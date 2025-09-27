@@ -1,0 +1,9 @@
+# Markdownlint configuration for Weltgewebe
+# Following Mobile-First principles and DSGVO compliance
+
+# MD013/line-length - Set max line length to 120 characters
+MD013:
+  line_length: 120
+  heading_line_length: 120
+  code_block_line_length: 120
+  tables: false
