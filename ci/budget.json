@@ -1,0 +1,9 @@
+{
+  "budgets": {
+    "web": {
+      "js_kb_max": 60,
+      "tti_ms_p95_max": 2000,
+      "inp_ms_p75_max": 200
+    }
+  }
+}
