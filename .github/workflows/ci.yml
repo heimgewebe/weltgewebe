@@ -52,7 +52,7 @@ jobs:
           sudo apt-get install -y jq yamllint
       - name: Lint YAML
         run: |
-          if ls **/*.y?(a)ml >/dev/null 2>&1; then
+          if find . -type f \( -name '*.yml' -o -name '*.yaml' \) | grep -q .; then
             yamllint -c .yamllint.yml .
           else
             echo "No YAML files found."
