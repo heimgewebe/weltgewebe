@@ -1,4 +1,4 @@
-# Retries & Zeitouts
+# Retries & Timeouts
 max_redirects = 5
 timeout = 10
 retry_wait_time = 2
