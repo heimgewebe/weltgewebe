@@ -1,10 +1,11 @@
+---
 name: CI (Docs-Only)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ "*" ]
+    branches: ["*"]
 
 jobs:
   markdown:
