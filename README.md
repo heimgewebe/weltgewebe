@@ -13,3 +13,7 @@ docker compose -f infra/compose/compose.core.yml up -d
 
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001. Code-Re-Entry erfolgt über die Gates A–D (siehe `docs/process/fahrplan.md`).
 
+## Continuous Integration
+
+Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
+
