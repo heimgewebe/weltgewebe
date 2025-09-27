@@ -6,6 +6,7 @@ Mobil-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, Je
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 ## Quickstart
+
 ```bash
 cp .env.example .env
 docker compose -f infra/compose/compose.core.yml up -d
@@ -16,4 +17,3 @@ docker compose -f infra/compose/compose.core.yml up -d
 ## Continuous Integration
 
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
-

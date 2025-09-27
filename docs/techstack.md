@@ -73,7 +73,6 @@ Observability & Runbooks
 
 Quellen: Technische Muster und Best Practices stammen u.a. aus aktuellen DevOps- und SRE-Leitfäden ￼ ￼ ￼ ￼. Die Zitate verweisen auf etablierte Konzepte (Outbox-Pattern, Disaster-DR-Tests, FinOps-KPIs, CI/CD-Security).
 
-
 ⸻
 
 🌐 Weltgewebe Techstack – Übersicht
@@ -146,7 +145,8 @@ Kosten & KPIs
 ⸻
 
 👉 Kurz: mobil-first, audit-ready, rewrite-frei skalierbar.
-Frontend simpel (SvelteKit-only), Events konsistent (PG Outbox + JetStream), Kosten & Latenz metrisch kontrolliert, DSGVO & Security vollständig eingebaut, Disaster-Recovery geprobt.
+Frontend simpel (SvelteKit-only), Events konsistent (PG Outbox + JetStream), Kosten & Latenz
+metrisch kontrolliert, DSGVO & Security vollständig eingebaut, Disaster-Recovery geprobt.
 
 ⸻
 
@@ -228,5 +228,3 @@ Kosten & KPIs
 │   ├─ Hetzner:  €15–900
 │   └─ DO-Hybrid: €70–2400
 └─ KPIs: €/1000 Sessions, €/GB egress, €/Mio Events, Edge-Quote %
-
-
