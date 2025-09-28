@@ -2,7 +2,7 @@
 <!-- Docs-only (ADR-0001 Clean-Slate) • Re-Entry via Gates A–D -->
 # Weltgewebe
 
-Mobil-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.  
+Mobile-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.  
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 ## Getting started
