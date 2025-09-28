@@ -26,10 +26,8 @@ jobs:
       - name: cargo test
         run: cargo test --all --quiet
 
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
       - name: cargo deny
-        run: cargo deny check
+        uses: EmbarkStudios/cargo-deny-action@v1
 
   repo:
     name: Repo – markdown & shell lint (soft)
