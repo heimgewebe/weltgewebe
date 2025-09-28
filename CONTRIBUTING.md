@@ -35,8 +35,7 @@ Details: siehe docs/architekturstruktur.md.
 2) Routing-Matrix „Wohin gehört was?“
 
 Beitragstyp	Zielordner/Datei	Typisches Pattern	Grund (warum dort)
-Neue Seite/Route im UI	apps/web/src/routes/...	+page.svelte, +page.ts, +server.ts
-        SvelteKit-Routing, SSR/Islands, nahe an UI
+Neue Seite/Route im UI	apps/web/src/routes/...	+page.svelte, +page.ts, +server.ts	SvelteKit-Routing, SSR/Islands, nahe an UI
 UI-Komponente/Store/Util	apps/web/src/lib/...	*.svelte, stores.ts, utils.ts	Wiederverwendung, klare Trennung vom Routing
 Statische Assets	apps/web/static/	manifest.webmanifest, Icons, Fonts	Build-unabhängige Auslieferung
 Neuer API-Endpoint	apps/api/src/routes/...	mod.rs, Handler, Router	HTTP/SSE-Schnittstelle gehört in routes
