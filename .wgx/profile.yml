@@ -1,11 +1,6 @@
 wgx:
-  apiVersion: v1.1
-  requiredWgx:
-    range: "^2.0"
-    min: "2.0.3"
-    caps:
-      - task-array
-      - status-dirs
+  apiVersion: v1
+  requiredWgx: "^2.0.3"
   repoKind: "weltgewebe"
   hermetic: true
   dirs:
@@ -15,32 +10,11 @@ wgx:
   env:
     RUST_LOG: "info,weltgewebe=debug"
   tasks:
-    doctor:
-      desc: "Health checks and local prerequisites"
-      group: "health"
-      safe: true
-      cmd: ["cargo", "run", "-p", "wg-cli", "--", "doctor"]
-    web-dev:
-      desc: "Run the SvelteKit dev server"
-      group: "web"
-      cmd:
-        default: ["pnpm", "--dir", "apps/web", "dev"]
-        darwin: ["pnpm", "--dir", "apps/web", "dev"]
-    api-test:
-      desc: "Execute API tests"
-      group: "api"
-      safe: true
-      cmd: ["cargo", "test", "-p", "wg-api", "--", "--nocapture"]
-    fmt:
-      desc: "Format Rust sources"
-      group: "lint"
-      safe: true
-      cmd: ["cargo", "fmt", "--all"]
-    clippy:
-      desc: "Run Rust lints via clippy"
-      group: "lint"
-      safe: true
-      cmd: ["cargo", "clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+    doctor: "cargo run -p wg-cli -- doctor"
+    web-dev: "pnpm --dir apps/web dev"
+    api-test: "cargo test -p wg-api -- --nocapture"
+    fmt: "cargo fmt --all"
+    clippy: "cargo clippy --all-targets --all-features -- -D warnings"
   workflows:
     dev-up:
       steps:
