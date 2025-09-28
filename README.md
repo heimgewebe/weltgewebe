@@ -9,6 +9,7 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
+
 ```bash
 cp .env.example .env
 # docker compose -f infra/compose/compose.core.yml up -d
