@@ -1,0 +1,86 @@
+name: wgx-smoke
+on:
+  pull_request:
+  push:
+    branches: ["main"]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      WGX_REF: "v2.0.3"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.1.1 # a9e4c9731b6b6c4c1b6c9c7c1b6c9c7c1b6c9c7c
+
+      - name: Fetch wgx
+        run: |
+          set -Eeuo pipefail
+          git clone --depth=1 https://github.com/alexdermohr/wgx /tmp/wgx
+          # Import the GPG public key of the repository owner (replace with actual key if needed)
+          curl -sSL https://github.com/alexdermohr.gpg | gpg --import
+          # Fetch tags and verify the signature of the tag
+          git -C /tmp/wgx fetch --tags
+          git -C /tmp/wgx tag -v "$WGX_REF"
+          # Abort if verification fails
+          if [ $? -ne 0 ]; then
+            echo "GPG signature verification failed for $WGX_REF"
+            exit 1
+          fi
+          git -C /tmp/wgx checkout "$WGX_REF"
+          echo "/tmp/wgx" >> "$GITHUB_PATH"
+
+      - name: Install manifest tooling
+        run: python -m pip install --user pyyaml
+
+      - name: List tasks
+        run: /tmp/wgx/wgx tasks
+
+      - name: Collect safe tasks
+        id: safe_tasks
+        run: |
+          set -Eeuo pipefail
+          python <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+import yaml
+
+try:
+    manifest_text = Path('.wgx/profile.yml').read_text(encoding='utf-8')
+except FileNotFoundError:
+    print("ERROR: .wgx/profile.yml not found.", file=sys.stderr)
+    sys.exit(1)
+try:
+    manifest = yaml.safe_load(manifest_text) or {}
+except yaml.YAMLError as e:
+    print(f"ERROR: Failed to parse .wgx/profile.yml: {e}", file=sys.stderr)
+    sys.exit(1)
+wgx = manifest.get('wgx', {}) or {}
+tasks = wgx.get('tasks', {}) or {}
+safe_tasks = [name for name, spec in tasks.items() if isinstance(spec, dict) and spec.get('safe')]
+print('Safe tasks:', ' '.join(safe_tasks) if safe_tasks else '(none)')
+with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
+    fh.write('tasks=' + json.dumps(safe_tasks) + '\n')
+PY
+
+      - name: Run safe tasks
+        if: steps.safe_tasks.outputs.tasks != '[]'
+        env:
+          SAFE_TASKS_JSON: ${{ steps.safe_tasks.outputs.tasks }}
+        run: |
+          set -Eeuo pipefail
+          python <<'PY'
+import json
+import os
+import subprocess
+
+tasks = json.loads(os.environ['SAFE_TASKS_JSON'])
+for task in tasks:
+    print(f'::group::wgx task {task}')
+    try:
+        subprocess.run(['/tmp/wgx/wgx', 'task', task], check=True)
+    finally:
+        print('::endgroup::')
+PY
