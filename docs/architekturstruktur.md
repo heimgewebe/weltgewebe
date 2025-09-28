@@ -76,7 +76,6 @@ weltgewebe/weltgewebe-repo/
 │  ├─ techstack.md              # Techstack v3.2 (Referenz)
 │  ├─ architektur.ascii         # Architektur-Poster/ASCII-Diagramme
 │  ├─ datenmodell.md            # Datenbank- und Projektionstabellen
-│  ├─ beitrag.md                # CONTRIBUTING-Guide
 │  └─ runbook.md                # Woche-1/2 Setup, DR/DSGVO-Drills
 │
 ├─ ci/                          # CI/CD & Qualitätsprüfungen
@@ -105,7 +104,7 @@ Platz für geteilte Libraries oder SDKs, die von mehreren Apps genutzt werden. W
 	•	infra/
 Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi, Caddy-Konfiguration, DB-Init, Monitoring-Setup. Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung.
 	•	docs/
-Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme, Datenmodellübersicht, CONTRIBUTING-Guide und Runbooks.
+Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme, Datenmodellübersicht und Runbooks.
 	•	ci/
 Alles rund um Continuous Integration/Deployment: Workflows für GitHub Actions, Skripte für Tests/DB-Handling, sowie zentrale Performance-Budgets (Lighthouse).
 	•	Root
