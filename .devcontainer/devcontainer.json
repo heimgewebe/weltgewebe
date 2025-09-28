@@ -16,6 +16,6 @@
     }
   },
   "remoteUser": "vscode",
-  "postCreateCommand": "bash -lc 'set -euxo pipefail; apt-get update; apt-get install -y jq ripgrep; cargo --version || true; npm -v || true; echo devcontainer ready'",
+  "postCreateCommand": "bash -lc 'set -euxo pipefail; sudo apt-get update; sudo apt-get install -y jq ripgrep; cargo --version || true; npm -v || true; echo devcontainer ready'",
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
