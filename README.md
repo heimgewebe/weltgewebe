@@ -7,9 +7,11 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 ## Quickstart
 
+> ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert. Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
+
 ```bash
 cp .env.example .env
-docker compose -f infra/compose/compose.core.yml up -d
+# docker compose -f infra/compose/compose.core.yml up -d
 # API migrieren (siehe apps/api/README.md), Web starten (apps/web/README.md)
 ```
 
