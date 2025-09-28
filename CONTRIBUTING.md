@@ -1,4 +1,5 @@
-Hier ist das finale CONTRIBUTING.md – optimiert, konsistent mit docs/architekturstruktur.md, und so geschrieben, dass Menschen und KIs sofort wissen, was wohin gehört, warum, und wie gearbeitet wird.
+Hier ist das finale CONTRIBUTING.md – optimiert, konsistent mit docs/architekturstruktur.md, und so
+geschrieben, dass Menschen und KIs sofort wissen, was wohin gehört, warum, und wie gearbeitet wird.
 
 ⸻
 
@@ -6,7 +7,8 @@ CONTRIBUTING.md
 
 Weltgewebe – Beiträge, Qualität, Wegeführung
 
-Dieses Dokument erklärt, wie im Weltgewebe-Repository gearbeitet wird: Ordner-Orientierung, Workflows, Qualitätsmaßstäbe und Entscheidungswege. Es baut auf folgenden Dateien auf:
+Dieses Dokument erklärt, wie im Weltgewebe-Repository gearbeitet wird: Ordner-Orientierung,
+Workflows, Qualitätsmaßstäbe und Entscheidungswege. Es baut auf folgenden Dateien auf:
 	•	docs/architekturstruktur.md – verbindliche Repo-Struktur (Ordner, Inhalte, Zweck)
 	•	docs/techstack.md – Stack-Referenz (SvelteKit, Rust/Axum, Postgres+Outbox, JetStream, Caddy, Observability)
 	•	ci/budget.json – Performance-Budgets (Frontend)
@@ -169,7 +171,8 @@ cd ../web && npm test
 # 6) Budgets lokal prüfen (falls Skript vorhanden)
 node ci/scripts/lhci.mjs
 
-Weitere Profile: compose.stream.yml (JetStream), compose.search.yml (Typesense/Meili), compose.observ.yml (Prom/Grafana).
+Weitere Profile: compose.stream.yml (JetStream), compose.search.yml (Typesense/Meili),
+compose.observ.yml (Prom/Grafana).
 
 ⸻
 
@@ -254,5 +257,6 @@ CREATE TABLE post_stats (
 Schlusswort
 
 Dieses Dokument ist die Arbeitslandkarte.
-Bei Unklarheiten: zuerst docs/architekturstruktur.md (Ordner), dann docs/ (Entscheidungen/Runbooks), danach kleiner PR, sauber getestet.
+Bei Unklarheiten: zuerst docs/architekturstruktur.md (Ordner), dann docs/ (Entscheidungen/Runbooks),
+danach kleiner PR, sauber getestet.
 So bleibt Weltgewebe mobil-first, messbar schnell und audit-fest.
