@@ -1,0 +1,22 @@
+# Weltgewebe repository ignores
+# Prevent accidental check-in of local Git directories
+/.git/
+
+# Environment files
+.env
+.env.local
+.env.*
+!.env.example
+
+# Node/NPM artifacts
+node_modules/
+npm-debug.log*
+
+# Build outputs
+build/
+dist/
+.tmp/
+
+# OS files
+.DS_Store
+Thumbs.db
