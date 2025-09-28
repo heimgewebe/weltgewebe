@@ -1,4 +1,5 @@
 # ADR-0001 — Clean-Slate als Docs-Monorepo
+
 Datum: 2025-09-12
 Status: Accepted
 Entscheidung: Rückbau auf Doku-only. Re-Entry nur über klar definierte Gates.

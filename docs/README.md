@@ -1,4 +1,5 @@
 # Weltgewebe – Doku-Index
+
 – **Start:** architekturstruktur.md
 – **Techstack:** techstack.md
 – **Prozess & Fahrplan:** process/README.md
