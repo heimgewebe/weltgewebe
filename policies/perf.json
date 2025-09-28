@@ -7,7 +7,8 @@
   },
   "api": {
     "latency_ms_p95": 300,
-    "db_query_ms_p95": 150
+    "db_query_ms_p95": 150,
+    "latency_target_note": "API latency target and SLO policy latency target are both set to 300ms intentionally for consistency."
   },
   "edge": {
     "monthly_egress_gb_max": 200,
