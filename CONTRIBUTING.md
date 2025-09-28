@@ -20,7 +20,8 @@ Beiträge landen im richtigen Ordner, klein und testbar, mit Metriken und Budget
 
 ⸻
 
-1) Repo-Topographie in 30 Sekunden
+## 1. Repo-Topographie in 30 Sekunden
+
   •  apps/ – Business-Code (Web-Frontend, API, Worker, optionale Search-Adapter)
   •  packages/ – gemeinsame Libraries/SDKs (optional)
   •  infra/ – Compose-Profile, Proxy (Caddy), DB-Init, Monitoring, optional Nomad/K8s
@@ -32,7 +33,7 @@ Details: siehe docs/architekturstruktur.md.
 
 ⸻
 
-2) Routing-Matrix „Wohin gehört was?“
+## 2. Routing-Matrix „Wohin gehört was?“
 
 Beitragstyp  Zielordner/Datei  Typisches Pattern  Grund (warum dort)
 Neue Seite/Route im UI  apps/web/src/routes/...  +page.svelte, +page.ts, +server.ts  SvelteKit-Routing, SSR/Islands,
@@ -56,10 +57,9 @@ Architektur-Entscheidung  docs/adr/ADR-xxx.md  Datum- oder Nummernschema  Nachvo
 Runbook  docs/runbook.md  Woche-1/2, DR/DSGVO  Betrieb in der Praxis
 Datenmodell  docs/datenmodell.md  Tabellen/Projektionen  Referenz für API/Worker
 
-
 ⸻
 
-3) Arbeitsweise / Workflow
+## 3. Arbeitsweise / Workflow
 
 Branch-Strategie: kurzes Feature-Branching gegen main. Kleine, thematisch fokussierte PRs.
 Commit-Präfixe:
@@ -67,9 +67,10 @@ Commit-Präfixe:
   •  fix(...) | chore(...) | refactor(...) | docs(adr|runbook|...)
 
 PR-Prozess:
-  1.  Lokal: Lints/Tests/Budgets laufen lassen.
-  2.  PR klein halten, Zweck und „Wie getestet“ kurz erläutern.
-  3.  Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen/verlinken.
+
+1. Lokal: Lints/Tests/Budgets laufen lassen.
+2. PR klein halten, Zweck und „Wie getestet“ kurz erläutern.
+3. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
 
 CI-Gates (brechen Builds):
   •  Frontend-Budget aus ci/budget.json (Initial-JS ≤ 60 KB, TTI ≤ 2000 ms).
@@ -79,7 +80,7 @@ CI-Gates (brechen Builds):
 
 ⸻
 
-4) Qualitätsmaßstäbe je Schicht
+## 4. Qualitätsmaßstäbe je Schicht
 
 Frontend (SvelteKit):
   •  SSR/PWA-freundlich; Caching per Header (Caddy).
@@ -110,7 +111,7 @@ GIS (falls genutzt):
 
 ⸻
 
-5) Daten & Events – Konsistenzpfad
+## 5. Daten & Events – Konsistenzpfad
 
 Source of Truth: PostgreSQL + Outbox.
 Event-Namen: <aggregate>.<verb> (z. B. post.created, comment.deleted).
@@ -135,7 +136,8 @@ DSGVO/Forget: Redaktions-/Lösch-Events erzeugen; Rebuild (Shadow) und Nachweis 
 
 ⸻
 
-6) Performance & Observability
+## 6. Performance & Observability
+
   •  Frontend: Budgets gemäß ci/budget.json. Regelmäßige Lighthouse-Checks.
   •  Server: Ziel-Latenzen p95 route-spezifisch definieren (API, SSE).
   •  JetStream: Topic/Consumer-Lag überwachen; Consumer-Namen stabil halten; Ack-Strategie dokumentieren.
@@ -143,7 +145,8 @@ DSGVO/Forget: Redaktions-/Lösch-Events erzeugen; Rebuild (Shadow) und Nachweis 
 
 ⸻
 
-7) Sicherheit & Compliance (Kurz)
+## 7. Sicherheit & Compliance (Kurz)
+
   •  Secrets: niemals ins Repo; .env.example als Vorlage.
   •  PII: isolieren gemäß Datenmodell; keine PII in Logs/Events.
   •  CSP/CORS: per Caddyfile verwalten; restriktiv beginnen, bei Bedarf öffnen.
@@ -151,25 +154,31 @@ DSGVO/Forget: Redaktions-/Lösch-Events erzeugen; Rebuild (Shadow) und Nachweis 
 
 ⸻
 
-8) Lokaler Quickstart
+## 8. Lokaler Quickstart
 
-# 1) .env anlegen
+### 1. .env anlegen
+
 cp .env.example .env
 
-# 2) Core-Profile hochfahren (API, Web, PG, PgBouncer, Caddy)
+### 2. Core-Profile hochfahren (API, Web, PG, PgBouncer, Caddy)
+
 docker compose -f infra/compose/compose.core.yml up -d
 
-# 3) DB-Migrationen
+### 3. DB-Migrationen
+
 docker exec -it welt_api sqlx migrate run   # oder eigenes Migrations-Binary
 
-# 4) Web-Dev
-cd apps/web && npm install && npm run dev   # http://localhost:3000
+### 4. Web-Dev
 
-# 5) Tests
+cd apps/web && npm install && npm run dev   # <http://localhost:3000>
+
+### 5. Tests
+
 cd apps/api && cargo test
 cd ../web && npm test
 
-# 6) Budgets lokal prüfen (falls Skript vorhanden)
+### 6. Budgets lokal prüfen (falls Skript vorhanden)
+
 node ci/scripts/lhci.mjs
 
 Weitere Profile: compose.stream.yml (JetStream), compose.search.yml (Typesense/Meili),
@@ -177,7 +186,7 @@ compose.observ.yml (Prom/Grafana).
 
 ⸻
 
-9) Doku & Entscheidungen
+## 9. Doku & Entscheidungen
 
 ADR-Pflicht bei:
   •  neuem Framework/Tool,
@@ -190,14 +199,15 @@ Aktualisiere Runbook (Betrieb/Drills) und Datenmodell (Tabellen/Projektionen) be
 
 ⸻
 
-10) Versionierung & Releases (Kurz)
+## 10. Versionierung & Releases (Kurz)
+
   •  SemVer: MAJOR.MINOR.PATCH
   •  Breaking Changes → MAJOR erhöhen, ADR ergänzen.
   •  Tagging und Changelog optional; CI kann Release-Artefakte bauen.
 
 ⸻
 
-11) Entscheidungsbaum „Wohin mit meinem Beitrag?“
+## 11. Entscheidungsbaum „Wohin mit meinem Beitrag?“
 
 Start
  ├─ Ist es UI (Seite/Komponente/Store)?
@@ -226,7 +236,7 @@ PR-Checkliste (kurz):
 
 ⸻
 
-12) Anhänge (kleine Referenzen)
+## 12. Anhänge (kleine Referenzen)
 
 Namensregeln:
   •  Rust: snake_case; TypeScript: kebab-case; ENV: UPPER_SNAKE.
@@ -251,7 +261,6 @@ CREATE TABLE post_stats (
   comments  int NOT NULL DEFAULT 0,
   last_activity_at timestamptz
 );
-
 
 ⸻
 
