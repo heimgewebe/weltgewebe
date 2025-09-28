@@ -32,8 +32,8 @@ stream:    # event streaming profile (optional)
 db-wait:    # wait for database to be ready
 	./ci/scripts/db-wait.sh
 
-db-migrate:
+db-migrate:    # run database migrations
 	cargo run -p api -- migrate
 
-seed:
+seed:          # seed database with initial data
 	cargo run -p api -- seed
