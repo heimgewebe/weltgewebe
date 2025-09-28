@@ -29,7 +29,7 @@ stream:    # event streaming profile (optional)
 	docker compose -f infra/compose/compose.stream.yml up -d
 
 # ---------- DB ----------
-db-wait:
+db-wait:    # wait for database to be ready
 	./ci/scripts/db-wait.sh
 
 db-migrate:
