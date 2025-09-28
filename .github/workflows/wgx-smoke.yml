@@ -43,11 +43,20 @@ jobs:
           python <<'PY'
 import json
 import os
+import sys
 from pathlib import Path
-
 import yaml
 
-manifest = yaml.safe_load(Path('.wgx/profile.yml').read_text(encoding='utf-8')) or {}
+try:
+    manifest_text = Path('.wgx/profile.yml').read_text(encoding='utf-8')
+except FileNotFoundError:
+    print("ERROR: .wgx/profile.yml not found.", file=sys.stderr)
+    sys.exit(1)
+try:
+    manifest = yaml.safe_load(manifest_text) or {}
+except yaml.YAMLError as e:
+    print(f"ERROR: Failed to parse .wgx/profile.yml: {e}", file=sys.stderr)
+    sys.exit(1)
 wgx = manifest.get('wgx', {}) or {}
 tasks = wgx.get('tasks', {}) or {}
 safe_tasks = [name for name, spec in tasks.items() if isinstance(spec, dict) and spec.get('safe')]
