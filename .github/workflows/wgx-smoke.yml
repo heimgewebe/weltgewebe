@@ -17,6 +17,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           git clone --depth=1 https://github.com/alexdermohr/wgx /tmp/wgx
+          # Import the GPG public key of the repository owner (replace with actual key if needed)
+          curl -sSL https://github.com/alexdermohr.gpg | gpg --import
+          # Fetch tags and verify the signature of the tag
+          git -C /tmp/wgx fetch --tags
+          git -C /tmp/wgx tag -v "$WGX_REF"
+          # Abort if verification fails
+          if [ $? -ne 0 ]; then
+            echo "GPG signature verification failed for $WGX_REF"
+            exit 1
+          fi
           git -C /tmp/wgx checkout "$WGX_REF"
           echo "/tmp/wgx" >> "$GITHUB_PATH"
 
