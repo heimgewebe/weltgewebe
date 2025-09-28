@@ -93,34 +93,38 @@ weltgewebe/weltgewebe-repo/
 ├─ LICENSE                      # Lizenztext
 └─ README.md                    # Projektüberblick, Quickstart
 
-
 ⸻
 
 Erläuterungen zu den Hauptordnern
-	•	apps/
-Enthält alle Anwendungen: Web-Frontend (SvelteKit), API (Rust/Axum), Worker (Eventprojektionen, Rebuilds) und optionale Search-Adapter. Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
-	•	packages/
-Platz für geteilte Libraries oder SDKs, die von mehreren Apps genutzt werden. Wird erst angelegt, wenn Bedarf an gemeinsamem Code entsteht.
-	•	infra/
-Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi, Caddy-Konfiguration, DB-Init, Monitoring-Setup. Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung.
-	•	docs/
-Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme, Datenmodellübersicht und Runbooks.
-	•	ci/
-Alles rund um Continuous Integration/Deployment: Workflows für GitHub Actions, Skripte für Tests/DB-Handling, sowie zentrale Performance-Budgets (Lighthouse).
-	•	Root
-Repository-Metadaten: .env.example (Vorlage), Editor- und Git-Configs, Lizenz und README mit Projektüberblick.
+
+- **apps/**
+  Enthält alle Anwendungen: Web-Frontend (SvelteKit), API (Rust/Axum), Worker (Eventprojektionen, Rebuilds) und
+  optionale Search-Adapter. Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
+- **packages/**
+  Platz für geteilte Libraries oder SDKs, die von mehreren Apps genutzt werden. Wird erst angelegt, wenn Bedarf an
+  gemeinsamem Code entsteht.
+- **infra/**
+  Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi, Caddy-Konfiguration,
+  DB-Init, Monitoring-Setup. Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung.
+- **docs/**
+  Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme,
+  Datenmodellübersicht und Runbooks.
+- **ci/**
+  Alles rund um Continuous Integration/Deployment: Workflows für GitHub Actions, Skripte für Tests/DB-Handling,
+  sowie zentrale Performance-Budgets (Lighthouse).
+- **Root**
+  Repository-Metadaten: .env.example (Vorlage), Editor- und Git-Configs, Lizenz und README mit Projektüberblick.
 
 ⸻
 
 Zusammenfassung
 
 Diese Struktur spiegelt den aktuellen Techstack (v3.2) wider:
-	•	Mobil-first via PWA (SvelteKit).
-	•	Rust/Axum API mit Outbox/JetStream-Eventing.
-	•	Compose-first Infrastruktur mit klar getrennten Profilen.
-	•	Observability und Compliance fest verankert.
-	•	Erweiterbar durch optionale packages/, nomad/, k8s/.
+
+- Mobil-first via PWA (SvelteKit).
+- Rust/Axum API mit Outbox/JetStream-Eventing.
+- Compose-first Infrastruktur mit klar getrennten Profilen.
+- Observability und Compliance fest verankert.
+- Erweiterbar durch optionale packages/, nomad/, k8s/.
 
 Dies dient als Referenzrahmen für alle weiteren Arbeiten am Weltgewebe-Repository.
-
-⸻

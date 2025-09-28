@@ -1,4 +1,5 @@
 # ADR-0002 — Re-Entry-Kriterien (Gates)
+
 Datum: 2025-09-12
 Status: Accepted
 Gate A (Web): SvelteKit-Skelett + Budgets (TTI ≤2s, INP ≤200ms, ≤60KB JS).
