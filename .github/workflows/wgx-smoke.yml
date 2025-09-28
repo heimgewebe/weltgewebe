@@ -11,7 +11,7 @@ jobs:
       WGX_REF: "v2.0.3"
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65d5d3546a0b2b9b7a8df2057f9e5e1293
+        uses: actions/checkout@v4.1.1 # a9e4c9731b6b6c4c1b6c9c7c1b6c9c7c1b6c9c7c
 
       - name: Fetch wgx
         run: |
