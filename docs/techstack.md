@@ -132,10 +132,10 @@ Infrastruktur & Hochverfügbarkeit
 
 Sicherheit und Compliance
   •  SBOM (Software Bill of Materials):
-    Jede neue Anwendungsversion erzeugt automatisch ein SBOM (z.B. via Syft/Trivy).
-    Das SBOM beschreibt alle Abhängigkeiten.
-    Es wird zusammen mit dem Build-Artefakt archiviert und als Attestation hinterlegt ￼.
-    Bei Deployments prüfen wir das SBOM auf bekannte Schwachstellen.
+    •  Jede neue Anwendungsversion erzeugt automatisch ein SBOM (z.B. via Syft/Trivy).
+    •  Das SBOM beschreibt alle Abhängigkeiten.
+    •  Es wird zusammen mit dem Build-Artefakt archiviert und als Attestation hinterlegt ￼.
+    •  Bei Deployments prüfen wir das SBOM auf bekannte Schwachstellen.
   •  Artifact Signing & Attestations:
     Container-Images und Pakete werden signiert (z.B. mit Sigstore Cosign).
     Neben dem SBOM legen wir erweiterte Attestations (z.B. SLSA-Provenance) als Metadaten ab ￼.
