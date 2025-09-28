@@ -1,0 +1,16 @@
+version: 1
+services:
+  web:
+    availability_target: 99.9
+    latency:
+      p95_ms: 3000
+      alert_threshold_pct_over_budget: 5
+  api:
+    availability_target: 99.95
+    latency:
+      p95_ms: 300
+      alert_threshold_pct_over_budget: 5
+error_budgets:
+  window_days: 30
+  warn_at_pct: 25
+  page_at_pct: 50
