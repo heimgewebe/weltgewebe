@@ -14,7 +14,7 @@ Der Projektfahrplan wird bereits in `docs/process/fahrplan.md` gepflegt. Dieses 
 - Architekturentscheidungen und weitere Dokumente verlinken auf den Fahrplan über dieses ADR.
 
 ## Link
-- [Fahrplan in docs/process](fahrplan.md)
+- [Fahrplan in docs/process](../process/fahrplan.md)
 
 ## Siehe auch
-- ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle
+- [ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-unschaerferadius-ron.md)

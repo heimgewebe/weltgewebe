@@ -34,7 +34,7 @@ Weitere Modi (z. B. Kachel-Snapping, Stadt-Centroid) werden **nicht** eingeführ
   - `faden_view` nutzt `public_pos` als Startpunkt
 
 ## UI
-**Einstellungen → Privatsphäre**: Unschärfe-Slider (Meter) + RoN-Toggle (inkl. Eistellbarkeit der Tage (beginnend mit 0, ab der die RoN-Anonymisierung greifen soll). Vorschau der angezeigten Position.
+**Einstellungen → Privatsphäre**: Unschärfe-Slider (Meter) + RoN-Toggle (inkl. Einstellbarkeit der Tage (beginnend mit 0, ab der die RoN-Anonymisierung greifen soll). Vorschau der angezeigten Position.
 
 ## Telemetrie & Logging
 Keine exakten Wohnsitz-Koordinaten in öffentlichen Daten oder Logs, sofern gewünscht; personenbezogene Daten nur, wo nötig.

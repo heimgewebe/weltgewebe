@@ -25,7 +25,7 @@ Beiträge landen im richtigen Ordner, klein und testbar, mit Metriken und Budget
   •  apps/ – Business-Code (Web-Frontend, API, Worker, optionale Search-Adapter)
   •  packages/ – gemeinsame Libraries/SDKs (optional)
   •  infra/ – Compose-Profile, Proxy (Caddy), DB-Init, Monitoring, optional Nomad/K8s
-  •  docs/ – ADRs, Architektur-Poster, Datenmodell, Runbook, CONTRIBUTING
+  •  docs/ – ADRs, Architektur-Poster, Datenmodell, Runbook
   •  ci/ – GitHub-Workflows, Skripte, Performance-Budgets
   •  Root – .env.example, Editor/Git-Konfig, Lizenz, README
 
