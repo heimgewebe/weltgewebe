@@ -1,0 +1,21 @@
+{
+  "name": "weltgewebe-dev",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "timonwong.shellcheck",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  },
+  "remoteUser": "vscode",
+  "postCreateCommand": "bash -lc 'set -euxo pipefail; sudo apt-get update; sudo apt-get install -y jq ripgrep; cargo --version || true; npm -v || true; echo devcontainer ready'",
+  "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
+}
