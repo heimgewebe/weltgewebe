@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-weltgewebe}
+      POSTGRES_USER: ${POSTGRES_USER:-weltgewebe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    profiles: [core]
+
+  nats:
+    image: nats:2-alpine
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+    profiles: [core]
+
+  api:
+    image: rust:1
+    working_dir: /app
+    volumes:
+      - ..:/app:delegated
+    command: ["bash", "-c", "cargo run --manifest-path apps/api/Cargo.toml"]
+    environment:
+      API_BIND: ${API_BIND:-0.0.0.0:8787}
+      DATABASE_URL: ${DATABASE_URL:-postgres://weltgewebe:change-me@postgres:5432/weltgewebe}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+    depends_on:
+      - postgres
+      - nats
+    ports:
+      - "8787:8787"
+    profiles: [api]
+
+volumes:
+  postgres-data:

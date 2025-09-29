@@ -21,6 +21,7 @@ jobs:
     outputs:
       web:  ${{ steps.filter.outputs.web }}
       docs: ${{ steps.filter.outputs.docs }}
+      api:  ${{ steps.filter.outputs.api }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -36,6 +37,10 @@ jobs:
             docs:
               - '**/*.md'
               - 'docs/**'
+            api:
+              - 'apps/api/**'
+              - '.github/workflows/**'
+              - 'ci/**'
 
   repo-lint:
     name: Repo – markdown & shell lint
@@ -59,6 +64,33 @@ jobs:
           args: --config .lychee.toml .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  api:
+    name: API – build, fmt, clippy & test
+    needs: changes
+    if: needs.changes.outputs.api == 'true' || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CARGO_TERM_COLOR: always
+    defaults:
+      run:
+        working-directory: apps/api
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt
+        run: cargo fmt -- --check
+      - name: cargo clippy
+        run: cargo clippy -- -D warnings
+      - name: cargo build
+        run: cargo build --locked
+      - name: cargo test
+        run: cargo test --locked
 
   web-setup:
     name: Web – install deps
