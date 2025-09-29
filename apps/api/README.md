@@ -16,7 +16,9 @@ This README provides a quick orientation for running and developing the service 
    cp ../../.env.example .env
    ```
 
-3. **Adjust the required environment variables** (either in `.env` or the shell). Values defined in `.env` take precedence over the defaults from Docker Compose when you use the local development stack.
+3. **Adjust the required environment variables** (either in `.env` or the shell).
+   Values defined in `.env` take precedence over the defaults from Docker Compose when you use the
+   local development stack.
    
    Recommended settings:
    - `API_BIND` &mdash; socket address to bind the API (default `0.0.0.0:8787`)
