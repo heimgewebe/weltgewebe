@@ -11,8 +11,22 @@
 
   type MapLibreModule = typeof import("maplibre-gl");
 
+  function canInitialise(container: HTMLDivElement | null): container is HTMLDivElement {
+    if (typeof window === "undefined") return false;
+    if (!container || !container.isConnected) return false;
+    const rect = container.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
   async function enableMap() {
     if (!browser || loading || mapReady || !mounted) return;
+
+    if (!canInitialise(mapHost)) {
+      error = "Karte konnte nicht geladen werden.";
+      return;
+    }
+
+    const container = mapHost;
     loading = true;
     error = null;
 
@@ -21,15 +35,11 @@
       await import("maplibre-gl/dist/maplibre-gl.css");
       const mapModule = await modulePromise;
 
-      if (!mapHost) {
-        throw new Error("Map container not available.");
-      }
-
       const maplibregl = (mapModule as MapLibreModule & { default?: MapLibreModule }).default ??
         (mapModule as MapLibreModule);
 
       map = new maplibregl.Map({
-        container: mapHost,
+        container,
         style: "https://demotiles.maplibre.org/style.json",
         center: [10.0, 53.55], // grob HH
         zoom: 10
