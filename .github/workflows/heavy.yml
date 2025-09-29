@@ -22,7 +22,7 @@ jobs:
       - id: flags
         shell: bash
         run: |
-          labels="${{ github.event.pull_request.number && join(github.event.pull_request.labels.*.name, ' ') || '' }}"
+          labels="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "run_heavy=true" >> "$GITHUB_OUTPUT"
           elif echo "$labels" | grep -qiE '(^| )full-ci( |$)'; then
