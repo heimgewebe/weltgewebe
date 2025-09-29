@@ -19,13 +19,15 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     init_tracing()?;
 
-    let db_pool = initialise_database_pool().await;
-    let nats_client = initialise_nats_client().await;
+    let (db_pool, db_pool_configured) = initialise_database_pool().await;
+    let (nats_client, nats_configured) = initialise_nats_client().await;
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let state = ApiState {
         db_pool,
+        db_pool_configured,
         nats_client,
+        nats_configured,
         metrics: metrics.clone(),
     };
 
@@ -62,10 +64,10 @@ fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn initialise_database_pool() -> Option<sqlx::PgPool> {
+async fn initialise_database_pool() -> (Option<sqlx::PgPool>, bool) {
     let database_url = match env::var("DATABASE_URL") {
         Ok(url) => url,
-        Err(_) => return None,
+        Err(_) => return (None, false),
     };
 
     match PgPoolOptions::new()
@@ -73,25 +75,25 @@ async fn initialise_database_pool() -> Option<sqlx::PgPool> {
         .connect(&database_url)
         .await
     {
-        Ok(pool) => Some(pool),
+        Ok(pool) => (Some(pool), true),
         Err(error) => {
             tracing::warn!(error = %error, "failed to connect to database");
-            None
+            (None, true)
         }
     }
 }
 
-async fn initialise_nats_client() -> Option<NatsClient> {
+async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
     let nats_url = match env::var("NATS_URL") {
         Ok(url) => url,
-        Err(_) => return None,
+        Err(_) => return (None, false),
     };
 
     match async_nats::connect(&nats_url).await {
-        Ok(client) => Some(client),
+        Ok(client) => (Some(client), true),
         Err(error) => {
             tracing::warn!(error = %error, "failed to connect to NATS");
-            None
+            (None, true)
         }
     }
 }
