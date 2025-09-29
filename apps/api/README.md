@@ -1,6 +1,7 @@
 # Weltgewebe API
 
-The Weltgewebe API is a Rust-based Axum service that powers the platform's backend capabilities. This README provides a quick orientation for running and developing the service locally.
+The Weltgewebe API is a Rust-based Axum service that powers the platform's backend capabilities.
+This README provides a quick orientation for running and developing the service locally.
 
 ## Quickstart
 
