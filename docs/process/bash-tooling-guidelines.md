@@ -1,49 +1,66 @@
-# Bash Tooling Guidelines
+# Bash-Tooling-Richtlinien
 
-Diese Richtlinie sammelt Best Practices für Bash-Utilities im Weltgewebe-Projekt.
-Sie basiert auf Erfahrungen aus der Arbeit an unserem Entwicklungscontainer,
-CLI-Hilfsprogrammen und Modultests. Die Beispiele orientieren sich an
-Prototypen, die wir für die zukünftige Code Re-Entry Phase entworfen haben.
+Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt entwickeln, prüfen und ausführen.  
+Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezifischen Vorgaben (Devcontainer, CLI-Bootstrap, SemVer).
 
-## Devcontainer-Setup
+## Ziele
 
-- **Bash-Version dokumentieren:** Skripte, die `nameref` nutzen, benötigen Bash
-  ≥ 4.3. Ein kurzer Hinweis direkt unter der Shebang macht zukünftigen
-  Mitwirkenden klar, welche Shell-Funktionen erwartet werden.
-- **Paketsammlungen per Referenz füllen:** Statt Arrays per Subshell zu
-  erzeugen, können Installationslisten über `local -n` an den Aufrufer
-  übergeben werden. Dadurch werden unnötige Kopien vermieden und die Funktion
-  kann Fehler (`return 1`) signalisieren, ohne das komplette Skript zu
-  beenden.
-- **`check`-Ziel aus Installationen ausklammern:** Hygiene-Checks sollten
-  separat laufen. Wenn jemand `./setup.sh check` aus Versehen mit angibt,
-  weisen wir darauf hin und ignorieren das Ziel, damit keine Pakete doppelt
-  installiert werden.
+- Einheitliche Formatierung der Skripte.
+- Automatisierte Qualitätssicherung mit statischer Analyse.
+- Gute Developer Experience für wiederkehrende Aufgaben.
+- Projektkontext: sauberes Devcontainer-Setup, klare CLI-Kommandos, reproduzierbare SemVer-Logik.
 
-## CLI-Bootstrap (`wgx`)
+## Kernwerkzeuge
 
-- **Debug-Ausgabe optional machen:** Über eine Umgebungsvariable wie
-  `WGX_DEBUG=1` kann zusätzliche Diagnose aktiviert werden. Standardmäßig bleibt
-  der CLI-Start leise, um Skriptausgaben nicht zu verwässern.
-- **Subcommands validieren:** Ohne Argument soll der Dispatcher die Usage
-  anzeigen und mit `exit 1` abbrechen. Unbekannte Befehle melden wir auf
-  Englisch, damit Fehlermeldungen auch in CI-Logs international lesbar sind.
-  Gleichzeitig geben wir die Usage-Hilfe auf `stderr` aus, um sofortige
-  Selbsthilfe zu ermöglichen.
+### shfmt
+- Formatierung gemäß POSIX-kompatiblen Standards.  
+- Nutze `shfmt -w` für automatische Formatierung.  
+- Setze `shfmt -d` in CI-Checks ein, um Abweichungen aufzuzeigen.
 
-## SemVer-Caret-Ranges
+### ShellCheck
+- Analysiert Skripte auf Fehler, Portabilität und Stilfragen.  
+- Lokaler Aufruf: `shellcheck <skript>`.  
+- In CI-Pipelines verpflichtend.
 
-- **`^0.0.x` strikt behandeln:** Für doppelt-nullte Versionen erlauben wir nur
-  Patch-Updates. Tests stellen sicher, dass `^0.0.3` nicht auf `0.0.4`
-  hochrutscht.
-- **Major-Sprünge blockieren:** Ein zusätzlicher Testfall prüft, dass `^1.2.3`
-  nicht auf `2.0.0` erweitert. So bleiben unsere Module kompatibel, bis wir
-  explizit eine neue Major-Version freigeben.
-- **Automatisierte Tests:** Bats-Tests dokumentieren das gewünschte Verhalten
-  und verhindern Regressionen, sobald wir die Shell-Module produktiv setzen.
+### Bash Language Server (optional)
+- Bietet Editor-Unterstützung (Autocompletion, Inlay-Hints).  
+- Installierbar via `npm install -g bash-language-server`.  
+- Im Editor als LSP aktivieren.
 
-Diese Leitlinien werden zum Gate-C-Übergang[^gate-c] erneut evaluiert und bei Bedarf in
-konkrete Skripte überführt.
+## Arbeitsweise
 
+1. Skripte beginnen mit `#!/usr/bin/env bash` und enthalten `set -euo pipefail`.
+2. Vor Commit: `shfmt` und `shellcheck` lokal ausführen.
+3. Ergebnisse der Checks im Pull Request sichtbar machen.
+4. Neue Tools → Dokumentation hier ergänzen.
+5. CI-Checks sind verbindlich; Ausnahmen werden dokumentiert.
 
-[^gate-c]: "Gate-C-Übergang" bezeichnet im Weltgewebe-Projekt die Phase, in der Prototypen und Richtlinien in produktive Skripte überführt werden. Weitere Informationen finden sich im [Projektphasen-Dokument](../project-phases.md).
+## Projektspezifische Ergänzungen
+
+### Devcontainer-Setup
+- **Bash-Version dokumentieren** (z. B. Hinweis auf `nameref` → Bash ≥4.3).  
+- **Paketsammlungen per Referenz (`local -n`)** statt Subshell-Kopien.  
+- **`check`-Ziel ignorieren**, falls versehentlich mitinstalliert.
+
+### CLI-Bootstrap (`wgx`)
+- Debug-Ausgabe optional via `WGX_DEBUG=1`.  
+- Dispatcher validiert Subcommands:  
+  - Ohne Argument → Usage + `exit 1`.  
+  - Unbekannte Befehle → Fehlermeldung auf Englisch (für CI-Logs).  
+  - Usage-Hilfe auf `stderr`.
+
+### SemVer-Caret-Ranges
+- `^0.0.x` → nur Patch-Updates erlaubt.  
+- Major-Sprünge blockiert (`^1.2.3` darf nicht auf `2.0.0` gehen).  
+- Automatisierte Bats-Tests dokumentieren dieses Verhalten.
+
+## Troubleshooting
+
+- Legacy-Skripte mit `# shellcheck disable=...` markieren und begründen.  
+- Plattformunterschiede (Linux/macOS) im Skript kommentieren.  
+- `shfmt`-Fehler → prüfen, ob Tabs statt Spaces verwendet wurden (wir nutzen nur Spaces).
+
+---
+
+Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in produktive Skripte überführt.  
+Weitere Infos: [Projektphasen-Dokument](../project-phases.md).
