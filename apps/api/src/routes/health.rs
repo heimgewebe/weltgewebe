@@ -33,19 +33,15 @@ async fn ready(State(state): State<ApiState>) -> StatusCode {
         None => true,
     };
 
-    let nats_ready = if database_ready {
-        match &state.nats_client {
-            Some(client) => match client.flush().await {
-                Ok(_) => true,
-                Err(error) => {
-                    tracing::warn!(error = %error, "nats health check failed");
-                    false
-                }
-            },
-            None => true,
-        }
-    } else {
-        false
+    let nats_ready = match &state.nats_client {
+        Some(client) => match client.flush().await {
+            Ok(_) => true,
+            Err(error) => {
+                tracing::warn!(error = %error, "nats health check failed");
+                false
+            }
+        },
+        None => true,
     };
 
     state
