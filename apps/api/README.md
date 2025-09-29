@@ -15,7 +15,9 @@ The Weltgewebe API is a Rust-based Axum service that powers the platform's backe
    cp ../../.env.example .env
    ```
 
-3. **Adjust the required environment variables** (either in `.env` or the shell):
+3. **Adjust the required environment variables** (either in `.env` or the shell). Values defined in `.env` take precedence over the defaults from Docker Compose when you use the local development stack.
+   
+   Recommended settings:
    - `API_BIND` &mdash; socket address to bind the API (default `0.0.0.0:8787`)
    - `DATABASE_URL` &mdash; PostgreSQL connection string (e.g. `postgres://user:password@localhost:5432/weltgewebe`)
    - `NATS_URL` &mdash; URL of the NATS server (e.g. `nats://127.0.0.1:4222`)

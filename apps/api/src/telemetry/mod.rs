@@ -6,7 +6,7 @@ use std::{
 };
 
 use axum::{
-    extract::State,
+    extract::{MatchedPath, State},
     http::{header, HeaderValue, Request, StatusCode},
     response::IntoResponse,
 };
@@ -138,7 +138,11 @@ where
 
     fn call(&mut self, request: Request<B>) -> Self::Future {
         let method = request.method().as_str().to_owned();
-        let path = request.uri().path().to_owned();
+        let matched_path = request
+            .extensions()
+            .get::<MatchedPath>()
+            .map(|p| p.as_str().to_owned());
+        let path = matched_path.unwrap_or_else(|| request.uri().path().to_owned());
         let metrics = self.metrics.clone();
         let future = self.inner.call(request);
 
