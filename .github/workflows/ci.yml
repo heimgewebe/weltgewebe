@@ -9,6 +9,8 @@ jobs:
   rust:
     name: Rust – fmt, clippy, tests, deny
     runs-on: ubuntu-latest
+    # Skip the Rust toolchain job while the repository is docs-only and has no Cargo manifests.
+    if: ${{ hashFiles('**/Cargo.toml') != '' }}
     defaults: { run: { shell: bash } }
     steps:
       - uses: actions/checkout@v4
