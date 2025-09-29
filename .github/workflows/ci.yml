@@ -1,39 +1,48 @@
-name: ci
+name: CI (smart PR)
+
 on:
-  push:
   pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+  merge_group: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
+
 jobs:
-  rust:
-    name: Rust – fmt, clippy, tests, deny
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
-    # Skip the Rust toolchain job while the repository is docs-only and has no Cargo manifests.
-    if: ${{ hashFiles('**/Cargo.toml') != '' }}
-    defaults: { run: { shell: bash } }
+    outputs:
+      web:  ${{ steps.filter.outputs.web }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dorny/paths-filter@v3
+        id: filter
         with:
-          components: clippy, rustfmt
-      - uses: Swatinem/rust-cache@v2
+          filters: |
+            web:
+              - 'apps/web/**'
+              - 'package*.json'
+              - '**/vite.config.*'
+              - '**/svelte.config.*'
+              - '.github/workflows/**'
+            docs:
+              - '**/*.md'
+              - 'docs/**'
 
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
-
-      - name: cargo clippy (deny warnings)
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: cargo test
-        run: cargo test --all --quiet
-
-      - name: cargo deny
-        uses: EmbarkStudios/cargo-deny-action@v1
-
-  repo:
-    name: Repo – markdown & shell lint (soft)
+  repo-lint:
+    name: Repo – markdown & shell lint
+    needs: changes
+    if: needs.changes.outputs.docs == 'true' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Markdownlint
@@ -44,3 +53,69 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y shellcheck
           git ls-files '*.sh' | xargs -r shellcheck -x
+      - name: Lychee link check
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --config .lychee.toml .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  web-setup:
+    name: Web – install deps
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: apps/web
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: npm ci
+        run: npm ci
+
+  web-check:
+    name: Web – typecheck (svelte-check)
+    needs: web-setup
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults: { run: { working-directory: apps/web, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: npm ci (restore cache)
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: svelte-check
+        run: npm run check
+
+  web-build:
+    name: Web – build
+    needs: web-check
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults: { run: { working-directory: apps/web, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: npm ci (restore cache)
+        run: npm ci --prefer-offline --no-audit --no-fund
+      - name: build
+        env:
+          CI: true
+        run: npm run build
