@@ -16,6 +16,7 @@ npm-debug.log*
 build/
 dist/
 .tmp/
+target/
 
 # OS files
 .DS_Store

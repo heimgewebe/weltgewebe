@@ -1,0 +1,17 @@
+[package]
+name = "weltgewebe-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Weltgewebe Team"]
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+axum = { version = "0.7", features = ["macros"] }
+async-nats = "0.35"
+dotenvy = "0.15"
+prometheus = "0.13"
+sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio", "postgres"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
