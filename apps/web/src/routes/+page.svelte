@@ -82,7 +82,7 @@
   <div
     bind:this={mapHost}
     role="application"
-    aria-label="Interaktive Karte"
+    aria-label="Interactive Map"
     style="position:absolute;inset:0;background:#eef"
   ></div>
 
