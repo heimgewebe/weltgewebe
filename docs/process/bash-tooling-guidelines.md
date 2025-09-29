@@ -43,14 +43,16 @@ Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezi
 - **`check`-Ziel ignorieren**, falls versehentlich mitinstalliert.
 
 ### CLI-Bootstrap (`wgx`)
-- Debug-Ausgabe optional via `WGX_DEBUG=1`.  
+
+- Debug-Ausgabe optional via `WGX_DEBUG=1`.
 - Dispatcher validiert Subcommands:  
   - Ohne Argument → Usage + `exit 1`.  
   - Unbekannte Befehle → Fehlermeldung auf Englisch (für CI-Logs).  
   - Usage-Hilfe auf `stderr`.
 
 ### SemVer-Caret-Ranges
-- `^0.0.x` → nur Patch-Updates erlaubt.  
+
+- `^0.0.x` → nur Patch-Updates erlaubt.
 - Major-Sprünge blockiert (`^1.2.3` darf nicht auf `2.0.0` gehen).  
 - Automatisierte Bats-Tests dokumentieren dieses Verhalten.
 
