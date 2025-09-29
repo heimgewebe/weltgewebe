@@ -22,7 +22,7 @@
       const mapModule = await modulePromise;
 
       if (!mapHost) {
-        throw new Error("Kein Kartencontainer vorhanden.");
+        throw new Error("Map container not available.");
       }
 
       const maplibregl = (mapModule as MapLibreModule & { default?: MapLibreModule }).default ??
