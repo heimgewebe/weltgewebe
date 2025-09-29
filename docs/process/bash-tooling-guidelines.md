@@ -42,5 +42,8 @@ Prototypen, die wir für die zukünftige Code Re-Entry Phase entworfen haben.
 - **Automatisierte Tests:** Bats-Tests dokumentieren das gewünschte Verhalten
   und verhindern Regressionen, sobald wir die Shell-Module produktiv setzen.
 
-Diese Leitlinien werden zum Gate-C-Übergang erneut evaluiert und bei Bedarf in
+Diese Leitlinien werden zum Gate-C-Übergang[^gate-c] erneut evaluiert und bei Bedarf in
 konkrete Skripte überführt.
+
+
+[^gate-c]: "Gate-C-Übergang" bezeichnet im Weltgewebe-Projekt die Phase, in der Prototypen und Richtlinien in produktive Skripte überführt werden. Weitere Informationen finden sich im [Projektphasen-Dokument](../project-phases.md).
