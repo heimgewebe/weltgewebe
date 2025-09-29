@@ -1,23 +1,12 @@
-node_modules
+# SvelteKit build artifacts
+.svelte-kit/
 
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
+# Node modules
+node_modules/
 
-# OS
-.DS_Store
-Thumbs.db
+# Playwright test reports
+playwright-report/
+test-results/
 
-# Env
-.env
-.env.*
-!.env.example
-!.env.test
-
-# Vite
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
+# Vite cache
+.vite/
