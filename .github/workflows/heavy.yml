@@ -1,0 +1,63 @@
+name: CI (heavy on demand)
+
+on:
+  workflow_dispatch: {}
+  pull_request:
+    types: [labeled, synchronize, reopened, ready_for_review]
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run_heavy: ${{ steps.flags.outputs.run_heavy }}
+    steps:
+      - id: flags
+        shell: bash
+        run: |
+          labels="${{ join(github.event.pull_request.labels.*.name, ' ') }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "run_heavy=true" >> "$GITHUB_OUTPUT"
+          elif echo "$labels" | grep -qiE '(^| )full-ci( |$)'; then
+            echo "run_heavy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_heavy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  e2e:
+    needs: gate
+    if: needs.gate.outputs.run_heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults: { run: { working-directory: apps/web, shell: bash } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: npm ci
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+      - name: Build (production)
+        env: { CI: true }
+        run: npm run build
+      - name: Run Playwright tests
+        env: { CI: true }
+        run: npm run test
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
