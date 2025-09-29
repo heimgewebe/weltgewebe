@@ -13,18 +13,21 @@ Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezi
 ## Kernwerkzeuge
 
 ### shfmt
-- Formatierung gemäß POSIX-kompatiblen Standards.  
-- Nutze `shfmt -w` für automatische Formatierung.  
+
+- Formatierung gemäß POSIX-kompatiblen Standards.
+- Nutze `shfmt -w` für automatische Formatierung.
 - Setze `shfmt -d` in CI-Checks ein, um Abweichungen aufzuzeigen.
 
 ### ShellCheck
-- Analysiert Skripte auf Fehler, Portabilität und Stilfragen.  
-- Lokaler Aufruf: `shellcheck <skript>`.  
+
+- Analysiert Skripte auf Fehler, Portabilität und Stilfragen.
+- Lokaler Aufruf: `shellcheck <skript>`.
 - In CI-Pipelines verpflichtend.
 
 ### Bash Language Server (optional)
-- Bietet Editor-Unterstützung (Autocompletion, Inlay-Hints).  
-- Installierbar via `npm install -g bash-language-server`.  
+
+- Bietet Editor-Unterstützung (Autocompletion, Inlay-Hints).
+- Installierbar via `npm install -g bash-language-server`.
 - Im Editor als LSP aktivieren.
 
 ## Arbeitsweise
@@ -38,8 +41,9 @@ Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezi
 ## Projektspezifische Ergänzungen
 
 ### Devcontainer-Setup
-- **Bash-Version dokumentieren** (z. B. Hinweis auf `nameref` → Bash ≥4.3).  
-- **Paketsammlungen per Referenz (`local -n`)** statt Subshell-Kopien.  
+
+- **Bash-Version dokumentieren** (z. B. Hinweis auf `nameref` → Bash ≥4.3).
+- **Paketsammlungen per Referenz (`local -n`)** statt Subshell-Kopien.
 - **`check`-Ziel ignorieren**, falls versehentlich mitinstalliert.
 
 ### CLI-Bootstrap (`wgx`)
