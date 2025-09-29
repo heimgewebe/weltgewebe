@@ -1,10 +1,10 @@
 {
   "name": "weltgewebe-dev",
-  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+    "ghcr.io/devcontainers/features/rust:1": {}
   },
   "customizations": {
     "vscode": {

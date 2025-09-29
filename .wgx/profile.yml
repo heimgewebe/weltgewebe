@@ -5,18 +5,19 @@ wgx:
   hermetic: true
   dirs:
     web: "apps/web"
-    api: "crates"
+    api: "apps/api"
     data: ".local/state/weltgewebe"
   env:
     RUST_LOG: "info,weltgewebe=debug"
   tasks:
-    doctor: "cargo run -p wg-cli -- doctor"
-    web-dev: "pnpm --dir apps/web dev"
-    api-test: "cargo test -p wg-api -- --nocapture"
-    fmt: "cargo fmt --all"
-    clippy: "cargo clippy --all-targets --all-features -- -D warnings"
+    web:dev: "npm --prefix apps/web run dev"
+    web:build: "npm --prefix apps/web run build"
+    web:check: "npm --prefix apps/web run check"
+    api:test: "cargo test --manifest-path apps/api/Cargo.toml -- --nocapture"
+    api:fmt: "cargo fmt --manifest-path apps/api/Cargo.toml"
+    api:clippy: "cargo clippy --manifest-path apps/api/Cargo.toml --all-targets --all-features -- -D warnings"
   workflows:
     dev-up:
       steps:
-        - task: "api-test"
-        - task: "web-dev"
+        - task: "api:test"
+        - task: "web:check"
