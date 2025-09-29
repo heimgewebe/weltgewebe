@@ -1,9 +1,17 @@
-use std::sync::Arc;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 use axum::{
-    extract::State, http::header, http::HeaderValue, http::StatusCode, response::IntoResponse,
+    extract::State,
+    http::{header, HeaderValue, Request, StatusCode},
+    response::IntoResponse,
 };
 use prometheus::{Encoder, IntCounterVec, IntGaugeVec, Opts, Registry, TextEncoder};
+use tower::{Layer, Service};
 
 use crate::state::ApiState;
 
@@ -83,5 +91,64 @@ pub async fn metrics_handler(State(state): State<ApiState>) -> impl IntoResponse
             tracing::error!(error = %error, "failed to encode metrics");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct MetricsLayer {
+    metrics: Metrics,
+}
+
+impl MetricsLayer {
+    pub fn new(metrics: Metrics) -> Self {
+        Self { metrics }
+    }
+}
+
+impl<S> Layer<S> for MetricsLayer {
+    type Service = MetricsService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        MetricsService {
+            inner,
+            metrics: self.metrics.clone(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MetricsService<S> {
+    inner: S,
+    metrics: Metrics,
+}
+
+impl<S, B> Service<Request<B>> for MetricsService<S>
+where
+    S: Service<Request<B>>,
+    S::Future: Send + 'static,
+    B: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<B>) -> Self::Future {
+        let method = request.method().as_str().to_owned();
+        let path = request.uri().path().to_owned();
+        let metrics = self.metrics.clone();
+        let future = self.inner.call(request);
+
+        Box::pin(async move {
+            let result = future.await;
+            metrics
+                .http_requests_total()
+                .with_label_values(&[method.as_str(), path.as_str()])
+                .inc();
+            result
+        })
     }
 }

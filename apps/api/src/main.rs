@@ -10,7 +10,7 @@ use axum::{routing::get, Router};
 use routes::health::health_routes;
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
-use telemetry::{metrics_handler, BuildInfo, Metrics};
+use telemetry::{metrics_handler, BuildInfo, Metrics, MetricsLayer};
 use tokio::net::TcpListener;
 use tracing_subscriber::{fmt, EnvFilter};
 
@@ -22,15 +22,17 @@ async fn main() -> anyhow::Result<()> {
     let db_pool = initialise_database_pool().await;
     let nats_client = initialise_nats_client().await;
 
+    let metrics = Metrics::try_new(BuildInfo::collect())?;
     let state = ApiState {
         db_pool,
         nats_client,
-        metrics: Metrics::try_new(BuildInfo::collect())?,
+        metrics: metrics.clone(),
     };
 
     let app = Router::new()
         .merge(health_routes())
         .route("/metrics", get(metrics_handler))
+        .layer(MetricsLayer::new(metrics))
         .with_state(state);
 
     let bind_addr: SocketAddr = env::var("API_BIND")
