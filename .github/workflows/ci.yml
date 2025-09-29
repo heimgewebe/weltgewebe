@@ -101,7 +101,7 @@ jobs:
 
   web-build:
     name: Web – build
-    needs: web-check
+    needs: [web-check, changes]
     if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 15
