@@ -3,7 +3,7 @@
 Diese Richtlinie sammelt Best Practices für Bash-Utilities im Weltgewebe-Projekt.
 Sie basiert auf Erfahrungen aus der Arbeit an unserem Entwicklungscontainer,
 CLI-Hilfsprogrammen und Modultests. Die Beispiele orientieren sich an
-Prototypen, die wir für die zukünftige Code-Re-Entry-Phase entworfen haben.
+Prototypen, die wir für die zukünftige Code Re-Entry Phase entworfen haben.
 
 ## Devcontainer-Setup
 
