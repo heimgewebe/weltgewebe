@@ -70,4 +70,4 @@ wie Devcontainer-Setup, CLI-Bootstrap und SemVer.
 ---
 
 Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in produktive Skripte überführt.  
-Weitere Infos: [Projektphasen-Dokument](../project-phases.md).
+Weitere Infos werden im Fahrplan dokumentiert.
