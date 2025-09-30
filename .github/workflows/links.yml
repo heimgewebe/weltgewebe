@@ -1,10 +1,5 @@
 name: links
 on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - "docs/**"
-      - ".github/workflows/links.yml"
   schedule: [{ cron: "0 4 * * *" }]
   workflow_dispatch:
 permissions:
