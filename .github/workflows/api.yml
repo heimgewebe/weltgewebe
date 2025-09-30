@@ -36,6 +36,5 @@ jobs:
         working-directory: apps/api
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: apps/api
-      - name: cargo test
-        run: cargo test --all-features --verbose
+      - run: cargo test --all-features --verbose
         working-directory: apps/api
