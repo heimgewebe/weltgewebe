@@ -20,4 +20,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: lycheeverse/lychee-action@v2
         with:
-          args: --accept 200,429 --max-redirects 5 --exclude-mail --no-progress "docs/**/*.md"
+          args: --accept 200,429 --max-redirects 5 --no-progress "docs/**/*.md"
