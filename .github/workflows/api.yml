@@ -17,6 +17,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Install rustfmt
         run: rustup component add rustfmt
+      - name: Install clippy
+        run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       # - name: cargo-deny (Dependency audit)   # TODO: enable when deny.toml is ready
       #   run: cargo deny check
