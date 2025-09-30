@@ -2208,6 +2208,7 @@ dependencies = [
  "axum",
  "dotenvy",
  "prometheus",
+ "serde_json",
  "sqlx",
  "tokio",
  "tower",
