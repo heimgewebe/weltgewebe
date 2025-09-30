@@ -30,11 +30,24 @@ jobs:
       - name: Ensure clippy is available
         run: rustup component add clippy
       - uses: Swatinem/rust-cache@v2
-      # - name: cargo-deny (Dependency audit)   # TODO: enable when deny.toml is ready
-      #   run: cargo deny check
       - run: cargo fmt --all -- --check
         working-directory: apps/api
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: apps/api
       - run: cargo test --all-features --verbose
+        env:
+          GIT_COMMIT_SHA: ${{ github.sha }}
+          BUILD_TIMESTAMP: ${{ github.run_started_at }}
         working-directory: apps/api
+  dependency-audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (
+      github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security')
+    )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          arguments: check

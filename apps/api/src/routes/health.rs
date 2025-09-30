@@ -8,7 +8,10 @@ use axum::{
 use serde_json::json;
 use sqlx::query_scalar;
 
-use crate::state::ApiState;
+use crate::{
+    state::ApiState,
+    telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
+};
 
 pub fn health_routes() -> Router<ApiState> {
     Router::new()
@@ -30,7 +33,7 @@ async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
             Some(client) => match client.flush().await {
                 Ok(_) => true,
                 Err(error) => {
-                    tracing::warn!(error = %error, "nats health check failed");
+                    readiness_check_failed("nats", &error);
                     false
                 }
             },
@@ -48,7 +51,7 @@ async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
             {
                 Ok(_) => true,
                 Err(error) => {
-                    tracing::warn!(error = %error, "database health check failed");
+                    readiness_check_failed("database", &error);
                     false
                 }
             },
@@ -65,7 +68,7 @@ async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
     };
 
     if status == StatusCode::OK {
-        tracing::info!("all readiness checks passed");
+        readiness_checks_succeeded();
     }
 
     (
