@@ -1,0 +1,74 @@
+name: api-smoke
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/api-smoke.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/api-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: api-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ultra_light_health:
+    name: API – ultra-light smoke (health endpoints)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: apps/api
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release (fast start)
+        run: cargo build --locked --release
+      - name: Run API in background
+        env:
+          API_BIND: 127.0.0.1:8787
+          RUST_LOG: info
+          RUST_BACKTRACE: 1
+        run: |
+          nohup cargo run --locked --release >/tmp/api.log 2>&1 & echo $! > /tmp/api.pid
+          ok=0
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:8787/health/live; then ok=1; break; fi
+            sleep 0.5
+          done
+          [ "$ok" -eq 1 ] || { echo "health/live not ready in time"; exit 1; }
+      - name: Probe /health and /metrics
+        run: |
+          set -euxo pipefail
+          curl -fsS http://127.0.0.1:8787/health/live
+          curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/health/ready | grep -E '^(200|503)$'
+          # /metrics darf 200 liefern, Inhalt ist optional; zeigen die ersten Zeilen, falls vorhanden:
+          curl -fsS http://127.0.0.1:8787/metrics | head -n 5 || echo "no /metrics yet (ok)"
+      - name: Stop API
+        if: always()
+        run: |
+          PID_FILE=/tmp/api.pid
+          if [ -f "$PID_FILE" ]; then
+            PID=$(cat "$PID_FILE")
+            if kill -0 "$PID" 2>/dev/null; then
+              kill "$PID" 2>/dev/null || true
+              wait "$PID" 2>/dev/null || true
+            fi
+          fi
+      - name: Upload API log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-log
+          path: /tmp/api.log

@@ -1,7 +1,17 @@
 name: api
 on:
   pull_request:
-  push: { branches: [main] }
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/api.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/api.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -26,5 +36,6 @@ jobs:
         working-directory: apps/api
       - run: cargo clippy --all-targets -- -D warnings
         working-directory: apps/api
-      - run: cargo test --all-features --verbose
+      - name: cargo test
+        run: cargo test --all-features --verbose
         working-directory: apps/api
