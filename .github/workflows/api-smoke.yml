@@ -45,7 +45,15 @@ jobs:
         run: |
           nohup cargo run --locked --release >/tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
-          sleep 2
+          # Wait up to 5 seconds for the PID file to exist
+          for i in {1..10}; do
+            [ -f /tmp/api.pid ] && break
+            sleep 0.5
+          done
+          if [ ! -f /tmp/api.pid ]; then
+            echo "PID file not found after waiting"
+            exit 1
+          fi
           if ! kill -0 "$(cat /tmp/api.pid)" 2>/dev/null; then
             echo "API process failed to start"
             exit 1
