@@ -31,6 +31,10 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Inject build metadata (compile-time env)
+        run: |
+          echo "GIT_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Build release (fast start)
@@ -40,8 +44,6 @@ jobs:
           API_BIND: 127.0.0.1:8787
           RUST_LOG: info
           RUST_BACKTRACE: 1
-          GIT_COMMIT_SHA: ${{ github.sha }}
-          BUILD_TIMESTAMP: ${{ github.run_started_at }}
         run: |
           nohup cargo run --locked --release >/tmp/api.log 2>&1 & echo $! > /tmp/api.pid
           ok=0
