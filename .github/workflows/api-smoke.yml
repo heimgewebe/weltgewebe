@@ -55,6 +55,11 @@ jobs:
           curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/health/ready | grep -E '^(200|503)$'
           # /metrics darf 200 liefern, Inhalt ist optional; zeigen die ersten Zeilen, falls vorhanden:
           curl -fsS http://127.0.0.1:8787/metrics | head -n 5 || echo "no /metrics yet (ok)"
+      - name: Probe /version (JSON shape)
+        run: |
+          set -euxo pipefail
+          body="$(curl -fsS http://127.0.0.1:8787/version)"
+          echo "$body" | grep -q '"version"' && echo "$body" | grep -q '"commit"' && echo "$body" | grep -q '"build_timestamp"'
       - name: Stop API
         if: always()
         run: |

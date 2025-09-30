@@ -8,6 +8,7 @@ use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{routing::get, Router};
 use routes::health::health_routes;
+use routes::meta::meta_routes;
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
 use telemetry::{metrics_handler, BuildInfo, Metrics, MetricsLayer};
@@ -33,6 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .merge(health_routes())
+        .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .layer(MetricsLayer::new(metrics))
         .with_state(state);
