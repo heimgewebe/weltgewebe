@@ -1,7 +1,17 @@
 name: api
 on:
   pull_request:
-  push: { branches: [main] }
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/api.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/api.yml"
   workflow_dispatch:
 permissions:
   contents: read
