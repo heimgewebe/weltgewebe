@@ -1,0 +1,26 @@
+name: api
+on:
+  pull_request:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test-and-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # - name: cargo-deny (Dependency audit)   # TODO: enable when deny.toml is ready
+      #   run: cargo deny check
+      - run: cargo fmt --all -- --check
+        working-directory: apps/api
+      - run: cargo clippy --all-targets -- -D warnings
+        working-directory: apps/api
+      - run: cargo test --all-features --verbose
+        working-directory: apps/api

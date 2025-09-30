@@ -1,0 +1,24 @@
+name: wgx-smoke
+on:
+  pull_request:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: wgx-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  manifest-doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure manifest exists
+        run: test -f .wgx/profile.yml
+      - name: Dry-run doctor task
+        run: |
+          echo "Simulate 'wgx doctor' until the CLI is vendor-locked."
+          echo "== profile.yml =="
+          sed -n '1,40p' .wgx/profile.yml
+          grep -E "apiVersion:|tasks:" .wgx/profile.yml

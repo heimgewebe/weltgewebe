@@ -1,0 +1,19 @@
+name: links
+on:
+  pull_request:
+  schedule: [{ cron: "0 4 * * *" }]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: links-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  lychee:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: --accept 200,429 --max-redirects 5 --exclude-mail --no-progress "docs/**/*.md"
