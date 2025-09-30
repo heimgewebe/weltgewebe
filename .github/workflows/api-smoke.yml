@@ -43,9 +43,25 @@ jobs:
           GIT_COMMIT_SHA: ${{ github.sha }}
           BUILD_TIMESTAMP: ${{ github.run_started_at }}
         run: |
-          nohup cargo run --locked --release >/tmp/api.log 2>&1 & echo $! > /tmp/api.pid
+          nohup cargo run --locked --release >/tmp/api.log 2>&1 &
+          echo $! > /tmp/api.pid
+          # Wait up to 5 seconds for the PID file to exist
+          for i in {1..10}; do
+            [ -f /tmp/api.pid ] && break
+            sleep 0.5
+          done
+          if [ ! -f /tmp/api.pid ]; then
+            echo "PID file not found after waiting"
+            exit 1
+          fi
+          if ! kill -0 "$(cat /tmp/api.pid)" 2>/dev/null; then
+            echo "API process failed to start"
+            exit 1
+          fi
+      - name: Wait for API health endpoint
+        run: |
           ok=0
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -fsS http://127.0.0.1:8787/health/live; then ok=1; break; fi
             sleep 0.5
           done
