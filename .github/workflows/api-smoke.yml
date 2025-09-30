@@ -40,6 +40,8 @@ jobs:
           API_BIND: 127.0.0.1:8787
           RUST_LOG: info
           RUST_BACKTRACE: 1
+          GIT_COMMIT_SHA: ${{ github.sha }}
+          BUILD_TIMESTAMP: ${{ github.run_started_at }}
         run: |
           nohup cargo run --locked --release >/tmp/api.log 2>&1 & echo $! > /tmp/api.pid
           ok=0

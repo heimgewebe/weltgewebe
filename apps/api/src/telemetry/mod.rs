@@ -5,6 +5,8 @@ use std::{
     task::{Context, Poll},
 };
 
+pub mod health;
+
 use axum::{
     extract::{MatchedPath, State},
     http::{header, HeaderValue, Request, StatusCode},
