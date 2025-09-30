@@ -1,0 +1,29 @@
+name: policies
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: policies-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  limits-file-and-yaml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure limits policy exists
+        run: test -f policies/limits.yaml
+      - name: Lint policies directory with yamllint
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install yamllint
+          if [ -f .yamllint.yml ]; then
+            yamllint -c .yamllint.yml policies
+          else
+            yamllint policies
+          fi
