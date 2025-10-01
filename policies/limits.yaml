@@ -2,7 +2,7 @@
 # Weltgewebe – Soft Limits (v1)
 # Zweck: Leitplanken sichtbar machen. Zunächst nur dokumentarisch; keine harten Gates.
 version: v1
-updated: 2025-09-30
+updated: 2025-02-14
 owner: platform
 
 web:
@@ -26,7 +26,7 @@ ci:
   max_runtime_minutes:
     default: 20
     heavy: 45
-    note: "Deckel pro Job; deckt sich mit aktuellen Timeouts in Workflows."
+    note: "Deckel pro Job; deckt sich mit aktuellen Timeouts in Workflows (Stand Februar 2025)."
 
 observability:
   required:

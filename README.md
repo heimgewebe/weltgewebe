@@ -53,10 +53,12 @@ Bedarf, `.env.example` um diese Variablen zu erweitern.
 
 ### Soft-Limits & Policies
 
+- Zweck: **Frühwarnung, kein Hard-Fail.**
+- Hinweis: **Werden nach und nach automatisiert in CI erzwungen.**
+
 Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget,
-CI-Laufzeiten). Sie sind zunächst **informativ** und werden schrittweise automatisiert
-(Kommentare im CI nach dem Build). Abweichungen sind kein Hard-Fail, dienen aber als
-Frühwarnung und Diskussionsgrundlage im Review.
+CI-Laufzeiten). Sie sind zunächst informativ und werden derzeit über Kommentare in der
+CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 
 ## Continuous Integration
 
