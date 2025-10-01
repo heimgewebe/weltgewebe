@@ -10,7 +10,7 @@ pub mod health;
 use axum::{
     extract::{MatchedPath, State},
     http::{header, HeaderValue, Request, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
 };
 use prometheus::{Encoder, IntCounterVec, IntGaugeVec, Opts, Registry, TextEncoder};
 use tower::{Layer, Service};
@@ -128,9 +128,10 @@ impl<S, B> Service<Request<B>> for MetricsService<S>
 where
     S: Service<Request<B>>,
     S::Future: Send + 'static,
+    S::Response: IntoResponse,
     B: Send + 'static,
 {
-    type Response = S::Response;
+    type Response = Response;
     type Error = S::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -149,15 +150,18 @@ where
         let future = self.inner.call(request);
 
         Box::pin(async move {
-            let result = future.await;
-            if let Ok(ref response) = result {
-                let status = response.status().as_u16().to_string();
-                metrics
-                    .http_requests_total()
-                    .with_label_values(&[method.as_str(), path.as_str(), status.as_str()])
-                    .inc();
+            match future.await {
+                Ok(response) => {
+                    let response = response.into_response();
+                    let status = response.status().as_u16().to_string();
+                    metrics
+                        .http_requests_total()
+                        .with_label_values(&[method.as_str(), path.as_str(), status.as_str()])
+                        .inc();
+                    Ok(response)
+                }
+                Err(error) => Err(error),
             }
-            result
         })
     }
 }
