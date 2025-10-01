@@ -43,6 +43,14 @@ Diese Werte werden **zur Compile-Zeit** gesetzt. In CI exportieren die Workflows
 `GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` als Umgebungsvariablen. Lokal sind sie optional
 und fallen auf `"unknown"` zurück. Es ist **nicht nötig**, diese Variablen in `.env` zu pflegen.
 
+### Build-Zeit-Variablen
+
+`GIT_COMMIT_SHA`, `CARGO_PKG_VERSION` und `BUILD_TIMESTAMP` stammen direkt aus dem
+CI bzw. Compiler. Sie werden **nicht** in `.env` oder `.env.example` gepflegt.
+Beim lokalen Build ohne CI-Kontext setzen wir sie automatisch auf `"unknown"`,
+während die Pipelines im CI die echten Werte einspeisen. Es besteht daher kein
+Bedarf, `.env.example` um diese Variablen zu erweitern.
+
 ### Soft-Limits & Policies
 
 Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget,
