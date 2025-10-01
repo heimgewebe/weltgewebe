@@ -50,7 +50,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
       - name: Run Vale (soft; no fail)
         run: |
-          set -euxo pipefail
+          set -uxo pipefail
           if [ -n "${{ steps.changed.outputs.files }}" ]; then
             ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }} || true
           else
