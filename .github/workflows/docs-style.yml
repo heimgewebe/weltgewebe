@@ -23,7 +23,17 @@ jobs:
           fetch-depth: 2
       - name: Install Vale
         run: |
-          curl -fsSL https://install.goreleaser.com/github.com/errata-ai/vale.sh | sh
+          set -euxo pipefail
+          VALE_VERSION="2.29.6"
+          VALE_OS="Linux_64-bit"
+          VALE_TARBALL="vale_${VALE_VERSION}_${VALE_OS}.tar.gz"
+          VALE_URL="https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/${VALE_TARBALL}"
+          VALE_SHA256_URL="${VALE_URL}.sha256"
+          mkdir -p bin
+          curl -fsSL -o "$VALE_TARBALL" "$VALE_URL"
+          curl -fsSL -o "${VALE_TARBALL}.sha256" "$VALE_SHA256_URL"
+          sha256sum -c "${VALE_TARBALL}.sha256"
+          tar -xzf "$VALE_TARBALL" -C bin
           ./bin/vale --version
       - name: Determine changed docs
         id: changed
