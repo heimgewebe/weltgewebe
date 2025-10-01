@@ -52,8 +52,10 @@ jobs:
           if [[ "$base" != origin/* ]]; then
             base="origin/$base"
           fi
-          git fetch origin "${base#origin/}" --depth=1 || true
-          files=$(git diff --name-only "$base...HEAD" | grep '^docs/' || true)
+          if ! git fetch origin "${base#origin/}" --depth=1; then
+            echo "Warning: unable to fetch $base; continuing with available history" >&2
+          fi
+          files=$(git diff --name-only "$base...HEAD" | awk '/^docs\// {print}' || true)
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$files" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -62,7 +64,9 @@ jobs:
         run: |
           set -euo pipefail
           if [ -n "${{ steps.changed.outputs.files }}" ]; then
-            ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }} || true
+            if ! ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }}; then
+              echo "Vale reported suggestions; continuing without failing the workflow."
+            fi
           else
             echo "No changed docs/* files; skipping."
           fi
@@ -70,4 +74,6 @@ jobs:
       - name: Full docs sweep on manual run (optional)
         if: ${{ github.event_name == 'workflow_dispatch' }}
         run: |
-          ./bin/vale --minAlertLevel=suggestion docs || true
+          if ! ./bin/vale --minAlertLevel=suggestion docs; then
+            echo "Vale reported suggestions during full sweep; continuing without failing the workflow."
+          fi
