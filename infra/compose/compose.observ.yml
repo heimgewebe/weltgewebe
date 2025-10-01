@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports: ["9090:9090"]
+    # volumes:
+    #   - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  grafana:
+    image: grafana/grafana:11.1.4
+    ports: ["3001:3000"]
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+  loki:
+    image: grafana/loki:3.2.1
+    ports: ["3100:3100"]
+  tempo:
+    image: grafana/tempo:2.5.0
+    ports: ["3200:3200"]
