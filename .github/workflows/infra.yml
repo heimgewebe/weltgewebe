@@ -1,19 +1,22 @@
 name: infra
 on:
   pull_request:
-  push: { branches: [main] }
+    branches: [ main ]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "infra/**"
+      - ".github/workflows/infra.yml"
   workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: infra-${{ github.ref }}
-  cancel-in-progress: true
+permissions: { contents: read }
+concurrency: { group: infra-${{ github.ref }}, cancel-in-progress: true }
 jobs:
   compose-core-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Core profile is present
         run: test -f infra/compose/compose.core.yml
-      # - run: test -f infra/compose/compose.observ.yml
