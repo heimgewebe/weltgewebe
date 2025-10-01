@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      CARGO_TARGET_DIR: target
+      CARGO_TARGET_DIR: ./target
     defaults:
       run:
         working-directory: apps/api
