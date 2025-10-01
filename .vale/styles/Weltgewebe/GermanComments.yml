@@ -2,7 +2,7 @@ extends: existence
 message: "TODO/FIXME gefunden: Ergänze Kontext oder verlinke ein Ticket."
 level: suggestion
 ignorecase: true
-scope: text
+scope: raw
 tokens:
   - TODO
   - FIXME
