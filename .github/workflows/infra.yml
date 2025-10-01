@@ -16,6 +16,7 @@ concurrency: { group: infra-${{ github.ref }}, cancel-in-progress: true }
 jobs:
   compose-core-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Core profile is present
