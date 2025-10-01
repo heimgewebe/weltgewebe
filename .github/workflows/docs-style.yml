@@ -1,0 +1,48 @@
+name: docs-style
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "docs/**"
+      - ".vale/**"
+      - ".vale.ini"
+      - ".github/workflows/docs-style.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: docs-style-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  vale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Install Vale
+        run: |
+          curl -fsSL https://install.goreleaser.com/github.com/errata-ai/vale.sh | sh
+          ./bin/vale --version
+      - name: Determine changed docs
+        id: changed
+        run: |
+          base="${{ github.base_ref || 'origin/main' }}"
+          git fetch origin "$base" --depth=1 || true
+          files=$(git diff --name-only "origin/${base#origin/}...HEAD" | grep '^docs/' || true)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Run Vale (soft; no fail)
+        run: |
+          set -euxo pipefail
+          if [ -n "${{ steps.changed.outputs.files }}" ]; then
+            ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }} || true
+          else
+            echo "No changed docs/* files; skipping."
+          fi
+      - name: Full docs sweep on manual run (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          ./bin/vale --minAlertLevel=suggestion docs || true
