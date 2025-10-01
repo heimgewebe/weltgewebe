@@ -47,7 +47,7 @@ struct MetricsInner {
 impl Metrics {
     pub fn try_new(build_info: BuildInfo) -> Result<Self, prometheus::Error> {
         let http_opts = Opts::new("http_requests_total", "Total number of HTTP requests");
-        let http_requests_total = IntCounterVec::new(http_opts, &["method", "path"])?;
+        let http_requests_total = IntCounterVec::new(http_opts, &["method", "path", "status"])?;
 
         let build_opts = Opts::new("build_info", "Build information for the API");
         let build_info_metric = IntGaugeVec::new(build_opts, &["version", "commit", "built_at"])?;
@@ -150,10 +150,13 @@ where
 
         Box::pin(async move {
             let result = future.await;
-            metrics
-                .http_requests_total()
-                .with_label_values(&[method.as_str(), path.as_str()])
-                .inc();
+            if let Ok(ref response) = result {
+                let status = response.status().as_u16().to_string();
+                metrics
+                    .http_requests_total()
+                    .with_label_values(&[method.as_str(), path.as_str(), status.as_str()])
+                    .inc();
+            }
             result
         })
     }
