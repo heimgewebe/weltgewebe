@@ -63,3 +63,7 @@ CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 ## Continuous Integration
 
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
+
+## Beiträge & Docs
+
+Stilprüfung via Vale läuft automatisch bei Doku-PRs; lokal `vale docs/` für Hinweise.

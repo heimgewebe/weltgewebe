@@ -1,0 +1,7 @@
+extends: substitution
+level: suggestion
+ignorecase: true
+message: "Begriff prüfen: '%s' – konsistente Schreibweise wählen."
+swap:
+  "bspw.": "z. B."
+  "u.a.": "u. a."
