@@ -25,6 +25,8 @@ jobs:
     name: API – ultra-light smoke (health endpoints)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      CARGO_TARGET_DIR: ./target
     defaults:
       run:
         working-directory: apps/api
@@ -37,6 +39,9 @@ jobs:
           echo "BUILD_TIMESTAMP=${{ github.run_started_at }}" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            apps/api -> target
       - name: Build release (fast start)
         run: cargo build --locked --release
       - name: Run API in background
