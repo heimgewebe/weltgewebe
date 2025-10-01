@@ -60,6 +60,13 @@ jobs:
             echo "API process failed to start"
             exit 1
           fi
+      - name: Probe /version (startup)
+        run: |
+          set -euo pipefail
+          body="$(curl --fail-with-body http://127.0.0.1:8787/version)"
+          echo "$body" | grep -q '"version"'
+          echo "$body" | grep -q '"commit"'
+          echo "$body" | grep -q '"build_timestamp"'
       - name: Wait for API health endpoint
         run: |
           ok=0
