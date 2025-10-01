@@ -43,7 +43,7 @@ jobs:
           workspaces: |
             apps/api -> target
       - name: Build release (fast start)
-        run: cargo build --locked --release
+        run: cargo build --locked --release --bin weltgewebe-api
       - name: Run API in background
         env:
           API_BIND: 127.0.0.1:8787
@@ -74,6 +74,10 @@ jobs:
         run: |
           set -euo pipefail
           body="$(curl --max-time 10 --fail-with-body http://127.0.0.1:8787/version)"
+          if ! echo "$body" | jq empty >/dev/null 2>&1; then
+            echo "API did not return valid JSON: $body"
+            exit 1
+          fi
           echo "::group::/version body"
           echo "$body"
           echo "::endgroup::"
