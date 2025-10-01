@@ -31,6 +31,25 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001. Code-Re-Entry erfolgt über die Gates A–D (siehe
 > `docs/process/fahrplan.md`).
 
+### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
+
+Die API stellt unter `/version` Build-Infos bereit:
+
+```json
+{ "version": "0.1.0", "commit": "<git sha>", "build_timestamp": "<UTC ISO8601>" }
+```
+
+Diese Werte werden **zur Compile-Zeit** gesetzt. In CI exportieren die Workflows
+`GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` als Umgebungsvariablen. Lokal sind sie optional
+und fallen auf `"unknown"` zurück. Es ist **nicht nötig**, diese Variablen in `.env` zu pflegen.
+
+### Soft-Limits & Policies
+
+Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget,
+CI-Laufzeiten). Sie sind zunächst **informativ** und werden schrittweise automatisiert
+(Kommentare im CI nach dem Build). Abweichungen sind kein Hard-Fail, dienen aber als
+Frühwarnung und Diskussionsgrundlage im Review.
+
 ## Continuous Integration
 
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
