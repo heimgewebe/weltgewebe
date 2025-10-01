@@ -45,7 +45,12 @@ jobs:
           RUST_LOG: info
           RUST_BACKTRACE: 1
         run: |
-          nohup cargo run --locked --release >/tmp/api.log 2>&1 &
+          if [ ! -x ./target/release/weltgewebe-api ]; then
+            echo "compiled API binary missing"
+            ls -al ./target/release || true
+            exit 1
+          fi
+          nohup ./target/release/weltgewebe-api >/tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
           # Wait up to 5 seconds for the PID file to exist
           for i in {1..10}; do
