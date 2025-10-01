@@ -55,7 +55,7 @@ jobs:
           if ! git fetch origin "${base#origin/}" --depth=1; then
             echo "Warning: unable to fetch $base; continuing with available history" >&2
           fi
-          files=$(git diff --name-only "$base...HEAD" | awk '/^docs\//')
+          files=$(git diff --name-only "$base...HEAD" | awk '/^docs\// {print}' || true)
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$files" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
