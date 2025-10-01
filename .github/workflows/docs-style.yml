@@ -1,0 +1,62 @@
+name: docs-style
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "docs/**"
+      - ".vale/**"
+      - ".vale.ini"
+      - ".github/workflows/docs-style.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: docs-style-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  vale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Install Vale
+        run: |
+          set -euxo pipefail
+          VALE_VERSION="2.29.6"
+          VALE_OS="Linux_64-bit"
+          VALE_TARBALL="vale_${VALE_VERSION}_${VALE_OS}.tar.gz"
+          VALE_URL="https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/${VALE_TARBALL}"
+          VALE_SHA256_URL="${VALE_URL}.sha256"
+          mkdir -p bin
+          curl -fsSL -o "$VALE_TARBALL" "$VALE_URL"
+          curl -fsSL -o "${VALE_TARBALL}.sha256" "$VALE_SHA256_URL"
+          sha256sum -c "${VALE_TARBALL}.sha256"
+          tar -xzf "$VALE_TARBALL" -C bin
+          ./bin/vale --version
+      - name: Determine changed docs
+        id: changed
+        run: |
+          base="${{ github.base_ref || 'main' }}"
+          # Ensure base is a remote-tracking branch (origin/branch)
+          if [[ "$base" != origin/* ]]; then
+            base="origin/$base"
+          fi
+          git fetch origin "${base#origin/}" --depth=1 || true
+          files=$(git diff --name-only "$base...HEAD" | grep '^docs/' || true)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$files" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Run Vale (soft; no fail)
+        run: |
+          set -uxo pipefail
+          if [ -n "${{ steps.changed.outputs.files }}" ]; then
+            ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }} || true
+          else
+            echo "No changed docs/* files; skipping."
+          fi
+      - name: Full docs sweep on manual run (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          ./bin/vale --minAlertLevel=suggestion docs || true
