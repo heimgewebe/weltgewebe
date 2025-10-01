@@ -1,7 +1,7 @@
 name: CI (smart PR)
 
 on:
-  pull_request: # Sicherheit: pull_request, da der Workflow Fremdcode ausführt
+  pull_request: # Security: pull_request since workflow executes foreign code
     branches: [ main ]
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
   merge_group: {}
