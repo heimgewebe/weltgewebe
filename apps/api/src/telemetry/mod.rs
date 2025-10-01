@@ -3,6 +3,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Instant,
 };
 
 pub mod health;
@@ -12,7 +13,9 @@ use axum::{
     http::{header, HeaderValue, Request, StatusCode},
     response::IntoResponse,
 };
-use prometheus::{Encoder, IntCounterVec, IntGaugeVec, Opts, Registry, TextEncoder};
+use prometheus::{
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry, TextEncoder,
+};
 use tower::{Layer, Service};
 
 use crate::state::ApiState;
@@ -42,6 +45,7 @@ pub struct Metrics {
 struct MetricsInner {
     registry: Registry,
     pub http_requests_total: IntCounterVec,
+    pub http_request_duration_seconds: HistogramVec,
 }
 
 impl Metrics {
@@ -52,9 +56,17 @@ impl Metrics {
         let build_opts = Opts::new("build_info", "Build information for the API");
         let build_info_metric = IntGaugeVec::new(build_opts, &["version", "commit", "built_at"])?;
 
+        let duration_opts = HistogramOpts::new(
+            "http_request_duration_seconds",
+            "HTTP request duration in seconds",
+        )
+        .buckets(vec![0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]);
+        let http_request_duration_seconds = HistogramVec::new(duration_opts, &["method", "path"])?;
+
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
         registry.register(Box::new(build_info_metric.clone()))?;
+        registry.register(Box::new(http_request_duration_seconds.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -68,12 +80,17 @@ impl Metrics {
             inner: Arc::new(MetricsInner {
                 registry,
                 http_requests_total,
+                http_request_duration_seconds,
             }),
         })
     }
 
     pub fn http_requests_total(&self) -> &IntCounterVec {
         &self.inner.http_requests_total
+    }
+
+    pub fn http_request_duration_seconds(&self) -> &HistogramVec {
+        &self.inner.http_request_duration_seconds
     }
 
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {
@@ -126,13 +143,13 @@ pub struct MetricsService<S> {
 
 impl<S, B> Service<Request<B>> for MetricsService<S>
 where
-    S: Service<Request<B>>,
-    S::Future: Send + 'static,
+    S: Service<Request<B>, Response = axum::response::Response>,
+    S::Future: Send,
     B: Send + 'static,
 {
-    type Response = S::Response;
+    type Response = axum::response::Response;
     type Error = S::Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+    type Future = ResponseFuture<S::Future>;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
@@ -148,16 +165,73 @@ where
         let metrics = self.metrics.clone();
         let future = self.inner.call(request);
 
-        Box::pin(async move {
-            let result = future.await;
-            if let Ok(ref response) = result {
-                let status = response.status().as_u16().to_string();
-                metrics
-                    .http_requests_total()
-                    .with_label_values(&[method.as_str(), path.as_str(), status.as_str()])
-                    .inc();
+        ResponseFuture::new(future, metrics, method, path)
+    }
+}
+
+pub struct ResponseFuture<F>
+where
+    F: Future,
+{
+    inner: Pin<Box<F>>,
+    metrics: Metrics,
+    method: String,
+    path: String,
+    start: Option<Instant>,
+}
+
+impl<F> ResponseFuture<F>
+where
+    F: Future,
+{
+    pub fn new(future: F, metrics: Metrics, method: String, path: String) -> Self {
+        Self {
+            inner: Box::pin(future),
+            metrics,
+            method,
+            path,
+            start: None,
+        }
+    }
+}
+
+impl<F, E> Future for ResponseFuture<F>
+where
+    F: Future<Output = Result<axum::response::Response, E>> + Send,
+{
+    type Output = Result<axum::response::Response, E>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+        if this.start.is_none() {
+            this.start = Some(Instant::now());
+        }
+
+        match this.inner.as_mut().poll(cx) {
+            Poll::Ready(result) => {
+                if let Some(start) = this.start.take() {
+                    if let Ok(ref response) = result {
+                        let status = response.status().as_u16().to_string();
+                        this.metrics
+                            .http_requests_total()
+                            .with_label_values(&[
+                                this.method.as_str(),
+                                this.path.as_str(),
+                                status.as_str(),
+                            ])
+                            .inc();
+                    }
+
+                    let duration = start.elapsed().as_secs_f64();
+                    this.metrics
+                        .http_request_duration_seconds()
+                        .with_label_values(&[this.method.as_str(), this.path.as_str()])
+                        .observe(duration);
+                }
+
+                Poll::Ready(result)
             }
-            result
-        })
+            Poll::Pending => Poll::Pending,
+        }
     }
 }

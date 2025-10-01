@@ -43,6 +43,24 @@ Diese Werte werden **zur Compile-Zeit** gesetzt. In CI exportieren die Workflows
 `GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` als Umgebungsvariablen. Lokal sind sie optional
 und fallen auf `"unknown"` zurück. Es ist **nicht nötig**, diese Variablen in `.env` zu pflegen.
 
+### Observability & Metriken
+
+Die API exportiert Prometheus-kompatible Kennzahlen unter `/metrics`:
+
+- `http_requests_total{method,path,status}` zählt eingehende HTTP-Requests pro Methode, Route und Statuscode.
+- `http_request_duration_seconds{method,path}` erfasst Latenzen als Histogramm mit den Standard-Buckets `0.005s` bis `1s`.
+
+Beispielabfragen für Dashboards oder die Prometheus-Konsole:
+
+- Erfolgs- vs. Fehlerraten:
+  ```promql
+  sum by (status) (rate(http_requests_total[5m]))
+  ```
+- 95%-Perzentil der Request-Latenz je Route:
+  ```promql
+  histogram_quantile(0.95, sum by (le, method, path) (rate(http_request_duration_seconds_bucket[5m])))
+  ```
+
 ### Soft-Limits & Policies
 
 Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget,
