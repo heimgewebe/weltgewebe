@@ -1,0 +1,46 @@
+name: Docs Style
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  prose:
+    name: Vale prose lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vale
+        run: |
+          set -euo pipefail
+          VALE_VERSION=3.4.1
+          curl -fsSL "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" -o vale.tar.gz
+          tar -xzf vale.tar.gz
+          sudo install -m 0755 vale /usr/local/bin/vale
+          rm -rf vale vale.tar.gz LICENSE README.md
+          vale --version
+      - name: Run Vale
+        run: |
+          set -euo pipefail
+          config=""
+          if [ -n "${VALE_CONFIG_PATH:-}" ] && [ -f "${VALE_CONFIG_PATH:-}" ]; then
+            config="$VALE_CONFIG_PATH"
+          elif [ -f ".vale.ini" ]; then
+            config=".vale.ini"
+          elif [ -f ".vale/vale.ini" ]; then
+            config=".vale/vale.ini"
+          fi
+
+          if [ -z "$config" ]; then
+            echo "::notice::No Vale configuration found. Skipping prose lint."
+            exit 0
+          fi
+
+          vale --config "$config" .
