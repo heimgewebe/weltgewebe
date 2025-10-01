@@ -38,9 +38,13 @@ jobs:
       - name: Determine changed docs
         id: changed
         run: |
-          base="${{ github.base_ref || 'origin/main' }}"
-          git fetch origin "$base" --depth=1 || true
-          files=$(git diff --name-only "origin/${base#origin/}...HEAD" | grep '^docs/' || true)
+          base="${{ github.base_ref || 'main' }}"
+          # Ensure base is a remote-tracking branch (origin/branch)
+          if [[ "$base" != origin/* ]]; then
+            base="origin/$base"
+          fi
+          git fetch origin "${base#origin/}" --depth=1 || true
+          files=$(git diff --name-only "$base...HEAD" | grep '^docs/' || true)
           echo "files<<EOF" >> $GITHUB_OUTPUT
           echo "$files" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
