@@ -152,7 +152,7 @@ where
         Box::pin(async move {
             match future.await {
                 Ok(response) => {
-                    let response = response.into_response();
+                    let response: Response = response.into_response();
                     let status = response.status().as_u16().to_string();
                     metrics
                         .http_requests_total()
