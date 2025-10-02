@@ -1,0 +1,14 @@
+content_security_policy:
+  default-src: "'self'"
+  img-src: "'self' data:"
+  script-src: "'self' 'unsafe-inline'"
+  connect-src:
+    - "'self'"
+    - https://api.weltgewebe.internal
+allowed_origins:
+  - https://app.weltgewebe.example
+  - https://console.weltgewebe.example
+strict_transport_security:
+  max_age_seconds: 63072000
+  include_subdomains: true
+  preload: true

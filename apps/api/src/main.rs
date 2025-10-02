@@ -1,3 +1,4 @@
+mod config;
 mod routes;
 mod state;
 mod telemetry;
@@ -7,6 +8,7 @@ use std::{env, net::SocketAddr};
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{routing::get, Router};
+use config::AppConfig;
 use routes::health::health_routes;
 use routes::meta::meta_routes;
 use sqlx::postgres::PgPoolOptions;
@@ -20,6 +22,7 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     init_tracing()?;
 
+    let app_config = AppConfig::load().context("failed to load API configuration")?;
     let (db_pool, db_pool_configured) = initialise_database_pool().await;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
@@ -29,6 +32,7 @@ async fn main() -> anyhow::Result<()> {
         db_pool_configured,
         nats_client,
         nats_configured,
+        config: app_config.clone(),
         metrics: metrics.clone(),
     };
 
