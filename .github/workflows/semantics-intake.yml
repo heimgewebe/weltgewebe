@@ -1,0 +1,38 @@
+name: semantics-intake
+on:
+  pull_request:
+    paths:
+      - "contracts/semantics/**"
+      - ".gewebe/in/**"
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ajv
+        run: npm i -g ajv-cli@5.0.0
+      - name: Validate incoming JSONL (if present)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for f in .gewebe/in/*.jsonl; do
+            [ -f "$f" ] || continue
+            schema=""
+            case "$f" in
+              *.nodes.jsonl) schema=contracts/semantics/node.schema.json ;;
+              *.edges.jsonl) schema=contracts/semantics/edge.schema.json ;;
+            esac
+            [ -n "$schema" ] || continue
+            found=1
+            while IFS= read -r line; do
+              echo "$line" | ajv validate -s "$schema" -d @- || exit 1
+            done < "$f"
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No .gewebe/in/*.jsonl found; nothing to validate."
+          else
+            echo "Validation OK"
+          fi

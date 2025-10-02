@@ -40,3 +40,8 @@ docs:
     - "docs/runbooks/codespaces-recovery.md"
     - "docs/runbooks/observability.md"
   note: "observability.md folgt; zunächst nur als Reminder gelistet."
+
+semantics:
+  max_nodes_jsonl_mb: 50
+  max_edges_jsonl_mb: 50
+  note: "Nur Informationsaufnahme; Import-Job folgt separat."

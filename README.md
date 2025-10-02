@@ -60,6 +60,12 @@ Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Bud
 CI-Laufzeiten). Sie sind zunächst informativ und werden derzeit über Kommentare in der
 CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 
+## Semantik (Externe Quelle: semantAH)
+
+- Verträge: `contracts/semantics/*.schema.json`
+- Manuelle Aufnahme: siehe `docs/runbooks/semantics-intake.md`
+- Aktuell: nur Infos, kein Event-Import.
+
 ## Continuous Integration
 
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
