@@ -51,6 +51,18 @@ Beim lokalen Build ohne CI-Kontext setzen wir sie automatisch auf `"unknown"`,
 während die Pipelines im CI die echten Werte einspeisen. Es besteht daher kein
 Bedarf, `.env.example` um diese Variablen zu erweitern.
 
+### Konfigurations-Overrides (HA_*)
+
+Die API liest Standardwerte aus `configs/app.defaults.yml`. Für Deployments können
+wir diese Defaults über folgende Umgebungsvariablen anpassen:
+
+- `HA_FADE_DAYS`
+- `HA_RON_DAYS`
+- `HA_ANONYMIZE_OPT_IN`
+- `HA_DELEGATION_EXPIRE_DAYS`
+
+Optional kann `APP_CONFIG_PATH` auf eine alternative YAML-Datei zeigen.
+
 ### Soft-Limits & Policies
 
 - Zweck: **Frühwarnung, kein Hard-Fail.**

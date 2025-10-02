@@ -24,6 +24,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Validate default app config
+        run: |
+          python3 - <<'PY'
+          import yaml
+          from pathlib import Path
+
+          with Path("configs/app.defaults.yml").open("r", encoding="utf-8") as fh:
+              yaml.safe_load(fh)
+          PY
       - name: Inject build metadata (compile-time env)
         run: |
           echo "GIT_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"

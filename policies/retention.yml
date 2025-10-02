@@ -1,0 +1,19 @@
+data_lifecycle:
+  fade_days: 7
+  ron_days: 84
+  delegation_expire_days: 28
+  anonymize_opt_in_default: true
+forget_pipeline:
+  - name: primary_accounts
+    actions:
+      - type: anonymize
+        deadline_days: 7
+      - type: delete
+        deadline_days: 84
+  - name: delegation_tokens
+    actions:
+      - type: revoke
+        deadline_days: 28
+compliance:
+  privacy_by_design: true
+  ron_anonymization: enabled
