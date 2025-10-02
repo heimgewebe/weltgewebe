@@ -12,7 +12,7 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub const DEFAULT_PATH = "configs/app.defaults.yml";
+    pub const DEFAULT_PATH: &'static str = "configs/app.defaults.yml";
 
     pub fn load() -> Result<Self> {
         let path = env::var("APP_CONFIG_PATH").unwrap_or_else(|_| Self::DEFAULT_PATH.to_string());
