@@ -50,7 +50,8 @@ impl Metrics {
         let http_requests_total = IntCounterVec::new(http_opts, &["method", "path", "status"])?;
 
         let build_opts = Opts::new("build_info", "Build information for the API");
-        let build_info_metric = IntGaugeVec::new(build_opts, &["version", "commit", "built_at"])?;
+        let build_info_metric =
+            IntGaugeVec::new(build_opts, &["version", "commit", "build_timestamp"])?;
 
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
