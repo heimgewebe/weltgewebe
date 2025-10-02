@@ -16,6 +16,7 @@ jobs:
       - name: Validate incoming JSONL (if present)
         run: |
           set -euo pipefail
+          shopt -s nullglob
           found=0
           for f in .gewebe/in/*.jsonl; do
             [ -f "$f" ] || continue
