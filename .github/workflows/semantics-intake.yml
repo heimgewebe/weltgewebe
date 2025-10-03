@@ -28,7 +28,7 @@ jobs:
             [ -n "$schema" ] || continue
             found=1
             while IFS= read -r line; do
-              echo "$line" | ajv validate -s "$schema" -d @- || exit 1
+              echo "$line" | ajv validate -s "$schema" -d - || exit 1
             done < "$f"
           done
           if [ "$found" -eq 0 ]; then
