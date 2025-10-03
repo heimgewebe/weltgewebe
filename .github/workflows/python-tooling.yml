@@ -23,8 +23,8 @@ jobs:
 
       # uv installieren (offizieller Guide)
       # Docs: https://docs.astral.sh/uv/guides/integration/github/
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
 
       - name: Show uv version
         run: ~/.local/bin/uv --version
