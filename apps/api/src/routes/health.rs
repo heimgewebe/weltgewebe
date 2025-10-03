@@ -1,7 +1,7 @@
 use axum::{
     extract::State,
-    http::{header, HeaderMap, HeaderValue, StatusCode},
-    response::IntoResponse,
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
@@ -19,62 +19,16 @@ pub fn health_routes() -> Router<ApiState> {
         .route("/health/ready", get(ready))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        config::AppConfig,
-        telemetry::{BuildInfo, Metrics},
-    };
-    use anyhow::Result;
-    use axum::extract::State;
-    use axum::Json;
-
-    fn test_state() -> Result<ApiState> {
-        let metrics = Metrics::try_new(BuildInfo {
-            version: "test",
-            commit: "test",
-            build_timestamp: "test",
-        })?;
-
-        Ok(ApiState {
-            db_pool: None,
-            db_pool_configured: false,
-            nats_client: None,
-            nats_configured: false,
-            config: AppConfig {
-                fade_days: 7,
-                ron_days: 84,
-                anonymize_opt_in: true,
-                delegation_expire_days: 28,
-            },
-            metrics,
-        })
-    }
-
-    #[tokio::test]
-    async fn readiness_succeeds_when_optional_dependencies_are_disabled() -> Result<()> {
-        let state = test_state()?;
-
-        let (status, _headers, Json(body)) = ready(State(state)).await;
-
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(body["status"], "ok");
-        assert_eq!(body["checks"]["database"], true);
-        assert_eq!(body["checks"]["nats"], true);
-
-        Ok(())
-    }
+async fn live() -> Response {
+    let body = Json(json!({ "status": "ok" }));
+    let mut response = body.into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
 }
 
-async fn live() -> impl IntoResponse {
-    let mut headers = HeaderMap::new();
-    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-
-    (StatusCode::OK, headers, Json(json!({ "status": "ok" })))
-}
-
-async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
+async fn ready(State(state): State<ApiState>) -> Response {
     let nats_ready = if state.nats_configured {
         match state.nats_client.as_ref() {
             Some(client) => match client.flush().await {
@@ -118,18 +72,92 @@ async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
         readiness_checks_succeeded();
     }
 
-    let mut headers = HeaderMap::new();
-    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    let body = Json(json!({
+        "status": if status == StatusCode::OK { "ok" } else { "error" },
+        "checks": {
+            "database": database_ready,
+            "nats": nats_ready,
+        }
+    }));
 
-    (
-        status,
-        headers,
-        Json(json!({
-            "status": if status == StatusCode::OK { "ok" } else { "error" },
-            "checks": {
-                "database": database_ready,
-                "nats": nats_ready,
-            }
-        })),
-    )
+    let mut response = body.into_response();
+    *response.status_mut() = status;
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::AppConfig,
+        telemetry::{BuildInfo, Metrics},
+    };
+    use anyhow::Result;
+    use axum::{body, extract::State, http::header};
+    use serde_json::Value;
+
+    fn test_state() -> Result<ApiState> {
+        let metrics = Metrics::try_new(BuildInfo {
+            version: "test",
+            commit: "test",
+            build_timestamp: "test",
+        })?;
+
+        Ok(ApiState {
+            db_pool: None,
+            db_pool_configured: false,
+            nats_client: None,
+            nats_configured: false,
+            config: AppConfig {
+                fade_days: 7,
+                ron_days: 84,
+                anonymize_opt_in: true,
+                delegation_expire_days: 28,
+            },
+            metrics,
+        })
+    }
+
+    #[tokio::test]
+    async fn live_returns_ok_status_and_no_store_header() -> Result<()> {
+        let response = live().await;
+        let status = response.status();
+        let cache_control = response.headers().get(header::CACHE_CONTROL).cloned();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            cache_control.as_ref().and_then(|value| value.to_str().ok()),
+            Some("no-store")
+        );
+        assert_eq!(body["status"], "ok");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn readiness_succeeds_when_optional_dependencies_are_disabled() -> Result<()> {
+        let state = test_state()?;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let cache_control = response.headers().get(header::CACHE_CONTROL).cloned();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            cache_control.as_ref().and_then(|value| value.to_str().ok()),
+            Some("no-store")
+        );
+        assert_eq!(body["status"], "ok");
+        assert_eq!(body["checks"]["database"], true);
+        assert_eq!(body["checks"]["nats"], true);
+
+        Ok(())
+    }
 }
