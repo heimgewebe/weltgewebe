@@ -2,6 +2,11 @@ use crate::{config::AppConfig, telemetry::Metrics};
 use async_nats::Client as NatsClient;
 use sqlx::PgPool;
 
+// ApiState is constructed for future expansion of the API server state. It is
+// currently unused by the binary, so we explicitly allow dead code here to keep
+// the CI pipeline green while maintaining the transparent intent of the state
+// container.
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct ApiState {
     pub db_pool: Option<PgPool>,
