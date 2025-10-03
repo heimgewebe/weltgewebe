@@ -22,7 +22,6 @@ pub fn health_routes() -> Router<ApiState> {
 async fn live() -> Response {
     let body = Json(json!({ "status": "ok" }));
     let mut response = body.into_response();
-    *response.status_mut() = StatusCode::OK;
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
