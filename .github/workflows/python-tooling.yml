@@ -1,0 +1,55 @@
+name: python-tooling
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "**/*.py"
+      - ".github/workflows/python-tooling.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "**/*.py"
+      - ".github/workflows/python-tooling.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-tooling-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tooling:
+    name: Python tooling checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Add user base binary directory to PATH
+        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Cache uv downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock', '**/requirements.txt', '**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Run uv tooling
+        run: |
+          uv --version
+          if [ -f uv.lock ]; then uv sync --locked
+          elif [ -f requirements.txt ]; then uv pip sync requirements.txt
+          elif [ -f pyproject.toml ]; then uv sync
+          else echo "No Python deps"; fi
