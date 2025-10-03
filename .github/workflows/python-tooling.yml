@@ -47,14 +47,26 @@ jobs:
         run: |
           set -euxo pipefail
           UV=~/.local/bin/uv
-          if [ -f "uv.lock" ]; then
-            $UV sync --locked
-          elif [ -f "requirements.txt" ]; then
-            $UV pip sync requirements.txt
-          elif [ -f "pyproject.toml" ]; then
-            $UV sync
-          else
-            echo "No Python dependency manifest found. Skipping sync."
+          found=0
+          # Find all directories containing a manifest, prefer uv.lock > requirements.txt > pyproject.toml
+          while IFS= read -r dir; do
+            found=1
+            if [ -f "$dir/uv.lock" ]; then
+              echo "Syncing dependencies in $dir using uv.lock"
+              (cd "$dir" && $UV sync --locked)
+            elif [ -f "$dir/requirements.txt" ]; then
+              echo "Syncing dependencies in $dir using requirements.txt"
+              (cd "$dir" && $UV pip sync requirements.txt)
+            elif [ -f "$dir/pyproject.toml" ]; then
+              echo "Syncing dependencies in $dir using pyproject.toml"
+              (cd "$dir" && $UV sync)
+            fi
+          done < <(
+            find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) \
+              -exec dirname {} \; | sort -u
+          )
+          if [ "$found" -eq 0 ]; then
+            echo "No Python dependency manifest found in any directory. Skipping sync."
           fi
 
       # Beispiel: ein kleines Sanity-Kommando (falls später Tools wie ruff/black o.ä. kommen)
