@@ -1,6 +1,7 @@
 # Observability – Local Profile
 
 ## Start
+
 ```bash
 docker compose -f infra/compose/compose.observ.yml up -d
 ```
