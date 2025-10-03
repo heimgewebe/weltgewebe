@@ -168,7 +168,7 @@ delegation_expire_days: 28
         let cfg = AppConfig::load_from_path(file.path())?;
         assert_eq!(cfg.fade_days, 7);
         assert_eq!(cfg.ron_days, 84);
-        assert_eq!(cfg.anonymize_opt_in, true);
+        assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
 
         Ok(())
@@ -188,7 +188,7 @@ delegation_expire_days: 28
         let cfg = AppConfig::load_from_path(file.path())?;
         assert_eq!(cfg.fade_days, 10);
         assert_eq!(cfg.ron_days, 90);
-        assert_eq!(cfg.anonymize_opt_in, false);
+        assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
 
         Ok(())
