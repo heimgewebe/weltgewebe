@@ -1,0 +1,9 @@
+[project]
+name = "weltgewebe-tools"
+version = "0.1.0"
+description = "Python tooling for Weltgewebe (CLI, lint, ETL, experiments)"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.uv]
+# uv verwaltet Lockfile uv.lock im Projektroot oder hier im Unterordner.
