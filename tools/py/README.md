@@ -1,6 +1,7 @@
 # Weltgewebe – Python Tools
 
 ## Schnellstart
+
 ```bash
 cd tools/py
 uv sync        # erstellt venv, installiert deps (aktuell leer)
