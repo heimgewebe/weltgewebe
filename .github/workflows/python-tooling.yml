@@ -1,75 +1,82 @@
 name: python-tooling
 
 on:
-  push:
-    branches: [ "main" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ main ]
+    paths:
+      - "**/*.py"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/uv.lock"
+      - ".github/workflows/python-tooling.yml"
+  push:
+    branches: [ main ]
+    paths:
+      - "**/*.py"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/uv.lock"
+      - ".github/workflows/python-tooling.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
+concurrency:
+  group: python-tooling-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  uv-check:
+  tooling:
+    name: Python tooling checks
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Python bereitstellen (für native Builds/ABI-Erkennung)
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      # uv installieren (offizieller Guide)
-      # Docs: https://docs.astral.sh/uv/guides/integration/github/
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v1
+      # Official uv setup (adds `uv` to PATH)
+      - uses: astral-sh/setup-uv@v1
 
-      - name: Show uv version
-        run: ~/.local/bin/uv --version
-
-      # Optional: Cache für uv (Download-/Build-Cache)
-      # (uv cacht bereits aggressiv; Cache hier ist ein Extra-Booster)
-      - name: Cache uv cache dir
+      - name: Cache uv downloads
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/uv
+          path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-
 
-      # Falls wir Python-Tools/Deps definieren, werden sie hier synchronisiert.
-      # Reihenfolge: uv.lock preferiert, sonst requirements.txt, sonst pyproject.toml
+      - name: Show uv version
+        run: uv --version
+
       - name: Sync dependencies if present
         shell: bash
         run: |
-          set -euxo pipefail
-          UV=~/.local/bin/uv
+          set -euo pipefail
           found=0
-          # Find all directories containing a manifest, prefer uv.lock > requirements.txt > pyproject.toml
+          # Scan all dirs that contain a Python manifest.
           while IFS= read -r dir; do
             found=1
             if [ -f "$dir/uv.lock" ]; then
-              echo "Syncing dependencies in $dir using uv.lock"
-              (cd "$dir" && $UV sync --locked)
+              echo "::group::uv sync (locked) in $dir"
+              (cd "$dir" && uv sync --locked)
+              echo "::endgroup::"
             elif [ -f "$dir/requirements.txt" ]; then
-              echo "Syncing dependencies in $dir using requirements.txt"
-              (cd "$dir" && $UV pip sync requirements.txt)
+              echo "::group::uv pip sync in $dir"
+              (cd "$dir" && uv pip sync requirements.txt)
+              echo "::endgroup::"
             elif [ -f "$dir/pyproject.toml" ]; then
-              echo "Syncing dependencies in $dir using pyproject.toml"
-              (cd "$dir" && $UV sync)
+              echo "::group::uv sync in $dir"
+              (cd "$dir" && uv sync)
+              echo "::endgroup::"
             fi
-          done < <(
-            find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) \
-              -exec dirname {} \; | sort -u
-          )
+          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) -exec dirname {} \; | sort -u)
           if [ "$found" -eq 0 ]; then
-            echo "No Python dependency manifest found in any directory. Skipping sync."
+            echo "No Python dependency manifests found. Skipping sync."
           fi
 
-      # Beispiel: ein kleines Sanity-Kommando (falls später Tools wie ruff/black o.ä. kommen)
       - name: Python sanity check
-        run: |
-          python -c "import sys; print('python ok:', sys.version)"
+        run: python -c "import sys; print('python ok:', sys.version)"
