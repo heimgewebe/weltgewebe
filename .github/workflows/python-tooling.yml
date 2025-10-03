@@ -5,13 +5,19 @@ on:
     branches: [ main ]
     paths:
       - "**/*.py"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
   push:
     branches: [ main ]
     paths:
       - "**/*.py"
+      - "**/pyproject.toml"
+      - "**/requirements*.txt"
+      - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -30,26 +36,47 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
-      - name: Add user base binary directory to PATH
-        run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      # Official uv setup (adds `uv` to PATH)
+      - uses: astral-sh/setup-uv@v1
 
       - name: Cache uv downloads
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock', '**/requirements.txt', '**/pyproject.toml') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock') }}
           restore-keys: |
-            ${{ runner.os }}-uv-
+            uv-${{ runner.os }}-
 
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Show uv version
+        run: uv --version
 
-      - name: Run uv tooling
+      - name: Sync dependencies if present
+        shell: bash
         run: |
-          uv --version
-          if [ -f uv.lock ]; then uv sync --locked
-          elif [ -f requirements.txt ]; then uv pip sync requirements.txt
-          elif [ -f pyproject.toml ]; then uv sync
-          else echo "No Python deps"; fi
+          set -euo pipefail
+          found=0
+          # Scan all dirs that contain a Python manifest.
+          while IFS= read -r dir; do
+            found=1
+            if [ -f "$dir/uv.lock" ]; then
+              echo "::group::uv sync (locked) in $dir"
+              (cd "$dir" && uv sync --locked)
+              echo "::endgroup::"
+            elif [ -f "$dir/requirements.txt" ]; then
+              echo "::group::uv pip sync in $dir"
+              (cd "$dir" && uv pip sync requirements.txt)
+              echo "::endgroup::"
+            elif [ -f "$dir/pyproject.toml" ]; then
+              echo "::group::uv sync in $dir"
+              (cd "$dir" && uv sync)
+              echo "::endgroup::"
+            fi
+          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) -exec dirname {} \; | sort -u)
+          if [ "$found" -eq 0 ]; then
+            echo "No Python dependency manifests found. Skipping sync."
+          fi
+
+      - name: Python sanity check
+        run: python -c "import sys; print('python ok:', sys.version)"

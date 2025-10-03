@@ -25,6 +25,13 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
   just check
   ```
 
+- Öffnest du das Repo im VS Code Devcontainer, richtet `.devcontainer/post-create.sh`
+  die benötigten Tools (u. a. `just`, `uv`, `vale`) automatisch ein. Danach stehen
+  Python-Helfer über `uv` sofort zur Verfügung (`uv --version`).
+  Falls du Python-Tools in Unterordnern verwaltest (z. B. `tools/py/`), achte darauf,
+  das entstehende `uv.lock` mit einzuchecken – standardmäßig landet es im jeweiligen
+  Projektstamm (Root oder Unterordner).
+
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
 - Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
 
