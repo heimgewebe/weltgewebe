@@ -53,6 +53,7 @@ jobs:
           API_BIND: 127.0.0.1:8787
           RUST_LOG: info
           RUST_BACKTRACE: 1
+          APP_CONFIG_PATH: ${{ github.workspace }}/configs/app.defaults.yml
         run: |
           if [ ! -x ./target/release/weltgewebe-api ]; then
             echo "compiled API binary missing"
