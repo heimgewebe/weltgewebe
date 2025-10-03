@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{header, StatusCode},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::get,
     Json, Router,
@@ -68,11 +68,10 @@ mod tests {
 }
 
 async fn live() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({ "status": "ok" })),
-    )
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+
+    (StatusCode::OK, headers, Json(json!({ "status": "ok" })))
 }
 
 async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
@@ -119,9 +118,12 @@ async fn ready(State(state): State<ApiState>) -> impl IntoResponse {
         readiness_checks_succeeded();
     }
 
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+
     (
         status,
-        [(header::CACHE_CONTROL, "no-store")],
+        headers,
         Json(json!({
             "status": if status == StatusCode::OK { "ok" } else { "error" },
             "checks": {
