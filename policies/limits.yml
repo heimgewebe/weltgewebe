@@ -1,8 +1,0 @@
-rate_limits:
-  burst: 100
-  sustained_per_minute: 600
-payload_limits:
-  max_bytes: 1048576
-  metadata_max_bytes: 16384
-streaming:
-  max_concurrent_streams: 16
