@@ -15,7 +15,7 @@
 ## Nächste Schritte (knapp & machbar)
 - [x] `docs/README.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
 - [ ] `.wgx/profile.yml`: Standard-Tasks `up|lint|test|build|smoke` definieren (Repo-SSoT).
-- [ ] `/health/ready`: Policy-Signal-Platzhalter ausgeben (z. B. `governance_timer_ok=true`).
+- [ ] `/health/ready`: Policy-Signal-Platzhalter ausgeben (z. B. als JSON-Objekt wie `{ "governance_timer_ok": true, "rate_limit_ok": true }`), um den Status relevanter Policies maschinenlesbar bereitzustellen.
 - [ ] `ci/`: Playwright-Smoke für Map-UI (1–2 kritische Szenarien) hinzufügen.
 - [ ] `ci/`: `cost-report.md` (S1–S4) als regelmäßiges Artefakt erzeugen.
 - [ ] `ci/`: SBOM+Signatur+Audit als Gate in Release-Workflow aktivieren.
