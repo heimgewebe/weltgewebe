@@ -13,11 +13,8 @@ on:
       - "apps/api/**"
       - ".github/workflows/api.yml"
   workflow_dispatch:
-permissions:
-  contents: read
-concurrency:
-  group: api-${{ github.ref }}
-  cancel-in-progress: true
+permissions: { contents: read }
+concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }
 jobs:
   test-and-lint:
     runs-on: ubuntu-latest

@@ -1,0 +1,25 @@
+name: security
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - "Cargo.*"
+      - "deny.toml"
+      - ".github/workflows/security.yml"
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: anchore/syft-action@v0.16.0
+        with:
+          output: sbom.spdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json

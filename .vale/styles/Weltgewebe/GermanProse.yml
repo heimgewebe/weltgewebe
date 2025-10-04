@@ -3,5 +3,6 @@ level: suggestion
 ignorecase: true
 message: "Begriff prüfen: '%s' – konsistente Schreibweise wählen."
 swap:
+  "z.B.": "z. B."
   "bspw.": "z. B."
   "u.a.": "u. a."

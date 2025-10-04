@@ -12,7 +12,7 @@ on:
       - ".github/workflows/infra.yml"
   workflow_dispatch:
 permissions: { contents: read }
-concurrency: { group: infra-${{ github.ref }}, cancel-in-progress: true }
+concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }
 jobs:
   compose-core-smoke:
     runs-on: ubuntu-latest
