@@ -9,10 +9,13 @@
 - **UI/Produkt-Definition testbar machen:** UI-Spezifika (Map-UI, Drawer, Zeitleiste, Knotentypen) als Playwright-/Vitest-Szenarien automatisieren, um Regressionen früh zu erkennen.
 - **Föderierung & Archiv-Strategie festigen:** Hybrid-Indexierung durch wiederkehrende Archiv-Validierung, URL-Kanonisierungstests und CI-Jobs absichern.
 - **Delegation/Abstimmung operationalisieren:** Policy-Engines und Telemetrie-Events (z. B. `delegation_expired`, `proposal_auto_passed`) etablieren, um Governance-Wirkung zu messen.
-- **Kosten-Szenarien als Code umsetzen:** Kostenmodelle (S1–S4) in Versionierung halten und regelmäßige `cost-report.md`-Artefakte in CI erzeugen.
-- **Security als Release-Gate durchsetzen:** SBOM, Signaturen, Key-Rotation und CVE-Schwellen als harte CI-Gates etablieren, um Releases zu schützen.
+- **Kosten-Szenarien als Code umsetzen:** Kostenmodelle (S1–S4) in Versionierung halten und regelmäßige
+  `cost-report.md`-Artefakte in CI erzeugen.
+- **Security als Release-Gate durchsetzen:** SBOM, Signaturen, Key-Rotation und CVE-Schwellen als harte
+  CI-Gates etablieren, um Releases zu schützen.
 
 ## Nächste Schritte (knapp & machbar)
+
 - [x] `docs/README.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
 - [ ] `.wgx/profile.yml`: Standard-Tasks `up|lint|test|build|smoke` definieren (Repo-SSoT).
 - [ ] `/health/ready`: Policy-Signal-Platzhalter ausgeben (z. B. als JSON-Objekt wie `{ "governance_timer_ok": true, "rate_limit_ok": true }`), um den Status relevanter Policies maschinenlesbar bereitzustellen.
