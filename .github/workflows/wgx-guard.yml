@@ -39,7 +39,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install PyYAML
-        run: python -m pip install --user pyyaml
+        run: python -m pip install pyyaml
       - name: Run schema-lite check
         run: |
           python - <<'PY'
