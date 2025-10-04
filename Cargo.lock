@@ -1592,6 +1592,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ba7f3c7f6c9fb0c0ab1b78c3afd5c06d51f1fd8cb17f866a3a33ef2b90c852e"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "serial_test"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2187,6 +2200,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
 
 [[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94c6f3b6a60a7a31e58d8eab73e611b795882ec58c2c299c1a7e2da52d58a40d"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2263,6 +2285,7 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
+ "serde_yaml",
  "serial_test",
  "sqlx",
  "tempfile",
