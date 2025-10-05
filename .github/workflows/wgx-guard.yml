@@ -13,7 +13,7 @@ on:
       - ".github/workflows/wgx-guard.yml"
       - "pyproject.toml"
       - "Cargo.toml"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read

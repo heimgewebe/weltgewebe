@@ -10,9 +10,14 @@ on:
     paths:
       - "infra/**"
       - ".github/workflows/infra.yml"
-  workflow_dispatch:
-permissions: { contents: read }
-concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   compose-core-smoke:
     runs-on: ubuntu-latest
