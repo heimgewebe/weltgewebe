@@ -65,6 +65,8 @@ jobs:
                 || { echo "::error::uv sync failed in $dir"; status=1; }
             fi
             echo "::endgroup::"
+          # Use '-type f' to ensure only files named 'pyproject.toml' are processed, not directories.
+          # This improves specificity and avoids issues if a directory is named 'pyproject.toml' (unlikely).
           done < <(find . -type f -name "pyproject.toml" -print0)
 
           exit "$status"
