@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# -*- coding: utf-8 -*-
+
 """Validate the minimal schema for ``.wgx/profile.yml``.
 
 The wgx-guard workflow embeds this script and previously relied on an inline
@@ -14,7 +17,7 @@ import importlib.util
 import pathlib
 import sys
 from types import ModuleType
-from typing import Sequence
+from collections.abc import Iterable, Mapping
 
 
 REQUIRED_TOP_LEVEL_KEYS = ("version", "env_priority", "tooling", "tasks")
@@ -27,7 +30,7 @@ def _error(message: str) -> None:
     print(f"::error::{message}")
 
 
-def _missing_keys(data: dict[str, object], keys: Iterable[str]) -> list[str]:
+def _missing_keys(data: Mapping[str, object], keys: Iterable[str]) -> list[str]:
     return [key for key in keys if key not in data]
 
 
