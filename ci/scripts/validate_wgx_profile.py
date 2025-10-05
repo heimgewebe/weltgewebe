@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import pathlib
 import sys
+from types import ModuleType
 from typing import Sequence
-
-import yaml
 
 
 def _error(message: str) -> None:
@@ -21,7 +22,26 @@ def _require_keys(data: dict[str, object], keys: Sequence[str]) -> bool:
     return True
 
 
+def _load_yaml_module() -> ModuleType | None:
+    existing = sys.modules.get("yaml")
+    if isinstance(existing, ModuleType):
+        return existing
+
+    module = importlib.util.find_spec("yaml")
+    if module is None:
+        _error(
+            "PyYAML not installed. Install it with 'python -m pip install pyyaml' before running this script."
+        )
+        return None
+
+    return importlib.import_module("yaml")
+
+
 def main() -> int:
+    yaml = _load_yaml_module()
+    if yaml is None:
+        return 1
+
     profile_path = pathlib.Path(".wgx/profile.yml")
     try:
         contents = profile_path.read_text(encoding="utf-8")
