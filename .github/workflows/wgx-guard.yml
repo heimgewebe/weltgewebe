@@ -46,10 +46,20 @@ jobs:
       - name: (Optional) UV bootstrap (pyproject present)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
         run: |
+          set -euo pipefail
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv --version
-          uv sync --frozen
+          while IFS= read -r -d '' file; do
+            dir="$(dirname "$file")"
+            echo "::group::uv sync in $dir"
+            if [ -f "$dir/uv.lock" ]; then
+              (cd "$dir" && uv sync --frozen)
+            else
+              (cd "$dir" && uv sync)
+            fi
+            echo "::endgroup::"
+          done < <(find . -name "pyproject.toml" -print0)
 
       - name: Done
         run: echo "wgx-guard passed ✅"
