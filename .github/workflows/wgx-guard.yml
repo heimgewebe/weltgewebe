@@ -49,7 +49,7 @@ jobs:
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv --version
-          uv sync --frozen
+          if [ -f uv.lock ]; then uv sync --frozen; else uv sync; fi
 
       - name: Sync nested Python projects (non-fatal per dir, fail at end if any)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
