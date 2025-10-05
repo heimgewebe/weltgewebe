@@ -2,7 +2,7 @@
 vulnerability = "deny"
 yanked = "warn"
 notice = "warn"
-unmaintained = "warn"
+unsound = "warn"
 ignore = []
 
 [bans]
