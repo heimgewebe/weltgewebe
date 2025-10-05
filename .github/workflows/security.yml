@@ -21,5 +21,5 @@ jobs:
           output-file: sbom.spdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: weltgewebe-sbom-spdx
+          name: weltgewebe-sbom-spdx-json
           path: sbom.spdx.json
