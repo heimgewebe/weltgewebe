@@ -3,7 +3,7 @@ mod routes;
 mod state;
 mod telemetry;
 
-use std::{env, net::SocketAddr};
+use std::{env, io::ErrorKind, net::SocketAddr};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
@@ -19,7 +19,17 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
+    let dotenv = dotenvy::dotenv();
+    if let Ok(path) = &dotenv {
+        tracing::debug!(?path, "loaded environment variables from .env file");
+    }
+
+    if let Err(error) = dotenv {
+        match &error {
+            dotenvy::Error::Io(io_error) if io_error.kind() == ErrorKind::NotFound => {},
+            _ => tracing::warn!(%error, "failed to load environment from .env file"),
+        }
+    }
     init_tracing()?;
 
     let app_config = AppConfig::load().context("failed to load API configuration")?;
