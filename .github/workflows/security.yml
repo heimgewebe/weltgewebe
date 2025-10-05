@@ -16,8 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install syft
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
+            sh -s -- -b /usr/local/bin
       - uses: anchore/sbom-action@v0.15.7
         with:
+          syft-path: /usr/local/bin/syft
           output-file: sbom.spdx.json
       - uses: actions/upload-artifact@v4
         with:
