@@ -17,12 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install syft
+        env:
+          SYFT_BIN_DIR: ${{ runner.temp }}/syft
         run: |
+          set -euo pipefail
+          mkdir -p "$SYFT_BIN_DIR"
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
-            sh -s -- -b $HOME/.local/bin
+            sh -s -- -b "$SYFT_BIN_DIR"
       - uses: anchore/sbom-action@v0.15.7
         with:
-          syft-path: $HOME/.local/bin/syft
+          syft-path: ${{ runner.temp }}/syft/syft
           output-file: sbom.spdx.json
       - uses: actions/upload-artifact@v4
         with:
