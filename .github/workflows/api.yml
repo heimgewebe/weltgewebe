@@ -70,7 +70,7 @@ jobs:
     name: dependency audit (on-demand)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Standardmäßig nicht bei jedem PR/Push: nur manuell oder via Label "security"
+    # By default not on every PR/push: only manually or via "security" label
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
