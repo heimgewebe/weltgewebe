@@ -22,13 +22,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$SYFT_BIN_DIR"
-          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | \
-            sh -s -- -b "$SYFT_BIN_DIR"
+          SYFT_VERSION="v0.102.0"
+          SYFT_TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
+          curl -sSfL -o "$SYFT_BIN_DIR/$SYFT_TARBALL" "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${SYFT_TARBALL}"
+          tar -xzf "$SYFT_BIN_DIR/$SYFT_TARBALL" -C "$SYFT_BIN_DIR"
+          rm "$SYFT_BIN_DIR/$SYFT_TARBALL"
+          chmod +x "$SYFT_BIN_DIR/syft"
       - uses: anchore/sbom-action@v0.15.7
         with:
           syft-path: ${{ runner.temp }}/syft/syft
           output-file: sbom.spdx.json
       - uses: actions/upload-artifact@v4
         with:
-          name: weltgewebe-sbom-spdx-json
+          name: weltgewebe_sbom_spdx_json
           path: sbom.spdx.json
