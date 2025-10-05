@@ -12,5 +12,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate archive routes (static hints)
         run: |
-          grep -R "rel=\"canonical\"" -n apps/web || echo "::warning::no canonicals found"
-          grep -R "/archive/" -n apps/web || echo "::warning::no archive routes"
+          if ! grep -R "rel=\"canonical\"" -n apps/web; then
+            echo "::error::no canonicals found"
+            exit 1
+          fi
+          if ! grep -R "/archive/" -n apps/web; then
+            echo "::error::no archive routes"
+            exit 1
+          fi
