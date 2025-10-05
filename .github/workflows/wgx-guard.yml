@@ -46,20 +46,37 @@ jobs:
       - name: (Optional) UV bootstrap (pyproject present)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
         run: |
-          set -euo pipefail
           curl -LsSf https://astral.sh/uv/install.sh | sh
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           uv --version
+          uv sync --frozen
+
+      - name: Sync nested Python projects (non-fatal per dir, fail at end if any)
+        if: ${{ hashFiles('**/pyproject.toml') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
           while IFS= read -r -d '' file; do
             dir="$(dirname "$file")"
             echo "::group::uv sync in $dir"
+            rc=0
             if [ -f "$dir/uv.lock" ]; then
-              (cd "$dir" && uv sync --frozen)
+              # innerhalb eines Subshells 'set +e' erlauben, um weiterzumachen
+              ( set +e; cd "$dir" && uv sync --frozen ); rc=$?
             else
-              (cd "$dir" && uv sync)
+              ( set +e; cd "$dir" && uv sync ); rc=$?
+            fi
+            if [ $rc -ne 0 ]; then
+              echo "::error::uv sync failed in $dir (exit $rc)"
+              failures=$((failures+1))
             fi
             echo "::endgroup::"
           done < <(find . -name "pyproject.toml" -print0)
+          if [ "$failures" -gt 0 ]; then
+            echo "::error::$failures Python workspace(s) failed to sync"
+            exit 1
+          fi
 
       - name: Done
         run: echo "wgx-guard passed ✅"
