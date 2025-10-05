@@ -45,38 +45,29 @@ jobs:
 
       - name: (Optional) UV bootstrap (pyproject present)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          uv --version
-          if [ -f uv.lock ]; then uv sync --frozen; else uv sync; fi
-
-      - name: Sync nested Python projects (non-fatal per dir, fail at end if any)
-        if: ${{ hashFiles('**/pyproject.toml') != '' }}
         shell: bash
         run: |
           set -euo pipefail
-          failures=0
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          UV="$HOME/.local/bin/uv"
+          "$UV" --version
+
+          status=0
           while IFS= read -r -d '' file; do
             dir="$(dirname "$file")"
             echo "::group::uv sync in $dir"
-            rc=0
             if [ -f "$dir/uv.lock" ]; then
-              # allow 'set +e' within a subshell to continue on error
-              ( set +e; cd "$dir" && uv sync --frozen ); rc=$?
+              ( cd "$dir" && "$UV" sync --locked ) \
+                || { echo "::error::uv sync failed in $dir (locked)"; status=1; }
             else
-              ( set +e; cd "$dir" && uv sync ); rc=$?
-            fi
-            if [ $rc -ne 0 ]; then
-              echo "::error::uv sync failed in $dir (exit $rc)"
-              failures=$((failures+1))
+              ( cd "$dir" && "$UV" sync ) \
+                || { echo "::error::uv sync failed in $dir"; status=1; }
             fi
             echo "::endgroup::"
-          done < <(find . -name "pyproject.toml" -print0)
-          if [ "$failures" -gt 0 ]; then
-            echo "::error::$failures Python workspace(s) failed to sync"
-            exit 1
-          fi
+          done < <(find . -type f -name "pyproject.toml" -print0)
+
+          exit "$status"
 
       - name: Done
         run: echo "wgx-guard passed ✅"
