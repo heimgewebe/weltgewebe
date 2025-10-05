@@ -55,7 +55,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # fmt & clippy am Repo-Root: deckt alle Crates/Workspaces ab
+      # fmt & clippy at repo root: covers all crates/workspaces
       - name: Format check (workspace)
         run: cargo fmt --all -- --check
 
