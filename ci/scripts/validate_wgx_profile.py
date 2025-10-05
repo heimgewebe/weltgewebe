@@ -1,4 +1,11 @@
-"""Validate the minimal schema for .wgx/profile.yml."""
+"""Validate the minimal schema for ``.wgx/profile.yml``.
+
+The wgx-guard workflow embeds this script and previously relied on an inline
+Python snippet. A subtle indentation slip in that snippet caused
+``IndentationError`` failures in CI.  To make the validation robust we keep the
+logic in this dedicated module and ensure the implementation is intentionally
+simple and well formatted.
+"""
 
 from __future__ import annotations
 
@@ -10,16 +17,18 @@ from types import ModuleType
 from typing import Sequence
 
 
+REQUIRED_TOP_LEVEL_KEYS = ("version", "env_priority", "tooling", "tasks")
+REQUIRED_TASKS = ("up", "lint", "test", "build", "smoke")
+
+
 def _error(message: str) -> None:
+    """Emit a GitHub Actions friendly error message."""
+
     print(f"::error::{message}")
 
 
-def _require_keys(data: dict[str, object], keys: Sequence[str]) -> bool:
-    missing = [key for key in keys if key not in data]
-    if missing:
-        _error(f"missing keys: {missing}")
-        return False
-    return True
+def _missing_keys(data: dict[str, object], keys: Iterable[str]) -> list[str]:
+    return [key for key in keys if key not in data]
 
 
 def _load_yaml_module() -> ModuleType | None:
@@ -43,6 +52,7 @@ def main() -> int:
         return 1
 
     profile_path = pathlib.Path(".wgx/profile.yml")
+
     try:
         contents = profile_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -50,7 +60,7 @@ def main() -> int:
         return 1
 
     try:
-        data = yaml.safe_load(contents)
+        data = yaml.safe_load(contents) or {}
     except yaml.YAMLError as exc:  # pragma: no cover - best effort logging
         _error(f"failed to parse YAML: {exc}")
         return 1
@@ -59,8 +69,9 @@ def main() -> int:
         _error("profile must be a mapping")
         return 1
 
-    top_level_required = ["version", "env_priority", "tooling", "tasks"]
-    if not _require_keys(data, top_level_required):
+    missing_top_level = _missing_keys(data, REQUIRED_TOP_LEVEL_KEYS)
+    if missing_top_level:
+        _error(f"missing keys: {missing_top_level}")
         return 1
 
     env_priority = data.get("env_priority")
@@ -73,10 +84,10 @@ def main() -> int:
         _error("tasks must be a mapping")
         return 1
 
-    for task_name in ["up", "lint", "test", "build", "smoke"]:
-        if task_name not in tasks:
-            _error(f"task '{task_name}' missing")
-            return 1
+    missing_tasks = _missing_keys(tasks, REQUIRED_TASKS)
+    if missing_tasks:
+        _error(f"missing tasks: {missing_tasks}")
+        return 1
 
     print("wgx profile OK")
     return 0

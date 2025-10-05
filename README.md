@@ -58,6 +58,11 @@ Beim lokalen Build ohne CI-Kontext setzen wir sie automatisch auf `"unknown"`,
 während die Pipelines im CI die echten Werte einspeisen. Es besteht daher kein
 Bedarf, `.env.example` um diese Variablen zu erweitern.
 
+### Policies-Pfad (Override)
+
+Standardmäßig sucht die API die Datei `policies/limits.yaml`. Für abweichende Layouts
+kannst du den Pfad via `POLICY_LIMITS_PATH=/pfad/zur/limits.yaml` setzen.
+
 ### Konfigurations-Overrides (HA_*)
 
 Die API liest Standardwerte aus `configs/app.defaults.yml`. Für Deployments können

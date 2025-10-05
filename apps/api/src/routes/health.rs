@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{env, fs, path::Path};
 
 use axum::{
     extract::State,
@@ -64,15 +64,22 @@ async fn ready(State(state): State<ApiState>) -> Response {
         true
     };
 
-    let policy_paths = [
+    // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
+    // Fallbacks stay for dev/CI convenience.
+    let env_path = env::var("POLICY_LIMITS_PATH")
+        .ok()
+        .map(Path::new)
+        .map(Path::to_path_buf);
+    let fallback_paths = [
         Path::new("policies/limits.yaml").to_path_buf(),
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
     ];
-    let policy_ready = policy_paths
-        .iter()
-        .find(|path| path.exists())
-        .and_then(|path| fs::read_to_string(path).ok())
+    let policy_ready = env_path
+        .into_iter()
+        .chain(fallback_paths)
+        .find(|p| p.exists())
+        .and_then(|p| fs::read_to_string(p).ok())
         .is_some();
 
     let status = if database_ready && nats_ready && policy_ready {
