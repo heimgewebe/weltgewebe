@@ -1,4 +1,4 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, path::{Path, PathBuf}};
 
 use axum::{
     extract::State,
@@ -66,10 +66,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 
     // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
     // Fallbacks stay for dev/CI convenience.
-    let env_path = env::var("POLICY_LIMITS_PATH")
-        .ok()
-        .map(Path::new)
-        .map(Path::to_path_buf);
+    let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
     let fallback_paths = [
         Path::new("policies/limits.yaml").to_path_buf(),
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
