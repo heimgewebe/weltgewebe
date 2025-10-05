@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Optional: Validiert, dass eine Standard-App-Config parsebar ist (falls vorhanden)
+      # Optional: Validates that a default app config is parseable (if present)
       - name: Validate app.defaults.yml (optional)
         if: hashFiles('configs/app.defaults.yml') != ''
         run: |
