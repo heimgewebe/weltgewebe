@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Err(error) = dotenv {
         match &error {
-            dotenvy::Error::Io(io_error) if io_error.kind() == ErrorKind::NotFound => {},
+            dotenvy::Error::Io(io_error) if io_error.kind() == ErrorKind::NotFound => {}
             _ => tracing::warn!(%error, "failed to load environment from .env file"),
         }
     }
