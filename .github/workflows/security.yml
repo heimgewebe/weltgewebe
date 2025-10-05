@@ -1,38 +1,108 @@
 name: security
+
 on:
+  workflow_dispatch: {}
   pull_request:
+    branches: [main]
     paths:
-      - "apps/api/**"
-      - "Cargo.*"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
       - "deny.toml"
       - ".github/workflows/security.yml"
+    types: [opened, synchronize, labeled]
+  schedule:
+    - cron: "45 2 * * *"   # nightly audit (02:45 UTC ≈ 04:45 Berlin)
+    - cron: "10 3 * * 0"   # weekly deny (03:10 UTC ≈ 05:10 Berlin)
+    - cron: "25 3 * * 0"   # weekly SBOM (03:25 UTC ≈ 05:25 Berlin)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  cargo-deny:
+  audit:
+    name: cargo audit (nightly + on-demand)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'security')) ||
+      (github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v4
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --force
+      - name: Run cargo audit (JSON report)
+        run: cargo audit --json | tee cargo-audit-report.json
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit-report
+          path: cargo-audit-report.json
+          retention-days: 14
+
+  deny:
+    name: cargo-deny (weekly + on-demand)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'security')) ||
+      (github.event_name == 'schedule' && github.event.schedule == '10 3 * * 0')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked --force
+      - name: Run cargo deny (JSON report)
+        run: cargo deny --format json check | tee cargo-deny-report.json
+      - name: Upload cargo-deny report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-deny-report
+          path: cargo-deny-report.json
+          retention-days: 14
+
   sbom:
+    name: syft sbom (weekly + on-demand)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' &&
+       contains(github.event.pull_request.labels.*.name, 'security')) ||
+      (github.event_name == 'schedule' && github.event.schedule == '25 3 * * 0')
     steps:
       - uses: actions/checkout@v4
-      - name: Install syft
-        env:
-          SYFT_BIN_DIR: ${{ runner.temp }}/syft
-        run: |
-          set -euo pipefail
-          mkdir -p "$SYFT_BIN_DIR"
-          SYFT_VERSION="v0.102.0"
-          SYFT_TARBALL="syft_${SYFT_VERSION#v}_linux_amd64.tar.gz"
-          curl -sSfL -o "$SYFT_BIN_DIR/$SYFT_TARBALL" "https://github.com/anchore/syft/releases/download/${SYFT_VERSION}/${SYFT_TARBALL}"
-          tar -xzf "$SYFT_BIN_DIR/$SYFT_TARBALL" -C "$SYFT_BIN_DIR"
-          rm "$SYFT_BIN_DIR/$SYFT_TARBALL"
-          chmod +x "$SYFT_BIN_DIR/syft"
-      - uses: anchore/sbom-action@v0.15.7
+      - name: Generate SBOM with Syft
+        uses: anchore/sbom-action@v0
         with:
-          syft-path: ${{ runner.temp }}/syft/syft
+          path: .
+          format: spdx-json
           output-file: sbom.spdx.json
-      - uses: actions/upload-artifact@v4
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: weltgewebe_sbom_spdx_json
+          name: sbom-spdx
           path: sbom.spdx.json
+          retention-days: 21
