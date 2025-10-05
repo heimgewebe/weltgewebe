@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: anchore/syft-action@v0.16.0
+      - uses: anchore/sbom-action@v0.15.7
         with:
-          output: sbom.spdx.json
+          output-file: sbom.spdx.json
       - uses: actions/upload-artifact@v4
         with:
           name: sbom
