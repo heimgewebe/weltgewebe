@@ -43,24 +43,25 @@ jobs:
       - name: Validate minimal schema keys
         run: |
           python - <<'PY'
-import sys, yaml, pathlib
-p = pathlib.Path(".wgx/profile.yml")
-data = yaml.safe_load(p.read_text(encoding="utf-8"))
-required_top = ["version","env_priority","tooling","tasks"]
-missing = [k for k in required_top if k not in data]
-if missing:
-    print(f"::error::missing keys: {missing}")
-    sys.exit(1)
-envp = data["env_priority"]
-if not isinstance(envp, list) or not envp:
-    print("::error::env_priority must be a non-empty list")
-    sys.exit(1)
-for t in ["up","lint","test","build","smoke"]:
-    if t not in data["tasks"]:
-        print(f"::error::task '{t}' missing")
-        sys.exit(1)
-print("wgx profile OK")
-PY
+            import sys, yaml, pathlib
+
+            p = pathlib.Path(".wgx/profile.yml")
+            data = yaml.safe_load(p.read_text(encoding="utf-8"))
+            required_top = ["version", "env_priority", "tooling", "tasks"]
+            missing = [k for k in required_top if k not in data]
+            if missing:
+                print(f"::error::missing keys: {missing}")
+                sys.exit(1)
+            envp = data["env_priority"]
+            if not isinstance(envp, list) or not envp:
+                print("::error::env_priority must be a non-empty list")
+                sys.exit(1)
+            for t in ["up", "lint", "test", "build", "smoke"]:
+                if t not in data["tasks"]:
+                    print(f"::error::task '{t}' missing")
+                    sys.exit(1)
+            print("wgx profile OK")
+            PY
 
       - name: (Optional) UV bootstrap (pyproject present)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}

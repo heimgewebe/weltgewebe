@@ -50,15 +50,13 @@ jobs:
         working-directory: apps/api
       - run: cargo test --all-features --verbose
         working-directory: apps/api
-  dependency-audit:
-    name: dependency audit
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || (
-      github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security')
-    )
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: EmbarkStudios/cargo-deny-action@v1
-        with:
-          arguments: check
+    dependency-audit:
+      name: dependency audit
+      runs-on: ubuntu-latest
+      if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
+      steps:
+        - uses: actions/checkout@v4
+        - uses: dtolnay/rust-toolchain@stable
+        - uses: EmbarkStudios/cargo-deny-action@v1
+          with:
+            arguments: check
