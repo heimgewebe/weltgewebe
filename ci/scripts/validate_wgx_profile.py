@@ -33,7 +33,7 @@ def _missing_keys(data: dict[str, object], keys: Iterable[str]) -> list[str]:
 
 def _load_yaml_module() -> ModuleType | None:
     existing = sys.modules.get("yaml")
-    if isinstance(existing, ModuleType):
+    if isinstance(existing, ModuleType) and hasattr(existing, "safe_load"):
         return existing
 
     module = importlib.util.find_spec("yaml")
