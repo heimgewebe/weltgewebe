@@ -62,7 +62,7 @@ jobs:
             echo "::group::uv sync in $dir"
             rc=0
             if [ -f "$dir/uv.lock" ]; then
-              # innerhalb eines Subshells 'set +e' erlauben, um weiterzumachen
+              # allow 'set +e' within a subshell to continue on error
               ( set +e; cd "$dir" && uv sync --frozen ); rc=$?
             else
               ( set +e; cd "$dir" && uv sync ); rc=$?
