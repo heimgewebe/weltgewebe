@@ -1,0 +1,4 @@
+metric,value,unit
+request_cost_eur,0.0002,EUR
+session_avg_requests,12,req
+active_users,1000,users

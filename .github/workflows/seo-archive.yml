@@ -1,0 +1,22 @@
+name: seo-archive
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "docs/**"
+      - ".github/workflows/seo-archive.yml"
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate archive routes (static hints)
+        run: |
+          if ! grep -R "rel=\"canonical\"" -n apps/web; then
+            echo "::error::no canonicals found"
+            exit 1
+          fi
+          if ! grep -R "/archive/" -n apps/web; then
+            echo "::error::no archive routes"
+            exit 1
+          fi

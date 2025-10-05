@@ -1,3 +1,5 @@
+use std::{fs, path::Path};
+
 use axum::{
     extract::State,
     http::{header, HeaderValue, StatusCode},
@@ -62,7 +64,18 @@ async fn ready(State(state): State<ApiState>) -> Response {
         true
     };
 
-    let status = if database_ready && nats_ready {
+    let policy_paths = [
+        Path::new("policies/limits.yaml").to_path_buf(),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
+    ];
+    let policy_ready = policy_paths
+        .iter()
+        .find(|path| path.exists())
+        .and_then(|path| fs::read_to_string(path).ok())
+        .is_some();
+
+    let status = if database_ready && nats_ready && policy_ready {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
@@ -77,6 +90,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
         "checks": {
             "database": database_ready,
             "nats": nats_ready,
+            "policy": policy_ready,
         }
     }));
 
@@ -157,6 +171,7 @@ mod tests {
         assert_eq!(body["status"], "ok");
         assert_eq!(body["checks"]["database"], true);
         assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
     }
