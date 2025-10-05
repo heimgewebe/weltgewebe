@@ -58,8 +58,8 @@ jobs:
             dir="$(dirname "$file")"
             echo "::group::uv sync in $dir"
             if [ -f "$dir/uv.lock" ]; then
-              ( cd "$dir" && "$UV" sync --locked ) \
-                || { echo "::error::uv sync failed in $dir (locked)"; status=1; }
+              ( cd "$dir" && "$UV" sync --frozen ) \
+                || { echo "::error::uv sync failed in $dir (frozen)"; status=1; }
             else
               ( cd "$dir" && "$UV" sync ) \
                 || { echo "::error::uv sync failed in $dir"; status=1; }
