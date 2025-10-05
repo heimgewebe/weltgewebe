@@ -4,8 +4,10 @@ on:
     paths:
       - "contracts/semantics/**"
       - ".gewebe/in/**"
-  workflow_dispatch:
-permissions: { contents: read }
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
 jobs:
   validate:
     runs-on: ubuntu-latest

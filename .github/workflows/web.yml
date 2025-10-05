@@ -11,9 +11,14 @@ on:
     paths:
       - "apps/web/**"
       - ".github/workflows/web.yml"
-  workflow_dispatch:
-permissions: { contents: read }
-concurrency: { group: ${{ github.workflow }}-${{ github.ref }}, cancel-in-progress: true }
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   budget-and-build:
     runs-on: ubuntu-latest
