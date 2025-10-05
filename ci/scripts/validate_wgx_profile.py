@@ -9,11 +9,12 @@ simple and well formatted.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import pathlib
 import sys
-from typing import Iterable
-
-import yaml
+from types import ModuleType
+from typing import Sequence
 
 
 REQUIRED_TOP_LEVEL_KEYS = ("version", "env_priority", "tooling", "tasks")
@@ -30,7 +31,26 @@ def _missing_keys(data: dict[str, object], keys: Iterable[str]) -> list[str]:
     return [key for key in keys if key not in data]
 
 
+def _load_yaml_module() -> ModuleType | None:
+    existing = sys.modules.get("yaml")
+    if isinstance(existing, ModuleType) and hasattr(existing, "safe_load"):
+        return existing
+
+    module = importlib.util.find_spec("yaml")
+    if module is None:
+        _error(
+            "PyYAML not installed. Install it with 'python -m pip install pyyaml' before running this script."
+        )
+        return None
+
+    return importlib.import_module("yaml")
+
+
 def main() -> int:
+    yaml = _load_yaml_module()
+    if yaml is None:
+        return 1
+
     profile_path = pathlib.Path(".wgx/profile.yml")
 
     try:
