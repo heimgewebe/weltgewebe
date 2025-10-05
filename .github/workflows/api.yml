@@ -1,62 +1,84 @@
 name: api
+
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "configs/app.defaults.yml"
       - ".github/workflows/api.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
+      - "configs/app.defaults.yml"
       - ".github/workflows/api.yml"
   workflow_dispatch: {}
 
 permissions:
   contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   test-and-lint:
+    name: test and lint (rust)
     runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always  # keep cargo output colorized in CI logs
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Validate default app config
+
+      # Optional: Validiert, dass eine Standard-App-Config parsebar ist (falls vorhanden)
+      - name: Validate app.defaults.yml (optional)
+        if: hashFiles('configs/app.defaults.yml') != ''
         run: |
           python3 - <<'PY'
-          import yaml
+          import yaml, sys
           from pathlib import Path
-
-          with Path("configs/app.defaults.yml").open("r", encoding="utf-8") as fh:
-              yaml.safe_load(fh)
+          p = Path("configs/app.defaults.yml")
+          yaml.safe_load(p.read_text(encoding="utf-8"))
+          print("configs/app.defaults.yml: OK")
           PY
-      - name: Inject build metadata (compile-time env)
-        run: |
-          echo "GIT_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
-          echo "BUILD_TIMESTAMP=${{ github.run_started_at }}" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install rustfmt
-        run: rustup component add rustfmt
-      - name: Ensure clippy is available
-        run: rustup component add clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all -- --check
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add rust components
+        run: rustup component add rustfmt clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # fmt & clippy am Repo-Root: deckt alle Crates/Workspaces ab
+      - name: Format check (workspace)
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings, workspace)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test (all features, verbose)
         working-directory: apps/api
-      - run: cargo clippy --all-targets -- -D warnings
-        working-directory: apps/api
-      - run: cargo test --all-features --verbose
-        working-directory: apps/api
-    dependency-audit:
-      name: dependency audit
-      runs-on: ubuntu-latest
-      if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
-      steps:
-        - uses: actions/checkout@v4
-        - uses: dtolnay/rust-toolchain@stable
-        - uses: EmbarkStudios/cargo-deny-action@v1
-          with:
-            arguments: check
+        run: cargo test --all-features --verbose
+
+  dependency-audit:
+    name: dependency audit (on-demand)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Standardmäßig nicht bei jedem PR/Push: nur manuell oder via Label "security"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --force
+      - name: cargo audit
+        run: cargo audit
