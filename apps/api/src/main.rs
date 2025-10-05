@@ -20,8 +20,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let dotenv = dotenvy::dotenv();
-    if let Some(path) = dotenv.as_ref().ok().map(|path| path.as_path()) {
-        tracing::debug!("loaded environment variables from {path:?}");
+    if let Ok(path) = &dotenv {
+        tracing::debug!(?path, "loaded environment variables from .env file");
     }
 
     if let Err(error) = dotenv {
