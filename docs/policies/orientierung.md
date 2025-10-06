@@ -39,8 +39,9 @@ Es beschreibt:
 | **Faden** | Verbindung zwischen Rolle ↔ Knoten (Handlung). |
 | **Garn** | Dauerhafte, verzwirnte Verbindung = Bestandsschutz. |
 
-### 3.2 Zeit und Prozesse  
-- **7-Sekunden-Rotation** → sichtbares Feedback nach Aktion.  
+### 3.2 Zeit und Prozesse
+
+- **7-Sekunden-Rotation** → sichtbares Feedback nach Aktion.
 - **7-Tage-Verblassen** → nicht verzwirnte Fäden/Knoten lösen sich auf.  
 - **7 + 7-Tage-Modell** → Anträge: Einspruch → Abstimmung.  
 - **Delegation (Liquid Democracy)** → verfällt nach 4 Wochen Inaktivität.  
@@ -110,7 +111,8 @@ Es beschreibt:
 ## 9 · Governance / Changelog-Pflicht
 
 Alle Änderungen an:
-- Datenschutz- oder Ethikparametern  
+
+- Datenschutz- oder Ethikparametern
 - Governance-Timern  
 - Sichtbarkeits-Mechaniken  
 
