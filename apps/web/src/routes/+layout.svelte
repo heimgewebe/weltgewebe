@@ -1,11 +1,19 @@
 <script lang="ts">
-	import favicon from '$lib/assets/favicon.svg';
+        import type { Snippet } from 'svelte';
+        import favicon from '$lib/assets/favicon.svg';
 
-	let { children } = $props();
+        type LayoutData = {
+                canonical?: string;
+        };
+
+        let { data, children } = $props<{ data?: LayoutData; children?: Snippet }>();
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+        <link rel="icon" href={favicon} />
+        {#if data?.canonical}
+                <link rel="canonical" href={data.canonical} />
+        {/if}
 </svelte:head>
 
 {@render children?.()}
