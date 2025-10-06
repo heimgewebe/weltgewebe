@@ -99,11 +99,12 @@
   <!-- Kleiner Drawer-Stub -->
   <aside style="position:absolute;left:1rem;top:1rem;background:#fff;padding:.75rem .9rem;border-radius:.5rem;box-shadow:0 2px 8px #0001;">
     <strong>Webrat</strong> · <em>Nähstübchen</em>
-    <div style="margin-top:.5rem;">
+    <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.35rem;">
       <button on:click={enableMap} disabled={mapReady || loading}>
         {mapReady ? "Karte aktiv" : (loading ? "Lade Karte…" : "Karte aktivieren")}
       </button>
-      {#if error}<span role="alert" style="color:#b00;margin-left:.5rem;">{error}</span>{/if}
+      <a href="/archive/" style="font-size:.9rem;">Archiv ansehen</a>
+      {#if error}<span role="alert" style="color:#b00;">{error}</span>{/if}
     </div>
   </aside>
 
