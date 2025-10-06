@@ -10,8 +10,9 @@
 Dieses Dokument verdichtet Geist, Plan und technische Architektur des Weltgewebes zu einer verbindlichen Orientierung für
 Entwicklung, Gestaltung und Governance.  
 Es beschreibt:
-- **Was** ethisch gilt,  
-- **Wie** daraus technische und gestalterische Konsequenzen folgen,  
+
+- **Was** ethisch gilt,
+- **Wie** daraus technische und gestalterische Konsequenzen folgen,
 - **Woran** sich Teams bei Entscheidungen künftig messen lassen.
 
 ---
@@ -32,6 +33,7 @@ Es beschreibt:
 ## 3 · Systemlogik („Plan“)
 
 ### 3.1 Domänenmodell
+
 | Entität | Beschreibung |
 |----------|--------------|
 | **Rolle / Garnrolle** | Verifizierter Nutzer (Account) + Position + Privat/Öffentlich-Bereich. |
