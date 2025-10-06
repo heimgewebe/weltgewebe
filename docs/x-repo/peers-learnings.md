@@ -1,4 +1,6 @@
+
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil
+
 ## X-Repo Learnings → sofort anwendbare Leitplanken für Konsistenz & Qualität
 
 - **Semantische Artefakte versionieren:** Ein leichtgewichtiges Graph-Schema (z. B. `nodes.jsonl`/`edges.jsonl`)
