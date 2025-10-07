@@ -1,0 +1,14 @@
+/node_modules
+**/node_modules
+**/.svelte-kit
+**/.vite
+**/.next
+**/dist
+**/build
+**/target
+/.cargo
+.git
+.gitignore
+.DS_Store
+.env
+.env.*
