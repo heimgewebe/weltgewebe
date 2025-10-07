@@ -11,6 +11,10 @@
 
   type MapLibreModule = typeof import("maplibre-gl");
 
+  const pageTitle = "Weltgewebe · Home";
+  const pageDescription =
+    "Interaktive Übersicht des Webrats mit Karte, Archiv und Timeline.";
+
   function canInitialise(container: HTMLDivElement | null): container is HTMLDivElement {
     if (typeof window === "undefined") return false;
     if (!container || !container.isConnected) return false;
@@ -86,6 +90,11 @@
     loading = false;
   });
 </script>
+
+<svelte:head>
+  <title>{pageTitle}</title>
+  <meta name="description" content={pageDescription} />
+</svelte:head>
 
 <div style="position:fixed;inset:0;">
   <!-- Map-Fläche -->
