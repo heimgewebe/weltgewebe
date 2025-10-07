@@ -75,8 +75,11 @@ tasks:
         [ -f Cargo.toml ] && cargo metadata --no-deps > /dev/null || true
         [ -f pyproject.toml ] && grep -q '\[project\]' pyproject.toml || true
 
+wgx:
+  org: "heimgewebe"
+
 meta:
-  owner: "alexdermohr"
+  owner: "heimgewebe"
   conventions:
     gewebedir: ".gewebe"
     version_endpoint: "/version"

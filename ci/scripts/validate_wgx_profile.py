@@ -20,7 +20,8 @@ from types import ModuleType
 from collections.abc import Iterable, Mapping
 
 
-REQUIRED_TOP_LEVEL_KEYS = ("version", "env_priority", "tooling", "tasks")
+REQUIRED_TOP_LEVEL_KEYS = ("version", "env_priority", "tooling", "tasks", "wgx")
+REQUIRED_WGX_KEYS = ("org",)
 REQUIRED_TASKS = ("up", "lint", "test", "build", "smoke")
 
 
@@ -91,6 +92,31 @@ def main() -> int:
     if missing_tasks:
         _error(f"missing tasks: {missing_tasks}")
         return 1
+
+    wgx_block = data.get("wgx")
+    if not isinstance(wgx_block, dict):
+        _error("wgx must be a mapping")
+        return 1
+
+    missing_wgx = _missing_keys(wgx_block, REQUIRED_WGX_KEYS)
+    if missing_wgx:
+        _error(f"wgx missing keys: {missing_wgx}")
+        return 1
+
+    org = wgx_block.get("org")
+    if not isinstance(org, str) or not org.strip():
+        _error("wgx.org must be a non-empty string")
+        return 1
+
+    meta = data.get("meta")
+    if isinstance(meta, dict) and "owner" in meta:
+        owner = meta.get("owner")
+        if not isinstance(owner, str) or not owner.strip():
+            _error("meta.owner must be a non-empty string when provided")
+            return 1
+        if owner != org:
+            _error(f"meta.owner ({owner!r}) must match wgx.org ({org!r})")
+            return 1
 
     print("wgx profile OK")
     return 0
