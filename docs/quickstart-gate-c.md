@@ -10,7 +10,8 @@ make logs
 make down
 ```
 
-**Hinweise**
+## Hinweise
+
 - Frontend nutzt `PUBLIC_API_BASE=/api` (siehe `apps/web/.env.development`).
 - Compose-Profil `dev` schützt vor Verwechslungen mit späteren prod-Stacks.
 - `make smoke` triggert den GitHub-Workflow `compose-smoke` für einen E2E-Boot-Test.
