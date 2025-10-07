@@ -1,4 +1,6 @@
 version: 1
+wgx:
+  org: heimgewebe
 repo:
   # Kurzname des Repos (wird automatisch aus git ableitbar sein – hier nur Doku)
   name: auto
