@@ -89,10 +89,33 @@ async fn ready(State(state): State<ApiState>) -> Response {
             }
         }
     } else {
-        fallback_paths
-            .iter()
-            .find_map(|p| fs::read_to_string(p).ok())
-            .is_some()
+        let mut last_error = None;
+        let found = fallback_paths.iter().any(|path| match fs::read_to_string(path) {
+            Ok(_) => true,
+            Err(error) => {
+                last_error = Some(format!(
+                    "failed to read policy file at {}: {}",
+                    path.display(),
+                    error
+                ));
+                false
+            }
+        });
+
+        if !found {
+            let searched_paths = fallback_paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let message = last_error.map_or_else(
+                || format!("no policy file found in fallback locations: {}", searched_paths),
+                |error| format!("{} (searched in: {})", error, searched_paths),
+            );
+            readiness_check_failed("policy", &message);
+        }
+
+        found
     };
 
     let status = if database_ready && nats_ready && policy_ready {
