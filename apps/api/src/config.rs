@@ -12,11 +12,17 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
-    pub const DEFAULT_PATH: &'static str = "configs/app.defaults.yml";
+    const DEFAULT_CONFIG: &'static str = include_str!("../../../configs/app.defaults.yml");
 
     pub fn load() -> Result<Self> {
-        let path = env::var("APP_CONFIG_PATH").unwrap_or_else(|_| Self::DEFAULT_PATH.to_string());
-        Self::load_from_path(path)
+        match env::var("APP_CONFIG_PATH") {
+            Ok(path) => Self::load_from_path(path),
+            Err(_) => {
+                let config = Self::parse_config(Self::DEFAULT_CONFIG)
+                    .context("failed to parse embedded default configuration")?;
+                config.apply_env_overrides()
+            }
+        }
     }
 
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
@@ -145,8 +151,12 @@ mod tests {
     use super::AppConfig;
     use anyhow::Result;
     use serial_test::serial;
-    use std::{env, io::Write};
-    use tempfile::NamedTempFile;
+    use std::{
+        env,
+        io::Write,
+        path::{Path, PathBuf},
+    };
+    use tempfile::{tempdir, NamedTempFile};
 
     const YAML: &str = r#"fade_days: 7
 ron_days: 84
@@ -160,6 +170,7 @@ delegation_expire_days: 28
         let mut file = NamedTempFile::new()?;
         write!(file, "{}", YAML)?;
 
+        let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
@@ -180,6 +191,7 @@ delegation_expire_days: 28
         let mut file = NamedTempFile::new()?;
         write!(file, "{}", YAML)?;
 
+        let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::set("HA_FADE_DAYS", "10");
         let _ron = EnvGuard::set("HA_RON_DAYS", "90");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
@@ -190,6 +202,27 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 90);
         assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 14);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_uses_embedded_defaults_when_config_file_missing() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let _dir = DirGuard::change_to(temp_dir.path())?;
+
+        let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
+        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+
+        let cfg = AppConfig::load()?;
+        assert_eq!(cfg.fade_days, 7);
+        assert_eq!(cfg.ron_days, 84);
+        assert!(cfg.anonymize_opt_in);
+        assert_eq!(cfg.delegation_expire_days, 28);
 
         Ok(())
     }
@@ -221,6 +254,24 @@ delegation_expire_days: 28
             } else {
                 env::remove_var(self.key);
             }
+        }
+    }
+
+    struct DirGuard {
+        original: PathBuf,
+    }
+
+    impl DirGuard {
+        fn change_to(path: impl AsRef<Path>) -> Result<Self> {
+            let original = env::current_dir()?;
+            env::set_current_dir(path.as_ref())?;
+            Ok(Self { original })
+        }
+    }
+
+    impl Drop for DirGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.original);
         }
     }
 }
