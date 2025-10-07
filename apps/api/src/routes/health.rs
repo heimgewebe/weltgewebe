@@ -75,12 +75,25 @@ async fn ready(State(state): State<ApiState>) -> Response {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
     ];
-    let policy_ready = env_path
-        .into_iter()
-        .chain(fallback_paths)
-        .find(|p| p.exists())
-        .and_then(|p| fs::read_to_string(p).ok())
-        .is_some();
+    let policy_ready = if let Some(path) = env_path {
+        match fs::read_to_string(&path) {
+            Ok(_) => true,
+            Err(error) => {
+                let message = format!(
+                    "failed to read policy file at {}: {}",
+                    path.display(),
+                    error
+                );
+                readiness_check_failed("policy", &message);
+                false
+            }
+        }
+    } else {
+        fallback_paths
+            .iter()
+            .find_map(|p| fs::read_to_string(p).ok())
+            .is_some()
+    };
 
     let status = if database_ready && nats_ready && policy_ready {
         StatusCode::OK
@@ -119,6 +132,7 @@ mod tests {
     use anyhow::Result;
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
+    use serial_test::serial;
 
     fn test_state() -> Result<ApiState> {
         let metrics = Metrics::try_new(BuildInfo {
@@ -143,6 +157,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn live_returns_ok_status_and_no_store_header() -> Result<()> {
         let response = live().await;
         let status = response.status();
@@ -161,6 +176,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn readiness_succeeds_when_optional_dependencies_are_disabled() -> Result<()> {
         let state = test_state()?;
 
@@ -181,5 +197,53 @@ mod tests {
         assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn readiness_fails_when_policy_path_is_invalid() -> Result<()> {
+        let _policy = EnvGuard::set("POLICY_LIMITS_PATH", "/does/not/exist");
+        let state = test_state()?;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let cache_control = response.headers().get(header::CACHE_CONTROL).cloned();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            cache_control.as_ref().and_then(|value| value.to_str().ok()),
+            Some("no-store")
+        );
+        assert_eq!(body["status"], "error");
+        assert_eq!(body["checks"]["database"], true);
+        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["policy"], false);
+
+        Ok(())
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = env::var(key).ok();
+            env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(ref val) = self.original {
+                env::set_var(self.key, val);
+            } else {
+                env::remove_var(self.key);
+            }
+        }
     }
 }
