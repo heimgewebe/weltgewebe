@@ -1,4 +1,6 @@
 version: 1
+wgx:
+  org: heimgewebe
 repo:
   # Kurzname des Repos (wird automatisch aus git ableitbar sein – hier nur Doku)
   name: auto
@@ -76,7 +78,7 @@ tasks:
         [ -f pyproject.toml ] && grep -q '\[project\]' pyproject.toml || true
 
 meta:
-  owner: "alexdermohr"
+  owner: "heimgewebe"
   conventions:
     gewebedir: ".gewebe"
     version_endpoint: "/version"
