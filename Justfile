@@ -16,11 +16,11 @@ check:     # quick hygiene check
 	just test
 
 # ---------- Compose ----------
-up:        # dev stack up (core profile)
-	docker compose -f infra/compose/compose.core.yml up -d --build
+up:        # dev stack up (dev profile)
+	docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
 
 down:      # stop dev stack
-	docker compose -f infra/compose/compose.core.yml down -v
+	docker compose -f infra/compose/compose.core.yml --profile dev down -v
 
 observ:    # monitoring profile (optional)
 	docker compose -f infra/compose/compose.observ.yml up -d

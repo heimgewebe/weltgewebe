@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state);
 
     let bind_addr: SocketAddr = env::var("API_BIND")
-        .unwrap_or_else(|_| "0.0.0.0:8787".to_string())
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()
         .context("failed to parse API_BIND address")?;
 

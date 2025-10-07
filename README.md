@@ -19,6 +19,14 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
   just up
   ```
 
+  Alternativ steht ein äquivalentes Makefile zur Verfügung:
+
+  ```bash
+  make up
+  ```
+
+- Siehe auch `docs/quickstart-gate-c.md` für die Compose-Befehle.
+
 - Run hygiene checks locally:
 
   ```bash

@@ -1,0 +1,43 @@
+name: compose-smoke
+permissions:
+  contents: read
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "infra/compose/compose.core.yml"
+      - "infra/caddy/Caddyfile"
+      - ".github/workflows/compose-smoke.yml"
+      - "apps/api/**"
+      - "apps/web/**"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Compose up (detached)
+        run: docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
+      - name: Wait for services (API & Web)
+        run: |
+          set -euo pipefail
+          tries=60
+          until curl -fsS http://localhost:8081/ >/dev/null; do
+            ((tries--)) || (docker compose -f infra/compose/compose.core.yml --profile dev logs --no-color && exit 1)
+            sleep 2
+          done
+          tries=60
+          until curl -fsS http://localhost:8081/api/version >/dev/null || curl -fsS http://localhost:8081/api/health/ready >/dev/null; do
+            ((tries--)) || (docker compose -f infra/compose/compose.core.yml --profile dev logs --no-color && exit 1)
+            sleep 2
+          done
+      - name: Show brief logs
+        if: always()
+        run: docker compose -f infra/compose/compose.core.yml --profile dev logs --no-color --tail=200
+      - name: Compose down
+        if: always()
+        run: docker compose -f infra/compose/compose.core.yml --profile dev down -v

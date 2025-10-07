@@ -7,8 +7,8 @@ This README provides a quick orientation for running and developing the service 
 
 1. **Install dependencies**
    - [Rust toolchain](https://www.rust-lang.org/tools/install) (stable)
-   - A running PostgreSQL instance
-   - A running NATS server
+   - A running PostgreSQL instance (or use `make up` / `just up` for the dev stack)
+   - Optional: a running NATS server when developing features that need messaging
 
 2. **Copy the environment template**
 
@@ -20,9 +20,9 @@ This README provides a quick orientation for running and developing the service 
    Values defined in `.env` take precedence over the defaults from Docker Compose when you use the
    local development stack.
    Recommended settings:
-   - `API_BIND` &mdash; socket address to bind the API (default `0.0.0.0:8787`)
+   - `API_BIND` &mdash; socket address to bind the API (default `0.0.0.0:8080`)
    - `DATABASE_URL` &mdash; PostgreSQL connection string (e.g. `postgres://user:password@localhost:5432/weltgewebe`)
-   - `NATS_URL` &mdash; URL of the NATS server (e.g. `nats://127.0.0.1:4222`)
+   - `NATS_URL` &mdash; URL of the NATS server (e.g. `nats://127.0.0.1:4222`) when messaging is enabled
 
 4. **Run the API**
 
@@ -30,7 +30,7 @@ This README provides a quick orientation for running and developing the service 
    cargo run
    ```
 
-   By default the service listens on <http://localhost:8787>.
+   By default the service listens on <http://localhost:8080>.
 
 ## Observability
 
