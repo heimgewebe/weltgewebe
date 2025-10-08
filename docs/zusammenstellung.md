@@ -54,12 +54,12 @@ Inhalte (Knoten, Fäden, Garn)
 - Nähstübchen: Ein ortsunabhängiger Raum für die allgemeine Kommunikation.
 - RoN-Platzhalter: Ein spezieller Knoten, an dem anonymisierte Inhalte nach 84 Tagen gesammelt werden.
 
-III. Zeitlichkeit, Sichtbarkeit und Anonymisierung
+III. Zeitlichkeit, Sichtbarkeit und Pseudonymisierung
 
 - 7-Sekunden-Rotation: Nach jeder Aktion dreht sich die Garnrolle des Nutzers für 7 Sekunden sichtbar auf der Karte.
 - 7-Tage-Verblassen: Fäden, die nicht zu Garn verzwirnt werden, verblassen innerhalb von 7 Tagen sukzessive. Knoten, zu
   denen 7 Tage lang kein neuer Faden führt, lösen sich ebenfalls in diesem Zeitraum sukzessive auf.
-- Anonymisierung (RoN-System):
+- Pseudonymisierung (RoN-System):
   - Nutzer können per Opt-in festlegen, dass ihre Beiträge nach x Tagen automatisch anonymisiert werden. Der
     Autorenname wird dann durch "RoN" (Rolle ohne Namen) ersetzt.
   - Die anonymisierten Fäden führen dann nicht mehr zur ursprünglichen Garnrolle, sondern zum zentralen
@@ -67,7 +67,7 @@ III. Zeitlichkeit, Sichtbarkeit und Anonymisierung
 - Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den RoN-Prozess. Beiträge, die
   jünger als x Tage sind, bleiben so lange namentlich sichtbar, bis diese Frist erreicht ist. Am Ende wird die Garnrolle
   des Nutzers gelöscht.
-- Eigene Beiträge und Aktionen können selbstverständlich jederzeit gelöscht werden.
+- Eigene Beiträge und Aktionen können per Tombstone + Key-Erase uneinsehbar gemacht werden.
 - per opt-in kann man die Verortung der eigenen Garnrolle ungenauer machen. Ungenauigkeitsradius individuell einstellbar
 
 IV. Governance und Demokratische Prozesse
