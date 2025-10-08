@@ -67,7 +67,7 @@ III. Zeitlichkeit, Sichtbarkeit und Pseudonymisierung
 - Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den RoN-Prozess. Beiträge, die
   jünger als x Tage sind, bleiben so lange namentlich sichtbar, bis diese Frist erreicht ist. Am Ende wird die Garnrolle
   des Nutzers gelöscht.
-- Eigene Beiträge und Aktionen können selbstverständlich „jederzeit löschen“ (als Tombstone + Key-Erase).
+- Eigene Beiträge und Aktionen können per Tombstone + Key-Erase uneinsehbar gemacht werden.
 - per opt-in kann man die Verortung der eigenen Garnrolle ungenauer machen. Ungenauigkeitsradius individuell einstellbar
 
 IV. Governance und Demokratische Prozesse
