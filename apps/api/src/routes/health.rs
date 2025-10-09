@@ -37,7 +37,11 @@ fn check_policy_file(path: &Path) -> Result<(), String> {
     match fs::read_to_string(path) {
         Ok(_) => Ok(()),
         Err(error) => {
-            let message = format!("failed to read policy file at {}: {}", path.display(), error);
+            let message = format!(
+                "failed to read policy file at {}: {}",
+                path.display(),
+                error
+            );
             readiness_check_failed("policy", &message);
             Err(message)
         }
@@ -53,7 +57,10 @@ fn check_policy_fallbacks(paths: &[PathBuf]) -> bool {
         errors.push(path.display().to_string());
     }
 
-    let message = format!("no policy file found in fallback locations: {}", errors.join(", "));
+    let message = format!(
+        "no policy file found in fallback locations: {}",
+        errors.join(", ")
+    );
     readiness_check_failed("policy", &message);
     false
 }
