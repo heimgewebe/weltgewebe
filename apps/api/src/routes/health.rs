@@ -33,6 +33,31 @@ async fn live() -> Response {
     response
 }
 
+fn check_policy_file(path: &Path) -> Result<(), String> {
+    match fs::read_to_string(path) {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let message = format!("failed to read policy file at {}: {}", path.display(), error);
+            readiness_check_failed("policy", &message);
+            Err(message)
+        }
+    }
+}
+
+fn check_policy_fallbacks(paths: &[PathBuf]) -> bool {
+    let mut errors = Vec::new();
+    for path in paths {
+        if check_policy_file(path).is_ok() {
+            return true;
+        }
+        errors.push(path.display().to_string());
+    }
+
+    let message = format!("no policy file found in fallback locations: {}", errors.join(", "));
+    readiness_check_failed("policy", &message);
+    false
+}
+
 async fn ready(State(state): State<ApiState>) -> Response {
     let nats_ready = if state.nats_configured {
         match state.nats_client.as_ref() {
@@ -76,46 +101,9 @@ async fn ready(State(state): State<ApiState>) -> Response {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
     ];
     let policy_ready = if let Some(path) = env_path {
-        match fs::read_to_string(&path) {
-            Ok(_) => true,
-            Err(error) => {
-                let message = format!(
-                    "failed to read policy file at {}: {}",
-                    path.display(),
-                    error
-                );
-                readiness_check_failed("policy", &message);
-                false
-            }
-        }
+        check_policy_file(&path).is_ok()
     } else {
-        let mut last_error = None;
-        let found = fallback_paths.iter().any(|path| match fs::read_to_string(path) {
-            Ok(_) => true,
-            Err(error) => {
-                last_error = Some(format!(
-                    "failed to read policy file at {}: {}",
-                    path.display(),
-                    error
-                ));
-                false
-            }
-        });
-
-        if !found {
-            let searched_paths = fallback_paths
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let message = last_error.map_or_else(
-                || format!("no policy file found in fallback locations: {}", searched_paths),
-                |error| format!("{} (searched in: {})", error, searched_paths),
-            );
-            readiness_check_failed("policy", &message);
-        }
-
-        found
+        check_policy_fallbacks(&fallback_paths)
     };
 
     let status = if database_ready && nats_ready && policy_ready {
