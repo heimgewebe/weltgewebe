@@ -53,11 +53,7 @@ impl AppConfig {
                 .split_once(':')
                 .map(|(k, v)| (k.trim(), v.trim()))
                 .ok_or_else(|| {
-                    anyhow!(
-                        "invalid configuration entry on line {}: {}",
-                        line_number,
-                        line
-                    )
+                    anyhow!("invalid configuration entry on line {line_number}: {line}")
                 })?;
 
             match key {
@@ -75,11 +71,7 @@ impl AppConfig {
                         Some(parse_u32(value, "delegation_expire_days", line_number)?);
                 }
                 other => {
-                    bail!(
-                        "unknown configuration key '{}' on line {}",
-                        other,
-                        line_number
-                    );
+                    bail!("unknown configuration key '{other}' on line {line_number}");
                 }
             }
         }
@@ -100,27 +92,24 @@ impl AppConfig {
         if let Ok(value) = env::var("HA_FADE_DAYS") {
             self.fade_days = value
                 .parse()
-                .with_context(|| format!("failed to parse HA_FADE_DAYS override: {}", value))?;
+                .with_context(|| format!("failed to parse HA_FADE_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_RON_DAYS") {
             self.ron_days = value
                 .parse()
-                .with_context(|| format!("failed to parse HA_RON_DAYS override: {}", value))?;
+                .with_context(|| format!("failed to parse HA_RON_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_ANONYMIZE_OPT_IN") {
-            self.anonymize_opt_in = value.parse().with_context(|| {
-                format!("failed to parse HA_ANONYMIZE_OPT_IN override: {}", value)
-            })?;
+            self.anonymize_opt_in = value
+                .parse()
+                .with_context(|| format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_DELEGATION_EXPIRE_DAYS") {
             self.delegation_expire_days = value.parse().with_context(|| {
-                format!(
-                    "failed to parse HA_DELEGATION_EXPIRE_DAYS override: {}",
-                    value
-                )
+                format!("failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}")
             })?;
         }
 
@@ -129,21 +118,15 @@ impl AppConfig {
 }
 
 fn parse_u32(value: &str, field: &str, line: usize) -> Result<u32> {
-    value.parse().with_context(|| {
-        format!(
-            "failed to parse '{}' as an integer on line {}: {}",
-            field, line, value
-        )
-    })
+    value
+        .parse()
+        .with_context(|| format!("failed to parse '{field}' as an integer on line {line}: {value}"))
 }
 
 fn parse_bool(value: &str, field: &str, line: usize) -> Result<bool> {
-    value.parse().with_context(|| {
-        format!(
-            "failed to parse '{}' as a boolean on line {}: {}",
-            field, line, value
-        )
-    })
+    value
+        .parse()
+        .with_context(|| format!("failed to parse '{field}' as a boolean on line {line}: {value}"))
 }
 
 #[cfg(test)]
@@ -168,7 +151,7 @@ delegation_expire_days: 28
     #[serial]
     fn load_from_path_reads_defaults() -> Result<()> {
         let mut file = NamedTempFile::new()?;
-        write!(file, "{}", YAML)?;
+        write!(file, "{YAML}")?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
@@ -189,7 +172,7 @@ delegation_expire_days: 28
     #[serial]
     fn load_from_path_applies_env_overrides() -> Result<()> {
         let mut file = NamedTempFile::new()?;
-        write!(file, "{}", YAML)?;
+        write!(file, "{YAML}")?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::set("HA_FADE_DAYS", "10");
