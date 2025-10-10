@@ -20,6 +20,9 @@ on:
 permissions:
   contents: read
 
+env:
+  RUST_TOOLCHAIN: stable
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -49,7 +52,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
 
       - name: Add rust components
         run: rustup component add rustfmt clippy
@@ -81,7 +84,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
       - name: Install cargo-audit
         run: cargo install cargo-audit --force
       - name: cargo audit
