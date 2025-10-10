@@ -75,7 +75,10 @@ async fn ready(State(state): State<ApiState>) -> Response {
                     false
                 }
             },
-            None => false,
+            None => {
+                readiness_check_failed("nats", "client not initialised");
+                false
+            }
         }
     } else {
         true
@@ -93,7 +96,10 @@ async fn ready(State(state): State<ApiState>) -> Response {
                     false
                 }
             },
-            None => false,
+            None => {
+                readiness_check_failed("database", "connection pool not initialised");
+                false
+            }
         }
     } else {
         true
@@ -243,4 +249,64 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn readiness_fails_when_database_pool_missing() -> Result<()> {
+        let mut state = test_state()?;
+        state.db_pool_configured = true;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["policy"], true);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn readiness_fails_when_nats_client_missing() -> Result<()> {
+        let mut state = test_state()?;
+        state.nats_configured = true;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["checks"]["database"], true);
+        assert_eq!(body["checks"]["nats"], false);
+        assert_eq!(body["checks"]["policy"], true);
+
+        Ok(())
+    }
+
+    struct EnvGuard {
+        key: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &'static str, value: &str) -> Self {
+            let original = env::var(key).ok();
+            env::set_var(key, value);
+            Self { key, original }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            if let Some(ref val) = self.original {
+                env::set_var(self.key, val);
+            } else {
+                env::remove_var(self.key);
+            }
+        }
+    }
 }
