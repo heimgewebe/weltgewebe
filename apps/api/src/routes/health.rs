@@ -152,6 +152,7 @@ mod tests {
     use crate::{
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
+        test_helpers::EnvGuard,
     };
     use anyhow::Result;
     use axum::{body, extract::State, http::header};
