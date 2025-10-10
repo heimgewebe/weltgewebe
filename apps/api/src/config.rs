@@ -149,6 +149,7 @@ fn parse_bool(value: &str, field: &str, line: usize) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::AppConfig;
+    use crate::test_helpers::EnvGuard;
     use anyhow::Result;
     use serial_test::serial;
     use std::{
@@ -227,35 +228,6 @@ delegation_expire_days: 28
         Ok(())
     }
 
-    /// Kleiner Env-Helper, der Variablen für die Testdauer setzt/entfernt und danach zurücksetzt.
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<String>,
-    }
-
-    impl EnvGuard {
-        fn set(key: &'static str, value: &str) -> Self {
-            let original = env::var(key).ok();
-            env::set_var(key, value);
-            Self { key, original }
-        }
-
-        fn unset(key: &'static str) -> Self {
-            let original = env::var(key).ok();
-            env::remove_var(key);
-            Self { key, original }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            if let Some(ref val) = self.original {
-                env::set_var(self.key, val);
-            } else {
-                env::remove_var(self.key);
-            }
-        }
-    }
 
     struct DirGuard {
         original: PathBuf,

@@ -3,6 +3,9 @@ mod routes;
 mod state;
 mod telemetry;
 
+#[cfg(test)]
+mod test_helpers;
+
 use std::{env, io::ErrorKind, net::SocketAddr};
 
 use anyhow::{anyhow, Context};
