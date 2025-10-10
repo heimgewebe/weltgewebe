@@ -85,9 +85,15 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Validate toolchain input
+        run: |
+          if [[ -z "${toolchain:-}" ]]; then
+            echo "'toolchain' is a required input" >&2
+            exit 1
+          fi
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: ${{ env.toolchain }}
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: cargo fmt
