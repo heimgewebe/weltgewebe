@@ -78,6 +78,7 @@ jobs:
     timeout-minutes: 20
     env:
       CARGO_TERM_COLOR: always
+      toolchain: stable
     defaults:
       run:
         working-directory: apps/api
