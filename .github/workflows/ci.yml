@@ -24,8 +24,8 @@ permissions:
   pull-requests: read
 
 env:
-  # Inputs-Kontext ist bei pull_request/merge_group nicht verfügbar.
-  toolchain: ${{ github.event.inputs.toolchain || 'stable' }}
+  # Robust default für alle Events (workflow_call, dispatch, PR, merge_group).
+  toolchain: ${{ inputs.toolchain || (github.event_name == 'workflow_dispatch' && github.event.inputs.toolchain) || 'stable' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -100,6 +100,11 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure default toolchain
+        run: |
+          if [[ -z "${toolchain:-}" ]]; then
+            echo "toolchain=stable" >> "$GITHUB_ENV"
+          fi
       - name: Validate toolchain input
         run: |
           if [[ -z "${toolchain:-}" ]]; then
