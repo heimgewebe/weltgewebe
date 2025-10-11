@@ -1,5 +1,6 @@
 {
   "name": "weltgewebe-web",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "packageManager": "npm@10.9.0",
@@ -13,23 +14,26 @@
     "screenshot": "node scripts/record-screenshot.mjs"
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^6.1.0",
-    "@sveltejs/kit": "^2.7.4",
-    "@typescript-eslint/eslint-plugin": "^8.8.0",
-    "@typescript-eslint/parser": "^8.8.0",
-    "eslint": "^9.11.1",
-    "eslint-plugin-svelte": "^2.45.1",
-    "globals": "^15.9.0",
-    "prettier": "^3.3.3",
-    "prettier-plugin-svelte": "^3.2.6",
-    "puppeteer": "^23.4.0",
-    "svelte": "^5.1.6",
-    "svelte-check": "^4.0.6",
-    "typescript": "^5.6.3",
-    "vite": "^7.1.7"
+    "@sveltejs/adapter-auto": "6.1.0",
+    "@sveltejs/kit": "2.43.5",
+    "@typescript-eslint/eslint-plugin": "8.8.0",
+    "@typescript-eslint/parser": "8.8.0",
+    "eslint": "9.11.1",
+    "eslint-plugin-svelte": "2.45.1",
+    "globals": "15.9.0",
+    "prettier": "3.3.3",
+    "prettier-plugin-svelte": "3.2.6",
+    "puppeteer": "23.4.0",
+    "svelte": "5.39.6",
+    "svelte-check": "4.3.2",
+    "typescript": "5.9.2",
+    "vite": "7.1.7"
   },
   "dependencies": {
-    "maplibre-gl": "^4.7.1",
-    "svelte-maplibre-gl": "^0.20.1"
+    "maplibre-gl": "4.7.1",
+    "svelte-maplibre-gl": "0.20.1"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   }
 }
