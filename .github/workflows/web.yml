@@ -40,12 +40,16 @@ jobs:
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Setup PNPM
-        uses: pnpm/action-setup@v3
+        uses: pnpm/action-setup@v4
         with:
           version: 9
 
       - name: Determine pnpm store
-        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+        id: pnpm-store
+        run: |
+          STORE_PATH="$(pnpm store path --silent)"
+          echo "PNPM_STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"
+          echo "store=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure pnpm store directory exists
         run: mkdir -p "$PNPM_STORE_PATH"
@@ -53,7 +57,7 @@ jobs:
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ${{ env.PNPM_STORE_PATH }}
+          path: ${{ steps.pnpm-store.outputs.store }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
