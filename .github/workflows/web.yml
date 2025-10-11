@@ -44,16 +44,13 @@ jobs:
         with:
           version: 9
 
-      - name: Determine pnpm store
-        id: pnpm-store
-        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
       - name: Ensure pnpm store directory exists
-        run: mkdir -p "${{ steps.pnpm-store.outputs.store }}"
+        run: mkdir -p ~/.local/share/pnpm/store/v10
 
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
-          path: ${{ steps.pnpm-store.outputs.store }}
+          path: ~/.local/share/pnpm/store/v10
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: pnpm-${{ runner.os }}-
 
