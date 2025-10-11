@@ -54,9 +54,7 @@ impl AppConfig {
                 .map(|(k, v)| (k.trim(), v.trim()))
                 .ok_or_else(|| {
                     anyhow!(
-                        "invalid configuration entry on line {}: {}",
-                        line_number,
-                        line
+                        "invalid configuration entry on line {line_number}: {line}"
                     )
                 })?;
 
@@ -76,9 +74,7 @@ impl AppConfig {
                 }
                 other => {
                     bail!(
-                        "unknown configuration key '{}' on line {}",
-                        other,
-                        line_number
+                        "unknown configuration key '{other}' on line {line_number}"
                     );
                 }
             }
@@ -100,26 +96,25 @@ impl AppConfig {
         if let Ok(value) = env::var("HA_FADE_DAYS") {
             self.fade_days = value
                 .parse()
-                .with_context(|| format!("failed to parse HA_FADE_DAYS override: {}", value))?;
+                .with_context(|| format!("failed to parse HA_FADE_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_RON_DAYS") {
             self.ron_days = value
                 .parse()
-                .with_context(|| format!("failed to parse HA_RON_DAYS override: {}", value))?;
+                .with_context(|| format!("failed to parse HA_RON_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_ANONYMIZE_OPT_IN") {
             self.anonymize_opt_in = value.parse().with_context(|| {
-                format!("failed to parse HA_ANONYMIZE_OPT_IN override: {}", value)
+                format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}")
             })?;
         }
 
         if let Ok(value) = env::var("HA_DELEGATION_EXPIRE_DAYS") {
             self.delegation_expire_days = value.parse().with_context(|| {
                 format!(
-                    "failed to parse HA_DELEGATION_EXPIRE_DAYS override: {}",
-                    value
+                    "failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}"
                 )
             })?;
         }
@@ -131,8 +126,7 @@ impl AppConfig {
 fn parse_u32(value: &str, field: &str, line: usize) -> Result<u32> {
     value.parse().with_context(|| {
         format!(
-            "failed to parse '{}' as an integer on line {}: {}",
-            field, line, value
+            "failed to parse '{field}' as an integer on line {line}: {value}"
         )
     })
 }
@@ -140,8 +134,7 @@ fn parse_u32(value: &str, field: &str, line: usize) -> Result<u32> {
 fn parse_bool(value: &str, field: &str, line: usize) -> Result<bool> {
     value.parse().with_context(|| {
         format!(
-            "failed to parse '{}' as a boolean on line {}: {}",
-            field, line, value
+            "failed to parse '{field}' as a boolean on line {line}: {value}"
         )
     })
 }
@@ -227,7 +220,6 @@ delegation_expire_days: 28
 
         Ok(())
     }
-
 
     struct DirGuard {
         original: PathBuf,
