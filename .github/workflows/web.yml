@@ -1,42 +1,67 @@
-name: web
-on:
-  pull_request:
-    branches: [ main ]
-    paths:
-      - "apps/web/**"
-      - "ci/budget.json"
-      - ".github/workflows/web.yml"
-  push:
-    branches: [ main ]
-    paths:
-      - "apps/web/**"
-      - ".github/workflows/web.yml"
-  workflow_dispatch: {}
+name: Web Check (Gate A)
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - apps/web/**
+      - .github/workflows/web.yml
+  push:
+    branches: [main, dev, 'feat/**', 'fix/**']
+    paths:
+      - apps/web/**
+      - .github/workflows/web.yml
+
 jobs:
-  budget-and-build:
+  build:
+    name: Build & Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          # Node.js version downgraded from 22 to 20 due to compatibility issues with project dependencies. Update to 22 when dependencies are compatible.
           node-version: 20
-          cache: npm
-          cache-dependency-path: apps/web/package-lock.json
-      - run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-        working-directory: apps/web
-      - run: npm run build
-        working-directory: apps/web
-      - name: Check performance budgets
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Setup PNPM
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Determine pnpm store
+        id: pnpm-store
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.store }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run check
+
+      - name: Lint & Build
         run: |
-          test -f ci/budget.json
-          echo "Budget file present (manual enforcement later)."
+          pnpm run lint
+          CI=true pnpm run build

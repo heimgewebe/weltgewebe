@@ -102,6 +102,12 @@ CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
+## Gate A – UX Click-Dummy
+
+👉 Siehe `apps/web/README.md`
+
+Frontend-Prototyp zur Diskussion von Karte · Drawer · Zeitleiste · Ethik-UI.
+
 ## Beiträge & Docs
 
 Stilprüfung via Vale läuft automatisch bei Doku-PRs; lokal `vale docs/` für Hinweise.
