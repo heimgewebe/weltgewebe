@@ -104,12 +104,7 @@ jobs:
         run: |
           if [[ -z "${toolchain:-}" ]]; then
             echo "toolchain=stable" >> "$GITHUB_ENV"
-          fi
-      - name: Validate toolchain input
-        run: |
-          if [[ -z "${toolchain:-}" ]]; then
-            echo "'toolchain' is a required input" >&2
-            exit 1
+            echo "toolchain input missing; defaulting to 'stable'"
           fi
       - uses: dtolnay/rust-toolchain@stable
         with:
