@@ -25,6 +25,7 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
+          # Wichtig: kein 'cache: pnpm' hier, da wir unten eigenen Cache-Step verwenden
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Setup PNPM
@@ -44,6 +45,7 @@ jobs:
         with:
           version: 9
 
+      # Exportiere pnpm-Store sowohl in $GITHUB_ENV (für Shell) als auch als Step-Output (für actions/cache)
       - name: Determine pnpm store
         id: pnpm-store
         run: |
@@ -52,14 +54,15 @@ jobs:
           echo "store=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure pnpm store directory exists
-        run: mkdir -p "$PNPM_STORE_PATH"
+        run: mkdir -p "$STORE_PATH"
 
       - name: Cache pnpm store
         uses: actions/cache@v4
         with:
           path: ${{ steps.pnpm-store.outputs.store }}
           key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: pnpm-${{ runner.os }}-
+          restore-keys: |
+            pnpm-${{ runner.os }}-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
