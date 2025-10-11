@@ -24,7 +24,8 @@ permissions:
   pull-requests: read
 
 env:
-  toolchain: ${{ inputs.toolchain || github.event.inputs.toolchain || 'stable' }}
+  # Inputs-Kontext ist bei pull_request/merge_group nicht verfügbar.
+  toolchain: ${{ github.event.inputs.toolchain || 'stable' }}
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
