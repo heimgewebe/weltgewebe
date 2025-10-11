@@ -11,6 +11,9 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  toolchain: stable
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -78,7 +81,6 @@ jobs:
     timeout-minutes: 20
     env:
       CARGO_TERM_COLOR: always
-      toolchain: stable
     defaults:
       run:
         working-directory: apps/api
@@ -122,8 +124,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
       - name: npm ci
         run: npm ci
 
@@ -141,8 +141,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
       - name: npm ci (restore cache)
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: svelte-check
@@ -162,8 +160,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
       - name: npm ci (restore cache)
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: build
