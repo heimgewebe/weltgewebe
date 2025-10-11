@@ -5,18 +5,21 @@ Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten, Fäde
 ## Dev
 ```bash
 cd apps/web
-pnpm install
-pnpm dev
+npm ci
+npm run dev
 ```
-Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`. 
-In Container- oder Codespaces-Umgebungen kannst du optional `pnpm dev -- --host --port 5173` verwenden.
+Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
+In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173` verwenden.
+
+> [!NOTE]
+> **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
 
 ### Screenshot aufnehmen
 
-In einem zweiten Terminal (während `pnpm dev` läuft):
+In einem zweiten Terminal (während `npm run dev` läuft):
 
 ```bash
-pnpm run screenshot
+npm run screenshot
 ```
 
 Legt `public/demo.png` an.

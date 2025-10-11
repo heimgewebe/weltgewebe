@@ -2,7 +2,7 @@
   "name": "weltgewebe-web",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@9.12.1",
+  "packageManager": "npm@10.9.0",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
