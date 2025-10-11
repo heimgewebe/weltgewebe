@@ -47,6 +47,8 @@ jobs:
       - name: Determine pnpm store
         id: pnpm-store
         run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Ensure pnpm store directory exists
+        run: mkdir -p "${{ steps.pnpm-store.outputs.store }}"
 
       - name: Cache pnpm store
         uses: actions/cache@v4
