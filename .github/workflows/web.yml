@@ -50,7 +50,7 @@ jobs:
         id: pnpm-store
         run: |
           STORE_PATH="$(pnpm store path --silent)"
-          echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"
+          echo "PNPM_STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"
           echo "store=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure pnpm store directory exists
