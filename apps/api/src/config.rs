@@ -102,15 +102,15 @@ impl AppConfig {
         }
 
         if let Ok(value) = env::var("HA_ANONYMIZE_OPT_IN") {
-            self.anonymize_opt_in = value.parse().with_context(|| {
-                format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}")
-            })?;
+            self.anonymize_opt_in = value
+                .parse()
+                .with_context(|| format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_DELEGATION_EXPIRE_DAYS") {
-            self.delegation_expire_days = value.parse().with_context(|| {
-                format!("failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}")
-            })?;
+            self.delegation_expire_days = value
+                .parse()
+                .with_context(|| format!("failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}"))?;
         }
 
         Ok(self)
