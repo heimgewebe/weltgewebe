@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Wichtig: kein 'cache: pnpm' hier, da wir unten eigenen Cache-Step verwenden
+          # kein built-in Node cache; wir cachen den pnpm-Store separat
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Setup PNPM
@@ -45,7 +45,7 @@ jobs:
         with:
           version: 9
 
-      # Exportiere pnpm-Store sowohl in $GITHUB_ENV (für Shell) als auch als Step-Output (für actions/cache)
+      # pnpm-Store ermitteln: als Env (für Shell) und als Step-Output (für actions/cache)
       - name: Determine pnpm store
         id: pnpm-store
         run: |
@@ -54,7 +54,7 @@ jobs:
           echo "store=$STORE_PATH" >> "$GITHUB_OUTPUT"
 
       - name: Ensure pnpm store directory exists
-        run: mkdir -p "$PNPM_STORE_PATH"
+        run: mkdir -p "${{ steps.pnpm-store.outputs.store }}"
 
       - name: Cache pnpm store
         uses: actions/cache@v4
