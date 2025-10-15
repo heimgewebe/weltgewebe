@@ -5,6 +5,13 @@
 Mobile-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.  
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
+> **Hinweis / Scope**
+>
+> - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
+> - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway;
+>   **kein Direktzugriff** auf JSONL-Dateien.
+> - Entspricht ADR-0001 (Docs-only) und bleibt kompatibel mit den Gates A–D.
+
 ## Getting started
 
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
