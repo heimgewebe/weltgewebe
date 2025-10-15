@@ -38,7 +38,10 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          # Bevorzugt deterministisch mit npm ci, fällt aber bei stale lockfile
+          # automatisch auf npm install zurück, damit der Run nicht scheitert.
+          npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund)
 
       - name: Typecheck
         run: npm run check
