@@ -30,47 +30,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # kein built-in Node cache; wir cachen den pnpm-Store separat
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - name: Setup PNPM
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      # pnpm-Store ermitteln: als Env (für Shell) und als Step-Output (für actions/cache)
-      - name: Determine pnpm store
-        id: pnpm-store
-        run: |
-          STORE_PATH="$(pnpm store path --silent)"
-          echo "PNPM_STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"
-          echo "store=$STORE_PATH" >> "$GITHUB_OUTPUT"
-
-      - name: Ensure pnpm store directory exists
-        run: mkdir -p "${{ steps.pnpm-store.outputs.store }}"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-store.outputs.store }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-${{ runner.os }}-
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
 
       - name: Typecheck
-        run: pnpm run check
+        run: npm run check
 
       - name: Lint & Build
         run: |
-          pnpm run lint
-          CI=true pnpm run build
+          npm run lint
+          CI=true npm run build
