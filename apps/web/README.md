@@ -25,11 +25,13 @@ npm run screenshot
 Legt `public/demo.png` an.
 
 ## Was kann das?
+
 - Vollbild-Karte (MapLibre) mit 4 Strukturknoten (Platzhalter).
 - Linker/rechter Drawer (UI-Stubs), Legende, Zeitachsen-Stub im Footer.
 - Keine Persistenz, keine echten Filter/Abfragen (Ethik → UX → Gemeinschaft → Zukunft → Autonomie → Kosten).
 
 ## Nächste Schritte
+
 - A-2: Klick auf Marker öffnet Panel mit „Was passiert hier später?“
 - A-3: Dummy-Datenlayer (JSON) für 2–3 Knotentypen, 2 Fadenfarben
 - A-4: Accessibility-Pass 1 (Fokus, Kontrast)
