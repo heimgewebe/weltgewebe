@@ -3,11 +3,13 @@
 Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten, Fäden, Drawer, Zeitachse).
 
 ## Dev
+
 ```bash
 cd apps/web
 npm ci
 npm run dev
 ```
+
 Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
 In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173` verwenden.
 
