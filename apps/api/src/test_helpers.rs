@@ -1,4 +1,7 @@
-use std::env;
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 pub struct EnvGuard {
     key: &'static str,
@@ -26,5 +29,23 @@ impl Drop for EnvGuard {
         } else {
             env::remove_var(self.key);
         }
+    }
+}
+
+pub struct DirGuard {
+    original: PathBuf,
+}
+
+impl DirGuard {
+    pub fn change_to(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+        let original = env::current_dir()?;
+        env::set_current_dir(path.as_ref())?;
+        Ok(Self { original })
+    }
+}
+
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        let _ = env::set_current_dir(&self.original);
     }
 }
