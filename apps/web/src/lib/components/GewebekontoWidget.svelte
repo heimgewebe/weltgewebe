@@ -1,0 +1,60 @@
+<script lang="ts">
+  export let balance = "1 250 WE";
+  export let trend: 'stable' | 'up' | 'down' = 'stable';
+  export let note = "Attrappe · UX-Test";
+
+  const trendLabels = {
+    stable: 'gleichbleibend',
+    up: 'steigend',
+    down: 'sinkend'
+  } as const;
+</script>
+
+<div class="gewebekonto panel" role="group" aria-label="Gewebekonto-Widget (Attrappe)">
+  <div class="meta row">
+    <span class="badge">Gewebekonto</span>
+    <span class="ghost">Status: {trendLabels[trend]}</span>
+  </div>
+  <div class="balance" aria-live="polite">
+    <strong>{balance}</strong>
+  </div>
+  <p class="note ghost">{note}</p>
+  <div class="actions row" aria-hidden="true">
+    <button class="btn" type="button" disabled>Einzahlen</button>
+    <button class="btn" type="button" disabled>Auszahlen</button>
+  </div>
+</div>
+
+<style>
+  .gewebekonto {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 14rem;
+  }
+
+  .meta {
+    justify-content: space-between;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .balance {
+    font-size: 1.25rem;
+  }
+
+  .note {
+    margin: 0;
+  }
+
+  .actions {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 40rem) {
+    .gewebekonto {
+      width: 100%;
+    }
+  }
+</style>

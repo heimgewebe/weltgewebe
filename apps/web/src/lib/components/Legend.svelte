@@ -2,8 +2,8 @@
   let open = false;
 </script>
 
-<div class="panel" style="position:absolute; right:.75rem; bottom:4.5rem; width:280px">
-  <div class="row" style="justify-content:space-between">
+<div class="panel legend">
+  <div class="legend-header row">
     <strong>Legende</strong>
     <button
       class="btn"
@@ -28,3 +28,35 @@
     <em class="ghost">Essenz: „Karte sichtbar, aber dumm.“</em>
   {/if}
 </div>
+
+<style>
+  .legend {
+    position: absolute;
+    z-index: 2;
+    right: clamp(0.75rem, 3vw, 1.5rem);
+    top: clamp(0.75rem, 3vw, 1.5rem);
+    width: min(18rem, calc(100% - 1.5rem));
+  }
+
+  .legend-header {
+    justify-content: space-between;
+  }
+
+  .legend :global(.col) {
+    gap: 0.35rem;
+  }
+
+  @media (max-width: 40rem) {
+    .legend {
+      left: clamp(0.75rem, 3vw, 1.5rem);
+      width: auto;
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .legend {
+      bottom: clamp(3.5rem, 12vh, 4.75rem);
+      top: auto;
+    }
+  }
+</style>
