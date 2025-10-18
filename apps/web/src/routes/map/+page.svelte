@@ -5,7 +5,7 @@
   import GewebekontoWidget from "$lib/components/GewebekontoWidget.svelte";
   import Legend from "$lib/components/Legend.svelte";
   import { onMount } from "svelte";
-  import { MapLibre, Marker, NavigationControl, ScaleControl } from "svelte-maplibre-gl";
+  import { MapLibre, Marker, NavigationControl, ScaleControl } from "$lib/maplibre";
 
   const center = { lng: 10.0, lat: 53.55 };
   const ui = {
