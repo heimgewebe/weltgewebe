@@ -2,6 +2,23 @@
 version = 2
 yanked = "warn"
 
+# NOTE: Diese Einträge verwenden das neue Schema mit dem Schlüssel `crate`.
+# Sie ersetzen die zuvor entfernten [[advisories.ignore]]-Blöcke, damit
+# cargo-deny bekannte, noch nicht gefahrlos upgradebare Abhängigkeiten
+# nicht als Fehler markiert.
+
+[[advisories.ignore]]
+crate  = "paste"
+reason = "Ignore until a non-breaking 1.x release is available/upstream issue resolved."
+
+[[advisories.ignore]]
+crate  = "protobuf"
+reason = "Pinned while waiting for a safe upgrade path compatible with current codegen."
+
+[[advisories.ignore]]
+crate  = "sqlx"
+reason = "Ignore until the project can adopt a patched release without breaking changes."
+
 
 [bans]
 multiple-versions = "warn"
