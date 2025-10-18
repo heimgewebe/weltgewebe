@@ -2,6 +2,7 @@ use std::{env, fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
+#[allow(clippy::single_component_path_imports)]
 use serde_yaml;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
