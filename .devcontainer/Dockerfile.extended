@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1.4
+ARG BASE_IMAGE=mcr.microsoft.com/devcontainers/javascript-node:22
+FROM ${BASE_IMAGE}
+
+# --- Ensure expected devcontainer user exists (the CLI assumes "vscode") ---
+# Idempotent: nur anlegen, wenn er fehlt (manche Base-Images liefern ihn nicht).
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
+RUN set -eux; \
+    if ! getent passwd "${USERNAME}" >/dev/null 2>&1; then \
+      groupadd --gid "${USER_GID}" "${USERNAME}"; \
+      useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}"; \
+    fi; \
+    mkdir -p /home/"${USERNAME}"/.ssh && chown -R "${USER_UID}:${USER_GID}" /home/"${USERNAME}"
+
+# Optional: Standard-Tools/Qualität der Life-in-Container-Experience
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl git less nano bash-completion \
+    && rm -rf /var/lib/apt/lists/*
+
+# Features/weitere Layer folgen darunter wie gehabt…
