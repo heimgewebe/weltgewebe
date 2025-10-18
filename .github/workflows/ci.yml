@@ -43,6 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -120,43 +121,31 @@ jobs:
       - name: cargo test
         run: cargo test --locked
 
-  web-setup:
-    name: Web – install deps
+  web-check:
+    name: Web – typecheck (svelte-check)
     needs: changes
     if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: apps/web
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22.x'
-      - name: npm ci
-        run: npm ci
-
-  web-check:
-    name: Web – typecheck (svelte-check)
-    needs: web-setup
-    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
     timeout-minutes: 12
+    env:
+      CI: true
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
     defaults: { run: { working-directory: apps/web, shell: bash } }
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-      - name: npm ci (restore cache)
-        run: npm ci --prefer-offline --no-audit --no-fund
-      - name: npm run check
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts --prefer-offline --no-audit --no-fund \
+            || (echo "::warning::npm ci failed – falling back to 'npm install' (no save, no scripts)"; npm install --ignore-scripts --prefer-offline --no-audit --no-fund --no-save)
+      - name: svelte-check
         run: npm run check
 
   web-build:
@@ -165,17 +154,21 @@ jobs:
     if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      CI: true
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
     defaults: { run: { working-directory: apps/web, shell: bash } }
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22.x'
-      - name: npm ci (restore cache)
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: build
-        env:
-          CI: true
         run: npm run build
