@@ -30,8 +30,7 @@
     "vite": "7.1.7"
   },
   "dependencies": {
-    "maplibre-gl": "4.7.1",
-    "svelte-maplibre-gl": "0.18.0"
+    "maplibre-gl": "4.7.1"
   },
   "engines": {
     "node": ">=20.19.0"
