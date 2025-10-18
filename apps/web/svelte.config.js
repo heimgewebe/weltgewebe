@@ -8,7 +8,21 @@ const config = {
 
   kit: {
     // adapter-auto ist eine Factory – hier **aufrufen**:
-    adapter: adapter()
+    adapter: adapter(),
+    /**
+     * Align Vite runtime resolution with tsconfig.json "paths".
+     * Matches:
+     *   "$lib/*"        -> "src/lib/*"
+     *   "$components/*" -> "src/lib/components/*"
+     *   "$stores/*"     -> "src/lib/stores/*"
+     *   "$routes/*"     -> "src/routes/*"
+     */
+    alias: {
+      $lib: 'src/lib',
+      $components: 'src/lib/components',
+      $stores: 'src/lib/stores',
+      $routes: 'src/routes'
+    }
   }
 };
 
