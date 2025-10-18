@@ -1,138 +1,127 @@
 <script lang="ts">
-  import AppShell from "$lib/components/AppShell.svelte";
-  import DrawerLeft from "$lib/components/DrawerLeft.svelte";
-  import DrawerRight from "$lib/components/DrawerRight.svelte";
-  import GewebekontoWidget from "$lib/components/GewebekontoWidget.svelte";
-  import Legend from "$lib/components/Legend.svelte";
-  import { onMount } from "svelte";
-  import { MapLibre, Marker, NavigationControl, ScaleControl } from "$lib/maplibre";
+  import { onMount, onDestroy } from 'svelte';
+  import '$lib/styles/tokens.css';
+  import 'maplibre-gl/dist/maplibre-gl.css';
+  import TopBar from '$lib/components/TopBar.svelte';
+  import Drawer from '$lib/components/Drawer.svelte';
+  import TimelineDock from '$lib/components/TimelineDock.svelte';
 
-  const center = { lng: 10.0, lat: 53.55 };
-  const ui = {
-    timeCursor: "T-0",
-    layers: { strukturknoten: true, faeden: false },
-    drawers: { left: true, right: true }
-  } as const;
+  let mapContainer: HTMLDivElement | null = null;
+  let map: any = null;
 
-  // TODO(Gate B, tracked in policies/roadmap.md): Replace external Carto basemap with self-hosted tiles and fonts.
-  const mapStyleUrl = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+  let leftOpen = true;     // linke Spalte (Webrat + Nähstübchen)
+  let rightOpen = false;   // Filter
+  let topOpen = false;     // Gewebekonto-Drawer
 
-  let mounted = false;
-  onMount(() => {
-    mounted = true;
+  function toggleLeft(){ leftOpen = !leftOpen; }
+  function toggleRight(){ rightOpen = !rightOpen; }
+  function toggleTop(){ topOpen = !topOpen; }
+
+  let keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  onMount(async () => {
+    const maplibregl = await import('maplibre-gl');
+    // Hamburg-Hamm grob: 10.05, 53.55 — Zoom 13
+    map = new maplibregl.Map({
+      container: mapContainer!,
+      style: 'https://demotiles.maplibre.org/style.json',
+      center: [10.05, 53.55],
+      zoom: 13
+    });
+    map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
+
+    keyHandler = (e: KeyboardEvent) => {
+      if (e.key === '[') toggleLeft();
+      if (e.key === ']') toggleRight();
+      if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
+    };
+    window.addEventListener('keydown', keyHandler);
   });
-
-  const strukturknoten = [
-    { id: "webrat", name: "Webrat", lng: 10.01, lat: 53.56 },
-    { id: "naehstuebchen", name: "Nähstübchen", lng: 9.99, lat: 53.55 },
-    { id: "gewebekonto", name: "Gewebekonto", lng: 10.03, lat: 53.54 },
-    { id: "ron", name: "RoN", lng: 10.02, lat: 53.545 }
-  ];
+  onDestroy(() => {
+    if (keyHandler) window.removeEventListener('keydown', keyHandler);
+    if (map && typeof map.remove === 'function') map.remove();
+  });
 </script>
 
-<AppShell timeCursor={ui.timeCursor} title="Weltgewebe – Click-Dummy">
-  <GewebekontoWidget slot="gewebekonto" note="Nur UI – Buchungen folgen in Gate B" />
-
-  <div slot="topright" class="layer-toggle" aria-label="Layer-Stub">
-    <button class="btn" type="button" aria-pressed={ui.layers.strukturknoten} disabled>Strukturknoten</button>
-    <button class="btn" type="button" aria-pressed={ui.layers.faeden} disabled>Fäden</button>
-  </div>
-
-  <div class="map-stage">
-    <div class="map-canvas">
-      {#if mounted}
-        <MapLibre
-          class="maplibre"
-          style={mapStyleUrl}
-          center={center}
-          zoom={12}
-          attributionControl
-          on:error={(event) => console.warn("MapLibre error", event.detail)}
-        >
-          <NavigationControl position="top-left" />
-          <ScaleControl />
-
-          {#if ui.layers.strukturknoten}
-            {#each strukturknoten as k}
-              <Marker lngLat={{ lng: k.lng, lat: k.lat }} anchor="bottom" draggable={false} aria-label={k.name}>
-                <div class="badge" title={k.name}>{k.name}</div>
-              </Marker>
-            {/each}
-          {/if}
-        </MapLibre>
-      {:else}
-        <div
-          class="maplibre maplibre--placeholder"
-          role="img"
-          aria-label="Kartenplatzhalter: Interaktive Karte lädt nach dem Initialisieren."
-        ></div>
-      {/if}
-    </div>
-
-    {#if ui.drawers.left}
-      <DrawerLeft />
-    {/if}
-    {#if ui.drawers.right}
-      <DrawerRight />
-    {/if}
-    <Legend />
-  </div>
-</AppShell>
-
 <style>
-  .layer-toggle {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+  .shell{
+    position:relative;
+    height:100dvh;
+    height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width:100vw;
+    overflow:hidden;
+    background:var(--bg);
+    color:var(--text);
+    padding-top:0;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom:0;
+    padding-bottom: env(safe-area-inset-bottom);
   }
-
-  .layer-toggle :global(.btn:focus-visible) {
-    outline: 2px solid rgba(112, 184, 255, 0.9);
-    outline-offset: 2px;
-    border-radius: 999px;
+  #map{ position:absolute; inset:0; }
+  #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
+  /* Linke Spalte: oben Webrat, unten Nähstübchen (hälftig) */
+  .leftStack{
+    position:absolute;
+    left:12px;
+    top:64px;
+    top:calc(64px + env(safe-area-inset-top));
+    bottom:64px;
+    bottom:calc(64px + env(safe-area-inset-bottom));
+    width:360px;
+    z-index:26;
+    display:grid; grid-template-rows: 1fr 1fr; gap:12px;
+    transform: translateX(-380px); transition: transform .18s ease;
   }
-
-  @media (min-width: 42rem) {
-    .layer-toggle {
-      justify-content: flex-end;
-    }
+  .leftStack.open{ transform:none; }
+  .panel{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius: var(--radius);
+    box-shadow: var(--shadow); color:var(--text); padding:12px; overflow:auto;
   }
-
-  .map-stage {
-    position: relative;
-    height: 100%;
-    isolation: isolate;
+  .panel h3{ margin:0 0 8px 0; font-size:14px; color:var(--muted); letter-spacing:.2px; }
+  .muted{ color:var(--muted); font-size:13px; }
+  @media (max-width: 900px){
+    .leftStack{ width:320px; }
   }
-
-  .map-canvas {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
+  @media (max-width: 380px){
+    .leftStack{ width:300px; transform: translateX(-320px); }
   }
-
-  .maplibre {
-    width: 100%;
-    height: 100%;
-  }
-
-  .maplibre--placeholder {
-    background: linear-gradient(135deg, rgba(38, 50, 64, 0.65), rgba(16, 24, 33, 0.65));
-  }
-
-  :global(.maplibregl-ctrl) {
-    color: var(--fg);
-  }
-
-  :global(.maplibregl-ctrl button) {
-    background: #101821;
-    border-color: #263240;
-  }
-
-  :global(.maplibregl-ctrl button:hover) {
-    background: #121e29;
-  }
-
-  :global(.maplibregl-ctrl-group) {
-    box-shadow: none;
+  @media (prefers-reduced-motion: reduce){
+    .leftStack{ transition: none; }
   }
 </style>
+
+<div class="shell">
+  <TopBar {onToggleLeft} {onToggleRight} {onToggleTop}/>
+
+  <!-- Linke Spalte: Webrat / Nähstübchen -->
+  <div class="leftStack {leftOpen ? 'open' : ''}">
+    <div class="panel">
+      <h3>Webrat</h3>
+      <div class="muted">Beratung, Anträge, Matrix (Stub)</div>
+    </div>
+    <div class="panel">
+      <h3>Nähstübchen</h3>
+      <div class="muted">Ideen, Entwürfe, Skizzen (Stub)</div>
+    </div>
+  </div>
+
+  <!-- Rechter Drawer: Suche/Filter -->
+  <Drawer title="Suche & Filter" side="right" open={rightOpen}>
+    <div class="panel" style="padding:8px;">
+      <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
+    </div>
+  </Drawer>
+
+  <!-- Top Drawer: Gewebekonto -->
+  <Drawer title="Gewebekonto" side="top" open={topOpen}>
+    <div class="panel" style="padding:8px;">
+      <div class="muted">Saldo / Delegationen / Verbindlichkeiten (Stub)</div>
+    </div>
+  </Drawer>
+
+  <!-- Karte -->
+  <div id="map" bind:this={mapContainer}></div>
+
+  <!-- Zeitleiste -->
+  <TimelineDock />
+</div>
+
