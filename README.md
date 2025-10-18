@@ -2,8 +2,16 @@
 <!-- Docs-only (ADR-0001 Clean-Slate) • Re-Entry via Gates A–D -->
 # Weltgewebe
 
-Mobile-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.  
+Mobile-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
+
+## Landing
+
+Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
+
+- [Einführung: Ethik- & UX-First-Startpunkt](docs/overview/inhalt.md)
+- [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
+
 
 > **Hinweis / Scope**
 >
