@@ -10,7 +10,8 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 | --- | --- | --- |
 | **Ethik & Wirkung** | Leitplanken, Risiken, Schutzbedarfe | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
 | **User Experience** | UX-Guidelines, Prototypen, Feedback-Loops | `apps/web/README.md`, `docs/ux/`, `docs/runbooks/` |
-| **Architektur** | Technische Boundaries, Integrationen, Datenflüsse | `architekturstruktur.md`, `docs/architecture/`, `contracts/` |
+| **Architektur** | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/` |
+|                 | Datenflüsse                          | `contracts/` |
 | **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml` |
 
 ## Navigationspfad für Außenstehende
@@ -34,10 +35,12 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 ## Verbindung zu den Gates
 
 Jedes Gate (A–D) besitzt eine eigene Dokumentation in `docs/process/`.
-Die Gates stellen sicher, dass neue Funktionen den Ethik- und UX-Anforderungen entsprechen,
-bevor sie in den produktiven Stack überführt werden.
-Die Zusammenstellung dient als Index, um die passenden Unterlagen pro Gate rasch zu finden.
+Die Gates stellen sicher, dass neue Funktionen den Ethik- und UX-Anforderungen
+entsprechen, bevor sie in den produktiven Stack überführt werden.
+Die Zusammenstellung dient als Index, um die passenden Unterlagen pro Gate rasch
+zu finden.
 
-> _Hinweis:_ Ergänzende Artefakte (z. B. Workshops, Entscheidungen, ADRs) werden im jeweiligen Ordner verlinkt,
-> sobald sie vorliegen. Diese Systematik wird fortlaufend gepflegt und bildet den verbindlichen Einstiegspunkt
-> für neue Teammitglieder ebenso wie externe Auditor:innen.
+> _Hinweis:_ Ergänzende Artefakte (z. B. Workshops, Entscheidungen, ADRs)
+> werden im jeweiligen Ordner verlinkt, sobald sie vorliegen. Diese Systematik
+> wird fortlaufend gepflegt und bildet den verbindlichen Einstiegspunkt für neue
+> Teammitglieder ebenso wie externe Auditor:innen.
