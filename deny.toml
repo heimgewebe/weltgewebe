@@ -1,7 +1,21 @@
 [advisories]
 version = 2
 yanked = "warn"
-ignore = []
+
+[[advisories.ignore]]
+# paste 1.0.x has no fixed release that avoids the advisory without breaking downstream macros.
+package = "paste"
+reason = "Ignore until a non-breaking upgrade becomes available."
+
+[[advisories.ignore]]
+# protobuf 3.x cannot be upgraded safely without significant API breakage.
+package = "protobuf"
+reason = "Pinned while waiting for an upstream fix that does not require a major rewrite."
+
+[[advisories.ignore]]
+# sqlx 0.8 has no patched release for the advisory affecting the 0.8 series yet.
+package = "sqlx"
+reason = "Ignore until the project can adopt a breaking 0.9 upgrade."
 
 [bans]
 multiple-versions = "warn"
