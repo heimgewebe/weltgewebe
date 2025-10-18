@@ -2,8 +2,6 @@ use std::{env, fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-#[allow(clippy::single_component_path_imports)]
-use serde_yaml;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
@@ -33,7 +31,6 @@ impl AppConfig {
             .with_context(|| format!("failed to read configuration file at {}", path.display()))?;
         let config: Self = serde_yaml::from_str(&raw)
             .with_context(|| format!("failed to parse configuration file at {}", path.display()))?;
-
         config.apply_env_overrides()
     }
 
