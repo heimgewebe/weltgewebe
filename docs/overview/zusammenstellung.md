@@ -1,6 +1,8 @@
 # Systematik & Strukturüberblick
 
-Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltgewebe-Dokumentation. Sie ergänzt die inhaltliche Einführung (`docs/overview/inhalt.md`) und macht deutlich, wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
+Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltgewebe-Dokumentation.
+Sie ergänzt die inhaltliche Einführung (`docs/overview/inhalt.md`) und macht deutlich,
+wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 
 ## Kernartefakte
 
@@ -31,6 +33,11 @@ Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltge
 
 ## Verbindung zu den Gates
 
-Jedes Gate (A–D) besitzt eine eigene Dokumentation in `docs/process/`. Die Gates stellen sicher, dass neue Funktionen den Ethik- und UX-Anforderungen entsprechen, bevor sie in den produktiven Stack überführt werden. Die Zusammenstellung dient als Index, um die passenden Unterlagen pro Gate rasch zu finden.
+Jedes Gate (A–D) besitzt eine eigene Dokumentation in `docs/process/`.
+Die Gates stellen sicher, dass neue Funktionen den Ethik- und UX-Anforderungen entsprechen,
+bevor sie in den produktiven Stack überführt werden.
+Die Zusammenstellung dient als Index, um die passenden Unterlagen pro Gate rasch zu finden.
 
-> _Hinweis:_ Ergänzende Artefakte (z. B. Workshops, Entscheidungen, ADRs) werden im jeweiligen Ordner verlinkt, sobald sie vorliegen. Diese Systematik wird fortlaufend gepflegt und bildet den verbindlichen Einstiegspunkt für neue Teammitglieder ebenso wie externe Auditor:innen.
+> _Hinweis:_ Ergänzende Artefakte (z. B. Workshops, Entscheidungen, ADRs) werden im jeweiligen Ordner verlinkt,
+> sobald sie vorliegen. Diese Systematik wird fortlaufend gepflegt und bildet den verbindlichen Einstiegspunkt
+> für neue Teammitglieder ebenso wie externe Auditor:innen.
