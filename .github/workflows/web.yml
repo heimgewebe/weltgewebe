@@ -44,7 +44,7 @@ jobs:
           npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund)
 
       - name: Typecheck
-        run: npm run check
+        run: npx svelte-check --tsconfig ./tsconfig.json
 
       - name: Lint & Build
         run: |
