@@ -2,7 +2,6 @@ use std::{env, fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use serde_yaml;
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
