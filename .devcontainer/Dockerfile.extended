@@ -7,15 +7,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # --- Ensure expected devcontainer user exists (the CLI assumes "vscode") ---
 # Idempotent: nur anlegen, wenn er fehlt (manche Base-Images liefern ihn nicht).
+#
+# Robustere Logik: vermeide feste UID/GID, wenn die gewünschte UID bereits belegt ist.
+# Falls ${USERNAME} bereits existiert, passiert nichts. Falls die gewünschte UID
+# frei ist, wird sie verwendet; sonst wird der User ohne feste UID angelegt, um
+# "UID ... is not unique"-Fehler während des Image-Builds zu vermeiden.
 ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=${USER_UID}
 RUN set -eux; \
+    # ensure group exists (try with requested GID, fall back to name-only)
     if ! getent group "${USERNAME}" >/dev/null 2>&1; then \
       groupadd --gid "${USER_GID}" "${USERNAME}" || groupadd "${USERNAME}"; \
     fi; \
+    # create user only if missing
     if ! getent passwd "${USERNAME}" >/dev/null 2>&1; then \
-      useradd --uid "${USER_UID}" --gid "${USERNAME}" -m -s /bin/bash "${USERNAME}"; \
+      # if the requested UID is free, create with that UID; otherwise create
+      # the user without forcing UID to avoid conflicts with existing users
+      if ! getent passwd "${USER_UID}" >/dev/null 2>&1; then \
+        useradd --uid "${USER_UID}" --gid "${USERNAME}" -m -s /bin/bash "${USERNAME}"; \
+      else \
+        useradd -m -s /bin/bash -g "${USERNAME}" "${USERNAME}" || useradd -m -s /bin/bash "${USERNAME}"; \
+      fi; \
     fi; \
     mkdir -p /home/"${USERNAME}"/.ssh && chown -R "${USERNAME}:${USERNAME}" /home/"${USERNAME}"
 
