@@ -46,6 +46,9 @@ jobs:
           # automatisch auf npm install zurück, damit der Run nicht scheitert.
           npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund)
 
+      - name: SvelteKit prepare
+        run: npx svelte-kit sync
+
       - name: Typecheck
         run: npx svelte-check --tsconfig ./tsconfig.json
 
