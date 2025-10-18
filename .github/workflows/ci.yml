@@ -157,7 +157,7 @@ jobs:
       - name: npm ci (restore cache)
         run: npm ci --prefer-offline --no-audit --no-fund
       - name: svelte-check
-        run: npm run check
+        run: npx svelte-check --tsconfig ./tsconfig.json
 
   web-build:
     name: Web – build
