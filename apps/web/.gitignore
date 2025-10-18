@@ -5,3 +5,10 @@ build
 public/demo.png
 .env
 .env.local
+
+# Playwright artifacts
+playwright-report/
+test-results/
+blob-report/
+trace.zip
+
