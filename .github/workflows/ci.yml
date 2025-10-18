@@ -156,8 +156,8 @@ jobs:
           node-version: '22.x'
       - name: npm ci (restore cache)
         run: npm ci --prefer-offline --no-audit --no-fund
-      - name: svelte-check
-        run: npx svelte-check --tsconfig ./tsconfig.json
+      - name: npm run check
+        run: npm run check
 
   web-build:
     name: Web – build
