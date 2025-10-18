@@ -1,4 +1,6 @@
 name: cost-report
+permissions:
+  contents: read
 on:
   workflow_dispatch:
   schedule:
