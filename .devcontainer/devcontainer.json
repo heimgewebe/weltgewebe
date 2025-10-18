@@ -1,6 +1,8 @@
 {
   "name": "weltgewebe-dev",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "build": {
+    "dockerfile": "Dockerfile.extended"
+  },
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
@@ -15,7 +17,11 @@
       ]
     }
   },
+  // Wir benutzen bewusst den "vscode"-User. Der Dockerfile-Patch legt ihn an, falls fehlend.
   "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  // Start an init process (tini) for better signal handling inside the container.
+  "init": true,
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
