@@ -39,19 +39,19 @@ impl AppConfig {
     fn apply_env_overrides(mut self) -> Result<Self> {
         if let Ok(value) = env::var("HA_FADE_DAYS") {
             self.fade_days = value
-                .parse()
+                .parse::<u32>()
                 .with_context(|| format!("failed to parse HA_FADE_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_RON_DAYS") {
             self.ron_days = value
-                .parse()
+                .parse::<u32>()
                 .with_context(|| format!("failed to parse HA_RON_DAYS override: {value}"))?;
         }
 
         if let Ok(value) = env::var("HA_ANONYMIZE_OPT_IN") {
             self.anonymize_opt_in = value
-                .parse()
+                .parse::<bool>()
                 .with_context(|| {
                     format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}")
                 })?;
@@ -59,7 +59,7 @@ impl AppConfig {
 
         if let Ok(value) = env::var("HA_DELEGATION_EXPIRE_DAYS") {
             self.delegation_expire_days = value
-                .parse()
+                .parse::<u32>()
                 .with_context(|| {
                     format!("failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}")
                 })?;
