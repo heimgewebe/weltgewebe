@@ -31,9 +31,13 @@
 ### Gate A: Aufgabenblöcke
 
 - **UX-Click-Dummy:** Interaktiver Ablauf für Karte → Knoten → Zeit-UI. Figma/Tool-Link im README vermerken.
-- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `thread` abstimmen (Basis für Gate B). Ablage unter `contracts/` und im README verlinken.
-- **README-Landing:** Landing-Abschnitt aktualisieren (Screenshot/Diagramm + Hinweise zum Click-Dummy, Contracts, Fahrplan).
-- **Vale-Regeln:** Vale-Regeln aus `styles/Weltgewebe/*` gegen README, Fahrplan und Gate-A-Dokumente prüfen, Verstöße beheben.
+- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `thread`
+  abstimmen (Basis für Gate B). Ablage unter `contracts/` und im README
+  verlinken.
+- **README-Landing:** Landing-Abschnitt aktualisieren (Screenshot/Diagramm +
+  Hinweise zum Click-Dummy, Contracts, Fahrplan).
+- **Vale-Regeln:** Vale-Regeln aus `styles/Weltgewebe/*` gegen README,
+  Fahrplan und Gate-A-Dokumente prüfen, Verstöße beheben.
 
 ### Gate A: Done
 

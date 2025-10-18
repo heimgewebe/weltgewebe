@@ -11,7 +11,6 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
 - [Einführung: Ethik- & UX-First-Startpunkt](docs/overview/inhalt.md)
 - [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
-
 > **Hinweis / Scope**
 >
 > - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
