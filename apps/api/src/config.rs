@@ -31,7 +31,6 @@ impl AppConfig {
             .with_context(|| format!("failed to read configuration file at {}", path.display()))?;
         let config: Self = serde_yaml::from_str(&raw)
             .with_context(|| format!("failed to parse configuration file at {}", path.display()))?;
-
         config.apply_env_overrides()
     }
 
