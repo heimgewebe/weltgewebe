@@ -69,7 +69,6 @@ mod tests {
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
-    use std::io::Write;
     use tempfile::{tempdir, NamedTempFile};
 
     const YAML: &str = r#"fade_days: 7
@@ -81,8 +80,8 @@ delegation_expire_days: 28
     #[test]
     #[serial]
     fn load_from_path_reads_defaults() -> Result<()> {
-        let mut file = NamedTempFile::new()?;
-        write!(file, "{YAML}")?;
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
@@ -102,8 +101,8 @@ delegation_expire_days: 28
     #[test]
     #[serial]
     fn load_from_path_applies_env_overrides() -> Result<()> {
-        let mut file = NamedTempFile::new()?;
-        write!(file, "{YAML}")?;
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _fade = EnvGuard::set("HA_FADE_DAYS", "10");
