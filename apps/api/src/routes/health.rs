@@ -65,46 +65,50 @@ fn check_policy_fallbacks(paths: &[PathBuf]) -> bool {
     false
 }
 
-async fn ready(State(state): State<ApiState>) -> Response {
-    let nats_ready = if state.nats_configured {
-        match state.nats_client.as_ref() {
-            Some(client) => match client.flush().await {
-                Ok(_) => true,
-                Err(error) => {
-                    readiness_check_failed("nats", &error);
-                    false
-                }
-            },
-            None => {
-                readiness_check_failed("nats", "client not initialised");
+async fn check_nats(state: &ApiState) -> bool {
+    if !state.nats_configured {
+        return true;
+    }
+
+    match state.nats_client.as_ref() {
+        Some(client) => match client.flush().await {
+            Ok(_) => true,
+            Err(error) => {
+                readiness_check_failed("nats", &error);
                 false
             }
+        },
+        None => {
+            readiness_check_failed("nats", "client not initialised");
+            false
         }
-    } else {
-        true
-    };
+    }
+}
 
-    let database_ready = if state.db_pool_configured {
-        match state.db_pool.as_ref() {
-            Some(pool) => match query_scalar::<_, i32>("SELECT 1")
-                .fetch_optional(pool)
-                .await
-            {
-                Ok(_) => true,
-                Err(error) => {
-                    readiness_check_failed("database", &error);
-                    false
-                }
-            },
-            None => {
-                readiness_check_failed("database", "connection pool not initialised");
+async fn check_database(state: &ApiState) -> bool {
+    if !state.db_pool_configured {
+        return true;
+    }
+
+    match state.db_pool.as_ref() {
+        Some(pool) => match query_scalar::<_, i32>("SELECT 1")
+            .fetch_optional(pool)
+            .await
+        {
+            Ok(_) => true,
+            Err(error) => {
+                readiness_check_failed("database", &error);
                 false
             }
+        },
+        None => {
+            readiness_check_failed("database", "connection pool not initialised");
+            false
         }
-    } else {
-        true
-    };
+    }
+}
 
+fn check_policy() -> bool {
     // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
     // Fallbacks stay for dev/CI convenience.
     let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
@@ -113,11 +117,18 @@ async fn ready(State(state): State<ApiState>) -> Response {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
     ];
-    let policy_ready = if let Some(path) = env_path {
+
+    if let Some(path) = env_path {
         check_policy_file(&path).is_ok()
     } else {
         check_policy_fallbacks(&fallback_paths)
-    };
+    }
+}
+
+async fn ready(State(state): State<ApiState>) -> Response {
+    let nats_ready = check_nats(&state).await;
+    let database_ready = check_database(&state).await;
+    let policy_ready = check_policy();
 
     let status = if database_ready && nats_ready && policy_ready {
         StatusCode::OK
