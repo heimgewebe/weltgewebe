@@ -22,3 +22,4 @@ export PATH="$HOME/.local/bin:$PATH"
 uv --version
 
 echo "uv installed and ready"
+
