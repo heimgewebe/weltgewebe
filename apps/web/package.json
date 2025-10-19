@@ -14,9 +14,10 @@
     "screenshot": "node scripts/record-screenshot.mjs",
     "pretest": "npm run build",
     "test": "playwright test",
-    "test:report": "npx playwright show-report",
+    "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=line",
-    "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true"
+    "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
+    "sync": "svelte-kit sync"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
