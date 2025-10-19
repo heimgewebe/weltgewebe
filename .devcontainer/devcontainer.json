@@ -34,8 +34,6 @@
   // Start an init process (tini) for better signal handling inside the container.
   "init": true,
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "postAttachCommand": {
-    "server": "bash -lc 'cd apps/web && [ -d node_modules ] || (npm ci || npm install)'"
-  },
+  "postAttachCommand": "bash -lc 'cd apps/web && [ -d node_modules ] || (npm ci || npm install)'",
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
