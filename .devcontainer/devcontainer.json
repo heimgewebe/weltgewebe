@@ -17,11 +17,25 @@
       ]
     }
   },
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "containerEnv": {
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
+    "PUPPETEER_SKIP_DOWNLOAD": "true"
+  },
   // Wir benutzen bewusst den "vscode"-User. Der Dockerfile-Patch legt ihn an, falls fehlend.
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
   // Start an init process (tini) for better signal handling inside the container.
   "init": true,
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "postAttachCommand": {
+    "server": "bash -lc 'cd apps/web && [ -d node_modules ] || (npm ci || npm install)'"
+  },
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
