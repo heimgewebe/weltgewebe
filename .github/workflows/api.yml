@@ -38,12 +38,17 @@ jobs:
       - uses: actions/checkout@v4
 
       # Optional: Validates that a default app config is parseable (if present)
+      - name: Install PyYAML for config validation
+        if: hashFiles('configs/app.defaults.yml') != ''
+        run: python3 -m pip install --disable-pip-version-check --no-cache-dir pyyaml
+
       - name: Validate app.defaults.yml (optional)
         if: hashFiles('configs/app.defaults.yml') != ''
         run: |
           python3 - <<'PY'
-          import yaml, sys
+          import yaml
           from pathlib import Path
+
           p = Path("configs/app.defaults.yml")
           yaml.safe_load(p.read_text(encoding="utf-8"))
           print("configs/app.defaults.yml: OK")
