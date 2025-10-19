@@ -44,7 +44,7 @@ jobs:
         run: |
           # Bevorzugt deterministisch mit npm ci, fällt aber bei stale lockfile
           # automatisch auf npm install zurück, damit der Run nicht scheitert.
-          npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund)
+          npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund --include=dev)
 
       - name: SvelteKit prepare
         run: npm run sync
@@ -59,6 +59,8 @@ jobs:
         run: CI=true npm run build
 
       - name: Playwright: setup browsers (CI)
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
         run: npm run test:setup
 
       - name: Test (CI)
