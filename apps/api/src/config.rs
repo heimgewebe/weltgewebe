@@ -3,6 +3,16 @@ use std::{env, fs, path::Path};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+macro_rules! apply_env_override {
+    ($self:ident, $field:ident, $env_var:literal) => {
+        if let Ok(value) = env::var($env_var) {
+            $self.$field = value
+                .parse()
+                .with_context(|| format!("failed to parse {} override: {value}", $env_var))?;
+        }
+    };
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -35,29 +45,10 @@ impl AppConfig {
     }
 
     fn apply_env_overrides(mut self) -> Result<Self> {
-        if let Ok(value) = env::var("HA_FADE_DAYS") {
-            self.fade_days = value
-                .parse()
-                .with_context(|| format!("failed to parse HA_FADE_DAYS override: {value}"))?;
-        }
-
-        if let Ok(value) = env::var("HA_RON_DAYS") {
-            self.ron_days = value
-                .parse()
-                .with_context(|| format!("failed to parse HA_RON_DAYS override: {value}"))?;
-        }
-
-        if let Ok(value) = env::var("HA_ANONYMIZE_OPT_IN") {
-            self.anonymize_opt_in = value.parse().with_context(|| {
-                format!("failed to parse HA_ANONYMIZE_OPT_IN override: {value}")
-            })?;
-        }
-
-        if let Ok(value) = env::var("HA_DELEGATION_EXPIRE_DAYS") {
-            self.delegation_expire_days = value.parse().with_context(|| {
-                format!("failed to parse HA_DELEGATION_EXPIRE_DAYS override: {value}")
-            })?;
-        }
+        apply_env_override!(self, fade_days, "HA_FADE_DAYS");
+        apply_env_override!(self, ron_days, "HA_RON_DAYS");
+        apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
+        apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
 
         Ok(self)
     }
