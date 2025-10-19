@@ -20,7 +20,6 @@ jobs:
     name: Build & Lint
     runs-on: ubuntu-latest
     env:
-      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       PUPPETEER_SKIP_DOWNLOAD: "true"
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,8 +58,11 @@ jobs:
         run: CI=true npm run build
 
       - name: Playwright: setup browsers (CI)
+        # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
+        # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
+        # dass vorhandene job-/repo-/orgweite Defaults überschrieben werden.
         env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "0"
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
         run: npm run test:setup
 
       - name: Test (CI)
@@ -69,3 +71,11 @@ jobs:
       - name: Upload Playwright report (best-effort)
         if: always()
         run: npm run test:report || true
+
+      - name: Upload Playwright report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          if-no-files-found: ignore
