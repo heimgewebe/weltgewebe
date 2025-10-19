@@ -47,12 +47,23 @@ jobs:
           npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund)
 
       - name: SvelteKit prepare
-        run: npx svelte-kit sync
+        run: npm run sync
 
       - name: Typecheck
-        run: npx svelte-check --tsconfig ./tsconfig.json
+        run: npm run check
 
-      - name: Lint & Build
-        run: |
-          npm run lint
-          CI=true npm run build
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: CI=true npm run build
+
+      - name: Playwright: setup browsers (CI)
+        run: npm run test:setup
+
+      - name: Test (CI)
+        run: npm run test:ci
+
+      - name: Upload Playwright report (best-effort)
+        if: always()
+        run: npm run test:report || true
