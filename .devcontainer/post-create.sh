@@ -5,6 +5,15 @@ set -euxo pipefail
 sudo apt-get update
 sudo apt-get install -y jq ripgrep vale shfmt hadolint just httpie
 
+# Node/PNPM vorbereiten
+corepack enable || true
+corepack prepare pnpm@latest --activate || true
+
+# Frontend-Install, wenn apps/web existiert
+if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
+  (cd apps/web && (pnpm install || npm ci || npm install))
+fi
+
 # --- uv installieren (offizieller Installer von Astral) ---
 # Quelle: Astral Docs – Standalone installer
 # https://docs.astral.sh/uv/getting-started/installation/
@@ -22,4 +31,9 @@ export PATH="$HOME/.local/bin:$PATH"
 uv --version
 
 echo "uv installed and ready"
+
+# Rust warm-up (optional)
+if [ -f "Cargo.toml" ]; then
+  cargo fetch || true
+fi
 

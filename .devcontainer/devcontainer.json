@@ -6,22 +6,32 @@
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
     "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers/features/rust:1": {}
+    "ghcr.io/devcontainers/features/rust:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
   },
   "customizations": {
     "vscode": {
       "extensions": [
         "rust-lang.rust-analyzer",
         "timonwong.shellcheck",
-        "streetsidesoftware.code-spell-checker"
+        "streetsidesoftware.code-spell-checker",
+        "yzhang.markdown-all-in-one",
+        "DavidAnson.vscode-markdownlint",
+        "bierner.markdown-preview-github-styles"
       ]
     }
   },
-  "forwardPorts": [5173],
+  "forwardPorts": [5173, 3000],
   "portsAttributes": {
     "5173": {
       "label": "Vite Dev Server",
       "onAutoForward": "openBrowser"
+    },
+    "3000": {
+      "label": "API / Preview",
+      "onAutoForward": "notify"
     }
   },
   "containerEnv": {
@@ -34,6 +44,6 @@
   // Start an init process (tini) for better signal handling inside the container.
   "init": true,
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "postAttachCommand": "bash -lc 'cd apps/web && [ -d node_modules ] || (npm ci || npm install)'",
+  "postAttachCommand": "bash -lc 'corepack enable || true; cd apps/web && [ -d node_modules ] || (pnpm install || npm ci || npm install)'",
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
