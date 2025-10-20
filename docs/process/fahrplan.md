@@ -1,16 +1,75 @@
 # Fahrplan
 
-**Stand:** 2025-09-13
+**Stand:** 2025-10-20
 **Bezug:** ADR-0001 (Clean Slate & Monorepo), ADR-0002 (Re-Entry-Kriterien), ADR-0003 (Privacy: Unschärferadius & RoN)
 **Prinzipien:** mobile-first, audit-ready, klein schneiden, Metriken vor Features.
 
 ---
 
+## Inhalt
+
+- [Kurzfahrplan (Gates A–D)](#kurzfahrplan-gates-ad)
+- [Gate-Checkliste (A–D)](#gate-checkliste-ad)
+  - [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett)
+  - [Gate B — API (Axum) *Health & Kernverträge*](#gate-b--api-axum-health--kernverträge)
+  - [Gate C — Infra-light (Compose, Caddy, PG)](#gate-c--infra-light-compose-caddy-pg)
+  - [Gate D — Security-Basis](#gate-d--security-basis)
+- [0) Vorbereitungen (sofort)](#0-vorbereitungen-sofort)
+- [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett-1)
+
+---
+
 ## Kurzfahrplan (Gates A–D)
-- **Gate A:** UX Click-Dummy (keine Backends)  
-- **Gate B:** API-Mock (lokal)  
-- **Gate C:** Infra-light (Compose, minimale Pfade)  
+- **Gate A:** UX Click-Dummy (keine Backends)
+- **Gate B:** API-Mock (lokal)
+- **Gate C:** Infra-light (Compose, minimale Pfade)
 - **Gate D:** Produktive Pfade (härten, Observability)
+
+## Gate-Checkliste (A–D)
+
+### Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*
+
+**Checkliste „bereit für Gate B“**
+
+- [ ] Interaktiver UX-Click-Dummy ist verlinkt (README) und deckt Karte → Knoten → Zeit-UI ab.
+- [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `thread` abgestimmt und dokumentiert.
+- [ ] README-Landing beschreibt Click-Dummy, Contracts und verweist auf diesen Fahrplan.
+- [ ] Vale-Regeln laufen gegen README/Fahrplan ohne Verstöße.
+- [ ] PWA installierbar, Offline-Shell lädt Grundlayout.
+- [ ] Dummy-Karte (MapLibre) sichtbar, Layout-Slots vorhanden; Budgets ≤ 60 KB / TTI ≤ 2 s dokumentiert.
+- [ ] Minimal-Smoke-Test (Playwright) grün, Lighthouse Mobile ≥ 85.
+
+### Gate B — API (Axum) *Health & Kernverträge*
+
+**Checkliste „bereit für Gate C“**
+
+- [ ] Axum-Service liefert `/health/live`, `/health/ready`, `/version`.
+- [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
+- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`) als Stubs implementiert.
+- [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`, `cargo test` aus.
+- [ ] `docker compose` (nur API) startet fehlerfrei.
+- [ ] Contract-Test gegen `POST /nodes` grün, OpenAPI JSON abrufbar.
+
+### Gate C — Infra-light (Compose, Caddy, PG)
+
+**Checkliste „bereit für Gate D“**
+
+- [ ] `infra/compose/compose.core.yml` umfasst web, api, postgres, pgBouncer, caddy.
+- [ ] `infra/caddy/Caddyfile` mit HTTP/3, strikter CSP, gzip/zstd vorhanden.
+- [ ] `.env.example` komplettiert, Healthchecks für Dienste konfiguriert.
+- [ ] `docker compose -f infra/compose/compose.core.yml up -d` läuft lokal ohne Fehler.
+- [ ] Caddy terminiert TLS (self-signed) und proxyt Web+API korrekt.
+- [ ] Web-Skelett lädt mit CSP ohne Console-Fehler.
+
+### Gate D — Security-Basis
+
+**Checkliste „bereit für Re-Entry“**
+
+- [ ] Lizenz final (AGPL-3.0-or-later) bestätigt und dokumentiert.
+- [ ] Secrets-Plan (sops/age) dokumentiert, keine Klartext-Secrets im Repo.
+- [ ] SBOM/Scan (Trivy oder Syft) in CI aktiv, bricht bei kritischen CVEs ab.
+- [ ] Runbook „Incident 0“ (Logs sammeln, Restart, Contact) verfügbar.
+- [ ] CI schützt Budgets, Policies verlinkt; Observability-Basis beschrieben.
 
 > Details, Akzeptanzkriterien, Budgets und Risiken folgen im Langteil unten.
 
