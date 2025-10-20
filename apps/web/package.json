@@ -5,9 +5,9 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "scripts": {
-    "dev": "vite dev --host",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "svelte-kit dev --host",
+    "build": "svelte-kit build",
+    "preview": "svelte-kit preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:ci": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
     "format": "prettier -w .",
@@ -35,7 +35,7 @@
     "svelte": "5.39.6",
     "svelte-check": "^4.3.2",
     "typescript": "5.9.2",
-    "vite": "7.1.7"
+    "vite": "^7.0.0"
   },
   "dependencies": {
     "maplibre-gl": "4.7.1"
