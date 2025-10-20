@@ -27,7 +27,7 @@
   "devDependencies": {
     "@playwright/test": "1.55.1",
     "@sveltejs/adapter-auto": "6.1.0",
-    "@sveltejs/kit": "2.43.5",
+    "@sveltejs/kit": "^2.47.2",
     "@typescript-eslint/eslint-plugin": "8.8.0",
     "@typescript-eslint/parser": "8.8.0",
     "eslint": "9.11.1",
