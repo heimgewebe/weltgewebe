@@ -24,6 +24,7 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
 
+
 ### Development quickstart
 (Preview; wird mit Gate C aktiviert – siehe `docs/process/fahrplan.md`.)
 
@@ -58,8 +59,9 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
 - Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
 
-> **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001. Code-Re-Entry erfolgt über die Gates A–D (siehe
-> [docs/process/fahrplan.md](docs/process/fahrplan.md). Dort sind die Gate-Checklisten (A–D) als To-dos dokumentiert.
+> **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001. Code-Re-Entry erfolgt über die Gates A–D
+> (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)). Dort sind die Gate-Checklisten (A–D) als
+> To-dos dokumentiert.
 
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
 
