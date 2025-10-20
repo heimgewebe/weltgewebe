@@ -15,7 +15,7 @@
   - [Gate C — Infra-light (Compose, Caddy, PG)](#gate-c--infra-light-compose-caddy-pg--phaseziele)
   - [Gate D — Security-Basis](#gate-d--security-basis-grundlagen)
 - [0) Vorbereitungen (sofort)](#0-vorbereitungen-sofort)
-- [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett-1)
+- [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett* — Phaseziele](#gate-a--web-sveltekit-minimal-sichtbares-skelett--phaseziele)
 
 ---
 
@@ -29,7 +29,7 @@
 
 ### Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*
 
-**Checkliste „bereit für Gate B“**
+#### Checkliste „bereit für Gate B“
 
 - [ ] Interaktiver UX-Click-Dummy ist verlinkt (README) und deckt Karte → Knoten → Zeit-UI ab.
 - [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `thread` abgestimmt und dokumentiert.
@@ -41,7 +41,7 @@
 
 ### Gate B — API (Axum) *Health & Kernverträge*
 
-**Checkliste „bereit für Gate C“**
+#### Checkliste „bereit für Gate C“
 
 - [ ] Axum-Service liefert `/health/live`, `/health/ready`, `/version`.
 - [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
@@ -52,7 +52,7 @@
 
 ### Gate C — Infra-light (Compose, Caddy, PG)
 
-**Checkliste „bereit für Gate D“**
+#### Checkliste „bereit für Gate D“
 
 - [ ] `infra/compose/compose.core.yml` umfasst web, api, postgres, pgBouncer, caddy.
 - [ ] `infra/caddy/Caddyfile` mit HTTP/3, strikter CSP, gzip/zstd vorhanden.
@@ -63,7 +63,7 @@
 
 ### Gate D — Security-Basis
 
-**Checkliste „bereit für Re-Entry“**
+#### Checkliste „bereit für Re-Entry“
 
 - [ ] Lizenz final (AGPL-3.0-or-later) bestätigt und dokumentiert.
 - [ ] Secrets-Plan (sops/age) dokumentiert, keine Klartext-Secrets im Repo.
@@ -85,7 +85,7 @@
 
 ---
 
-## Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*
+## Gate A — Web (SvelteKit) *Minimal sichtbares Skelett* — Phaseziele
 
 **Ziel:** „Karte hallo sagen“ – startfähiges Web, PWA-Shell, Basislayout, MapLibre-Stub.
 
