@@ -24,7 +24,6 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
 
-
 ### Development quickstart
 (Preview; wird mit Gate C aktiviert – siehe `docs/process/fahrplan.md`.)
 
@@ -122,7 +121,8 @@ Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und 
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 
 - **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md) (Gates A–D mit konkreten Prüfpunkten)
-- **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md) (Frontend-Prototyp für Karte · Drawer · Zeitleiste · Ethik-UI)
+- **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md) (Frontend-Prototyp für Karte · Drawer ·
+  Zeitleiste · Ethik-UI)
 
 ## Beiträge & Docs
 
