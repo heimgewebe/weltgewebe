@@ -61,24 +61,24 @@ Dieses Runbook beschreibt die Schritte zur Simulation eines Totalausfalls und de
 
 1.  **Saubere Umgebung bereitstellen:** Eine neue VM- oder Kubernetes-Umgebung ohne bestehende Daten oder Konfigurationen hochfahren.
 2.  **Infrastruktur aufbauen:**
-    -   Das Repository auf die neue Umgebung klonen.
-    -   Die Basis-Infrastruktur über die Compose-Files oder Nomad-Jobs starten (`infra/compose/compose.core.yml` etc.). Die Container starten, bleiben aber ggf. im Wartezustand, da die Datenbank noch nicht bereit ist.
+    - Das Repository auf die neue Umgebung klonen.
+    - Die Basis-Infrastruktur über die Compose-Files oder Nomad-Jobs starten (`infra/compose/compose.core.yml` etc.). Die Container starten, bleiben aber ggf. im Wartezustand, da die Datenbank noch nicht bereit ist.
 3.  **Datenbank-Wiederherstellung (Point-in-Time Recovery):**
-    -   Eine neue PostgreSQL-Instanz starten.
-    -   Das letzte Basis-Backup einspielen.
-    -   Die WAL-Archive aus dem Backup-Speicher bis zum letzten verfügbaren Zeitpunkt vor dem "Ausfall" wiederherstellen.
+    - Eine neue PostgreSQL-Instanz starten.
+    - Das letzte Basis-Backup einspielen.
+    - Die WAL-Archive aus dem Backup-Speicher bis zum letzten verfügbaren Zeitpunkt vor dem "Ausfall" wiederherstellen.
 4.  **Systemstart & Event-Replay:**
-    -   Die Applikations-Container (API, Worker) neu starten, damit sie sich mit der wiederhergestellten Datenbank verbinden.
-    -   Den `outbox`-Relay-Prozess starten. Dieser beginnt, die noch nicht verarbeiteten Events aus der `outbox`-Tabelle an NATS JetStream zu senden.
-    -   Die Worker (Projektoren) starten. Sie konsumieren die Events von JetStream und bauen die Lese-Modelle (`faden_view` etc.) neu auf.
+    - Die Applikations-Container (API, Worker) neu starten, damit sie sich mit der wiederhergestellten Datenbank verbinden.
+    - Den `outbox`-Relay-Prozess starten. Dieser beginnt, die noch nicht verarbeiteten Events aus der `outbox`-Tabelle an NATS JetStream zu senden.
+    - Die Worker (Projektoren) starten. Sie konsumieren die Events von JetStream und bauen die Lese-Modelle (`faden_view` etc.) neu auf.
 5.  **Verifikation & Abschluss:**
-    -   **Datenkonsistenz prüfen:** Stichprobenartige Überprüfung der wiederhergestellten Daten in den Lese-Modellen.
-    -   **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Thread erstellen).
-    -   **Zeitmessung:** Die benötigte Zeit für die Wiederherstellung stoppen und mit dem RTO vergleichen.
-    -   **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
+    - **Datenkonsistenz prüfen:** Stichprobenartige Überprüfung der wiederhergestellten Daten in den Lese-Modellen.
+    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Thread erstellen).
+    - **Zeitmessung:** Die benötigte Zeit für die Wiederherstellung stoppen und mit dem RTO vergleichen.
+    - **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
 6.  **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse dokumentieren.
 
 ### Nachbereitung
 
--   **Lessons Learned:** Ein kurzes Meeting abhalten, um Probleme oder Verbesserungspotenziale zu besprechen.
--   **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
+- **Lessons Learned:** Ein kurzes Meeting abhalten, um Probleme oder Verbesserungspotenziale zu besprechen.
+- **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
