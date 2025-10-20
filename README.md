@@ -25,6 +25,7 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
 
 ### Development quickstart
+(Preview; wird mit Gate C aktiviert – siehe `docs/process/fahrplan.md`.)
 
 - Install Rust (stable), Docker, Docker Compose, and `just`.
 - Bring up the core stack:

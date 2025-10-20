@@ -6,6 +6,16 @@
 
 ---
 
+## Kurzfahrplan (Gates A–D)
+- **Gate A:** UX Click-Dummy (keine Backends)  
+- **Gate B:** API-Mock (lokal)  
+- **Gate C:** Infra-light (Compose, minimale Pfade)  
+- **Gate D:** Produktive Pfade (härten, Observability)
+
+> Details, Akzeptanzkriterien, Budgets und Risiken folgen im Langteil unten.
+
+---
+
 ## 0) Vorbereitungen (sofort)
 
 - **Sprache & Vale:** Vale aktiv, Regeln aus `styles/Weltgewebe/*` verbindlich.
