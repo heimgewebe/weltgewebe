@@ -5,6 +5,7 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "scripts": {
+    "postinstall": "node ./scripts/verify-cookie-version.js",
     "dev": "svelte-kit dev --host",
     "build": "svelte-kit build",
     "preview": "svelte-kit preview",
@@ -20,6 +21,9 @@
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "svelte-kit sync"
   },
+  "overrides": {
+    "cookie": "^0.7.0"
+  },
   "devDependencies": {
     "@playwright/test": "1.55.1",
     "@sveltejs/adapter-auto": "6.1.0",
@@ -33,7 +37,7 @@
     "prettier": "3.3.3",
     "prettier-plugin-svelte": "3.2.6",
     "svelte": "5.39.6",
-    "svelte-check": "^4.3.2",
+    "svelte-check": "4.3.2",
     "typescript": "5.9.2",
     "vite": "^7.0.0"
   },

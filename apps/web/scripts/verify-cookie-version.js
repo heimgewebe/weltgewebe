@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 // Skip silently when cookie isn't present (e.g. npm ci --omit=dev / production).
 // This guards against transitive downgrades or accidental removal of `overrides`.
 const require = createRequire(import.meta.url);
+// CI is truthy on most providers; treat explicit "false" as off.
 const isCI = !!process.env.CI && process.env.CI !== 'false';
 
 // Minimal semver check for our purposes: we just need to know if a version is
@@ -20,6 +21,7 @@ const semverLt = (a, b) => {
   return false;
 };
 
+// Helper: detect common "module not found" shapes across Node/ESM.
 const isModuleNotFound = (err) =>
   err?.code === 'MODULE_NOT_FOUND' ||
   err?.code === 'ERR_MODULE_NOT_FOUND' ||
@@ -45,9 +47,7 @@ try {
   // If cookie is not installed at all (e.g. prod install without dev deps),
   // skip the check so production installs still succeed.
   if (isModuleNotFound(err)) {
-    // Be quiet in CI to avoid noisy logs in production pipelines.
-    // Uncomment next line if you prefer an explicit note:
-    // console.log('[security] cookie not present in this install; skipping version check.');
+    // Quiet skip — production deploys often omit dev deps.
     process.exit(0);
   }
   // Other errors: strict in CI, lenient locally.
