@@ -22,7 +22,7 @@
     "sync": "svelte-kit sync"
   },
   "overrides": {
-    "cookie": "^0.7.0"
+    "cookie": "npm:cookie@0.7.2"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
