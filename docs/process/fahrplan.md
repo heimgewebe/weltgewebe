@@ -11,7 +11,7 @@
 - [Kurzfahrplan (Gates A–D)](#kurzfahrplan-gates-ad)
 - [Gate-Checkliste (A–D)](#gate-checkliste-ad)
   - [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett)
-  - [Gate B — API (Axum) *Health & Kernverträge*](#gate-b--api-axum-health--kernverträge)
+  - [Gate B — API (Axum) *Health & Kernverträge*](#gate-b--api-axum-health--kernverträge--phaseziele)
   - [Gate C — Infra-light (Compose, Caddy, PG)](#gate-c--infra-light-compose-caddy-pg--phaseziele)
   - [Gate D — Security-Basis](#gate-d--security-basis-grundlagen)
 - [0) Vorbereitungen (sofort)](#0-vorbereitungen-sofort)
@@ -116,7 +116,7 @@
 
 ---
 
-## Gate B — API (Axum) *Health & Kernverträge*
+## Gate B — API (Axum) *Health & Kernverträge* — Phaseziele
 
 **Ziel:** API lebt, dokumentiert und testet minimal **Kernobjekte**: Knoten, Rolle, Faden.
 
