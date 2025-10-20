@@ -10,7 +10,7 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use serde_json::json;
+use serde_json::{json, Map};
 use sqlx::query_scalar;
 
 use crate::{
@@ -33,61 +33,105 @@ async fn live() -> Response {
     response
 }
 
-fn check_policy_file(path: &Path) -> Result<(), String> {
-    match fs::read_to_string(path) {
-        Ok(_) => Ok(()),
-        Err(error) => {
-            let message = format!(
-                "failed to read policy file at {}: {}",
-                path.display(),
-                error
-            );
-            readiness_check_failed("policy", &message);
-            Err(message)
+#[derive(Debug, Default)]
+struct CheckResult {
+    ready: bool,
+    errors: Vec<String>,
+}
+
+impl CheckResult {
+    fn ready() -> Self {
+        Self {
+            ready: true,
+            errors: Vec::new(),
         }
+    }
+
+    fn failure(errors: Vec<String>) -> Self {
+        Self {
+            ready: false,
+            errors,
+        }
+    }
+
+    fn failure_with_message(message: String) -> Self {
+        Self::failure(vec![message])
     }
 }
 
-fn check_policy_fallbacks(paths: &[PathBuf]) -> bool {
+fn readiness_verbose() -> bool {
+    env::var("READINESS_VERBOSE")
+        .map(|value| {
+            let trimmed = value.trim();
+            trimmed == "1" || trimmed.eq_ignore_ascii_case("true")
+        })
+        .unwrap_or(false)
+}
+
+fn check_policy_file(path: &Path) -> Result<(), String> {
+    fs::read_to_string(path).map(|_| ()).map_err(|error| {
+        format!(
+            "failed to read policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })
+}
+
+fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
     let mut errors = Vec::new();
     for path in paths {
-        if check_policy_file(path).is_ok() {
-            return true;
+        match check_policy_file(path) {
+            Ok(()) => return CheckResult::ready(),
+            Err(message) => errors.push(message),
         }
-        errors.push(path.display().to_string());
     }
 
-    let message = format!(
-        "no policy file found in fallback locations: {}",
-        errors.join(", ")
-    );
-    readiness_check_failed("policy", &message);
-    false
+    if !errors.is_empty() {
+        for error in &errors {
+            readiness_check_failed("policy", error);
+        }
+
+        let message = format!(
+            "no policy file found in fallback locations: {}",
+            paths
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        readiness_check_failed("policy", &message);
+        errors.push(message);
+    }
+
+    CheckResult::failure(errors)
 }
 
-async fn check_nats(state: &ApiState) -> bool {
+async fn check_nats(state: &ApiState) -> CheckResult {
     if !state.nats_configured {
-        return true;
+        return CheckResult::ready();
     }
 
     match state.nats_client.as_ref() {
         Some(client) => match client.flush().await {
-            Ok(_) => true,
+            Ok(_) => CheckResult::ready(),
             Err(error) => {
-                readiness_check_failed("nats", &error);
-                false
+                let message = error.to_string();
+                readiness_check_failed("nats", &message);
+                CheckResult::failure_with_message(message)
             }
         },
         None => {
-            readiness_check_failed("nats", "client not initialised");
-            false
+            let message = "client not initialised".to_string();
+            readiness_check_failed("nats", &message);
+            CheckResult::failure_with_message(message)
         }
     }
 }
 
-async fn check_database(state: &ApiState) -> bool {
+async fn check_database(state: &ApiState) -> CheckResult {
     if !state.db_pool_configured {
-        return true;
+        return CheckResult::ready();
     }
 
     match state.db_pool.as_ref() {
@@ -95,20 +139,22 @@ async fn check_database(state: &ApiState) -> bool {
             .fetch_optional(pool)
             .await
         {
-            Ok(_) => true,
+            Ok(_) => CheckResult::ready(),
             Err(error) => {
-                readiness_check_failed("database", &error);
-                false
+                let message = error.to_string();
+                readiness_check_failed("database", &message);
+                CheckResult::failure_with_message(message)
             }
         },
         None => {
-            readiness_check_failed("database", "connection pool not initialised");
-            false
+            let message = "connection pool not initialised".to_string();
+            readiness_check_failed("database", &message);
+            CheckResult::failure_with_message(message)
         }
     }
 }
 
-fn check_policy() -> bool {
+fn check_policy() -> CheckResult {
     // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
     // Fallbacks stay for dev/CI convenience.
     let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
@@ -119,18 +165,24 @@ fn check_policy() -> bool {
     ];
 
     if let Some(path) = env_path {
-        check_policy_file(&path).is_ok()
+        match check_policy_file(&path) {
+            Ok(()) => CheckResult::ready(),
+            Err(message) => {
+                readiness_check_failed("policy", &message);
+                CheckResult::failure_with_message(message)
+            }
+        }
     } else {
         check_policy_fallbacks(&fallback_paths)
     }
 }
 
 async fn ready(State(state): State<ApiState>) -> Response {
-    let nats_ready = check_nats(&state).await;
-    let database_ready = check_database(&state).await;
-    let policy_ready = check_policy();
+    let nats = check_nats(&state).await;
+    let database = check_database(&state).await;
+    let policy = check_policy();
 
-    let status = if database_ready && nats_ready && policy_ready {
+    let status = if database.ready && nats.ready && policy.ready {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
@@ -140,16 +192,42 @@ async fn ready(State(state): State<ApiState>) -> Response {
         readiness_checks_succeeded();
     }
 
+    let verbose = readiness_verbose();
+
     let body = Json(json!({
         "status": if status == StatusCode::OK { "ok" } else { "error" },
         "checks": {
-            "database": database_ready,
-            "nats": nats_ready,
-            "policy": policy_ready,
+            "database": database.ready,
+            "nats": nats.ready,
+            "policy": policy.ready,
         }
     }));
 
-    let mut response = body.into_response();
+    let mut value = body.0;
+
+    if verbose {
+        let mut errors = Map::new();
+
+        if !database.errors.is_empty() {
+            errors.insert("database".to_string(), json!(database.errors));
+        }
+
+        if !nats.errors.is_empty() {
+            errors.insert("nats".to_string(), json!(nats.errors));
+        }
+
+        if !policy.errors.is_empty() {
+            errors.insert("policy".to_string(), json!(policy.errors));
+        }
+
+        if !errors.is_empty() {
+            if let Some(object) = value.as_object_mut() {
+                object.insert("errors".to_string(), json!(errors));
+            }
+        }
+    }
+
+    let mut response = Json(value).into_response();
     *response.status_mut() = status;
     response
         .headers_mut()
@@ -294,6 +372,31 @@ mod tests {
         assert_eq!(body["checks"]["database"], true);
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn readiness_includes_error_details_when_verbose_enabled() -> Result<()> {
+        let _policy = EnvGuard::set("POLICY_LIMITS_PATH", "/does/not/exist");
+        let _verbose = EnvGuard::set("READINESS_VERBOSE", "1");
+        let state = test_state()?;
+
+        let response = ready(State(state)).await;
+        let status = response.status();
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+
+        assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(body["checks"]["policy"], false);
+
+        let errors = body["errors"]["policy"].as_array().expect("policy errors");
+        assert!(!errors.is_empty());
+        assert!(errors
+            .iter()
+            .filter_map(|value| value.as_str())
+            .any(|message| message.contains("failed to read policy file")));
 
         Ok(())
     }
