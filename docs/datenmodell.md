@@ -26,6 +26,7 @@ Speichert geografische oder logische Knotenpunkte, die als Anker für Threads di
 | `updated_at` | `timestamptz` | Zeitstempel der letzten Änderung. |
 
 ### `roles`
+
 Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
 
 | Spalte | Typ | Beschreibung |
@@ -36,6 +37,7 @@ Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 
 ### `threads`
+
 Repräsentiert die Konversationen oder "Fäden", die an Knoten gebunden sind.
 
 | Spalte | Typ | Beschreibung |
@@ -49,6 +51,7 @@ Repräsentiert die Konversationen oder "Fäden", die an Knoten gebunden sind.
 | `updated_at` | `timestamptz` | Zeitstempel der letzten Änderung. |
 
 ### `outbox`
+
 Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikation.
 
 | Spalte | Typ | Beschreibung |
@@ -64,7 +67,8 @@ Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikat
 
 ## Projektionen (Lese-Modelle)
 
-Diese Views sind für die Lese-Performance optimiert und fassen Daten aus mehreren Tabellen zusammen. Sie werden von den Workern (Projektoren) asynchron aktualisiert.
+Diese Views sind für die Lese-Performance optimiert und fassen Daten aus mehreren Tabellen zusammen.
+Sie werden von den Workern (Projektoren) asynchron aktualisiert.
 
 ### `public_role_view`
 
