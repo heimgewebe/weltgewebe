@@ -17,6 +17,9 @@ defaults:
 jobs:
   e2e:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # required for npm cache restore
     env:
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
