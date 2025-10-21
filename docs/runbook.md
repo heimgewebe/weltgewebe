@@ -53,23 +53,28 @@ Dieses Runbook beschreibt die Schritte zur Simulation eines Totalausfalls und de
 
 ### Vorbereitung
 
-1.  **Backup-Verfügbarkeit prüfen:** Sicherstellen, dass die letzten WAL-Archive der PostgreSQL-Datenbank an einem sicheren, externen Ort (z.B. S3-Bucket) verfügbar sind.
-2.  **Infrastruktur-Code:** Sicherstellen, dass der `infra/`-Ordner den aktuellen Stand der produktiven Infrastruktur abbildet.
-3.  **Team informieren:** Alle Beteiligten über den Beginn des Drills in Kenntnis setzen.
+1. **Backup-Verfügbarkeit prüfen:** Sicherstellen, dass die letzten WAL-Archive der
+   PostgreSQL-Datenbank an einem sicheren, externen Ort (z.B. S3-Bucket) verfügbar sind.
+2. **Infrastruktur-Code:** Sicherstellen, dass der `infra/`-Ordner den aktuellen Stand der produktiven Infrastruktur abbildet.
+3. **Team informieren:** Alle Beteiligten über den Beginn des Drills in Kenntnis setzen.
 
 ### Durchführung
 
 1. **Saubere Umgebung bereitstellen:** Eine neue VM- oder Kubernetes-Umgebung ohne bestehende Daten oder Konfigurationen hochfahren.
 2. **Infrastruktur aufbauen:**
     - Das Repository auf die neue Umgebung klonen.
-    - Die Basis-Infrastruktur über die Compose-Files oder Nomad-Jobs starten (`infra/compose/compose.core.yml` etc.). Die Container starten, bleiben aber ggf. im Wartezustand, da die Datenbank noch nicht bereit ist.
+    - Die Basis-Infrastruktur über die Compose-Files oder Nomad-Jobs starten (`infra/compose/compose.core.yml` etc.). Die
+      Container starten, bleiben aber ggf. im Wartezustand, da die Datenbank noch nicht bereit ist.
 3. **Datenbank-Wiederherstellung (Point-in-Time Recovery):**
     - Eine neue PostgreSQL-Instanz starten.
     - Das letzte Basis-Backup einspielen.
-    - Die WAL-Archive aus dem Backup-Speicher bis zum letzten verfügbaren Zeitpunkt vor dem "Ausfall" wiederherstellen.
+    - Die WAL-Archive aus dem Backup-Speicher bis zum letzten verfügbaren Zeitpunkt vor
+      dem "Ausfall" wiederherstellen.
 4. **Systemstart & Event-Replay:**
-    - Die Applikations-Container (API, Worker) neu starten, damit sie sich mit der wiederhergestellten Datenbank verbinden.
-    - Den `outbox`-Relay-Prozess starten. Dieser beginnt, die noch nicht verarbeiteten Events aus der `outbox`-Tabelle an NATS JetStream zu senden.
+    - Die Applikations-Container (API, Worker) neu starten, damit sie sich mit der
+      wiederhergestellten Datenbank verbinden.
+    - Den `outbox`-Relay-Prozess starten. Dieser beginnt, die noch nicht verarbeiteten
+      Events aus der `outbox`-Tabelle an NATS JetStream zu senden.
     - Die Worker (Projektoren) starten. Sie konsumieren die Events von JetStream
       und bauen die Lese-Modelle (`faden_view` etc.) neu auf.
 5. **Verifikation & Abschluss:**
