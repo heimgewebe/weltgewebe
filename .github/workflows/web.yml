@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PUPPETEER_SKIP_DOWNLOAD: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
@@ -38,12 +40,14 @@ jobs:
           node-version: '22.x'
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - name: Enable Corepack (npm)
+        run: corepack enable
 
       - name: Install dependencies
         run: |
           # Bevorzugt deterministisch mit npm ci, fällt aber bei stale lockfile
           # automatisch auf npm install zurück, damit der Run nicht scheitert.
-          npm ci --no-audit --no-fund || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --no-audit --no-fund --include=dev)
+          npm ci || (echo "::warning::package-lock.json ist nicht in Sync – fallback auf 'npm install'"; npm install --include=dev)
 
       - name: SvelteKit prepare
         run: npm run sync

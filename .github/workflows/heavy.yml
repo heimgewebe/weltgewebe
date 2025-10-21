@@ -36,6 +36,13 @@ jobs:
     if: needs.gate.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CI: true
+      HEADLESS: "1"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
     defaults: { run: { working-directory: apps/web, shell: bash } }
     steps:
       - uses: actions/checkout@v4
@@ -44,15 +51,15 @@ jobs:
           node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: apps/web/package-lock.json
+      - name: Enable Corepack (npm)
+        run: corepack enable
       - name: npm ci
         run: npm ci
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
       - name: Build (production)
-        env: { CI: true }
         run: npm run build
       - name: Run Playwright tests
-        env: { CI: true }
         run: npm run test
       - name: Upload Playwright report
         if: always()
