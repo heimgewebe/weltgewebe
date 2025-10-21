@@ -1,5 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { get } from 'svelte/store';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -10,16 +13,55 @@
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
 
-  let leftOpen = true;     // linke Spalte (Webrat + Nähstübchen)
+  let leftOpen = true;     // linke Spalte (Webrat/Nähstübchen)
   let rightOpen = false;   // Filter
-  let topOpen = false;     // Gewebekonto-Drawer
+  let topOpen = false;     // Gewebekonto
 
-  function toggleLeft(){ leftOpen = !leftOpen; }
-  function toggleRight(){ rightOpen = !rightOpen; }
-  function toggleTop(){ topOpen = !topOpen; }
+  const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
+
+  function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
+    const { pathname, search } = get(page).url;
+    const p = new URLSearchParams(search);
+    if (next.l !== undefined) {
+      if (next.l === defaultQueryState.l) {
+        p.delete('l');
+      } else {
+        p.set('l', next.l ? '1' : '0');
+      }
+    }
+    if (next.r !== undefined) {
+      if (next.r === defaultQueryState.r) {
+        p.delete('r');
+      } else {
+        p.set('r', next.r ? '1' : '0');
+      }
+    }
+    if (next.t !== undefined) {
+      if (next.t === defaultQueryState.t) {
+        p.delete('t');
+      } else {
+        p.set('t', next.t ? '1' : '0');
+      }
+    }
+    const query = p.toString();
+    const target = query ? `${pathname}?${query}` : pathname;
+    // noScroll/replaceState damit der Verlauf sauber bleibt
+    goto(target, { replaceState: true, noScroll: true, keepfocus: true });
+  }
+
+  function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
+  function toggleRight(){ rightOpen = !rightOpen; setQuery({ r: rightOpen }); }
+  function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
 
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
   onMount(async () => {
+    // Initial aus URL lesen
+    const { search } = get(page).url;
+    const q = new URLSearchParams(search);
+    leftOpen = q.get('l') ? q.get('l') === '1' : leftOpen;
+    rightOpen = q.get('r') ? q.get('r') === '1' : rightOpen;
+    topOpen = q.get('t') ? q.get('t') === '1' : topOpen;
+
     const maplibregl = await import('maplibre-gl');
     const container = mapContainer;
     if (!container) {
