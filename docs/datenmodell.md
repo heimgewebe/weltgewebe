@@ -20,8 +20,8 @@ abgeleiteten Lese-Modelle zu verstehen.
 
 ## Tabellen (Schreib-Modell)
 
-
 ### `nodes`
+
 Speichert geografische oder logische Knotenpunkte, die als Anker für Threads dienen.
 
 | Spalte | Typ | Beschreibung |
