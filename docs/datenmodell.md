@@ -67,6 +67,7 @@ Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikat
 Diese Views sind für die Lese-Performance optimiert und fassen Daten aus mehreren Tabellen zusammen. Sie werden von den Workern (Projektoren) asynchron aktualisiert.
 
 ### `public_role_view`
+
 Eine denormalisierte Sicht auf Rollen, die nur öffentlich sichtbare Informationen enthält.
 
 | Spalte | Typ | Beschreibung |
@@ -76,6 +77,7 @@ Eine denormalisierte Sicht auf Rollen, die nur öffentlich sichtbare Information
 | `avatar_url` | `text` | URL zu einem Avatar-Bild. |
 
 ### `faden_view`
+
 Eine zusammengefasste Ansicht von Threads für die schnelle Darstellung in der Benutzeroberfläche.
 
 | Spalte | Typ | Beschreibung |

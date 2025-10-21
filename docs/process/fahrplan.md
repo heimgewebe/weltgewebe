@@ -20,6 +20,7 @@
 ---
 
 ## Kurzfahrplan (Gates A–D)
+
 - **Gate A:** UX Click-Dummy (keine Backends)
 - **Gate B:** API-Mock (lokal)
 - **Gate C:** Infra-light (Compose, minimale Pfade)
