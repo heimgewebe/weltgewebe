@@ -1,13 +1,20 @@
 # Datenmodell
 
-Dieses Dokument beschreibt das Datenmodell der Weltgewebe-Anwendung, das auf PostgreSQL aufbaut. Es dient als Referenz für Entwickler, um die Kernentitäten, ihre Beziehungen und die daraus abgeleiteten Lese-Modelle zu verstehen.
+Dieses Dokument beschreibt das Datenmodell der Weltgewebe-Anwendung, das auf PostgreSQL aufbaut.
+Es dient als Referenz für Entwickler, um die Kernentitäten, ihre Beziehungen und die daraus
+abgeleiteten Lese-Modelle zu verstehen.
 
 ## Grundprinzipien
 
 - **Source of Truth:** PostgreSQL ist die alleinige Quelle der Wahrheit.
-- **Transaktionaler Outbox:** Alle Zustandsänderungen werden transaktional in die `outbox`-Tabelle geschrieben, um eine konsistente Event-Verteilung an nachgelagerte Systeme (z.B. via NATS JetStream) zu garantieren.
-- **Normalisierung:** Das Schreib-Modell ist normalisiert, um Datenintegrität zu gewährleisten. Lese-Modelle (Projektionen/Views) sind für spezifische Anwendungsfälle denormalisiert und optimiert.
-- **UUIDs:** Alle Primärschlüssel sind UUIDs (`v4`), um eine verteilte Generierung zu ermöglichen und Abhängigkeiten von sequenziellen IDs zu vermeiden.
+- **Transaktionaler Outbox:** Alle Zustandsänderungen werden transaktional in die `outbox`-Tabelle
+  geschrieben, um eine konsistente Event-Verteilung an nachgelagerte Systeme (z.B. via NATS
+  JetStream) zu garantieren.
+- **Normalisierung:** Das Schreib-Modell ist normalisiert, um Datenintegrität zu gewährleisten.
+  Lese-Modelle (Projektionen/Views) sind für spezifische Anwendungsfälle denormalisiert und
+  optimiert.
+- **UUIDs:** Alle Primärschlüssel sind UUIDs (`v4`), um eine verteilte Generierung zu
+  ermöglichen und Abhängigkeiten von sequenziellen IDs zu vermeiden.
 
 ---
 
