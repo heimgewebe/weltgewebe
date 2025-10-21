@@ -19,6 +19,9 @@ jobs:
   build:
     name: Build & Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write   # required for npm cache restore
     env:
       PUPPETEER_SKIP_DOWNLOAD: "true"
       NPM_CONFIG_AUDIT: "false"
