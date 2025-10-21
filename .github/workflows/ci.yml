@@ -145,8 +145,8 @@ jobs:
         run: |
           npm ci --ignore-scripts --prefer-offline --no-audit --no-fund \
             || (echo "::warning::npm ci failed – falling back to 'npm install' (no save, no scripts)"; npm install --ignore-scripts --prefer-offline --no-audit --no-fund --include=dev --no-save)
-      - name: svelte-check
-        run: npm run check
+      - name: Svelte Type Check
+        run: npx svelte-check --tsconfig ./tsconfig.json
 
   web-build:
     name: Web – build
