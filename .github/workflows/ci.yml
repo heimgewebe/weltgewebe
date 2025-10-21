@@ -129,6 +129,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      actions: write   # required for npm cache restore
     env:
       CI: true
       PUPPETEER_SKIP_DOWNLOAD: 'true'
@@ -162,6 +163,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: write   # required for npm cache restore
     env:
       CI: true
       PUPPETEER_SKIP_DOWNLOAD: 'true'
