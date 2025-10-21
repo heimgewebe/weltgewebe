@@ -143,7 +143,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '20.19.0'
           cache: 'npm'
           cache-dependency-path: apps/web/package-lock.json
       - name: Enable Corepack (npm)
@@ -175,7 +175,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '20.19.0'
           cache: 'npm'
           cache-dependency-path: apps/web/package-lock.json
       - name: Enable Corepack (npm)
