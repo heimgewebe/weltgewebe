@@ -1,11 +1,61 @@
 <script lang="ts">
+  import { createEventDispatcher, onMount, tick } from 'svelte';
+
   export let title = '';
   export let open = false;
   export let side: 'left' | 'right' | 'top' = 'left';
   export let id: string | undefined;
 
+  const dispatch = createEventDispatcher<{ open: void; close: void }>();
+
   let headingId: string | undefined;
-  $: headingId = title ? `${(id ?? `${side}-drawer`)}-title` : undefined;
+  let drawerId: string;
+  $: drawerId = id ?? `${side}-drawer`;
+  $: headingId = title ? `${drawerId}-title` : undefined;
+
+  let rootEl: HTMLDivElement | null = null;
+  let openerEl: HTMLElement | null = null;
+  export function setOpener(el: HTMLElement | null) {
+    openerEl = el;
+  }
+
+  function focusFirstInside() {
+    if (!rootEl) return;
+    const focusables = Array.from(
+      rootEl.querySelectorAll<HTMLElement>(
+        'button:not([tabindex="-1"]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter((element) => !element.hasAttribute('disabled'));
+
+    (focusables[0] ?? rootEl).focus();
+  }
+
+  async function handleOpen() {
+    await tick();
+    focusFirstInside();
+    dispatch('open');
+  }
+
+  async function handleClose() {
+    await tick();
+    openerEl?.focus();
+    dispatch('close');
+  }
+
+  let hasMounted = false;
+  onMount(() => {
+    hasMounted = true;
+  });
+
+  let previousOpen = open;
+  $: if (hasMounted && open !== previousOpen) {
+    if (open) {
+      handleOpen();
+    } else {
+      handleClose();
+    }
+    previousOpen = open;
+  }
 </script>
 
 <style>
@@ -47,7 +97,8 @@
 </style>
 
 <div
-  id={id}
+  bind:this={rootEl}
+  id={drawerId}
   class="drawer"
   class:open={open}
   class:left={side === 'left'}
@@ -55,6 +106,7 @@
   class:top={side === 'top'}
   aria-hidden={!open}
   aria-labelledby={headingId}
+  tabindex="-1"
   role="complementary"
   {...$$restProps}
 >
