@@ -17,6 +17,17 @@
   let rightOpen = false;   // Filter
   let topOpen = false;     // Gewebekonto
 
+  type DrawerInstance = InstanceType<typeof Drawer> & {
+    setOpener?: (el: HTMLElement | null) => void;
+  };
+  let rightDrawerRef: DrawerInstance | null = null;
+  let topDrawerRef: DrawerInstance | null = null;
+  let openerButtons: {
+    left: HTMLButtonElement | null;
+    right: HTMLButtonElement | null;
+    top: HTMLButtonElement | null;
+  } = { left: null, right: null, top: null };
+
   const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
 
   function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
@@ -53,6 +64,23 @@
   function toggleRight(){ rightOpen = !rightOpen; setQuery({ r: rightOpen }); }
   function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
 
+  function handleOpeners(
+    event: CustomEvent<{
+      left: HTMLButtonElement | null;
+      right: HTMLButtonElement | null;
+      top: HTMLButtonElement | null;
+    }>
+  ) {
+    openerButtons = event.detail;
+  }
+
+  $: if (rightDrawerRef) {
+    rightDrawerRef.setOpener?.(openerButtons.right ?? null);
+  }
+  $: if (topDrawerRef) {
+    topDrawerRef.setOpener?.(openerButtons.top ?? null);
+  }
+
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
   onMount(async () => {
     // Initial aus URL lesen
@@ -77,6 +105,23 @@
     map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
     keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (topOpen) {
+          topOpen = false;
+          setQuery({ t: false });
+          return;
+        }
+        if (rightOpen) {
+          rightOpen = false;
+          setQuery({ r: false });
+          return;
+        }
+        if (leftOpen) {
+          leftOpen = false;
+          setQuery({ l: false });
+          return;
+        }
+      }
       if (e.key === '[') toggleLeft();
       if (e.key === ']') toggleRight();
       if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
@@ -142,6 +187,7 @@
     {leftOpen}
     {rightOpen}
     {topOpen}
+    on:openers={handleOpeners}
   />
 
   <!-- Linke Spalte: Webrat / Nähstübchen -->
@@ -162,14 +208,26 @@
   </div>
 
   <!-- Rechter Drawer: Suche/Filter -->
-  <Drawer id="filter-drawer" title="Suche & Filter" side="right" open={rightOpen}>
+  <Drawer
+    bind:this={rightDrawerRef}
+    id="filter-drawer"
+    title="Suche & Filter"
+    side="right"
+    open={rightOpen}
+  >
     <div class="panel" style="padding:8px;">
       <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
     </div>
   </Drawer>
 
   <!-- Top Drawer: Gewebekonto -->
-  <Drawer id="account-drawer" title="Gewebekonto" side="top" open={topOpen}>
+  <Drawer
+    bind:this={topDrawerRef}
+    id="account-drawer"
+    title="Gewebekonto"
+    side="top"
+    open={topOpen}
+  >
     <div class="panel" style="padding:8px;">
       <div class="muted">Saldo / Delegationen / Verbindlichkeiten (Stub)</div>
     </div>

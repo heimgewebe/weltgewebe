@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { createEventDispatcher, onMount } from 'svelte';
   import Garnrolle from './Garnrolle.svelte';
   export let onToggleLeft: () => void;
   export let onToggleRight: () => void;
@@ -6,6 +7,22 @@
   export let leftOpen = false;
   export let rightOpen = false;
   export let topOpen = false;
+
+  const dispatch = createEventDispatcher<{
+    openers: {
+      left: HTMLButtonElement | null;
+      right: HTMLButtonElement | null;
+      top: HTMLButtonElement | null;
+    };
+  }>();
+
+  let btnLeft: HTMLButtonElement | null = null;
+  let btnRight: HTMLButtonElement | null = null;
+  let btnTop: HTMLButtonElement | null = null;
+
+  onMount(() => {
+    dispatch('openers', { left: btnLeft, right: btnRight, top: btnTop });
+  });
 </script>
 
 <style>
@@ -32,6 +49,7 @@
     aria-pressed={leftOpen}
     aria-expanded={leftOpen}
     aria-controls="left-stack"
+    bind:this={btnLeft}
     on:click={onToggleLeft}
   >
     ☰ Webrat/Nähstübchen
@@ -42,6 +60,7 @@
     aria-pressed={rightOpen}
     aria-expanded={rightOpen}
     aria-controls="filter-drawer"
+    bind:this={btnRight}
     on:click={onToggleRight}
   >
     🔎 Filter
@@ -52,6 +71,7 @@
     aria-pressed={topOpen}
     aria-expanded={topOpen}
     aria-controls="account-drawer"
+    bind:this={btnTop}
     on:click={onToggleTop}
   >
     🧶 Gewebekonto

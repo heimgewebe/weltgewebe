@@ -67,6 +67,7 @@
     opacity:0;
     pointer-events:none;
     transition:.18s ease;
+    overscroll-behavior: contain;
   }
   .drawer.open{ transform:none; opacity:1; pointer-events:auto; }
   .left{
@@ -108,6 +109,7 @@
   aria-labelledby={headingId}
   tabindex="-1"
   role="complementary"
+  inert={!open ? true : undefined}
   {...$$restProps}
 >
   {#if title}<h3 id={headingId}>{title}</h3>{/if}
