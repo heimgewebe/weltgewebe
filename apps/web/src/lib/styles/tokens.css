@@ -13,5 +13,18 @@
   --drawer-gap: 12px;
   --drawer-width: 360px;
   --drawer-slide-offset: 20px;
+
+  /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
+  --edge-inset-x: 24px;     /* Abstand von links/rechts */
+  --edge-inset-top: 24px;   /* Abstand oben */
+  --edge-top-height: 16px;  /* Höhe Top-Zone */
+  --edge-left-width: 16px;  /* Breite linke Zone */
+  --edge-right-width: 16px; /* Breite rechte Zone */
 }
 
+/* Android: Back-Swipe oft breiter → Zone schmaler & leicht weiter innen */
+:root.ua-android{
+  --edge-inset-x: 28px;
+  --edge-left-width: 12px;
+  --edge-right-width: 12px;
+}
