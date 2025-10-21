@@ -16,6 +16,10 @@ In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --ho
 > [!NOTE]
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
 
+### Polyfill-Debugging
+
+Für ältere Safari-/iPadOS-Versionen wird automatisch ein `inert`-Polyfill aktiviert. Falls du das native Verhalten prüfen möchtest, hänge `?noinert=1` an die URL (oder setze `window.__NO_INERT__ = true` im DevTools-Console).
+
 ### Screenshot aufnehmen
 
 In einem zweiten Terminal (während `npm run dev` läuft):
@@ -38,3 +42,14 @@ Legt `public/demo.png` an.
 - A-3: Dummy-Datenlayer (JSON) für 2–3 Knotentypen, 2 Fadenfarben
 - A-4: Accessibility-Pass 1 (Fokus, Kontrast)
 - A-5: Dev-Overlay: Bundle-Größe (Budget ≤ ~90KB Initial-JS)
+
+## Tests
+
+### Playwright (Drawer + Keyboard)
+
+```bash
+npx playwright install --with-deps  # einmalig
+npx playwright test tests/drawers.spec.ts
+```
+
+Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit Maus-Drags die Swipe-Gesten simulieren können.

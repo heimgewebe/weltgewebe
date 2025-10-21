@@ -64,6 +64,103 @@
   function toggleRight(){ rightOpen = !rightOpen; setQuery({ r: rightOpen }); }
   function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
 
+  type SwipeIntent =
+    | 'open-left'
+    | 'close-left'
+    | 'open-right'
+    | 'close-right'
+    | 'open-top'
+    | 'close-top';
+
+  type SwipeState = {
+    pointerId: number;
+    intent: SwipeIntent;
+    startX: number;
+    startY: number;
+  } | null;
+
+  let swipeState: SwipeState = null;
+
+  function startSwipe(e: PointerEvent, intent: SwipeIntent) {
+    const allowMouse = (window as any).__E2E__ === true;
+    if (e.pointerType !== 'touch' && e.pointerType !== 'pen' && !allowMouse) return;
+
+    if (
+      (intent === 'open-left' && leftOpen) ||
+      (intent === 'close-left' && !leftOpen) ||
+      (intent === 'open-right' && rightOpen) ||
+      (intent === 'close-right' && !rightOpen) ||
+      (intent === 'open-top' && topOpen) ||
+      (intent === 'close-top' && !topOpen)
+    ) {
+      return;
+    }
+
+    swipeState = {
+      pointerId: e.pointerId,
+      intent,
+      startX: e.clientX,
+      startY: e.clientY
+    };
+  }
+
+  function finishSwipe(e: PointerEvent) {
+    if (!swipeState || swipeState.pointerId !== e.pointerId) return;
+
+    const dx = e.clientX - swipeState.startX;
+    const dy = e.clientY - swipeState.startY;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const threshold = 60;
+    const { intent } = swipeState;
+    swipeState = null;
+
+    switch (intent) {
+      case 'open-left':
+        if (!leftOpen && dx > threshold && absX > absY) {
+          leftOpen = true;
+          setQuery({ l: true });
+        }
+        break;
+      case 'close-left':
+        if (leftOpen && -dx > threshold && absX > absY) {
+          leftOpen = false;
+          setQuery({ l: false });
+        }
+        break;
+      case 'open-right':
+        if (!rightOpen && -dx > threshold && absX > absY) {
+          rightOpen = true;
+          setQuery({ r: true });
+        }
+        break;
+      case 'close-right':
+        if (rightOpen && dx > threshold && absX > absY) {
+          rightOpen = false;
+          setQuery({ r: false });
+        }
+        break;
+      case 'open-top':
+        if (!topOpen && dy > threshold && absY > absX) {
+          topOpen = true;
+          setQuery({ t: true });
+        }
+        break;
+      case 'close-top':
+        if (topOpen && -dy > threshold && absY > absX) {
+          topOpen = false;
+          setQuery({ t: false });
+        }
+        break;
+    }
+  }
+
+  function cancelSwipe(e: PointerEvent) {
+    if (swipeState && swipeState.pointerId === e.pointerId) {
+      swipeState = null;
+    }
+  }
+
   function handleOpeners(
     event: CustomEvent<{
       left: HTMLButtonElement | null;
@@ -82,51 +179,63 @@
   }
 
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
-  onMount(async () => {
-    // Initial aus URL lesen
-    const { search } = get(page).url;
-    const q = new URLSearchParams(search);
-    leftOpen = q.get('l') ? q.get('l') === '1' : leftOpen;
-    rightOpen = q.get('r') ? q.get('r') === '1' : rightOpen;
-    topOpen = q.get('t') ? q.get('t') === '1' : topOpen;
+  onMount(() => {
+    const pointerUp = (event: PointerEvent) => finishSwipe(event);
+    const pointerCancel = (event: PointerEvent) => cancelSwipe(event);
+    window.addEventListener('pointerup', pointerUp);
+    window.addEventListener('pointercancel', pointerCancel);
 
-    const maplibregl = await import('maplibre-gl');
-    const container = mapContainer;
-    if (!container) {
-      return;
-    }
-    // Hamburg-Hamm grob: 10.05, 53.55 — Zoom 13
-    map = new maplibregl.Map({
-      container,
-      style: 'https://demotiles.maplibre.org/style.json',
-      center: [10.05, 53.55],
-      zoom: 13
-    });
-    map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
+    (async () => {
+      // Initial aus URL lesen
+      const { search } = get(page).url;
+      const q = new URLSearchParams(search);
+      leftOpen = q.get('l') ? q.get('l') === '1' : leftOpen;
+      rightOpen = q.get('r') ? q.get('r') === '1' : rightOpen;
+      topOpen = q.get('t') ? q.get('t') === '1' : topOpen;
 
-    keyHandler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (topOpen) {
-          topOpen = false;
-          setQuery({ t: false });
-          return;
-        }
-        if (rightOpen) {
-          rightOpen = false;
-          setQuery({ r: false });
-          return;
-        }
-        if (leftOpen) {
-          leftOpen = false;
-          setQuery({ l: false });
-          return;
-        }
+      const maplibregl = await import('maplibre-gl');
+      const container = mapContainer;
+      if (!container) {
+        return;
       }
-      if (e.key === '[') toggleLeft();
-      if (e.key === ']') toggleRight();
-      if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
+      // Hamburg-Hamm grob: 10.05, 53.55 — Zoom 13
+      map = new maplibregl.Map({
+        container,
+        style: 'https://demotiles.maplibre.org/style.json',
+        center: [10.05, 53.55],
+        zoom: 13
+      });
+      map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
+
+      keyHandler = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          if (topOpen) {
+            topOpen = false;
+            setQuery({ t: false });
+            return;
+          }
+          if (rightOpen) {
+            rightOpen = false;
+            setQuery({ r: false });
+            return;
+          }
+          if (leftOpen) {
+            leftOpen = false;
+            setQuery({ l: false });
+            return;
+          }
+        }
+        if (e.key === '[') toggleLeft();
+        if (e.key === ']') toggleRight();
+        if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
+      };
+      window.addEventListener('keydown', keyHandler);
+    })();
+
+    return () => {
+      window.removeEventListener('pointerup', pointerUp);
+      window.removeEventListener('pointercancel', pointerCancel);
     };
-    window.addEventListener('keydown', keyHandler);
   });
   onDestroy(() => {
     if (keyHandler) window.removeEventListener('keydown', keyHandler);
@@ -149,6 +258,12 @@
   }
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
+  /* Swipe-Edge-Zonen über Tokens (OS-Gesten-freundlich) */
+  .edge{ position:absolute; z-index:27; }
+  .edge.left{ left:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-left-width); touch-action: pan-y; }
+  .edge.right{ right:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-right-width); touch-action: pan-y; }
+  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-x; }
+  .edgeHit{ position:absolute; inset:0; }
   /* Linke Spalte: oben Webrat, unten Nähstübchen (hälftig) */
   .leftStack{
     position:absolute;
@@ -196,6 +311,8 @@
     class="leftStack"
     class:open={leftOpen}
     aria-hidden={!leftOpen}
+    inert={!leftOpen ? true : undefined}
+    on:pointerdown={(event) => startSwipe(event, 'close-left')}
   >
     <div class="panel">
       <h3>Webrat</h3>
@@ -214,6 +331,7 @@
     title="Suche & Filter"
     side="right"
     open={rightOpen}
+    on:pointerdown={(event) => startSwipe(event, 'close-right')}
   >
     <div class="panel" style="padding:8px;">
       <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
@@ -227,6 +345,7 @@
     title="Gewebekonto"
     side="top"
     open={topOpen}
+    on:pointerdown={(event) => startSwipe(event, 'close-top')}
   >
     <div class="panel" style="padding:8px;">
       <div class="muted">Saldo / Delegationen / Verbindlichkeiten (Stub)</div>
@@ -235,6 +354,16 @@
 
   <!-- Karte -->
   <div id="map" bind:this={mapContainer}></div>
+
+  <div class="edge left" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-left')}>
+    <div class="edgeHit"></div>
+  </div>
+  <div class="edge right" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-right')}>
+    <div class="edgeHit"></div>
+  </div>
+  <div class="edge top" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-top')}>
+    <div class="edgeHit"></div>
+  </div>
 
   <!-- Zeitleiste -->
   <TimelineDock />
