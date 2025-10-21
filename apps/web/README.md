@@ -11,14 +11,17 @@ npm run dev
 ```
 
 Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
-In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173` verwenden.
+In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173`
+verwenden.
 
 > [!NOTE]
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
 
 ### Polyfill-Debugging
 
-Für ältere Safari-/iPadOS-Versionen wird automatisch ein `inert`-Polyfill aktiviert. Falls du das native Verhalten prüfen möchtest, hänge `?noinert=1` an die URL (oder setze `window.__NO_INERT__ = true` im DevTools-Console).
+Für ältere Safari-/iPadOS-Versionen wird automatisch ein `inert`-Polyfill aktiviert.
+Falls du das native Verhalten prüfen möchtest, hänge `?noinert=1` an die URL
+(oder setze `window.__NO_INERT__ = true` im DevTools-Console).
 
 ### Screenshot aufnehmen
 
