@@ -1,8 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { get } from 'svelte/store';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -31,33 +28,38 @@
   const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
 
   function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
-    const { pathname, search } = get(page).url;
-    const p = new URLSearchParams(search);
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
     if (next.l !== undefined) {
       if (next.l === defaultQueryState.l) {
-        p.delete('l');
+        url.searchParams.delete('l');
       } else {
-        p.set('l', next.l ? '1' : '0');
+        url.searchParams.set('l', next.l ? '1' : '0');
       }
     }
     if (next.r !== undefined) {
       if (next.r === defaultQueryState.r) {
-        p.delete('r');
+        url.searchParams.delete('r');
       } else {
-        p.set('r', next.r ? '1' : '0');
+        url.searchParams.set('r', next.r ? '1' : '0');
       }
     }
     if (next.t !== undefined) {
       if (next.t === defaultQueryState.t) {
-        p.delete('t');
+        url.searchParams.delete('t');
       } else {
-        p.set('t', next.t ? '1' : '0');
+        url.searchParams.set('t', next.t ? '1' : '0');
       }
     }
-    const query = p.toString();
-    const target = query ? `${pathname}?${query}` : pathname;
-    // noScroll/replaceState damit der Verlauf sauber bleibt
-    goto(target, { replaceState: true, noScroll: true, keepfocus: true });
+    history.replaceState(history.state, '', url);
+  }
+
+  function syncFromLocation() {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    leftOpen = q.has('l') ? q.get('l') === '1' : defaultQueryState.l;
+    rightOpen = q.has('r') ? q.get('r') === '1' : defaultQueryState.r;
+    topOpen = q.has('t') ? q.get('t') === '1' : defaultQueryState.t;
   }
 
   function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
@@ -179,20 +181,18 @@
   }
 
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
+  let popHandler: ((event: PopStateEvent) => void) | null = null;
   onMount(() => {
     const pointerUp = (event: PointerEvent) => finishSwipe(event);
     const pointerCancel = (event: PointerEvent) => cancelSwipe(event);
     window.addEventListener('pointerup', pointerUp);
     window.addEventListener('pointercancel', pointerCancel);
 
-    (async () => {
-      // Initial aus URL lesen
-      const { search } = get(page).url;
-      const q = new URLSearchParams(search);
-      leftOpen = q.get('l') ? q.get('l') === '1' : leftOpen;
-      rightOpen = q.get('r') ? q.get('r') === '1' : rightOpen;
-      topOpen = q.get('t') ? q.get('t') === '1' : topOpen;
+    syncFromLocation();
+    popHandler = () => syncFromLocation();
+    window.addEventListener('popstate', popHandler);
 
+    (async () => {
       const maplibregl = await import('maplibre-gl');
       const container = mapContainer;
       if (!container) {
@@ -235,10 +235,12 @@
     return () => {
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
+      if (popHandler) window.removeEventListener('popstate', popHandler);
     };
   });
   onDestroy(() => {
     if (keyHandler) window.removeEventListener('keydown', keyHandler);
+    if (popHandler) window.removeEventListener('popstate', popHandler);
     if (map && typeof map.remove === 'function') map.remove();
   });
 </script>
