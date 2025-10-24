@@ -1,4 +1,26 @@
-set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+alias c := ci
+
+ci:
+	@echo "==> Web: install, sync, build, typecheck"
+	if [ -d apps/web ]; then
+		pushd apps/web >/dev/null
+		npm ci
+		npm run sync
+		npm run build
+		npm run check:ci
+		popd >/dev/null
+	fi
+	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
+	if [ -d apps/api ]; then
+		pushd apps/api >/dev/null
+		cargo fmt -- --check
+		cargo clippy -- -D warnings
+		cargo build --locked
+		cargo test --locked
+		popd >/dev/null
+	fi
 
 # ---------- Rust ----------
 fmt:       # format all
