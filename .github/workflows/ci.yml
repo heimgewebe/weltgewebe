@@ -1,186 +1,129 @@
-name: CI (smart PR)
-
-on:
-  pull_request: # Security: pull_request since workflow executes foreign code
-    branches: [ main ]
-    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
-  merge_group: {}
-  workflow_dispatch:
-    inputs:
-      toolchain:
-        description: Rust toolchain channel to use for API checks
-        required: false
-        default: stable
-  workflow_call:
-    inputs:
-      toolchain:
-        description: Rust toolchain channel to use for API checks
-        required: false
-        type: string
-        default: stable
+name: CI
 
 permissions:
   contents: read
-  pull-requests: read
 
-env:
-  # Robust default für alle Events (workflow_call, dispatch, PR, merge_group).
-  toolchain: ${{ inputs.toolchain || (github.event_name == 'workflow_dispatch' && github.event.inputs.toolchain) || 'stable' }}
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
 jobs:
-  changes:
-    name: Detect changes
+  ci:
     runs-on: ubuntu-latest
-    outputs:
-      web:  ${{ steps.filter.outputs.web }}
-      docs: ${{ steps.filter.outputs.docs }}
-      api:  ${{ steps.filter.outputs.api }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            web:
-              - 'apps/web/**'
-              - 'package*.json'
-              - '**/vite.config.*'
-              - '**/svelte.config.*'
-              - '.github/workflows/**'
-            docs:
-              - '**/*.md'
-              - 'docs/**'
-            api:
-              - 'apps/api/**'
-              - '.github/workflows/**'
-              - 'ci/**'
 
-  repo-lint:
-    name: Repo – markdown & shell lint
-    needs: changes
-    if: needs.changes.outputs.docs == 'true' || github.event_name == 'merge_group'
+      - name: Ensure yq is available
+        run: |
+          scripts/tools/yq-pin.sh ensure
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Read toolchain versions
+        run: |
+          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
+          RUST=$(yq -r '.rust' toolchain.versions.yml)
+          echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
+          PY=$(yq -r '.python' toolchain.versions.yml)
+          echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
+          UV=$(yq -r '.uv' toolchain.versions.yml)
+          echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Cache Cargo artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            apps/web/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache uv artifacts
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-uv-${{ env.UV_VERSION }}-${{ hashFiles('**/pyproject.toml') }}
+
+      - name: Install uv
+        env:
+          UV_VERSION: ${{ env.UV_VERSION }}
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          INSTALLED=$(uv --version | awk '{print $2}')
+          if [[ "${INSTALLED}" != "${UV_VERSION}" ]]; then
+            echo "Expected uv ${UV_VERSION}, got ${INSTALLED}" >&2
+            exit 1
+          fi
+
+      - name: Setup Just
+        uses: extractions/setup-just@v2
+
+      - name: Show tool versions
+        run: |
+          rustc --version
+          python --version
+          uv --version
+          just --version
+
+      - name: Validate project
+        run: just ci
+
+
+  lint-docs:
+    name: Docs & Shell Hygiene
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
       - name: Markdownlint
         run: |
-          npm i -g markdownlint-cli@0.41.0
+          npm install -g markdownlint-cli@0.41.0
           git ls-files '*.md' | xargs -r markdownlint
+
       - name: ShellCheck
         run: |
-          sudo apt-get update && sudo apt-get install -y shellcheck
+          sudo apt-get update -qq
+          sudo apt-get install -y shellcheck
           git ls-files '*.sh' | xargs -r shellcheck -x
-      - name: Lychee link check
+
+      - name: Broken-Link Check
         uses: lycheeverse/lychee-action@v2
         with:
           args: --config .lychee.toml .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  api:
-    name: API – build, fmt, clippy & test
-    needs: changes
-    if: needs.changes.outputs.api == 'true' || github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      CARGO_TERM_COLOR: always
-    defaults:
-      run:
-        working-directory: apps/api
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - name: Ensure default toolchain
-        run: |
-          if [[ -z "${toolchain:-}" ]]; then
-            echo "toolchain=stable" >> "$GITHUB_ENV"
-            echo "toolchain input missing; defaulting to 'stable'"
-          fi
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.toolchain || 'stable' }}
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: cargo fmt
-        run: cargo fmt -- --check
-      - name: cargo clippy
-        run: cargo clippy -- -D warnings
-      - name: cargo build
-        run: cargo build --locked
-      - name: cargo test
-        run: cargo test --locked
-
-  web-check:
-    name: Web – typecheck (svelte-check)
-    needs: changes
-    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-      actions: write   # required for npm cache restore
-    env:
-      CI: true
-      PUPPETEER_SKIP_DOWNLOAD: 'true'
-      NPM_CONFIG_AUDIT: 'false'
-      NPM_CONFIG_FUND: 'false'
-    defaults: { run: { working-directory: apps/web, shell: bash } }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Enable Corepack (npm)
-        run: corepack enable
-      - name: Install dependencies
-        run: npm ci
-      - name: Svelte Type Check
-        run: npx svelte-check --tsconfig ./tsconfig.json
-
-  web-build:
-    name: Web – build
-    needs: [web-check, changes]
-    if: needs.changes.outputs.web == 'true' || github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      actions: write   # required for npm cache restore
-    env:
-      CI: true
-      PUPPETEER_SKIP_DOWNLOAD: 'true'
-      NPM_CONFIG_AUDIT: 'false'
-      NPM_CONFIG_FUND: 'false'
-    defaults: { run: { working-directory: apps/web, shell: bash } }
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Enable Corepack (npm)
-        run: corepack enable
-      - name: Install dependencies
-        run: npm ci --prefer-offline
-      - name: build
-        run: npm run build
