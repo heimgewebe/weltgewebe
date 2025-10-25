@@ -38,10 +38,25 @@ download_yq() {
     aarch64|arm64) arch="arm64" ;;
   esac
   local url="https://github.com/mikefarah/yq/releases/download/v${ver}/yq_${os}_${arch}"
+  local tmp_bin
+  local tmp_sha
+  tmp_bin="$(mktemp)"
+  tmp_sha="${tmp_bin}.sha256"
   echo "Downloading yq v${ver} from: ${url}"
-  curl -fsSL "${url}" -o "${BIN}.tmp"
-  chmod +x "${BIN}.tmp"
-  mv "${BIN}.tmp" "${BIN}"
+  curl -fsSL "${url}" -o "${tmp_bin}"
+  curl -fsSL "${url}.sha256" -o "${tmp_sha}"
+  local expected
+  local actual
+  expected="$(awk '{print $1}' "${tmp_sha}")"
+  actual="$(sha256sum "${tmp_bin}" | awk '{print $1}')"
+  if [[ "${expected}" != "${actual}" ]]; then
+    echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
+    rm -f "${tmp_bin}" "${tmp_sha}"
+    exit 1
+  fi
+  chmod +x "${tmp_bin}"
+  mv "${tmp_bin}" "${BIN}"
+  rm -f "${tmp_sha}"
 }
 
 case "${CMD}" in
