@@ -6,7 +6,7 @@ set -euo pipefail
 # Default: 4.44.1
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-4.44.1}"
+REQ_VER="${2:-${YQ_VERSION:-4.44.1}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
@@ -30,8 +30,21 @@ current_version() {
 
 download_yq() {
   local ver="$1"
-  local os="linux"
+  local os
   local arch
+  local sys
+
+  sys="$(uname | tr '[:upper:]' '[:lower:]')"
+  case "${sys}" in
+    linux|darwin)
+      os="${sys}"
+      ;;
+    *)
+      echo "unsupported operating system for yq: ${sys}" >&2
+      exit 1
+      ;;
+  esac
+
   arch="$(uname -m)"
   case "${arch}" in
     x86_64) arch="amd64" ;;
@@ -60,9 +73,20 @@ download_yq() {
   fi
 
   # pick asset (plain binary or tarball)
-  if curl -fsSI "${url_base}/${base}" >/dev/null; then
+  local -a curl_common curl_retry
+  local curl_help=""
+  curl_common=(-fsS --proto '=https' --tlsv1.2)
+  curl_retry=(--retry 3 --retry-delay 2)
+  if ! curl_help="$(curl --help all 2>/dev/null)"; then
+    curl_help="$(curl --help 2>/dev/null || true)"
+  fi
+  if [[ -n "${curl_help}" ]] && grep -q -- '--retry-all-errors' <<<"${curl_help}"; then
+    curl_retry+=(--retry-all-errors)
+  fi
+
+  if curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}" >/dev/null; then
     asset="${base}"
-  elif curl -fsSI "${url_base}/${base}.tar.gz" >/dev/null; then
+  elif curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}.tar.gz" >/dev/null; then
     asset="${base}.tar.gz"
   else
     echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
@@ -78,22 +102,35 @@ download_yq() {
   local sha_path="${asset_path}.sha256"
 
   echo "Downloading yq v${ver} from: ${url_base}/${asset}"
-  curl -fsSL "${url_base}/${asset}" -o "${asset_path}"
-  curl -fsSL "${url_base}/${asset}.sha256" -o "${sha_path}"
+  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"
+  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}.sha256" -o "${sha_path}"
 
   local expected actual
   expected="$(awk '{print $1}' "${sha_path}")"
+  if [[ -z "${expected}" ]]; then
+    echo "empty checksum file: ${sha_path}" >&2
+    exit 1
+  fi
   actual="$(sha256sum "${asset_path}" | awk '{print $1}')"
   if [[ "${expected}" != "${actual}" ]]; then
     echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
     exit 1
   fi
 
+  # Zielpfad der extrahierten/geladenen Binary im Tmp-Verzeichnis
   local extracted="${tmp_dir}/${base}"
   if [[ "${asset}" == *.tar.gz ]]; then
+    # Archivfall: entpacken erzeugt ${base}
     tar -xzf "${asset_path}" -C "${tmp_dir}"
   else
-    mv "${asset_path}" "${extracted}"
+    # Standalone-Binary: vermeide mv auf sich selbst unter set -euo pipefail
+    if [[ "${asset_path}" != "${extracted}" ]]; then
+      # in seltenen Fällen, falls die Namen differieren, kopieren wir explizit
+      cp -f "${asset_path}" "${extracted}"
+    else
+      # identischer Pfad – wir verwenden den bereits geladenen Pfad direkt
+      extracted="${asset_path}"
+    fi
   fi
 
   if [[ ! -f "${extracted}" ]]; then
