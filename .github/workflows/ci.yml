@@ -43,8 +43,13 @@ jobs:
           trap 'rm -f "${TMP}" "${TMP_SHA}"' EXIT
           echo "Downloading ${BIN_URL}"
           curl -fsSL "${BIN_URL}" -o "${TMP}"
-          if curl -fsSL "${URL_BASE}/checksums" -o "${TMP_SHA}"; then
-            (cd "$(dirname "${TMP}")" && grep "  ${BIN}$" "${TMP_SHA}" | sha256sum -c -)
+          # Verify against matching checksum for the exact binary
+          curl -fsSL "${BIN_URL}.sha256" -o "${TMP_SHA}"
+          EXPECTED="$(awk '{print $1}' "${TMP_SHA}")"
+          ACTUAL="$(sha256sum "${TMP}" | awk '{print $1}')"
+          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
+            echo "yq checksum mismatch: expected ${EXPECTED}, got ${ACTUAL}" >&2
+            exit 1
           fi
           sudo install -m 0755 "${TMP}" /usr/local/bin/yq
           rm -f "${TMP}" "${TMP_SHA}"
@@ -177,6 +182,7 @@ jobs:
             --max-concurrency 3
             --retry-wait-time 3s
             --max-retries 3
+            --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path '**/node_modules/**'
             --exclude-path '**/dist/**'
             '**/*.md'
