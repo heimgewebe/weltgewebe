@@ -35,7 +35,8 @@ Es geht um kollektive Selbstorganisation, Verantwortung und Autonomie in einem v
 
 ## 2. Funktionale und strukturelle Elemente – der Plan (in Ansätzen)
 
-Neben dem Geist gibt es auf der Website Hinweise auf konkrete Strukturen und Konzepte, wie man dieses Ideal operationalisieren möchte:
+Neben dem Geist gibt es auf der Website Hinweise auf konkrete Strukturen und Konzepte,
+wie man dieses Ideal operationalisieren möchte:
 
 - **Weltgewebe / Karte**
   - Zweck / Idee: Die Plattform oder Leinwand, auf der Aktionen, Wünsche, Kommentare und
