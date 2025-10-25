@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Minimaler Installer/Pinner für mikefarah/yq v4.x
 # Usage: scripts/tools/yq-pin.sh ensure [<version>]
-# Default: 4.44.3
+# Default: 4.44.1
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-4.44.3}"
+REQ_VER="${2:-4.44.1}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
@@ -49,21 +49,17 @@ download_yq() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir}"' EXIT INT TERM
 
+  # prerequisites
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required to install yq" >&2
     exit 1
   fi
-
   if ! command -v sha256sum >/dev/null 2>&1; then
     echo "sha256sum is required to verify yq downloads" >&2
     exit 1
   fi
 
-  if ! command -v install >/dev/null 2>&1; then
-    echo "install is required to place the yq binary" >&2
-    exit 1
-  fi
-
+  # choose asset (plain binary or tarball)
   if curl -fsSI "${url_base}/${base}" >/dev/null; then
     asset="${base}"
   elif curl -fsSI "${url_base}/${base}.tar.gz" >/dev/null; then
@@ -85,8 +81,7 @@ download_yq() {
   curl -fsSL "${url_base}/${asset}" -o "${asset_path}"
   curl -fsSL "${url_base}/${asset}.sha256" -o "${sha_path}"
 
-  local expected
-  local actual
+  local expected actual
   expected="$(awk '{print $1}' "${sha_path}")"
   actual="$(sha256sum "${asset_path}" | awk '{print $1}')"
   if [[ "${expected}" != "${actual}" ]]; then
@@ -106,7 +101,14 @@ download_yq() {
     exit 1
   fi
 
-  install -m 0755 "${extracted}" "${BIN}"
+  # install atomically if possible
+  if command -v install >/dev/null 2>&1; then
+    install -m 0755 "${extracted}" "${BIN}"
+  else
+    chmod 0755 "${extracted}"
+    mv "${extracted}" "${BIN}"
+  fi
+
   echo "✓ Installed yq v${ver} → ${BIN}" >&2
   rm -rf "${tmp_dir}"
   trap - EXIT INT TERM
