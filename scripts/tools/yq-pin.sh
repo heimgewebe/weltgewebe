@@ -36,28 +36,82 @@ download_yq() {
   case "${arch}" in
     x86_64) arch="amd64" ;;
     aarch64|arm64) arch="arm64" ;;
+    *)
+      echo "unsupported architecture for yq: ${arch}" >&2
+      exit 1
+      ;;
   esac
-  echo "yq-pin: detected architecture '${arch}'"
-  local url="https://github.com/mikefarah/yq/releases/download/v${ver}/yq_${os}_${arch}"
-  local tmp_bin
-  local tmp_sha
-  tmp_bin="$(mktemp)"
-  tmp_sha="${tmp_bin}.sha256"
-  echo "Downloading yq v${ver} from: ${url}"
-  curl -fsSL "${url}" -o "${tmp_bin}"
-  curl -fsSL "${url}.sha256" -o "${tmp_sha}"
-  local expected
-  local actual
-  expected="$(awk '{print $1}' "${tmp_sha}")"
-  actual="$(sha256sum "${tmp_bin}" | awk '{print $1}')"
-  if [[ "${expected}" != "${actual}" ]]; then
-    echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
-    rm -f "${tmp_bin}" "${tmp_sha}"
+
+  local base="yq_${os}_${arch}"
+  local url_base="https://github.com/mikefarah/yq/releases/download/v${ver}"
+  local asset=""
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "${tmp_dir}"' EXIT INT TERM
+
+  # tool prerequisites
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required to install yq" >&2
     exit 1
   fi
-  chmod +x "${tmp_bin}"
-  mv "${tmp_bin}" "${BIN}"
-  rm -f "${tmp_sha}"
+  if ! command -v sha256sum >/dev/null 2>&1; then
+    echo "sha256sum is required to verify yq downloads" >&2
+    exit 1
+  fi
+
+  # pick asset (plain binary or tarball)
+  if curl -fsSI "${url_base}/${base}" >/dev/null; then
+    asset="${base}"
+  elif curl -fsSI "${url_base}/${base}.tar.gz" >/dev/null; then
+    asset="${base}.tar.gz"
+  else
+    echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
+    exit 1
+  fi
+
+  if [[ "${asset}" == *.tar.gz ]] && ! command -v tar >/dev/null 2>&1; then
+    echo "tar is required to extract yq archives" >&2
+    exit 1
+  fi
+
+  local asset_path="${tmp_dir}/${asset##*/}"
+  local sha_path="${asset_path}.sha256"
+
+  echo "Downloading yq v${ver} from: ${url_base}/${asset}"
+  curl -fsSL "${url_base}/${asset}" -o "${asset_path}"
+  curl -fsSL "${url_base}/${asset}.sha256" -o "${sha_path}"
+
+  local expected actual
+  expected="$(awk '{print $1}' "${sha_path}")"
+  actual="$(sha256sum "${asset_path}" | awk '{print $1}')"
+  if [[ "${expected}" != "${actual}" ]]; then
+    echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
+    exit 1
+  fi
+
+  local extracted="${tmp_dir}/${base}"
+  if [[ "${asset}" == *.tar.gz ]]; then
+    tar -xzf "${asset_path}" -C "${tmp_dir}"
+  else
+    mv "${asset_path}" "${extracted}"
+  fi
+
+  if [[ ! -f "${extracted}" ]]; then
+    echo "yq binary not found after extracting ${asset}" >&2
+    exit 1
+  fi
+
+  # install atomically
+  if command -v install >/dev/null 2>&1; then
+    install -m 0755 "${extracted}" "${BIN}"
+  else
+    chmod 0755 "${extracted}"
+    mv "${extracted}" "${BIN}"
+  fi
+
+  echo "✓ Installed yq v${ver} → ${BIN}" >&2
+  rm -rf "${tmp_dir}"
+  trap - EXIT INT TERM
 }
 
 case "${CMD}" in
