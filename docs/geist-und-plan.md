@@ -7,8 +7,7 @@ du kannst damit weiterarbeiten oder ich helfe dir beim Verdichten / Operationali
 
 ## 1. Einleitende, normative Aussagen – der Geist
 
-Diese Passagen geben dir Einsicht in die philosophische und normative Grundhaltung hinter dem
-Projekt:
+Diese Passagen geben dir Einsicht in die philosophische und normative Grundhaltung hinter dem Projekt:
 
 - Der Name Weltweberei legt den Fokus auf Verflechtung, Weben und Verknüpfen („weben der welt, wie
   es jedem (!) gefällt“).
@@ -36,8 +35,7 @@ Es geht um kollektive Selbstorganisation, Verantwortung und Autonomie in einem v
 
 ## 2. Funktionale und strukturelle Elemente – der Plan (in Ansätzen)
 
-Neben dem Geist gibt es auf der Website Hinweise auf konkrete Strukturen und Konzepte, wie man
-dieses Ideal operationalisieren möchte:
+Neben dem Geist gibt es auf der Website Hinweise auf konkrete Strukturen und Konzepte, wie man dieses Ideal operationalisieren möchte:
 
 - **Weltgewebe / Karte**
   - Zweck / Idee: Die Plattform oder Leinwand, auf der Aktionen, Wünsche, Kommentare und
@@ -82,8 +80,7 @@ dieses Ideal operationalisieren möchte:
 
 ## 3. Risiken, Widersprüche und offene Fragen
 
-Damit du beim Weiterentwickeln gewappnet bist, hier ein paar erkennbare Spannungen oder
-Herausforderungen:
+Damit du beim Weiterentwickeln gewappnet bist, hier ein paar erkennbare Spannungen oder Herausforderungen:
 
 1. Governance vs. Skalierung — je größer das Netzwerk, desto höher ist die Gefahr von
    Koordinationsproblemen, Trittbrettfahrern, Machtkonzentration.
