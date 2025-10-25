@@ -8,9 +8,7 @@
 - ADR-0002 (Re-Entry-Kriterien)
 - ADR-0003 (Privacy: Unschärferadius & RoN)
 
-**Prinzipien:** mobile-first, audit-ready, klein schneiden, Metriken vor Features.
-
----
+## Prinzipien: mobile-first, audit-ready, klein schneiden, Metriken vor Features
 
 ## Inhalt
 

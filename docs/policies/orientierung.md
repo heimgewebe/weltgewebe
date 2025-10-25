@@ -162,4 +162,3 @@ Alle Änderungen an:
 - Datenschutz- oder Ethikparametern.
 - Governance-Timern.
 - Sichtbarkeits-Mechaniken.
-
