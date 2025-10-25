@@ -101,7 +101,7 @@ download_yq() {
     exit 1
   fi
 
-  # install atomically
+  # install atomically if possible
   if command -v install >/dev/null 2>&1; then
     install -m 0755 "${extracted}" "${BIN}"
   else
