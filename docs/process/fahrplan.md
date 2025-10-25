@@ -1,21 +1,26 @@
 # Fahrplan
 
 **Stand:** 2025-10-20
-**Bezug:** ADR-0001 (Clean Slate & Monorepo), ADR-0002 (Re-Entry-Kriterien), ADR-0003 (Privacy: Unschärferadius & RoN)
+**Bezug:**
+- ADR-0001 (Clean Slate & Monorepo)
+- ADR-0002 (Re-Entry-Kriterien)
+- ADR-0003 (Privacy: Unschärferadius & RoN)
 **Prinzipien:** mobile-first, audit-ready, klein schneiden, Metriken vor Features.
-
 ---
 
 ## Inhalt
 
 - [Kurzfahrplan (Gates A–D)](#kurzfahrplan-gates-ad)
 - [Gate-Checkliste (A–D)](#gate-checkliste-ad)
-  - [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett)
-  - [Gate B — API (Axum) *Health & Kernverträge*](#gate-b--api-axum-health--kernverträge--phaseziele)
+  - [Gate A — Web (SvelteKit) *Minimal sichtbares
+    Skelett*](#gate-a--web-sveltekit-minimal-sichtbares-skelett)
+  - [Gate B — API (Axum) *Health &
+    Kernverträge*](#gate-b--api-axum-health--kernverträge--phaseziele)
   - [Gate C — Infra-light (Compose, Caddy, PG)](#gate-c--infra-light-compose-caddy-pg--phaseziele)
   - [Gate D — Security-Basis](#gate-d--security-basis-grundlagen)
 - [0) Vorbereitungen (sofort)](#0-vorbereitungen-sofort)
-- [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett* — Phaseziele](#gate-a--web-sveltekit-minimal-sichtbares-skelett--phaseziele)
+- [Gate A — Web (SvelteKit) *Minimal sichtbares Skelett* —
+  Phaseziele](#gate-a--web-sveltekit-minimal-sichtbares-skelett--phaseziele)
 
 ---
 
@@ -37,7 +42,8 @@
 - [ ] README-Landing beschreibt Click-Dummy, Contracts und verweist auf diesen Fahrplan.
 - [ ] Vale-Regeln laufen gegen README/Fahrplan ohne Verstöße.
 - [ ] PWA installierbar, Offline-Shell lädt Grundlayout.
-- [ ] Dummy-Karte (MapLibre) sichtbar, Layout-Slots vorhanden; Budgets ≤ 60 KB / TTI ≤ 2 s dokumentiert.
+- [ ] Dummy-Karte (MapLibre) sichtbar, Layout-Slots vorhanden; Budgets ≤ 60 KB / TTI ≤ 2 s
+  dokumentiert.
 - [ ] Minimal-Smoke-Test (Playwright) grün, Lighthouse Mobile ≥ 85.
 
 ### Gate B — API (Axum) *Health & Kernverträge*
@@ -46,8 +52,10 @@
 
 - [ ] Axum-Service liefert `/health/live`, `/health/ready`, `/version`.
 - [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
-- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`) als Stubs implementiert.
-- [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`, `cargo test` aus.
+- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`) als Stubs
+  implementiert.
+- [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`,
+  `cargo test` aus.
 - [ ] `docker compose` (nur API) startet fehlerfrei.
 - [ ] Contract-Test gegen `POST /nodes` grün, OpenAPI JSON abrufbar.
 
@@ -100,7 +108,8 @@
 
 ### Gate A: Aufgabenblöcke
 
-- **UX-Click-Dummy:** Interaktiver Ablauf für Karte → Knoten → Zeit-UI. Figma/Tool-Link im README vermerken.
+- **UX-Click-Dummy:** Interaktiver Ablauf für Karte → Knoten → Zeit-UI. Figma/Tool-Link im README
+  vermerken.
 - **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `thread`
   abstimmen (Basis für Gate B). Ablage unter `contracts/` und im README
   verlinken.
@@ -125,7 +134,8 @@
 
 - Axum-Service mit `/health/live`, `/health/ready`, `/version`.
 - OpenAPI-Stub (utoipa) generiert.
-- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads` (Stub-Implementierung).
+- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`
+  (Stub-Implementierung).
 - `migrations/` vorbereitet (ohne Fachtabellen).
 - CI: `cargo fmt`, `clippy -D warnings`, `cargo test`.
 
@@ -176,7 +186,8 @@
 
 - Karte sichtbar (MapLibre), Dummy-Layer, UI-Skeleton für Filter & Zeitleiste.
 - Zeit-Slider (UI) ohne Datenwirkung, nur State/URL-Sync.
-- **Knoten anlegen (UI)**: kleines Formular (Name), flüchtige Speicherung (Client/Mem), Marker erscheint.
+- **Knoten anlegen (UI)**: kleines Formular (Name), flüchtige Speicherung (Client/Mem), Marker
+  erscheint.
 - Mobile-Nav-Gesten (Drawer wischen).
 
 **Akzeptanz:** Mobile Lighthouse ≥ 90; TTI ≤ 2 s; UI-Flows klickbar; Knoten-Form erzeugt Marker.
@@ -200,7 +211,8 @@
 - Zeitleiste wirkt auf Sichtbarkeit (Fäden/Knoten blenden weich aus; Client-seitig).
 - `public_pos` im View-Modell (Fake-Backend oder Local-Derivation).
 
-**Akzeptanz:** Vorschau der öffentlichen Position reagiert; Zeitleiste verhält sich wie spezifiziert.
+**Akzeptanz:** Vorschau der öffentlichen Position reagiert; Zeitleiste verhält sich wie
+spezifiziert.
 
 ---
 
