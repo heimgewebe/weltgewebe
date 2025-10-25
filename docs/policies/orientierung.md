@@ -1,7 +1,13 @@
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 
 **Stand:** 2025-10-06
-**Quelle:** `inhalt.md` · `zusammenstellung.md` · `geist-und-plan.md` · `fahrplan.md` · `techstack.md`
+**Quelle:**
+
+- [inhalt.md](../overview/inhalt.md)
+- [zusammenstellung.md](../overview/zusammenstellung.md)
+- [geist-und-plan.md](../geist-und-plan.md)
+- [fahrplan.md](../process/fahrplan.md)
+- [techstack.md](../techstack.md)
 
 ---
 

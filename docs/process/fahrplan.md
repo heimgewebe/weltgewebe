@@ -1,10 +1,13 @@
 # Fahrplan
 
 **Stand:** 2025-10-20
+
 **Bezug:**
+
 - ADR-0001 (Clean Slate & Monorepo)
 - ADR-0002 (Re-Entry-Kriterien)
 - ADR-0003 (Privacy: Unschärferadius & RoN)
+
 **Prinzipien:** mobile-first, audit-ready, klein schneiden, Metriken vor Features.
 ---
 

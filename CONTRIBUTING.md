@@ -12,6 +12,7 @@ Dieses Dokument erklärt, wie im Weltgewebe-Repository gearbeitet wird: Ordner-O
 Workflows, Qualitätsmaßstäbe und
 Entscheidungswege.
 Es baut auf folgenden Dateien auf:
+
 - docs/architekturstruktur.md – verbindliche Repo-Struktur (Ordner, Inhalte, Zweck).
 - docs/techstack.md – Stack-Referenz (SvelteKit, Rust/Axum, Postgres+Outbox, JetStream, Caddy,
   Observability).
@@ -125,15 +126,18 @@ Branch-Strategie: kurzes Feature-Branching gegen main.
 Kleine, thematisch fokussierte Pull Requests.
 
 Commit-Präfixe:
+
 - feat(web): … | feat(api): … | feat(worker): … | feat(infra): …
 - fix(...) | chore(...) | refactor(...) | docs(adr|runbook|...)
 
 PR-Prozess:
+
 1. Lokal: Lints, Tests und Budgets laufen lassen.
 2. PR klein halten, Zweck und „Wie getestet“ kurz erläutern.
 3. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
 
 CI-Gates (brechen Builds):
+
 - Frontend-Budget aus ci/budget.json (Initial-JS ≤ 60 KB, TTI ≤ 2000 ms).
 - Lints/Formatter (Web: ESLint/Prettier; API/Worker: cargo fmt, cargo clippy -D).
 - Tests (npm test, cargo test).
