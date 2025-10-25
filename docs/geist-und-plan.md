@@ -9,6 +9,7 @@ du kannst damit weiterarbeiten oder ich helfe dir beim Verdichten / Operationali
 
 Diese Passagen geben dir Einsicht in die philosophische und normative Grundhaltung hinter dem
 Projekt:
+
 - Der Name Weltweberei legt den Fokus auf Verflechtung, Weben und Verknüpfen („weben der welt, wie
   es jedem (!) gefällt“).
 - Es handelt sich um ein Konzept eines „sichtbaren, gemeinschaftlich ausgehandelten Zusammenwirkens
@@ -37,6 +38,7 @@ Es geht um kollektive Selbstorganisation, Verantwortung und Autonomie in einem v
 
 Neben dem Geist gibt es auf der Website Hinweise auf konkrete Strukturen und Konzepte, wie man
 dieses Ideal operationalisieren möchte:
+
 - **Weltgewebe / Karte**
   - Zweck / Idee: Die Plattform oder Leinwand, auf der Aktionen, Wünsche, Kommentare und
     Verantwortungsübernahmen visualisiert werden.
@@ -82,6 +84,7 @@ dieses Ideal operationalisieren möchte:
 
 Damit du beim Weiterentwickeln gewappnet bist, hier ein paar erkennbare Spannungen oder
 Herausforderungen:
+
 1. Governance vs. Skalierung — je größer das Netzwerk, desto höher ist die Gefahr von
    Koordinationsproblemen, Trittbrettfahrern, Machtkonzentration.
 2. Sicherheit und Identitätsprobleme — wie verhinderst du Sybil-Attacken (falsche
@@ -104,10 +107,12 @@ Herausforderungen:
 ## 4. Mein zusammengefasster „Geist & Plan“ (in deiner Sprache, für deine Nutzung)
 
 Wenn ich das für dein Projekt (Weltgewebe) zusammenfasse, um es nutzbar zu machen:
+
 - Geist: Freiheit, Gemeinschaft, Transparenz, Verantwortung, partizipative Autonomie.
   Ein Raum, in dem Menschen freiwillig ihre Intentionen einbringen, sich verflechten und
   zusammenwirken, ohne dominante Hierarchien, und in dem Veränderung offen verhandelbar ist.
 - Plan (Architektur):
+
   1. Ein interaktives Karten- und Netzwerkinterface (Weltgewebe), das sichtbar macht, wie Menschen
   handeln, wünschen und Verantwortung übernehmen.
   2. Lokale Zellen („Ortswebereien“) mit eigenen Gemeinschaftskonten, Antragsprozessen und
@@ -150,6 +155,7 @@ angezeigt.
 Kontextuelle Einordnung
 
 Du hast Dateien hochgeladen, die Philosophie, Struktur und Tech-Stack des Weltgewebes dokumentieren:
+
 - inhalt.md: Konzept und Funktionsweise.
 - zusammenstellung.md: Systematische Zusammenfassung (Grundprinzipien, Domänenmodell, Governance).
 - architekturstruktur.md: Repo-Struktur für Entwickler:innen.

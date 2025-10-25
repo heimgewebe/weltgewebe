@@ -148,9 +148,7 @@ Es beschreibt:
 - Phase …
   - Ziel: Langfristig Föderation + Delegations-Audits.
   - Ethik-Bezug: Verantwortung skaliert halten.
-
 ---
-
 ## 9 · Governance / Changelog-Pflicht
 
 Alle Änderungen an:
