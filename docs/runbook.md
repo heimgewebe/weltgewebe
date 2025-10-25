@@ -11,7 +11,9 @@ Ziel dieses Runbooks ist es, neuen Teammitgliedern einen strukturierten und schn
 
 - **Tag 1: Willkommen & Einführung**
   - **Kennenlernen:** Team und Ansprechpartner.
-  - **Projekt-Kontext:** Lektüre von `README.md`, `docs/overview/inhalt.md` und `docs/geist-und-plan.md`.
+  - **Projekt-Kontext:** Lektüre von [README.md](../README.md),
+    [docs/overview/inhalt.md](overview/inhalt.md) und
+    [docs/geist-und-plan.md](geist-und-plan.md).
   - **Architektur:** `docs/architekturstruktur.md` und `docs/techstack.md` durcharbeiten, um die
     Komponenten und ihre Zusammenspiel zu verstehen.
   - **Zugänge:** Accounts für GitHub, Docker Hub, etc. beantragen.

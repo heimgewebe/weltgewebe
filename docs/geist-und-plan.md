@@ -111,6 +111,7 @@ Wenn ich das für dein Projekt (Weltgewebe) zusammenfasse, um es nutzbar zu mach
 - Geist: Freiheit, Gemeinschaft, Transparenz, Verantwortung, partizipative Autonomie.
   Ein Raum, in dem Menschen freiwillig ihre Intentionen einbringen, sich verflechten und
   zusammenwirken, ohne dominante Hierarchien, und in dem Veränderung offen verhandelbar ist.
+
 - Plan (Architektur):
 
   1. Ein interaktives Karten- und Netzwerkinterface (Weltgewebe), das sichtbar macht, wie Menschen
@@ -232,7 +233,9 @@ Demokratie trifft Picknick, mit JetStream und PgBouncer als unsichtbare Grillanz
 ∴fores Ungewissheit
 
 - Grad: niedrig–mittel (30–40 %).
+
 - Ursachen:
+
   - Soziale Dynamik (wie dauerhaft beteiligen sich Leute?).
   - Governance im Konfliktfall (Abstimmungen bei Missbrauch, Streit über Ressourcen).
   - Technische Skalierung (Last > 100k Nutzer, Kostenpfad).
@@ -243,6 +246,7 @@ Demokratie trifft Picknick, mit JetStream und PgBouncer als unsichtbare Grillanz
 Kontrastvektor
 
 Noch nicht thematisiert:
+
 - Konfliktlösung jenseits Abstimmungen (z. B. Mediation).
 - Schnittstellen zu externen Systemen (öffentliche Verwaltung, lokale Initiativen).
 - Umgang mit kulturellen Unterschieden bei Föderation globaler Ortswebereien.
