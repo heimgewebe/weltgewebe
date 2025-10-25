@@ -20,13 +20,36 @@ defaults:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure yq is available
+      - name: Install yq (for toolchain.versions.yml)
         run: |
-          scripts/tools/yq-pin.sh ensure
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          YQ_VERSION=4.44.3
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64)  BIN="yq_linux_amd64" ;;
+            aarch64|arm64) BIN="yq_linux_arm64" ;;
+            *) echo "Unsupported arch for yq: ${ARCH}" >&2; exit 1 ;;
+          esac
+          URL_BASE="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}"
+          BIN_URL="${URL_BASE}/${BIN}"
+          TMP="$(mktemp)"
+          TMP_SHA="${TMP}.sha256"
+          trap 'rm -f "${TMP}" "${TMP_SHA}"' EXIT
+          echo "Downloading ${BIN_URL}"
+          curl -fsSL "${BIN_URL}" -o "${TMP}"
+          if curl -fsSL "${URL_BASE}/checksums" -o "${TMP_SHA}"; then
+            (cd "$(dirname "${TMP}")" && grep "  ${BIN}$" "${TMP_SHA}" | sha256sum -c -)
+          fi
+          sudo install -m 0755 "${TMP}" /usr/local/bin/yq
+          rm -f "${TMP}" "${TMP_SHA}"
+          trap - EXIT
+          yq --version
 
       - name: Read toolchain versions
         run: |
@@ -51,12 +74,16 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-
+            ${{ runner.os }}-cargo-
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20.19.0'
+          check-latest: true
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
@@ -71,13 +98,34 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ env.UV_VERSION }}-${{ hashFiles('**/pyproject.toml') }}
+          key: ${{ runner.os }}-uv-${{ env.UV_VERSION }}-${{ hashFiles('**/pyproject.toml', 'toolchain.versions.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-uv-
 
       - name: Install uv
         env:
           UV_VERSION: ${{ env.UV_VERSION }}
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          ARCH="$(uname -m)"
+          case "${ARCH}" in
+            x86_64)  TARBALL="uv-x86_64-unknown-linux-gnu.tar.gz" ;;
+            aarch64) TARBALL="uv-aarch64-unknown-linux-gnu.tar.gz" ;;
+            arm64)   TARBALL="uv-aarch64-unknown-linux-gnu.tar.gz" ;;
+            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
+          esac
+          URL="https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/${TARBALL}"
+          echo "Downloading ${URL}"
+          TMP_TGZ="$(mktemp)"
+          TMP_SHA="${TMP_TGZ}.sha256"
+          trap 'rm -f "${TMP_TGZ}" "${TMP_SHA}"' EXIT
+          curl -fL "$URL" -o "${TMP_TGZ}"
+          if curl -fsL "https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/SHA256SUMS" -o "${TMP_SHA}"; then
+            (cd "$(dirname "${TMP_TGZ}")" && grep " ${TARBALL}$" "${TMP_SHA}" | sha256sum -c -)
+          fi
+          tar xzf "${TMP_TGZ}" -C "$HOME/.local/bin" uv
+          chmod +x "$HOME/.local/bin/uv"
           export PATH="$HOME/.local/bin:$PATH"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
@@ -86,6 +134,7 @@ jobs:
             echo "Expected uv ${UV_VERSION}, got ${INSTALLED}" >&2
             exit 1
           fi
+          trap - EXIT
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -111,19 +160,50 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Markdownlint
-        run: |
-          npm install -g markdownlint-cli@0.41.0
-          git ls-files '*.md' | xargs -r markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: |
+            **/*.md
+            !**/node_modules/**
+            !**/dist/**
 
-      - name: ShellCheck
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y shellcheck
-          git ls-files '*.sh' | xargs -r shellcheck -x
-
-      - name: Broken-Link Check
+      - name: Link check (lychee)
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config .lychee.toml .
+          args: >
+            --no-progress
+            --accept 200,206,301,302,429
+            --timeout 15s
+            --max-concurrency 3
+            --retry-wait-time 3s
+            --max-retries 3
+            --exclude-path '**/node_modules/**'
+            --exclude-path '**/dist/**'
+            '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: YAML lint
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: |
+            .
+          strict: true
+
+      - name: Ensure jq is available
+        run: |
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
+          fi
+
+      - name: JSON lint
+        run: |
+          set -euo pipefail
+          mapfile -d '' files < <(git ls-files -z '*.json' ':!:**/package-lock.json' || true)
+          if (( ${#files[@]} )); then
+            jq -n 'inputs' "${files[@]}" >/dev/null
+          else
+            echo "No JSON files to lint"
+          fi
