@@ -143,4 +143,3 @@ CI-Gates (brechen Builds):
 - Lints/Formatter (Web: ESLint/Prettier; API/Worker: cargo fmt, cargo clippy -D).
 - Tests (npm test, cargo test).
 - Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
-
