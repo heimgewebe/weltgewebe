@@ -29,13 +29,14 @@ jobs:
       - name: Install yq (for toolchain.versions.yml)
         run: |
           set -euo pipefail
-          YQ_VERSION=4.44.3
+          YQ_VERSION=4.44.1
           ARCH="$(uname -m)"
           case "${ARCH}" in
             x86_64)  BIN="yq_linux_amd64" ;;
             aarch64|arm64) BIN="yq_linux_arm64" ;;
             *) echo "Unsupported arch for yq: ${ARCH}" >&2; exit 1 ;;
           esac
+          echo "yq installer: detected architecture '${ARCH}'"
           URL_BASE="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}"
           BIN_URL="${URL_BASE}/${BIN}"
           TMP="$(mktemp)"

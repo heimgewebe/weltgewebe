@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Minimaler Installer/Pinner für mikefarah/yq v4.x
 # Usage: scripts/tools/yq-pin.sh ensure [<version>]
-# Default: 4.44.3
+# Default: 4.44.1
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-4.44.3}"
+REQ_VER="${2:-4.44.1}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
@@ -37,6 +37,7 @@ download_yq() {
     x86_64) arch="amd64" ;;
     aarch64|arm64) arch="arm64" ;;
   esac
+  echo "yq-pin: detected architecture '${arch}'"
   local url="https://github.com/mikefarah/yq/releases/download/v${ver}/yq_${os}_${arch}"
   local tmp_bin
   local tmp_sha
