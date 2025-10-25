@@ -49,7 +49,7 @@ download_yq() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir}"' EXIT INT TERM
 
-  # prerequisites
+  # tool prerequisites
   if ! command -v curl >/dev/null 2>&1; then
     echo "curl is required to install yq" >&2
     exit 1
@@ -59,7 +59,7 @@ download_yq() {
     exit 1
   fi
 
-  # choose asset (plain binary or tarball)
+  # pick asset (plain binary or tarball)
   if curl -fsSI "${url_base}/${base}" >/dev/null; then
     asset="${base}"
   elif curl -fsSI "${url_base}/${base}.tar.gz" >/dev/null; then
