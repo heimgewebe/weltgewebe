@@ -92,7 +92,7 @@ download_yq() {
   # pick asset (plain binary or tarball)
   local -a curl_common curl_retry
   local curl_help=""
-  curl_common=(-fsSL --proto '=https' --tlsv1.2)
+  curl_common=(-fsS --proto '=https' --tlsv1.2) # kein -L hier: HEAD-Probes sollen Redirects (302) NICHT folgen
   curl_retry=(--retry 3 --retry-delay 2)
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
@@ -101,14 +101,23 @@ download_yq() {
     curl_retry+=(--retry-all-errors)
   fi
 
-  if curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}" >/dev/null; then
+  local head_status_base=0
+  local head_status_tar=0
+  if curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}" >/dev/null; then
     asset="${base}"
-  elif curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}.tar.gz" >/dev/null; then
-    asset="${base}.tar.gz"
   else
-    echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
-    exit 1
+    head_status_base=$?
+    if curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}.tar.gz" >/dev/null; then
+      asset="${base}.tar.gz"
+    else
+      head_status_tar=$?
+      echo "yq asset not found (HEAD 404/403 or timeout) at ${url_base}/${base}{,.tar.gz}" >&2
+      echo "  exit codes: base=${head_status_base}, base.tar.gz=${head_status_tar}" >&2
+      exit 1
+    fi
   fi
+
+  echo "yq asset selected: ${asset}"
 
   if [[ "${asset}" == *.tar.gz ]] && ! command -v tar >/dev/null 2>&1; then
     echo "tar is required to extract yq archives" >&2
@@ -118,8 +127,9 @@ download_yq() {
   local asset_path="${tmp_dir}/${asset##*/}"
   local sha_path="${asset_path}.sha256"
 
+  echo "target: ${os}/${arch}, yq v${ver}"
   echo "Downloading yq v${ver} from: ${url_base}/${asset}"
-  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"
+  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"  # Download folgt Redirects
   curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}.sha256" -o "${sha_path}"
 
   local expected actual
@@ -138,6 +148,10 @@ download_yq() {
   local extracted="${tmp_dir}/${base}"
   if [[ "${asset}" == *.tar.gz ]]; then
     # Archivfall: entpacken erzeugt ${base}
+    if [[ ! -s "${asset_path}" ]]; then
+      echo "empty download: ${asset_path}" >&2
+      exit 1
+    fi
     tar -xzf "${asset_path}" -C "${tmp_dir}"
   else
     # Standalone-Binary: vermeide mv auf sich selbst unter set -euo pipefail
@@ -182,12 +196,12 @@ download_yq() {
     exit 1
   fi
 
-  echo "✓ Installed yq v${installed_ver} → ${BIN}"
+  echo "✅ yq v${installed_ver} verified at ${BIN}"
 
   if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
-    cat >&2 <<'EOF'
+    cat >&2 <<EOF
 Note: ${BIN_DIR} is not currently in your PATH on macOS. Add the following to your shell profile to use yq without the full path:
-  export PATH="${BIN_DIR}:$PATH"
+  export PATH="${BIN_DIR}:\$PATH"
 EOF
   fi
 
