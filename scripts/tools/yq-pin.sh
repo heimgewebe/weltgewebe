@@ -14,7 +14,11 @@ ensure_path() {
   mkdir -p "${BIN_DIR}"
   case ":$PATH:" in
     *":${BIN_DIR}:"*) ;;
-    *) echo "${BIN_DIR}" >> "${GITHUB_PATH:-/dev/null}" 2>/dev/null || true ;;
+    *)
+      if [[ -n "${GITHUB_PATH:-}" ]]; then
+        echo "${BIN_DIR}" >> "${GITHUB_PATH}" 2>/dev/null || true
+      fi
+      ;;
   esac
 }
 
@@ -71,8 +75,15 @@ download_yq() {
   local url_base="https://github.com/mikefarah/yq/releases/download/v${ver}"
   local asset=""
   local tmp_dir=""
-  tmp_dir="$(mktemp -d)"
-  trap 'rm -rf "${tmp_dir}"' EXIT INT TERM
+
+  echo "Target platform: ${os}/${arch}; requested yq v${ver}" >&2
+
+  if ! tmp_dir="$(mktemp -d)"; then
+    echo "failed to create temporary directory for yq download" >&2
+    exit 1
+  fi
+
+  trap 'rm -rf "${tmp_dir:-}"' EXIT INT TERM
 
   # tool prerequisites
   if ! command -v curl >/dev/null 2>&1; then
@@ -92,7 +103,7 @@ download_yq() {
   # pick asset (plain binary or tarball)
   local -a curl_common curl_retry
   local curl_help=""
-  curl_common=(-fsSL --proto '=https' --tlsv1.2)
+  curl_common=(-fsS --proto '=https' --tlsv1.2 --connect-timeout 5) # kein -L: HEAD-Probes sollen Redirects nicht folgen
   curl_retry=(--retry 3 --retry-delay 2)
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
@@ -101,17 +112,23 @@ download_yq() {
     curl_retry+=(--retry-all-errors)
   fi
 
-  if curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}" >/dev/null; then
+  if curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}" >/dev/null; then
     asset="${base}"
-  elif curl "${curl_common[@]}" "${curl_retry[@]}" -I "${url_base}/${base}.tar.gz" >/dev/null; then
+  elif curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}.tar.gz" >/dev/null; then
     asset="${base}.tar.gz"
   else
     echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
     exit 1
   fi
 
+  if [[ "${asset}" == *.tar.gz ]]; then
+    echo "Found yq archive asset: ${asset}"
+  else
+    echo "Found yq binary asset: ${asset}"
+  fi
+
   if [[ "${asset}" == *.tar.gz ]] && ! command -v tar >/dev/null 2>&1; then
-    echo "tar is required to extract yq archives" >&2
+    echo "tar is required to extract yq archives (install gnu-tar or bsdtar)" >&2
     exit 1
   fi
 
@@ -119,8 +136,12 @@ download_yq() {
   local sha_path="${asset_path}.sha256"
 
   echo "Downloading yq v${ver} from: ${url_base}/${asset}"
-  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"
-  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}.sha256" -o "${sha_path}"
+  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"       # Downloads folgen Redirects
+  if [[ ! -s "${asset_path}" ]]; then
+    echo "downloaded asset is empty: ${asset_path}" >&2
+    exit 1
+  fi
+  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}.sha256" -o "${sha_path}"  # ebenso Checksums
 
   local expected actual
   expected="$(awk '{print $1}' "${sha_path}")"
@@ -160,11 +181,13 @@ download_yq() {
     install -m 0755 "${extracted}" "${BIN}"
   else
     chmod 0755 "${extracted}"
-    mv "${extracted}" "${BIN}"
+    mv -f "${extracted}" "${BIN}"
   fi
 
   # Refresh command hash tables for interactive shells that source this script.
   hash -r 2>/dev/null || true
+
+  echo "yq installed to ${BIN}"
 
   if ! "${BIN}" --version >/dev/null 2>&1; then
     echo "installed yq at ${BIN} is not executable" >&2
@@ -182,7 +205,7 @@ download_yq() {
     exit 1
   fi
 
-  echo "✓ Installed yq v${installed_ver} → ${BIN}"
+  echo "✅ yq v${installed_ver} verified and ready in ${BIN_DIR}"
 
   if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
     cat >&2 <<'EOF'
