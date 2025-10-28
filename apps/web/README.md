@@ -14,6 +14,13 @@ Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
 In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173`
 verwenden.
 
+> [!TIP]
+> **E2E-Tests:** Playwright nutzt lokal Port `4173` (Preview-Server) und fällt in CI automatisch
+> auf `5173` zurück. Setze `PORT=<nummer> npm run test:ci`, um den Port explizit vorzugeben.
+> HTML-Reports landen unter `apps/web/playwright-report` (überschreibbar via
+> `PLAYWRIGHT_HTML_REPORT`). CI-Artefakt-Uploads sollten sowohl den Ordner als auch die Datei
+> `apps/web/playwright-report/results.xml` einsammeln.
+
 > [!NOTE]
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
 
