@@ -161,3 +161,17 @@ Alle Änderungen an:
 - Datenschutz- oder Ethikparametern.
 - Governance-Timern.
 - Sichtbarkeits-Mechaniken.
+
+---
+
+## 10 · Build- und CI-Policy
+
+- **Lokales Tooling (`scripts/tools/yq-pin.sh`)** hält `yq` ohne Root-Rechte aktuell. Das Skript
+  erkennt Binär-/Tarball-Varianten, prüft Checksums und nutzt erweiterte Curl-Retries, um
+  Entwickler:innen auf Workstations oder Codespaces unabhängig vom Runner-Setup zu machen.
+- **GitHub Actions** installieren `yq` über eine eigene, schlanke Routine in
+  `.github/workflows/ci.yml`. Sie arbeiten auf frischen Images, installieren direkt nach
+  `/usr/local/bin` und vermeiden Seiteneffekte aus `$HOME`.
+- **Link-Checks:** Das CI setzt auf eine „flake-freie“ Konfiguration (`--retry`, limitierte
+  Parallelität) als Blocker. Der separate Watchdog `links.yml` läuft nachts bzw. manuell und
+  meldet Ausfälle, bricht aber keine Deployments.
