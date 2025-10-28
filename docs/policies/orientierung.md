@@ -178,4 +178,3 @@ Folgende Grundsätze gelten für lokale Entwicklung und CI:
 - **Link-Checks:** Das CI setzt auf eine „flake-freie“ Konfiguration (`--retry`, limitierte
   Parallelität) als Blocker. Der separate Watchdog `links.yml` läuft nachts bzw. manuell und
   meldet Ausfälle, bricht aber keine Deployments.
-
