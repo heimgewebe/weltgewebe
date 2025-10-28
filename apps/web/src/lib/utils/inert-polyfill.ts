@@ -36,10 +36,14 @@ function applyAriaHidden(el: Element, on: boolean) {
   }
 }
 
+let hasSetupCompleted = false;
+
 export function ensureInertPolyfill() {
   // SSR-Schutz und moderne Browser mit nativer inert-Unterstützung überspringen.
   if (typeof document === 'undefined' || typeof HTMLElement === 'undefined') return;
   if ('inert' in HTMLElement.prototype) return;
+  if (hasSetupCompleted) return;
+  hasSetupCompleted = true;
 
   // Style-Schutz nur einmal injizieren (Pointer & Selection aus).
   const styleId = 'wg-inert-polyfill-style';
@@ -70,23 +74,32 @@ export function ensureInertPolyfill() {
       (t as HTMLElement).blur?.();
       (document.activeElement as HTMLElement | null)?.blur?.();
     }
-  }, true);
+  }, { capture: true });
   document.addEventListener('click', (e) => {
     const t = e.target as HTMLElement | null;
     if (t && t.closest('[inert]')) {
       e.preventDefault();
       e.stopPropagation();
     }
-  }, true);
+  }, { capture: true });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
-      const t = e.target as HTMLElement | null;
-      if (t && t.closest('[inert]')) {
+    const active = document.activeElement as HTMLElement | null;
+    const target = e.target as HTMLElement | null;
+    const withinInert = (node: HTMLElement | null) => !!node && !!node.closest?.('[inert]');
+    if (withinInert(active) || withinInert(target)) {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopPropagation();
+        active?.blur?.();
+        return;
+      }
+
+      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
         e.preventDefault();
         e.stopPropagation();
       }
     }
-  }, true);
+  }, { capture: true });
 
   // Reagiere auf spätere inert-Attribute
   const mo = new MutationObserver((muts) => {
