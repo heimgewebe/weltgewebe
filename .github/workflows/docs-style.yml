@@ -34,8 +34,14 @@ jobs:
           VALE_OS="Linux_64-bit"
           TARBALL="vale_${VALE_VERSION}_${VALE_OS}.tar.gz"
           BASE_URL="https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}"
-          curl -fsSL -o "$TARBALL" "${BASE_URL}/${TARBALL}"
-          curl -fsSL -o checksums.txt "${BASE_URL}/vale_${VALE_VERSION}_checksums.txt"
+          CURL_COMMON=(-fsS --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2)
+          if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+            CURL_COMMON+=(--retry-all-errors)
+          elif curl --help 2>/dev/null | grep -q -- '--retry-all-errors'; then
+            CURL_COMMON+=(--retry-all-errors)
+          fi
+          curl "${CURL_COMMON[@]}" -L -o "$TARBALL" "${BASE_URL}/${TARBALL}"
+          curl "${CURL_COMMON[@]}" -L -o checksums.txt "${BASE_URL}/vale_${VALE_VERSION}_checksums.txt"
           grep "$TARBALL" checksums.txt | sha256sum -c -
           mkdir -p bin
           tar -xzf "$TARBALL"
