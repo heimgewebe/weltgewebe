@@ -26,10 +26,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install yq (for toolchain.versions.yml)
+      - name: Ensure yq is available
         env:
-          YQ_VERSION: 4.44.1
+          YQ_VERSION: 4.47.2
         run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
           scripts/tools/yq-pin.sh ensure "${YQ_VERSION}"
           yq --version
 
