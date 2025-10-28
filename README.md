@@ -63,6 +63,46 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)). Dort sind die Gate-Checklisten (A–D) als
 > To-dos dokumentiert.
 
+### Web-E2E-Quickstart (Preview)
+
+Abgeleitet aus dem manuellen CI-Workflow (siehe `.github/workflows/web-e2e.yml`). Damit Playwright lokal zuverlässig läuft, orientiere dich an den folgenden Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
+
+1. Voraussetzungen: Node.js ≥ 20.19 (oder ≥ 22.12).
+   ```bash
+   corepack enable
+   ```
+   (aktiviert npm ≥ 10, falls noch nicht global geschehen)
+2. Dependencies installieren:
+
+   ```bash
+   cd apps/web
+   npm ci
+   ```
+
+3. Playwright-Browser nachrüsten (**einmalig pro Maschine**):
+
+   ```bash
+   npx playwright install --with-deps
+   # alternativ: npm run test:setup
+   ```
+
+4. App builden, damit `npm run preview` die statischen Assets servieren kann:
+
+   ```bash
+   npm run build
+   ```
+
+5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard: lokal 4173, im CI 5173; via `PORT` überschreibbar):
+
+   ```bash
+   npx playwright test
+   # CI-Spiegel: npm run test:ci
+   ```
+
+Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
+`npm run preview` läuft (Standard-Ports: lokal 4173, CI 5173; via `PORT` überschreibbar).
+Den HTML-Report findest du nach den Läufen unter `apps/web/playwright-report/`.
+
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
 
 Die API stellt unter `/version` Build-Infos bereit:
