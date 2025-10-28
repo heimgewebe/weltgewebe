@@ -25,10 +25,12 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install yq (for toolchain.versions.yml)
         env:
-          YQ_VERSION: 4.44.1
+          YQ_VERSION: 4.47.2
         run: |
           scripts/tools/yq-pin.sh ensure "${YQ_VERSION}"
           yq --version
@@ -48,6 +50,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
+        env:
+          CARGO_TERM_COLOR: always
 
       - name: Cache Cargo artifacts
         uses: actions/cache@v4
@@ -56,9 +60,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ env.RUST_VERSION }}-
             ${{ runner.os }}-cargo-
 
       - name: Setup Node
@@ -103,6 +106,8 @@ jobs:
           just --version
 
       - name: Validate project
+        env:
+          CARGO_TERM_COLOR: always
         run: just ci
 
   web-e2e:
@@ -120,6 +125,8 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -179,6 +186,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Markdownlint
         uses: DavidAnson/markdownlint-cli2-action@v16
