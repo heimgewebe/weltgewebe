@@ -202,8 +202,8 @@ jobs:
         with:
           args: >
             --no-progress
-            --accept 200,206,301,302,308,429
-            --timeout 15s
+            --accept 200,206,301,302,308,429,999
+            --timeout 15
             --max-concurrency 3
             --retry-wait-time 3s
             --max-retries 3
