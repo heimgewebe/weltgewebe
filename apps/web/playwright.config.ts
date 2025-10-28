@@ -1,7 +1,12 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, type ReporterDescription } from "@playwright/test";
 
 const PORT = Number(process.env.PORT ?? 4173);
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
+const htmlReportDir = process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report";
+const reporter: ReporterDescription[] = [
+  ["line"],
+  ["html", { open: "never", outputFolder: htmlReportDir }]
+];
 
 export default defineConfig({
   testDir: "tests",
@@ -12,6 +17,7 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "on-first-retry"
   },
+  reporter,
   ...(shouldStartWebServer
     ? {
         webServer: {

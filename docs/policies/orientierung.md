@@ -154,6 +154,7 @@ Es beschreibt:
 - Phase …
   - Ziel: Langfristig Föderation + Delegations-Audits.
   - Ethik-Bezug: Verantwortung skaliert halten.
+
 ## 9 · Governance / Changelog-Pflicht
 
 Alle Änderungen an:
@@ -166,6 +167,8 @@ Alle Änderungen an:
 
 ## 10 · Build- und CI-Policy
 
+Folgende Grundsätze gelten für lokale Entwicklung und CI:
+
 - **Lokales Tooling (`scripts/tools/yq-pin.sh`)** hält `yq` ohne Root-Rechte aktuell. Das Skript
   erkennt Binär-/Tarball-Varianten, prüft Checksums und nutzt erweiterte Curl-Retries, um
   Entwickler:innen auf Workstations oder Codespaces unabhängig vom Runner-Setup zu machen.
@@ -175,3 +178,4 @@ Alle Änderungen an:
 - **Link-Checks:** Das CI setzt auf eine „flake-freie“ Konfiguration (`--retry`, limitierte
   Parallelität) als Blocker. Der separate Watchdog `links.yml` läuft nachts bzw. manuell und
   meldet Ausfälle, bricht aber keine Deployments.
+
