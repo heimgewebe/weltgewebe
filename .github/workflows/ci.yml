@@ -193,11 +193,13 @@ jobs:
         with:
           args: >
             --no-progress
-            --accept 200,206,301,302,429
+            --accept 200,206,301,302,308,429
             --timeout 15s
             --max-concurrency 3
             --retry-wait-time 3s
             --max-retries 3
+            --user-agent "heimgewebe-ci-lychee"
+            --exclude-mail
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path '**/node_modules/**'
             --exclude-path '**/dist/**'
@@ -216,7 +218,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update
+            sudo apt-get update -qq
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
           fi
 
