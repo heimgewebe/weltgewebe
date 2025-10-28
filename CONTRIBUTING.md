@@ -143,3 +143,17 @@ CI-Gates (brechen Builds):
 - Lints/Formatter (Web: ESLint/Prettier; API/Worker: cargo fmt, cargo clippy -D).
 - Tests (npm test, cargo test).
 - Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
+
+## 4. Tooling-Differenzierung (Lokal vs. CI)
+
+- **`scripts/tools/yq-pin.sh`** – lokaler Installer, der Download-Ziele automatisch erkennt, mit
+  Wiederholungen (`curl --retry*`) lädt, Checksums prüft und alles unter `~/.local/bin`
+  ablegt (inkl. PATH-Hinzufügung). Gedacht für reproduzierbare lokale Umgebung ohne sudo.
+- **CI-Workflows (`.github/workflows/ci.yml`)** – bringen ihren eigenen `yq`-Installer mit
+  (pinned Version, direkter Download nach `/usr/local/bin`), weil Runner root-Rechte und einen
+  frischen FS besitzen. Erwartung: kein Re-Use des Shell-Skripts im CI, damit der Workflow
+  ohne Dotfiles/Cache deterministisch bleibt.
+- **Link-Prüfung:** Im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige
+  Parallelität, definierte Accept-Codes), um False Positives/Flakes zu vermeiden. Das
+  Nacht- und On-Demand-Workflow `links.yml` nutzt bewusst ein reduziertes Profil als
+  Watchdog, schlägt aber nicht als Qualitäts-Gate fehl.

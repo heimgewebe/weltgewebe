@@ -36,10 +36,21 @@ function applyAriaHidden(el: Element, on: boolean) {
   }
 }
 
+/**
+ * Setze `window.__FORCE_INERT_POLYFILL__ = true`, um den Polyfill auch bei
+ * moderner Browser-Unterstützung explizit zu aktivieren (z. B. für Tests).
+ */
 export function ensureInertPolyfill() {
   // SSR-Schutz und moderne Browser mit nativer inert-Unterstützung überspringen.
   if (typeof document === 'undefined' || typeof HTMLElement === 'undefined') return;
-  if ('inert' in HTMLElement.prototype) return;
+  const win = window as typeof window & {
+    __FORCE_INERT_POLYFILL__?: boolean;
+    __INERT_POLYFILL_ACTIVE__?: boolean;
+  };
+  const forcePolyfill = win.__FORCE_INERT_POLYFILL__ === true;
+  if (!forcePolyfill && 'inert' in HTMLElement.prototype) return;
+  if (win.__INERT_POLYFILL_ACTIVE__) return;
+  win.__INERT_POLYFILL_ACTIVE__ = true;
 
   // Style-Schutz nur einmal injizieren (Pointer & Selection aus).
   const styleId = 'wg-inert-polyfill-style';
