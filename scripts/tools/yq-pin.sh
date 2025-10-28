@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Minimaler Installer/Pinner für mikefarah/yq v4.x
 # Usage: scripts/tools/yq-pin.sh ensure [<version>]
-# Default: 4.44.0
+# Default: 4.47.2
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${YQ_VERSION:-4.44.0}}"
+REQ_VER="${2:-${YQ_VERSION:-4.47.2}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
@@ -70,7 +70,7 @@ download_yq() {
   local base="yq_${os}_${arch}"
   local url_base="https://github.com/mikefarah/yq/releases/download/v${ver}"
   local asset=""
-  local tmp_dir
+  local tmp_dir=""
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir}"' EXIT INT TERM
 
@@ -79,15 +79,20 @@ download_yq() {
     echo "curl is required to install yq" >&2
     exit 1
   fi
-  if ! command -v sha256sum >/dev/null 2>&1; then
-    echo "sha256sum is required to verify yq downloads" >&2
+  local -a SHA256_CMD
+  if command -v sha256sum >/dev/null 2>&1; then
+    SHA256_CMD=(sha256sum)
+  elif command -v shasum >/dev/null 2>&1; then
+    SHA256_CMD=(shasum -a 256)
+  else
+    echo "no SHA256 tool found (need sha256sum or shasum)" >&2
     exit 1
   fi
 
   # pick asset (plain binary or tarball)
   local -a curl_common curl_retry
   local curl_help=""
-  curl_common=(-fsS --proto '=https' --tlsv1.2)
+  curl_common=(-fsSL --proto '=https' --tlsv1.2)
   curl_retry=(--retry 3 --retry-delay 2)
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
@@ -123,7 +128,7 @@ download_yq() {
     echo "empty checksum file: ${sha_path}" >&2
     exit 1
   fi
-  actual="$(sha256sum "${asset_path}" | awk '{print $1}')"
+  actual="$(${SHA256_CMD[@]} "${asset_path}" | awk '{print $1}')"
   if [[ "${expected}" != "${actual}" ]]; then
     echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
     exit 1
@@ -177,7 +182,7 @@ download_yq() {
     exit 1
   fi
 
-  echo "Installed yq v${installed_ver} → ${BIN}"
+  echo "✓ Installed yq v${installed_ver} → ${BIN}"
 
   if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
     cat >&2 <<'EOF'
