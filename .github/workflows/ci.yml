@@ -105,59 +105,6 @@ jobs:
       - name: Validate project
         run: just ci
 
-  e2e:
-    name: Web E2E
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: [ci]
-    if: ${{ always() }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20.19.0'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('apps/web/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Install dependencies
-        working-directory: apps/web
-        run: |
-          npm ci
-          npx playwright install --with-deps
-
-      - name: Build & start preview
-        working-directory: apps/web
-        env:
-          HOST: 127.0.0.1
-          PORT: 4173
-        run: |
-          npm run build
-          npm run preview -- --port "$PORT" --host "$HOST" &> /tmp/preview.log &
-          npx wait-on "http://$HOST:$PORT"
-
-      - name: Run Playwright tests
-        working-directory: apps/web
-        env:
-          PLAYWRIGHT_HTML_REPORT: playwright-report
-        run: npm run test:ci
-
-      - name: Upload Playwright report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-
-
   web-e2e:
     name: Web E2E
     runs-on: ubuntu-latest
@@ -212,12 +159,17 @@ jobs:
           PLAYWRIGHT_HTML_REPORT: playwright-report
         run: npm run test:ci
 
+      - name: Dump preview log on failure
+        if: ${{ failure() }}
+        run: cat /tmp/preview.log || true
+
       - name: Upload Playwright report
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ github.run_id }}
+          name: playwright-report-${{ github.run_id }}-${{ github.job }}
           path: apps/web/playwright-report
+          if-no-files-found: ignore
 
   lint-docs:
     name: Docs & Shell Hygiene
