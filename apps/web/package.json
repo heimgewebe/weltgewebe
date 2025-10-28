@@ -20,7 +20,8 @@
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=line",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
-    "sync": "svelte-kit sync"
+    "sync": "svelte-kit sync",
+    "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci"
   },
   "overrides": {
     "cookie": "npm:cookie@0.7.2"
