@@ -9,7 +9,7 @@ ci:
 		npm ci
 		npm run sync
 		npm run build
-		npm run check:ci
+		npm run ci
 		popd >/dev/null
 	fi
 	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
@@ -48,16 +48,16 @@ observ:    # monitoring profile (optional)
 	docker compose -f infra/compose/compose.observ.yml up -d
 
 stream:    # event streaming profile (optional)
-        docker compose -f infra/compose/compose.stream.yml up -d
+	docker compose -f infra/compose/compose.stream.yml up -d
 
 # ---------- Drills ----------
 drill:     # run disaster recovery drill smoke sequence
-        just up
-        ./tools/drill-smoke.sh
+	just up
+	./tools/drill-smoke.sh
 
 # ---------- DB ----------
 db-wait:    # wait for database to be ready
-        ./ci/scripts/db-wait.sh
+	./ci/scripts/db-wait.sh
 
 db-migrate:    # run database migrations
 	cargo run -p api -- migrate

@@ -18,11 +18,23 @@ ensure_path() {
   esac
 }
 
+parse_version() {
+  local out ver
+  if ! out="$("$@" --version 2>/dev/null)"; then
+    echo ""
+    return
+  fi
+  if ! ver="$(printf '%s\n' "${out}" | grep -Eo '[0-9]+(\.[0-9]+){1,3}' | head -n1)"; then
+    ver=""
+  fi
+  printf '%s\n' "${ver}"
+}
+
 current_version() {
   if command -v yq >/dev/null 2>&1; then
-    yq --version | awk '{print $3}' || true
+    parse_version yq || true
   elif [[ -x "${BIN}" ]]; then
-    "${BIN}" --version | awk '{print $3}' || true
+    parse_version "${BIN}" || true
   else
     echo ""
   fi
@@ -146,7 +158,34 @@ download_yq() {
     mv "${extracted}" "${BIN}"
   fi
 
-  echo "✓ Installed yq v${ver} → ${BIN}" >&2
+  # Refresh command hash tables for interactive shells that source this script.
+  hash -r 2>/dev/null || true
+
+  if ! "${BIN}" --version >/dev/null 2>&1; then
+    echo "installed yq at ${BIN} is not executable" >&2
+    exit 1
+  fi
+
+  local installed_ver
+  installed_ver="$(parse_version "${BIN}")"
+  if [[ -z "${installed_ver}" ]]; then
+    echo "failed to detect installed yq version from ${BIN}" >&2
+    exit 1
+  fi
+  if [[ "${installed_ver}" != "${ver}" ]]; then
+    echo "installed yq version ${installed_ver} does not match requested ${ver}" >&2
+    exit 1
+  fi
+
+  echo "Installed yq v${installed_ver} → ${BIN}"
+
+  if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
+    cat >&2 <<'EOF'
+Note: ${BIN_DIR} is not currently in your PATH on macOS. Add the following to your shell profile to use yq without the full path:
+  export PATH="${BIN_DIR}:$PATH"
+EOF
+  fi
+
   rm -rf "${tmp_dir}"
   trap - EXIT INT TERM
 }

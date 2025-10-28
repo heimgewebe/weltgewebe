@@ -12,7 +12,6 @@ function applyAriaHidden(el: Element, on: boolean) {
     if (!previousAriaHidden.has(element)) {
       previousAriaHidden.set(element, element.getAttribute('aria-hidden'));
     }
-
     if (element.getAttribute('aria-hidden') !== 'true') {
       element.setAttribute('aria-hidden', 'true');
     }
@@ -23,6 +22,7 @@ function applyAriaHidden(el: Element, on: boolean) {
   previousAriaHidden.delete(element);
 
   if (previous === undefined) {
+    // Wir haben den ursprünglichen Zustand nicht gesehen → defensiv säubern.
     if (element.getAttribute('aria-hidden') === 'true') {
       element.removeAttribute('aria-hidden');
     }
@@ -38,17 +38,21 @@ function applyAriaHidden(el: Element, on: boolean) {
 
 /**
  * Setze `window.__FORCE_INERT_POLYFILL__ = true`, um den Polyfill auch bei
- * moderner Browser-Unterstützung explizit zu aktivieren (z. B. für Tests).
+ * moderner Browser-Unterstützung explizit zu aktivieren (z. B. für Tests).
  */
 export function ensureInertPolyfill() {
   // SSR-Schutz und moderne Browser mit nativer inert-Unterstützung überspringen.
   if (typeof document === 'undefined' || typeof HTMLElement === 'undefined') return;
+
   const win = window as typeof window & {
     __FORCE_INERT_POLYFILL__?: boolean;
     __INERT_POLYFILL_ACTIVE__?: boolean;
   };
+
   const forcePolyfill = win.__FORCE_INERT_POLYFILL__ === true;
   if (!forcePolyfill && 'inert' in HTMLElement.prototype) return;
+
+  // Idempotenz: nur einmal aktivieren
   if (win.__INERT_POLYFILL_ACTIVE__) return;
   win.__INERT_POLYFILL_ACTIVE__ = true;
 
@@ -68,38 +72,65 @@ export function ensureInertPolyfill() {
     document.head.appendChild(style);
   }
 
-  // Aria-Hidden initial anwenden
+  // aria-hidden initial anwenden
   const syncAll = () => {
-    document.querySelectorAll<HTMLElement>('[inert]').forEach((el) => applyAriaHidden(el, true));
+    document
+      .querySelectorAll<HTMLElement>('[inert]')
+      .forEach((el) => applyAriaHidden(el, true));
   };
   syncAll();
 
   // Fokus-, Click- & Tastatur-Blocker
-  document.addEventListener('focusin', (e) => {
-    const t = e.target as HTMLElement | null;
-    if (t && t.closest('[inert]')) {
-      (t as HTMLElement).blur?.();
-      (document.activeElement as HTMLElement | null)?.blur?.();
-    }
-  }, true);
-  document.addEventListener('click', (e) => {
-    const t = e.target as HTMLElement | null;
-    if (t && t.closest('[inert]')) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Tab') {
+  document.addEventListener(
+    'focusin',
+    (e) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('[inert]')) {
+        t.blur?.();
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      }
+    },
+    { capture: true }
+  );
+
+  document.addEventListener(
+    'click',
+    (e) => {
       const t = e.target as HTMLElement | null;
       if (t && t.closest('[inert]')) {
         e.preventDefault();
         e.stopPropagation();
       }
-    }
-  }, true);
+    },
+    { capture: true }
+  );
 
-  // Reagiere auf spätere inert-Attribute
+  document.addEventListener(
+    'keydown',
+    (e) => {
+      const active = document.activeElement as HTMLElement | null;
+      const target = e.target as HTMLElement | null;
+      const withinInert = (node: HTMLElement | null) =>
+        !!node && !!node.closest?.('[inert]');
+
+      if (withinInert(active) || withinInert(target)) {
+        // Tab-/Enter-/Space-Interaktionen blocken
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          e.stopPropagation();
+          active?.blur?.();
+          return;
+        }
+        if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    },
+    { capture: true }
+  );
+
+  // Beobachte nachträgliche Änderungen an 'inert' und neu eingefügte Knoten
   const mo = new MutationObserver((muts) => {
     for (const m of muts) {
       if (m.type === 'attributes' && m.attributeName === 'inert' && m.target instanceof HTMLElement) {
@@ -116,11 +147,16 @@ export function ensureInertPolyfill() {
           if (node.hasAttribute('inert')) {
             applyAriaHidden(node, true);
           }
-
           node.querySelectorAll('[inert]').forEach((el) => applyAriaHidden(el, true));
         }
       }
     }
   });
-  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['inert'], childList: true, subtree: true });
+
+  mo.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['inert'],
+    childList: true,
+    subtree: true,
+  });
 }

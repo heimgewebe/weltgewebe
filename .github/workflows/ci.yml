@@ -27,34 +27,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install yq (for toolchain.versions.yml)
+        env:
+          YQ_VERSION: 4.44.1
         run: |
-          set -euo pipefail
-          YQ_VERSION=4.44.1
-          ARCH="$(uname -m)"
-          case "${ARCH}" in
-            x86_64)  BIN="yq_linux_amd64" ;;
-            aarch64|arm64) BIN="yq_linux_arm64" ;;
-            *) echo "Unsupported arch for yq: ${ARCH}" >&2; exit 1 ;;
-          esac
-          echo "yq installer: detected architecture '${ARCH}'"
-          URL_BASE="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}"
-          BIN_URL="${URL_BASE}/${BIN}"
-          TMP="$(mktemp)"
-          TMP_SHA="${TMP}.sha256"
-          trap 'rm -f "${TMP}" "${TMP_SHA}"' EXIT
-          echo "Downloading ${BIN_URL}"
-          curl -fsSL "${BIN_URL}" -o "${TMP}"
-          # Verify against matching checksum for the exact binary
-          curl -fsSL "${BIN_URL}.sha256" -o "${TMP_SHA}"
-          EXPECTED="$(awk '{print $1}' "${TMP_SHA}")"
-          ACTUAL="$(sha256sum "${TMP}" | awk '{print $1}')"
-          if [ "${EXPECTED}" != "${ACTUAL}" ]; then
-            echo "yq checksum mismatch: expected ${EXPECTED}, got ${ACTUAL}" >&2
-            exit 1
-          fi
-          sudo install -m 0755 "${TMP}" /usr/local/bin/yq
-          rm -f "${TMP}" "${TMP_SHA}"
-          trap - EXIT
+          scripts/tools/yq-pin.sh ensure "${YQ_VERSION}"
           yq --version
 
       - name: Read toolchain versions
@@ -112,35 +88,9 @@ jobs:
         env:
           UV_VERSION: ${{ env.UV_VERSION }}
         run: |
-          set -euo pipefail
-          mkdir -p "$HOME/.local/bin"
-          ARCH="$(uname -m)"
-          case "${ARCH}" in
-            x86_64)  TARBALL="uv-x86_64-unknown-linux-gnu.tar.gz" ;;
-            aarch64) TARBALL="uv-aarch64-unknown-linux-gnu.tar.gz" ;;
-            arm64)   TARBALL="uv-aarch64-unknown-linux-gnu.tar.gz" ;;
-            *) echo "Unsupported arch: ${ARCH}" >&2; exit 1 ;;
-          esac
-          URL="https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/${TARBALL}"
-          echo "Downloading ${URL}"
-          TMP_TGZ="$(mktemp)"
-          TMP_SHA="${TMP_TGZ}.sha256"
-          trap 'rm -f "${TMP_TGZ}" "${TMP_SHA}"' EXIT
-          curl -fL "$URL" -o "${TMP_TGZ}"
-          if curl -fsL "https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/SHA256SUMS" -o "${TMP_SHA}"; then
-            (cd "$(dirname "${TMP_TGZ}")" && grep " ${TARBALL}$" "${TMP_SHA}" | sha256sum -c -)
-          fi
-          tar xzf "${TMP_TGZ}" -C "$HOME/.local/bin" uv
-          chmod +x "$HOME/.local/bin/uv"
-          export PATH="$HOME/.local/bin:$PATH"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          scripts/tools/uv-pin.sh ensure "${UV_VERSION}"
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          INSTALLED=$(uv --version | awk '{print $2}')
-          if [[ "${INSTALLED}" != "${UV_VERSION}" ]]; then
-            echo "Expected uv ${UV_VERSION}, got ${INSTALLED}" >&2
-            exit 1
-          fi
-          trap - EXIT
+          uv --version
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -154,6 +104,58 @@ jobs:
 
       - name: Validate project
         run: just ci
+
+  e2e:
+    name: Web E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [ci]
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0'
+          cache: 'npm'
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('apps/web/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps
+
+      - name: Build & start preview
+        working-directory: apps/web
+        env:
+          HOST: 127.0.0.1
+          PORT: 4173
+        run: |
+          npm run build
+          npm run preview -- --port "$PORT" --host "$HOST" &> /tmp/preview.log &
+          npx wait-on "http://$HOST:$PORT"
+
+      - name: Run Playwright tests
+        working-directory: apps/web
+        env:
+          PLAYWRIGHT_HTML_REPORT: playwright-report
+        run: npm run test:ci
+
+      - name: Upload Playwright report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
 
 
   web-e2e:
