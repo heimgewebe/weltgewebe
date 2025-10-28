@@ -60,15 +60,17 @@ Data Lifecycle & DSGVO-Compliance
 
 Disaster Recovery
   •  Regelmäßige Drills: Mindestens vierteljährlich führen wir einen DR-Drill durch. Dabei simulieren wir einen
-     Totalausfall des primären Rechenzentrums. In jedem Drill wird unsere Infrastruktur nach definiertem RPO/RTO-Konzept
+     Totalausfall des primären Rechenzentrums.
+     In jedem Drill wird unsere Infrastruktur nach definiertem RPO/RTO-Konzept
      in einer sauberen Umgebung neu aufgebaut.
   •  Rebuild + Replay: Der Drill umfasst: (1) Neuaufbau aller Cluster (Nomad, DBs, NATS, etc.) mit Infrastruktur-as-
      Code, (2) Event-Replay: Verarbeitung gespeicherter Events aus der Outbox/Historie, um den Datenstand zu
      rekonstruieren, (3) Verifikation: Konsistenz-Checks zwischen Quellsystem und Wiederherstellung. Alle Schritte
      werden dokumentiert und gemessen (Recovery-Time, Datenverlust).
-  •  Continuous Testing: Diese Übung ist Teil eines kontinuierlichen Verbesserungsprozesses. Erkenntnisse fließen in die
-     Systemhärtung ein (z.B. Code-Updates, Automatisierung). TestRail empfiehlt, DR-Prozesse regelmäßig zu validieren,
-     damit das Team eingespielt bleibt.
+  •  Continuous Testing: Diese Übung ist Teil eines kontinuierlichen Verbesserungsprozesses.
+     Erkenntnisse fließen in die
+     Systemhärtung ein (z.B. Code-Updates, Automatisierung).
+     TestRail empfiehlt, DR-Prozesse regelmäßig zu validieren, damit das Team eingespielt bleibt.
 
 Service Level Objectives (SLO) & Alerts
   •  Routen-granulare SLOs: Für jeden Haupt-Service bzw. Endpunkt definieren wir eigene SLOs (z.B. 99,9 % Verfügbarkeit
@@ -86,9 +88,11 @@ Suche (Typesense / MeiliSearch)
   •  Primäre Suche: Typesense: Als schnellere Suchlösung setzen wir Typesense ein. Typesense bietet ultraschnelle,
      typos-tolerante Volltextsuche und einfache Konfiguration. Damit können wir Instant-Suchergebnisse und
      Autovervollständigung gewährleisten.
-  •  Fallback: MeiliSearch: Als sekundäre Engine dient MeiliSearch. Sie überzeugt durch entwicklerfreundliches Setup und
-     extrem schnelle Indexierung. Fällt Typesense aus oder erreicht es Kapazitätsgrenzen, schalten wir automatisch auf
-     MeiliSearch um. Beide Systeme werden laufend via Monitoring auf ihre Ressourcen- und Durchsatz-Zahlen geprüft.
+  •  Fallback: MeiliSearch: Als sekundäre Engine dient MeiliSearch.
+     Sie überzeugt durch entwicklerfreundliches Setup und extrem schnelle Indexierung.
+     Fällt Typesense aus oder erreicht es Kapazitätsgrenzen, schalten wir automatisch auf
+     MeiliSearch um.
+     Beide Systeme werden laufend via Monitoring auf ihre Ressourcen- und Durchsatz-Zahlen geprüft.
   •  DX-Metriken: Für Entwickler-Effizienz („Developer Experience“) tracken wir Kennzahlen wie Time-to-Market von
      Suchfeatures, Code-Review-Durchlaufzeiten und Einrichtungsaufwand. Diese Metriken sorgen dafür, dass wir die
      Wartbarkeit und Erweiterbarkeit unserer Suche kontinuierlich verbessern können.
@@ -99,10 +103,11 @@ Kostenmanagement & KPIs
   •  S2 Wachstum: +50 % Nutzer, saisonale Peak-Zeiten.
   •  S3 Spitzenlast: z.B. „Black Friday“-ähnlicher Ansturm (2–3× Basis).
   •  S4 Extremfall: Ungeschätzter Extrem-Traffic (Worst-Case).
-In einer Kosten-Tabelle modellieren wir für jedes Szenario Sessions/Monat und Bandbreitenbedarf und berechnen die
-ungefähren Cloud-Kosten (z.B. Instanz-Stunden, Daten-Egress, Speichervolumen). Darin führen wir auch geschätzte KPIs wie
-€ pro Session oder € pro GB auf. Solche Einheitenwerte erlauben es, Kostenentwicklungen zu interpretieren:
-„Kosten/Nutzer“ ist ein aussagekräftiger FinOps-KPI.
+  In einer Kosten-Tabelle modellieren wir für jedes Szenario Sessions/Monat und Bandbreitenbedarf
+  und berechnen die ungefähren Cloud-Kosten (z.B. Instanz-Stunden, Daten-Egress, Speichervolumen).
+  Darin führen wir auch geschätzte KPIs wie € pro Session oder € pro GB auf.
+  Solche Einheitenwerte erlauben es, Kostenentwicklungen zu interpretieren:
+  „Kosten/Nutzer“ ist ein aussagekräftiger FinOps-KPI.
   •  KPI-Metriken: Basis-KPIs sind u.a. „€ pro Session“, „€ pro App-Request“, „€ pro GB Traffic“. Studien empfehlen,
      Cloud-Kosten in Relation zum Traffic zu setzen (z.B. Cost per Session). Wir definieren Schwellenwerte (z.B. Ziel:
      < €1/Session) und überwachen Abweichungen. Die KPI-Berichte werden monatlich aktualisiert.
@@ -172,9 +177,9 @@ Observability & Runbooks
     (Woche 1–2: Systemüberblick, Account-Setup, Dev-Umgebung)
     und geht bis zu Incident-Runbooks (z.B. „Netzwerkausfall“, „Datenbank-Recovery“).
     Runbooks minimieren Fehler im Stresstest und sorgen für reproduzierbare Abläufe.
-  •  Onboarding (Woche 1–2):
-    In den ersten zwei Wochen erhält jeder neue Entwickler klare Dokumentation zu Infrastruktur, Tools, Zugangsdaten und
-    Erst-Checks (Smoke-Tests).
+    •  Onboarding (Woche 1–2):
+      In den ersten zwei Wochen erhält jeder neue Entwickler klare Dokumentation zu Infrastruktur,
+      Tools, Zugangsdaten und Erst-Checks (Smoke-Tests).
     Themen sind u.a. Code-Repo, CI/CD-Pipeline, Monitoring-Zugriff, evtl. Testumgebung-Einrichtung.
     Diese „Woche-1“-Dokumente sind versioniert und werden regelmäßig aktualisiert.
   •  Quartalsweise Audits:
