@@ -20,7 +20,6 @@ verwenden.
 > HTML-Reports landen unter `apps/web/playwright-report` (überschreibbar via
 > `PLAYWRIGHT_HTML_REPORT`). CI-Artefakt-Uploads sollten sowohl den Ordner als auch die Datei
 > `apps/web/playwright-report/results.xml` einsammeln.
-
 > [!NOTE]
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
 

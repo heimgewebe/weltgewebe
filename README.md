@@ -13,7 +13,6 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
 
 > **Hinweis / Scope**
->
 > - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
 > - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway;
 >   **kein Direktzugriff** auf JSONL-Dateien.
@@ -65,12 +64,16 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
 ### Web-E2E-Quickstart (Preview)
 
-Abgeleitet aus dem manuellen CI-Workflow (siehe `.github/workflows/web-e2e.yml`). Damit Playwright lokal zuverlässig läuft, orientiere dich an den folgenden Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
+Abgeleitet aus dem manuellen CI-Workflow (siehe `.github/workflows/web-e2e.yml`). Damit Playwright
+lokal zuverlässig läuft, orientiere dich an den folgenden Schritten – zusätzliche Details findest du
+bei Bedarf in der Workflowdatei:
 
 1. Voraussetzungen: Node.js ≥ 20.19 (oder ≥ 22.12).
+
    ```bash
    corepack enable
    ```
+
    (aktiviert npm ≥ 10, falls noch nicht global geschehen)
 2. Dependencies installieren:
 
@@ -92,7 +95,8 @@ Abgeleitet aus dem manuellen CI-Workflow (siehe `.github/workflows/web-e2e.yml`)
    npm run build
    ```
 
-5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard: lokal 4173, im CI 5173; via `PORT` überschreibbar):
+5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard: lokal 4173, im CI
+   5173; via `PORT` überschreibbar):
 
    ```bash
    npx playwright test
