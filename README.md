@@ -13,7 +13,6 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
 
 > **Hinweis / Scope**
->
 > - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
 > - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway;
 >   **kein Direktzugriff** auf JSONL-Dateien.
@@ -74,6 +73,7 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
    ```bash
    corepack enable
    ```
+
    (aktiviert npm ≥ 10, falls noch nicht global geschehen)
 2. Dependencies installieren:
    
