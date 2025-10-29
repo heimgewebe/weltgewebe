@@ -19,6 +19,7 @@
     "test": "playwright test",
     "test:report": "playwright show-report",
     "test:ci": "playwright test",
+    "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "svelte-kit sync",
     "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci"

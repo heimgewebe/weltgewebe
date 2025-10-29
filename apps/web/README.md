@@ -56,6 +56,11 @@ Legt `public/demo.png` an.
 
 ## Tests
 
+### Tests & Reports
+
+Playwright legt lokale HTML-Reports unter `apps/web/playwright-report` ab. Öffne sie bei
+Bedarf mit `npx playwright show-report playwright-report`.
+
 ### Playwright (Drawer + Keyboard)
 
 ```bash
