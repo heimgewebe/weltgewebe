@@ -10,7 +10,7 @@ env_priority:
 
 tooling:
   uv:
-    version: "0.7.x"  # intentionally pinned; revisit after 0.8.x stabilizes
+    version: "0.8.x"  # aligned with toolchain.versions.yml
   python:
     version: "3.12"
     uv: true

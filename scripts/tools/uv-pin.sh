@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Installer/Pinner for astral-sh/uv releases
 # Usage: scripts/tools/uv-pin.sh ensure [<version>]
-# Default version: 0.7.2 (matches toolchain.versions.yml)
+# Default version: 0.8.0 (matches toolchain.versions.yml)
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${UV_VERSION:-0.7.2}}"
+REQ_VER="${2:-${UV_VERSION:-0.8.0}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/uv"
 
@@ -101,14 +101,20 @@ download_uv() {
   fi
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' EXIT INT TERM
+  trap '[[ -n "${tmpdir:-}" ]] && rm -rf "${tmpdir}"' EXIT INT TERM
 
   tarball="${tmpdir}/${asset}"
   checksum_file="${tmpdir}/SHA256SUMS"
 
   echo "Downloading uv v${ver} (${asset})"
-  curl_fetch "${url}" -L -o "${tarball}"
-  curl_fetch "https://github.com/astral-sh/uv/releases/download/v${ver}/SHA256SUMS" -L -o "${checksum_file}"
+  if ! curl_fetch "${url}" -L -o "${tarball}"; then
+    echo "failed to download uv release asset from ${url}" >&2
+    exit 1
+  fi
+  if ! curl_fetch "https://github.com/astral-sh/uv/releases/download/v${ver}/SHA256SUMS" -L -o "${checksum_file}"; then
+    echo "failed to download uv checksums for v${ver}" >&2
+    exit 1
+  fi
 
   if ! grep " ${asset}" "${checksum_file}" | sha256sum -c -; then
     echo "uv checksum verification failed for ${asset}" >&2
