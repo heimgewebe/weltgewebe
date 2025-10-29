@@ -1,6 +1,6 @@
 # Bash-Tooling-Richtlinien
 
-Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt entwickeln, prüfen und ausführen.  
+Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt entwickeln, prüfen und ausführen.
 Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezifischen Vorgaben
 wie Devcontainer-Setup, CLI-Bootstrap und SemVer.
 
@@ -50,24 +50,24 @@ wie Devcontainer-Setup, CLI-Bootstrap und SemVer.
 ### CLI-Bootstrap (`wgx`)
 
 - Debug-Ausgabe optional via `WGX_DEBUG=1`.
-- Dispatcher validiert Subcommands:  
-  - Ohne Argument → Usage + `exit 1`.  
-  - Unbekannte Befehle → Fehlermeldung auf Englisch (für CI-Logs).  
+- Dispatcher validiert Subcommands:
+  - Ohne Argument → Usage + `exit 1`.
+  - Unbekannte Befehle → Fehlermeldung auf Englisch (für CI-Logs).
   - Usage-Hilfe auf `stderr`.
 
 ### SemVer-Caret-Ranges
 
 - `^0.0.x` → nur Patch-Updates erlaubt.
-- Major-Sprünge blockiert (`^1.2.3` darf nicht auf `2.0.0` gehen).  
+- Major-Sprünge blockiert (`^1.2.3` darf nicht auf `2.0.0` gehen).
 - Automatisierte Bats-Tests dokumentieren dieses Verhalten.
 
 ## Troubleshooting
 
-- Legacy-Skripte mit `# shellcheck disable=...` markieren und begründen.  
-- Plattformunterschiede (Linux/macOS) im Skript kommentieren.  
+- Legacy-Skripte mit `# shellcheck disable=...` markieren und begründen.
+- Plattformunterschiede (Linux/macOS) im Skript kommentieren.
 - `shfmt`-Fehler → prüfen, ob Tabs statt Spaces verwendet wurden (wir nutzen nur Spaces).
 
 ---
 
-Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in produktive Skripte überführt.  
+Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in produktive Skripte überführt.
 Weitere Infos werden im Fahrplan dokumentiert.
