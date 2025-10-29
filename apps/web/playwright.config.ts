@@ -15,11 +15,7 @@ const htmlReporter: ReporterDescription = [
 const isCI = /^(1|true)$/i.test(process.env.CI ?? "");
 const consoleReporter: ReporterDescription = isCI ? ["dot"] : ["line"];
 const junitReporter: ReporterDescription = ["junit", { outputFile: resolve(htmlReportDir, "results.xml") }];
-const reporter: ReporterDescription[] = [
-  consoleReporter,
-  htmlReporter,
-  ...(isCI ? [junitReporter] : [])
-];
+const reporter: ReporterDescription[] = [consoleReporter, htmlReporter, junitReporter];
 
 export default defineConfig({
   testDir: "tests",

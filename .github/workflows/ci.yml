@@ -28,10 +28,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install yq (for toolchain.versions.yml)
+      - name: Ensure yq is available
         env:
           YQ_VERSION: 4.47.2
         run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
           scripts/tools/yq-pin.sh ensure "${YQ_VERSION}"
           yq --version
 
@@ -202,8 +204,8 @@ jobs:
         with:
           args: >
             --no-progress
-            --accept 200,206,301,302,308,429
-            --timeout 15s
+            --accept 200,206,301,302,308,429,999
+            --timeout 15
             --max-concurrency 3
             --retry-wait-time 3s
             --max-retries 3

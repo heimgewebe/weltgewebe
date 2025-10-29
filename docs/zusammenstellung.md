@@ -44,8 +44,8 @@ Inhalte (Knoten, Fäden, Garn)
   Delegationsfäden. Delegationsfäden verlaufen von einer Garnrolle zu einer anderen. Nebeneinanderliegende Fäden und
   Garne, die von einer Rolle zu einem Knoten führen, überlappen sich zunehmend, um zu dicke Linien zu vermeiden.
 - Vergänglichkeit und Beständigkeit (Garn): Fäden verblassen sukzessive innerhalb von 7 Tagen, wenn sie nicht durch
-  einen Klick auf den "Verzwirnungsbutton" zu "Garn" gemacht werden. Verzwirnte Fäden (Garn) sind dauerhaft und schützen
-  Inhalte sowie den gesamten Knoten vor Veränderung und Auflösung.
+  einen Klick auf den "Verzwirnungsbutton" zu "Garn" gemacht werden.
+  Verzwirnte Fäden (Garn) sind dauerhaft und schützen Inhalte sowie den gesamten Knoten vor Veränderung und Auflösung.
   Strukturknoten
   Dies sind permanente und immer sichtbare Knoten für zentrale Funktionen:
 - Gewebekonto: Dient der Finanzverwaltung und der Übersicht über Goldfäden.
@@ -64,11 +64,12 @@ III. Zeitlichkeit, Sichtbarkeit und Pseudonymisierung
     Autorenname wird dann durch "RoN" (Rolle ohne Namen) ersetzt.
   - Die anonymisierten Fäden führen dann nicht mehr zur ursprünglichen Garnrolle, sondern zum zentralen
     RoN-Platzhalter. Das Wissen bleibt so im Gewebe erhalten.
-- Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den RoN-Prozess. Beiträge, die
-  jünger als x Tage sind, bleiben so lange namentlich sichtbar, bis diese Frist erreicht ist. Am Ende wird die Garnrolle
-  des Nutzers gelöscht.
+- Ausstiegsprozess: Wenn ein Nutzer die Plattform verlässt, durchlaufen alle seine Daten den RoN-Prozess.
+  Beiträge, die jünger als x Tage sind, bleiben so lange namentlich sichtbar, bis diese Frist erreicht ist.
+  Am Ende wird die Garnrolle des Nutzers gelöscht.
 - Eigene Beiträge und Aktionen können per Tombstone + Key-Erase uneinsehbar gemacht werden.
-- per opt-in kann man die Verortung der eigenen Garnrolle ungenauer machen. Ungenauigkeitsradius individuell einstellbar
+- Per Opt-in kann man die Verortung der eigenen Garnrolle ungenauer machen.
+  Der Ungenauigkeitsradius ist individuell einstellbar.
 
 IV. Governance und Demokratische Prozesse
 
@@ -103,13 +104,14 @@ V. Benutzeroberfläche und Nutzererlebnis
   Liste angezeigt. Ein Klick auf einen Listeneintrag zentriert die Karte auf den entsprechenden Nutzer.
 - Widgets: Oben mittig befindet sich das Gewebekonto-Widget (Saldo, Bewegungen), oben rechts der Zugang zum eigenen
   Konto und zur Verifikation.
-- Zeitleiste: Eine Zeitachse am unteren Bildschirmrand ermöglicht die Rückschau auf vergangene Aktivitäten ("Webungen").
+- Zeitleiste: Eine Zeitachse am unteren Bildschirmrand ermöglicht die Rückschau
+  auf vergangene Aktivitäten ("Webungen").
 
 VI. Organisation und Technische Architektur
 
-- Lokale Organisation (Ortswebereien): Das Weltgewebe wird durch lokale "Ortswebereien" konkret umgesetzt. Jede dieser
-  Gruppen verfügt über ein eigenes Gemeinschaftskonto (Gewebekonto) und eine Unterseite auf weltgewebe.net. Föderationen
-  von Ortswebereien sind vorgesehen.
+- Lokale Organisation (Ortswebereien): Das Weltgewebe wird durch lokale "Ortswebereien" konkret umgesetzt.
+  Jede dieser Gruppen verfügt über ein eigenes Gemeinschaftskonto (Gewebekonto) und eine Unterseite auf weltgewebe.net.
+  Föderationen von Ortswebereien sind vorgesehen.
 - Technischer Stack und Verortung: Die Architektur basiert auf Event-Sourcing mit NATS JetStream, PostgreSQL/PostGIS
   und Redis. Knoten und Rollen werden H3-basiert gespeichert, um räumliche Abfragen, Filter und Indizes zu ermöglichen.
 - Hosting und Betrieb:
