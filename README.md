@@ -13,10 +13,12 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
 
 > **Hinweis / Scope**
+>
 > - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
 > - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway;
 >   **kein Direktzugriff** auf JSONL-Dateien.
 > - Entspricht ADR-0001 (Docs-only) und bleibt kompatibel mit den Gates A–D.
+>
 
 ## Getting started
 
@@ -69,39 +71,39 @@ Damit Playwright lokal zuverlässig läuft, orientiere dich an den folgenden
 Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
 
 1. Voraussetzungen: Node.js ≥ 20.19 (oder ≥ 22.12).
-   
-   ```bash
-   corepack enable
-   ```
 
-   (aktiviert npm ≥ 10, falls noch nicht global geschehen)
+    ```bash
+    corepack enable
+    ```
+
+    (aktiviert npm ≥ 10, falls noch nicht global geschehen)
 2. Dependencies installieren:
-   
-   ```bash
-   cd apps/web
-   npm ci
-   ```
+
+    ```bash
+    cd apps/web
+    npm ci
+    ```
 
 3. Playwright-Browser nachrüsten (**einmalig pro Maschine**):
-   
-   ```bash
-   npx playwright install --with-deps
-   # alternativ: npm run test:setup
-   ```
+
+    ```bash
+    npx playwright install --with-deps
+    # alternativ: npm run test:setup
+    ```
 
 4. App builden, damit `npm run preview` die statischen Assets servieren kann:
-   
-   ```bash
-   npm run build
-   ```
+
+    ```bash
+    npm run build
+    ```
 
 5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard:
    lokal 4173, im CI 5173; via `PORT` überschreibbar):
 
-   ```bash
-   npx playwright test
-   # CI-Spiegel: npm run test:ci
-   ```
+    ```bash
+    npx playwright test
+    # CI-Spiegel: npm run test:ci
+    ```
 
 Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
 `npm run preview` läuft (Standard-Ports: lokal 4173, CI 5173; via `PORT` überschreibbar).
