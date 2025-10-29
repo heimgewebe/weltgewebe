@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Installer/Pinner for astral-sh/uv releases
 # Usage: scripts/tools/uv-pin.sh ensure [<version>]
-# Default version: 0.4.20 (matches toolchain.versions.yml)
+# Default version: 0.7.2 (matches toolchain.versions.yml)
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${UV_VERSION:-0.4.20}}"
+REQ_VER="${2:-${UV_VERSION:-0.7.2}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/uv"
 
