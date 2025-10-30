@@ -24,7 +24,11 @@ test.describe("smoke", () => {
 
     const main = page.getByRole("main");
     await expect(main).toBeVisible();
-    await expect(page.locator("h1,h2")).toBeVisible();
+
+    // Die Karte hängt in einem stabilen Container mit der ID #map.
+    await expect(page.locator("#map")).toBeVisible();
+    // Hinweis: Die /map-Route rendert bewusst keine Überschrift-Elemente.
+    // Der Smoke-Test prüft nur Rendering + Fehlerfreiheit, keine Headline-Präsenz.
 
     expect(consoleErrors, consoleErrors.join("\n")).toHaveLength(0);
     expect(pageErrors, pageErrors.join("\n")).toHaveLength(0);
