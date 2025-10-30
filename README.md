@@ -59,6 +59,9 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
 - Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
+- Für lokale Web-E2E-Tests installierst du die Playwright-Browser einmalig mit
+  `npx playwright install --with-deps` (Details unten im Abschnitt
+  [Web-E2E-Quickstart](#web-e2e-quickstart-preview)).
 
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
 > Code-Re-Entry erfolgt über die Gates A–D (siehe
