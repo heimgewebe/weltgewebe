@@ -18,6 +18,30 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
+  docs-changes:
+    name: Detect docs updates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docs:
+              - '**/*.md'
+              - '**/*.yml'
+              - '**/*.yaml'
+              - '.markdownlint.*'
+              - '.yamllint*'
+              - '.github/workflows/ci.yml'
+
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -182,6 +206,8 @@ jobs:
 
   lint-docs:
     name: Docs & Shell Hygiene
+    needs: docs-changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -198,6 +224,15 @@ jobs:
             **/*.md
             !**/node_modules/**
             !**/dist/**
+            !**/.git/**
+
+      - name: Cache lychee responses
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-lychee-
 
       - name: Link check (lychee)
         uses: lycheeverse/lychee-action@v2
@@ -214,6 +249,8 @@ jobs:
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path '**/node_modules/**'
             --exclude-path '**/dist/**'
+            --cache
+            --max-cache-age 1d
             '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
