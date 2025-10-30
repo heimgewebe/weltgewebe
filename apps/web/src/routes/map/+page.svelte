@@ -296,7 +296,7 @@
   }
 </style>
 
-<div class="shell">
+<main class="shell">
   <TopBar
     onToggleLeft={toggleLeft}
     onToggleRight={toggleRight}
@@ -369,5 +369,5 @@
 
   <!-- Zeitleiste -->
   <TimelineDock />
-</div>
+</main>
 
