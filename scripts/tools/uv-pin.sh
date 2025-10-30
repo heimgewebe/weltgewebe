@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Installer/Pinner for astral-sh/uv releases
 # Usage: scripts/tools/uv-pin.sh ensure [<version>]
-# Default version: 0.7.2 (matches toolchain.versions.yml)
+# Default version: 0.8.1 (matches toolchain.versions.yml)
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${UV_VERSION:-0.7.2}}"
+REQ_VER="${2:-${UV_VERSION:-0.8.1}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/uv"
 
@@ -81,7 +81,7 @@ curl_fetch() {
 
 download_uv() {
   local ver="$1"
-  local triple asset url tmpdir tarball checksum_file extracted
+  local triple asset url tmpdir="" tarball checksum_file extracted
 
   triple="$(detect_target)"
   asset="uv-${triple}.tar.gz"
@@ -101,7 +101,7 @@ download_uv() {
   fi
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' EXIT INT TERM
+  trap 'rm -rf "${tmpdir:-}"' EXIT INT TERM
 
   tarball="${tmpdir}/${asset}"
   checksum_file="${tmpdir}/SHA256SUMS"
@@ -126,7 +126,7 @@ download_uv() {
   fi
 
   echo "✓ Installed uv v${ver} → ${BIN}" >&2
-  rm -rf "${tmpdir}" || true
+  rm -rf "${tmpdir:-}" || true
   trap - EXIT INT TERM
 }
 

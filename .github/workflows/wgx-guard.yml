@@ -49,12 +49,13 @@ jobs:
           python -m pip install --disable-pip-version-check --upgrade pip
           python -m pip install --disable-pip-version-check pyyaml==6.0.2
 
+      # --- Schema-Light-Check: Minimal-Validierung des Profils ---
       - name: Run schema-lite check
         run: |
           python - <<'PY'
           import sys, yaml, pathlib
           p = pathlib.Path(".wgx/profile.yml")
-          data = yaml.safe_load(p.read_text(encoding="utf-8"))
+          data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
           if not isinstance(data, dict):
               print("::error::.wgx/profile.yml must be a YAML mapping"); sys.exit(1)
           required_top = ["version","env_priority","tooling","tasks"]
@@ -73,30 +74,63 @@ jobs:
           print("schema-lite ok")
           PY
 
-      - name: (Optional) Cache uv & venv
+      # --- Caching für uv (alle Subprojekte) ---
+      - name: (Optional) Cache uv
         # consider *any* tracked Python project in subdirectories
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/uv.lock', 'uv.lock') }}
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}-${{ hashFiles('**/uv.lock') }}
           restore-keys: |
             uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}-
             uv-${{ runner.os }}-
 
+      - name: (Optional) No Python projects detected
+        if: ${{ hashFiles('**/pyproject.toml') == '' }}
+        run: echo "No Python projects detected – skipping uv bootstrap."
+
+      # --- UV-Bootstrap: Version aus toolchain.versions.yml ableiten ---
       - name: (Optional) UV bootstrap (pyproject present)
         if: ${{ hashFiles('**/pyproject.toml') != '' }}
         run: |
           set -euo pipefail
-          # align with toolchain.versions.yml (0.8.x)
-          python -m pip install --user --disable-pip-version-check 'uv==0.8.*'
+          UV_SERIES_DEFAULT="0.8"
+          if [ -f toolchain.versions.yml ]; then
+            UV_SERIES="$(python - <<'PY'
+import sys
+from pathlib import Path
+import yaml
+t = Path("toolchain.versions.yml")
+d = yaml.safe_load(t.read_text(encoding="utf-8")) or {}
+uv = str(d.get("uv", "")).strip()
+parts = uv.split(".")
+if not uv or len(parts) < 2:
+    print(f"::error::unexpected uv version: {uv}", file=sys.stderr); sys.exit(1)
+print(".".join(parts[:2]))
+PY
+            )"
+          else
+            echo "::warning::toolchain.versions.yml missing → defaulting to uv ${UV_SERIES_DEFAULT}.x"
+            UV_SERIES="$UV_SERIES_DEFAULT"
+          fi
+          echo "expecting uv ${UV_SERIES}.x"
+          if command -v uv >/dev/null 2>&1 && uv --version | grep -qE "^uv ${UV_SERIES//./\\.}\\."; then
+            echo "uv bereits vorhanden (Serie ${UV_SERIES}.x) – überspringe Installation."
+          else
+            python -m pip install --user --disable-pip-version-check "uv==${UV_SERIES}.*"
+          fi
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "::warning::uv not found after installation step"
+          fi
           ver="$(uv --version || true)"
           echo "uv version: $ver"
-          if ! [[ "$ver" =~ ^uv\ 0\.8\. ]]; then
-            echo "::error::uv 0.8.x erwartet, gefunden: $ver"
+          regex="^uv ${UV_SERIES//./\\.}\."
+          if ! [[ "$ver" =~ $regex ]]; then
+            echo "::error::uv ${UV_SERIES}.x erwartet, gefunden: $ver"
             exit 1
           fi
 
@@ -114,6 +148,7 @@ jobs:
             fi
             echo "::endgroup::"
           done
+          echo "uv sync completed with status=${status}"
           exit "$status"
 
       - name: Done
