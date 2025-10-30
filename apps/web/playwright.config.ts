@@ -7,20 +7,63 @@ const htmlReportDir = resolve(
   process.cwd(),
   process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report"
 );
+const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
+  | "never"
+  | "on-failure"
+  | "always";
+const junitOutputName = process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml";
 // Ensure CI uploads always find an HTML report directory.
 const htmlReporter: ReporterDescription = [
   "html",
-  { open: "never", outputFolder: htmlReportDir }
+  { open: htmlOpenSetting, outputFolder: htmlReportDir }
 ];
 const isCI = /^(1|true)$/i.test(process.env.CI ?? "");
 const consoleReporter: ReporterDescription = isCI ? ["dot"] : ["line"];
-const junitReporter: ReporterDescription = ["junit", { outputFile: resolve(htmlReportDir, "results.xml") }];
-const reporter: ReporterDescription[] = [consoleReporter, htmlReporter, junitReporter];
+const junitReporter: ReporterDescription = [
+  "junit",
+  { outputFile: resolve(htmlReportDir, junitOutputName) }
+];
+/**
+ * Reporter aus ENV parsen:
+ *   PW_TEST_REPORTER="dot,html,junit"
+ *   PLAYWRIGHT_HTML_REPORT_OPEN="never|on-failure|always"
+ *   PLAYWRIGHT_JUNIT_OUTPUT_NAME="results.xml"
+ */
+function resolveEnvReporters(): ReporterDescription[] | undefined {
+  const spec = process.env.PW_TEST_REPORTER?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!spec || spec.length === 0) return undefined;
+
+  const mapped: ReporterDescription[] = [];
+  for (const key of spec) {
+    if (key === "dot" || key === "line" || key === "list") {
+      mapped.push([key]);
+    } else if (key === "html") {
+      mapped.push(["html", { open: htmlOpenSetting, outputFolder: htmlReportDir }]);
+    } else if (key === "junit") {
+      mapped.push([
+        "junit",
+        { outputFile: resolve(htmlReportDir, junitOutputName) }
+      ]);
+    } else {
+      // Fallback: Unbekannte Bezeichner ignorieren
+    }
+  }
+  return mapped.length ? mapped : undefined;
+}
+
+const envReporters = resolveEnvReporters();
+const reporter: ReporterDescription[] = envReporters ?? [
+  consoleReporter,
+  htmlReporter,
+  junitReporter
+];
 
 export default defineConfig({
   testDir: "tests",
   timeout: 60_000,
-  retries: process.env.CI ? 1 : 0,
+  retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? undefined : 2,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
