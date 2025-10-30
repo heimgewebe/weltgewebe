@@ -88,8 +88,9 @@ Es beschreibt:
   - Richtwert: 28 Tage (4 Wochen).
   - Herkunft: § IV Delegation.
 
-> **Hinweis:** Die Werte 7/7/28 Tage sind aus der Beschreibung im Repo abgeleitet – nicht normativ festgelegt.
-> Änderungen erfordern Governance-Beschluss + Changelog-Eintrag.
+> **Hinweis:** Die Werte 7/7/28 Tage sind aus der Beschreibung im Repo abgeleitet –
+> nicht normativ festgelegt. Änderungen erfordern Governance-Beschluss +
+> Changelog-Eintrag.
 
 ---
 

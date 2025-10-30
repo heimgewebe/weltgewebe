@@ -1,6 +1,7 @@
 # Bash-Tooling-Richtlinien
 
-Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt entwickeln, prüfen und ausführen.
+Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt
+entwickeln, prüfen und ausführen.
 Sie kombinieren generelle Best Practices (Formatierung, Checks) mit projektspezifischen Vorgaben
 wie Devcontainer-Setup, CLI-Bootstrap und SemVer.
 
@@ -69,5 +70,6 @@ wie Devcontainer-Setup, CLI-Bootstrap und SemVer.
 
 ---
 
-Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in produktive Skripte überführt.
+Diese Leitlinien werden zum **Gate-C-Übergang** erneut evaluiert und ggf. in
+produktive Skripte überführt.
 Weitere Infos werden im Fahrplan dokumentiert.

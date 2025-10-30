@@ -1,11 +1,12 @@
 # Runbook
 
-Dieses Dokument enthält praxisorientierte Anleitungen für den Betrieb, die Wartung und das Onboarding
-im Weltgewebe-Projekt.
+Dieses Dokument enthält praxisorientierte Anleitungen für den Betrieb, die
+Wartung und das Onboarding im Weltgewebe-Projekt.
 
 ## 1. Onboarding (Woche 1-2)
 
-Ziel dieses Runbooks ist es, neuen Teammitgliedern einen strukturierten und schnellen Einstieg zu ermöglichen.
+Ziel dieses Runbooks ist es, neuen Teammitgliedern einen strukturierten und
+schnellen Einstieg zu ermöglichen.
 
 ### Woche 1: Systemüberblick & lokales Setup
 
@@ -34,10 +35,11 @@ Ziel dieses Runbooks ist es, neuen Teammitgliedern einen strukturierten und schn
 - **Tag 4-5: Erster kleiner Beitrag**
   - **Hygiene-Checks:** `just check` ausführen und sicherstellen, dass alle Linter, Formatierer und
     Tests erfolgreich durchlaufen.
-  - **"Good first issue" suchen:** Ein kleines, abgeschlossenes Ticket (z.B. eine Textänderung in der
-    UI oder eine Doku-Ergänzung) auswählen.
-  - **Workflow üben:** Branch erstellen, Änderung implementieren, Commit mit passendem Präfix (`docs:
-    ...` oder `feat(web): ...`) erstellen und einen Pull Request zur Review stellen.
+  - **"Good first issue" suchen:** Ein kleines, abgeschlossenes Ticket (z.B.
+    eine Textänderung in der UI oder eine Doku-Ergänzung) auswählen.
+  - **Workflow üben:** Branch erstellen, Änderung implementieren, Commit mit
+    passendem Präfix (`docs: ...` oder `feat(web): ...`) erstellen und einen Pull
+    Request zur Review stellen.
 
 ### Woche 2: Vertiefung & erste produktive Aufgaben
 
@@ -119,7 +121,8 @@ einer sauberen Umgebung wiederhergestellt werden.
 
 ### Nachbereitung
 
-- **Lessons Learned:** Ein kurzes Meeting abhalten, um Probleme oder Verbesserungspotenziale zu besprechen.
+- **Lessons Learned:** Ein kurzes Meeting abhalten, um Probleme oder
+  Verbesserungspotenziale zu besprechen.
 - **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
 - **Automatisierung nutzen:** `just drill` ausführen, um den Drill reproduzierbar zu starten und
   Smoke-Tests anzustoßen.

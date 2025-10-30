@@ -1,6 +1,7 @@
 # weltgewebe-web (Gate A Click-Dummy)
 
-Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten, Fäden, Drawer, Zeitachse).
+Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten,
+Fäden, Drawer, Zeitachse).
 
 ## Dev
 
@@ -23,7 +24,9 @@ verwenden.
 > `apps/web/playwright-report/results.xml` einsammeln.
 >
 > [!NOTE]
-> **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter verweigern Vite und Freunde den Dienst.
+> **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter
+> verweigern Vite und Freunde den Dienst. Per `nvm use` kannst du via
+> `.nvmrc` im Projektverzeichnis direkt auf die richtige Version springen.
 
 ### Polyfill-Debugging
 
@@ -45,7 +48,8 @@ Legt `public/demo.png` an.
 
 - Vollbild-Karte (MapLibre) mit 4 Strukturknoten (Platzhalter).
 - Linker/rechter Drawer (UI-Stubs), Legende, Zeitachsen-Stub im Footer.
-- Keine Persistenz, keine echten Filter/Abfragen (Ethik → UX → Gemeinschaft → Zukunft → Autonomie → Kosten).
+- Keine Persistenz, keine echten Filter/Abfragen (Ethik → UX → Gemeinschaft →
+  Zukunft → Autonomie → Kosten).
 
 ## Nächste Schritte
 
@@ -68,4 +72,5 @@ npx playwright install --with-deps  # einmalig
 npx playwright test tests/drawers.spec.ts
 ```
 
-Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit Maus-Drags die Swipe-Gesten simulieren können.
+Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit
+Maus-Drags die Swipe-Gesten simulieren können.
