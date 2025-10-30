@@ -1,0 +1,20 @@
+[
+  {
+    "id": "gate-a-werkstatt",
+    "title": "Werkstatt Hamm",
+    "lat": 53.553,
+    "lon": 10.052
+  },
+  {
+    "id": "gate-a-markt",
+    "title": "Hamm Wochenmarkt",
+    "lat": 53.551,
+    "lon": 10.048
+  },
+  {
+    "id": "gate-a-cafe",
+    "title": "Café Deichtor",
+    "lat": 53.55,
+    "lon": 10.056
+  }
+]

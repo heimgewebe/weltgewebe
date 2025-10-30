@@ -1,21 +1,35 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Map as MapLibreMap } from 'maplibre-gl';
   import TopBar from '$lib/components/TopBar.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import points from '$lib/data/dummy.json';
+
+  type MapPoint = {
+    id: string;
+    title: string;
+    lat: number;
+    lon: number;
+  };
+
+  const markersData = points satisfies MapPoint[];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
 
   let leftOpen = true;     // linke Spalte (Webrat/Nähstübchen)
-  let rightOpen = false;   // Filter
+  let rightOpen = false;   // Filter / Info
   let topOpen = false;     // Gewebekonto
+
+  let selected: MapPoint | null = null;
+  const markerCleanupFns: Array<() => void> = [];
 
   type DrawerInstance = InstanceType<typeof Drawer> & {
     setOpener?: (el: HTMLElement | null) => void;
+    focus?: () => void;
   };
   let rightDrawerRef: DrawerInstance | null = null;
   let topDrawerRef: DrawerInstance | null = null;
@@ -59,11 +73,22 @@
     const q = new URLSearchParams(window.location.search);
     leftOpen = q.has('l') ? q.get('l') === '1' : defaultQueryState.l;
     rightOpen = q.has('r') ? q.get('r') === '1' : defaultQueryState.r;
+    if (!rightOpen) {
+      selected = null;
+    }
     topOpen = q.has('t') ? q.get('t') === '1' : defaultQueryState.t;
   }
 
   function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
-  function toggleRight(){ rightOpen = !rightOpen; setQuery({ r: rightOpen }); }
+  function setRightOpen(next: boolean) {
+    if (rightOpen === next) return;
+    rightOpen = next;
+    if (!rightOpen) {
+      selected = null;
+    }
+    setQuery({ r: rightOpen });
+  }
+  function toggleRight(){ setRightOpen(!rightOpen); }
   function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
 
   type SwipeIntent =
@@ -132,14 +157,12 @@
         break;
       case 'open-right':
         if (!rightOpen && -dx > threshold && absX > absY) {
-          rightOpen = true;
-          setQuery({ r: true });
+          setRightOpen(true);
         }
         break;
       case 'close-right':
         if (rightOpen && dx > threshold && absX > absY) {
-          rightOpen = false;
-          setQuery({ r: false });
+          setRightOpen(false);
         }
         break;
       case 'open-top':
@@ -207,6 +230,33 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
+      markerCleanupFns.forEach((fn) => fn());
+      markerCleanupFns.length = 0;
+
+      for (const item of markersData) {
+        const element = document.createElement('button');
+        element.type = 'button';
+        element.className = 'map-marker';
+        element.setAttribute('aria-label', item.title);
+        element.title = item.title;
+        const handleClick = async () => {
+          selected = item;
+          setRightOpen(true);
+          await tick();
+          rightDrawerRef?.focus?.();
+        };
+        element.addEventListener('click', handleClick);
+
+        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+          .setLngLat([item.lon, item.lat])
+          .addTo(map);
+
+        markerCleanupFns.push(() => {
+          element.removeEventListener('click', handleClick);
+          marker.remove();
+        });
+      }
+
       keyHandler = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           if (topOpen) {
@@ -215,8 +265,7 @@
             return;
           }
           if (rightOpen) {
-            rightOpen = false;
-            setQuery({ r: false });
+            setRightOpen(false);
             return;
           }
           if (leftOpen) {
@@ -236,12 +285,16 @@
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
       if (popHandler) window.removeEventListener('popstate', popHandler);
+      markerCleanupFns.forEach((fn) => fn());
+      markerCleanupFns.length = 0;
     };
   });
   onDestroy(() => {
     if (keyHandler) window.removeEventListener('keydown', keyHandler);
     if (popHandler) window.removeEventListener('popstate', popHandler);
     if (map && typeof map.remove === 'function') map.remove();
+    markerCleanupFns.forEach((fn) => fn());
+    markerCleanupFns.length = 0;
   });
 </script>
 
@@ -285,6 +338,23 @@
   }
   .panel h3{ margin:0 0 8px 0; font-size:14px; color:var(--muted); letter-spacing:.2px; }
   .muted{ color:var(--muted); font-size:13px; }
+  .infoPanel{ margin-bottom: var(--drawer-gap); }
+  #map :global(.map-marker){
+    width:24px;
+    height:24px;
+    border-radius:999px;
+    border:2px solid var(--panel-border);
+    background:var(--accent, #ff8c42);
+    display:grid;
+    place-items:center;
+    color:var(--bg);
+    cursor:pointer;
+    box-shadow:0 0 0 2px rgba(0,0,0,0.25);
+  }
+  #map :global(.map-marker:focus-visible){
+    outline:2px solid var(--fg);
+    outline-offset:2px;
+  }
   @media (max-width: 900px){
     .leftStack{ --drawer-width: 320px; }
   }
@@ -335,6 +405,13 @@
     open={rightOpen}
     on:pointerdown={(event) => startSwipe(event, 'close-right')}
   >
+    {#if selected}
+      <div class="panel infoPanel">
+        <strong>{selected.title}</strong>
+        <div class="muted">Kurzbeschreibung folgt (Stub)</div>
+        <div class="muted">Weitere Details folgen (Stub)</div>
+      </div>
+    {/if}
     <div class="panel" style="padding:8px;">
       <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
     </div>
