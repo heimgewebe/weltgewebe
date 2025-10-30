@@ -19,6 +19,13 @@
   let btnLeft: HTMLButtonElement | null = null;
   let btnRight: HTMLButtonElement | null = null;
   let btnTop: HTMLButtonElement | null = null;
+  let leftLabel: string;
+  let rightLabel: string;
+  let topLabel: string;
+
+  $: leftLabel = leftOpen ? 'Webrat/Nähstübchen schließen' : 'Webrat/Nähstübchen öffnen';
+  $: rightLabel = rightOpen ? 'Suche & Filter schließen' : 'Suche & Filter öffnen';
+  $: topLabel = topOpen ? 'Gewebekonto schließen' : 'Gewebekonto öffnen';
 
   onMount(() => {
     dispatch('openers', { left: btnLeft, right: btnRight, top: btnTop });
@@ -39,6 +46,11 @@
     box-shadow: var(--shadow); cursor:pointer;
   }
   .btn:hover{ outline:1px solid var(--accent-soft); }
+  .btn:focus-visible{
+    outline:2px solid var(--accent);
+    outline-offset:3px;
+  }
+  .btn:focus:not(:focus-visible){ outline:none; }
   .spacer{ flex:1; }
 </style>
 
@@ -46,6 +58,7 @@
   <button
     class="btn"
     type="button"
+    aria-label={leftLabel}
     aria-pressed={leftOpen}
     aria-expanded={leftOpen}
     aria-controls="left-stack"
@@ -57,6 +70,7 @@
   <button
     class="btn"
     type="button"
+    aria-label={rightLabel}
     aria-pressed={rightOpen}
     aria-expanded={rightOpen}
     aria-controls="filter-drawer"
@@ -68,6 +82,7 @@
   <button
     class="btn"
     type="button"
+    aria-label={topLabel}
     aria-pressed={topOpen}
     aria-expanded={topOpen}
     aria-controls="account-drawer"
