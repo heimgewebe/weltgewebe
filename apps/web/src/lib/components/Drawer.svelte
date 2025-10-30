@@ -19,6 +19,10 @@
     openerEl = el;
   }
 
+  export function focus() {
+    rootEl?.focus();
+  }
+
   function focusFirstInside() {
     if (!rootEl) return;
     const focusables = Array.from(
@@ -107,8 +111,8 @@
   class:top={side === 'top'}
   aria-hidden={!open}
   aria-labelledby={headingId}
-  tabindex="-1"
   role="complementary"
+  tabindex={-1}
   inert={!open ? true : undefined}
   {...$$restProps}
 >

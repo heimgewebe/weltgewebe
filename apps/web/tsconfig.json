@@ -4,6 +4,7 @@
     "types": ["svelte"],
     "strict": true,
     "baseUrl": ".",
+    "resolveJsonModule": true,
     "paths": {
       "$lib/*": ["src/lib/*"],
       "$components/*": ["src/lib/components/*"],
