@@ -60,8 +60,9 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
 - Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
 
-> **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001. Code-Re-Entry erfolgt über die Gates A–D
-> (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)). Dort sind die Gate-Checklisten (A–D) als
+> **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
+> Code-Re-Entry erfolgt über die Gates A–D (siehe
+> [docs/process/fahrplan.md](docs/process/fahrplan.md)). Dort sind die Gate-Checklisten (A–D) als
 > To-dos dokumentiert.
 
 ### Web-E2E-Quickstart (Preview)
@@ -163,12 +164,15 @@ CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 
 ## Continuous Integration
 
-Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check, YAML/JSON-Lint und Budget-Stub (ci/budget.json).
+Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check,
+YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 
-- **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md) (Gates A–D mit konkreten Prüfpunkten)
-- **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md) (Frontend-Prototyp für Karte · Drawer ·
+- **Gate-Checklisten:**
+  [docs/process/fahrplan.md](docs/process/fahrplan.md) (Gates A–D mit konkreten Prüfpunkten)
+- **Gate A (Preview/Docs):**
+  [apps/web/README.md](apps/web/README.md) (Frontend-Prototyp für Karte · Drawer ·
   Zeitleiste · Ethik-UI)
 
 ## Beiträge & Docs
