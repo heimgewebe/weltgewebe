@@ -82,10 +82,7 @@ jobs:
         with:
           path: |
             ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}-
-            uv-${{ runner.os }}-
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: (Optional) No Python projects detected
         if: ${{ hashFiles('**/pyproject.toml') == '' }}
