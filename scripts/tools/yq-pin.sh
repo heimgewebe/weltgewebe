@@ -83,11 +83,13 @@ download_yq() {
     exit 1
   fi
 
-  local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD
+  # Compose curl option groups with compatibility fallbacks
+  local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD CURL_FAIL CURL_HEAD
   local curl_help=""
-  CURL_COMMON=(-fsS --proto '=https' --tlsv1.2 --connect-timeout 5)
+  CURL_COMMON=(-fsS --proto '=https' --tlsv1.2)
   CURL_RETRY=(--retry 3 --retry-delay 2)
-  CURL_DOWNLOAD=(--max-time 90)
+  CURL_DOWNLOAD=(-L --connect-timeout 10 --max-time 90)
+  CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
   fi
@@ -98,14 +100,26 @@ download_yq() {
     if grep -q -- '--retry-connrefused' <<<"${curl_help}"; then
       CURL_RETRY+=(--retry-connrefused)
     fi
+    if grep -q -- '--fail-with-body' <<<"${curl_help}"; then
+      CURL_FAIL=(--fail-with-body)
+    else
+      CURL_FAIL=(--fail)
+    fi
+  else
+    CURL_FAIL=(--fail)
   fi
 
-  if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" -I --max-time 10 "${url_base}/${base}" >/dev/null; then
+  echo "Probing available yq assets at ${url_base}..." >&2
+
+  if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" >/dev/null; then
     asset="${base}"
-  elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" -I --max-time 10 "${url_base}/${base}.tar.gz" >/dev/null; then
+  elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
     asset="${base}.tar.gz"
   else
-    echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
+    {
+      echo "yq asset not found (HEAD 404/403 or timeout)"
+      echo "  base URL: ${url_base}/${base}{,.tar.gz}"
+    } >&2
     exit 1
   fi
 
@@ -123,8 +137,8 @@ download_yq() {
   local asset_path="${tmp_dir}/${asset##*/}"
   local sha_path="${asset_path}.sha256"
   echo "Downloading yq v${ver} from ${url_base}/${asset}"
-  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" --fail-with-body -L "${url_base}/${asset}" -o "${asset_path}"
-  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" --fail-with-body -L "${url_base}/${asset}.sha256" -o "${sha_path}"
+  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
+  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}"
 
   if [[ ! -s "${sha_path}" ]]; then
     echo "missing yq sha256 file at ${sha_path}" >&2
