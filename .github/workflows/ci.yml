@@ -113,13 +113,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Install uv
-        env:
-          UV_VERSION: ${{ env.UV_VERSION }}
+      - name: Install uv (pinned via toolchain.versions.yml)
         run: |
-          scripts/tools/uv-pin.sh ensure "${UV_VERSION}"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          uv --version
+          set -euo pipefail
+          VER="$(awk -F': ' '/^uv: /{print $2}' toolchain.versions.yml | tr -d '"')"
+          if [ -z "${VER:-}" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          echo "Installing uv v${VER} via official installer…"
+          curl -LsSf --connect-timeout 10 --retry 3 https://astral.sh/uv/install.sh | sh -s -- -y -v "v${VER}"
+          # ensure PATH for subsequent steps
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          hash -r
+          INSTALLED="$(uv --version)"
+          echo "${INSTALLED}"
+          if ! grep -F " ${VER}" <<<"${INSTALLED}"; then
+            echo "uv version mismatch" >&2
+            exit 1
+          fi
 
       - name: Setup Just
         uses: extractions/setup-just@v2
