@@ -1,3 +1,4 @@
+// apps/web/tests/accessibility.spec.ts
 import { test, expect } from '@playwright/test';
 
 test('main landmark is visible and left drawer toggles via keyboard', async ({ page }) => {

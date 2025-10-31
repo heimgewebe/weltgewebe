@@ -51,7 +51,7 @@ tasks:
           uv run ruff format --check .
         fi
         if command -v markdownlint >/dev/null 2>&1; then
-          markdownlint "**/*.md"
+          markdownlint "**/*.md" "!**/node_modules/**" "!**/dist/**" "!**/.git/**"
         fi
         if command -v yamllint >/dev/null 2>&1; then
           yamllint .
