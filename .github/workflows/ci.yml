@@ -319,6 +319,7 @@ jobs:
           mapfile -d '' files < <(git ls-files -z '*.json' ':!:**/package-lock.json' || true)
           if (( ${#files[@]} )); then
             jq -n 'inputs' "${files[@]}" >/dev/null
+            echo "Validated $(( ${#files[@]} )) JSON files with jq."
           else
             echo "No JSON files to lint"
           fi
