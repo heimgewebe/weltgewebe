@@ -109,8 +109,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ env.UV_VERSION }}-${{ hashFiles('**/pyproject.toml', 'toolchain.versions.yml') }}
+          key: ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
+            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
             ${{ runner.os }}-uv-
 
       - name: Install uv (pinned via toolchain.versions.yml)
@@ -251,6 +252,8 @@ jobs:
             ${{ runner.os }}-lychee-
 
       - name: Link check (lychee)
+        id: lychee
+        continue-on-error: true
         uses: lycheeverse/lychee-action@v2
         with:
           # lychee v0.15 expects integer seconds for retry wait time
@@ -262,7 +265,28 @@ jobs:
             --retry-wait-time 3
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
-            --exclude-mail
+            --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
+            --exclude-path '**/node_modules/**'
+            --exclude-path '**/dist/**'
+            --cache
+            --max-cache-age 1d
+            '**/*.md'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Link check (lychee - verbose retry)
+        if: ${{ steps.lychee.outcome == 'failure' }}
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --accept 200,206,301,302,308,429,999
+            --timeout 20
+            --max-concurrency 3
+            --retry-wait-time 3
+            --max-retries 3
+            --verbose
+            --user-agent "heimgewebe-ci-lychee"
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path '**/node_modules/**'
             --exclude-path '**/dist/**'
