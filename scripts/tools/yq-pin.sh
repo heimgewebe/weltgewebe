@@ -83,13 +83,14 @@ download_yq() {
     exit 1
   fi
 
-  # Compose curl option groups with compatibility fallbacks
+  # Compose curl option groups mit Kompatibilitäts-Fallbacks
   local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD CURL_FAIL CURL_HEAD
   local curl_help=""
   CURL_COMMON=(-fsS --proto '=https' --tlsv1.2)
   CURL_RETRY=(--retry 3 --retry-delay 2)
   CURL_DOWNLOAD=(-L --connect-timeout 10 --max-time 90)
   CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
+
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
   fi
@@ -110,7 +111,6 @@ download_yq() {
   fi
 
   echo "Probing available yq assets at ${url_base}..." >&2
-
   if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" >/dev/null; then
     asset="${base}"
   elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
@@ -136,6 +136,7 @@ download_yq() {
 
   local asset_path="${tmp_dir}/${asset##*/}"
   local sha_path="${asset_path}.sha256"
+
   echo "Downloading yq v${ver} from ${url_base}/${asset}"
   curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
   curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}"
@@ -145,17 +146,15 @@ download_yq() {
     exit 1
   fi
 
-  local expected actual asset_name="${asset##*/}" expected_line="" line=""
+  local expected actual asset_name expected_line line
+  asset_name="${asset##*/}"
+  expected_line=""
+
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
-    if [[ -z "${expected_line}" ]]; then
-      expected_line="${line}"
-    fi
+    [[ -z "${expected_line}" ]] && expected_line="${line}"
     case "${line}" in
-      *" ${asset_name}"|*"*${asset_name}")
-        expected_line="${line}"
-        break
-        ;;
+      *" ${asset_name}"|*"*${asset_name}") expected_line="${line}"; break ;;
     esac
   done < "${sha_path}"
 
@@ -171,6 +170,7 @@ download_yq() {
     expected="$(printf '%s\n' "${expected_line}" | cut -d' ' -f1)"
     actual="$(${SHA256_CMD[@]} "${asset_path}" | cut -d' ' -f1)"
   fi
+
   if [[ "${expected}" != "${actual}" ]]; then
     echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
     exit 1

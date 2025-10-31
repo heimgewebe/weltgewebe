@@ -20,8 +20,8 @@
   </div>
   <p class="note ghost">{note}</p>
   <div class="actions row" aria-hidden="true">
-    <button class="btn" type="button" disabled>Einzahlen</button>
-    <button class="btn" type="button" disabled>Auszahlen</button>
+    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Einzahlen</button>
+    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Auszahlen</button>
   </div>
 </div>
 

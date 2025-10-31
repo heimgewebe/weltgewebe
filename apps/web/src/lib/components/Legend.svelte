@@ -1,5 +1,5 @@
 <script lang="ts">
-  let open = false;
+  let open: boolean = false;
 </script>
 
 <div class="panel legend">
