@@ -123,7 +123,8 @@ jobs:
             exit 1
           fi
           echo "Installing uv v${VER} via official installer…"
-          curl -LsSf --connect-timeout 10 --retry 3 https://astral.sh/uv/install.sh | sh -s -- -y -v "v${VER}"
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
+            https://astral.sh/uv/install.sh | sh -s -- --version "v${VER}" --force
           # ensure PATH for subsequent steps
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
