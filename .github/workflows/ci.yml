@@ -258,7 +258,8 @@ jobs:
             --accept 200,206,301,302,308,429,999
             --timeout 15
             --max-concurrency 3
-            --retry-wait-time 3s
+            # lychee v0.15 expects integer seconds for retry wait time
+            --retry-wait-time 3
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
             --exclude-mail
