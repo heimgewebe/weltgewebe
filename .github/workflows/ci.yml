@@ -253,12 +253,12 @@ jobs:
       - name: Link check (lychee)
         uses: lycheeverse/lychee-action@v2
         with:
-          args: >
+          # lychee v0.15 expects integer seconds for retry wait time
+          args: >-
             --no-progress
             --accept 200,206,301,302,308,429,999
-            --timeout 15
+            --timeout 20
             --max-concurrency 3
-            # lychee v0.15 expects integer seconds for retry wait time
             --retry-wait-time 3
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
@@ -284,6 +284,7 @@ jobs:
           set -euo pipefail
           if ! command -v jq >/dev/null 2>&1; then
             sudo apt-get update -qq
+            # Install jq without recommended packages and avoid interactive prompts
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
           fi
 
