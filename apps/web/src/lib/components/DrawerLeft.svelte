@@ -116,7 +116,7 @@
     .drawer {
       top: clamp(0.75rem, 2vw, 1.5rem);
       bottom: clamp(3.5rem, 12vh, 4.75rem);
-      left: clamp(0.75rem, 2vw, 1.5rem);
+      left: clamp(1rem, 2vw, 1.5rem);
       transform: none;
       width: min(20rem, 28vw);
       max-height: none;

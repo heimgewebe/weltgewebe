@@ -84,7 +84,7 @@ download_yq() {
   # curl config
   local -a curl_common curl_retry
   local curl_help=""
-  curl_common=(-fsS --proto '=https' --tlsv1.2 --connect-timeout 5) # kein -L für HEAD-Probes
+  curl_common=(-fsS --proto '=https' --tlsv1.2 --connect-timeout 5) # kein -L: HEAD-Probes sollen Redirects nicht folgen
   curl_retry=(--retry 3 --retry-delay 2)
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
