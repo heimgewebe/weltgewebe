@@ -68,38 +68,58 @@ download_yq() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir:-}"' EXIT INT TERM
 
-  # prerequisites
   if ! command -v curl >/dev/null 2>&1; then
-    echo "curl is required to install yq" >&2; exit 1
+    echo "curl is required to install yq" >&2
+    exit 1
   fi
+
   local -a SHA256_CMD
   if command -v sha256sum >/dev/null 2>&1; then
     SHA256_CMD=(sha256sum)
   elif command -v shasum >/dev/null 2>&1; then
     SHA256_CMD=(shasum -a 256)
   else
-    echo "no SHA256 tool found (need sha256sum or shasum)" >&2; exit 1
+    echo "no SHA256 tool found (need sha256sum or shasum)" >&2
+    exit 1
   fi
 
-  # curl config
-  local -a curl_common curl_retry
+  # Compose curl option groups mit Kompatibilitäts-Fallbacks
+  local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD CURL_FAIL CURL_HEAD
   local curl_help=""
-  curl_common=(-fsS --proto '=https' --tlsv1.2 --connect-timeout 5) # kein -L: HEAD-Probes sollen Redirects nicht folgen
-  curl_retry=(--retry 3 --retry-delay 2)
+  CURL_COMMON=(-fsS --proto '=https' --tlsv1.2)
+  CURL_RETRY=(--retry 3 --retry-delay 2)
+  CURL_DOWNLOAD=(-L --connect-timeout 10 --max-time 90)
+  CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
+
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
   fi
-  if [[ -n "${curl_help}" ]] && grep -q -- '--retry-all-errors' <<<"${curl_help}"; then
-    curl_retry+=(--retry-all-errors)
+  if [[ -n "${curl_help}" ]]; then
+    if grep -q -- '--retry-all-errors' <<<"${curl_help}"; then
+      CURL_RETRY+=(--retry-all-errors)
+    fi
+    if grep -q -- '--retry-connrefused' <<<"${curl_help}"; then
+      CURL_RETRY+=(--retry-connrefused)
+    fi
+    if grep -q -- '--fail-with-body' <<<"${curl_help}"; then
+      CURL_FAIL=(--fail-with-body)
+    else
+      CURL_FAIL=(--fail)
+    fi
+  else
+    CURL_FAIL=(--fail)
   fi
 
-  # HEAD-Probes zum Asset
-  if curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}" >/dev/null; then
+  echo "Probing available yq assets at ${url_base}..." >&2
+  if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" >/dev/null; then
     asset="${base}"
-  elif curl "${curl_common[@]}" "${curl_retry[@]}" -I --max-time 10 "${url_base}/${base}.tar.gz" >/dev/null; then
+  elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
     asset="${base}.tar.gz"
   else
-    echo "yq asset not found at ${url_base}/${base}{,.tar.gz}" >&2
+    {
+      echo "yq asset not found (HEAD 404/403 or timeout)"
+      echo "  base URL: ${url_base}/${base}{,.tar.gz}"
+    } >&2
     exit 1
   fi
 
@@ -116,29 +136,58 @@ download_yq() {
 
   local asset_path="${tmp_dir}/${asset##*/}"
   local sha_path="${asset_path}.sha256"
-  echo "Downloading yq v${ver} from ${url_base}/${asset}"
-  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}" -o "${asset_path}"
-  curl "${curl_common[@]}" "${curl_retry[@]}" -L "${url_base}/${asset}.sha256" -o "${sha_path}"
 
-  # Checksum verify
-  local expected actual
-  expected="$(awk '{print $1}' "${sha_path}")"
-  actual="$(${SHA256_CMD[@]} "${asset_path}" | awk '{print $1}')"
+  echo "Downloading yq v${ver} from ${url_base}/${asset}"
+  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
+  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}"
+
+  if [[ ! -s "${sha_path}" ]]; then
+    echo "missing yq sha256 file at ${sha_path}" >&2
+    exit 1
+  fi
+
+  local expected actual asset_name expected_line line
+  asset_name="${asset##*/}"
+  expected_line=""
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    [[ -z "${line}" ]] && continue
+    [[ -z "${expected_line}" ]] && expected_line="${line}"
+    case "${line}" in
+      *" ${asset_name}"|*"*${asset_name}") expected_line="${line}"; break ;;
+    esac
+  done < "${sha_path}"
+
+  if [[ -z "${expected_line}" ]]; then
+    echo "no checksum entry found for ${asset_name} in ${sha_path}" >&2
+    exit 1
+  fi
+
+  if command -v awk >/dev/null 2>&1; then
+    expected="$(printf '%s\n' "${expected_line}" | awk '{print $1}')"
+    actual="$(${SHA256_CMD[@]} "${asset_path}" | awk '{print $1}')"
+  else
+    expected="$(printf '%s\n' "${expected_line}" | cut -d' ' -f1)"
+    actual="$(${SHA256_CMD[@]} "${asset_path}" | cut -d' ' -f1)"
+  fi
+
   if [[ "${expected}" != "${actual}" ]]; then
     echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
     exit 1
   fi
 
-  # Extract or copy
   local extracted="${tmp_dir}/${base}"
   if [[ "${asset}" == *.tar.gz ]]; then
-    tar -xzf "${asset_path}" -C "${tmp_dir}"
+    tar -xzf "${asset_path}" -C "${tmp_dir}" || { echo "failed to extract yq archive" >&2; exit 1; }
   else
     [[ "${asset_path}" != "${extracted}" ]] && cp -f "${asset_path}" "${extracted}"
   fi
-  [[ -f "${extracted}" ]] || { echo "yq binary not found after extraction"; exit 1; }
+  [[ -f "${extracted}" ]] || { echo "yq binary not found after extraction" >&2; exit 1; }
 
-  # Install
+  if ! command -v install >/dev/null 2>&1; then
+    echo "install not found; falling back to mv" >&2
+  fi
+
   install -m 0755 "${extracted}" "${BIN}" 2>/dev/null || {
     chmod 0755 "${extracted}"
     mv -f "${extracted}" "${BIN}"
@@ -148,10 +197,12 @@ download_yq() {
   local installed_ver
   installed_ver="$(parse_version "${BIN}")"
   if [[ -z "${installed_ver}" ]]; then
-    echo "failed to detect installed yq version" >&2; exit 1
+    echo "failed to detect installed yq version" >&2
+    exit 1
   fi
   if [[ "${installed_ver}" != "${ver}" ]]; then
-    echo "installed yq version ${installed_ver} does not match requested ${ver}" >&2; exit 1
+    echo "installed yq version ${installed_ver} does not match requested ${ver}" >&2
+    exit 1
   fi
 
   echo "✅ yq v${installed_ver} verified and ready in ${BIN_DIR}"
@@ -164,7 +215,7 @@ Add the following to your shell profile:
 EOF
   fi
 
-  rm -rf "${tmp_dir}"
+  rm -rf "${tmp_dir}" 2>/dev/null || true
   trap - EXIT INT TERM
 }
 

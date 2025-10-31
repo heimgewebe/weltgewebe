@@ -56,9 +56,14 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
   Falls du Python-Tools in Unterordnern verwaltest (z. B. `tools/py/`), achte darauf,
   das entstehende `uv.lock` mit einzuchecken – standardmäßig landet es im jeweiligen
   Projektstamm (Root oder Unterordner).
+  Außerhalb des Devcontainers stellst du die gewünschte `uv`-Version mit
+  `scripts/tools/uv-pin.sh ensure` sicher (optional via `UV_VERSION=<ziel>`).
 
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
 - Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
+- Für lokale Web-E2E-Tests installierst du die Playwright-Browser einmalig mit
+  `npx playwright install --with-deps` (Details unten im Abschnitt
+  [Web-E2E-Quickstart](#web-e2e-quickstart-preview)).
 
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
 > Code-Re-Entry erfolgt über die Gates A–D (siehe

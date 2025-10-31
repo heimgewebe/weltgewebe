@@ -18,6 +18,30 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 jobs:
+  docs-changes:
+    name: Detect docs updates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            docs:
+              - '**/*.md'
+              - '**/*.yml'
+              - '**/*.yaml'
+              - '.markdownlint.*'
+              - '.yamllint*'
+              - '.github/workflows/ci.yml'
+
   ci:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -89,13 +113,25 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-uv-
 
-      - name: Install uv
-        env:
-          UV_VERSION: ${{ env.UV_VERSION }}
+      - name: Install uv (pinned via toolchain.versions.yml)
         run: |
-          scripts/tools/uv-pin.sh ensure "${UV_VERSION}"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          uv --version
+          set -euo pipefail
+          VER="$(awk -F': ' '/^uv: /{print $2}' toolchain.versions.yml | tr -d '"')"
+          if [ -z "${VER:-}" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          echo "Installing uv v${VER} via official installer…"
+          curl -LsSf --connect-timeout 10 --retry 3 https://astral.sh/uv/install.sh | sh -s -- -y -v "v${VER}"
+          # ensure PATH for subsequent steps
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          hash -r
+          INSTALLED="$(uv --version)"
+          echo "${INSTALLED}"
+          if ! grep -F " ${VER}" <<<"${INSTALLED}"; then
+            echo "uv version mismatch" >&2
+            exit 1
+          fi
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -121,6 +157,10 @@ jobs:
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
+      FORCE_COLOR: "1"
+      PW_TEST_REPORTER: dot,html,junit
+      PLAYWRIGHT_HTML_REPORT_OPEN: never
+      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
     defaults:
       run:
         shell: bash --noprofile --norc -euo pipefail {0}
@@ -182,6 +222,8 @@ jobs:
 
   lint-docs:
     name: Docs & Shell Hygiene
+    needs: docs-changes
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -198,6 +240,15 @@ jobs:
             **/*.md
             !**/node_modules/**
             !**/dist/**
+            !**/.git/**
+
+      - name: Cache lychee responses
+        uses: actions/cache@v4
+        with:
+          path: .lycheecache
+          key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-lychee-
 
       - name: Link check (lychee)
         uses: lycheeverse/lychee-action@v2
@@ -207,13 +258,16 @@ jobs:
             --accept 200,206,301,302,308,429,999
             --timeout 15
             --max-concurrency 3
-            --retry-wait-time 3s
+            # lychee v0.15 expects integer seconds for retry wait time
+            --retry-wait-time 3
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
             --exclude-mail
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path '**/node_modules/**'
             --exclude-path '**/dist/**'
+            --cache
+            --max-cache-age 1d
             '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
