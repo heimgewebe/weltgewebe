@@ -8,13 +8,14 @@ Erweiterungen sich anbieten.
 
 - **Installation im Devcontainer:** `.devcontainer/post-create.sh` installiert `uv`
   per offizieller Astral-Installroutine und macht das Binary direkt verfügbar.
-- **Toolchain-Pin:** `toolchain.versions.yml` pinnt `uv` aktuell auf v0.8.1; das
-  Rollback von v0.8.2 verhindert 404-Fehler beim Download der Release-Assets in
-  CI. Falls du lokal eine andere Version testen möchtest, kannst du das Script
+- **Toolchain-Pin:** `toolchain.versions.yml` pinnt `uv` aktuell auf v0.8.0.  \
+  In CI wird `uv` deterministisch über das offizielle Install-Script installiert,
+  sodass keine fehleranfälligen Release-Asset-URLs mehr nötig sind. Falls du
+  lokal eine andere Version testen möchtest, kannst du das Script
   mit Override nutzen:
 
   ```bash
-  UV_VERSION=0.8.1 scripts/tools/uv-pin.sh ensure
+  UV_VERSION=0.8.0 scripts/tools/uv-pin.sh ensure
   ```
 
   (Beliebige Zielversion via `UV_VERSION=<ziel>` möglich.)
