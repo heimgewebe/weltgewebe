@@ -91,7 +91,7 @@ download_yq() {
   CURL_RETRY=(--retry 3 --retry-delay 2)
   CURL_DOWNLOAD=(-L --connect-timeout 10 --max-time 90)
   CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
-  CURL_RANGE=(--connect-timeout 5 --max-time 10 -H 'Range: bytes=0-0')
+  CURL_RANGE=(--connect-timeout 5 --max-time 10 -H 'Range: bytes=0-1023')
 
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
