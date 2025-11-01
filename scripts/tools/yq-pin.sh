@@ -115,9 +115,9 @@ download_yq() {
   else
     echo "HEAD probe failed, retrying with Range 0-0…" >&2
     # Fallback für Server, die HEAD-Anfragen blockieren (Range 0-0 vermeidet vollen Download)
-    if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" -o /dev/null "${url_base}/${base}" >/dev/null; then
+    if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}" >/dev/null; then
       asset="${base}"
-    elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" -o /dev/null "${url_base}/${base}.tar.gz" >/dev/null; then
+    elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
       asset="${base}.tar.gz"
     else
       echo "no yq asset for ${os}/${arch} v${ver} at ${url_base}" >&2
