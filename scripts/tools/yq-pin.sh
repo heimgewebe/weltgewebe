@@ -84,12 +84,14 @@ download_yq() {
   fi
 
   # Compose curl option groups mit Kompatibilitäts-Fallbacks
-  local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD CURL_FAIL CURL_HEAD
+  local -a CURL_COMMON CURL_RETRY CURL_DOWNLOAD CURL_FAIL CURL_HEAD CURL_RANGE
   local curl_help=""
   CURL_COMMON=(-fsS --proto '=https' --tlsv1.2)
+  CURL_COMMON+=(-A "heimgewebe-yq-pin/1.0")
   CURL_RETRY=(--retry 3 --retry-delay 2)
   CURL_DOWNLOAD=(-L --connect-timeout 10 --max-time 90)
   CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
+  CURL_RANGE=(--connect-timeout 5 --max-time 10 -H 'Range: bytes=0-0')
 
   if ! curl_help="$(curl --help all 2>/dev/null)"; then
     curl_help="$(curl --help 2>/dev/null || true)"
@@ -101,14 +103,9 @@ download_yq() {
     if grep -q -- '--retry-connrefused' <<<"${curl_help}"; then
       CURL_RETRY+=(--retry-connrefused)
     fi
-    if grep -q -- '--fail-with-body' <<<"${curl_help}"; then
-      CURL_FAIL=(--fail-with-body)
-    else
-      CURL_FAIL=(--fail)
-    fi
-  else
-    CURL_FAIL=(--fail)
   fi
+
+  CURL_FAIL=(--fail)
 
   echo "Probing available yq assets at ${url_base}..." >&2
   if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" >/dev/null; then
@@ -116,11 +113,16 @@ download_yq() {
   elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
     asset="${base}.tar.gz"
   else
-    {
-      echo "yq asset not found (HEAD 404/403 or timeout)"
-      echo "  base URL: ${url_base}/${base}{,.tar.gz}"
-    } >&2
-    exit 1
+    echo "HEAD probe failed, retrying with Range 0-0…" >&2
+    # Fallback für Server, die HEAD-Anfragen blockieren (Range 0-0 vermeidet vollen Download)
+    if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" -o /dev/null "${url_base}/${base}" >/dev/null; then
+      asset="${base}"
+    elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" -o /dev/null "${url_base}/${base}.tar.gz" >/dev/null; then
+      asset="${base}.tar.gz"
+    else
+      echo "no yq asset for ${os}/${arch} v${ver} at ${url_base}" >&2
+      exit 1
+    fi
   fi
 
   if [[ "${asset}" == *.tar.gz ]]; then
@@ -205,7 +207,7 @@ download_yq() {
     exit 1
   fi
 
-  echo "✅ yq v${installed_ver} verified and ready in ${BIN_DIR}"
+  echo "✅ yq v${installed_ver} downloaded & verified"
 
   if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
     cat >&2 <<EOF
