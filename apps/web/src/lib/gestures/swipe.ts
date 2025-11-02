@@ -142,7 +142,11 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     if (horizontalEnough && longEnough && fastEnough) {
       const dir: SwipeDirection = dx < 0 ? 'left' : 'right';
       cfg.onSwipe?.(dir, { dx, dy, v });
-      if (dir === 'left') cfg.onLeft?.(); else cfg.onRight?.();
+      if (dir === 'left') {
+        cfg.onLeft?.();
+      } else {
+        cfg.onRight?.();
+      }
     } else {
       cfg.onReject?.({ dx, dy, v, horizontalEnough, longEnough, fastEnough });
     }
