@@ -20,3 +20,13 @@ body { background:var(--bg); color:var(--fg); font: 14px/1.4 ui-sans-serif, syst
 .btn:disabled { opacity:.5; cursor:not-allowed }
 .legend-dot { width:.8rem; height:.8rem; border-radius:999px; display:inline-block; margin-right:.4rem; vertical-align:middle }
 .dot-blue{background:#4ea1ff}.dot-gray{background:#9aa3ad}.dot-yellow{background:#ffd65a}.dot-red{background:#ff6b6b}.dot-green{background:#54e1a6}.dot-violet{background:#b392f0}
+
+.swipe-parent {
+  scroll-snap-type: none;
+  overflow-x: hidden;
+}
+
+.swipeable {
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
+}
