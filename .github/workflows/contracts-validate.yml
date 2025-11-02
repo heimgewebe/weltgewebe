@@ -173,7 +173,7 @@ jobs:
           while IFS=$'\t' read -r -a fields; do
             status="${fields[0]}"
             p1="${fields[1]}"
-            p2="${fields[2]}"
+            p2="${fields[2]:-}"
             [[ "$p1" =~ ^(contracts|schemas)/ ]] || continue
             case "$status" in
               D)  echo "DELETE: $p1" ;;
