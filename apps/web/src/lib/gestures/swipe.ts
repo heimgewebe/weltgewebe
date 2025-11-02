@@ -98,7 +98,15 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     pid = e.pointerId;
     start = last = { x: e.clientX, y: e.clientY, t: now() };
     active = true;
-    try { node.setPointerCapture(pid); } catch {}
+    try { node.setPointerCapture(pid); }
+    catch (err) {
+      // setPointerCapture may fail in some browsers or if the element is not in the DOM.
+      // This is non-fatal for swipe handling, so we ignore the error.
+      // In development, log the error for debugging.
+      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
+        console.error('setPointerCapture failed:', err);
+      }
+    }
   }
 
   function onMove(e: PointerEvent) {
