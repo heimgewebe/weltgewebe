@@ -54,7 +54,7 @@ jobs:
 
       - name: Ensure yq is available
         env:
-          YQ_VERSION: 4.47.2
+          YQ_VERSION: 4.48.1
         run: |
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
