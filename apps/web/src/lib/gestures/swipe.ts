@@ -10,7 +10,7 @@
  *     touch-action: pan-y;            // lässt vertikales Scrollen zu und schützt horizontale Swipes
  *     overscroll-behavior-x: contain; // verhindert seitliches Überscrollen
  *   }
- *   /* Eltern-Container sollten horizontales Snap/Scroll vermeiden */
+ *   // Eltern-Container sollten horizontales Snap/Scroll vermeiden
  *   .swipe-parent { scroll-snap-type: none; }
  */
 export type SwipeDirection = 'left' | 'right';
