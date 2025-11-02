@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Minimaler Installer/Pinner für mikefarah/yq v4.x
 # Usage: scripts/tools/yq-pin.sh ensure [<version>]
-# Default: 4.47.2
+# Default: 4.48.1
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${YQ_VERSION:-4.47.2}}"
+REQ_VER="${2:-${YQ_VERSION:-4.48.1}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
