@@ -149,7 +149,17 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
   }
 
   function reset() {
-    if (pid !== null) { try { node.releasePointerCapture(pid); } catch {} }
+    if (pid !== null) {
+      try {
+        node.releasePointerCapture(pid);
+      } catch (err) {
+        // Some browsers may throw if releasePointerCapture is called incorrectly.
+        // This error is safe to ignore, but log in development for debugging.
+        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
+          console.error('releasePointerCapture failed:', err);
+        }
+      }
+    }
     pid = null; start = null; last = null; active = false;
   }
 
