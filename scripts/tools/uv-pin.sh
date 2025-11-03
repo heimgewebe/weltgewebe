@@ -14,18 +14,52 @@ ensure_path() {
   mkdir -p "${BIN_DIR}"
   case ":$PATH:" in
     *":${BIN_DIR}:"*) ;;
-    *) echo "${BIN_DIR}" >> "${GITHUB_PATH:-/dev/null}" 2>/dev/null || true ;;
+    *)
+      export PATH="${BIN_DIR}:${PATH}"
+      echo "${BIN_DIR}" >> "${GITHUB_PATH:-/dev/null}" 2>/dev/null || true
+      ;;
   esac
+}
+
+extract_uv_version() {
+  local binary="$1"
+  local output=""
+
+  if output="$(LC_ALL=C "${binary}" -V 2>/dev/null)"; then
+    :
+  elif output="$(LC_ALL=C "${binary}" --help 2>/dev/null | head -n1)"; then
+    :
+  elif output="$(LC_ALL=C "${binary}" --version 2>/dev/null)"; then
+    :
+  else
+    return 1
+  fi
+
+  local version=""
+
+  version="$(LC_ALL=C awk '{print $2}' <<<"${output}" | LC_ALL=C grep -Eo '^[0-9]+(\.[0-9]+)*' || true)"
+  if [[ -z "${version}" ]]; then
+    version="$(LC_ALL=C grep -Eo '[0-9]+(\.[0-9]+)*' <<<"${output}" | head -n1 || true)"
+  fi
+  if [[ -z "${version}" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "${version}"
 }
 
 current_version() {
   if command -v uv >/dev/null 2>&1; then
-    uv --version | awk '{print $2}' || true
+    if extract_uv_version "uv"; then
+      return 0
+    fi
   elif [[ -x "${BIN}" ]]; then
-    "${BIN}" --version | awk '{print $2}' || true
-  else
-    echo ""
+    if extract_uv_version "${BIN}"; then
+      return 0
+    fi
   fi
+
+  echo ""
 }
 
 detect_target() {
