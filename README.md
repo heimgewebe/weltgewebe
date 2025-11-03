@@ -52,7 +52,7 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
 - Öffnest du das Repo im VS Code Devcontainer, richtet `.devcontainer/post-create.sh`
   die benötigten Tools (u. a. `just`, `uv`, `vale`) automatisch ein. Danach stehen
-  Python-Helfer über `uv` sofort zur Verfügung (`uv --version`).
+  Python-Helfer über `uv` sofort zur Verfügung (`uv -V`).
   Falls du Python-Tools in Unterordnern verwaltest (z. B. `tools/py/`), achte darauf,
   das entstehende `uv.lock` mit einzuchecken – standardmäßig landet es im jeweiligen
   Projektstamm (Root oder Unterordner).
