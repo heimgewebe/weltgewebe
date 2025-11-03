@@ -37,8 +37,12 @@ extract_uv_version() {
 
   local version=""
 
+  # First, try to extract the version as the second field of the output.
+  # This works if the output is like: "uv X.Y.Z" or similar, where the version is the second word.
   version="$(LC_ALL=C awk '{print $2}' <<<"${output}" | LC_ALL=C grep -Eo '^[0-9]+(\.[0-9]+)*' || true)"
   if [[ -z "${version}" ]]; then
+    # Fallback: search for a version-like pattern anywhere in the output.
+    # This handles cases where the output format is unexpected or contains extra text before the version.
     version="$(LC_ALL=C grep -Eo '[0-9]+(\.[0-9]+)*' <<<"${output}" | head -n1 || true)"
   fi
   if [[ -z "${version}" ]]; then
