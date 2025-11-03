@@ -130,7 +130,7 @@ jobs:
           hash -r
           INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
           if [ -z "$INSTALLED" ]; then
-            echo "Konnte uv-Version nicht ermitteln – ist uv korrekt installiert?" >&2
+            echo "Could not determine uv version - is uv correctly installed?" >&2
             exit 1
           fi
           echo "${INSTALLED}"
