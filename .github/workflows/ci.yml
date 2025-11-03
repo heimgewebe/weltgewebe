@@ -267,8 +267,8 @@ jobs:
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path '**/node_modules/**'
-            --exclude-path '**/dist/**'
+            --exclude-path 'node_modules'
+            --exclude-path 'dist'
             --cache
             --max-cache-age 1d
             '**/*.md'
@@ -289,8 +289,8 @@ jobs:
             --verbose
             --user-agent "heimgewebe-ci-lychee"
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path '**/node_modules/**'
-            --exclude-path '**/dist/**'
+            --exclude-path 'node_modules'
+            --exclude-path 'dist'
             --cache
             --max-cache-age 1d
             '**/*.md'
