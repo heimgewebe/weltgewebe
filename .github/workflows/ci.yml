@@ -43,10 +43,13 @@ jobs:
               - '.github/workflows/ci.yml'
 
   ci:
+    needs: docs-changes
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       NODE_OPTIONS: --max-old-space-size=4096
+    # skip heavy CI when it's a docs-only change (unless manually dispatched)
+    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,7 +120,7 @@ jobs:
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
-          VER="$(awk -F': ' '/^uv: /{print $2}' toolchain.versions.yml | tr -d '"')"
+          VER="$(yq -r '.uv' toolchain.versions.yml)"
           if [ -z "${VER:-}" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
@@ -271,8 +274,8 @@ jobs:
             --max-retries 3
             --user-agent "heimgewebe-ci-lychee"
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path '**/node_modules/**'
-            --exclude-path '**/dist/**'
+            --exclude-path 'node_modules'
+            --exclude-path 'dist'
             --cache
             --max-cache-age 1d
             '**/*.md'
@@ -293,8 +296,8 @@ jobs:
             --verbose
             --user-agent "heimgewebe-ci-lychee"
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path '**/node_modules/**'
-            --exclude-path '**/dist/**'
+            --exclude-path 'node_modules'
+            --exclude-path 'dist'
             --cache
             --max-cache-age 1d
             '**/*.md'
