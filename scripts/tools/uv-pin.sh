@@ -21,14 +21,29 @@ ensure_path() {
   esac
 }
 
+# NOTE on version probing strategy (why -V / --help / --version):
+# - Different uv releases and distro builds expose different flags:
+#   * Newer uv supports `-V` (short) while some older/help-wrapped builds
+#     only show the version on the first line of `--help`.
+#   * A few package variants still respond to `--version`.
+# - Some CI images wrap commands (e.g. via shims) that hide `-V`, but print a
+#   canonical banner on `--help`.
+# - We keep probing in the order: `-V` → `--help | head -n1` → `--version`.
+#   Together with `LC_ALL=C` and a robust regex extraction this makes parsing
+#   locale- and wrapper-safe without depending on a specific uv build flavor.
+# - If all probes fail, the caller handles an empty string as “not installed”.
+#
 extract_uv_version() {
   local binary="$1"
   local output=""
 
+  # Try short form first (preferred on modern uv).
   if output="$(LC_ALL=C "${binary}" -V 2>/dev/null)"; then
     :
+  # Some packaged builds only expose the version in the first --help line.
   elif output="$(LC_ALL=C "${binary}" --help 2>/dev/null | head -n1)"; then
     :
+  # Legacy/alternative flag still present in a few environments.
   elif output="$(LC_ALL=C "${binary}" --version 2>/dev/null)"; then
     :
   else
@@ -53,17 +68,21 @@ extract_uv_version() {
 }
 
 current_version() {
+  local v=""
+
   if command -v uv >/dev/null 2>&1; then
-    if extract_uv_version "uv"; then
-      return 0
-    fi
+    v="$(extract_uv_version uv || true)"
   elif [[ -x "${BIN}" ]]; then
-    if extract_uv_version "${BIN}"; then
-      return 0
-    fi
+    v="$(extract_uv_version "${BIN}" || true)"
   fi
 
-  echo ""
+  [[ -n "${v}" ]] || {
+    if [[ "${DEBUG:-0}" = 1 ]]; then
+      echo "uv version not detected" >&2
+    fi
+  }
+
+  printf '%s\n' "${v}"
 }
 
 detect_target() {
