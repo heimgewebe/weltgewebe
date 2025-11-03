@@ -33,7 +33,6 @@ ensure_path() {
 #   locale- and wrapper-safe without depending on a specific uv build flavor.
 # - If all probes fail, the caller handles an empty string as “not installed”.
 #
-#
 extract_uv_version() {
   local binary="$1"
   local output=""
