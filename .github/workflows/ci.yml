@@ -1,3 +1,4 @@
+---
 name: CI
 
 permissions:
@@ -5,7 +6,7 @@ permissions:
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -15,7 +16,8 @@ concurrency:
 
 defaults:
   run:
-    shell: bash --noprofile --norc -euo pipefail {0}
+    shell: >
+      bash --noprofile --norc -euo pipefail {0}
 
 jobs:
   docs-changes:
@@ -49,7 +51,8 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
+    if: >
+      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -89,7 +92,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: >-
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -112,7 +116,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
+          key: >-
+            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
             ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
             ${{ runner.os }}-uv-
@@ -126,7 +131,7 @@ jobs:
           exit 1
           fi
           echo "Installing uv v${VER} via official installer…"
-          UV_VERSION="v${VER}" curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh | sh -s -- --force
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh | UV_VERSION="v${VER}" sh -s -- --force
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
           INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
@@ -230,7 +235,8 @@ jobs:
   lint-docs:
     name: Docs & Shell Hygiene
     needs: docs-changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
+    if: >
+      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -265,7 +271,7 @@ jobs:
           # lychee v0.15 expects integer seconds for retry wait time
           args: >-
             --no-progress
-            --accept 200,206,301,302,308,429,999
+            --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3
             --retry-wait-time 3
@@ -286,7 +292,7 @@ jobs:
         with:
           args: >-
             --no-progress
-            --accept 200,206,301,302,308,429,999
+            --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3
             --retry-wait-time 3
