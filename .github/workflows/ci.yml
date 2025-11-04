@@ -122,24 +122,22 @@ jobs:
           set -euo pipefail
           VER="$(yq -r '.uv' toolchain.versions.yml)"
           if [ -z "${VER:-}" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
-            exit 1
+          echo "failed to parse uv version from toolchain.versions.yml" >&2
+          exit 1
           fi
           echo "Installing uv v${VER} via official installer…"
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
-            https://astral.sh/uv/install.sh | sh -s -- --version "v${VER}" --force
-          # ensure PATH for subsequent steps
+          UV_VERSION="v${VER}" curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh | sh
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
           INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
           if [ -z "$INSTALLED" ]; then
-            echo "Could not determine uv version - is uv correctly installed?" >&2
-            exit 1
+          echo "Could not determine uv version - is uv correctly installed?" >&2
+          exit 1
           fi
           echo "${INSTALLED}"
           if ! grep -F " ${VER}" <<<"${INSTALLED}"; then
-            echo "uv version mismatch" >&2
-            exit 1
+          echo "uv version mismatch" >&2
+          exit 1
           fi
 
       - name: Setup Just
