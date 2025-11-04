@@ -11,7 +11,7 @@ if ! command_exists rustup; then
   echo "Rustup not found. Installing..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
   # Add cargo to path for the current session
-  source "$HOME/.cargo/env"
+  . "$HOME/.cargo/env"
 else
   echo "Rustup is already installed."
 fi
