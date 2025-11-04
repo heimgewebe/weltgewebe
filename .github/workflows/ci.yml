@@ -126,7 +126,7 @@ jobs:
           exit 1
           fi
           echo "Installing uv v${VER} via official installer…"
-          UV_VERSION="v${VER}" curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh | sh
+          UV_VERSION="v${VER}" curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh | sh -s -- --force
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
           INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
