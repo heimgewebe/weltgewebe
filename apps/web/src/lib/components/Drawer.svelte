@@ -112,7 +112,7 @@
   aria-hidden={!open}
   aria-labelledby={headingId}
   role="dialog"
-  aria-modal={open ? true : undefined}
+  aria-modal={open ? "true" : undefined}
   tabindex={open ? 0 : -1}
   inert={!open ? true : undefined}
   {...$$restProps}
