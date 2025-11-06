@@ -25,14 +25,34 @@ impl AppConfig {
     const DEFAULT_CONFIG: &'static str = include_str!("../../../configs/app.defaults.yml");
 
     pub fn load() -> Result<Self> {
-        match env::var("APP_CONFIG_PATH") {
-            Ok(path) => Self::load_from_path(path),
-            Err(_) => {
-                let config: Self = serde_yaml::from_str(Self::DEFAULT_CONFIG)
-                    .context("failed to parse embedded default configuration")?;
-                config.apply_env_overrides()
+        let config = match env::var("APP_CONFIG_PATH") {
+            Ok(path) => {
+                if !Path::new(&path).is_file() {
+                    tracing::warn!(
+                        path,
+                        "configuration file specified but not found or is not a regular file; falling back to defaults"
+                    );
+                    serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                        .context("failed to parse embedded default configuration")?
+                } else {
+                    match Self::load_from_path(&path) {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            tracing::warn!(
+                                path,
+                                error = %e,
+                                "failed to load configuration file; falling back to defaults"
+                            );
+                            serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                                .context("failed to parse embedded default configuration")?
+                        }
+                    }
             }
-        }
+            Err(_) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                .context("failed to parse embedded default configuration")?,
+        };
+
+        config.apply_env_overrides()
     }
 
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
@@ -117,6 +137,27 @@ delegation_expire_days: 28
         let _dir = DirGuard::change_to(temp_dir.path())?;
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
+        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+
+        let cfg = AppConfig::load()?;
+        assert_eq!(cfg.fade_days, 7);
+        assert_eq!(cfg.ron_days, 84);
+        assert!(cfg.anonymize_opt_in);
+        assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_falls_back_to_defaults_when_config_path_is_invalid() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let invalid_path = temp_dir.path().join("does-not-exist.yml");
+
+        let _config_path = EnvGuard::set("APP_CONFIG_PATH", invalid_path.to_str().unwrap());
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
