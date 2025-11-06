@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test.describe("map route", () => {
   test.beforeEach(() => {
     // Map-data fetches can sometimes take slightly longer in CI containers.
-    expect.setTimeout(15_000);
+    test.setTimeout(15_000);
   });
 
   test("shows structure layer controls", async ({ page }) => {

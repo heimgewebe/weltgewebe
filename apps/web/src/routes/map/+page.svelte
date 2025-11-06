@@ -186,6 +186,12 @@
     }
   }
 
+  function handleDrawerPointerDown(event: Event, intent: SwipeIntent) {
+    if (event instanceof PointerEvent) {
+      startSwipe(event, intent);
+    }
+  }
+
   function handleOpeners(
     event: CustomEvent<{
       left: HTMLButtonElement | null;
@@ -403,7 +409,7 @@
     title="Suche & Filter"
     side="right"
     open={rightOpen}
-    on:pointerdown={(event) => startSwipe(event, 'close-right')}
+    on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-right')}
   >
     {#if selected}
       <div class="panel infoPanel">
@@ -424,7 +430,7 @@
     title="Gewebekonto"
     side="top"
     open={topOpen}
-    on:pointerdown={(event) => startSwipe(event, 'close-top')}
+    on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-top')}
   >
     <div class="panel" style="padding:8px;">
       <div class="muted">Saldo / Delegationen / Verbindlichkeiten (Stub)</div>

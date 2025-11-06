@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("smoke", () => {
   test.beforeEach(() => {
-    expect.setTimeout(10_000);
+    test.setTimeout(10_000);
   });
 
   test("loads /map without console errors", async ({ page }) => {
