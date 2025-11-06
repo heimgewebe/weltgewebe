@@ -65,6 +65,7 @@ jobs:
           set -euo pipefail
           BIN_DIR="${HOME}/.local/bin"
           mkdir -p "${BIN_DIR}"
+          echo "${BIN_DIR}" >> "$GITHUB_PATH"
           export PATH="${BIN_DIR}:${PATH}"
           echo "Installing yq v${YQ_VERSION}..."
           YQ_URL="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
