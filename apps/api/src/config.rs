@@ -35,8 +35,18 @@ impl AppConfig {
                     serde_yaml::from_str(Self::DEFAULT_CONFIG)
                         .context("failed to parse embedded default configuration")?
                 } else {
-                    Self::load_from_path(path)?
-                }
+                    match Self::load_from_path(&path) {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            tracing::warn!(
+                                path,
+                                error = %e,
+                                "failed to load configuration file; falling back to defaults"
+                            );
+                            serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                                .context("failed to parse embedded default configuration")?
+                        }
+                    }
             }
             Err(_) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
                 .context("failed to parse embedded default configuration")?,
