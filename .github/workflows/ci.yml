@@ -59,7 +59,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install yq
-        uses: mikefarah/setup-yq@v1
+        uses: mikefarah/yq-install-action@v1
         with:
           version: v4.48.1
 
