@@ -58,32 +58,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure yq is available
-        env:
-          YQ_VERSION: 4.48.1
-        run: |
-          set -euo pipefail
-          BIN_DIR="${HOME}/.local/bin"
-          mkdir -p "${BIN_DIR}"
-          echo "${BIN_DIR}" >> "$GITHUB_PATH"
-          export PATH="${BIN_DIR}:${PATH}"
-          echo "Installing yq v${YQ_VERSION}..."
-          YQ_URL="https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
-          YQ_BIN="${BIN_DIR}/yq"
-          YQ_SHA_URL="${YQ_URL}.sha256"
-          curl -LsSf "${YQ_URL}" -o "${YQ_BIN}"
-          curl -LsSf "${YQ_SHA_URL}" -o "${YQ_BIN}.sha256"
-          EXPECTED_SHA256=$(cut -d' ' -f1 < "${YQ_BIN}.sha256")
-          ACTUAL_SHA256=$(sha256sum "${YQ_BIN}" | cut -d' ' -f1)
-          if [ "${EXPECTED_SHA256}" != "${ACTUAL_SHA256}" ]; then
-            echo "ERROR: SHA256 checksum mismatch for yq binary!" >&2
-            echo "Expected: ${EXPECTED_SHA256}" >&2
-            echo "Actual:   ${ACTUAL_SHA256}" >&2
-            exit 1
-          fi
-          chmod +x "${YQ_BIN}"
-          echo "yq installation complete."
-          yq --version
+      - name: Install yq
+        uses: mikefarah/setup-yq@v1
+        with:
+          version: v4.48.1
+
+      - name: Verify yq
+        run: yq --version
 
       - name: Read toolchain versions
         run: |
@@ -333,8 +314,11 @@ jobs:
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
 
-          # Get tracked YAML files only (ignore .git, vendor, etc.)
-          mapfile -d '' files < <(git ls-files -z -- '*.yml' '*.yaml' || true)
+          # Collect tracked YAML files (NUL-separated) in a robust, portable way
+          files=()
+          while IFS= read -r -d '' file; do
+            files+=("$file")
+          done < <(git ls-files -z -- '*.yml' '*.yaml' || true)
 
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No YAML files to lint"
@@ -342,7 +326,6 @@ jobs:
           fi
 
           printf 'Linting %d YAML files\n' "${#files[@]}"
-          # Run yamllint with the repo config file
           python -m yamllint --strict -c .yamllint.yml "${files[@]}"
 
       - name: Ensure jq is available
