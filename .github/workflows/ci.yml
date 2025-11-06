@@ -316,7 +316,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
 
           # Get tracked YAML files only (ignore .git, vendor, etc.)
-          mapfile -t files < <(git ls-files -z -- '*.yml' '*.yaml' | xargs -0 -n1 echo || true)
+          mapfile -d '' files < <(git ls-files -z -- '*.yml' '*.yaml' || true)
 
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No YAML files to lint"
