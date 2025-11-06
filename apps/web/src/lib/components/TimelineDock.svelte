@@ -1,3 +1,7 @@
+<script lang="ts">
+  export {};
+</script>
+
 <style>
   .dock{
     position:absolute; left:0; right:0; bottom:0; min-height:56px; z-index:28;
