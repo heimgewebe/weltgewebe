@@ -27,10 +27,10 @@ impl AppConfig {
     pub fn load() -> Result<Self> {
         let config = match env::var("APP_CONFIG_PATH") {
             Ok(path) => {
-                if !Path::new(&path).exists() {
+                if !Path::new(&path).is_file() {
                     tracing::warn!(
                         path,
-                        "configuration file specified but not found; falling back to defaults"
+                        "configuration file specified but not found or is not a regular file; falling back to defaults"
                     );
                     serde_yaml::from_str(Self::DEFAULT_CONFIG)
                         .context("failed to parse embedded default configuration")?
