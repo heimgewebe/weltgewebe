@@ -47,6 +47,7 @@ impl AppConfig {
                                 .context("failed to parse embedded default configuration")?
                         }
                     }
+                }
             }
             Err(_) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
                 .context("failed to parse embedded default configuration")?,

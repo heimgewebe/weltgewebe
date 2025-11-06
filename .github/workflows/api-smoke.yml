@@ -41,15 +41,34 @@ jobs:
         run: |
           echo "GIT_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
           echo "BUILD_TIMESTAMP=${{ github.run_started_at }}" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@v2
+          profile: minimal
+          override: true
+      - name: Print Rust versions
+        run: |
+          rustc --version
+          cargo --version
+      - name: Cache cargo target
+        uses: actions/cache@v4
         with:
-          workspaces: |
-            apps/api -> target
+          path: target
+          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-target-
       - name: Build release (fast start)
-        run: cargo build --locked --release --bin weltgewebe-api
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/build-logs
+          cargo build --locked --release --bin weltgewebe-api 2>&1 | tee /tmp/build-logs/cargo-build.log
+      - name: Upload cargo build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-build-log
+          path: /tmp/build-logs/cargo-build.log
       - name: Run API in background
         env:
           API_BIND: 127.0.0.1:8787
