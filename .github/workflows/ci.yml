@@ -343,7 +343,7 @@ jobs:
 
           printf 'Linting %d YAML files\n' "${#files[@]}"
           # Run yamllint with the repo config file
-          python -m yamllint -c .yamllint.yml "${files[@]}"
+          python -m yamllint --strict -c .yamllint.yml "${files[@]}"
 
       - name: Ensure jq is available
         run: |
