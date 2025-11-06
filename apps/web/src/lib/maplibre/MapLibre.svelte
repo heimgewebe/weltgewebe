@@ -124,7 +124,9 @@
       }
     }
 
-    return value;
+    throw new Error(
+      `Invalid LngLatLike value passed to normalizeLngLat: ${JSON.stringify(value)}`
+    );
   }
 </script>
 
