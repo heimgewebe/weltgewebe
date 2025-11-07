@@ -34,22 +34,37 @@ async fn live() -> Response {
 }
 
 #[derive(Debug, Default)]
+enum CheckStatus {
+    #[default]
+    Ready,
+    Skipped,
+    Failed,
+}
+
+#[derive(Debug, Default)]
 struct CheckResult {
-    ready: bool,
+    status: CheckStatus,
     errors: Vec<String>,
 }
 
 impl CheckResult {
     fn ready() -> Self {
         Self {
-            ready: true,
+            status: CheckStatus::Ready,
+            errors: Vec::new(),
+        }
+    }
+
+    fn skipped() -> Self {
+        Self {
+            status: CheckStatus::Skipped,
             errors: Vec::new(),
         }
     }
 
     fn failure(errors: Vec<String>) -> Self {
         Self {
-            ready: false,
+            status: CheckStatus::Failed,
             errors,
         }
     }
@@ -109,7 +124,7 @@ fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
 
 async fn check_nats(state: &ApiState) -> CheckResult {
     if !state.nats_configured {
-        return CheckResult::ready();
+        return CheckResult::skipped();
     }
 
     match state.nats_client.as_ref() {
@@ -131,7 +146,7 @@ async fn check_nats(state: &ApiState) -> CheckResult {
 
 async fn check_database(state: &ApiState) -> CheckResult {
     if !state.db_pool_configured {
-        return CheckResult::ready();
+        return CheckResult::skipped();
     }
 
     match state.db_pool.as_ref() {
@@ -182,10 +197,13 @@ async fn ready(State(state): State<ApiState>) -> Response {
     let database = check_database(&state).await;
     let policy = check_policy();
 
-    let status = if database.ready && nats.ready && policy.ready {
-        StatusCode::OK
-    } else {
+    let status = if matches!(database.status, CheckStatus::Failed)
+        || matches!(nats.status, CheckStatus::Failed)
+        || matches!(policy.status, CheckStatus::Failed)
+    {
         StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        StatusCode::OK
     };
 
     if status == StatusCode::OK {
@@ -197,9 +215,9 @@ async fn ready(State(state): State<ApiState>) -> Response {
     let body = Json(json!({
         "status": if status == StatusCode::OK { "ok" } else { "error" },
         "checks": {
-            "database": database.ready,
-            "nats": nats.ready,
-            "policy": policy.ready,
+            "database": matches!(database.status, CheckStatus::Ready),
+            "nats": matches!(nats.status, CheckStatus::Ready),
+            "policy": matches!(policy.status, CheckStatus::Ready),
         }
     }));
 
@@ -306,8 +324,8 @@ mod tests {
             Some("no-store")
         );
         assert_eq!(body["status"], "ok");
-        assert_eq!(body["checks"]["database"], true);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
@@ -331,8 +349,8 @@ mod tests {
             Some("no-store")
         );
         assert_eq!(body["status"], "error");
-        assert_eq!(body["checks"]["database"], true);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], false);
 
         Ok(())
@@ -351,7 +369,7 @@ mod tests {
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(body["checks"]["database"], false);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
@@ -369,7 +387,7 @@ mod tests {
         let body: Value = serde_json::from_slice(&body_bytes)?;
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(body["checks"]["database"], true);
+        assert_eq!(body["checks"]["database"], false);
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 

@@ -27,7 +27,7 @@
   "overrides": {
     "vite": "4.5.3",
     "@sveltejs/vite-plugin-svelte": "2.5.3",
-    "cookie": "npm:cookie@0.7.2"
+    "cookie": "npm:cookie@1.0.2"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
