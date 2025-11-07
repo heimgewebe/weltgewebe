@@ -78,7 +78,8 @@ fn init_tracing() -> anyhow::Result<()> {
     fmt()
         .with_env_filter(env_filter)
         .try_init()
-        .map_err(|error| anyhow!(error))?;
+        .map_err(|e| anyhow!(e))
+        .context("failed to initialize tracing")?;
 
     Ok(())
 }

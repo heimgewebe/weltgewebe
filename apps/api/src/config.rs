@@ -8,7 +8,7 @@ macro_rules! apply_env_override {
         if let Ok(value) = env::var($env_var) {
             $self.$field = value
                 .parse()
-                .with_context(|| format!("failed to parse {} override: {value}", $env_var))?;
+                .with_context(|| format!("failed to parse {} override: {}", $env_var, value))?;
         }
     };
 }

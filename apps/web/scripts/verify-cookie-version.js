@@ -30,7 +30,7 @@ const isModuleNotFound = (err) =>
 try {
   const pkg = require('cookie/package.json');
   const installed = pkg?.version;
-  const minSafe = '0.7.0';
+  const minSafe = '1.0.2';
   if (semverLt(installed, minSafe)) {
     const msg =
       `\n[security] cookie@${installed} detected (< ${minSafe}). ` +

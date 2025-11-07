@@ -39,7 +39,7 @@ jobs:
           sudo apt-get install -y pkg-config libssl-dev libpq-dev
       - name: Inject build metadata (compile-time env)
         run: |
-          echo "GIT_COMMIT_SHA=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
           echo "BUILD_TIMESTAMP=${{ github.run_started_at }}" >> "$GITHUB_ENV"
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
