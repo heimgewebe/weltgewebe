@@ -33,7 +33,7 @@ async fn live() -> Response {
     response
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy)]
 enum CheckStatus {
     #[default]
     Ready,
