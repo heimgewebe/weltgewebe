@@ -58,11 +58,24 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install yq
-        uses: mikefarah/yq-install-action@v1
-        with:
-          version: v4.48.1
-
+      - name: Install yq (official release)
+        run: |
+          YQ_VERSION="v4.48.1"
+          # choose architecture binary for ubuntu runners
+          arch="$(uname -m)"
+          case "$arch" in
+          x86_64) bin="yq_linux_amd64" ;;
+          aarch64|arm64) bin="yq_linux_arm64" ;;
+          *) echo "Unsupported arch: $arch" >&2; exit 1; 
+          esac
+          url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${bin}"
+          echo "Downloading ${url}"
+          curl -fsSL -o /tmp/yq "${url}"
+          # Download and verify checksum
+          curl -fsSL -o /tmp/yq.sha256 "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums_hashes_order"
+          grep "${bin}" /tmp/yq.sha256 | sha256sum -c -
+          chmod +x /tmp/yq
+          sudo mv /tmp/yq /usr/local/bin/yq
       - name: Verify yq
         run: yq --version
 
