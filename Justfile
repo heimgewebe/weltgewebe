@@ -1,5 +1,31 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Reset & Restart Web Dev Environment (Codespaces-tauglich)
+reset-web:
+    echo "🧹 Cleaning up and restarting web environment..."
+    cd apps/web
+
+    # Kill lingering vite/svelte-kit processes
+    pkill -f vite || true
+    pkill -f svelte-kit || true
+
+    # Remove stale node_modules & lockfiles
+    rm -rf node_modules package-lock.json
+
+    # Verify npm cache (avoid corrupt deps)
+    npm cache verify --force
+
+    # Reinstall (include optional deps like rollup)
+    npm install --include=optional
+
+    # Re-sync routes and SvelteKit structure
+    npx svelte-kit sync
+
+    echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..."
+    npx vite dev --host 0.0.0.0 --port 5173
+
+    echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
+
 alias c := ci
 
 ci:
