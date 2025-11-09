@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "svelte-kit dev --host",
     "build": "svelte-kit build",
-    "preview": "svelte-kit preview",
+    "preview": "svelte-kit preview --host",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",
     "prebuild": "svelte-kit sync",
@@ -22,18 +22,15 @@
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "svelte-kit sync",
-    "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci"
-  },
-  "overrides": {
-    "vite": "4.5.3",
-    "@sveltejs/vite-plugin-svelte": "2.5.3",
-    "cookie": "npm:cookie@1.0.2"
+    "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci",
+    "dev:cs": "svelte-kit dev --host 0.0.0.0 --port 5173",
+    "preview:cs": "svelte-kit preview --host 0.0.0.0 --port 4173"
   },
   "devDependencies": {
     "@playwright/test": "1.55.1",
-    "@sveltejs/adapter-static": "^2.0.3",
-    "@sveltejs/kit": "^2.20.6",
-    "@sveltejs/vite-plugin-svelte": "^2.5.3",
+    "@sveltejs/adapter-static": "^3.0.3",
+    "@sveltejs/kit": "^2.48.4",
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
     "@typescript-eslint/eslint-plugin": "8.8.0",
     "@typescript-eslint/parser": "8.8.0",
     "eslint": "9.11.1",
@@ -45,7 +42,7 @@
     "svelte": "^4.2.19",
     "svelte-check": "^4.3.2",
     "typescript": "5.9.2",
-    "vite": "^5.4.21"
+    "vite": "^5.4.10"
   },
   "dependencies": {
     "maplibre-gl": "4.7.1"

@@ -1,0 +1,62 @@
+npm verbose cli /usr/local/share/nvm/versions/node/v20.19.5/bin/node /usr/local/share/nvm/versions/node/v20.19.5/bin/npm
+npm info using npm@10.8.2
+npm info using node@v20.19.5
+npm verbose title npm install
+npm verbose argv "install" "--omit" "optional" "--loglevel" "verbose"
+npm verbose logfile logs-max:10 dir:/home/vscode/.npm/_logs/2025-11-08T15_56_35_184Z-
+npm verbose logfile /home/vscode/.npm/_logs/2025-11-08T15_56_35_184Z-debug-0.log
+npm http fetch GET 200 https://registry.npmjs.org/maplibre-gl 13ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@playwright%2ftest 20ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@sveltejs%2fadapter-static 17ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@sveltejs%2fkit 10ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@sveltejs%2fkit 11ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@opentelemetry%2fapi 6ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@sveltejs%2fvite-plugin-svelte 3ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/svelte 14ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/vite 113ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/@types%2fnode 38ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/less 6ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/lightningcss 5ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/sass 3ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/sass-embedded 3ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/stylus 2ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/sugarss 1ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/postcss 3ms (cache hit)
+npm http fetch GET 200 https://registry.npmjs.org/terser 3ms (cache hit)
+npm verbose stack Error: unable to resolve dependency tree
+npm verbose stack     at #failPeerConflict (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:1360:25)
+npm verbose stack     at #loadPeerSet (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:1326:33)
+npm verbose stack     at async #buildDepStep (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:901:11)
+npm verbose stack     at async Arborist.buildIdealTree (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/build-ideal-tree.js:181:7)
+npm verbose stack     at async Promise.all (index 1)
+npm verbose stack     at async Arborist.reify (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/node_modules/@npmcli/arborist/lib/arborist/reify.js:131:5)
+npm verbose stack     at async Install.exec (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/lib/commands/install.js:150:5)
+npm verbose stack     at async Npm.exec (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/lib/npm.js:207:9)
+npm verbose stack     at async module.exports (/usr/local/share/nvm/versions/node/v20.19.5/lib/node_modules/npm/lib/cli/entry.js:74:5)
+npm error code ERESOLVE
+npm error ERESOLVE unable to resolve dependency tree
+npm error
+npm error While resolving: weltgewebe-web@0.0.0
+npm error Found: @sveltejs/kit@2.48.4
+npm error node_modules/@sveltejs/kit
+npm error   dev @sveltejs/kit@"^2.48.4" from the root project
+npm error
+npm error Could not resolve dependency:
+npm error peer @sveltejs/kit@"^1.5.0" from @sveltejs/adapter-static@2.0.3
+npm error node_modules/@sveltejs/adapter-static
+npm error   dev @sveltejs/adapter-static@"^2.0.3" from the root project
+npm error
+npm error Fix the upstream dependency conflict, or retry
+npm error this command with --force or --legacy-peer-deps
+npm error to accept an incorrect (and potentially broken) dependency resolution.
+npm error
+npm error
+npm error For a full report see:
+npm error /home/vscode/.npm/_logs/2025-11-08T15_56_35_184Z-eresolve-report.txt
+npm verbose cwd /workspaces/weltgewebe/apps/web
+npm verbose os Linux 6.8.0-1030-azure
+npm verbose node v20.19.5
+npm verbose npm  v10.8.2
+npm verbose exit 1
+npm verbose code 1
+npm error A complete log of this run can be found in: /home/vscode/.npm/_logs/2025-11-08T15_56_35_184Z-debug-0.log
