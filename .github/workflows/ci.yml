@@ -143,7 +143,7 @@ jobs:
             exit 1
           fi
           echo "Installing uv v${VER} via official installer…"
-          INSTALLER_SH="${HOME}/uv_install.sh"
+          INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
           chmod +x "${INSTALLER_SH}"
           UV_VERSION="v${VER}" "${INSTALLER_SH}" --force
