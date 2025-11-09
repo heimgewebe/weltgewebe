@@ -9,6 +9,7 @@ Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
+- [Vision & Leitidee](docs/vision.md)
 - [Einführung: Ethik- & UX-First-Startpunkt](docs/overview/inhalt.md)
 - [Systematik & Strukturüberblick](docs/overview/zusammenstellung.md)
 
