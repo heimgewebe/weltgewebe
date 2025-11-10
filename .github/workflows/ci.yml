@@ -359,9 +359,11 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -d '' files < <(git ls-files -z '*.json' ':!:**/package-lock.json' || true)
-          if (( ${#files[@]} )); then
-            jq -n 'inputs' "${files[@]}" >/dev/null
-            echo "Validated $(( ${#files[@]} )) JSON files with jq."
-          else
+
+          if [ "${#files[@]}" -eq 0 ]; then
             echo "No JSON files to lint"
+            exit 0
           fi
+
+          printf 'Linting %d JSON files\n' "${#files[@]}"
+          jq -n 'inputs' "${files[@]}" >/dev/null
