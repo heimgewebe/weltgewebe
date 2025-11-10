@@ -90,3 +90,7 @@ db-migrate:    # run database migrations
 
 seed:          # seed database with initial data
 	cargo run -p api -- seed
+default: lint
+lint:
+    bash -n $(git ls-files *.sh *.bash)
+    echo "lint ok"
