@@ -328,23 +328,10 @@ jobs:
       - name: YAML lint
         run: |
           set -euo pipefail
-          # Ensure yamllint is available (install per-run to avoid runner drift)
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
-
-          # Collect tracked YAML files (NUL-separated) in a robust, portable way
-          files=()
-          while IFS= read -r -d '' file; do
-            files+=("$file")
-          done < <(git ls-files -z -- '*.yml' '*.yaml' || true)
-
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No YAML files to lint"
-            exit 0
-          fi
-
-          printf 'Linting %d YAML files\n' "${#files[@]}"
-          python -m yamllint --strict -c .yamllint.yml "${files[@]}"
+          git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
+            python -m yamllint --strict -c .yamllint.yml
 
       - name: Ensure jq is available
         run: |
@@ -358,12 +345,5 @@ jobs:
       - name: JSON lint
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(git ls-files -z '*.json' ':!:**/package-lock.json' || true)
-
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No JSON files to lint"
-            exit 0
-          fi
-
-          printf 'Linting %d JSON files\n' "${#files[@]}"
-          jq -n 'inputs' "${files[@]}" >/dev/null
+          git ls-files -z '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
+            jq -n 'inputs' >/dev/null
