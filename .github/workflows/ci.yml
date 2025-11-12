@@ -327,7 +327,6 @@ jobs:
 
       - name: YAML lint
         run: |
-          set -euo pipefail
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
           LINT_SCRIPT="${{ runner.temp }}/lint_yaml.sh"
@@ -335,10 +334,7 @@ jobs:
           #!/usr/bin/env bash
           set -euo pipefail
           git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
-            python -m yamllint --strict -c .yamllint.yml
-          EOF
-          chmod +x "${LINT_SCRIPT}"
-          "${LINT_SCRIPT}"
+            yamllint --strict -c .yamllint.yml
 
       - name: Ensure jq is available
         run: |
@@ -351,12 +347,7 @@ jobs:
 
       - name: JSON lint
         run: |
-          set -euo pipefail
-          LINT_SCRIPT="${{ runner.temp }}/lint_json.sh"
-          cat > "${LINT_SCRIPT}" <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          git ls-files -z '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
+          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
             jq -n 'inputs' >/dev/null
           EOF
           chmod +x "${LINT_SCRIPT}"
