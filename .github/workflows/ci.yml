@@ -110,7 +110,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
           check-latest: true
@@ -199,7 +199,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
           check-latest: true
