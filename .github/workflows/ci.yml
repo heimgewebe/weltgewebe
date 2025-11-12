@@ -110,7 +110,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
           check-latest: true
@@ -199,7 +199,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
           check-latest: true
@@ -330,8 +330,15 @@ jobs:
           set -euo pipefail
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
+          LINT_SCRIPT="${{ runner.temp }}/lint_yaml.sh"
+          cat > "${LINT_SCRIPT}" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
           git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
             python -m yamllint --strict -c .yamllint.yml
+          EOF
+          chmod +x "${LINT_SCRIPT}"
+          "${LINT_SCRIPT}"
 
       - name: Ensure jq is available
         run: |
@@ -345,5 +352,12 @@ jobs:
       - name: JSON lint
         run: |
           set -euo pipefail
+          LINT_SCRIPT="${{ runner.temp }}/lint_json.sh"
+          cat > "${LINT_SCRIPT}" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
           git ls-files -z '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
             jq -n 'inputs' >/dev/null
+          EOF
+          chmod +x "${LINT_SCRIPT}"
+          "${LINT_SCRIPT}"

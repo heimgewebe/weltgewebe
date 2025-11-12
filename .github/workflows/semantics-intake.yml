@@ -20,39 +20,38 @@ jobs:
       - name: Enforce size limits
         run: |
           python - <<'PY'
-import math
-import sys
-from pathlib import Path
+          import math
+          import sys
+          from pathlib import Path
 
-import yaml
+          import yaml
 
-limits_path = Path("policies/limits.yaml")
-if not limits_path.exists():
-    print("::error::policies/limits.yaml missing")
-    sys.exit(1)
+          limits_path = Path("policies/limits.yaml")
+          if not limits_path.exists():
+              print("::error::policies/limits.yaml missing")
+              sys.exit(1)
 
-data = yaml.safe_load(limits_path.read_text(encoding="utf-8")) or {}
-sem = data.get("semantics", {})
-try:
-    max_nodes = int(sem.get("max_nodes_jsonl_mb"))
-    max_edges = int(sem.get("max_edges_jsonl_mb"))
-except (TypeError, ValueError):
-    print("::error::semantics limits must be integers")
-    sys.exit(1)
+          data = yaml.safe_load(limits_path.read_text(encoding="utf-8")) or {}
+          try:
+              max_nodes = int(data.get("max_nodes_jsonl_mb"))
+              max_edges = int(data.get("max_edges_jsonl_mb"))
+          except (TypeError, ValueError):
+              print("::error::limits must be integers in policies/limits.yaml")
+              sys.exit(1)
 
-def file_size_mb(path: Path) -> int:
-    return math.ceil(path.stat().st_size / (1024 * 1024))
+          def file_size_mb(path: Path) -> int:
+              return math.ceil(path.stat().st_size / (1024 * 1024))
 
-for path in Path(".gewebe/in").glob("*.jsonl"):
-    size_mb = file_size_mb(path)
-    if path.name.endswith(".nodes.jsonl") and size_mb > max_nodes:
-        print(f"::error::{path} > limit ({size_mb} MB > {max_nodes} MB)")
-        sys.exit(1)
-    if path.name.endswith(".edges.jsonl") and size_mb > max_edges:
-        print(f"::error::{path} > limit ({size_mb} MB > {max_edges} MB)")
-        sys.exit(1)
-print("Semantic intake size limits respected")
-PY
+          for path in Path(".gewebe/in").glob("*.jsonl"):
+              size_mb = file_size_mb(path)
+              if path.name.endswith(".nodes.jsonl") and size_mb > max_nodes:
+                  print(f"::error::{path} > limit ({size_mb} MB > {max_nodes} MB)")
+                  sys.exit(1)
+              if path.name.endswith(".edges.jsonl") and size_mb > max_edges:
+                  print(f"::error::{path} > limit ({size_mb} MB > {max_edges} MB)")
+                  sys.exit(1)
+          print("Semantic intake size limits respected")
+          PY
       - name: Validate incoming JSONL (if present)
         run: |
           set -euo pipefail
