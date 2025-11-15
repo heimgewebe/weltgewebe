@@ -49,18 +49,18 @@ jobs:
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '22.x'
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
-      - name: Enable Corepack (npm)
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Enable Corepack (pnpm)
         run: corepack enable
-      - name: npm ci
-        run: npm ci
+      - name: pnpm install
+        run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: pnpm playwright install --with-deps
       - name: Build (production)
-        run: npm run build
+        run: pnpm build
       - name: Run Playwright tests
-        run: npm run test
+        run: pnpm test
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4

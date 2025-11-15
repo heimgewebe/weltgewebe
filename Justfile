@@ -12,17 +12,14 @@ reset-web:
     # Remove stale node_modules & lockfiles
     rm -rf node_modules package-lock.json
 
-    # Verify npm cache (avoid corrupt deps)
-    npm cache verify --force
-
-    # Reinstall (include optional deps like rollup)
-    npm install --include=optional
+    # Reinstall dependencies with pnpm
+    pnpm install
 
     # Re-sync routes and SvelteKit structure
-    npx svelte-kit sync
+    pnpm svelte-kit sync
 
     echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..."
-    npx vite dev --host 0.0.0.0 --port 5173
+    pnpm vite dev --host 0.0.0.0 --port 5173
 
     echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
 
@@ -32,10 +29,10 @@ ci:
 	@echo "==> Web: install, sync, build, typecheck"
 	if [ -d apps/web ]; then
 		pushd apps/web >/dev/null
-		npm ci
-		npm run sync
-		npm run build
-		npm run ci
+		pnpm install --frozen-lockfile
+		pnpm sync
+		pnpm build
+		pnpm ci
 		popd >/dev/null
 	fi
 	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
