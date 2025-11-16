@@ -135,7 +135,8 @@ jobs:
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
-          VER="$(yq -r '.uv' toolchain.versions.yml)"
+          # Read version and strip a potential leading 'v'
+          VER="$(yq -r '.uv' toolchain.versions.yml | sed 's/^v//')"
           if [ -z "${VER:-}" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
@@ -144,7 +145,10 @@ jobs:
           INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
           chmod +x "${INSTALLER_SH}"
-          UV_VERSION="v${VER}" "${INSTALLER_SH}" --force
+          # The installer script uses the UV_VERSION env var.
+          # We export it to make it available to the installer process.
+          export UV_VERSION="v${VER}"
+          "${INSTALLER_SH}" --force
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
           # resiliently check for installed version
@@ -323,21 +327,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Lint YAML and JSON files
+      - name: Lint YAML files
         run: |
           set -euo pipefail
-          echo "Linting YAML files..."
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
           git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
             yamllint --strict -c .yamllint.yml
-          echo "Checking for jq..."
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq not found, installing..."
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
-          fi
-          echo "Linting JSON files..."
-          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
-            jq -n 'inputs' >/dev/null
-          echo "Linting completed."
+
+      - name: JSON lint
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.json' ':!:**/package-lock.json' \
+            | xargs -r -0 --no-run-if-empty jq -n 'inputs' >/dev/null

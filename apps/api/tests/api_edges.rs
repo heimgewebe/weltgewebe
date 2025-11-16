@@ -1,8 +1,17 @@
-use axum::{body, http::{Request, StatusCode}, Router};
+use anyhow::Result;
+use axum::{
+    body,
+    http::{Request, StatusCode},
+    Router,
+};
 use std::{fs, path::PathBuf};
 use tower::ServiceExt;
-use weltgewebe_api::{routes::api_router, state::ApiState, config::AppConfig, telemetry::{Metrics, BuildInfo}};
-use anyhow::{Result, Context};
+use weltgewebe_api::{
+    config::AppConfig,
+    routes::api_router,
+    state::ApiState,
+    telemetry::{BuildInfo, Metrics},
+};
 
 fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
@@ -26,14 +35,18 @@ fn test_state() -> Result<ApiState> {
     })
 }
 
-fn make_tmp_dir() -> tempfile::TempDir { tempfile::tempdir().expect("tmpdir") }
+fn make_tmp_dir() -> tempfile::TempDir {
+    tempfile::tempdir().expect("tmpdir")
+}
 fn write_lines(path: &PathBuf, lines: &[&str]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, lines.join("\n")).unwrap();
 }
 
 fn app() -> Router {
-    Router::new().nest("/api", api_router()).with_state(test_state().unwrap())
+    Router::new()
+        .nest("/api", api_router())
+        .with_state(test_state().unwrap())
 }
 
 #[tokio::test]
@@ -43,35 +56,43 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     let edges = in_dir.join("demo.edges.jsonl");
     std::env::set_var("GEWEBE_IN_DIR", &in_dir);
 
-    write_lines(&edges, &[
-        r#"{"id":"e1","src":"n1","dst":"n2","kind":"thread"}"#,
-        r#"{"id":"e2","src":"n1","dst":"n3","kind":"thread"}"#,
-        r#"{"id":"e3","src":"n2","dst":"n3","kind":"thread"}"#,
-    ]);
+    write_lines(
+        &edges,
+        &[
+            r#"{"id":"e1","src":"n1","dst":"n2","kind":"thread"}"#,
+            r#"{"id":"e2","src":"n1","dst":"n3","kind":"thread"}"#,
+            r#"{"id":"e3","src":"n2","dst":"n3","kind":"thread"}"#,
+        ],
+    );
 
     let app = app();
 
     let res = app
         .clone()
-        .oneshot(Request::get("/api/edges?src=n1").body(body::Body::empty())?)
-        .await?;
+        .oneshot(
+            Request::get("/api/edges?src=n1")
+                .body(body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(v.as_array().context("must be array")?.len(), 2);
 
     let res = app
-        .oneshot(Request::get("/api/edges?src=n1&dst=n2").body(body::Body::empty())?)
-        .await?;
+        .oneshot(
+            Request::get("/api/edges?src=n1&dst=n2")
+                .body(body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     let arr = v.as_array().context("must be array")?;
     assert_eq!(arr.len(), 1);
-    assert_eq!(
-        arr[0].get("id").context("id missing")?.as_str().context("must be string")?,
-        "e1"
-    );
-
-    Ok(())
+    assert_eq!(arr[0].get("id").unwrap().as_str().unwrap(), "e1");
 }
