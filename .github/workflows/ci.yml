@@ -335,4 +335,4 @@ jobs:
         run: |
           set -euo pipefail
           git ls-files -z -- '*.json' ':!:**/package-lock.json' \
-            | x-r -0 --no-run-if-empty jq -n 'inputs' >/dev/null
+            | xargs -r -0 --no-run-if-empty jq -n 'inputs' >/dev/null
