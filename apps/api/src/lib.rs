@@ -1,4 +1,5 @@
 pub mod config;
+pub mod middleware;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
@@ -10,8 +11,9 @@ use std::{env, io::ErrorKind, net::SocketAddr};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
-use axum::{routing::get, Router};
+use axum::{middleware::from_fn, routing::get, Router};
 use config::AppConfig;
+use middleware::auth::require_auth;
 use routes::{api_router, health::health_routes, meta::meta_routes};
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
@@ -48,7 +50,7 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     let app = Router::new()
-        .nest("/api", api_router())
+        .nest("/api", api_router().route_layer(from_fn(require_auth)))
         .merge(health_routes())
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
