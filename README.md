@@ -26,30 +26,39 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
 
-### Development quickstart
+### Development Quickstart
 
-(Preview; wird mit Gate C aktiviert – siehe `docs/process/fahrplan.md`.)
+1.  **Voraussetzungen:** Docker, Docker Compose und `just` müssen installiert sein.
+    Alternativ zu `just` kann `make` verwendet werden.
 
-- Install Rust (stable), Docker, Docker Compose, and `just`.
-- Bring up the core stack:
+2.  **.env erstellen:** Kopiere die Vorlage `.env.example` nach `.env`.
+    Für den lokalen Start sind in der Regel keine Änderungen nötig.
 
-  ```bash
-  just up
-  ```
+    ```bash
+    cp .env.example .env
+    ```
 
-  Alternativ steht ein äquivalentes Makefile zur Verfügung:
+3.  **Dev-Stack starten:**
 
-  ```bash
-  make up
-  ```
+    ```bash
+    just up
+    ```
 
-- Siehe auch `docs/quickstart-gate-c.md` für die Compose-Befehle.
+    Der Befehl `make up` ist ein Alias und macht dasselbe.
+    *Hinweis: Der erste Start kann einige Minuten dauern, da Docker-Images gebaut werden.*
 
-- Run hygiene checks locally:
+4.  **Erfolg prüfen:**
+    - **Frontend:** Öffne [http://localhost:8081](http://localhost:8081) im Browser.
+    - **API-Healthcheck:** Rufe [http://localhost:8081/api/health/live](http://localhost:8081/api/health/live) auf.
 
-  ```bash
-  just check
-  ```
+5.  **Stack anhalten:**
+
+    ```bash
+    just down
+    ```
+
+- Für weitere Details siehe `docs/quickstart-gate-c.md`.
+- Um Code-Qualität lokal zu prüfen, nutze `just check`.
 
 - Öffnest du das Repo im VS Code Devcontainer, richtet `.devcontainer/post-create.sh`
   die benötigten Tools (u. a. `just`, `uv`, `vale`) automatisch ein. Danach stehen
@@ -105,7 +114,7 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
     ```
 
 5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard:
-   lokal 4173, im CI 5173; via `PORT` überschreibbar):
+   lokal 5173, im CI 5173; via `PORT` überschreibbar):
 
     ```bash
     npx playwright test
@@ -113,7 +122,7 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
     ```
 
 Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
-`npm run preview` läuft (Standard-Ports: lokal 4173, CI 5173; via `PORT` überschreibbar).
+`npm run preview` läuft (Standard-Ports: lokal 5173, CI 5173; via `PORT` überschreibbar).
 Den HTML-Report findest du nach den Läufen unter `apps/web/playwright-report/`.
 
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
