@@ -323,21 +323,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Lint YAML and JSON files
+      - name: Lint YAML files
         run: |
           set -euo pipefail
-          echo "Linting YAML files..."
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
           git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
             yamllint --strict -c .yamllint.yml
-          echo "Checking for jq..."
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq not found, installing..."
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
-          fi
-          echo "Linting JSON files..."
-          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
-            jq -n 'inputs' >/dev/null
-          echo "Linting completed."
+
+      - name: JSON lint
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.json' ':!:**/package-lock.json' \
+            | xargs -r -0 --no-run-if-empty jq -n 'inputs' >/dev/null
