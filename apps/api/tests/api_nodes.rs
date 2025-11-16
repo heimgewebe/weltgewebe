@@ -57,7 +57,6 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
         Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?
     ).await?;
     assert_eq!(res.status(), StatusCode::OK);
-
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     let arr = v.as_array().context("must be array")?;
