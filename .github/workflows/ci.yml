@@ -227,7 +227,7 @@ jobs:
       - name: Start preview server
         run: |
           pnpm preview -- --host 127.0.0.1 --port 4173 &> /tmp/preview.log &
-          pnpm --yes wait-on http://127.0.0.1:4173
+          pnpm dlx wait-on http://127.0.0.1:4173
 
       - name: Run Playwright tests
         env:
