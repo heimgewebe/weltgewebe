@@ -73,7 +73,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `npm run preview -- --host 0.0.0.0 --port ${PORT}`,
+          command: `pnpm preview -- --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 90_000,
           reuseExistingServer: !process.env.CI

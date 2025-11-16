@@ -1,6 +1,7 @@
 {
   "name": "weltgewebe-web",
   "version": "0.0.0",
+  "packageManager": "pnpm@9.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,14 +16,14 @@
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
-    "pretest": "npm run build",
+    "pretest": "pnpm build",
     "test": "playwright test",
     "test:report": "playwright show-report",
     "test:ci": "playwright test",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "svelte-kit sync",
-    "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci",
+    "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
     "dev:cs": "svelte-kit dev --host 0.0.0.0 --port 5173",
     "preview:cs": "svelte-kit preview --host 0.0.0.0 --port 4173"
   },

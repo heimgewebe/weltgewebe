@@ -11,7 +11,7 @@ corepack prepare pnpm@latest --activate || true
 
 # Frontend-Install, wenn apps/web existiert
 if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
-    (cd apps/web && (pnpm install || npm ci || npm install))
+    (cd apps/web && pnpm install)
 fi
 
 # --- uv installieren (offizieller Installer von Astral) ---

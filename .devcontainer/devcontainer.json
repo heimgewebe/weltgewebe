@@ -44,6 +44,6 @@
   // Start an init process (tini) for better signal handling inside the container.
   "init": true,
   "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "postAttachCommand": "bash -lc 'corepack enable || true; cd apps/web && [ -d node_modules ] || (pnpm install || npm ci || npm install)'",
+  "postAttachCommand": "bash -lc 'corepack enable || true; cd apps/web && [ -d node_modules ] || pnpm install'",
   "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
