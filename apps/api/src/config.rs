@@ -158,7 +158,10 @@ delegation_expire_days: 28
         let temp_dir = tempdir()?;
         let invalid_path = temp_dir.path().join("does-not-exist.yml");
 
-        let _config_path = EnvGuard::set("APP_CONFIG_PATH", invalid_path.to_str().unwrap());
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            invalid_path.to_str().expect("path is valid utf-8"),
+        );
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
