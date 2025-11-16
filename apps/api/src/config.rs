@@ -6,9 +6,13 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            $self.$field = value
-                .parse()
-                .with_context(|| format!("failed to parse {env_var} override: {value}", env_var=$env_var, value=value))?;
+            $self.$field = value.parse().with_context(|| {
+                format!(
+                    "failed to parse {env_var} override: {value}",
+                    env_var = $env_var,
+                    value = value
+                )
+            })?;
         }
     };
 }
