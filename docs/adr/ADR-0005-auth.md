@@ -42,4 +42,4 @@ Folgende Bereiche der Anwendung werden in Zukunft eine Authentifizierung erforde
 *   **API**: Das API benötigt eine Middleware, die das Session-Cookie validiert und den Benutzerkontext für die Anfrage herstellt.
 *   **Frontend**: Das Frontend benötigt einen Mechanismus, um den Authentifizierungsstatus des Benutzers zu erkennen und die Benutzeroberfläche entsprechend anzupassen (z.B. Login/Logout-Buttons, geschützte Routen).
 *   **Sicherheit**: Die Implementierung muss sorgfältig erfolgen, um gängige Sicherheitsrisiken (wie Session-Fixation, CSRF, XSS) zu vermeiden.
-*   **Keine sofortige Sicherheit**: Die in diesem ADR beschriebenen Platzhalter bieten **keine** echte Sicherheit. Sie sind nur als strukturelle Vorbereitung für die spätere Implementierung gedacht.
+*   **Keine sofortige Sicherheit**: Die im Zuge dieses ADRs erstellten Code-Platzhalter (insbesondere die API-Middleware) sind **bewusst nicht funktional und bieten keinerlei Sicherheit**. Sie dienen ausschließlich als strukturelle Einhängepunkte für die spätere, echte Implementierung von Schutzmechanismen.
