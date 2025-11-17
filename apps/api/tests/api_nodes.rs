@@ -1,8 +1,17 @@
-use axum::{body, http::{Request, StatusCode}, Router};
+use anyhow::{Context, Result};
+use axum::{
+    body,
+    http::{Request, StatusCode},
+    Router,
+};
 use std::{fs, path::PathBuf};
 use tower::ServiceExt;
-use weltgewebe_api::{routes::api_router, state::ApiState, config::AppConfig, telemetry::{Metrics, BuildInfo}};
-use anyhow::{Result, Context};
+use weltgewebe_api::{
+    config::AppConfig,
+    routes::api_router,
+    state::ApiState,
+    telemetry::{BuildInfo, Metrics},
+};
 
 fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
@@ -26,7 +35,9 @@ fn test_state() -> Result<ApiState> {
     })
 }
 
-fn make_tmp_dir() -> tempfile::TempDir { tempfile::tempdir().expect("tmpdir") }
+fn make_tmp_dir() -> tempfile::TempDir {
+    tempfile::tempdir().expect("tmpdir")
+}
 
 fn write_lines(path: &PathBuf, lines: &[&str]) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -34,7 +45,9 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
 }
 
 fn app() -> Router {
-    Router::new().nest("/api", api_router()).with_state(test_state().unwrap())
+    Router::new()
+        .nest("/api", api_router())
+        .with_state(test_state().unwrap())
 }
 
 #[tokio::test]
@@ -44,18 +57,24 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let nodes = in_dir.join("demo.nodes.jsonl");
     std::env::set_var("GEWEBE_IN_DIR", &in_dir);
 
-    write_lines(&nodes, &[
-        r#"{"type":"Feature","id":"n1","geometry":{"type":"Point","coordinates":[9.9,53.55]},"properties":{"title":"A"}}"#,
-        r#"{"type":"Feature","id":"n2","geometry":{"type":"Point","coordinates":[11.0,54.2]},"properties":{"title":"B"}}"#,
-        r#"{"type":"Feature","id":"n3","geometry":{"type":"Point","coordinates":[10.2,53.6]},"properties":{"title":"C"}}"#,
-    ]);
+    write_lines(
+        &nodes,
+        &[
+            r#"{"type":"Feature","id":"n1","geometry":{"type":"Point","coordinates":[9.9,53.55]},"properties":{"title":"A"}}"#,
+            r#"{"type":"Feature","id":"n2","geometry":{"type":"Point","coordinates":[11.0,54.2]},"properties":{"title":"B"}}"#,
+            r#"{"type":"Feature","id":"n3","geometry":{"type":"Point","coordinates":[10.2,53.6]},"properties":{"title":"C"}}"#,
+        ],
+    );
 
     let app = app();
 
     // BBox über Hamburg herum (soll n1 & n3 treffen)
-    let res = app.clone().oneshot(
-        Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?
-    ).await?;
+    let res = app
+        .clone()
+        .oneshot(
+            Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?,
+        )
+        .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
