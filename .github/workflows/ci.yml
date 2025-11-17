@@ -60,22 +60,28 @@ jobs:
 
       - name: Install yq (official release)
         run: |
+          set -euo pipefail
+          YQ_TMP_DIR=$(mktemp -d)
+          trap 'rm -rf -- "$YQ_TMP_DIR"' EXIT
+          cd "$YQ_TMP_DIR"
           YQ_VERSION="v4.48.1"
-          # choose architecture binary for ubuntu runners
           arch="$(uname -m)"
           case "$arch" in
-          x86_64) bin="yq_linux_amd64" ;;
-          aarch64|arm64) bin="yq_linux_arm64" ;;
-          *) echo "Unsupported arch: $arch" >&2; exit 1; 
+            x86_64) bin="yq_linux_amd64" ;;
+            aarch64|arm64) bin="yq_linux_arm64" ;;
+            *) echo "Unsupported arch: $arch" >&2; exit 1; ;;
           esac
           url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${bin}"
-          echo "Downloading ${url}"
-          curl -fsSL -o /tmp/yq "${url}"
-          # Download and verify checksum
-          curl -fsSL -o /tmp/yq.sha256 "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums_hashes_order"
-          grep "${bin}" /tmp/yq.sha256 | sha256sum -c -
-          chmod +x /tmp/yq
-          sudo mv /tmp/yq /usr/local/bin/yq
+          checksum_url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums"
+          echo "Downloading yq from ${url}"
+          curl -fsSL --connect-timeout 10 --retry 3 --retry-all-errors -o "${bin}" "${url}"
+          echo "Downloading checksums from ${checksum_url}"
+          curl -fsSL --connect-timeout 10 --retry 3 --retry-all-errors -o checksums "${checksum_url}"
+          echo "Verifying checksum..."
+          grep "${bin}" checksums | sha256sum -c -
+          echo "Checksum valid."
+          chmod +x "${bin}"
+          sudo mv "${bin}" /usr/local/bin/yq
       - name: Verify yq
         run: yq --version
 
