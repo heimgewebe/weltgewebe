@@ -117,7 +117,14 @@ jobs:
           node-version: '20.19.0'
           check-latest: true
           cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
+
+      - name: Install pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.11.0 --activate
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -214,10 +221,14 @@ jobs:
           node-version: '20.19.0'
           check-latest: true
           cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
 
-      - name: Enable Corepack (pnpm)
-        run: corepack enable
+      - name: Install pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.11.0 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
