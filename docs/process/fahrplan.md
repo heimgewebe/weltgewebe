@@ -38,7 +38,7 @@
 #### Checkliste „bereit für Gate B“
 
 - [ ] Interaktiver UX-Click-Dummy ist verlinkt (README) und deckt Karte → Knoten → Zeit-UI ab.
-- [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `thread` abgestimmt und dokumentiert.
+- [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `conversation`, `edge` abgestimmt und dokumentiert.
 - [ ] README-Landing beschreibt Click-Dummy, Contracts und verweist auf diesen Fahrplan.
 - [ ] Vale-Regeln laufen gegen README/Fahrplan ohne Verstöße.
 - [ ] PWA installierbar, Offline-Shell lädt Grundlayout.
@@ -52,7 +52,7 @@
 
 - [ ] Axum-Service liefert `/health/live`, `/health/ready`, `/version`.
 - [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
-- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`) als Stubs
+- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`) als Stubs
   implementiert.
 - [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`,
   `cargo test` aus.
@@ -110,7 +110,7 @@
 
 - **UX-Click-Dummy:** Interaktiver Ablauf für Karte → Knoten → Zeit-UI. Figma/Tool-Link im README
   vermerken.
-- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `thread`
+- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `conversation`, `edge`
   abstimmen (Basis für Gate B). Ablage unter `contracts/` und im README
   verlinken.
 - **README-Landing:** Landing-Abschnitt aktualisieren (Screenshot/Diagramm +
@@ -128,13 +128,13 @@
 
 ## Gate B — API (Axum) *Health & Kernverträge* — Phaseziele
 
-**Ziel:** API lebt, dokumentiert und testet minimal **Kernobjekte**: Knoten, Rolle, Faden.
+**Ziel:** API lebt, dokumentiert und testet minimal **Kernobjekte**: Knoten, Rolle, Gesprächsraum, Faden.
 
 ### Gate B: Umfang
 
 - Axum-Service mit `/health/live`, `/health/ready`, `/version`.
 - OpenAPI-Stub (utoipa) generiert.
-- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`
+- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`
   (Stub-Implementierung).
 - `migrations/` vorbereitet (ohne Fachtabellen).
 - CI: `cargo fmt`, `clippy -D warnings`, `cargo test`.
@@ -194,11 +194,11 @@
 
 ---
 
-## Phase B (Woche 3–4): **Kernmodell — Knoten, Rolle, Faden**
+## Phase B (Woche 3–4): **Kernmodell — Knoten, Rolle, Gesprächsraum, Faden**
 
-- Domain-Events: `node.created`, `role.created`, `thread.created`.
-- Tabellen (PG): `nodes`, `roles`, `threads` (nur ID/Meta), Outbox (leer, aber vorhanden).
-- API: `POST /nodes`, `GET /nodes/{id}` echt (PG); `POST /roles`, `POST /threads` stub.
+- Domain-Events: `node.created`, `role.created`, `conversation.created`, `edge.created`.
+- Tabellen (PG): `nodes`, `roles`, `conversations`, `edges` (nur ID/Meta), Outbox (leer, aber vorhanden).
+- API: `POST /nodes`, `GET /nodes/{id}` echt (PG); `POST /roles`, `POST /conversations` stub.
 - Web: „Rolle drehen 7 Sekunden“ (UI-Effekt), Faden-Stub Linie Rolle→Knoten (Fake-Data).
 
 **Akzeptanz:** Knoten persistiert in PG; Faden-Stub sichtbar; E2E-Flow „Knoten knüpfen“ klickbar.

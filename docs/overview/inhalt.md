@@ -24,6 +24,10 @@ Technische Re-Entry-Pfade sind über Gates A–D definiert.
 So bleiben Experimente nachvollziehbar und können schrittweise in den Produktionskontext
 überführt werden.
 
+## Domänensprache
+
+Das Weltgewebe verwendet eine präzise Domänensprache, um Klarheit in Code, APIs und Dokumentation zu gewährleisten. Die Kernelemente sind in `docs/domain/vocabulary.md` definiert und durch [ADR-0043](docs/adr/0043-edge-vs-conversation.md) formalisiert.
+
 ## Weitere Orientierung
 
 - **Systematik & Struktur:** Siehe `docs/overview/zusammenstellung.md`.
