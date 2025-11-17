@@ -73,6 +73,7 @@ weltgewebe/weltgewebe-repo/
 │
 ├─ docs/                        # Dokumentation & Entscheidungen
 │  ├─ adr/                      # Architecture Decision Records
+│  │  ├─ ADR-0005-auth.md      # Minimales Auth-Konzept
 │  ├─ techstack.md              # Techstack v3.2 (Referenz)
 │  ├─ architektur.ascii         # Architektur-Poster/ASCII-Diagramme
 │  ├─ datenmodell.md            # Datenbank- und Projektionstabellen

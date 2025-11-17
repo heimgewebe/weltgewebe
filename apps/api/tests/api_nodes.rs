@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use axum::{
     body,
     http::{Request, StatusCode},
@@ -51,7 +51,7 @@ fn app() -> Router {
 }
 
 #[tokio::test]
-async fn nodes_bbox_and_limit() {
+async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let nodes = in_dir.join("demo.nodes.jsonl");
@@ -72,35 +72,34 @@ async fn nodes_bbox_and_limit() {
     let res = app
         .clone()
         .oneshot(
-            Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10")
-                .body(body::Body::empty())
-                .unwrap(),
+            Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?,
         )
-        .await
-        .unwrap();
+        .await?;
     assert_eq!(res.status(), StatusCode::OK);
-
-    let body = body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let arr = v.as_array().unwrap();
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
     assert_eq!(arr.len(), 2);
     let ids: Vec<_> = arr
         .iter()
-        .map(|x| x.get("id").unwrap().as_str().unwrap().to_string())
+        .map(|x| {
+            x.get("id")
+                .expect("id missing")
+                .as_str()
+                .expect("must be string")
+                .to_string()
+        })
         .collect();
     assert!(ids.contains(&"n1".to_string()) && ids.contains(&"n3".to_string()));
 
     // Limit=1
     let res = app
-        .oneshot(
-            Request::get("/api/nodes?limit=1")
-                .body(body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+        .oneshot(Request::get("/api/nodes?limit=1").body(body::Body::empty())?)
+        .await?;
     assert_eq!(res.status(), StatusCode::OK);
-    let body = body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
-    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(v.as_array().unwrap().len(), 1);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v.as_array().context("must be array")?.len(), 1);
+
+    Ok(())
 }

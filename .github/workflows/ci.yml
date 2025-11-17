@@ -135,34 +135,40 @@ jobs:
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
-          # Read version and strip a potential leading 'v'
-          VER="$(yq -r '.uv' toolchain.versions.yml | sed 's/^v//')"
-          if [ -z "${VER:-}" ]; then
+          RAW_VER="$(yq -r '.uv' toolchain.versions.yml)"
+          if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
-          echo "Installing uv v${VER} via official installer…"
+          # optional führendes "v" entfernen, damit beide Varianten funktionieren:
+          #   uv: "0.5.4"    oder uv: "v0.5.4"
+          CLEAN_VER="${RAW_VER#v}"
+          INSTALLER_VER="v${CLEAN_VER}"
+
           INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
+            https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
           chmod +x "${INSTALLER_SH}"
-          # The installer script uses the UV_VERSION env var.
-          # We export it to make it available to the installer process.
-          export UV_VERSION="v${VER}"
-          "${INSTALLER_SH}" --force
+
+          # Installer über UV_VERSION steuern
+          UV_VERSION="${INSTALLER_VER}" "${INSTALLER_SH}" --force
+
+          # Stellen sicher, dass ~/.local/bin in PATH nachfolgender Schritte ist
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
           hash -r
-          # resiliently check for installed version
-          INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
-          if [ -z "$INSTALLED" ]; then
-            echo "Could not determine uv version - is uv correctly installed?" >&2
+
+          # Version überprüfen (defensiv, aber hilfreich bei Drift)
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "uv not found in PATH after installation" >&2
             exit 1
           fi
-          echo "${INSTALLED}"
-          # use grep -Fq for quiet, fixed-string matching
-          if ! grep -Fq " ${VER}" <<<"${INSTALLED}"; then
-            echo "uv version mismatch. Expected: ${VER}, Got: ${INSTALLED}" >&2
+          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
+          echo "Installed uv version: ${INSTALLED_VER}"
+          if [ "${INSTALLED_VER}" != "${CLEAN_VER}" ]; then
+            echo "uv version mismatch. Expected: ${CLEAN_VER}, got: ${INSTALLED_VER}" >&2
             exit 1
           fi
+          echo "uv version check passed."
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -327,16 +333,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Lint YAML files
+      - name: Lint YAML and JSON files
         run: |
           set -euo pipefail
+          echo "Linting YAML files..."
           python -m pip install --user yamllint
           export PATH="$HOME/.local/bin:$PATH"
           git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
             yamllint --strict -c .yamllint.yml
-
-      - name: JSON lint
-        run: |
-          set -euo pipefail
-          git ls-files -z -- '*.json' ':!:**/package-lock.json' \
-            | xargs -r -0 --no-run-if-empty jq -n 'inputs' >/dev/null
+          echo "Checking for jq..."
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "jq not found, installing..."
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
+          fi
+          echo "Linting JSON files..."
+          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
+            jq -n 'inputs' >/dev/null
+          echo "Linting completed."

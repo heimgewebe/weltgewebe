@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { authStore } from '$lib/auth/store';
+  import { onDestroy } from 'svelte';
+
   export let balance = "1 250 WE";
   export let trend: 'stable' | 'up' | 'down' = 'stable';
   export let note = "Attrappe · UX-Test";
@@ -8,6 +11,14 @@
     up: 'steigend',
     down: 'sinkend'
   } as const;
+
+  let loggedIn = false;
+
+  const unsubscribe = authStore.subscribe((value) => {
+    loggedIn = value.loggedIn;
+  });
+
+  onDestroy(unsubscribe);
 </script>
 
 <div class="gewebekonto panel" role="group" aria-label="Gewebekonto-Widget (Attrappe)">
@@ -22,6 +33,13 @@
   <div class="actions row" aria-hidden="true">
     <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Einzahlen</button>
     <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Auszahlen</button>
+  </div>
+  <div class="auth-actions row">
+    {#if loggedIn}
+      <button class="btn ghost" type="button" on:click={() => authStore.logout()}>Abmelden</button>
+    {:else}
+      <button class="btn" type="button" on:click={() => authStore.login()}>Anmelden</button>
+    {/if}
   </div>
 </div>
 

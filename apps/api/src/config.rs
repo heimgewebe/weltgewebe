@@ -6,13 +6,19 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            $self.$field = value.parse().with_context(|| {
-                format!(
-                    "failed to parse {env_var} override: {value}",
-                    env_var = $env_var,
-                    value = value
-                )
-            })?;
+            match value.parse() {
+                Ok(parsed) => {
+                    $self.$field = parsed;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        env_var = $env_var,
+                        value = %value,
+                        error = %e,
+                        "failed to parse environment override; keeping configured value"
+                    );
+                }
+            }
         }
     };
 }
@@ -162,7 +168,10 @@ delegation_expire_days: 28
         let temp_dir = tempdir()?;
         let invalid_path = temp_dir.path().join("does-not-exist.yml");
 
-        let _config_path = EnvGuard::set("APP_CONFIG_PATH", invalid_path.to_str().unwrap());
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            invalid_path.to_str().expect("path is valid utf-8"),
+        );
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
