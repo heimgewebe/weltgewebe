@@ -22,7 +22,7 @@ abgeleiteten Lese-Modelle zu verstehen.
 
 ### `nodes`
 
-Speichert geografische oder logische Knotenpunkte, die als Anker für Threads dienen.
+Speichert geografische oder logische Knotenpunkte, die als Anker für Gesprächsräume dienen.
 
 | Spalte | Typ | Beschreibung |
 |---|---|---|
@@ -46,15 +46,15 @@ Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
 
 ### `conversations`
 
-Repräsentiert die Gesprächsräume ("conversations"), die an Knoten gebunden sind.
+Repräsentiert die Gesprächsräume ("conversations"), die mit unterschiedlichen Subjekten (z.B. Knoten, Gremien) verknüpft sein können.
 
 | Spalte | Typ | Beschreibung |
 |---|---|---|
 | `id` | `uuid` (PK) | Eindeutiger Identifikator des Gesprächsraums. |
-| `node_id` | `uuid` (FK, `nodes.id`) | Zugehöriger Knoten. |
-| `author_role_id` | `uuid` (FK, `roles.id`) | Ersteller des Gesprächsraums. |
+| `conversation_type` | `text` | Typ des Gesprächsraums (z.B. `node`, `webrat`, `naehstuebchen`, `private`). |
+| `subject_id` | `uuid` | Zugehöriges Subjekt (z.B. `nodes.id` bei `conversation_type = 'node'`). Kann für globale Gespräche `NULL` sein. |
+| `author_role_id` | `uuid` (FK, `roles.id`) | Rolle, die den Gesprächsraum eröffnet hat. |
 | `title` | `text` | Titel des Gesprächsraums. |
-| `content` | `text` | Inhalt (z.B. erster Beitrag). |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 | `updated_at` | `timestamptz` | Zeitstempel der letzten Änderung. |
 

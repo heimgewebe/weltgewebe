@@ -16,7 +16,7 @@
       "type": ["string", "null"],
       "format": "uuid"
     },
-    "created_by_role": {
+    "author_role_id": {
       "type": "string",
       "format": "uuid"
     },
@@ -32,5 +32,5 @@
       "format": "date-time"
     }
   },
-  "required": ["id", "conversation_type", "subject_id", "created_by_role", "title", "created_at", "updated_at"]
+  "required": ["id", "conversation_type", "subject_id", "author_role_id", "title", "created_at", "updated_at"]
 }
