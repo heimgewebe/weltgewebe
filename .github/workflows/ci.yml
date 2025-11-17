@@ -132,33 +132,27 @@ jobs:
             ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
             ${{ runner.os }}-uv-
 
-      - name: Install uv (pinned via toolchain.versions.yml)
+      - name: Install uv
         run: |
           set -euo pipefail
-          VER="$(yq -r '.uv' toolchain.versions.yml)"
-          if [ -z "${VER:-}" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
+          RAW_VER="$(yq -r '.uv' toolchain.versions.yml)"
+          if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
+            echo "Error: Could not parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
-          echo "Installing uv v${VER} via official installer…"
-          INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
-          chmod +x "${INSTALLER_SH}"
-          UV_VERSION="v${VER}" "${INSTALLER_SH}" --force
-          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
-          hash -r
-          # resiliently check for installed version
-          INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
-          if [ -z "$INSTALLED" ]; then
-            echo "Could not determine uv version - is uv correctly installed?" >&2
+          INSTALLER_VER="v${RAW_VER#v}"
+          CLEAN_VER="${RAW_VER#v}"
+          echo "Requesting uv version: ${INSTALLER_VER}"
+          curl -LsSf https://astral.sh/uv/install.sh | UV_VERSION="${INSTALLER_VER}" sh
+          INSTALLED_VER="$(uv --version | awk '{print $2}')"
+          echo "Installed uv version: ${INSTALLED_VER}"
+          if [ "${INSTALLED_VER}" != "${CLEAN_VER}" ]; then
+            echo "Version mismatch!" >&2
+            echo "Expected: ${CLEAN_VER}" >&2
+            echo "Got:      ${INSTALLED_VER}" >&2
             exit 1
           fi
-          echo "${INSTALLED}"
-          # use grep -Fq for quiet, fixed-string matching
-          if ! grep -Fq " ${VER}" <<<"${INSTALLED}"; then
-            echo "uv version mismatch. Expected: ${VER}, Got: ${INSTALLED}" >&2
-            exit 1
-          fi
+          echo "uv version check passed."
 
       - name: Setup Just
         uses: extractions/setup-just@v2
