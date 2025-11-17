@@ -44,17 +44,17 @@ Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
 | `permissions` | `jsonb` | Berechtigungen der Rolle als JSON-Objekt. |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 
-### `threads`
+### `conversations`
 
-Repräsentiert die Konversationen oder "Fäden", die an Knoten gebunden sind.
+Repräsentiert die Gesprächsräume ("conversations"), die an Knoten gebunden sind.
 
 | Spalte | Typ | Beschreibung |
 |---|---|---|
-| `id` | `uuid` (PK) | Eindeutiger Identifikator des Threads. |
+| `id` | `uuid` (PK) | Eindeutiger Identifikator des Gesprächsraums. |
 | `node_id` | `uuid` (FK, `nodes.id`) | Zugehöriger Knoten. |
-| `author_role_id` | `uuid` (FK, `roles.id`) | Ersteller des Threads. |
-| `title` | `text` | Titel des Threads. |
-| `content` | `text` | Inhalt des Threads (z.B. erster Beitrag). |
+| `author_role_id` | `uuid` (FK, `roles.id`) | Ersteller des Gesprächsraums. |
+| `title` | `text` | Titel des Gesprächsraums. |
+| `content` | `text` | Inhalt (z.B. erster Beitrag). |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 | `updated_at` | `timestamptz` | Zeitstempel der letzten Änderung. |
 
@@ -65,9 +65,9 @@ Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikat
 | Spalte | Typ | Beschreibung |
 |---|---|---|
 | `id` | `uuid` (PK) | Eindeutiger Identifikator des Events. |
-| `aggregate_type` | `text` | Typ des Aggregats (z.B. "thread"). |
+| `aggregate_type` | `text` | Typ des Aggregats (z.B. "conversation"). |
 | `aggregate_id` | `uuid` | ID des betroffenen Aggregats. |
-| `event_type` | `text` | Typ des Events (z.B. "thread.created"). |
+| `event_type` | `text` | Typ des Events (z.B. "conversation.created"). |
 | `payload` | `jsonb` | Event-Daten. |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 
@@ -88,17 +88,17 @@ Eine denormalisierte Sicht auf Rollen, die nur öffentlich sichtbare Information
 | `display_name` | `text` | Öffentlich sichtbarer Name (ggf. aus einem externen User-Service). |
 | `avatar_url` | `text` | URL zu einem Avatar-Bild. |
 
-### `faden_view`
+### `conversation_view`
 
-Eine zusammengefasste Ansicht von Threads für die schnelle Darstellung in der Benutzeroberfläche.
+Eine zusammengefasste Ansicht von Gesprächsräumen für die schnelle Darstellung in der Benutzeroberfläche.
 
 | Spalte | Typ | Beschreibung |
 |---|---|---|
-| `thread_id` | `uuid` | Identifikator des Threads. |
+| `conversation_id` | `uuid` | Identifikator des Gesprächsraums. |
 | `node_id` | `uuid` | Zugehöriger Knoten. |
 | `node_name` | `text` | Name des zugehörigen Knotens. |
 | `author_display_name` | `text` | Anzeigename des Autors. |
-| `title` | `text` | Titel des Threads. |
+| `title` | `text` | Titel des Gesprächsraums. |
 | `comment_count` | `integer` | Anzahl der Kommentare (wird vom Projektor berechnet). |
 | `last_activity_at` | `timestamptz` | Zeitstempel der letzten Aktivität. |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
