@@ -171,11 +171,11 @@ Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Bud
 CI-Laufzeiten). Sie sind zunächst informativ und werden derzeit über Kommentare in der
 CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
 
-## Semantik (Externe Quelle: semantAH)
+## Semantik (Optionale zukünftige Integration – derzeit inaktiv)
 
-- Verträge: `contracts/semantics/*.schema.json`
-- Manuelle Aufnahme: siehe `docs/runbooks/semantics-intake.md`
-- Aktuell: nur Infos, kein Event-Import.
+- Ursprünglicher Plan: `semantAH`-Integration (siehe ADR-0042).
+- Status: Vorerst ausgesetzt, Contracts und CI-Jobs entfernt.
+- Eine Reaktivierung würde eine neue ADR erfordern.
 
 ## Continuous Integration
 
