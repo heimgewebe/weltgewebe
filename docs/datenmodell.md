@@ -58,6 +58,18 @@ Repräsentiert die Gesprächsräume ("conversations"), die mit unterschiedlichen
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 | `updated_at` | `timestamptz` | Zeitstempel der letzten Änderung. |
 
+### `messages`
+
+Speichert einzelne Beiträge innerhalb eines Gesprächsraums.
+
+| Spalte | Typ | Beschreibung |
+|---|---|---|
+| `id` | `uuid` (PK) | Eindeutiger Identifikator der Nachricht. |
+| `conversation_id` | `uuid` (FK, `conversations.id`) | Zugehöriger Gesprächsraum. |
+| `author_role_id` | `uuid` (FK, `roles.id`) | Rolle, die die Nachricht verfasst hat. |
+| `content` | `text` | Inhalt der Nachricht. |
+| `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
+
 ### `outbox`
 
 Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikation.
@@ -65,9 +77,9 @@ Implementiert das Transactional Outbox Pattern für zuverlässige Event-Publikat
 | Spalte | Typ | Beschreibung |
 |---|---|---|
 | `id` | `uuid` (PK) | Eindeutiger Identifikator des Events. |
-| `aggregate_type` | `text` | Typ des Aggregats (z.B. "conversation"). |
+| `aggregate_type` | `text` | Typ des Aggregats (z.B. "conversation", "message"). |
 | `aggregate_id` | `uuid` | ID des betroffenen Aggregats. |
-| `event_type` | `text` | Typ des Events (z.B. "conversation.created"). |
+| `event_type` | `text` | Typ des Events (z.B. "conversation.created", "message.posted"). |
 | `payload` | `jsonb` | Event-Daten. |
 | `created_at` | `timestamptz` | Zeitstempel der Erstellung. |
 
