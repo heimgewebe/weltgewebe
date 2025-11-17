@@ -132,24 +132,40 @@ jobs:
             ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
             ${{ runner.os }}-uv-
 
-      - name: Install uv
+      - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
           RAW_VER="$(yq -r '.uv' toolchain.versions.yml)"
           if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
-            echo "Error: Could not parse uv version from toolchain.versions.yml" >&2
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
-          INSTALLER_VER="v${RAW_VER#v}"
+          # optional führendes "v" entfernen, damit beide Varianten funktionieren:
+          #   uv: "0.5.4"    oder uv: "v0.5.4"
           CLEAN_VER="${RAW_VER#v}"
-          echo "Requesting uv version: ${INSTALLER_VER}"
-          curl -LsSf https://astral.sh/uv/install.sh | UV_VERSION="${INSTALLER_VER}" sh
-          INSTALLED_VER="$(uv --version | awk '{print $2}')"
+          INSTALLER_VER="v${CLEAN_VER}"
+
+          INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
+            https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
+          chmod +x "${INSTALLER_SH}"
+
+          # Installer über UV_VERSION steuern
+          UV_VERSION="${INSTALLER_VER}" "${INSTALLER_SH}" --force
+
+          # Stellen sicher, dass ~/.local/bin in PATH nachfolgender Schritte ist
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          hash -r
+
+          # Version überprüfen (defensiv, aber hilfreich bei Drift)
+          if ! command -v uv >/dev/null 2>&1; then
+            echo "uv not found in PATH after installation" >&2
+            exit 1
+          fi
+          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
           echo "Installed uv version: ${INSTALLED_VER}"
           if [ "${INSTALLED_VER}" != "${CLEAN_VER}" ]; then
-            echo "Version mismatch!" >&2
-            echo "Expected: ${CLEAN_VER}" >&2
-            echo "Got:      ${INSTALLED_VER}" >&2
+            echo "uv version mismatch. Expected: ${CLEAN_VER}, got: ${INSTALLED_VER}" >&2
             exit 1
           fi
           echo "uv version check passed."
