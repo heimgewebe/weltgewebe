@@ -6,13 +6,19 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            $self.$field = value.parse().with_context(|| {
-                format!(
-                    "failed to parse {env_var} override: {value}",
-                    env_var = $env_var,
-                    value = value
-                )
-            })?;
+            match value.parse() {
+                Ok(parsed) => {
+                    $self.$field = parsed;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        env_var = $env_var,
+                        value = %value,
+                        error = %e,
+                        "failed to parse environment override; keeping configured value"
+                    );
+                }
+            }
         }
     };
 }
@@ -57,7 +63,7 @@ impl AppConfig {
                 .context("failed to parse embedded default configuration")?,
         };
 
-        Ok(config.apply_env_overrides())
+        config.apply_env_overrides()
     }
 
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
@@ -66,16 +72,16 @@ impl AppConfig {
             .with_context(|| format!("failed to read configuration file at {}", path.display()))?;
         let config: Self = serde_yaml::from_str(&raw)
             .with_context(|| format!("failed to parse configuration file at {}", path.display()))?;
-        Ok(config.apply_env_overrides())
+        config.apply_env_overrides()
     }
 
-    fn apply_env_overrides(mut self) -> Self {
+    fn apply_env_overrides(mut self) -> Result<Self> {
         apply_env_override!(self, fade_days, "HA_FADE_DAYS");
         apply_env_override!(self, ron_days, "HA_RON_DAYS");
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
 
-        self
+        Ok(self)
     }
 }
 
