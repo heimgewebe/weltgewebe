@@ -1,28 +1,32 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/message.schema.json",
   "title": "Message",
   "description": "A single message within a conversation.",
   "type": "object",
   "properties": {
     "id": {
-      "type": "string",
-      "format": "uuid"
+      "type": "string"
     },
     "conversation_id": {
-      "type": "string",
-      "format": "uuid"
+      "type": "string"
     },
-    "author_role_id": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "content": {
+    "sender_role_id": {
       "type": "string"
     },
     "created_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "body": {
+      "type": "string"
+    },
+    "in_reply_to_id": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
     }
   },
-  "required": ["id", "conversation_id", "author_role_id", "content", "created_at"]
+  "required": ["id", "conversation_id", "sender_role_id", "created_at", "body"]
 }
