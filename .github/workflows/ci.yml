@@ -111,6 +111,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+          run_install: false
+
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
@@ -120,12 +126,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             apps/web/pnpm-lock.yaml
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.11.0
-          run_install: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -217,6 +217,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+          run_install: false
+
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
@@ -225,12 +231,6 @@ jobs:
           cache-dependency-path: |
             pnpm-lock.yaml
             apps/web/pnpm-lock.yaml
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.11.0
-          run_install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
