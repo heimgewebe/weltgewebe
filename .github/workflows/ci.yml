@@ -14,10 +14,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Verwende die Standard-Bash von GitHub Actions, ohne eigenes Template.
 defaults:
   run:
-    shell: >
-      bash --noprofile --norc -euo pipefail {0}
+    shell: bash
 
 jobs:
   docs-changes:
@@ -59,29 +59,25 @@ jobs:
           fetch-depth: 0
 
       - name: Install yq (official release)
+        env:
+          YQ_VERSION: v4.48.1
         run: |
-          set -euo pipefail
-          YQ_TMP_DIR=$(mktemp -d)
-          trap 'rm -rf -- "$YQ_TMP_DIR"' EXIT
-          cd "$YQ_TMP_DIR"
-          YQ_VERSION="v4.48.1"
+          # einfache, transparente Installation ohne externe Skripte
           arch="$(uname -m)"
           case "$arch" in
             x86_64) bin="yq_linux_amd64" ;;
             aarch64|arm64) bin="yq_linux_arm64" ;;
-            *) echo "Unsupported arch: $arch" >&2; exit 1; ;;
+            *)
+              echo "Unsupported arch: $arch" >&2
+              exit 1
+              ;;
           esac
+
           url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${bin}"
-          checksum_url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/checksums"
-          echo "Downloading yq from ${url}"
-          curl -fsSL --connect-timeout 10 --retry 3 --retry-all-errors -o "${bin}" "${url}"
-          echo "Downloading checksums from ${checksum_url}"
-          curl -fsSL --connect-timeout 10 --retry 3 --retry-all-errors -o checksums "${checksum_url}"
-          echo "Verifying checksum..."
-          grep "${bin}" checksums | sha256sum -c -
-          echo "Checksum valid."
-          chmod +x "${bin}"
-          sudo mv "${bin}" /usr/local/bin/yq
+          echo "Downloading ${url}"
+          curl -sSL "$url" -o /tmp/yq
+          chmod +x /tmp/yq
+          sudo mv /tmp/yq /usr/local/bin/yq
       - name: Verify yq
         run: yq --version
 
@@ -121,7 +117,15 @@ jobs:
           node-version: '20.19.0'
           check-latest: true
           cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+          run_install: false
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -206,7 +210,7 @@ jobs:
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
     defaults:
       run:
-        shell: bash --noprofile --norc -euo pipefail {0}
+        shell: bash
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
@@ -218,10 +222,15 @@ jobs:
           node-version: '20.19.0'
           check-latest: true
           cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
 
-      - name: Enable Corepack (pnpm)
-        run: corepack enable
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+          run_install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
