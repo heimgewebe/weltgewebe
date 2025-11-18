@@ -6,13 +6,16 @@
   "type": "object",
   "properties": {
     "id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "conversation_id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "sender_role_id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "created_at": {
       "type": "string",
@@ -22,10 +25,15 @@
       "type": "string"
     },
     "in_reply_to_id": {
-      "type": "string"
+      "type": ["string", "null"],
+      "format": "uuid"
     },
     "metadata": {
-      "type": "object"
+      "type": "object",
+      "description": "Optional metadata for the message (e.g. rendering hints).",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
     }
   },
   "required": ["id", "conversation_id", "sender_role_id", "created_at", "body"]

@@ -6,7 +6,8 @@
   "type": "object",
   "properties": {
     "id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "conversation_type": {
       "type": "string",
@@ -16,7 +17,9 @@
       "type": ["string", "null"]
     },
     "created_by_role": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid",
+      "description": "Role that created the conversation."
     },
     "title": {
       "type": "string"
@@ -30,5 +33,5 @@
       "format": "date-time"
     }
   },
-  "required": ["id", "conversation_type", "subject_id", "created_by_role", "title", "created_at", "updated_at"]
+  "required": ["id", "conversation_type", "created_by_role", "title", "created_at", "updated_at"]
 }
