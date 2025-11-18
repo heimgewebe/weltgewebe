@@ -1,24 +1,22 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/conversation.schema.json",
   "title": "Conversation",
-  "description": "A conversation space for discussion or decision-making.",
+  "description": "A conversation space.",
   "type": "object",
   "properties": {
     "id": {
-      "type": "string",
-      "format": "uuid"
+      "type": "string"
     },
     "conversation_type": {
       "type": "string",
       "enum": ["node", "webrat", "naehstuebchen", "private"]
     },
     "subject_id": {
-      "type": ["string", "null"],
-      "format": "uuid"
+      "type": ["string", "null"]
     },
-    "author_role_id": {
-      "type": "string",
-      "format": "uuid"
+    "created_by_role": {
+      "type": "string"
     },
     "title": {
       "type": "string"
@@ -32,5 +30,5 @@
       "format": "date-time"
     }
   },
-  "required": ["id", "conversation_type", "subject_id", "author_role_id", "title", "created_at", "updated_at"]
+  "required": ["id", "conversation_type", "subject_id", "created_by_role", "title", "created_at", "updated_at"]
 }

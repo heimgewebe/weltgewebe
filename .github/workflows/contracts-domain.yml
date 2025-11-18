@@ -1,0 +1,27 @@
+name: "Validate Domain Schemas"
+on:
+  push:
+    paths:
+      - 'contracts/domain/**.schema.json'
+  pull_request:
+    paths:
+      - 'contracts/domain/**.schema.json'
+
+jobs:
+  validate-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - run: pnpm install -g ajv-cli
+      - run: |
+          for schema in contracts/domain/*.schema.json; do
+            ajv compile -s "$schema" --strict=false
+          done

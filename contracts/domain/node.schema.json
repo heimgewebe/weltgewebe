@@ -1,36 +1,35 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/node.schema.json",
   "title": "Node",
-  "description": "A node in the Weltgewebe graph, representing places, ideas, or resources.",
+  "description": "A node in the Weltgewebe graph.",
   "type": "object",
   "properties": {
     "id": {
-      "type": "string",
-      "format": "uuid"
-    },
-    "name": {
       "type": "string"
     },
-    "location": {
-      "type": "object",
-      "properties": {
-        "lat": {
-          "type": "number"
-        },
-        "lon": {
-          "type": "number"
-        }
-      },
-      "required": ["lat", "lon"]
+    "kind": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
     },
     "created_at": {
       "type": "string",
       "format": "date-time"
     },
-    "updated_at": {
-      "type": "string",
-      "format": "date-time"
+    "summary": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "location": {
+      "type": "object"
     }
   },
-  "required": ["id", "name"]
+  "required": ["id", "kind", "title", "created_at"]
 }
