@@ -1,10 +1,10 @@
-| Domäne | Deutsch | Technik/API | Bedeutung |
+|Domäne|Deutsch|Technik/API|Bedeutung|
 |---|---|---|---|
-| node | Knoten | /nodes | Orte, Ideen, Ressourcen |
-| role | Rolle | /roles | Berechtigungs- und Identitätskontext für Aktionen im Gewebe |
-| edge | Faden | /edges | Graph-Beziehungen zwischen node/role (siehe [ADR-0043](../adr/0043-edge-vs-conversation.md)) |
-| conversation | Gesprächsraum | /conversations | Diskussions- / Entscheidungsräume (siehe [ADR-0043](../adr/0043-edge-vs-conversation.md)) |
-| message | Beitrag | /conversations/{id}/messages | Einzelner Inhalt in einer conversation |
+|node|Knoten|/nodes|Orte, Ideen, Ressourcen|
+|role|Rolle|/roles|Berechtigungs- und Identitätskontext für Aktionen im Gewebe|
+|edge|Faden|/edges|Graph-Beziehungen zwischen node/role (siehe [ADR-0043](../adr/0043-edge-vs-conversation.md))|
+|conversation|Gesprächsraum|/conversations|Diskussions- / Entscheidungsräume (siehe [ADR-0043](../adr/0043-edge-vs-conversation.md))|
+|message|Beitrag|/conversations/{id}/messages|Einzelner Inhalt in einer conversation|
 
 ---
 

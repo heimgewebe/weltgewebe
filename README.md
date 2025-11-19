@@ -2,7 +2,7 @@
 <!-- Docs-only (ADR-0001 Clean-Slate) • Re-Entry via Gates A–D -->
 # Weltgewebe
 
-Mobile-first Webprojekt auf SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream, Caddy.
+Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream und Caddy.
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
 ## Landing
@@ -16,10 +16,9 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > **Hinweis / Scope**
 >
 > - **Kein** Teilnahme-/Freigabeprozess für Fleet-Rollouts oder operativen Leitstandbetrieb.
-> - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway;
+> - Optionales Dashboard-Widget liest **ausschließlich** über das Leitstand-REST/Gateway,
 >   **kein Direktzugriff** auf JSONL-Dateien.
 > - Entspricht ADR-0001 (Docs-only) und bleibt kompatibel mit den Gates A–D.
->
 
 ## Getting started
 
@@ -28,17 +27,17 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 
 ### Development Quickstart
 
-1.  **Voraussetzungen:** Docker, Docker Compose und `just` müssen installiert sein.
-    Alternativ zu `just` kann `make` verwendet werden.
+1. **Voraussetzungen:** Docker, Docker Compose und `just` müssen installiert sein.
+   Alternativ zu `just` kann `make` verwendet werden.
 
-2.  **.env erstellen:** Kopiere die Vorlage `.env.example` nach `.env`.
-    Für den lokalen Start sind in der Regel keine Änderungen nötig.
+2. **.env erstellen:** Kopiere die Vorlage `.env.example` nach `.env`.
+   Für den lokalen Start sind in der Regel keine Änderungen nötig.
 
     ```bash
     cp .env.example .env
     ```
 
-3.  **Dev-Stack starten:**
+3. **Dev-Stack starten:**
 
     ```bash
     just up
@@ -47,11 +46,11 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
     Der Befehl `make up` ist ein Alias und macht dasselbe.
     *Hinweis: Der erste Start kann einige Minuten dauern, da Docker-Images gebaut werden.*
 
-4.  **Erfolg prüfen:**
+4. **Erfolg prüfen:**
     - **Frontend:** Öffne [http://localhost:8081](http://localhost:8081) im Browser.
     - **API-Healthcheck:** Rufe [http://localhost:8081/api/health/live](http://localhost:8081/api/health/live) auf.
 
-5.  **Stack anhalten:**
+5. **Stack anhalten:**
 
     ```bash
     just down
@@ -60,25 +59,24 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - Für weitere Details siehe `docs/quickstart-gate-c.md`.
 - Um Code-Qualität lokal zu prüfen, nutze `just check`.
 
-- Öffnest du das Repo im VS Code Devcontainer, richtet `.devcontainer/post-create.sh`
-  die benötigten Tools (u. a. `just`, `uv`, `vale`) automatisch ein. Danach stehen
-  Python-Helfer über `uv` sofort zur Verfügung (`uv -V`).
-  Falls du Python-Tools in Unterordnern verwaltest (z. B. `tools/py/`), achte darauf,
-  das entstehende `uv.lock` mit einzuchecken – standardmäßig landet es im jeweiligen
+- Im VS Code Devcontainer richtet `.devcontainer/post-create.sh` die benötigten Tools
+  (u. a. `just`, `uv`, `vale`) automatisch ein. Python-Helfer über `uv` stehen
+  danach sofort zur Verfügung (`uv -V`).
+- Falls du Python-Tools in Unterordnern verwaltest (z. B. `tools/py/`), achte darauf,
+  das entstehende `uv.lock` mit einzuchecken – es landet standardmäßig im jeweiligen
   Projektstamm (Root oder Unterordner).
-  Außerhalb des Devcontainers stellst du die gewünschte `uv`-Version mit
+- Außerhalb des Devcontainers stellst du die gewünschte `uv`-Version mit
   `scripts/tools/uv-pin.sh ensure` sicher (optional via `UV_VERSION=<ziel>`).
 
 - CI enforces: `cargo fmt --check`, `clippy -D warnings`, `cargo deny check`.
-- Performance budgets & SLOs live in `policies/` and are referenced in docs & dashboards.
-- Für lokale Web-E2E-Tests installierst du die Playwright-Browser einmalig mit
-  `npx playwright install --with-deps` (Details unten im Abschnitt
-  [Web-E2E-Quickstart](#web-e2e-quickstart-preview)).
+- Performance-Budgets & SLOs leben in `policies/` und werden in Docs & Dashboards referenziert.
+- Für lokale Web-E2E-Tests installierst du die Playwright-Browser einmalig
+  (Details im Abschnitt [Web-E2E-Quickstart](#web-e2e-quickstart-preview)):
+  `npx playwright install --with-deps`
 
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
-> Code-Re-Entry erfolgt über die Gates A–D (siehe
-> [docs/process/fahrplan.md](docs/process/fahrplan.md)). Dort sind die Gate-Checklisten (A–D) als
-> To-dos dokumentiert.
+> Code-Re-Entry erfolgt über die Gates A–D (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)).
+> Dort sind die Gate-Checklisten (A–D) als To-dos dokumentiert.
 
 ### Web-E2E-Quickstart (Preview)
 
@@ -113,8 +111,7 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
     npm run build
     ```
 
-5. Tests headless ausführen (startet automatisch einen Preview-Server – Standard:
-   lokal 5173, im CI 5173; via `PORT` überschreibbar):
+5. Tests headless ausführen (startet automatisch einen Preview-Server):
 
     ```bash
     npx playwright test
@@ -122,28 +119,31 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
     ```
 
 Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
-`npm run preview` läuft (Standard-Ports: lokal 5173, CI 5173; via `PORT` überschreibbar).
-Den HTML-Report findest du nach den Läufen unter `apps/web/playwright-report/`.
+`npm run preview` läuft. Den HTML-Report findest du nach den Läufen unter
+`apps/web/playwright-report/`.
 
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
 
 Die API stellt unter `/version` Build-Infos bereit:
 
 ```json
-{ "version": "0.1.0", "commit": "<git sha>", "build_timestamp": "<UTC ISO8601>" }
+{
+  "version": "0.1.0",
+  "commit": "<git sha>",
+  "build_timestamp": "<UTC ISO8601>"
+}
 ```
 
-Diese Werte werden **zur Compile-Zeit** gesetzt. In CI exportieren die Workflows
-`GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` als Umgebungsvariablen. Lokal sind sie optional
-und fallen auf `"unknown"` zurück. Es ist **nicht nötig**, diese Variablen in `.env` zu pflegen.
+Diese Werte werden zur Compile-Zeit gesetzt. In CI exportieren die Workflows `GIT_COMMIT_SHA`
+und `BUILD_TIMESTAMP` als Umgebungsvariablen. Lokal sind sie optional und fallen auf
+`"unknown"` zurück. Es ist **nicht nötig**, diese Variablen in `.env` zu pflegen.
 
 ### Build-Zeit-Variablen
 
-`GIT_COMMIT_SHA`, `CARGO_PKG_VERSION` und `BUILD_TIMESTAMP` stammen direkt aus dem
-CI bzw. Compiler. Sie werden **nicht** in `.env` oder `.env.example` gepflegt.
-Beim lokalen Build ohne CI-Kontext setzen wir sie automatisch auf `"unknown"`,
-während die Pipelines im CI die echten Werte einspeisen. Es besteht daher kein
-Bedarf, `.env.example` um diese Variablen zu erweitern.
+`GIT_COMMIT_SHA`, `CARGO_PKG_VERSION` und `BUILD_TIMESTAMP` stammen direkt aus dem CI
+bzw. Compiler. Sie werden **nicht** in `.env` oder `.env.example` gepflegt.
+Beim lokalen Build ohne CI-Kontext setzen wir sie automatisch auf `"unknown"`, während
+die Pipelines im CI die echten Werte einspeisen.
 
 ### Policies-Pfad (Override)
 
@@ -167,9 +167,9 @@ Optional kann `APP_CONFIG_PATH` auf eine alternative YAML-Datei zeigen.
 - Zweck: **Frühwarnung, kein Hard-Fail.**
 - Hinweis: **Werden nach und nach automatisiert in CI erzwungen.**
 
-Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget,
-CI-Laufzeiten). Sie sind zunächst informativ und werden derzeit über Kommentare in der
-CI gespiegelt. Abweichungen dienen als Diskussionsgrundlage im Review.
+Unter `policies/limits.yaml` dokumentieren wir Leitplanken (z. B. Web-Bundle-Budget, CI-Laufzeiten).
+Sie sind zunächst informativ und werden derzeit über Kommentare in der CI gespiegelt. Abweichungen
+dienen als Diskussionsgrundlage im Review.
 
 ## Semantik (Optionale zukünftige Integration – derzeit inaktiv)
 
@@ -184,11 +184,10 @@ YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 
-- **Gate-Checklisten:**
-  [docs/process/fahrplan.md](docs/process/fahrplan.md) (Gates A–D mit konkreten Prüfpunkten)
-- **Gate A (Preview/Docs):**
-  [apps/web/README.md](apps/web/README.md) (Frontend-Prototyp für Karte · Drawer ·
-  Zeitleiste · Ethik-UI)
+- **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md)
+  (Gates A–D mit konkreten Prüfpunkten)
+- **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md)
+  (Frontend-Prototyp für Karte · Drawer · Zeitleiste · Ethik-UI)
 
 ## Beiträge & Docs
 
