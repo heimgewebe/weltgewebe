@@ -15,11 +15,14 @@ test("marker click opens info panel", async ({ page }) => {
   await expect(markerButton).toBeVisible();
   await markerButton.click();
 
-  const infoDrawer = page.getByRole("complementary", { name: "Suche & Filter" });
+  const infoDrawer = page.getByRole("complementary", {
+    name: "Suche & Filter",
+  });
   await expect(infoDrawer).toBeVisible();
   await expect(infoDrawer.getByText("Werkstatt Hamm")).toBeVisible();
-  await expect(infoDrawer.getByText("Weitere Details folgen (Stub)"))
-    .toBeVisible();
+  await expect(
+    infoDrawer.getByText("Weitere Details folgen (Stub)"),
+  ).toBeVisible();
 });
 
 test("escape closes info panel and clears selection", async ({ page }) => {
@@ -35,7 +38,9 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await expect(markerButton).toBeVisible();
   await markerButton.click();
 
-  const infoDrawer = page.getByRole("complementary", { name: "Suche & Filter" });
+  const infoDrawer = page.getByRole("complementary", {
+    name: "Suche & Filter",
+  });
   await expect(infoDrawer).toBeVisible();
 
   await page.keyboard.press("Escape");

@@ -22,12 +22,16 @@ test.describe("map route", () => {
     await page.goto("/map", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle");
 
-    const strukturknotenButton = page.getByRole("button", { name: "Strukturknoten" });
+    const strukturknotenButton = page.getByRole("button", {
+      name: "Strukturknoten",
+    });
     await expect(strukturknotenButton).toBeVisible();
     await expect(strukturknotenButton).toBeDisabled();
 
     await expect(page.getByRole("button", { name: "Fäden" })).toBeVisible();
-    await expect(page.getByRole("link", { name: /Archiv ansehen/i })).toHaveAttribute("href", "/archive/");
+    await expect(
+      page.getByRole("link", { name: /Archiv ansehen/i }),
+    ).toHaveAttribute("href", "/archive/");
     await expect(page.getByRole("main")).toBeVisible();
 
     expect(consoleErrors, consoleErrors.join("\n")).toHaveLength(0);

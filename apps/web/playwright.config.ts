@@ -5,23 +5,24 @@ const PORT = Number(process.env.PORT ?? (process.env.CI ? 5173 : 4173));
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 const htmlReportDir = resolve(
   process.cwd(),
-  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report"
+  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report",
 );
 const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
   | "never"
   | "on-failure"
   | "always";
-const junitOutputName = process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml";
+const junitOutputName =
+  process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml";
 // Ensure CI uploads always find an HTML report directory.
 const htmlReporter: ReporterDescription = [
   "html",
-  { open: htmlOpenSetting, outputFolder: htmlReportDir }
+  { open: htmlOpenSetting, outputFolder: htmlReportDir },
 ];
 const isCI = /^(1|true)$/i.test(process.env.CI ?? "");
 const consoleReporter: ReporterDescription = isCI ? ["dot"] : ["line"];
 const junitReporter: ReporterDescription = [
   "junit",
-  { outputFile: resolve(htmlReportDir, junitOutputName) }
+  { outputFile: resolve(htmlReportDir, junitOutputName) },
 ];
 /**
  * Reporter aus ENV parsen:
@@ -40,11 +41,14 @@ function resolveEnvReporters(): ReporterDescription[] | undefined {
     if (key === "dot" || key === "line" || key === "list") {
       mapped.push([key]);
     } else if (key === "html") {
-      mapped.push(["html", { open: htmlOpenSetting, outputFolder: htmlReportDir }]);
+      mapped.push([
+        "html",
+        { open: htmlOpenSetting, outputFolder: htmlReportDir },
+      ]);
     } else if (key === "junit") {
       mapped.push([
         "junit",
-        { outputFile: resolve(htmlReportDir, junitOutputName) }
+        { outputFile: resolve(htmlReportDir, junitOutputName) },
       ]);
     } else {
       // Fallback: Unbekannte Bezeichner ignorieren
@@ -57,7 +61,7 @@ const envReporters = resolveEnvReporters();
 const reporter: ReporterDescription[] = envReporters ?? [
   consoleReporter,
   htmlReporter,
-  junitReporter
+  junitReporter,
 ];
 
 export default defineConfig({
@@ -67,7 +71,7 @@ export default defineConfig({
   workers: process.env.CI ? undefined : 2,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
-    trace: "on-first-retry"
+    trace: "on-first-retry",
   },
   reporter,
   ...(shouldStartWebServer
@@ -76,8 +80,8 @@ export default defineConfig({
           command: `pnpm preview -- --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 90_000,
-          reuseExistingServer: !process.env.CI
-        }
+          reuseExistingServer: !process.env.CI,
+        },
       }
-    : {})
+    : {}),
 });

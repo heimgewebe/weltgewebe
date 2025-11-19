@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store';
+import { writable } from "svelte/store";
 
 // Definiert die Struktur des Benutzer-Objekts.
 interface User {
@@ -19,12 +19,12 @@ const createAuthStore = () => {
     subscribe,
     // Platzhalter-Funktion für den Login
     login: () => {
-      console.log('Platzhalter: login() aufgerufen');
-      set({ loggedIn: true, role: 'weber' });
+      console.log("Platzhalter: login() aufgerufen");
+      set({ loggedIn: true, role: "weber" });
     },
     // Platzhalter-Funktion für den Logout
     logout: () => {
-      console.log('Platzhalter: logout() aufgerufen');
+      console.log("Platzhalter: logout() aufgerufen");
       set({ loggedIn: false, role: undefined });
     },
   };
