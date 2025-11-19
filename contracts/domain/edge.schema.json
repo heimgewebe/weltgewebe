@@ -6,21 +6,24 @@
   "type": "object",
   "properties": {
     "id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "source_type": {
       "type": "string",
       "enum": ["role", "node"]
     },
     "source_id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "target_type": {
       "type": "string",
       "enum": ["role", "node"]
     },
     "target_id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "edge_kind": {
       "type": "string",
