@@ -128,3 +128,7 @@ serve-demo: demo-data
 check-demo:
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/nodes" | jq length
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/edges" | jq 'length'
+
+# ---------- Contracts ----------
+contracts-domain-check:
+    ./scripts/contracts-domain-check.sh

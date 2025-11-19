@@ -12,7 +12,7 @@ export type MapContextValue = {
 export function initMapContext(): MapContextValue {
   const value: MapContextValue = {
     map: writable<maplibregl.Map | null>(null),
-    maplibre: null
+    maplibre: null,
   };
 
   setContext(MAP_CONTEXT_KEY, value);
@@ -23,7 +23,9 @@ export function useMapContext(): MapContextValue {
   const context = getContext<MapContextValue | undefined>(MAP_CONTEXT_KEY);
 
   if (!context) {
-    throw new Error("MapLibre components must be used inside a <MapLibre> container.");
+    throw new Error(
+      "MapLibre components must be used inside a <MapLibre> container.",
+    );
   }
 
   return context;

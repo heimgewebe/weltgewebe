@@ -144,6 +144,20 @@ CI-Gates (brechen Builds):
 - Tests (npm test, cargo test).
 - Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
 
+### Domain-Contracts lokal validieren
+
+Um die JSON-Schemas und Beispiele unter `contracts/domain/` lokal zu prüfen und sicherzustellen, dass sie mit der CI übereinstimmen, kann ein Validierungsskript ausgeführt werden.
+
+**Voraussetzungen:**
+- Node.js ≥ 20
+- `ajv-cli` und `ajv-formats` global installiert (z.B. mit `pnpm install -g ajv-cli ajv-formats`)
+
+**Ausführung:**
+- `just contracts-domain-check`
+- oder `npm run contracts:domain:check`
+
+Das Skript kompiliert alle Schemas und validiert die Beispiel-Instanzen dagegen.
+
 ## 4. Tooling-Differenzierung (Lokal vs. CI)
 
 - **`scripts/tools/yq-pin.sh`** – lokaler Installer für eine reproduzierbare Umgebung (ohne sudo).

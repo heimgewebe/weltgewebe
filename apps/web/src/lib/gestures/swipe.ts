@@ -13,7 +13,7 @@
  *   Hinweis: Eltern-Container sollten horizontales Snap/Scroll vermeiden
  *   (siehe Styles in `app.css`, Klasse `.swipe-parent { scroll-snap-type: none; }`).
  */
-export type SwipeDirection = 'left' | 'right';
+export type SwipeDirection = "left" | "right";
 export type SwipeMeta = { dx: number; dy: number; v: number };
 export type SwipeRejectMeta = {
   dx: number;
@@ -25,15 +25,15 @@ export type SwipeRejectMeta = {
 };
 
 export type SwipeOptions = {
-  threshold?: number;      // minimale Strecke in px (Default 24)
-  angleRatio?: number;     // |dy| <= angleRatio * |dx| (Default 0.5)
-  velocityMin?: number;    // minimale Geschwindigkeit px/ms (Default 0.30)
-  allowMouse?: boolean;    // Maus-Swipes erlauben (Default false)
-  lockAxis?: boolean;      // bricht ab, wenn Vertikalbewegung dominiert
-  passiveMove?: boolean;   // pointermove passiv halten (Default true)
-  axisDeadzone?: number;   // Radius bevor lockAxis greift (Default 6)
-  onLeft?: () => void;     // callback bei Swipe nach links
-  onRight?: () => void;    // callback bei Swipe nach rechts
+  threshold?: number; // minimale Strecke in px (Default 24)
+  angleRatio?: number; // |dy| <= angleRatio * |dx| (Default 0.5)
+  velocityMin?: number; // minimale Geschwindigkeit px/ms (Default 0.30)
+  allowMouse?: boolean; // Maus-Swipes erlauben (Default false)
+  lockAxis?: boolean; // bricht ab, wenn Vertikalbewegung dominiert
+  passiveMove?: boolean; // pointermove passiv halten (Default true)
+  axisDeadzone?: number; // Radius bevor lockAxis greift (Default 6)
+  onLeft?: () => void; // callback bei Swipe nach links
+  onRight?: () => void; // callback bei Swipe nach rechts
   onSwipe?: (dir: SwipeDirection, meta: SwipeMeta) => void; // generischer Callback
   onReject?: (meta: SwipeRejectMeta) => void; // Debugging-Hook bei nicht erfüllten Gates
 };
@@ -66,15 +66,15 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     lockAxis: false,
     passiveMove: true,
     axisDeadzone: 6,
-    ...opts
+    ...opts,
   };
 
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return {
       destroy() {},
       update(next: SwipeOptions) {
         Object.assign(cfg, next);
-      }
+      },
     };
   }
 
@@ -83,14 +83,15 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
   let last: Pt | null = null;
   let active = false;
 
-  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const now = () =>
+    typeof performance !== "undefined" ? performance.now() : Date.now();
 
   function onDown(e: PointerEvent) {
     // Nur echte Touch/Pen-Gesten werten (verhindert „künstliche“ Maus-Swipes)
     const pointerAllowed =
-      e.pointerType === 'touch' ||
-      e.pointerType === 'pen' ||
-      (cfg.allowMouse && e.pointerType === 'mouse');
+      e.pointerType === "touch" ||
+      e.pointerType === "pen" ||
+      (cfg.allowMouse && e.pointerType === "mouse");
 
     if (!pointerAllowed) return;
     if (e.isPrimary === false) return;
@@ -98,13 +99,18 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     pid = e.pointerId;
     start = last = { x: e.clientX, y: e.clientY, t: now() };
     active = true;
-    try { node.setPointerCapture(pid); }
-    catch (err) {
+    try {
+      node.setPointerCapture(pid);
+    } catch (err) {
       // setPointerCapture may fail in some browsers or if the element is not in the DOM.
       // This is non-fatal for swipe handling, so we ignore the error.
       // In development, log the error for debugging.
-      if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
-        console.error('setPointerCapture failed:', err);
+      if (
+        typeof process !== "undefined" &&
+        process.env &&
+        process.env.NODE_ENV === "development"
+      ) {
+        console.error("setPointerCapture failed:", err);
       }
     }
   }
@@ -140,9 +146,9 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     const longEnough = Math.abs(dx) >= cfg.threshold;
     const fastEnough = v >= cfg.velocityMin;
     if (horizontalEnough && longEnough && fastEnough) {
-      const dir: SwipeDirection = dx < 0 ? 'left' : 'right';
+      const dir: SwipeDirection = dx < 0 ? "left" : "right";
       cfg.onSwipe?.(dir, { dx, dy, v });
-      if (dir === 'left') {
+      if (dir === "left") {
         cfg.onLeft?.();
       } else {
         cfg.onRight?.();
@@ -159,12 +165,19 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
       } catch (err) {
         // Some browsers may throw if releasePointerCapture is called incorrectly.
         // This error is safe to ignore, but log in development for debugging.
-        if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV !== 'production') {
-          console.error('releasePointerCapture failed:', err);
+        if (
+          typeof process !== "undefined" &&
+          process.env &&
+          process.env.NODE_ENV !== "production"
+        ) {
+          console.error("releasePointerCapture failed:", err);
         }
       }
     }
-    pid = null; start = null; last = null; active = false;
+    pid = null;
+    start = null;
+    last = null;
+    active = false;
   }
 
   function onUp(e: PointerEvent) {
@@ -179,47 +192,47 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
     reset();
   }
 
-  node.addEventListener('pointerdown', onDown, PASSIVE_TRUE_OPTIONS);
+  node.addEventListener("pointerdown", onDown, PASSIVE_TRUE_OPTIONS);
   node.addEventListener(
-    'pointermove',
+    "pointermove",
     onMove,
-    cfg.passiveMove ? PASSIVE_TRUE_OPTIONS : PASSIVE_FALSE_OPTIONS
+    cfg.passiveMove ? PASSIVE_TRUE_OPTIONS : PASSIVE_FALSE_OPTIONS,
   );
-  node.addEventListener('pointerup',   onUp,     PASSIVE_TRUE_OPTIONS);
-  node.addEventListener('pointercancel', onCancel, PASSIVE_TRUE_OPTIONS);
-  node.addEventListener('pointerleave',  onCancel, PASSIVE_TRUE_OPTIONS);
-  node.addEventListener('lostpointercapture', onCancel, PASSIVE_TRUE_OPTIONS);
+  node.addEventListener("pointerup", onUp, PASSIVE_TRUE_OPTIONS);
+  node.addEventListener("pointercancel", onCancel, PASSIVE_TRUE_OPTIONS);
+  node.addEventListener("pointerleave", onCancel, PASSIVE_TRUE_OPTIONS);
+  node.addEventListener("lostpointercapture", onCancel, PASSIVE_TRUE_OPTIONS);
 
   let detachWindowUp: (() => void) | null = null;
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     const onWindowUp = (e: PointerEvent) => {
       if (e.pointerId === pid) {
         onUp(e);
       }
     };
-    window.addEventListener('pointerup', onWindowUp, PASSIVE_TRUE_OPTIONS);
-    detachWindowUp = () => window.removeEventListener('pointerup', onWindowUp);
+    window.addEventListener("pointerup", onWindowUp, PASSIVE_TRUE_OPTIONS);
+    detachWindowUp = () => window.removeEventListener("pointerup", onWindowUp);
   }
 
   let cleanupVisibility: (() => void) | null = null;
-  if (typeof document !== 'undefined') {
+  if (typeof document !== "undefined") {
     const onVis = () => {
       if (document.hidden) reset();
     };
-    document.addEventListener('visibilitychange', onVis, PASSIVE_TRUE_OPTIONS);
+    document.addEventListener("visibilitychange", onVis, PASSIVE_TRUE_OPTIONS);
     cleanupVisibility = () => {
-      document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }
 
   return {
     destroy() {
-      node.removeEventListener('pointerdown', onDown);
-      node.removeEventListener('pointermove', onMove);
-      node.removeEventListener('pointerup', onUp);
-      node.removeEventListener('pointercancel', onCancel);
-      node.removeEventListener('pointerleave', onCancel);
-      node.removeEventListener('lostpointercapture', onCancel);
+      node.removeEventListener("pointerdown", onDown);
+      node.removeEventListener("pointermove", onMove);
+      node.removeEventListener("pointerup", onUp);
+      node.removeEventListener("pointercancel", onCancel);
+      node.removeEventListener("pointerleave", onCancel);
+      node.removeEventListener("lostpointercapture", onCancel);
       detachWindowUp?.();
       cleanupVisibility?.();
     },
@@ -227,14 +240,13 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
       const prevPassiveMove = cfg.passiveMove;
       Object.assign(cfg, next);
       if (cfg.passiveMove !== prevPassiveMove) {
-        node.removeEventListener('pointermove', onMove);
+        node.removeEventListener("pointermove", onMove);
         node.addEventListener(
-          'pointermove',
+          "pointermove",
           onMove,
-          cfg.passiveMove ? PASSIVE_TRUE_OPTIONS : PASSIVE_FALSE_OPTIONS
+          cfg.passiveMove ? PASSIVE_TRUE_OPTIONS : PASSIVE_FALSE_OPTIONS,
         );
       }
-    }
+    },
   };
 }
-
