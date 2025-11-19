@@ -161,7 +161,7 @@ jobs:
           chmod +x "${INSTALLER_SH}"
 
           # Installer über UV_VERSION steuern
-          UV_VERSION="${INSTALLER_VER}" "${INSTALLER_SH}" --force
+          UV_VERSION="${INSTALLER_VER}" "${INSTALLER_SH}"
 
           # Stellen sicher, dass ~/.local/bin in PATH nachfolgender Schritte ist
           echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
