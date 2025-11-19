@@ -3,9 +3,11 @@ on:
   push:
     paths:
       - 'contracts/domain/**.schema.json'
+      - 'contracts/domain/examples/**.json'
   pull_request:
     paths:
       - 'contracts/domain/**.schema.json'
+      - 'contracts/domain/examples/**.json'
 
 jobs:
   validate-schemas:
@@ -20,8 +22,25 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
-      - run: pnpm install -g ajv-cli
-      - run: |
+      - name: Install ajv-cli and ajv-formats
+        run: pnpm install -g ajv-cli ajv-formats
+
+      - name: Compile schemas
+        run: |
           for schema in contracts/domain/*.schema.json; do
-            ajv compile -s "$schema" --strict=false
+            echo "Compiling $schema"
+            ajv compile -s "$schema" --strict=false -c ajv-formats
+          done
+
+      - name: Validate example instances
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for example in contracts/domain/examples/*.example.json; do
+            filename=$(basename "$example")
+            entity="${filename%.example.json}"
+            schema="contracts/domain/${entity}.schema.json"
+            echo "Validating $example against $schema"
+            ajv validate -s "$schema" -d "$example" -c ajv-formats
           done

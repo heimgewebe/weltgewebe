@@ -6,17 +6,21 @@
   "type": "object",
   "properties": {
     "id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "conversation_type": {
       "type": "string",
       "enum": ["node", "webrat", "naehstuebchen", "private"]
     },
     "subject_id": {
-      "type": ["string", "null"]
+      "type": ["string", "null"],
+      "format": "uuid"
     },
-    "created_by_role": {
-      "type": "string"
+    "author_role_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Role that created the conversation."
     },
     "title": {
       "type": "string"
@@ -30,5 +34,12 @@
       "format": "date-time"
     }
   },
-  "required": ["id", "conversation_type", "subject_id", "created_by_role", "title", "created_at", "updated_at"]
+  "required": [
+    "id",
+    "conversation_type",
+    "author_role_id",
+    "title",
+    "created_at",
+    "updated_at"
+  ]
 }

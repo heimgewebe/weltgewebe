@@ -6,7 +6,8 @@
   "type": "object",
   "properties": {
     "id": {
-      "type": "string"
+      "type": "string",
+      "format": "uuid"
     },
     "kind": {
       "type": "string"
@@ -15,6 +16,10 @@
       "type": "string"
     },
     "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
       "type": "string",
       "format": "date-time"
     },
@@ -28,8 +33,18 @@
       }
     },
     "location": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": ["lat", "lon"],
+      "additionalProperties": false
     }
   },
-  "required": ["id", "kind", "title", "created_at"]
+  "required": ["id", "kind", "title", "created_at", "updated_at"]
 }
