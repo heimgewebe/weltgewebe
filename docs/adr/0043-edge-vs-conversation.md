@@ -18,7 +18,8 @@ Der Begriff „thread“ war doppeldeutig (Graph ↔ Kommunikation) und erzeugte
 ## Konsequenzen
 
 - **APIs**: `/edges`, `/conversations`, `/conversations/{id}/messages`, `/nodes`
-- **Schemas** müssen die neuen Begriffe nutzen. Diese Entscheidung ist im Schema-Verzeichnis `contracts/domain/*.schema.json` konkretisiert.
+- **Schemas** müssen die neuen Begriffe nutzen. Diese Entscheidung ist im Schema-Verzeichnis
+  `contracts/domain/*.schema.json` konkretisiert.
 - **Spätere DB-Migration**: `threads` → `conversations`
 - **CI** wird künftig prüfen, dass „thread“ nicht mehr vorkommt.
 - Alle **Dokumentationen** müssen perspektivisch auf die neue Domäne umgestellt werden.

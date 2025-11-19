@@ -146,14 +146,12 @@ CI-Gates (brechen Builds):
 
 ## 4. Tooling-Differenzierung (Lokal vs. CI)
 
-- **`scripts/tools/yq-pin.sh`** – lokaler Installer, der Download-Ziele automatisch erkennt, mit
-  Wiederholungen (`curl --retry*`) lädt, Checksums prüft und alles unter `~/.local/bin`
-  ablegt (inkl. PATH-Hinzufügung). Gedacht für reproduzierbare lokale Umgebung ohne sudo.
-- **CI-Workflows (`.github/workflows/ci.yml`)** – bringen ihren eigenen `yq`-Installer mit
-  (pinned Version, direkter Download nach `/usr/local/bin`), weil Runner root-Rechte und einen
-  frischen FS besitzen. Erwartung: kein Re-Use des Shell-Skripts im CI, damit der Workflow
-  ohne Dotfiles/Cache deterministisch bleibt.
-- **Link-Prüfung:** Im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige
-  Parallelität, definierte Accept-Codes), um False Positives/Flakes zu vermeiden. Das
-  Nacht- und On-Demand-Workflow `links.yml` nutzt bewusst ein reduziertes Profil als
-  Watchdog, schlägt aber nicht als Qualitäts-Gate fehl.
+- **`scripts/tools/yq-pin.sh`** – lokaler Installer für eine reproduzierbare Umgebung (ohne sudo).
+  Erkennt Download-Ziele, lädt mit Wiederholungen (`curl --retry*`), prüft Checksums und legt
+  alles unter `~/.local/bin` ab (inkl. PATH-Hinzufügung).
+- **CI-Workflows (`.github/workflows/ci.yml`)** – nutzen einen eigenen `yq`-Installer (gepinnte Version,
+  direkter Download), da Runner root-Rechte und ein frisches Dateisystem haben. So bleibt der
+  Workflow ohne Dotfiles/Cache deterministisch.
+- **Link-Prüfung:** Im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige Parallelität),
+  um Flakes zu vermeiden. Der nächtliche Workflow (`links.yml`) dient als Watchdog mit
+  reduziertem Profil und ist kein hartes Qualitäts-Gate.

@@ -6,13 +6,13 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 
 ## Kernartefakte
 
-| Bereich | Zweck | Primäre Ressourcen |
-| --- | --- | --- |
-| **Ethik & Wirkung** | Leitplanken, Risiken, Schutzbedarfe | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
-| **User Experience** | UX-Guidelines, Prototypen, Feedback | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/` |
-| **Architektur** | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/` |
-|                 | Datenflüsse                          | `contracts/` |
-| **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml` |
+| Bereich                | Zweck                                | Primäre Ressourcen                                     |
+|------------------------|--------------------------------------|--------------------------------------------------------|
+| **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
+| **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
+| **Architektur**        | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/`         |
+|                        | Datenflüsse                          | `contracts/`                                           |
+| **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml`         |
 
 ## Navigationspfad für Außenstehende
 

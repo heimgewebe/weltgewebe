@@ -115,8 +115,8 @@ einer sauberen Umgebung wiederhergestellt werden.
       Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
 6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse dokumentieren.
 
-| Startzeit | Endzeit | RTO erreicht? | RPO erreicht? |
-|-----------|---------|---------------|---------------|
+| Startzeit | Endzeit | RTO erreicht?     | RPO erreicht?     |
+|-----------|---------|-------------------|-------------------|
 |           |         | [ ] Ja / [ ] Nein | [ ] Ja / [ ] Nein |
 
 ### Nachbereitung
