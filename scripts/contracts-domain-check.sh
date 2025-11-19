@@ -15,11 +15,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-AJV_BIN="/home/jules/.local/share/pnpm/ajv"
-
+AJV_BIN=$(command -v ajv)
 if ! [ -x "$AJV_BIN" ]; then
-    echo "error: ajv executable not found at $AJV_BIN" >&2
-    echo "Please ensure pnpm is set up and 'ajv-cli' is installed globally." >&2
+    echo "error: ajv executable not found in your PATH." >&2
+    echo "Please install 'ajv-cli' and 'ajv-formats' globally (e.g., using pnpm or npm)." >&2
     exit 1
 fi
 
