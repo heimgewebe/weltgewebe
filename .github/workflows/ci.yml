@@ -145,37 +145,33 @@ jobs:
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
-          RAW_VER="$(yq -r '.uv' toolchain.versions.yml)"
-          if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
+          UV_VERSION="$(yq -r '.uv' toolchain.versions.yml)"
+          if [ -z "${UV_VERSION:-}" ] || [ "${UV_VERSION}" = "null" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
-          # optional führendes "v" entfernen, damit beide Varianten funktionieren:
-          #   uv: "0.5.4"    oder uv: "v0.5.4"
-          CLEAN_VER="${RAW_VER#v}"
-          INSTALLER_VER="v${CLEAN_VER}"
+          echo "Attempting to install uv version: ${UV_VERSION}"
 
-          INSTALLER_SH="${{ runner.temp }}/uv_install.sh"
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
-            https://astral.sh/uv/install.sh -o "${INSTALLER_SH}"
-          chmod +x "${INSTALLER_SH}"
+          # Direktes Herunterladen des Binär-Archivs, um Versionsprobleme mit
+          # dem Installer-Skript zu umgehen.
+          # Annahme: Der Runner ist x86_64, was für ubuntu-latest zutrifft.
+          url="https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+          echo "Downloading from ${url}"
 
-          # Installer über UV_VERSION steuern
-          UV_VERSION="${INSTALLER_VER}" "${INSTALLER_SH}"
-
-          # Stellen sicher, dass ~/.local/bin in PATH nachfolgender Schritte ist
-          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
+          sudo mv /tmp/uv /usr/local/bin/uv
+          sudo chmod +x /usr/local/bin/uv
           hash -r
 
-          # Version überprüfen (defensiv, aber hilfreich bei Drift)
+          # Version überprüfen
           if ! command -v uv >/dev/null 2>&1; then
             echo "uv not found in PATH after installation" >&2
             exit 1
           fi
           INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
           echo "Installed uv version: ${INSTALLED_VER}"
-          if [ "${INSTALLED_VER}" != "${CLEAN_VER}" ]; then
-            echo "uv version mismatch. Expected: ${CLEAN_VER}, got: ${INSTALLED_VER}" >&2
+          if [ "${INSTALLED_VER}" != "${UV_VERSION}" ]; then
+            echo "uv version mismatch. Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
             exit 1
           fi
           echo "uv version check passed."
