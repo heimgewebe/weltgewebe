@@ -20,6 +20,15 @@ export default [
   ...svelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte"],
+    languageOptions: {
+      parserOptions: {
+        parser: tsParser,
+      },
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
     rules: {
       "svelte/no-at-html-tags": "error",
     },
@@ -32,7 +41,10 @@ export default [
         ecmaVersion: 2023,
         sourceType: "module",
       },
-      globals: globals.browser,
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
     },
     plugins: {
       "@typescript-eslint": tsPlugin,
@@ -41,6 +53,7 @@ export default [
       ...js.configs.recommended.rules,
       ...tsPlugin.configs["recommended"].rules,
       "@typescript-eslint/no-explicit-any": "off",
+      "no-undef": "off",
     },
   },
 ];
