@@ -175,8 +175,19 @@ jobs:
           echo "Downloading from ${url}"
 
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
-          sudo mv /tmp/uv /usr/local/bin/uv
+          # Handle potential subdirectory in tarball (e.g. uv-x86_64-unknown-linux-gnu/uv)
+          if [ -f /tmp/uv ]; then
+            sudo mv /tmp/uv /usr/local/bin/uv
+          elif [ -d /tmp/uv-x86_64-unknown-linux-gnu ]; then
+            sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv
+            [ -f /tmp/uv-x86_64-unknown-linux-gnu/uvx ] && sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx || true
+          else
+            echo "Cannot find uv binary in extracted tarball"
+            find /tmp -maxdepth 2 -name "uv"
+            exit 1
+          fi
           sudo chmod +x /usr/local/bin/uv
+          [ -f /usr/local/bin/uvx ] && sudo chmod +x /usr/local/bin/uvx || true
           hash -r
 
           # Version überprüfen
