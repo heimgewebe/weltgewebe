@@ -240,9 +240,18 @@
         const res = await fetch('/api/nodes');
         if (res.ok) {
           const data = await res.json();
-          // Adapt GeoJSON FeatureCollection to MapPoint
-          if (data.features && Array.isArray(data.features)) {
-            markersData = data.features.map((f: any) => ({
+          let features: any[] = [];
+
+          if (Array.isArray(data)) {
+            // API returns a plain array of features
+            features = data;
+          } else if (data.features && Array.isArray(data.features)) {
+            // API returns a FeatureCollection
+            features = data.features;
+          }
+
+          if (features.length > 0) {
+            markersData = features.map((f: any) => ({
               id: f.id,
               title: f.properties?.title || 'Unbenannt',
               lat: f.geometry.coordinates[1],
