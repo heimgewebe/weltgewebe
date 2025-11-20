@@ -7,7 +7,7 @@ sudo apt-get install -y jq ripgrep vale shfmt hadolint just httpie
 
 # yq installieren (wird gebraucht um toolchain.versions.yml zu lesen)
 # Wir verwenden die offizielle Binary-Installation, da kein apt-Paket oder zu alt.
-YQ_VERSION="v4.40.5"
+YQ_VERSION="v4.48.1"
 YQ_BINARY="yq_linux_amd64"
 tmp_yq=$(mktemp)
 wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}" -O "${tmp_yq}"
