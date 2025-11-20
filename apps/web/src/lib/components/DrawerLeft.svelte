@@ -79,11 +79,13 @@
     <div id="drawer-panel-webrat" role="tabpanel" aria-labelledby="drawer-tab-webrat">
       <!-- Feature Flag: coming soon -->
       <!-- <p>Platzhalter – „coming soon“ (Diskussionen/Abstimmungen)</p> -->
+      <p class="muted">Coming Soon: Webrat (Diskussionen/Abstimmungen)</p>
     </div>
   {:else}
     <div id="drawer-panel-naehstuebchen" role="tabpanel" aria-labelledby="drawer-tab-naehstuebchen">
       <!-- Feature Flag: coming soon -->
       <!-- <p>Platzhalter – „coming soon“ (Community-Werkzeuge)</p> -->
+      <p class="muted">Coming Soon: Nähstübchen (Community-Werkzeuge)</p>
     </div>
   {/if}
 </aside>

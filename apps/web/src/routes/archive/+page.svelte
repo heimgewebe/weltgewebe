@@ -1,8 +1,8 @@
 <script lang="ts">
   const archiveMonths = [
-    { label: "Mai 2024", path: "/archive/2024/05" },
-    { label: "April 2024", path: "/archive/2024/04" },
-    { label: "März 2024", path: "/archive/2024/03" }
+    // { label: "Mai 2024", path: "/archive/2024/05" },
+    // { label: "April 2024", path: "/archive/2024/04" },
+    // { label: "März 2024", path: "/archive/2024/03" }
   ];
 </script>
 
@@ -18,18 +18,22 @@
   <header>
     <h1>Archiv</h1>
     <p>
-      Im Archiv findest du vergangene Monatsübersichten. Wähle einen Monat aus, um alle Einträge
-      aus dieser Zeitspanne zu entdecken.
+      Im Archiv findest du vergangene Monatsübersichten.
+      <em>Aktuell sind keine archivierten Monate verfügbar.</em>
     </p>
   </header>
 
   <section aria-labelledby="archive-months">
     <h2 id="archive-months">Monate</h2>
-    <ul>
-      {#each archiveMonths as month}
-        <li><a href={month.path}>{month.label}</a></li>
-      {/each}
-    </ul>
+    {#if archiveMonths.length > 0}
+      <ul>
+        {#each archiveMonths as month}
+          <li><a href={month.path}>{month.label}</a></li>
+        {/each}
+      </ul>
+    {:else}
+      <p style="color: var(--muted, #666);">Keine Einträge vorhanden.</p>
+    {/if}
   </section>
 </main>
 

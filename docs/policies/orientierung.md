@@ -89,20 +89,22 @@ Bitte konsultieren Sie `policies/retention.yml` für die aktuellen, operativen W
 
 ## 5 · Governance-Matrix
 
+> **Hinweis:** Die konkreten Fristen (Tage/Wochen) werden technisch in `policies/retention.yml` definiert. Die untenstehenden Werte dienen nur der Erläuterung des Konzepts.
+
 - Antrag
-  - Dauer: 7 Tage + 7 Tage.
+  - Konzept: Vorlauf + Abstimmungsphase.
   - Sichtbarkeit: öffentlich.
   - Trigger: Timer oder Einspruch.
 - Delegation
-  - Dauer: 4 Wochen.
+  - Konzept: Befristete Stimmübertragung.
   - Sichtbarkeit: transparent (gestrichelte Linien).
   - Trigger: Inaktivität.
 - Meldung / Freeze
-  - Dauer: 24 h.
+  - Konzept: Temporäre Sperre zur Klärung.
   - Sichtbarkeit: eingeklappt.
   - Trigger: Moderations-Vote.
 - RoN-Anonymisierung
-  - Dauer: variable x Tage.
+  - Konzept: Automatische Anonymisierung nach Fristablauf.
   - Sichtbarkeit: „Rolle ohne Namen“.
   - Trigger: User-Opt-in.
 

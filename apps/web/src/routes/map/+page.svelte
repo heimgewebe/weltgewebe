@@ -444,7 +444,6 @@
     title="Suche & Filter"
     side="right"
     open={rightOpen}
-    style="display: none;"
     on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-right')}
   >
     {#if selected}
@@ -453,11 +452,11 @@
         <div class="muted">Kurzbeschreibung folgt (Stub)</div>
         <div class="muted">Weitere Details folgen (Stub)</div>
       </div>
+    {:else}
+      <div class="panel" style="padding:8px;">
+          <div class="muted">Suche & Filter inaktiv (Coming Soon)</div>
+      </div>
     {/if}
-    <!-- Feature Flag: Filter disabled -->
-    <!-- <div class="panel" style="padding:8px;">
-      <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
-    </div> -->
   </Drawer>
 
   <!-- Top Drawer: Gewebekonto -->

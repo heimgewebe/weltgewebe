@@ -25,37 +25,33 @@ if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
 fi
 
 # --- uv installieren (Version aus toolchain.versions.yml) ---
-RAW_VER=$(yq -r '.uv' toolchain.versions.yml)
-if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
+UV_VERSION=$(yq -r '.uv' toolchain.versions.yml)
+if [ -z "${UV_VERSION:-}" ] || [ "${UV_VERSION}" = "null" ]; then
   echo "failed to parse uv version from toolchain.versions.yml" >&2
   exit 1
 fi
-# Ensure clean version number (strip potential 'v' prefix if present in yaml, though usually it's 0.8.0)
-CLEAN_VER="${RAW_VER#v}"
-# GitHub Release URL uses tags without "v" prefix (e.g. "0.9.8")
+
+# NOTE: Dieses Setup muss identisch bleiben mit .github/workflows/ci.yml
+echo "Installing uv version ${UV_VERSION}..."
+
+# Clean version string (strip leading v if present)
+CLEAN_VER="${UV_VERSION#v}"
 URL="https://github.com/astral-sh/uv/releases/download/${CLEAN_VER}/uv-x86_64-unknown-linux-gnu.tar.gz"
 
-echo "Installing uv version ${CLEAN_VER} from ${URL}..."
+tmpfile=$(mktemp) || { echo "Failed to create temp file" >&2; exit 1; }
 
-tmpfile=$(mktemp) || {
-    echo "Failed to create temp file" >&2
-    exit 1
-}
-
+# Robust download
 curl -LsSf "$URL" -o "$tmpfile" || {
     echo "Failed to download uv tarball" >&2
     rm -f "$tmpfile"
     exit 1
 }
 
-# Extract to /tmp. The tarball usually contains a directory `uv-x86_64-unknown-linux-gnu/`
+# Extract to /tmp
 tar -xzf "$tmpfile" -C /tmp
 
-# Move binaries. Use wildcard or explicit path.
-# The folder name inside tarball matches the arch string.
-# We move it to /usr/local/bin.
+# Move binaries
 sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv
-# uvx might be present
 if [ -f /tmp/uv-x86_64-unknown-linux-gnu/uvx ]; then
     sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx
 fi
@@ -66,18 +62,9 @@ sudo chmod +x /usr/local/bin/uv
 rm -f "$tmpfile"
 rm -rf /tmp/uv-x86_64-unknown-linux-gnu
 
-# Version anzeigen, damit man im Devcontainer-Log sieht, dass es geklappt hat
+# Verification
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv not found in PATH after installation" >&2
   exit 1
 fi
 uv --version
-
-# NOTE: Dieses Setup muss identisch bleiben mit .github/workflows/ci.yml
-
-echo "uv installed and ready"
-
-# Rust warm-up (optional)
-if [ -f "Cargo.toml" ]; then
-    cargo fetch || true
-fi

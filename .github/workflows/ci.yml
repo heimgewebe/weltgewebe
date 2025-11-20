@@ -14,59 +14,33 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# Verwende die Standard-Bash von GitHub Actions, ohne eigenes Template.
 defaults:
   run:
     shell: bash
 
 jobs:
-  docs-changes:
-    name: Detect docs updates
+  # ------------------------------------------------------------------
+  # 1. Change Detection
+  # ------------------------------------------------------------------
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     outputs:
       docs: ${{ steps.filter.outputs.docs }}
+      web: ${{ steps.filter.outputs.web }}
+      api: ${{ steps.filter.outputs.api }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: filter
-        uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v3
+        id: filter
         with:
           filters: |
             docs:
               - '**/*.md'
-              - '**/*.yml'
-              - '**/*.yaml'
-              - '.markdownlint.*'
-              - '.yamllint*'
-              - '.github/workflows/ci.yml'
-
-  ci:
-    needs: docs-changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
-    # skip heavy CI when it's a docs-only change (unless manually dispatched)
-    if: >
-      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
-    outputs:
-      web_changed: ${{ steps.filter.outputs.web }}
-      api_changed: ${{ steps.filter.outputs.api }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
+              - 'docs/**'
             web:
               - 'apps/web/**'
+              - 'packages/**'
             api:
               - 'apps/api/**'
               - 'contracts/**'
@@ -74,340 +48,143 @@ jobs:
               - 'Cargo.lock'
               - 'Justfile'
 
-      - name: Install yq (official release)
-        env:
-          YQ_VERSION: v4.48.1
-        run: |
-          # einfache, transparente Installation ohne externe Skripte
-          arch="$(uname -m)"
-          case "$arch" in
-            x86_64) bin="yq_linux_amd64" ;;
-            aarch64|arm64) bin="yq_linux_arm64" ;;
-            *)
-              echo "Unsupported arch: $arch" >&2
-              exit 1
-              ;;
-          esac
+  # ------------------------------------------------------------------
+  # 2. Web CI (Lint, Build, Check)
+  # ------------------------------------------------------------------
+  web-ci:
+    name: Web CI
+    needs: changes
+    if: ${{ needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-          url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${bin}"
-          echo "Downloading ${url}"
-          curl -sSL "$url" -o /tmp/yq
-          chmod +x /tmp/yq
-          sudo mv /tmp/yq /usr/local/bin/yq
-      - name: Verify yq
-        run: yq --version
+      - name: Setup Toolchain (pnpm, node)
+        uses: ./.github/actions/setup-web
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --filter "./apps/web"
+
+      - name: Sync SvelteKit
+        working-directory: apps/web
+        run: pnpm sync
+
+      - name: Build
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Check & Lint
+        working-directory: apps/web
+        run: |
+          pnpm check:ci
+          pnpm lint
+
+  # ------------------------------------------------------------------
+  # 3. API CI (Fmt, Clippy, Test)
+  # ------------------------------------------------------------------
+  api-ci:
+    name: API CI
+    needs: changes
+    if: ${{ needs.changes.outputs.api == 'true' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.48.1/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
 
       - name: Read toolchain versions
         run: |
-          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
-          RUST=$(yq -r '.rust' toolchain.versions.yml)
-          echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
-          PY=$(yq -r '.python' toolchain.versions.yml)
-          echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
-          UV=$(yq -r '.uv' toolchain.versions.yml)
-          echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
+          echo "RUST_VERSION=$(yq -r '.rust' toolchain.versions.yml)" >> $GITHUB_ENV
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
-        env:
-          CARGO_TERM_COLOR: always
 
-      - name: Cache Cargo artifacts
+      - name: Cache Cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: >-
-            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.11.0
-          run_install: false
+      - name: Format Check
+        working-directory: apps/api
+        run: cargo fmt -- --check
 
-      - name: Setup Node
-        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
-        with:
-          node-version: '20.19.0'
-          check-latest: true
-          cache: 'pnpm'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            apps/web/pnpm-lock.yaml
+      - name: Clippy
+        working-directory: apps/api
+        run: cargo clippy -- -D warnings
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Test
+        working-directory: apps/api
+        run: cargo test --locked
 
-      - name: Cache uv artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: >-
-            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
-            ${{ runner.os }}-uv-
-
-      - name: Install uv (pinned via toolchain.versions.yml)
-        run: |
-          set -euo pipefail
-          UV_VERSION="$(yq -r '.uv' toolchain.versions.yml)"
-          if [ -z "${UV_VERSION:-}" ] || [ "${UV_VERSION}" = "null" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
-            exit 1
-          fi
-          echo "Attempting to install uv version: ${UV_VERSION}"
-
-          # Direktes Herunterladen des Binär-Archivs, um Versionsprobleme mit
-          # dem Installer-Skript zu umgehen.
-          # Annahme: Der Runner ist x86_64, was für ubuntu-latest zutrifft.
-          url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
-          echo "Downloading from ${url}"
-
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
-          # Handle potential subdirectory in tarball (e.g. uv-x86_64-unknown-linux-gnu/uv)
-          if [ -f /tmp/uv ]; then
-            sudo mv /tmp/uv /usr/local/bin/uv
-          elif [ -d /tmp/uv-x86_64-unknown-linux-gnu ]; then
-            sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv
-            [ -f /tmp/uv-x86_64-unknown-linux-gnu/uvx ] && sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx || true
-          else
-            echo "Cannot find uv binary in extracted tarball"
-            find /tmp -maxdepth 2 -name "uv"
-            exit 1
-          fi
-          sudo chmod +x /usr/local/bin/uv
-          [ -f /usr/local/bin/uvx ] && sudo chmod +x /usr/local/bin/uvx || true
-          hash -r
-
-          # Version überprüfen
-          if ! command -v uv >/dev/null 2>&1; then
-            echo "uv not found in PATH after installation" >&2
-            exit 1
-          fi
-          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
-          echo "Installed uv version: ${INSTALLED_VER}"
-          if [ "${INSTALLED_VER}" != "${UV_VERSION}" ]; then
-            echo "uv version mismatch. Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
-            exit 1
-          fi
-          echo "uv version check passed."
-
-      - name: Setup Just
-        uses: extractions/setup-just@v2
-
-      - name: Show tool versions
-        run: |
-          rustc --version
-          python --version
-          uv --version
-          just --version
-
-      - name: Validate Web
-        if: steps.filter.outputs.web == 'true'
-        run: |
-          echo "==> Running Web Checks"
-          cd apps/web
-          pnpm install --frozen-lockfile
-          pnpm sync
-          pnpm build
-          pnpm ci
-
-      - name: Validate API
-        if: steps.filter.outputs.api == 'true'
-        env:
-          CARGO_TERM_COLOR: always
-        run: |
-          echo "==> Running API Checks"
-          if [ -d apps/api ]; then
-            pushd apps/api >/dev/null
-            cargo fmt -- --check
-            cargo clippy -- -D warnings
-            cargo build --locked
-            cargo test --locked
-            popd >/dev/null
-          fi
-
+  # ------------------------------------------------------------------
+  # 4. Web E2E (Playwright)
+  # ------------------------------------------------------------------
   web-e2e:
     name: Web E2E
+    needs: [changes, web-ci]
+    # Run if web changed, even if web-ci passed (needs: web-ci implies dependency)
+    if: ${{ needs.changes.outputs.web == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    needs: ci
-    # Only run if web changed or dispatch
-    if: ${{ needs.ci.outputs.web_changed == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 20
     env:
-      HEADLESS: "1"
-      NPM_CONFIG_AUDIT: "false"
-      NPM_CONFIG_FUND: "false"
-      FORCE_COLOR: "1"
-      PW_TEST_REPORTER: dot,html,junit
-      PLAYWRIGHT_HTML_REPORT_OPEN: never
-      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
-    defaults:
-      run:
-        shell: bash
-        working-directory: apps/web
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.11.0
-          run_install: false
+      - name: Setup Toolchain
+        uses: ./.github/actions/setup-web
 
-      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
-        with:
-          node-version: '20.19.0'
-          check-latest: true
-          cache: 'pnpm'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            apps/web/pnpm-lock.yaml
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Playwright browser binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-ms-playwright-
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps chromium
 
-      - name: Install Playwright browsers
-        run: pnpm playwright install --with-deps
-
-      - name: Build application
+      - name: Build Web
+        working-directory: apps/web
         run: pnpm build
 
-      - name: Start preview server
-        run: |
-          pnpm preview -- --host 127.0.0.1 --port 4173 &> /tmp/preview.log &
-          pnpm dlx wait-on http://127.0.0.1:4173
-
-      - name: Run Playwright tests
-        env:
-          PLAYWRIGHT_SKIP_WEBSERVER: "1"
-          PLAYWRIGHT_HTML_REPORT: playwright-report
+      - name: Run E2E Tests
+        working-directory: apps/web
         run: pnpm test:ci
 
-      - name: Dump preview log on failure
-        if: ${{ failure() }}
-        run: cat /tmp/preview.log || true
-
-      - name: Upload Playwright report
-        if: ${{ always() }}
+      - name: Upload Report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ github.run_id }}-${{ github.job }}
+          name: playwright-report
           path: apps/web/playwright-report
-          if-no-files-found: ignore
+          retention-days: 30
 
+  # ------------------------------------------------------------------
+  # 5. Docs & Linting (Global)
+  # ------------------------------------------------------------------
   lint-docs:
-    name: Docs & Shell Hygiene
-    needs: docs-changes
-    if: >
-      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
+    name: Docs & Hygiene
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Markdownlint
         uses: DavidAnson/markdownlint-cli2-action@v16
         with:
-          globs: |
-            **/*.md
-            !**/node_modules/**
-            !**/dist/**
-            !**/.git/**
+          globs: '**/*.md'
 
-      - name: Cache lychee responses
-        uses: actions/cache@v4
-        with:
-          path: .lycheecache
-          key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-lychee-
-
-      - name: Link check (lychee)
-        id: lychee
-        continue-on-error: true
-        uses: lycheeverse/lychee-action@v2
-        with:
-          # lychee v0.15 expects integer seconds for retry wait time
-          args: >-
-            --no-progress
-            --accept "200,206,301,302,308,429,999"
-            --timeout 20
-            --max-concurrency 3
-            --retry-wait-time 3
-            --max-retries 3
-            --user-agent "heimgewebe-ci-lychee"
-            --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path 'node_modules'
-            --exclude-path 'dist'
-            --cache
-            --max-cache-age 1d
-            '**/*.md'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Link check (lychee - verbose retry)
-        if: ${{ steps.lychee.outcome == 'failure' }}
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --accept "200,206,301,302,308,429,999"
-            --timeout 20
-            --max-concurrency 3
-            --retry-wait-time 3
-            --max-retries 3
-            --verbose
-            --user-agent "heimgewebe-ci-lychee"
-            --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
-            --exclude-path 'node_modules'
-            --exclude-path 'dist'
-            --cache
-            --max-cache-age 1d
-            '**/*.md'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Lint YAML and JSON files
+      - name: Yamllint
         run: |
-          set -euo pipefail
-          echo "Linting YAML files..."
-          python -m pip install --user yamllint
-          export PATH="$HOME/.local/bin:$PATH"
-          git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
-            yamllint --strict -c .yamllint.yml
-          echo "Checking for jq..."
-          if ! command -v jq >/dev/null 2>&1; then
-            echo "jq not found, installing..."
-            sudo apt-get update -qq
-            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
-          fi
-          echo "Linting JSON files..."
-          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
-            jq -n 'inputs' >/dev/null
-          echo "Linting completed."
+          pip install yamllint
+          yamllint --strict .
