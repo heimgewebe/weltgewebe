@@ -101,6 +101,7 @@
   }
 </style>
 
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
 <div
   bind:this={rootEl}
   id={drawerId}
@@ -116,6 +117,9 @@
   tabindex={open ? 0 : -1}
   inert={!open ? true : undefined}
   {...$$restProps}
+  on:keydown
+  on:click
+  on:pointerdown
 >
   {#if title}<h3 id={headingId}>{title}</h3>{/if}
   <slot />

@@ -45,6 +45,7 @@
     role="tablist"
     aria-label="Bereich auswählen"
     aria-orientation="horizontal"
+    tabindex="-1"
     on:keydown={handleKeydown}
   >
     <button
