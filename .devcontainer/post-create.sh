@@ -32,8 +32,8 @@ if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
 fi
 # Ensure clean version number (strip potential 'v' prefix if present in yaml, though usually it's 0.8.0)
 CLEAN_VER="${RAW_VER#v}"
-# GitHub Release URL expects "v0.8.0"
-URL="https://github.com/astral-sh/uv/releases/download/v${CLEAN_VER}/uv-x86_64-unknown-linux-gnu.tar.gz"
+# GitHub Release URL uses tags without "v" prefix (e.g. "0.9.8")
+URL="https://github.com/astral-sh/uv/releases/download/${CLEAN_VER}/uv-x86_64-unknown-linux-gnu.tar.gz"
 
 echo "Installing uv version ${CLEAN_VER} from ${URL}..."
 
