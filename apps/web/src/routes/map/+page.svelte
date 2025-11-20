@@ -251,12 +251,14 @@
           }
 
           if (features.length > 0) {
-            markersData = features.map((f: any) => ({
-              id: f.id,
-              title: f.properties?.title || 'Unbenannt',
-              lat: f.geometry.coordinates[1],
-              lon: f.geometry.coordinates[0]
-            }));
+            markersData = features
+              .filter((f: any) => f?.geometry?.coordinates?.length >= 2)
+              .map((f: any) => ({
+                id: f.id,
+                title: f.properties?.title || 'Unbenannt',
+                lat: f.geometry.coordinates[1],
+                lon: f.geometry.coordinates[0]
+              }));
           }
         }
       } catch (e) {

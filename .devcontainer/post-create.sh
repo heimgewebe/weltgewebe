@@ -14,8 +14,8 @@ wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY
 
 # Node/PNPM vorbereiten
 corepack enable || true
-# Wir richten pnpm ein - Version wird im nächsten Schritt ggf. angepasst, hier erstmal default
-corepack prepare pnpm@latest --activate || true
+# Pinned version to match CI (9.11.0)
+corepack prepare pnpm@9.11.0 --activate || true
 
 # Frontend-Install, wenn apps/web existiert
 if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
@@ -23,29 +23,44 @@ if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
 fi
 
 # --- uv installieren (Version aus toolchain.versions.yml) ---
-UV_VERSION=$(yq '.uv' toolchain.versions.yml | tr -d '"')
+RAW_VER=$(yq -r '.uv' toolchain.versions.yml)
+if [ -z "${RAW_VER:-}" ] || [ "${RAW_VER}" = "null" ]; then
+  echo "failed to parse uv version from toolchain.versions.yml" >&2
+  exit 1
+fi
+# Ensure clean version number (strip potential 'v' prefix if present in yaml, though usually it's 0.8.0)
+CLEAN_VER="${RAW_VER#v}"
+# GitHub Release URL expects "v0.8.0"
+URL="https://github.com/astral-sh/uv/releases/download/v${CLEAN_VER}/uv-x86_64-unknown-linux-gnu.tar.gz"
 
-# Download the installer script
+echo "Installing uv version ${CLEAN_VER} from ${URL}..."
+
 tmpfile=$(mktemp) || {
     echo "Failed to create temp file" >&2
     exit 1
 }
 
-# Wir nutzen direkt curl auf den Release-Tarball für die spezifische Version,
-# ähnlich wie im CI-Workflow, um exakt die Version zu bekommen.
-# Der Installer script supported auch version constraints, aber wir machen es hier manuell für volle Kontrolle
-# oder nutzen uv's installer feature 'curl -LsSf https://astral.sh/uv/${UV_VERSION}/install.sh | sh'
-
-echo "Installing uv version ${UV_VERSION}..."
-curl -LsSf https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz -o "$tmpfile" || {
+curl -LsSf "$URL" -o "$tmpfile" || {
     echo "Failed to download uv tarball" >&2
     rm -f "$tmpfile"
     exit 1
 }
 
+# Extract to /tmp. The tarball usually contains a directory `uv-x86_64-unknown-linux-gnu/`
 tar -xzf "$tmpfile" -C /tmp
+
+# Move binaries. Use wildcard or explicit path.
+# The folder name inside tarball matches the arch string.
+# We move it to /usr/local/bin.
 sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uv /usr/local/bin/uv
-sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx || true
+# uvx might be present
+if [ -f /tmp/uv-x86_64-unknown-linux-gnu/uvx ]; then
+    sudo mv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/uvx
+fi
+
+sudo chmod +x /usr/local/bin/uv
+[ -f /usr/local/bin/uvx ] && sudo chmod +x /usr/local/bin/uvx
+
 rm -f "$tmpfile"
 rm -rf /tmp/uv-x86_64-unknown-linux-gnu
 
