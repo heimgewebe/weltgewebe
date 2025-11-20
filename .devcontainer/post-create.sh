@@ -9,8 +9,10 @@ sudo apt-get install -y jq ripgrep vale shfmt hadolint just httpie
 # Wir verwenden die offizielle Binary-Installation, da kein apt-Paket oder zu alt.
 YQ_VERSION="v4.40.5"
 YQ_BINARY="yq_linux_amd64"
-wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} -O /usr/local/bin/yq && \
-    chmod +x /usr/local/bin/yq
+tmp_yq=$(mktemp)
+wget "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}" -O "${tmp_yq}"
+sudo mv "${tmp_yq}" /usr/local/bin/yq
+sudo chmod +x /usr/local/bin/yq
 
 # Node/PNPM vorbereiten
 corepack enable || true
@@ -65,6 +67,10 @@ rm -f "$tmpfile"
 rm -rf /tmp/uv-x86_64-unknown-linux-gnu
 
 # Version anzeigen, damit man im Devcontainer-Log sieht, dass es geklappt hat
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv not found in PATH after installation" >&2
+  exit 1
+fi
 uv --version
 
 # NOTE: Dieses Setup muss identisch bleiben mit .github/workflows/ci.yml
