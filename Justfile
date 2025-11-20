@@ -23,8 +23,6 @@ reset-web:
 
     echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
 
-alias c := ci
-
 ci:
 	@echo "==> Web: install, sync, build, typecheck"
 	if [ -d apps/web ]; then
@@ -69,9 +67,6 @@ down:      # stop dev stack
 
 observ:    # monitoring profile (optional)
 	docker compose -f infra/compose/compose.observ.yml up -d
-
-stream:    # event streaming profile (optional)
-	docker compose -f infra/compose/compose.stream.yml up -d
 
 # ---------- Drills ----------
 drill:     # run disaster recovery drill smoke sequence

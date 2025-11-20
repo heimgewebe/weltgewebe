@@ -18,11 +18,13 @@
 </script>
 
 {#if open}
+<!-- Filter Drawer ist deaktiviert und wird ausgeblendet, bis Funktionalität bereitsteht -->
 <aside
   class="panel drawer drawer-right"
   aria-label="Filter- und Such-Drawer (inaktiv)"
   aria-describedby="filters-disabled-note"
   inert
+  style="display: none;"
 >
   <strong>Suche</strong>
   <div class="col">

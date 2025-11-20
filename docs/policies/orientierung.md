@@ -72,25 +72,18 @@ Es beschreibt:
 
 ## 4 · Ethisch-technische Defaults
 
-- Sichtbarkeit (`fade_days`)
-  - Richtwert: 7 Tage laut zusammenstellung.md.
-  - Herkunft: Funktionsbeschreibung, nicht Code.
-- Identität (`ron_alias_valid_days`)
-  - Richtwert: 28 Tage (Delegations-Analogon).
-  - Herkunft: Geist & Plan-Ableitung.
-- Anonymisierung (`default_anonymized`)
-  - Richtwert: *nicht festgelegt*, nur „Opt-in möglich“.
-  - Herkunft: zusammenstellung.md, Abschnitt III.
-- Ortsdaten (`unschaerferadius_m`)
-  - Richtwert: individuell einstellbar.
-  - Herkunft: zusammenstellung.md, Abschnitt III.
-- Delegation (`delegation_expire_days`)
-  - Richtwert: 28 Tage (4 Wochen).
-  - Herkunft: § IV Delegation.
+Die verbindlichen Werte für Datenschutz- und Lebenszyklus-Parameter sind in der Datei
+[`policies/retention.yml`](../../policies/retention.yml) definiert. Diese Datei dient als
+**Single Source of Truth** für die technische Implementierung.
 
-> **Hinweis:** Die Werte 7/7/28 Tage sind aus der Beschreibung im Repo abgeleitet –
-> nicht normativ festgelegt. Änderungen erfordern Governance-Beschluss +
-> Changelog-Eintrag.
+Die dort definierten Parameter umfassen:
+
+- **Sichtbarkeit** (`fade_days`): Dauer, bis Inhalte verblassen.
+- **Identität** (`ron_days`): Gültigkeitsdauer von Identitäten/Rollen.
+- **Delegation** (`delegation_expire_days`): Verfall von Delegationen.
+- **Compliance**: Einstellungen zu Privacy by Design und Anonymisierung.
+
+Bitte konsultieren Sie `policies/retention.yml` für die aktuellen, operativen Werte.
 
 ---
 

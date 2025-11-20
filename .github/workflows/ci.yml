@@ -53,10 +53,26 @@ jobs:
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
     if: >
       ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
+    outputs:
+      web_changed: ${{ steps.filter.outputs.web }}
+      api_changed: ${{ steps.filter.outputs.api }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            web:
+              - 'apps/web/**'
+            api:
+              - 'apps/api/**'
+              - 'contracts/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'Justfile'
 
       - name: Install yq (official release)
         env:
@@ -186,15 +202,37 @@ jobs:
           uv --version
           just --version
 
-      - name: Validate project
+      - name: Validate Web
+        if: steps.filter.outputs.web == 'true'
+        run: |
+          echo "==> Running Web Checks"
+          cd apps/web
+          pnpm install --frozen-lockfile
+          pnpm sync
+          pnpm build
+          pnpm ci
+
+      - name: Validate API
+        if: steps.filter.outputs.api == 'true'
         env:
           CARGO_TERM_COLOR: always
-        run: just ci
+        run: |
+          echo "==> Running API Checks"
+          if [ -d apps/api ]; then
+            pushd apps/api >/dev/null
+            cargo fmt -- --check
+            cargo clippy -- -D warnings
+            cargo build --locked
+            cargo test --locked
+            popd >/dev/null
+          fi
 
   web-e2e:
     name: Web E2E
     runs-on: ubuntu-latest
     needs: ci
+    # Only run if web changed or dispatch
+    if: ${{ needs.ci.outputs.web_changed == 'true' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 20
     env:
       HEADLESS: "1"

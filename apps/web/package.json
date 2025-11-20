@@ -32,6 +32,7 @@
     "@sveltejs/adapter-static": "^3.0.3",
     "@sveltejs/kit": "^2.48.4",
     "@sveltejs/vite-plugin-svelte": "^3.1.1",
+    "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "8.8.0",
     "@typescript-eslint/parser": "8.8.0",
     "eslint": "9.11.1",
