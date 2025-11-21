@@ -1,10 +1,11 @@
+---
 name: CI (heavy on demand)
 
 on:
   workflow_dispatch: {}
   pull_request:
     types: [labeled, synchronize, reopened, ready_for_review]
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   contents: read

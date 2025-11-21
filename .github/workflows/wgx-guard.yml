@@ -1,3 +1,4 @@
+---
 name: wgx-guard
 
 on:
@@ -96,17 +97,17 @@ jobs:
           UV_SERIES_DEFAULT="0.8"
           if [ -f toolchain.versions.yml ]; then
             UV_SERIES="$(python - <<'PY'
-import sys
-from pathlib import Path
-import yaml
-t = Path("toolchain.versions.yml")
-d = yaml.safe_load(t.read_text(encoding="utf-8")) or {}
-uv = str(d.get("uv", "")).strip()
-parts = uv.split(".")
-if not uv or len(parts) < 2:
-    print(f"::error::unexpected uv version: {uv}", file=sys.stderr); sys.exit(1)
-print(".".join(parts[:2]))
-PY
+          import sys
+          from pathlib import Path
+          import yaml
+          t = Path("toolchain.versions.yml")
+          d = yaml.safe_load(t.read_text(encoding="utf-8")) or {}
+          uv = str(d.get("uv", "")).strip()
+          parts = uv.split(".")
+          if not uv or len(parts) < 2:
+              print(f"::error::unexpected uv version: {uv}", file=sys.stderr); sys.exit(1)
+          print(".".join(parts[:2]))
+          PY
             )"
           else
             echo "::warning::toolchain.versions.yml missing → defaulting to uv ${UV_SERIES_DEFAULT}.x"

@@ -1,14 +1,15 @@
+---
 name: api-smoke
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/api-smoke.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
       - "Cargo.toml"
@@ -124,9 +125,11 @@ jobs:
         run: |
           set -euxo pipefail
           curl -fsS http://127.0.0.1:8787/health/live
-          curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/health/ready | grep -E '^(200|503)$'
+          curl -fsS -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8787/health/ready \
+          | grep -E '^(200|503)$'
           # /metrics darf 200 liefern, Inhalt ist optional; zeigen die ersten Zeilen, falls vorhanden:
-          curl -fsS http://127.0.0.1:8787/metrics | head -n 5 || echo "no /metrics yet (ok)"
+          curl -fsS http://127.0.0.1:8787/metrics | head -n 5 \
+          || echo "no /metrics yet (ok)"
       - name: Probe /version (field presence)
         run: |
           set -euo pipefail
