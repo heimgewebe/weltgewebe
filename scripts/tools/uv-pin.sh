@@ -144,17 +144,30 @@ curl_fetch() {
 
 download_uv() {
     local ver="$1"
-    local triple asset url tmpdir="" tarball checksum_file extracted
+    local triple asset url tmpdir="" archive checksum_file extracted
 
     triple="$(detect_target)"
-    asset="uv-${triple}.tar.gz"
+    # Newer uv versions use .zip for Linux/Windows, assuming .zip for simplicity if >= 0.7.0
+    # However, let's check what we are targeting. For now, we switch Linux x86_64 to zip.
+    if [[ "${triple}" == "x86_64-unknown-linux-gnu" ]]; then
+        asset="uv-${triple}.zip"
+    else
+        asset="uv-${triple}.tar.gz"
+    fi
+
     url="https://github.com/astral-sh/uv/releases/download/v${ver}/${asset}"
 
     if ! command -v curl >/dev/null 2>&1; then
         echo "curl is required to install uv" >&2
         exit 1
     fi
-    if ! command -v tar >/dev/null 2>&1; then
+    # We might need unzip for .zip
+    if [[ "${asset}" == *.zip ]]; then
+        if ! command -v unzip >/dev/null 2>&1; then
+             echo "unzip is required to extract uv" >&2
+             exit 1
+        fi
+    elif ! command -v tar >/dev/null 2>&1; then
         echo "tar is required to extract uv" >&2
         exit 1
     fi
@@ -166,11 +179,11 @@ download_uv() {
     tmpdir="$(mktemp -d)"
     trap 'rm -rf "${tmpdir:-}"' EXIT INT TERM
 
-    tarball="${tmpdir}/${asset}"
+    archive="${tmpdir}/${asset}"
     checksum_file="${tmpdir}/SHA256SUMS"
 
     echo "Downloading uv v${ver} (${asset})"
-    curl_fetch "${url}" -L -o "${tarball}"
+    curl_fetch "${url}" -L -o "${archive}"
     curl_fetch "https://github.com/astral-sh/uv/releases/download/v${ver}/SHA256SUMS" -L -o "${checksum_file}"
 
     if ! grep " ${asset}" "${checksum_file}" | sha256sum -c -; then
@@ -179,7 +192,13 @@ download_uv() {
     fi
 
     extracted="${tmpdir}/uv"
-    tar -xzf "${tarball}" -C "${tmpdir}" uv
+    if [[ "${asset}" == *.zip ]]; then
+        unzip -q -o "${archive}" -d "${tmpdir}"
+        # Find uv binary in the extracted directory
+        find "${tmpdir}" -type f -name uv -exec mv {} "${extracted}" \; -quit
+    else
+        tar -xzf "${archive}" -C "${tmpdir}" uv
+    fi
 
     if command -v install >/dev/null 2>&1; then
         install -m 0755 "${extracted}" "${BIN}"
