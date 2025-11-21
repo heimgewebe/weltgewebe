@@ -160,7 +160,14 @@ jobs:
           echo "Downloading from ${url}"
 
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
-          sudo mv /tmp/uv /usr/local/bin/uv
+          # Find the uv binary in the extracted directory (structure varies by release)
+          UV_BIN=$(find /tmp -type f -name 'uv' -executable | head -n1)
+          if [ -z "$UV_BIN" ]; then
+            echo "uv binary not found after extraction" >&2
+            exit 1
+          fi
+          echo "Found uv binary at: $UV_BIN"
+          sudo mv "$UV_BIN" /usr/local/bin/uv
           sudo chmod +x /usr/local/bin/uv
           hash -r
 
