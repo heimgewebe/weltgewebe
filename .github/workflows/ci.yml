@@ -242,6 +242,7 @@ jobs:
       CI_REPORTERS: dot,html,junit
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      PORT: "4173"
     defaults:
       run:
         shell: bash
