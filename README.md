@@ -5,7 +5,9 @@
 Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream und Caddy.
 Struktur und Beiträge: siehe `architekturstruktur.md` und `CONTRIBUTING.md`.
 
-> **Hinweis zur Eigenständigkeit:** Weltgewebe ist ein eigenständiges Projekt. Repositories wie `heimgewebe/contracts`, `wgx` oder `hauski` sind optionale Quellen und Werkzeuge, aber keine monolithische Codebasis.
+> **Hinweis zur Eigenständigkeit:** Weltgewebe ist ein eigenständiges Projekt. Repositories wie
+> `heimgewebe/contracts`, `wgx` oder `hauski` sind optionale Quellen und Werkzeuge, aber keine
+> monolithische Codebasis.
 
 ## Landing
 
