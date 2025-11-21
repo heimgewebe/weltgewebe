@@ -25,7 +25,7 @@ Produktionskontext überführt werden.
 
 Das Weltgewebe verwendet eine präzise Domänensprache für Klarheit in Code, APIs und Dokumentation.
 Die Kernelemente sind in `docs/domain/vocabulary.md` definiert und durch
-[ADR-0043](docs/adr/0043-edge-vs-conversation.md) formalisiert.
+[ADR-0043](../adr/0043-edge-vs-conversation.md) formalisiert.
 
 ## Weitere Orientierung
 
