@@ -159,7 +159,8 @@ jobs:
           url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
           echo "Downloading from ${url}"
 
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
+          # Verwende --strip-components=1, da das Archiv einen Unterordner (z.B. uv-x86_64-...) enthält.
+          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz --strip-components=1 -C /tmp
           sudo mv /tmp/uv /usr/local/bin/uv
           sudo chmod +x /usr/local/bin/uv
           hash -r
