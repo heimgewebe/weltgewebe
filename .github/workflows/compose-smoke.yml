@@ -1,3 +1,4 @@
+---
 name: compose-smoke
 permissions:
   contents: read

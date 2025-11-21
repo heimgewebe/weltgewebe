@@ -4,9 +4,9 @@ scope: text
 ignorecase: false
 description: "Weltgewebe-Redaktionsstil: neutrale Sprache, konsistente Begriffe und Zahlenschreibweisen."
 tokens:
-  - pattern: "\\b[\u00C0-\u024F\w]+(?:\\*|:|_)innen\\b"
+  - pattern: "\\b[\u00C0-\u024F\\w]+(?:\\*|:|_)innen\\b"
     message: "Vermeide Gender-Stern/-Gap – wähle eine neutrale Formulierung."
-  - pattern: "\\b[\u00C0-\u024F\w]+/[\u00C0-\u024F\w]+innen\\b"
+  - pattern: "\\b[\u00C0-\u024F\\w]+/[\u00C0-\u024F\\w]+innen\\b"
     message: "Vermeide Slash-Genderformen – nutze eine neutrale Bezeichnung."
   - pattern: "\\bRolle[nr]?/(?:und|oder)?Funktion\\b"
     message: "Begriffe nicht vermischen: 'Rolle' und 'Funktion' haben unterschiedliche Bedeutungen."

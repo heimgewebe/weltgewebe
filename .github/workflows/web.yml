@@ -1,3 +1,4 @@
+---
 name: Web Check (Gate A)
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{github.workflow}}-${{github.ref}}
       cancel-in-progress: true
     defaults:
       run:

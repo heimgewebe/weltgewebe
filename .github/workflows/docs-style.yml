@@ -1,8 +1,9 @@
+---
 name: docs-style
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "docs/**"
       - ".vale/**"
@@ -14,7 +15,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-style-${{ github.ref }}
+  group: docs-style-${{github.ref}}
   cancel-in-progress: true
 
 jobs:
@@ -53,7 +54,7 @@ jobs:
         id: changed
         run: |
           set -euo pipefail
-          base="${{ github.base_ref || 'main' }}"
+          base="${{github.base_ref || 'main'}}"
           # Ensure base is a remote-tracking branch (origin/branch)
           if [[ "$base" != origin/* ]]; then
             base="origin/$base"
@@ -69,8 +70,8 @@ jobs:
       - name: Run Vale (soft; no fail)
         run: |
           set -euo pipefail
-          if [ -n "${{ steps.changed.outputs.files }}" ]; then
-            if ! ./bin/vale --minAlertLevel=suggestion ${{ steps.changed.outputs.files }}; then
+          if [ -n "${{steps.changed.outputs.files}}" ]; then
+            if ! ./bin/vale --minAlertLevel=suggestion ${{steps.changed.outputs.files}}; then
               echo "Vale reported suggestions; continuing without failing the workflow."
             fi
           else
@@ -78,7 +79,7 @@ jobs:
           fi
 
       - name: Full docs sweep on manual run (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
+        if: ${{github.event_name == 'workflow_dispatch'}}
         run: |
           if ! ./bin/vale --minAlertLevel=suggestion docs; then
             echo "Vale reported suggestions during full sweep; continuing without failing the workflow."

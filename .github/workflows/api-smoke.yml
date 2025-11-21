@@ -1,14 +1,15 @@
+---
 name: api-smoke
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/api-smoke.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "apps/api/**"
       - "Cargo.toml"
@@ -18,7 +19,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: api-smoke-${{ github.ref }}
+  group: api-smoke-${{github.ref}}
   cancel-in-progress: true
 jobs:
   ultra_light_health:
@@ -39,8 +40,8 @@ jobs:
           sudo apt-get install -y pkg-config libssl-dev libpq-dev
       - name: Inject build metadata (compile-time env)
         run: |
-          echo "GIT_COMMIT_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
-          echo "BUILD_TIMESTAMP=${{ github.run_started_at }}" >> "$GITHUB_ENV"
+          echo "GIT_COMMIT_SHA=${{github.sha}}" >> "$GITHUB_ENV"
+          echo "BUILD_TIMESTAMP=${{github.run_started_at}}" >> "$GITHUB_ENV"
       - name: Setup Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -55,9 +56,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target
-          key: ${{ runner.os }}-cargo-target-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}
+          key: ${{runner.os}}-cargo-target-${{hashFiles('**/Cargo.lock','**/Cargo.toml')}}
           restore-keys: |
-            ${{ runner.os }}-cargo-target-
+            ${{runner.os}}-cargo-target-
       - name: Build release (fast start)
         run: |
           set -o pipefail
@@ -74,7 +75,7 @@ jobs:
           API_BIND: 127.0.0.1:8787
           RUST_LOG: info
           RUST_BACKTRACE: 1
-          APP_CONFIG_PATH: ${{ github.workspace }}/configs/app.defaults.yml
+          APP_CONFIG_PATH: ${{github.workspace}}/configs/app.defaults.yml
         run: |
           if [ ! -x ./target/release/weltgewebe-api ]; then
             echo "compiled API binary missing"
@@ -119,7 +120,7 @@ jobs:
             if curl -fsS http://127.0.0.1:8787/health/live; then ok=1; break; fi
             sleep 0.5
           done
-          [ "$ok" -eq 1 ] || { echo "health/live not ready in time"; exit 1; }
+          [ "$ok" -eq 1 ] || {echo "health/live not ready in time"; exit 1;}
       - name: Probe /health and /metrics
         run: |
           set -euxo pipefail
