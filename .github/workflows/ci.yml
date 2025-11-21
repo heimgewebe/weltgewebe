@@ -210,7 +210,7 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm sync
           pnpm build
-          pnpm ci
+          pnpm run ci
 
       - name: Validate API
         if: needs.docs-changes.outputs.api_changed == 'true'
