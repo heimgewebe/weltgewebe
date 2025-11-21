@@ -1,3 +1,8 @@
+<script lang="ts">
+  // TS-Stub: hält svelte-check ruhig, bis hier echte Logik einzieht.
+  // Aktuell keine Props/Variablen notwendig.
+</script>
+
 <style>
   .dock{
     position:absolute; left:0; right:0; bottom:0; min-height:56px; z-index:28;
