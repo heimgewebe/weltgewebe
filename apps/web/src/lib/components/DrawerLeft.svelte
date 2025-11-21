@@ -77,11 +77,13 @@
   <div class="divider"></div>
   {#if tab === 'webrat'}
     <div id="drawer-panel-webrat" role="tabpanel" aria-labelledby="drawer-tab-webrat">
-      <p>Platzhalter – „coming soon“ (Diskussionen/Abstimmungen)</p>
+      <!-- Feature Flag: coming soon -->
+      <!-- <p>Platzhalter – „coming soon“ (Diskussionen/Abstimmungen)</p> -->
     </div>
   {:else}
     <div id="drawer-panel-naehstuebchen" role="tabpanel" aria-labelledby="drawer-tab-naehstuebchen">
-      <p>Platzhalter – „coming soon“ (Community-Werkzeuge)</p>
+      <!-- Feature Flag: coming soon -->
+      <!-- <p>Platzhalter – „coming soon“ (Community-Werkzeuge)</p> -->
     </div>
   {/if}
 </aside>

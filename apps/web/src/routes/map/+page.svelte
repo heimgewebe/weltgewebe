@@ -6,7 +6,6 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
-  import points from '$lib/data/dummy.json';
 
   type MapPoint = {
     id: string;
@@ -15,7 +14,7 @@
     lon: number;
   };
 
-  const markersData = points satisfies MapPoint[];
+  let markersData: MapPoint[] = [];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -236,6 +235,36 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
+      // Fetch real nodes from API
+      try {
+        const res = await fetch('/api/nodes');
+        if (res.ok) {
+          const data = await res.json();
+          let features: any[] = [];
+
+          if (Array.isArray(data)) {
+            // API returns a plain array of features
+            features = data;
+          } else if (data.features && Array.isArray(data.features)) {
+            // API returns a FeatureCollection
+            features = data.features;
+          }
+
+          if (features.length > 0) {
+            markersData = features
+              .filter((f: any) => f?.geometry?.coordinates?.length >= 2)
+              .map((f: any) => ({
+                id: f.id,
+                title: f.properties?.title || 'Unbenannt',
+                lat: f.geometry.coordinates[1],
+                lon: f.geometry.coordinates[0]
+              }));
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load nodes:', e);
+      }
+
       markerCleanupFns.forEach((fn) => fn());
       markerCleanupFns.length = 0;
 
@@ -394,11 +423,17 @@
   >
     <div class="panel">
       <h3>Webrat</h3>
-      <div class="muted">Beratung, Anträge, Matrix (Stub)</div>
+      <div class="muted">
+        <!-- Feature Flag: Coming soon -->
+        <!-- Beratung, Anträge, Matrix (Stub) -->
+      </div>
     </div>
     <div class="panel">
       <h3>Nähstübchen</h3>
-      <div class="muted">Ideen, Entwürfe, Skizzen (Stub)</div>
+      <div class="muted">
+        <!-- Feature Flag: Coming soon -->
+        <!-- Ideen, Entwürfe, Skizzen (Stub) -->
+      </div>
     </div>
   </div>
 
@@ -409,6 +444,7 @@
     title="Suche & Filter"
     side="right"
     open={rightOpen}
+    style="display: none;"
     on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-right')}
   >
     {#if selected}
@@ -418,9 +454,10 @@
         <div class="muted">Weitere Details folgen (Stub)</div>
       </div>
     {/if}
-    <div class="panel" style="padding:8px;">
+    <!-- Feature Flag: Filter disabled -->
+    <!-- <div class="panel" style="padding:8px;">
       <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
-    </div>
+    </div> -->
   </Drawer>
 
   <!-- Top Drawer: Gewebekonto -->
@@ -453,4 +490,3 @@
   <!-- Zeitleiste -->
   <TimelineDock />
 </main>
-

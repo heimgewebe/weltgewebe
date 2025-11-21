@@ -1,3 +1,5 @@
+<script lang="ts">
+</script>
 <style>
   .dock{
     position:absolute; left:0; right:0; bottom:0; min-height:56px; z-index:28;
@@ -16,4 +18,3 @@
   <div class="spacer"></div>
   <div style="opacity:.72; font-size:12px;">Tipp: [ = links · ] = rechts · Alt+G = Gewebekonto</div>
 </div>
-
