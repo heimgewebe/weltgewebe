@@ -14,6 +14,12 @@
     lon: number;
   };
 
+  const fallbackData: MapPoint[] = [
+    { id: "gate-a-werkstatt", title: "Werkstatt Hamm", lat: 53.553, lon: 10.052 },
+    { id: "gate-a-markt", title: "Hamm Wochenmarkt", lat: 53.551, lon: 10.048 },
+    { id: "gate-a-cafe", title: "Café Deichtor", lat: 53.55, lon: 10.056 }
+  ];
+
   let markersData: MapPoint[] = [];
 
   let mapContainer: HTMLDivElement | null = null;
@@ -235,7 +241,7 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
-      // Fetch real nodes from API
+      // Fetch real nodes from API with fallback
       try {
         const res = await fetch('/api/nodes');
         if (res.ok) {
@@ -260,9 +266,14 @@
                 lon: f.geometry.coordinates[0]
               }));
           }
+        } else {
+          // If API endpoint is missing (e.g. static build/preview), use fallback
+          console.warn('API unavailable, using fallback data.');
+          markersData = fallbackData;
         }
       } catch (e) {
-        console.error('Failed to load nodes:', e);
+        console.error('Failed to load nodes, using fallback:', e);
+        markersData = fallbackData;
       }
 
       markerCleanupFns.forEach((fn) => fn());
