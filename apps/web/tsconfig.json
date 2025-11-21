@@ -1,7 +1,7 @@
 {
   "extends": "./.svelte-kit/tsconfig.json",
   "compilerOptions": {
-    "types": ["svelte"],
+    "types": ["svelte", "node"],
     "strict": true,
     "baseUrl": ".",
     "resolveJsonModule": true,
