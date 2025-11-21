@@ -239,7 +239,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
       FORCE_COLOR: "1"
-      PW_TEST_REPORTER: dot,html,junit
+      CI_REPORTERS: dot,html,junit
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
     defaults:

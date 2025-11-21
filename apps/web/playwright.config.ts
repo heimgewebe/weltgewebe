@@ -26,12 +26,12 @@ const junitReporter: ReporterDescription = [
 ];
 /**
  * Reporter aus ENV parsen:
- *   PW_TEST_REPORTER="dot,html,junit"
+ *   CI_REPORTERS="dot,html,junit"
  *   PLAYWRIGHT_HTML_REPORT_OPEN="never|on-failure|always"
  *   PLAYWRIGHT_JUNIT_OUTPUT_NAME="results.xml"
  */
 function resolveEnvReporters(): ReporterDescription[] | undefined {
-  const spec = process.env.PW_TEST_REPORTER?.split(",")
+  const spec = process.env.CI_REPORTERS?.split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   if (!spec || spec.length === 0) return undefined;
