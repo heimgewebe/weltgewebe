@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Installer/Pinner for astral-sh/uv releases
 # Usage: scripts/tools/uv-pin.sh ensure [<version>]
-# Default version: 0.8.0 (matches toolchain.versions.yml)
+# Default version: 0.9.11 (matches toolchain.versions.yml)
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${UV_VERSION:-0.8.0}}"
+REQ_VER="${2:-${UV_VERSION:-0.9.11}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/uv"
 
@@ -144,11 +144,15 @@ curl_fetch() {
 
 download_uv() {
     local ver="$1"
-    local triple asset url tmpdir="" tarball checksum_file extracted
+    local triple asset url tmpdir="" tarball checksum_file extracted checksum_url
 
     triple="$(detect_target)"
     asset="uv-${triple}.tar.gz"
-    url="https://github.com/astral-sh/uv/releases/download/v${ver}/${asset}"
+    # Note: uv >= 0.9.0 release URLs do not use the 'v' prefix in the path.
+    url="https://github.com/astral-sh/uv/releases/download/${ver}/${asset}"
+
+    # Try individual checksum file first (newer releases), then fallback to SHA256SUMS
+    checksum_url="https://github.com/astral-sh/uv/releases/download/${ver}/${asset}.sha256"
 
     if ! command -v curl >/dev/null 2>&1; then
         echo "curl is required to install uv" >&2
@@ -167,19 +171,50 @@ download_uv() {
     trap 'rm -rf "${tmpdir:-}"' EXIT INT TERM
 
     tarball="${tmpdir}/${asset}"
-    checksum_file="${tmpdir}/SHA256SUMS"
+    checksum_file="${tmpdir}/CHECKSUM"
 
     echo "Downloading uv v${ver} (${asset})"
     curl_fetch "${url}" -L -o "${tarball}"
-    curl_fetch "https://github.com/astral-sh/uv/releases/download/v${ver}/SHA256SUMS" -L -o "${checksum_file}"
 
-    if ! grep " ${asset}" "${checksum_file}" | sha256sum -c -; then
-        echo "uv checksum verification failed for ${asset}" >&2
-        exit 1
+    # Try to download individual checksum file
+    if curl_fetch "${checksum_url}" -L -o "${checksum_file}" 2>/dev/null; then
+         echo "Verifying with individual checksum file..."
+         # The .sha256 file format for uv is "HASH  FILENAME"
+         # But sometimes it is just the hash.
+         # Let's check if sha256sum -c works (it expects 2 columns).
+         if ! sha256sum -c "${checksum_file}" 2>/dev/null; then
+            # Fallback if the file only contains the hash or formatting issues
+            local hash
+            hash="$(awk '{print $1}' "${checksum_file}")"
+            # Check if the hash matches the file
+            echo "${hash}  ${tarball}" | sha256sum -c -
+         fi
+    else
+         # Fallback to SHA256SUMS (older releases or if individual fails)
+         # This path might fail for new releases that don't have SHA256SUMS, but that is expected fallback behavior.
+         echo "Individual checksum not found, trying SHA256SUMS..."
+         local checksum_sums_url="https://github.com/astral-sh/uv/releases/download/${ver}/SHA256SUMS"
+
+         curl_fetch "${checksum_sums_url}" -L -o "${checksum_file}"
+
+         if ! grep " ${asset}" "${checksum_file}" | sha256sum -c -; then
+             echo "uv checksum verification failed for ${asset}" >&2
+             exit 1
+         fi
     fi
 
-    extracted="${tmpdir}/uv"
-    tar -xzf "${tarball}" -C "${tmpdir}" uv
+    # The tarball usually contains a directory like uv-x86_64-unknown-linux-gnu/uv
+    # We want to extract just the 'uv' binary.
+    # Using --strip-components=1 is risky if structure changes, but standard for these artifacts.
+    # Let's try finding it.
+    tar -xzf "${tarball}" -C "${tmpdir}"
+
+    # Find the uv binary in the extracted directory (it might be in a subdir)
+    extracted="$(find "${tmpdir}" -type f -name uv | head -n 1)"
+    if [[ -z "${extracted}" ]]; then
+        echo "Could not find 'uv' binary in downloaded archive" >&2
+        exit 1
+    fi
 
     if command -v install >/dev/null 2>&1; then
         install -m 0755 "${extracted}" "${BIN}"
