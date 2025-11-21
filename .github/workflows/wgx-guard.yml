@@ -34,7 +34,7 @@ jobs:
 
       - name: Check .wgx/profile.yml presence
         run: |
-          test -f .wgx/profile.yml || {echo "::error::.wgx/profile.yml missing"; exit 1;}
+          test -f .wgx/profile.yml || { echo "::error::.wgx/profile.yml missing"; exit 1;}
           echo "found .wgx/profile.yml"
 
       - name: Setup Python (with pip cache)
@@ -140,9 +140,9 @@ PY
             dir="$(dirname "$file")"
             echo "::group::uv sync in $dir"
             if [ -f "$dir/uv.lock" ]; then
-              ( cd "$dir" && uv sync --frozen ) || {echo "::error::uv sync failed in $dir (frozen)"; status=1;}
+              ( cd "$dir" && uv sync --frozen ) || { echo "::error::uv sync failed in $dir (frozen)"; status=1;}
             else
-              ( cd "$dir" && uv sync ) || {echo "::error::uv sync failed in $dir"; status=1;}
+              ( cd "$dir" && uv sync ) || { echo "::error::uv sync failed in $dir"; status=1;}
             fi
             echo "::endgroup::"
           done

@@ -55,7 +55,7 @@ jobs:
           while IFS= read -r -d '' f; do files+=("$f"); done < \
             <(git ls-files -z -- '.github/workflows/*.yml' '.github/workflows/*.yaml' || true)
 
-          [[ ${#files[@]} -gt 0 ]] || {echo "::notice::No workflow files"; exit 0;}
+          [[ ${#files[@]} -gt 0 ]] || { echo "::notice::No workflow files"; exit 0;}
 
           extract_pair() {
             local line="$1"

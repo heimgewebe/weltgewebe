@@ -83,7 +83,7 @@ jobs:
 
       - name: Read toolchain versions
         run: |
-          test -f toolchain.versions.yml || {echo "toolchain.versions.yml not found"; exit 1;}
+          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1;}
           RUST=$(yq -r '.rust' toolchain.versions.yml)
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           PY=$(yq -r '.python' toolchain.versions.yml)
@@ -161,8 +161,8 @@ jobs:
 
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
           # Find the uv binary in the extracted directory (structure varies by release)
-          # Use 'uv*' and avoid -executable check to be robust against permission issues in tar
-          UV_BIN=$(find /tmp -type f -name 'uv*' | head -n1)
+          # Use '-name uv' to avoid picking up non-binaries like uv.lock or uv-installer
+          UV_BIN=$(find /tmp -type f -name 'uv' | head -n1)
           if [ -z "$UV_BIN" ]; then
             # Fallback: listing files to diagnose
             echo "uv binary not found after extraction. /tmp contents:" >&2
