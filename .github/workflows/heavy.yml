@@ -44,7 +44,7 @@ jobs:
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
-    defaults: { run: { working-directory: apps/web, shell: bash } }
+    defaults: {run: {working-directory: apps/web, shell: bash}}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
