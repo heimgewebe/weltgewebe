@@ -1,7 +1,7 @@
 ---
 name: wgx-guard
 
-on:
+"on":
   push:
     paths:
       - ".wgx/**"

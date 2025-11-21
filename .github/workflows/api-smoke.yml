@@ -1,6 +1,6 @@
 ---
 name: api-smoke
-on:
+"on":
   pull_request:
     branches: [main]
     paths:
