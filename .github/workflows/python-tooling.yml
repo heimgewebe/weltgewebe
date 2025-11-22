@@ -1,8 +1,9 @@
+---
 name: python-tooling
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
@@ -10,7 +11,7 @@ on:
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"

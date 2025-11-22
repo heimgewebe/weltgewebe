@@ -1,3 +1,4 @@
+---
 wgx:
   apiVersion: v1
   requiredWgx: "^2.0.0"

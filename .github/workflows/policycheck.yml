@@ -1,3 +1,4 @@
+---
 name: policycheck
 permissions:
   contents: read

@@ -155,11 +155,22 @@ jobs:
           # Direktes Herunterladen des Binär-Archivs, um Versionsprobleme mit
           # dem Installer-Skript zu umgehen.
           # Annahme: Der Runner ist x86_64, was für ubuntu-latest zutrifft.
-          url="https://github.com/astral-sh/uv/releases/download/v${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
+          # Note: uv >= 0.9.0 release URLs do not use the 'v' prefix in the path.
+          url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
           echo "Downloading from ${url}"
 
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
-          sudo mv /tmp/uv /usr/local/bin/uv
+          # Find the uv binary in the extracted directory (structure varies by release)
+          # Use '-name uv' to avoid picking up non-binaries like uv.lock or uv-installer
+          UV_BIN=$(find /tmp -type f -name 'uv' | head -n1)
+          if [ -z "$UV_BIN" ]; then
+            # Fallback: listing files to diagnose
+            echo "uv binary not found after extraction. /tmp contents:" >&2
+            ls -R /tmp
+            exit 1
+          fi
+          echo "Found uv binary at: $UV_BIN"
+          sudo mv "$UV_BIN" /usr/local/bin/uv
           sudo chmod +x /usr/local/bin/uv
           hash -r
 
