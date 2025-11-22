@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{github.workflow}}-${{github.ref}}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 # Verwende die Standard-Bash von GitHub Actions, ohne eigenes Template.
@@ -26,7 +26,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      docs: ${{steps.filter.outputs.docs}}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -52,7 +52,7 @@ jobs:
       NODE_OPTIONS: --max-old-space-size=4096
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
     if: >
-      ${{github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true'}}
+      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -83,7 +83,7 @@ jobs:
 
       - name: Read toolchain versions
         run: |
-          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1;}
+          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
           RUST=$(yq -r '.rust' toolchain.versions.yml)
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           PY=$(yq -r '.python' toolchain.versions.yml)
@@ -94,7 +94,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{env.RUST_VERSION}}
+          toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
         env:
           CARGO_TERM_COLOR: always
@@ -107,9 +107,9 @@ jobs:
             ~/.cargo/git
             target
           key: >-
-            ${{runner.os}}-cargo-${{hashFiles('**/Cargo.lock')}}
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{runner.os}}-cargo-
+            ${{ runner.os }}-cargo-
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -130,17 +130,17 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{env.PYTHON_VERSION}}
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Cache uv artifacts
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
           key: >-
-            ${{runner.os}}-uv-${{hashFiles('toolchain.versions.yml')}}-${{hashFiles('**/pyproject.toml')}}
+            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
           restore-keys: |
-            ${{runner.os}}-uv-${{hashFiles('toolchain.versions.yml')}}-
-            ${{runner.os}}-uv-
+            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
+            ${{ runner.os }}-uv-
 
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
@@ -170,7 +170,6 @@ jobs:
             exit 1
           fi
           echo "Found uv binary at: $UV_BIN"
-          # Update PATH by moving to /usr/local/bin (in PATH)
           sudo mv "$UV_BIN" /usr/local/bin/uv
           sudo chmod +x /usr/local/bin/uv
           hash -r
@@ -247,9 +246,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{runner.os}}-ms-playwright-${{hashFiles('apps/web/pnpm-lock.yaml')}}
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{runner.os}}-ms-playwright-
+            ${{ runner.os }}-ms-playwright-
 
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps
@@ -269,14 +268,14 @@ jobs:
         run: pnpm test:ci
 
       - name: Dump preview log on failure
-        if: ${{failure()}}
+        if: ${{ failure() }}
         run: cat /tmp/preview.log || true
 
       - name: Upload Playwright report
-        if: ${{always()}}
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{github.run_id}}-${{github.job}}
+          name: playwright-report-${{ github.run_id }}-${{ github.job }}
           path: apps/web/playwright-report
           if-no-files-found: ignore
 
@@ -284,7 +283,7 @@ jobs:
     name: Docs & Shell Hygiene
     needs: docs-changes
     if: >
-      ${{github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true'}}
+      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -307,9 +306,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .lycheecache
-          key: ${{runner.os}}-lychee-${{hashFiles('**/*.md', '.lychee.toml')}}
+          key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}
           restore-keys: |
-            ${{runner.os}}-lychee-
+            ${{ runner.os }}-lychee-
 
       - name: Link check (lychee)
         id: lychee
@@ -332,10 +331,10 @@ jobs:
             --max-cache-age 1d
             '**/*.md'
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Link check (lychee - verbose retry)
-        if: ${{steps.lychee.outcome == 'failure'}}
+        if: ${{ steps.lychee.outcome == 'failure' }}
         uses: lycheeverse/lychee-action@v2
         with:
           args: >-
@@ -354,7 +353,7 @@ jobs:
             --max-cache-age 1d
             '**/*.md'
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lint YAML and JSON files
         run: |

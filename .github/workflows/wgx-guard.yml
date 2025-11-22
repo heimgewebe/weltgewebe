@@ -20,7 +20,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: wgx-guard-${{github.ref}}
+  group: wgx-guard-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
 
       - name: Check .wgx/profile.yml presence
         run: |
-          test -f .wgx/profile.yml || { echo "::error::.wgx/profile.yml missing"; exit 1;}
+          test -f .wgx/profile.yml || { echo "::error::.wgx/profile.yml missing"; exit 1; }
           echo "found .wgx/profile.yml"
 
       - name: Setup Python (with pip cache)
@@ -59,17 +59,17 @@ jobs:
           data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
           if not isinstance(data, dict):
               print("::error::.wgx/profile.yml must be a YAML mapping"); sys.exit(1)
-          required_top = [ "version","env_priority","tooling","tasks" ]
+          required_top = ["version","env_priority","tooling","tasks"]
           missing = [k for k in required_top if k not in data]
           if missing:
               print(f"::error::missing keys: {missing}")
               sys.exit(1)
-          envp = data[ "env_priority" ]
+          envp = data["env_priority"]
           if not isinstance(envp, list) or not envp:
               print("::error::env_priority must be a non-empty list")
               sys.exit(1)
-          for t in [ "up","lint","test","build","smoke" ]:
-              if t not in data[ "tasks" ]:
+          for t in ["up","lint","test","build","smoke"]:
+              if t not in data["tasks"]:
                   print(f"::error::task '{t}' missing")
                   sys.exit(1)
           print("schema-lite ok")
@@ -78,20 +78,20 @@ jobs:
       # --- Caching für uv (alle Subprojekte) ---
       - name: (Optional) Cache uv
         # consider *any* tracked Python project in subdirectories
-        if: ${{hashFiles('**/pyproject.toml') != ''}}
+        if: ${{ hashFiles('**/pyproject.toml') != '' }}
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/uv
-          key: uv-${{runner.os}}-${{hashFiles('**/pyproject.toml')}}
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
 
       - name: (Optional) No Python projects detected
-        if: ${{hashFiles('**/pyproject.toml') == ''}}
+        if: ${{ hashFiles('**/pyproject.toml') == '' }}
         run: echo "No Python projects detected – skipping uv bootstrap."
 
       # --- UV-Bootstrap: Version aus toolchain.versions.yml ableiten ---
       - name: (Optional) UV bootstrap (pyproject present)
-        if: ${{hashFiles('**/pyproject.toml') != ''}}
+        if: ${{ hashFiles('**/pyproject.toml') != '' }}
         run: |
           set -euo pipefail
           UV_SERIES_DEFAULT="0.8"
@@ -140,9 +140,9 @@ PY
             dir="$(dirname "$file")"
             echo "::group::uv sync in $dir"
             if [ -f "$dir/uv.lock" ]; then
-              ( cd "$dir" && uv sync --frozen ) || { echo "::error::uv sync failed in $dir (frozen)"; status=1;}
+              ( cd "$dir" && uv sync --frozen ) || { echo "::error::uv sync failed in $dir (frozen)"; status=1; }
             else
-              ( cd "$dir" && uv sync ) || { echo "::error::uv sync failed in $dir"; status=1;}
+              ( cd "$dir" && uv sync ) || { echo "::error::uv sync failed in $dir"; status=1; }
             fi
             echo "::endgroup::"
           done

@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{github.workflow}}-${{github.ref}}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,9 +46,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: uv-${{runner.os}}-${{hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock')}}
+          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock') }}
           restore-keys: |
-            uv-${{runner.os}}-
+            uv-${{ runner.os }}-
 
       - name: Show uv version
         run: uv --version

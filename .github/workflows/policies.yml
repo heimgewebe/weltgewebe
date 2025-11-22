@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: policies-${{github.ref}}
+  group: policies-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   limits-file-and-yaml:

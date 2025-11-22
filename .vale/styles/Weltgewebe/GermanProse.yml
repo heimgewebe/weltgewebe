@@ -1,3 +1,4 @@
+---
 extends: substitution
 level: suggestion
 ignorecase: true

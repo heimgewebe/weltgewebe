@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: links-${{github.ref}}
+  group: links-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   lychee:
