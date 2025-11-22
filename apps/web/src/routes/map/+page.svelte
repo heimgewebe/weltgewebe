@@ -307,15 +307,11 @@
 <style>
   .shell{
     position:relative;
-    height:100dvh;
-    /* keep the raw dynamic viewport height as a fallback for browsers missing safe-area support */
-    height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    width:100vw;
+    width:100%;
+    height:100%;
     overflow:hidden;
     background:var(--bg);
     color:var(--text);
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
   }
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
@@ -372,7 +368,7 @@
   }
 </style>
 
-<main class="shell">
+<div class="shell" role="main" aria-label="Karte und Kontext">
   <TopBar
     onToggleLeft={toggleLeft}
     onToggleRight={toggleRight}
@@ -452,5 +448,5 @@
 
   <!-- Zeitleiste -->
   <TimelineDock />
-</main>
+</div>
 

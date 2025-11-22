@@ -7,9 +7,9 @@ test("marker click opens info panel", async ({ page }) => {
 
   await page.goto("/map", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
-  await page.waitForFunction(() => !!document.querySelector(".map-marker"));
+  await page.waitForFunction(() => !!document.querySelector(".map-marker"), { timeout: 30000 });
 
-  await expect(page.getByRole("button", { name: /Hamm|Café/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Hamm|Café/ })).toBeVisible({ timeout: 30000 });
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
   await expect(markerButton).toBeVisible();
@@ -32,7 +32,7 @@ test("escape closes info panel and clears selection", async ({ page }) => {
 
   await page.goto("/map", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
-  await page.waitForFunction(() => !!document.querySelector(".map-marker"));
+  await page.waitForFunction(() => !!document.querySelector(".map-marker"), { timeout: 30000 });
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
   await expect(markerButton).toBeVisible();

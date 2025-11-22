@@ -9,7 +9,8 @@ test("main landmark is visible and left drawer toggles via keyboard", async ({
   await page.waitForLoadState("networkidle");
   await expect(page).toHaveURL(/[\?&]l=0\b/);
 
-  await expect(page.getByRole("main")).toBeVisible();
+  // Use locator to avoid ambiguity with nested main roles
+  await expect(page.locator('div[role="main"][aria-label="Karte und Kontext"]')).toBeVisible();
 
   const leftToggle = page.getByRole("button", { name: /Webrat\/Nähstübchen/ });
   await leftToggle.focus();
