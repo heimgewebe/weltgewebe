@@ -22,7 +22,8 @@ test.describe("smoke", () => {
     await page.goto("/map", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle");
 
-    const main = page.getByRole("main");
+    // Use locator to avoid ambiguity with nested main roles
+    const main = page.locator('div[role="main"][aria-label="Karte und Kontext"]');
     await expect(main).toBeVisible();
 
     // Die Karte hängt in einem stabilen Container mit der ID #map.

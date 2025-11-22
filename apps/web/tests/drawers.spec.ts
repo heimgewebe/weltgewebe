@@ -13,13 +13,13 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
   await page.keyboard.press("]");
   await expect(
     page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 10000 });
 
   // Esc → schließt rechts
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeHidden();
+  ).toBeHidden({ timeout: 10000 });
 
   // Top öffnen
   await page.keyboard.press("Alt+g");

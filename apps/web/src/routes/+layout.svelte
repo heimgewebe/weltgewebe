@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AppShell from "$lib/components/AppShell.svelte";
   import '../app.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import '$lib/styles/tokens.css';
@@ -25,4 +26,14 @@
   {/if}
 </svelte:head>
 
-<slot />
+<AppShell>
+  {#key $page.url.pathname}
+    <slot />
+  {/key}
+</AppShell>
+
+<style>
+  :global(body) {
+    margin: 0;
+  }
+</style>
