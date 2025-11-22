@@ -1,12 +1,13 @@
+---
 name: infra
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "infra/**"
       - ".github/workflows/infra.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "infra/**"
       - ".github/workflows/infra.yml"

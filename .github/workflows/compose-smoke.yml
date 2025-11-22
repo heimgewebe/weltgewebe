@@ -1,3 +1,4 @@
+---
 name: compose-smoke
 permissions:
   contents: read
@@ -31,7 +32,8 @@ jobs:
             sleep 2
           done
           tries=60
-          until curl -fsS http://localhost:8081/api/version >/dev/null || curl -fsS http://localhost:8081/api/health/ready >/dev/null; do
+          until curl -fsS http://localhost:8081/api/version >/dev/null \
+            || curl -fsS http://localhost:8081/api/health/ready >/dev/null; do
             ((tries--)) || (docker compose -f infra/compose/compose.core.yml --profile dev logs --no-color && exit 1)
             sleep 2
           done

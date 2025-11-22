@@ -1,8 +1,9 @@
+---
 name: python-tooling
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
@@ -10,7 +11,7 @@ on:
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
@@ -73,7 +74,8 @@ jobs:
               (cd "$dir" && uv sync)
               echo "::endgroup::"
             fi
-          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) -exec dirname {} \; | sort -u)
+          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) \
+            -exec dirname {} \; | sort -u)
           if [ "$found" -eq 0 ]; then
             echo "No Python dependency manifests found. Skipping sync."
           fi
