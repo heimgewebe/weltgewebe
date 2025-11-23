@@ -1,3 +1,4 @@
+---
 name: Web Check (Gate A)
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{github.workflow}}-${{github.ref}}
       cancel-in-progress: true
     defaults:
       run:
@@ -62,7 +63,7 @@ jobs:
       - name: Build
         run: CI=true pnpm build
 
-      - name: Playwright: setup browsers (CI)
+      - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
         # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
         # dass vorhandene job-/repo-/orgweite Defaults überschrieben werden.

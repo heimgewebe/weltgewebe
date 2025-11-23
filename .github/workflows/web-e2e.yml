@@ -1,3 +1,4 @@
+---
 name: Web E2E (manual)
 
 on:
@@ -7,7 +8,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: web-e2e-${{ github.ref }}
+  group: web-e2e-${{github.ref}}
   cancel-in-progress: true
 
 defaults:

@@ -1,8 +1,9 @@
+---
 name: python-tooling
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
@@ -10,7 +11,7 @@ on:
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
@@ -23,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{github.workflow}}-${{github.ref}}
   cancel-in-progress: true
 
 jobs:
@@ -45,9 +46,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/uv
-          key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock') }}
+          key: uv-${{runner.os}}-${{hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock')}}
           restore-keys: |
-            uv-${{ runner.os }}-
+            uv-${{runner.os}}-
 
       - name: Show uv version
         run: uv --version
@@ -60,21 +61,22 @@ jobs:
           # Scan all dirs that contain a Python manifest.
           while IFS= read -r dir; do
             found=1
-            if [ -f "$dir/uv.lock" ]; then
+            if [-f "$dir/uv.lock"]; then
               echo "::group::uv sync (locked) in $dir"
               (cd "$dir" && uv sync --locked)
               echo "::endgroup::"
-            elif [ -f "$dir/requirements.txt" ]; then
+            elif [-f "$dir/requirements.txt"]; then
               echo "::group::uv pip sync in $dir"
               (cd "$dir" && uv pip sync requirements.txt)
               echo "::endgroup::"
-            elif [ -f "$dir/pyproject.toml" ]; then
+            elif [-f "$dir/pyproject.toml"]; then
               echo "::group::uv sync in $dir"
               (cd "$dir" && uv sync)
               echo "::endgroup::"
             fi
-          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) -exec dirname {} \; | sort -u)
-          if [ "$found" -eq 0 ]; then
+          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) \
+            -exec dirname {} \; | sort -u)
+          if ["$found" -eq 0]; then
             echo "No Python dependency manifests found. Skipping sync."
           fi
 

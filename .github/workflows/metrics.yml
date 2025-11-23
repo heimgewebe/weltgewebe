@@ -1,3 +1,4 @@
+---
 name: "📊 Metrics Snapshot & Validation"
 permissions:
   contents: read          # Repo lesen, um Skripte auszuführen
@@ -10,7 +11,7 @@ on:
 
 env:
   METRICS_SCHEMA_URL: https://raw.githubusercontent.com/heimgewebe/metarepo/contracts-v1/contracts/wgx/metrics.json
-  HAUSKI_POST_URL: ${{ secrets.HAUSKI_METRICS_URL }}
+  HAUSKI_POST_URL: ${{secrets.HAUSKI_METRICS_URL}}
 
 jobs:
   snapshot:
@@ -36,7 +37,7 @@ jobs:
         run: npx --yes ajv-cli@5 validate -s .ci/metrics.schema.json -d metrics.json
 
       - name: Optional POST to hausKI
-        if: ${{ env.HAUSKI_POST_URL && env.HAUSKI_POST_URL != '' }}
+        if: ${{env.HAUSKI_POST_URL && env.HAUSKI_POST_URL != ''}}
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 \
             -H 'Content-Type: application/json' \

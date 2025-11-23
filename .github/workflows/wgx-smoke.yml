@@ -1,12 +1,13 @@
+---
 name: wgx-smoke
 on:
   pull_request:
-  push: { branches: [main] }
+  push: {branches: [main]}
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: wgx-${{ github.ref }}
+  group: wgx-${{github.ref}}
   cancel-in-progress: true
 jobs:
   manifest-doctor:
