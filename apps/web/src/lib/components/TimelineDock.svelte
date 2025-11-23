@@ -16,4 +16,7 @@
   <div class="spacer"></div>
   <div style="opacity:.72; font-size:12px;">Tipp: [ = links · ] = rechts · Alt+G = Gewebekonto</div>
 </div>
+<script lang="ts">
+  // TS-Stub für svelte-check
+</script>
 

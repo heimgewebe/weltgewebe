@@ -6,7 +6,6 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
-  import points from '$lib/data/dummy.json';
 
   type MapPoint = {
     id: string;
@@ -15,7 +14,7 @@
     lon: number;
   };
 
-  const markersData = points satisfies MapPoint[];
+  const markersData: MapPoint[] = [];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;

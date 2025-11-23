@@ -7,3 +7,6 @@ export const load: LayoutLoad = ({ url }) => {
     canonical,
   };
 };
+
+export const prerender = true;
+export const ssr = false;
