@@ -15,7 +15,9 @@ Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
 In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173`
 verwenden.
 
-> [!TIP] > **E2E-Tests:** Playwright nutzt lokal Port `4173` (Preview-Server) und fällt in CI automatisch
+<!-- prettier-ignore-start -->
+> [!TIP]
+> **E2E-Tests:** Playwright nutzt lokal Port `4173` (Preview-Server) und fällt in CI automatisch
 > auf `5173` zurück (siehe [`playwright.config.ts`](./playwright.config.ts)). Setze `PORT=<nummer>`
 > und führe `npm run test:ci` aus, um den Port explizit vorzugeben.
 > HTML-Reports landen unter `apps/web/playwright-report` (überschreibbar via
@@ -26,6 +28,7 @@ verwenden.
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter
 > verweigern Vite und Freunde den Dienst. Per `nvm use` kannst du via
 > `.nvmrc` im Projektverzeichnis direkt auf die richtige Version springen.
+<!-- prettier-ignore-end -->
 
 ### Polyfill-Debugging
 
