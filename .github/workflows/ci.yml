@@ -146,7 +146,7 @@ jobs:
         run: |
           set -euo pipefail
           UV_VERSION="$(yq -r '.uv // ""' toolchain.versions.yml)"
-          if [ -z "${UV_VERSION:-}" ]; then
+          if [ -z "$UV_VERSION" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
@@ -167,8 +167,9 @@ jobs:
             # Fallback: listing files to diagnose (safe, limited output)
             echo "uv binary not found after extraction. Showing /tmp top-level contents:" >&2
             ls -la /tmp 2>/dev/null | head -n 200 || true
-            echo "Attempting to locate uv with limited find..." >&2
-            UV_BIN=$(find /tmp -type f -name 'uv*' -maxdepth 3 2>/dev/null | head -n1 || true)
+            echo "Attempting to locate uv with broader search..." >&2
+            # Look for executable files with 'uv' in the name, excluding common non-binaries
+            UV_BIN=$(find /tmp -type f \( -name 'uv' -o -name 'uv-*' \) ! -name '*.lock' ! -name '*.txt' ! -name '*.md' -maxdepth 3 2>/dev/null | head -n1 || true)
             if [ -z "$UV_BIN" ]; then
               echo "uv binary not found after extraction (safe check)." >&2
               exit 1
