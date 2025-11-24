@@ -1,5 +1,7 @@
 import type { LayoutLoad } from "./$types";
 
+// Configure static site generation: prerender all pages at build time,
+// disable server-side rendering for a pure static site
 export const prerender = true;
 export const ssr = false;
 
