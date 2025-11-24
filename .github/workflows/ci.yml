@@ -152,29 +152,39 @@ jobs:
           fi
           echo "Attempting to install uv version: ${UV_VERSION}"
 
-          # Direktes Herunterladen des Binär-Archivs, um Versionsprobleme mit
-          # dem Installer-Skript zu umgehen.
-          # Annahme: Der Runner ist x86_64, was für ubuntu-latest zutrifft.
-          # Note: uv >= 0.9.0 release URLs do not use the 'v' prefix in the path.
+          # Build release URL (assume ubuntu-latest x86_64 runner)
           url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
           echo "Downloading from ${url}"
 
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
-          # Find the uv binary in the extracted directory (structure varies by release)
-          # Use '-name uv' to avoid picking up non-binaries like uv.lock or uv-installer
-          UV_BIN=$(find /tmp -type f -name 'uv' | head -n1)
-          if [ -z "$UV_BIN" ]; then
-            # Fallback: listing files to diagnose
-            echo "uv binary not found after extraction. /tmp contents:" >&2
-            ls -R /tmp
+          # Use an isolated temporary directory to avoid scanning /tmp root and permission issues
+          TMPDIR="$(mktemp -d)"
+          trap 'rm -rf "$TMPDIR"' EXIT
+
+          # Download and extract into TMPDIR; fail with diagnostics on error
+          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C "$TMPDIR"; then
+            echo "Failed to download or extract uv archive from ${url}" >&2
+            echo "Listing $TMPDIR for diagnostics:" >&2
+            ls -lA "$TMPDIR" || true
             exit 1
           fi
+
+          echo "Archive contents (top-level):"
+          ls -lA "$TMPDIR" || true
+
+          # Find the uv binary only inside TMPDIR and prefer an executable file
+          UV_BIN="$(find "$TMPDIR" -type f -name 'uv' -perm /111 -print -quit || true)"
+          if [ -z "$UV_BIN" ]; then
+            echo "uv binary not found after extraction. Inspecting $TMPDIR contents:" >&2
+            ls -R "$TMPDIR" || true
+            exit 1
+          fi
+
           echo "Found uv binary at: $UV_BIN"
           sudo mv "$UV_BIN" /usr/local/bin/uv
           sudo chmod +x /usr/local/bin/uv
           hash -r
 
-          # Version überprüfen
+          # Verify version
           if ! command -v uv >/dev/null 2>&1; then
             echo "uv not found in PATH after installation" >&2
             exit 1
