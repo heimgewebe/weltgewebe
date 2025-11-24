@@ -1,3 +1,4 @@
+---
 name: "Validate Domain Schemas"
 on:
   push:

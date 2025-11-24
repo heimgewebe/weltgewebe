@@ -1,3 +1,4 @@
+---
 name: Web Check (Gate A)
 
 permissions:
@@ -37,15 +38,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.11.0
+
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '20.19.0'
           cache: 'pnpm'
           cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - name: Enable Corepack (pnpm)
-        run: corepack enable
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -62,7 +65,7 @@ jobs:
       - name: Build
         run: CI=true pnpm build
 
-      - name: Playwright: setup browsers (CI)
+      - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
         # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
         # dass vorhandene job-/repo-/orgweite Defaults überschrieben werden.
