@@ -184,7 +184,7 @@ jobs:
           ls -lA "$TMPDIR" || true
 
           # Find the uv binary only inside TMPDIR and prefer an executable file
-          UV_BIN="$(find "$TMPDIR" -type f -name 'uv' -perm /111 -print -quit || true)"
+          UV_BIN="$(find "$TMPDIR" -type f -name 'uv' -executable -print -quit || true)"
           if [ -z "$UV_BIN" ]; then
             echo "uv binary not found after extraction. Inspecting $TMPDIR contents:" >&2
             ls -R "$TMPDIR" || true
