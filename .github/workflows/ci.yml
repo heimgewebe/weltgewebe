@@ -162,14 +162,14 @@ jobs:
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
           # Find the uv binary in the extracted directory (structure varies by release)
           # Use '-name uv' to avoid picking up non-binaries like uv.lock or uv-installer
-          UV_BIN=$(find /tmp -type f -name 'uv' -maxdepth 3 2>/dev/null | head -n1 || true)
+          UV_BIN=$(find /tmp -maxdepth 3 -type f -name 'uv' 2>/dev/null | head -n1 || true)
           if [ -z "$UV_BIN" ]; then
             # Fallback: listing files to diagnose (safe, limited output)
             echo "uv binary not found after extraction. Showing /tmp top-level contents:" >&2
             ls -la /tmp 2>/dev/null | head -n 200 || true
             echo "Attempting to locate uv with broader search..." >&2
             # Look for executable files with 'uv' in the name, excluding common non-binaries
-            UV_BIN=$(find /tmp -type f \( -name 'uv' -o -name 'uv-*' \) ! -name '*.lock' ! -name '*.txt' ! -name '*.md' -maxdepth 3 2>/dev/null | head -n1 || true)
+            UV_BIN=$(find /tmp -maxdepth 3 -type f \( -name 'uv' -o -name 'uv-*' \) ! -name '*.lock' ! -name '*.txt' ! -name '*.md' 2>/dev/null | head -n1 || true)
             if [ -z "$UV_BIN" ]; then
               echo "uv binary not found after extraction (safe check)." >&2
               exit 1
