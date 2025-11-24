@@ -169,26 +169,25 @@ jobs:
           echo "Downloading from ${url}"
 
           # Use an isolated temporary directory to avoid scanning /tmp root and permission issues
-          TMPDIR="$(mktemp -d)"
-          trap 'rm -rf "$TMPDIR"' EXIT
+          INSTALL_TMPDIR="$(mktemp -d)"
+          trap 'rm -rf "$INSTALL_TMPDIR"' EXIT
 
-          # Download and extract into TMPDIR; fail with diagnostics on error
-          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" \
-            | tar -xz -C "$TMPDIR"; then
+          # Download and extract into INSTALL_TMPDIR; fail with diagnostics on error
+          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C "$INSTALL_TMPDIR"; then
             echo "Failed to download or extract uv archive from ${url}" >&2
-            echo "Listing $TMPDIR for diagnostics:" >&2
-            ls -lA "$TMPDIR" || true
+            echo "Listing $INSTALL_TMPDIR for diagnostics:" >&2
+            ls -lA "$INSTALL_TMPDIR" || true
             exit 1
           fi
 
           echo "Archive contents (top-level):"
-          ls -lA "$TMPDIR" || true
+          ls -lA "$INSTALL_TMPDIR" || true
 
-          # Find the uv binary only inside TMPDIR and prefer an executable file
-          UV_BIN="$(find "$TMPDIR" -type f -name 'uv' -executable -print -quit || true)"
+          # Find the uv binary only inside INSTALL_TMPDIR and prefer an executable file
+          UV_BIN="$(find "$INSTALL_TMPDIR" -type f -name 'uv' -executable -print -quit || true)"
           if [ -z "$UV_BIN" ]; then
-            echo "uv binary not found after extraction. Inspecting $TMPDIR contents:" >&2
-            ls -R "$TMPDIR" || true
+            echo "uv binary not found after extraction. Inspecting $INSTALL_TMPDIR contents:" >&2
+            ls -R "$INSTALL_TMPDIR" || true
             exit 1
           fi
 
