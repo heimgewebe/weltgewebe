@@ -43,7 +43,6 @@
     class="row"
     style="gap:.5rem"
     role="tablist"
-    tabindex="0"
     aria-label="Bereich auswählen"
     aria-orientation="horizontal"
     on:keydown={handleKeydown}

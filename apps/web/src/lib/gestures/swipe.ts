@@ -105,7 +105,6 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
       // setPointerCapture may fail in some browsers or if the element is not in the DOM.
       // This is non-fatal for swipe handling, so we ignore the error.
       // In development, log the error for debugging.
-      // In development, log the error for debugging.
       if (import.meta.env.DEV) {
         console.error("setPointerCapture failed:", err);
       }
