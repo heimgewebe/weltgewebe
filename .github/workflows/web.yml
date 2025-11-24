@@ -4,7 +4,7 @@ name: Web Check (Gate A)
 permissions:
   contents: read
 
-on:
+"on":
   pull_request:
     branches: [main, dev]
     paths:

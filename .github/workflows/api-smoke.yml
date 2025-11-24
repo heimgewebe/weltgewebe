@@ -121,8 +121,12 @@ jobs:
             has("build_timestamp")
           ' >/dev/null
 
-          # Optional: also assert types (string/string/number) – harmless if types differ:
-          # echo "$body" | jq -e '(.version|type=="string") and (.commit|type=="string") and (.build_timestamp|type=="number")' >/dev/null
+          # Optional: also assert types (string/string/number) — harmless if types differ.
+          # echo "$body" | jq -e '
+          #   (.version  | type == "string") and
+          #   (.commit   | type == "string") and
+          #   (.build_timestamp | type == "number")
+          # ' >/dev/null
       - name: Wait for API health endpoint
         run: |
           ok=0
