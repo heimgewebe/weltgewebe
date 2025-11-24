@@ -84,11 +84,23 @@ jobs:
       - name: Read toolchain versions
         run: |
           test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
-          RUST=$(yq -r '.rust' toolchain.versions.yml)
+          RUST=$(yq -r '.rust // ""' toolchain.versions.yml)
+          if [ -z "$RUST" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
-          PY=$(yq -r '.python' toolchain.versions.yml)
+          PY=$(yq -r '.python // ""' toolchain.versions.yml)
+          if [ -z "$PY" ]; then
+            echo "failed to parse python version from toolchain.versions.yml" >&2
+            exit 1
+          fi
           echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
-          UV=$(yq -r '.uv' toolchain.versions.yml)
+          UV=$(yq -r '.uv // ""' toolchain.versions.yml)
+          if [ -z "$UV" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
 
       - name: Setup Rust
@@ -145,8 +157,8 @@ jobs:
       - name: Install uv (pinned via toolchain.versions.yml)
         run: |
           set -euo pipefail
-          UV_VERSION="$(yq -r '.uv' toolchain.versions.yml)"
-          if [ -z "${UV_VERSION:-}" ] || [ "${UV_VERSION}" = "null" ]; then
+          UV_VERSION="$(yq -r '.uv // ""' toolchain.versions.yml)"
+          if [ -z "$UV_VERSION" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
@@ -162,12 +174,20 @@ jobs:
           curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C /tmp
           # Find the uv binary in the extracted directory (structure varies by release)
           # Use '-name uv' to avoid picking up non-binaries like uv.lock or uv-installer
-          UV_BIN=$(find /tmp -type f -name 'uv' | head -n1)
+          UV_BIN=$(find /tmp -maxdepth 3 -type f -name 'uv' 2>/dev/null | head -n1 || true)
           if [ -z "$UV_BIN" ]; then
-            # Fallback: listing files to diagnose
-            echo "uv binary not found after extraction. /tmp contents:" >&2
-            ls -R /tmp
-            exit 1
+            # Fallback: listing files to diagnose (safe, limited output)
+            echo "uv binary not found after extraction. Showing /tmp top-level contents:" >&2
+            ls -la /tmp 2>/dev/null | head -n 200 || true
+            echo "Attempting to locate uv with broader search..." >&2
+            # Look for executable files with 'uv' in the name, excluding common non-binaries
+            UV_BIN=$(find /tmp -maxdepth 3 -type f \( -name 'uv' -o -name 'uv-*' \) ! -name '*.lock' ! -name '*.txt' ! -name '*.md' 2>/dev/null | head -n1 || true)
+            if [ -z "$UV_BIN" ]; then
+              echo "uv binary not found after extraction (safe check)." >&2
+              exit 1
+            else
+              echo "Found uv at: $UV_BIN" >&2
+            fi
           fi
           echo "Found uv binary at: $UV_BIN"
           sudo mv "$UV_BIN" /usr/local/bin/uv
