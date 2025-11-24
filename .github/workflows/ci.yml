@@ -173,7 +173,8 @@ jobs:
           trap 'rm -rf "$TMPDIR"' EXIT
 
           # Download and extract into TMPDIR; fail with diagnostics on error
-          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C "$TMPDIR"; then
+          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" \
+            | tar -xz -C "$TMPDIR"; then
             echo "Failed to download or extract uv archive from ${url}" >&2
             echo "Listing $TMPDIR for diagnostics:" >&2
             ls -lA "$TMPDIR" || true

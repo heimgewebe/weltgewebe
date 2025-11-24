@@ -32,7 +32,7 @@ ci:
 		pnpm install --frozen-lockfile; \
 		pnpm sync; \
 		pnpm build; \
-		pnpm ci; \
+		pnpm run ci; \
 		popd >/dev/null; \
 	fi
 	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
