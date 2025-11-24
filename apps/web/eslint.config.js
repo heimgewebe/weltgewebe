@@ -20,8 +20,21 @@ export default [
   ...svelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte"],
+    languageOptions: {
+      parserOptions: {
+        parser: tsParser,
+      },
+    },
     rules: {
       "svelte/no-at-html-tags": "error",
+    },
+  },
+  {
+    files: ["playwright.config.ts", "scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
     },
   },
   {
@@ -40,6 +53,7 @@ export default [
     rules: {
       ...js.configs.recommended.rules,
       ...tsPlugin.configs["recommended"].rules,
+      "no-undef": "off", // TypeScript handles this
       "@typescript-eslint/no-explicit-any": "off",
     },
   },

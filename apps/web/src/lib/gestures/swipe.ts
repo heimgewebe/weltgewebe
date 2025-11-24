@@ -105,11 +105,8 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
       // setPointerCapture may fail in some browsers or if the element is not in the DOM.
       // This is non-fatal for swipe handling, so we ignore the error.
       // In development, log the error for debugging.
-      if (
-        typeof process !== "undefined" &&
-        process.env &&
-        process.env.NODE_ENV === "development"
-      ) {
+      // In development, log the error for debugging.
+      if (import.meta.env.DEV) {
         console.error("setPointerCapture failed:", err);
       }
     }
@@ -165,11 +162,7 @@ export function swipe(node: HTMLElement, opts: SwipeOptions = {}) {
       } catch (err) {
         // Some browsers may throw if releasePointerCapture is called incorrectly.
         // This error is safe to ignore, but log in development for debugging.
-        if (
-          typeof process !== "undefined" &&
-          process.env &&
-          process.env.NODE_ENV !== "production"
-        ) {
+        if (import.meta.env.DEV) {
           console.error("releasePointerCapture failed:", err);
         }
       }
