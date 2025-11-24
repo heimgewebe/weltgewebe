@@ -187,7 +187,7 @@ jobs:
             echo "uv not found in PATH after installation" >&2
             exit 1
           fi
-          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}' || true)"
+          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
           echo "Installed uv version: ${INSTALLED_VER}"
           if [ "${INSTALLED_VER}" != "${UV_VERSION}" ]; then
             echo "uv version mismatch. Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
