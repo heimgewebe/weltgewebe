@@ -114,7 +114,12 @@ jobs:
           echo "$body"
           echo "::endgroup::"
           # Validate fields using jq (more robust than grep on strings)
-          echo "$body" | jq -e 'type == "object" and has("version") and has("commit") and has("build_timestamp")' >/dev/null
+          echo "$body" | jq -e '
+            type == "object" and
+            has("version") and
+            has("commit") and
+            has("build_timestamp")
+          ' >/dev/null
 
           # Optional: also assert types (string/string/number) – harmless if types differ:
           # echo "$body" | jq -e '(.version|type=="string") and (.commit|type=="string") and (.build_timestamp|type=="number")' >/dev/null

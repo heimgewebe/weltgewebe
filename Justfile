@@ -27,22 +27,22 @@ alias c := ci
 
 ci:
 	@echo "==> Web: install, sync, build, typecheck"
-	if [ -d apps/web ]; then
-		pushd apps/web >/dev/null
-		pnpm install --frozen-lockfile
-		pnpm sync
-		pnpm build
-		pnpm ci
-		popd >/dev/null
+	if [ -d apps/web ]; then \
+		pushd apps/web >/dev/null; \
+		pnpm install --frozen-lockfile; \
+		pnpm sync; \
+		pnpm build; \
+		pnpm ci; \
+		popd >/dev/null; \
 	fi
 	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
-	if [ -d apps/api ]; then
-		pushd apps/api >/dev/null
-		cargo fmt -- --check
-		cargo clippy -- -D warnings
-		cargo build --locked
-		cargo test --locked
-		popd >/dev/null
+	if [ -d apps/api ]; then \
+		pushd apps/api >/dev/null; \
+		cargo fmt -- --check; \
+		cargo clippy -- -D warnings; \
+		cargo build --locked; \
+		cargo test --locked; \
+		popd >/dev/null; \
 	fi
 
 # ---------- Rust ----------

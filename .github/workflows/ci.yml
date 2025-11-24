@@ -204,7 +204,8 @@ jobs:
           INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
           echo "Installed uv version: ${INSTALLED_VER}"
           if [ "${INSTALLED_VER}" != "${UV_VERSION}" ]; then
-            echo "uv version mismatch. Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
+            echo "uv version mismatch." >&2
+            echo "Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
             exit 1
           fi
           echo "uv version check passed."
