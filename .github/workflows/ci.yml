@@ -282,7 +282,7 @@ jobs:
 
       - name: Start preview server
         run: |
-          # Start preview, listen on all interfaces, require requested port,
+          # Start preview, listen on all interfaces,
           # capture stdout+stderr to /tmp/preview.log and run in background.
           pnpm preview -- --host 0.0.0.0 > /tmp/preview.log 2>&1 &
 
