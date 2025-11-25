@@ -11,38 +11,49 @@ concurrency:
   group: web-e2e-${{ github.ref }}
   cancel-in-progress: true
 
-defaults:
-  run:
-    working-directory: apps/web
-
 jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: read
-      actions: write   # required for npm cache restore
+      actions: write # required for npm cache restore
     env:
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
+      PREVIEW_PORT: "4173"
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+      GEWEBE_API_BASE: "http://127.0.0.1:8080"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
-          node-version: '20.19.0'
-          cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          node-version: "20.19.0"
+          cache: "pnpm"
+          cache-dependency-path: "**/pnpm-lock.yaml"
       - name: Enable Corepack (pnpm)
         run: corepack enable
       - name: Install deps
         run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
-        run: pnpm test:setup
+        run: pnpm --filter weltgewebe-web exec playwright install --with-deps
       - name: Build app
-        run: pnpm build
+        run: pnpm --filter weltgewebe-web build
+
+      - name: Start demo API
+        run: |
+          PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
+
+      - name: Start preview server
+        run: |
+          pnpm --filter weltgewebe-web preview -- --host 0.0.0.0 --port "${PREVIEW_PORT}" --strictPort > /tmp/preview.log 2>&1 &
+
+      - name: Wait for servers
+        run: pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" "http://127.0.0.1:8080" --timeout 120000
+
       - name: Run tests
-        run: pnpm test:ci
+        run: pnpm --filter weltgewebe-web test:ci
       - name: Upload HTML report (always)
         if: always()
         uses: actions/upload-artifact@v4
