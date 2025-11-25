@@ -348,8 +348,9 @@ jobs:
         continue-on-error: true
         uses: lycheeverse/lychee-action@v2
         with:
+          failIfEmpty: false
           # lychee v0.15 expects integer seconds for retry wait time
-          args: >-
+          args: >
             --no-progress
             --accept "200,206,301,302,308,429,999"
             --timeout 20
@@ -360,6 +361,7 @@ jobs:
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path 'node_modules'
             --exclude-path 'dist'
+            --exclude-path '.git'
             --cache
             --max-cache-age 1d
             '**/*.md'
@@ -370,7 +372,7 @@ jobs:
         if: ${{ steps.lychee.outcome == 'failure' }}
         uses: lycheeverse/lychee-action@v2
         with:
-          args: >-
+          args: >
             --no-progress
             --accept "200,206,301,302,308,429,999"
             --timeout 20
@@ -382,6 +384,7 @@ jobs:
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path 'node_modules'
             --exclude-path 'dist'
+            --exclude-path '.git'
             --cache
             --max-cache-age 1d
             '**/*.md'
