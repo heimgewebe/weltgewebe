@@ -78,11 +78,11 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(rx + 20, y, { steps: 6 });
   await page.mouse.up();
   await expect
-    .poll(async () => {
-      return await page
+    .poll(async () =>
+      page
         .getByRole("heading", { name: "Suche & Filter" })
-        .isHidden();
-    })
+        .isHidden()
+    )
     .toBe(true);
 
   // open top (drag ↓ nahe Top)
