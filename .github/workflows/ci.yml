@@ -173,7 +173,8 @@ jobs:
           trap 'rm -rf "$INSTALL_TMPDIR"' EXIT
 
           # Download and extract into INSTALL_TMPDIR; fail with diagnostics on error
-          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" | tar -xz -C "$INSTALL_TMPDIR"; then
+          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" \
+            | tar -xz -C "$INSTALL_TMPDIR"; then
             echo "Failed to download or extract uv archive from ${url}" >&2
             echo "Listing $INSTALL_TMPDIR for diagnostics:" >&2
             ls -lA "$INSTALL_TMPDIR" || true
@@ -235,9 +236,9 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
       FORCE_COLOR: "1"
-      PW_TEST_REPORTER: dot,html,junit
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      PREVIEW_PORT: "5173"
     defaults:
       run:
         shell: bash
@@ -281,8 +282,8 @@ jobs:
 
       - name: Start preview server
         run: |
-          pnpm preview -- --host 127.0.0.1 --port 4173 &> /tmp/preview.log &
-          pnpm dlx wait-on http://127.0.0.1:4173
+          pnpm preview -- --host 127.0.0.1 --port "${PREVIEW_PORT}" &> /tmp/preview.log &
+          pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" --timeout 30000
 
       - name: Run Playwright tests
         env:
