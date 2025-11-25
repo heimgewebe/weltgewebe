@@ -9,10 +9,8 @@ test("marker click opens info panel", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
-  await expect(page.getByRole("button", { name: /Hamm|Café/ })).toBeVisible();
-
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect(markerButton).toBeVisible();
+  await expect.poll(async () => markerButton.isVisible()).toBe(true);
   await markerButton.click();
 
   const infoDrawer = page.getByRole("complementary", {
@@ -35,7 +33,7 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect(markerButton).toBeVisible();
+  await expect.poll(async () => markerButton.isVisible()).toBe(true);
   await markerButton.click();
 
   const infoDrawer = page.getByRole("complementary", {

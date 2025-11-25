@@ -17,9 +17,12 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 
   // Esc → schließt rechts
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        await page.getByRole("heading", { name: "Suche & Filter" }).isHidden(),
+    )
+    .toBe(true);
 
   // Top öffnen
   await page.keyboard.press("Alt+g");
@@ -29,7 +32,12 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 
   // Esc → schließt top
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        await page.getByRole("heading", { name: "Gewebekonto" }).isHidden(),
+    )
+    .toBe(true);
 
   // Links öffnen
   await page.keyboard.press("[");
@@ -37,7 +45,12 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 
   // Esc → schließt links (Stack)
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("heading", { name: "Webrat" })).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        await page.getByRole("heading", { name: "Webrat" }).isHidden(),
+    )
+    .toBe(true);
 });
 
 test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
@@ -60,7 +73,12 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(box.x + 30, y, { steps: 6 });
   await page.mouse.up();
-  await expect(page.getByRole("heading", { name: "Webrat" })).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        await page.getByRole("heading", { name: "Webrat" }).isHidden(),
+    )
+    .toBe(true);
 
   // open right (drag ← an rechter Kante)
   const rx = box.x + box.width - 40;
@@ -77,9 +95,13 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(rx + 20, y, { steps: 6 });
   await page.mouse.up();
-  await expect(
-    page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeHidden();
+  await expect
+    .poll(async () => {
+      return await page
+        .getByRole("heading", { name: "Suche & Filter" })
+        .isHidden();
+    })
+    .toBe(true);
 
   // open top (drag ↓ nahe Top)
   const tx = box.x + box.width * 0.5;
@@ -97,5 +119,10 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, ty - 10, { steps: 6 });
   await page.mouse.up();
-  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeHidden();
+  await expect
+    .poll(
+      async () =>
+        await page.getByRole("heading", { name: "Gewebekonto" }).isHidden(),
+    )
+    .toBe(true);
 });
