@@ -238,6 +238,7 @@ jobs:
       FORCE_COLOR: "1"
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      PREVIEW_PORT: "5173"
     defaults:
       run:
         shell: bash
@@ -281,8 +282,8 @@ jobs:
 
       - name: Start preview server
         run: |
-          pnpm preview -- --host 127.0.0.1 --port 4173 &> /tmp/preview.log &
-          pnpm dlx wait-on http://127.0.0.1:4173
+          pnpm preview -- --host 127.0.0.1 --port "${PREVIEW_PORT}" &> /tmp/preview.log &
+          pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" --timeout 30000
 
       - name: Run Playwright tests
         env:

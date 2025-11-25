@@ -2,7 +2,7 @@
 name: security
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch: true
   pull_request:
     branches: [main]
     paths:
