@@ -282,8 +282,17 @@ jobs:
 
       - name: Start preview server
         run: |
-          pnpm preview -- --host 127.0.0.1 --port "${PREVIEW_PORT}" &> /tmp/preview.log &
-          pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" --timeout 30000
+          # Start preview, listen on all interfaces, require requested port,
+          # capture stdout+stderr to /tmp/preview.log and run in background.
+          pnpm preview -- --host 0.0.0.0 --port "${PREVIEW_PORT}" --strictPort > /tmp/preview.log 2>&1 &
+
+          # Wait up to 60s for the server to become available on loopback.
+          pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" --timeout 60000 || {
+            echo "Preview server did not start within 60s. Last 200 lines of /tmp/preview.log:"
+            tail -n 200 /tmp/preview.log || true
+            echo "Full preview log saved to /tmp/preview.log"
+            exit 1
+          }
 
       - name: Run Playwright tests
         env:
