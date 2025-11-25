@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [sveltekit()],
   preview: {
     port: process.env.PREVIEW_PORT
-      ? parseInt(process.env.PREVIEW_PORT, 10)
+      ? parseInt(process.env.PREVIEW_PORT, 10) || 4173
       : 4173,
     strictPort: true,
   },
