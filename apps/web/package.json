@@ -19,7 +19,7 @@
     "pretest": "pnpm build",
     "test": "playwright test",
     "test:report": "playwright show-report",
-    "test:ci": "PW_TEST_REPORTER=dot,html,junit playwright test",
+    "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
     "sync": "svelte-kit sync",
