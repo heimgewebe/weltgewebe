@@ -372,6 +372,7 @@ jobs:
         if: ${{ steps.lychee.outcome == 'failure' }}
         uses: lycheeverse/lychee-action@v2
         with:
+          failIfEmpty: false
           args: >
             --no-progress
             --accept "200,206,301,302,308,429,999"
