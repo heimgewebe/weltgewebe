@@ -27,9 +27,7 @@ test("polyfill schützt dynamisch eingefügte Elemente", async ({ page }) => {
   });
 
   const child = page.locator("#polyfill-child");
-  await expect
-    .poll(async () => child.getAttribute("aria-hidden"))
-    .toBe("true");
+  await expect.poll(async () => child.getAttribute("aria-hidden")).toBe("true");
 
   await child.click({ force: true });
   await expect
