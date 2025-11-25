@@ -25,10 +25,11 @@ test.describe("map route", () => {
     const strukturknotenButton = page.getByRole("button", {
       name: "Strukturknoten",
     });
-    await expect(strukturknotenButton).toBeVisible();
+    await expect.poll(async () => strukturknotenButton.isVisible()).toBe(true);
     await expect(strukturknotenButton).toBeDisabled();
 
-    await expect(page.getByRole("button", { name: "Fäden" })).toBeVisible();
+    const faedenButton = page.getByRole("button", { name: "Fäden" });
+    await expect.poll(async () => faedenButton.isVisible()).toBe(true);
     await expect(
       page.getByRole("link", { name: /Archiv ansehen/i }),
     ).toHaveAttribute("href", "/archive/");
