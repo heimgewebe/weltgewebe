@@ -44,8 +44,6 @@ jobs:
           echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
       - name: Print Rust versions
         run: |
           rustc --version
