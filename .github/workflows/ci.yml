@@ -282,31 +282,35 @@ jobs:
 
       - name: Start preview server
         run: |
-          # Start preview, listen on all interfaces,
-          # capture stdout+stderr to /tmp/preview.log and run in background.
-          pnpm preview -- --host 0.0.0.0 > /tmp/preview.log 2>&1 &
+          # Start preview, listen on loopback explicitly and capture logs
+          pnpm preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} > /tmp/preview.log 2>&1 &
+          PREVIEW_PID=$!
+          echo "Started preview PID=${PREVIEW_PID}"
 
-          # Wait time in seconds (increased from 60 to 120)
-          WAIT_TIME=120
-          START_TIME=$SECONDS
-
-          # Function to check both possible host responses
-          pruefe_server() {
-            curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 && return 0
-            curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 && return 0
-            return 1
-          }
-
-          # Wait loop
-          until pruefe_server || [ $((SECONDS - START_TIME)) -ge "$WAIT_TIME" ]; do
-            sleep 1
+          # Wait up to 120s for the server to become available; check IPv4 and IPv6
+          MAX_WAIT=120
+          INTERVAL=5
+          ELAPSED=0
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            if curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
+               || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
+               || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1; then
+              echo "Preview server is available"
+              break
+            fi
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
           done
 
-          # On failure: output the last logs and error
-          if ! pruefe_server; then
-            echo "Preview server did not start within ${WAIT_TIME}s. Last 200 lines of /tmp/preview.log:"
+          if ! (curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
+                || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
+                || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1); then
+            echo "Preview server did not start within ${MAX_WAIT}s. Last 200 lines of /tmp/preview.log:"
             tail -n 200 /tmp/preview.log || true
-            echo "Full preview log saved to /tmp/preview.log"
+            echo "Listening sockets for diagnostics:"
+            ss -ltnp | grep ":${PREVIEW_PORT}" || true
+            echo "Preview process tree:"
+            ps -o pid,cmd --pid $PREVIEW_PID || true
             exit 1
           fi
 
