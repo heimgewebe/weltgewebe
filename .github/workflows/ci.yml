@@ -310,7 +310,7 @@ jobs:
             echo "Listening sockets for diagnostics:"
             ss -ltnp | grep ":${PREVIEW_PORT}" || true
             echo "Preview process tree:"
-            ps -o pid,cmd --pid $PREVIEW_PID || true
+            ps -o pid,cmd -p $PREVIEW_PID 2>/dev/null || echo "Preview process $PREVIEW_PID not found"
             exit 1
           fi
 
