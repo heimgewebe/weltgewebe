@@ -92,38 +92,38 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
 
     ```bash
     corepack enable
+    corepack use pnpm@9.11.0
     ```
 
-    (aktiviert npm ≥ 10, falls noch nicht global geschehen)
-2. Dependencies installieren:
+2. Dependencies installieren (nutzt das pnpm-Lockfile):
 
     ```bash
     cd apps/web
-    npm ci
+    pnpm install --frozen-lockfile
     ```
 
 3. Playwright-Browser nachrüsten (**einmalig pro Maschine**):
 
     ```bash
-    npx playwright install --with-deps
-    # alternativ: npm run test:setup
+    pnpm exec playwright install --with-deps
+    # alternativ: pnpm test:setup
     ```
 
-4. App builden, damit `npm run preview` die statischen Assets servieren kann:
+4. App builden, damit `pnpm preview` die statischen Assets servieren kann:
 
     ```bash
-    npm run build
+    pnpm build
     ```
 
 5. Tests headless ausführen (startet automatisch einen Preview-Server):
 
     ```bash
-    npx playwright test
-    # CI-Spiegel: npm run test:ci
+    pnpm test
+    # CI-Spiegel: pnpm test:ci
     ```
 
 Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
-`npm run preview` läuft. Den HTML-Report findest du nach den Läufen unter
+`pnpm preview` läuft. Den HTML-Report findest du nach den Läufen unter
 `apps/web/playwright-report/`.
 
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
