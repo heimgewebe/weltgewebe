@@ -298,7 +298,7 @@ jobs:
           }
 
           # Warte-Schleife
-          until pruefe_server || [ $((SECONDS - STARTZEIT)) -ge "$WARTEZEIT" ]; do
+          until pruefe_server || [ $((SECONDS - STARTZEIT)) -ge $WARTEZEIT ]; do
             sleep 1
           done
 
