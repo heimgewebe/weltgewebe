@@ -6,18 +6,18 @@ CI-tauglich sind – statt nur „so ungefähr“ zu passen.
 
 1. Allgemeine Arbeitsweise
 
-- Immer echte Dateien bevorzugen: Bevor du Code vorschlägst oder analysierst, musst du nach der realen Datei im Repo suchen und
-  von dort aus arbeiten. Rate nicht frei, wenn die Datei existiert.
+- Immer echte Dateien bevorzugen: Bevor du Code vorschlägst oder analysierst, musst du nach der realen Datei im Repo suchen
+  und von dort aus arbeiten. Rate nicht frei, wenn die Datei existiert.
 - Keine „stilisierten“ Snippets: Verwende keine verkürzten Schreibweisen wie SECONDS end oder zerstückelte Redirections
   (devtcpHOSTPORT). Alles, was du zeigst, muss so in einer echten Datei kompilierbar bzw. ausführbar sein.
 - Vollständige Blöcke: Wenn du Funktionen oder Skripte änderst, zeige immer den ganzen betroffenen Block (z.B. komplette
   Funktion, komplettes Skript), nicht nur einzelne zerhackte Zeilen.
-- Kennzeichnung von Auslassungen: Wenn du Teile weglässt, markiere das explizit mit Kommentaren wie // ... oder # ... ohne die
-  Syntax zu zerstören.
+- Kennzeichnung von Auslassungen: Wenn du Teile weglässt, markiere das explizit mit Kommentaren wie // ... oder # ... ohne
+  die Syntax zu zerstören.
 
 ---
 
-2. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
+1. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
 
 - Erfolgsmeldungen nur bei tatsächlichem Erfolg: console.log('Frontend performance budget matches expected thresholds') oder
   ähnliche Erfolgsmeldungen dürfen nur ausgeführt werden, wenn vorher kein Fehler geworfen wurde.
@@ -46,7 +46,7 @@ if (actual !== expectedValue) {
 
 ---
 
-3. Regeln für Shell-Skripte (z.B. db-wait.sh)
+1. Regeln für Shell-Skripte (z.B. db-wait.sh)
 
 - POSIX- oder Bash-Syntax niemals „optisch vereinfachen“.
 - [ und ] brauchen immer Leerzeichen:
@@ -98,9 +98,10 @@ exit 1
 
 ---
 
-4. Verhalten bei Unsicherheit
+1. Verhalten bei Unsicherheit
 
-- Wenn du dir bei einer Datei, Syntax oder Semantik nicht sicher bist, sage das explizit und schlage eine mögliche Variante vor.
+- Wenn du dir bei einer Datei, Syntax oder Semantik nicht sicher bist, sage das explizit und schlage eine mögliche Variante
+  vor.
 - Bitte darum, den realen Build- oder Lint-Fehler zu posten, statt so zu tun, als wäre alles sicher.
 - Bevor du Änderungen an CI-relevanten Skripten vorschlägst (Node, Bash, YAML), simuliere gedanklich mindestens:
   - Läuft das Skript von set -e / errexit umgeben sauber durch?
@@ -108,7 +109,7 @@ exit 1
 
 ---
 
-5. Zielbild
+1. Zielbild
 
 - Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische
   Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.
