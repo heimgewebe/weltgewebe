@@ -51,7 +51,7 @@ jobs:
             --host 0.0.0.0 --port "${PREVIEW_PORT}" --strictPort > /tmp/preview.log 2>&1 &
 
       - name: Wait for servers
-        run: pnpm dlx wait-on "http://127.0.0.1:${PREVIEW_PORT}" "http://127.0.0.1:8080" --timeout 120000
+        run: pnpm dlx wait-on "http://localhost:${PREVIEW_PORT}" "http://127.0.0.1:8080" --timeout 120000
 
       - name: Run tests
         run: pnpm --filter weltgewebe-web test:ci
