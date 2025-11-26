@@ -57,8 +57,7 @@ done
 
 if ! check_preview_ready; then
   printf 'Preview server did not start within %s seconds\n' "$PREVIEW_WAIT_DURATION" >&2
+  verify_port_binding || true
   show_preview_logs
   exit 1
 fi
-
-verify_port_binding || exit 1
