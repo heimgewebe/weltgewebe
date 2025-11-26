@@ -51,8 +51,7 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
-    if: >
-      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
+    if: github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -356,8 +355,7 @@ jobs:
   lint-docs:
     name: Docs & Shell Hygiene
     needs: docs-changes
-    if: >
-      ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
+    if: github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

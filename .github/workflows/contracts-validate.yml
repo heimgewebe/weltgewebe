@@ -57,6 +57,7 @@ jobs:
 
           [[ ${#files[@]} -gt 0 ]] || { echo "::notice::No workflow files"; exit 0; }
 
+          # shellcheck disable=SC1009,SC1072,SC1073
           extract_pair() {
             local line="$1"
             line="${line%%#*}"

@@ -56,14 +56,10 @@ jobs:
           PY
 
       - name: Install rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Add rust components
-        run: rustup component add rustfmt clippy
+          components: rustfmt, clippy
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -90,11 +86,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          profile: minimal
-          override: true
       - name: Install cargo-audit
         run: cargo install cargo-audit --force
       - name: cargo audit
