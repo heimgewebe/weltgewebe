@@ -312,6 +312,11 @@ jobs:
               break
             fi
 
+            if ! kill -0 "$PREVIEW_PID" 2>/dev/null; then
+              echo "Preview process exited while waiting. Last 200 lines of $PREVIEW_LOG:"
+              tail -n 200 "$PREVIEW_LOG" || true
+              exit 1
+            fi
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
