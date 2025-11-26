@@ -13,6 +13,10 @@ if [ ! -f "$PREVIEW_PID_FILE" ]; then
 fi
 
 PREVIEW_PID=$(cat "$PREVIEW_PID_FILE")
+if [[ ! "$PREVIEW_PID" =~ ^[0-9]+$ ]]; then
+  printf 'Invalid PID in %s: %s\n' "$PREVIEW_PID_FILE" "$PREVIEW_PID" >&2
+  exit 1
+fi
 
 check_preview_ready() {
   curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1
