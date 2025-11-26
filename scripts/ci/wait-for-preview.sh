@@ -38,7 +38,7 @@ verify_port_binding() {
   return 1
 }
 
-declare -i end=$SECONDS+PREVIEW_WAIT_DURATION
+declare -i end=$((SECONDS + PREVIEW_WAIT_DURATION))
 
 while [ "$SECONDS" -lt "$end" ]; do
   if ! kill -0 "$PREVIEW_PID" 2>/dev/null; then
