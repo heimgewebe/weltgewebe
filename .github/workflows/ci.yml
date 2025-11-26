@@ -285,6 +285,11 @@ jobs:
           # Start preview, listen on loopback explicitly and capture logs
           pnpm preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} > /tmp/preview.log 2>&1 &
           PREVIEW_PID=$!
+          if ! kill -0 $PREVIEW_PID 2>/dev/null; then
+            echo "Failed to start preview server"
+            tail -n 40 /tmp/preview.log || true
+            exit 1
+          fi
           echo "Started preview PID=${PREVIEW_PID}"
 
           # Wait up to 120s for the server to become available; check IPv4 and IPv6
