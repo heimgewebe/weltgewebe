@@ -1,6 +1,6 @@
 ---
 name: policies
-on:
+"on":
   pull_request:
   push:
     branches:
