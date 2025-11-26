@@ -292,9 +292,9 @@ jobs:
           INTERVAL=5
           ELAPSED=0
           while [ $ELAPSED -lt $MAX_WAIT ]; do
-            if curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
-               || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
-               || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1; then
+            if (curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
+                || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
+                || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1); then
               echo "Preview server is available"
               break
             fi
