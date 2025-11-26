@@ -2,7 +2,7 @@
 name: policycheck
 permissions:
   contents: read
-on:
+"on":
   pull_request:
     paths:
       - "policies/**"
