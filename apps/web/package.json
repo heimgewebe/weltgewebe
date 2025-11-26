@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "vite dev --host",
     "build": "vite build",
-    "preview": "vite preview --host",
+    "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",
     "prebuild": "svelte-kit sync",
