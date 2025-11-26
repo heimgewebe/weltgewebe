@@ -21,7 +21,7 @@ importers:
         specifier: 1.55.1
         version: 1.55.1
       "@sveltejs/adapter-static":
-        specifier: ^3.0.3
+        specifier: ^3.0.4
         version: 3.0.10(@sveltejs/kit@2.5.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))
       "@sveltejs/kit":
         specifier: 2.5.0
