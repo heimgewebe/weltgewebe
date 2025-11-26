@@ -307,7 +307,7 @@ jobs:
             echo "Preview server did not start within ${WAIT_TIME}s. Last 200 lines of /tmp/preview.log:"
             tail -n 200 /tmp/preview.log || true
             echo "Process list for diagnostics:"
-            ps aux | egrep 'pnpm|node' || true
+            ps aux | grep -E 'pnpm|node' || true
             echo "Full preview log saved to /tmp/preview.log"
             exit 1
           fi
