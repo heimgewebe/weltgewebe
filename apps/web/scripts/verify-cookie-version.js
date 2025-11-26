@@ -30,11 +30,12 @@ const isModuleNotFound = (err) =>
 try {
   const pkg = require("cookie/package.json");
   const installed = pkg?.version;
-  const minSafe = "1.0.2";
+  // CVE-2024-47764 is fixed in cookie@0.7.0 (see https://nvd.nist.gov/vuln/detail/CVE-2024-47764)
+  const minSafe = "0.7.0";
   if (semverLt(installed, minSafe)) {
     const msg =
       `\n[security] cookie@${installed} detected (< ${minSafe}). ` +
-      `The advisory requires ${minSafe}+ — check npm overrides and lockfile.\n`;
+      `CVE-2024-47764 requires ${minSafe}+ — check pnpm overrides and lockfile.\n`;
     if (isCI) {
       console.error(msg);
       process.exit(1);

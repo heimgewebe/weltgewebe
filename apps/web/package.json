@@ -4,6 +4,11 @@
   "packageManager": "pnpm@9.1.0",
   "private": true,
   "type": "module",
+  "pnpm": {
+    "overrides": {
+      "cookie": "^0.7.0"
+    }
+  },
   "scripts": {
     "dev": "vite dev --host",
     "build": "vite build",
