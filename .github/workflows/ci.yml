@@ -282,42 +282,74 @@ jobs:
 
       - name: Start preview server
         run: |
-          # Start preview, listen on loopback explicitly and capture logs
-          pnpm preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} > /tmp/preview.log 2>&1 &
+          set -euo pipefail
+          set -x
+
+          # mehr aussagekräftige Serverlogs für Debugging
+          export VITE_LOG_LEVEL=info
+          export DEBUG=vite:*
+
+          PREVIEW_LOG=/tmp/preview.log
+
+          # Start preview, listen on loopback explizit und capture logs
+          pnpm preview -- --host 127.0.0.1 --port ${PREVIEW_PORT} > "$PREVIEW_LOG" 2>&1 &
           PREVIEW_PID=$!
+
+          # Give the process a short moment to initialize
+          sleep 1
+
+          # sanity: process must exist
           if ! kill -0 $PREVIEW_PID 2>/dev/null; then
-            echo "Failed to start preview server"
-            tail -n 40 /tmp/preview.log || true
+            echo "Preview process died immediately. Last 200 lines of $PREVIEW_LOG:"
+            tail -n 200 "$PREVIEW_LOG" || true
             exit 1
           fi
+
           echo "Started preview PID=${PREVIEW_PID}"
 
-          # Wait up to 120s for the server to become available; check IPv4 and IPv6
+          # Wait up to 120s for the server to become available (check IPv4, localhost, IPv6)
           MAX_WAIT=120
-          INTERVAL=5
+          INTERVAL=2
           ELAPSED=0
           while [ $ELAPSED -lt $MAX_WAIT ]; do
-            if (curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
-                || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
-                || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1); then
+            if curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
+               || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
+               || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1 ; then
               echo "Preview server is available"
               break
             fi
+
+            # If the preview process died while waiting, fail with logs
+            if ! kill -0 $PREVIEW_PID 2>/dev/null; then
+              echo "Preview process exited while waiting for readiness. Last 200 lines of $PREVIEW_LOG:"
+              tail -n 200 "$PREVIEW_LOG" || true
+              exit 1
+            fi
+
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
           done
 
-          if ! (curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1 \
-                || curl -sSf "http://localhost:${PREVIEW_PORT}" >/dev/null 2>&1 \
-                || curl -sSf "http://[::1]:${PREVIEW_PORT}" >/dev/null 2>&1); then
-            echo "Preview server did not start within ${MAX_WAIT}s. Last 200 lines of /tmp/preview.log:"
-            tail -n 200 /tmp/preview.log || true
-            echo "Listening sockets for diagnostics:"
-            ss -ltnp | grep ":${PREVIEW_PORT}" || true
+          # final verification: is a socket bound to the port?
+          if ! ss -ltnp | grep -q ":${PREVIEW_PORT}"; then
+            echo "No listening socket found for port ${PREVIEW_PORT} after wait. Dumping diagnostics:"
+            echo "Last 200 lines of $PREVIEW_LOG:"
+            tail -n 200 "$PREVIEW_LOG" || true
+            echo "Listening sockets:"
+            ss -ltnp || true
             echo "Preview process tree:"
             ps -o pid,cmd -p $PREVIEW_PID 2>/dev/null || echo "Preview process $PREVIEW_PID not found"
             exit 1
           fi
+
+          # one final quick request to ensure HTTP responds
+          if ! curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1; then
+            echo "Server bound but HTTP requests failing. Dumping last 200 lines of $PREVIEW_LOG:"
+            tail -n 200 "$PREVIEW_LOG" || true
+            exit 1
+          fi
+
+          echo "Preview server ready and responding on port ${PREVIEW_PORT}"
 
       - name: Run Playwright tests
         env:
