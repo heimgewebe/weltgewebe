@@ -1,6 +1,7 @@
+---
 name: python-tooling
 
-on:
+'on':
   pull_request:
     branches: [main]
     paths:
