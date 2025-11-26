@@ -28,7 +28,7 @@ show_preview_logs() {
 }
 
 verify_port_binding() {
-  if ss -ltn "sport = :${PREVIEW_PORT}" | grep -q LISTEN; then
+  if ss -ltn | grep -q ":${PREVIEW_PORT}.*LISTEN"; then
     printf 'Preview server is listening on port %s\n' "$PREVIEW_PORT"
     return 0
   fi
