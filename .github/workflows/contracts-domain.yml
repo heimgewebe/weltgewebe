@@ -1,6 +1,6 @@
 ---
 name: "Validate Domain Schemas"
-on:
+"on":
   push:
     paths:
       - 'contracts/domain/**.schema.json'
