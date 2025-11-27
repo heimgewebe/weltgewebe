@@ -5,15 +5,19 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     (window as any).__E2E__ = true;
   });
-  await page.goto("/map");
+  await page.goto("/map?l=0&r=0&t=0", { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+  await page.waitForSelector("#map");
 });
 
 test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }) => {
   // Rechts öffnen
   await page.keyboard.press("]");
-  await expect(
-    page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByRole("heading", { name: "Suche & Filter" }).isVisible(),
+    )
+    .toBe(true);
 
   // Esc → schließt rechts
   await page.keyboard.press("Escape");
@@ -26,9 +30,11 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 
   // Top öffnen
   await page.keyboard.press("Alt+g");
-  await expect(
-    page.getByRole("heading", { name: "Gewebekonto" }),
-  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByRole("heading", { name: "Gewebekonto" }).isVisible(),
+    )
+    .toBe(true);
 
   // Esc → schließt top
   await page.keyboard.press("Escape");
@@ -41,7 +47,9 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 
   // Links öffnen
   await page.keyboard.press("[");
-  await expect(page.getByRole("heading", { name: "Webrat" })).toBeVisible();
+  await expect
+    .poll(async () => page.getByRole("heading", { name: "Webrat" }).isVisible())
+    .toBe(true);
 
   // Esc → schließt links (Stack)
   await page.keyboard.press("Escape");
@@ -66,7 +74,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(box.x + 120, y, { steps: 6 });
   await page.mouse.up();
-  await expect(page.getByRole("heading", { name: "Webrat" })).toBeVisible();
+  await expect
+    .poll(async () => page.getByRole("heading", { name: "Webrat" }).isVisible())
+    .toBe(true);
 
   // close left (drag ←)
   await page.mouse.move(box.x + 140, y);
@@ -86,9 +96,11 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(rx - 100, y, { steps: 6 });
   await page.mouse.up();
-  await expect(
-    page.getByRole("heading", { name: "Suche & Filter" }),
-  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByRole("heading", { name: "Suche & Filter" }).isVisible(),
+    )
+    .toBe(true);
 
   // close right (drag →)
   await page.mouse.move(rx - 120, y);
@@ -110,9 +122,11 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, ty + 120, { steps: 6 });
   await page.mouse.up();
-  await expect(
-    page.getByRole("heading", { name: "Gewebekonto" }),
-  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      page.getByRole("heading", { name: "Gewebekonto" }).isVisible(),
+    )
+    .toBe(true);
 
   // close top (drag ↑)
   await page.mouse.move(tx, ty + 140);
