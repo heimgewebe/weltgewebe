@@ -1,5 +1,5 @@
 ---
-version: 1
+version: true
 services:
   web:
     # availability_target is a percentage (e.g., 99.9% uptime)
