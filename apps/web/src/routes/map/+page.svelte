@@ -291,6 +291,8 @@
     return () => {
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
+      if (keyHandler) window.removeEventListener('keydown', keyHandler);
+      if (popHandler) window.removeEventListener('popstate', popHandler);
     };
   });
   onDestroy(() => {
