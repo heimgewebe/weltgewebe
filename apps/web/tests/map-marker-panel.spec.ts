@@ -10,16 +10,14 @@ test("marker click opens info panel", async ({ page }) => {
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect.poll(async () => markerButton.isVisible()).toBe(true);
+  await expect(markerButton).toBeVisible();
   await markerButton.click();
 
-  const infoDrawer = page.getByRole("complementary", {
-    name: "Suche & Filter",
-  });
-  await expect(infoDrawer).toBeVisible();
-  await expect(infoDrawer.getByText("Werkstatt Hamm")).toBeVisible();
+  const filterDrawer = page.locator("#filter-drawer");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
+  await expect(filterDrawer.getByText("Werkstatt Hamm")).toBeVisible();
   await expect(
-    infoDrawer.getByText("Weitere Details folgen (Stub)"),
+    filterDrawer.getByText("Weitere Details folgen (Stub)"),
   ).toBeVisible();
 });
 
@@ -33,16 +31,14 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect.poll(async () => markerButton.isVisible()).toBe(true);
+  await expect(markerButton).toBeVisible();
   await markerButton.click();
 
-  const infoDrawer = page.getByRole("complementary", {
-    name: "Suche & Filter",
-  });
-  await expect(infoDrawer).toBeVisible();
+  const filterDrawer = page.locator("#filter-drawer");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
 
   await page.keyboard.press("Escape");
 
-  await expect(infoDrawer).toHaveAttribute("aria-hidden", "true");
-  await expect(infoDrawer.getByText("Werkstatt Hamm")).toHaveCount(0);
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(filterDrawer.getByText("Werkstatt Hamm")).toHaveCount(0);
 });
