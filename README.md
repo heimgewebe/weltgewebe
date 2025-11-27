@@ -76,7 +76,7 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 - Performance-Budgets & SLOs leben in `policies/` und werden in Docs & Dashboards referenziert.
 - Für lokale Web-E2E-Tests installierst du die Playwright-Browser einmalig
   (Details im Abschnitt [Web-E2E-Quickstart](#web-e2e-quickstart-preview)):
-  `npx playwright install --with-deps`
+  `pnpm exec playwright install --with-deps`
 
 > **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
 > Code-Re-Entry erfolgt über die Gates A–D (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)).
