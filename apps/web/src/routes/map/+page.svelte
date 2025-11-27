@@ -40,6 +40,7 @@
   } = { left: null, right: null, top: null };
 
   const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
+  let showThreads = false;
 
   function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
     if (typeof window === 'undefined') return;
@@ -221,6 +222,29 @@
     popHandler = () => syncFromLocation();
     window.addEventListener('popstate', popHandler);
 
+    keyHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (topOpen) {
+          topOpen = false;
+          setQuery({ t: false });
+          return;
+        }
+        if (rightOpen) {
+          setRightOpen(false);
+          return;
+        }
+        if (leftOpen) {
+          leftOpen = false;
+          setQuery({ l: false });
+          return;
+        }
+      }
+      if (e.key === '[') toggleLeft();
+      if (e.key === ']') toggleRight();
+      if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
+    };
+    window.addEventListener('keydown', keyHandler);
+
     (async () => {
       const maplibregl = await import('maplibre-gl');
       const container = mapContainer;
@@ -262,37 +286,11 @@
           marker.remove();
         });
       }
-
-      keyHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          if (topOpen) {
-            topOpen = false;
-            setQuery({ t: false });
-            return;
-          }
-          if (rightOpen) {
-            setRightOpen(false);
-            return;
-          }
-          if (leftOpen) {
-            leftOpen = false;
-            setQuery({ l: false });
-            return;
-          }
-        }
-        if (e.key === '[') toggleLeft();
-        if (e.key === ']') toggleRight();
-        if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
-      };
-      window.addEventListener('keydown', keyHandler);
     })();
 
     return () => {
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
-      if (popHandler) window.removeEventListener('popstate', popHandler);
-      markerCleanupFns.forEach((fn) => fn());
-      markerCleanupFns.length = 0;
     };
   });
   onDestroy(() => {
@@ -361,8 +359,49 @@
     outline:2px solid var(--fg);
     outline-offset:2px;
   }
+  .layerToggles{
+    position:absolute;
+    right:var(--drawer-gap);
+    top:calc(var(--toolbar-offset) + env(safe-area-inset-top) + 8px);
+    display:flex;
+    gap:8px;
+    align-items:center;
+    z-index:28;
+    background:rgba(0,0,0,0.4);
+    backdrop-filter: blur(8px);
+    padding:6px 8px;
+    border-radius:12px;
+    border:1px solid var(--panel-border);
+    box-shadow: var(--shadow);
+  }
+  .layerToggles .toggle{
+    appearance:none;
+    border:1px solid var(--panel-border);
+    background:var(--panel);
+    color:var(--text);
+    border-radius:10px;
+    padding:6px 10px;
+    cursor:pointer;
+    box-shadow: var(--shadow);
+  }
+  .layerToggles .toggle[data-active="true"],
+  .layerToggles .toggle[aria-pressed="true"]{
+    background:var(--accent, #ff8c42);
+    border-color:var(--accent, #ff8c42);
+    color:var(--bg);
+  }
+  .layerToggles .toggle:disabled{
+    opacity:0.65;
+    cursor:not-allowed;
+  }
+  .layerToggles a{
+    color:var(--text);
+    text-decoration:underline;
+    font-size:14px;
+  }
   @media (max-width: 900px){
     .leftStack{ --drawer-width: 320px; }
+    .layerToggles{ left:var(--drawer-gap); right:auto; flex-wrap:wrap; }
   }
   @media (max-width: 380px){
     .leftStack{ --drawer-width: 300px; }
@@ -430,6 +469,7 @@
     title="Gewebekonto"
     side="top"
     open={topOpen}
+    role="dialog"
     on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-top')}
   >
     <div class="panel" style="padding:8px;">
@@ -448,6 +488,22 @@
   </div>
   <div class="edge top" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-top')}>
     <div class="edgeHit"></div>
+  </div>
+
+  <div class="layerToggles" role="toolbar" aria-label="Struktur-Overlay">
+    <button class="toggle" type="button" disabled aria-disabled="true">
+      Strukturknoten
+    </button>
+    <button
+      class="toggle"
+      type="button"
+      aria-pressed={showThreads}
+      on:click={() => (showThreads = !showThreads)}
+      data-active={showThreads ? 'true' : undefined}
+    >
+      Fäden
+    </button>
+    <a href="/archive/">Archiv ansehen</a>
   </div>
 
   <!-- Zeitleiste -->
