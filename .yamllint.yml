@@ -4,6 +4,7 @@ extends: default
 ignore: |
   # Lockfiles are auto-generated and cannot be line-wrapped.
   # See: https://github.com/heimgewebe/weltgewebe/pull/461
+  pnpm-lock.yaml
   apps/web/pnpm-lock.yaml
 
 rules:
