@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
-    # Link checks on pull requests are handled in the central CI.
+  # Link checks on pull requests are handled in the central CI.
 permissions:
   contents: read
 concurrency:
