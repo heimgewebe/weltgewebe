@@ -501,7 +501,6 @@
       type="button"
       aria-pressed={showThreads}
       on:click={() => (showThreads = !showThreads)}
-      data-active={showThreads ? 'true' : undefined}
     >
       Fäden
     </button>
