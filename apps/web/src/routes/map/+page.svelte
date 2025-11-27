@@ -493,7 +493,7 @@
   </div>
 
   <div class="layerToggles" role="toolbar" aria-label="Struktur-Overlay">
-    <button class="toggle" type="button" disabled aria-disabled="true">
+    <button class="toggle" type="button" disabled>
       Strukturknoten
     </button>
     <button
