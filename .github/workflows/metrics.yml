@@ -37,7 +37,7 @@ jobs:
         run: npx --yes ajv-cli@5 validate -s .ci/metrics.schema.json -d metrics.json
 
       - name: Optional POST to hausKI
-        if: ${{ env.HAUSKI_POST_URL != '' && env.HAUSKI_POST_URL != null }}
+        if: ${{ env.HAUSKI_POST_URL && env.HAUSKI_POST_URL != '' }}
         run: |
           curl --fail --silent --show-error --retry 3 --retry-delay 2 \
             -H 'Content-Type: application/json' \
