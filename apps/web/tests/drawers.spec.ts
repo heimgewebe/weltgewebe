@@ -13,52 +13,39 @@ test.beforeEach(async ({ page }) => {
 test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }) => {
   // Rechts öffnen
   await page.keyboard.press("]");
-  await expect
-    .poll(async () =>
-      page.getByRole("heading", { name: "Suche & Filter" }).isVisible(),
-    )
-    .toBe(true);
+  await expect(
+    page.getByRole("heading", { name: "Suche & Filter" }),
+  ).toBeVisible({ timeout: 5000 });
 
   // Esc → schließt rechts
   await page.keyboard.press("Escape");
-  await expect
-    .poll(
-      async () =>
-        await page.getByRole("heading", { name: "Suche & Filter" }).isHidden(),
-    )
-    .toBe(true);
+  await expect(
+    page.getByRole("heading", { name: "Suche & Filter" }),
+  ).toBeHidden({ timeout: 5000 });
 
   // Top öffnen
   await page.keyboard.press("Alt+g");
-  await expect
-    .poll(async () =>
-      page.getByRole("heading", { name: "Gewebekonto" }).isVisible(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeVisible({
+    timeout: 5000,
+  });
 
   // Esc → schließt top
   await page.keyboard.press("Escape");
-  await expect
-    .poll(
-      async () =>
-        await page.getByRole("heading", { name: "Gewebekonto" }).isHidden(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeHidden({
+    timeout: 5000,
+  });
 
   // Links öffnen
   await page.keyboard.press("[");
-  await expect
-    .poll(async () => page.getByRole("heading", { name: "Webrat" }).isVisible())
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Webrat" })).toBeVisible({
+    timeout: 5000,
+  });
 
   // Esc → schließt links (Stack)
   await page.keyboard.press("Escape");
-  await expect
-    .poll(
-      async () =>
-        await page.getByRole("heading", { name: "Webrat" }).isHidden(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Webrat" })).toBeHidden({
+    timeout: 5000,
+  });
 });
 
 test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
@@ -74,21 +61,18 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(box.x + 120, y, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(async () => page.getByRole("heading", { name: "Webrat" }).isVisible())
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Webrat" })).toBeVisible({
+    timeout: 5000,
+  });
 
   // close left (drag ←)
   await page.mouse.move(box.x + 140, y);
   await page.mouse.down();
   await page.mouse.move(box.x + 30, y, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(
-      async () =>
-        await page.getByRole("heading", { name: "Webrat" }).isHidden(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Webrat" })).toBeHidden({
+    timeout: 5000,
+  });
 
   // open right (drag ← an rechter Kante)
   const rx = box.x + box.width - 40;
@@ -96,24 +80,18 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(rx - 100, y, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(async () =>
-      page.getByRole("heading", { name: "Suche & Filter" }).isVisible(),
-    )
-    .toBe(true);
+  await expect(
+    page.getByRole("heading", { name: "Suche & Filter" }),
+  ).toBeVisible({ timeout: 5000 });
 
   // close right (drag →)
   await page.mouse.move(rx - 120, y);
   await page.mouse.down();
   await page.mouse.move(rx + 20, y, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(async () => {
-      return await page
-        .getByRole("heading", { name: "Suche & Filter" })
-        .isHidden();
-    })
-    .toBe(true);
+  await expect(
+    page.getByRole("heading", { name: "Suche & Filter" }),
+  ).toBeHidden({ timeout: 5000 });
 
   // open top (drag ↓ nahe Top)
   const tx = box.x + box.width * 0.5;
@@ -122,21 +100,16 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, ty + 120, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(async () =>
-      page.getByRole("heading", { name: "Gewebekonto" }).isVisible(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeVisible({
+    timeout: 5000,
+  });
 
   // close top (drag ↑)
   await page.mouse.move(tx, ty + 140);
   await page.mouse.down();
   await page.mouse.move(tx, ty - 10, { steps: 6 });
   await page.mouse.up();
-  await expect
-    .poll(
-      async () =>
-        await page.getByRole("heading", { name: "Gewebekonto" }).isHidden(),
-    )
-    .toBe(true);
+  await expect(page.getByRole("heading", { name: "Gewebekonto" })).toBeHidden({
+    timeout: 5000,
+  });
 });
