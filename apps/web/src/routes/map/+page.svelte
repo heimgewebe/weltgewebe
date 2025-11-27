@@ -386,7 +386,6 @@
     cursor:pointer;
     box-shadow: var(--shadow);
   }
-  .layerToggles .toggle[data-active="true"],
   .layerToggles .toggle[aria-pressed="true"]{
     background:var(--accent, #ff8c42);
     border-color:var(--accent, #ff8c42);
