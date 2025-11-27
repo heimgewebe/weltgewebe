@@ -3,7 +3,7 @@ name: cost-report
 permissions:
   contents: read
   actions: write
-'on':
+"on":
   workflow_dispatch:
   schedule:
     - cron: "7 3 1 * *"
