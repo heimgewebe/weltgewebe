@@ -2,7 +2,7 @@
 name: compose-smoke
 permissions:
   contents: read
-'on':
+"on":
   workflow_dispatch:
   push:
     branches: [main]
