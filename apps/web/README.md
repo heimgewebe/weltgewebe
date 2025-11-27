@@ -5,6 +5,9 @@ Fäden, Drawer, Zeitachse).
 
 ## Dev
 
+Hinweis: Das Projekt verwendet pnpm via Corepack (sowohl lokal als auch im CI).
+Aktiviere es mit `corepack enable`.
+
 ```bash
 cd apps/web
 pnpm install --frozen-lockfile
@@ -65,13 +68,13 @@ Legt `public/demo.png` an.
 ### Tests & Reports
 
 Playwright legt lokale HTML-Reports unter `apps/web/playwright-report` ab. Öffne sie bei
-Bedarf mit `npx playwright show-report playwright-report`.
+Bedarf mit `pnpm exec playwright show-report playwright-report`.
 
 ### Playwright (Drawer + Keyboard)
 
 ```bash
-npx playwright install --with-deps  # einmalig
-npx playwright test tests/drawers.spec.ts
+pnpm exec playwright install --with-deps  # einmalig
+pnpm exec playwright test tests/drawers.spec.ts
 ```
 
 Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit
