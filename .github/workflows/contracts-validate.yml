@@ -29,7 +29,7 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 env:
-  FAIL_ON_NO_BASE: false
+  FAIL_ON_NO_BASE: true
   ALLOW_REMOVALS: false
 
 jobs:
