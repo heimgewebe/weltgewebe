@@ -7,7 +7,7 @@ sudo apt-get install -y jq ripgrep vale shfmt hadolint just httpie
 
 # Node/PNPM vorbereiten
 corepack enable || true
-corepack prepare pnpm@latest --activate || true
+corepack prepare pnpm@9.11.0 --activate || true
 
 # Frontend-Install, wenn apps/web existiert
 if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
