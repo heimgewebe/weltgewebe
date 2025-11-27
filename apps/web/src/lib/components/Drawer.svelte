@@ -5,6 +5,7 @@
   export let open = false;
   export let side: 'left' | 'right' | 'top' = 'left';
   export let id: string | undefined;
+  export let role: 'complementary' | 'dialog' = 'complementary';
 
   const dispatch = createEventDispatcher<{ open: void; close: void }>();
 
@@ -111,8 +112,8 @@
   class:top={side === 'top'}
   aria-hidden={!open}
   aria-labelledby={headingId}
-  role="dialog"
-  aria-modal={open ? "true" : undefined}
+  role={role}
+  aria-modal={role === 'dialog' && open ? "true" : undefined}
   tabindex="-1"
   inert={!open ? true : undefined}
   {...$$restProps}

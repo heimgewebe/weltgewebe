@@ -3,36 +3,41 @@
 // - setzt aria-hidden, solange inert aktiv ist
 // Safari < 16.4 & ältere iPadOS-Versionen profitieren davon.
 
-const previousAriaHidden = new WeakMap<Element, string | null>();
+// Speichert den ursprünglichen aria-hidden-Wert für Knoten, deren Subtree wir ausblenden.
+// Hinweis: Diese Variante isoliert ausschließlich innerhalb des inert-Subtrees und modelliert
+// keine verschachtelten inert-Container. Verschachtelte inert-Bereiche sollten daher vermieden
+// oder bewusst sequentiell aktiviert werden.
+const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 
-function applyAriaHidden(el: Element, on: boolean) {
-  const element = el as HTMLElement;
+function setSubtreeAriaHidden(root: Element, on: boolean) {
+  const elements = [root, ...root.querySelectorAll<HTMLElement>("*")];
 
   if (on) {
-    if (!previousAriaHidden.has(element)) {
-      previousAriaHidden.set(element, element.getAttribute("aria-hidden"));
-    }
-    if (element.getAttribute("aria-hidden") !== "true") {
-      element.setAttribute("aria-hidden", "true");
+    for (const element of elements) {
+      if (!previousSubtreeAriaHidden.has(element)) {
+        previousSubtreeAriaHidden.set(
+          element,
+          element.getAttribute("aria-hidden"),
+        );
+      }
+      if (element.getAttribute("aria-hidden") !== "true") {
+        element.setAttribute("aria-hidden", "true");
+      }
     }
     return;
   }
 
-  const previous = previousAriaHidden.get(element);
-  previousAriaHidden.delete(element);
+  for (const element of elements) {
+    if (!previousSubtreeAriaHidden.has(element)) continue;
 
-  if (previous === undefined) {
-    // Wir haben den ursprünglichen Zustand nicht gesehen → defensiv säubern.
-    if (element.getAttribute("aria-hidden") === "true") {
+    const previous = previousSubtreeAriaHidden.get(element);
+    previousSubtreeAriaHidden.delete(element);
+
+    if (previous === null) {
       element.removeAttribute("aria-hidden");
+    } else if (previous !== undefined) {
+      element.setAttribute("aria-hidden", previous);
     }
-    return;
-  }
-
-  if (previous === null) {
-    element.removeAttribute("aria-hidden");
-  } else {
-    element.setAttribute("aria-hidden", previous);
   }
 }
 
@@ -77,7 +82,7 @@ export function ensureInertPolyfill() {
   const syncAll = () => {
     document
       .querySelectorAll<HTMLElement>("[inert]")
-      .forEach((el) => applyAriaHidden(el, true));
+      .forEach((el) => setSubtreeAriaHidden(el, true));
   };
   syncAll();
 
@@ -141,7 +146,7 @@ export function ensureInertPolyfill() {
       ) {
         const el = m.target as HTMLElement;
         const on = el.hasAttribute("inert");
-        applyAriaHidden(el, on);
+        setSubtreeAriaHidden(el, on);
         continue;
       }
 
@@ -150,11 +155,17 @@ export function ensureInertPolyfill() {
           if (!(node instanceof HTMLElement)) continue;
 
           if (node.hasAttribute("inert")) {
-            applyAriaHidden(node, true);
+            setSubtreeAriaHidden(node, true);
           }
+
           node
             .querySelectorAll("[inert]")
-            .forEach((el) => applyAriaHidden(el, true));
+            .forEach((el) => setSubtreeAriaHidden(el, true));
+
+          const inertHost = node.closest<HTMLElement>("[inert]");
+          if (inertHost) {
+            setSubtreeAriaHidden(node, true);
+          }
         }
       }
     }
