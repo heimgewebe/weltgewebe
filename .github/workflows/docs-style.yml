@@ -9,7 +9,7 @@ on:
       - ".vale/**"
       - ".vale.ini"
       - ".github/workflows/docs-style.yml"
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: read
