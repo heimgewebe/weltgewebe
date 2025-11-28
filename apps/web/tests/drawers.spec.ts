@@ -89,7 +89,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   if (!filterDrawerBox) throw new Error("filter drawer not visible");
   await page.mouse.move(filterDrawerBox.x + 10, y);
   await page.mouse.down();
-  await page.mouse.move(filterDrawerBox.x + filterDrawerBox.width - 10, y, { steps: 6 });
+  await page.mouse.move(filterDrawerBox.x + filterDrawerBox.width - 10, y, {
+    steps: 6,
+  });
   await page.mouse.up();
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
 
