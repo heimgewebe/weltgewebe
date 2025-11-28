@@ -8,6 +8,10 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/map?l=0&r=0&t=0", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
   await page.waitForSelector("#map");
+  // Wait for drawers to be rendered and initial state settled
+  await expect(page.locator("#left-stack")).toBeAttached({ timeout: 5000 });
+  await expect(page.locator("#filter-drawer")).toBeAttached({ timeout: 5000 });
+  await expect(page.locator("#account-drawer")).toBeAttached({ timeout: 5000 });
 });
 
 test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }) => {
@@ -15,33 +19,51 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
   const accountDrawer = page.locator("#account-drawer");
   const leftStack = page.locator("#left-stack");
 
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
-  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true");
-  await expect(leftStack).toHaveAttribute("aria-hidden", "true");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
+  await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 
   // Rechts öffnen
   await page.keyboard.press("]");
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // Esc → schließt rechts
   await page.keyboard.press("Escape");
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 
   // Top öffnen
   await page.keyboard.press("Alt+g");
-  await expect(accountDrawer).toHaveAttribute("aria-hidden", "false");
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // Esc → schließt top
   await page.keyboard.press("Escape");
-  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 
   // Links öffnen
   await page.keyboard.press("[");
-  await expect(leftStack).toHaveAttribute("aria-hidden", "false");
+  await expect(leftStack).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // Esc → schließt links (Stack)
   await page.keyboard.press("Escape");
-  await expect(leftStack).toHaveAttribute("aria-hidden", "true");
+  await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 });
 
 test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
@@ -63,7 +85,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(leftEdgeX + 140, y, { steps: 6 });
   await page.mouse.up();
-  await expect(leftStack).toHaveAttribute("aria-hidden", "false");
+  await expect(leftStack).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // close left (drag ←)
   const leftStackBox = await leftStack.boundingBox();
@@ -72,7 +96,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(leftStackBox.x + 10, y, { steps: 6 });
   await page.mouse.up();
-  await expect(leftStack).toHaveAttribute("aria-hidden", "true");
+  await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 
   // open right (drag ← an rechter Kante)
   const rightEdgeBox = await rightEdge.boundingBox();
@@ -82,7 +108,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(rx - 120, y, { steps: 6 });
   await page.mouse.up();
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // close right (drag →)
   const filterDrawerBox = await filterDrawer.boundingBox();
@@ -93,7 +121,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
     steps: 6,
   });
   await page.mouse.up();
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 
   // open top (drag ↓ nahe Top)
   const topEdgeBox = await topEdge.boundingBox();
@@ -104,7 +134,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, ty + 140, { steps: 6 });
   await page.mouse.up();
-  await expect(accountDrawer).toHaveAttribute("aria-hidden", "false");
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "false", {
+    timeout: 2000,
+  });
 
   // close top (drag ↑)
   const accountDrawerBox = await accountDrawer.boundingBox();
@@ -113,5 +145,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, accountDrawerBox.y + 10, { steps: 6 });
   await page.mouse.up();
-  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
+    timeout: 2000,
+  });
 });
