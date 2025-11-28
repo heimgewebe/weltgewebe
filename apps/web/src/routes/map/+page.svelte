@@ -1,5 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
+  import type { PageData } from './$types';
+  import {
+    drawerQueryDefaults,
+    readDrawerParam,
+    writeDrawerParam,
+    type DrawerKey
+  } from './drawerDefaults';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Map as MapLibreMap } from 'maplibre-gl';
@@ -7,6 +14,8 @@
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
   import points from '$lib/data/dummy.json';
+
+  export let data: PageData;
 
   type MapPoint = {
     id: string;
@@ -20,9 +29,9 @@
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
 
-  let leftOpen = true;     // linke Spalte (Webrat/Nähstübchen)
-  let rightOpen = false;   // Filter / Info
-  let topOpen = false;     // Gewebekonto
+  let leftOpen = data.leftOpen ?? drawerQueryDefaults.l;     // linke Spalte (Webrat/Nähstübchen)
+  let rightOpen = data.rightOpen ?? drawerQueryDefaults.r;   // Filter / Info
+  let topOpen = data.topOpen ?? drawerQueryDefaults.t;       // Gewebekonto
 
   let selected: MapPoint | null = null;
   const markerCleanupFns: Array<() => void> = [];
@@ -39,45 +48,29 @@
     top: HTMLButtonElement | null;
   } = { left: null, right: null, top: null };
 
-  const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
   let showThreads = false;
 
-  function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
+  function setQuery(next: Partial<Record<DrawerKey, boolean>>) {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    if (next.l !== undefined) {
-      if (next.l === defaultQueryState.l) {
-        url.searchParams.delete('l');
-      } else {
-        url.searchParams.set('l', next.l ? '1' : '0');
+    (['l', 'r', 't'] as const).forEach((key) => {
+      const value = next[key];
+      if (value !== undefined) {
+        writeDrawerParam(url.searchParams, key, value);
       }
-    }
-    if (next.r !== undefined) {
-      if (next.r === defaultQueryState.r) {
-        url.searchParams.delete('r');
-      } else {
-        url.searchParams.set('r', next.r ? '1' : '0');
-      }
-    }
-    if (next.t !== undefined) {
-      if (next.t === defaultQueryState.t) {
-        url.searchParams.delete('t');
-      } else {
-        url.searchParams.set('t', next.t ? '1' : '0');
-      }
-    }
+    });
     history.replaceState(history.state, '', url);
   }
 
   function syncFromLocation() {
     if (typeof window === 'undefined') return;
     const q = new URLSearchParams(window.location.search);
-    leftOpen = q.has('l') ? q.get('l') === '1' : defaultQueryState.l;
-    rightOpen = q.has('r') ? q.get('r') === '1' : defaultQueryState.r;
+    leftOpen = readDrawerParam(q, 'l');
+    rightOpen = readDrawerParam(q, 'r');
     if (!rightOpen) {
       selected = null;
     }
-    topOpen = q.has('t') ? q.get('t') === '1' : defaultQueryState.t;
+    topOpen = readDrawerParam(q, 't');
   }
 
   function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
