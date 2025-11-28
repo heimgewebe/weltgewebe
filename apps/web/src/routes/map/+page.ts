@@ -1,12 +1,12 @@
-import type { PageLoad } from './$types';
-import { readDrawerParam } from './drawerDefaults';
+import type { PageLoad } from "./$types";
+import { readDrawerParam } from "./drawerDefaults";
 
 export const load: PageLoad = ({ url }) => {
   const params = url.searchParams;
 
-  const leftOpen = readDrawerParam(params, 'l');
-  const rightOpen = readDrawerParam(params, 'r');
-  const topOpen = readDrawerParam(params, 't');
+  const leftOpen = readDrawerParam(params, "l");
+  const rightOpen = readDrawerParam(params, "r");
+  const topOpen = readDrawerParam(params, "t");
 
   return { leftOpen, rightOpen, topOpen };
 };

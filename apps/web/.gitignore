@@ -5,6 +5,7 @@ build
 public/demo.png
 .env
 .env.local
+package-lock.json
 
 # Playwright artifacts
 playwright-report/
