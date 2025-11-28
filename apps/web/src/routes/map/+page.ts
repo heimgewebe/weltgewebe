@@ -1,5 +1,5 @@
 import type { PageLoad } from './$types';
-import { drawerQueryDefaults, readDrawerParam } from './drawerDefaults';
+import { readDrawerParam } from './drawerDefaults';
 
 export const load: PageLoad = ({ url }) => {
   const params = url.searchParams;
