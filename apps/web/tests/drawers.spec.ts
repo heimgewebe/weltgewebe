@@ -15,6 +15,10 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
   const accountDrawer = page.locator("#account-drawer");
   const leftStack = page.locator("#left-stack");
 
+  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(accountDrawer).toHaveAttribute("aria-hidden", "true");
+  await expect(leftStack).toHaveAttribute("aria-hidden", "true");
+
   // Rechts öffnen
   await page.keyboard.press("]");
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
@@ -41,58 +45,71 @@ test("Esc schließt geöffnete Drawer (top → right → left)", async ({ page }
 });
 
 test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
-  const map = page.locator("#map");
+  const leftEdge = page.locator(".edge.left");
+  const rightEdge = page.locator(".edge.right");
+  const topEdge = page.locator(".edge.top");
   const filterDrawer = page.locator("#filter-drawer");
   const accountDrawer = page.locator("#account-drawer");
   const leftStack = page.locator("#left-stack");
 
   // Linke Kante öffnen (drag→ rechts)
-  const box = await map.boundingBox();
-  if (!box) throw new Error("map not visible");
-  const y = box.y + box.height * 0.5;
+  const leftEdgeBox = await leftEdge.boundingBox();
+  if (!leftEdgeBox) throw new Error("left edge bounding box unavailable");
+  const y = leftEdgeBox.y + leftEdgeBox.height * 0.5;
 
   // open left
-  await page.mouse.move(box.x + 40, y);
+  const leftEdgeX = leftEdgeBox.x + leftEdgeBox.width * 0.5;
+  await page.mouse.move(leftEdgeX, y);
   await page.mouse.down();
-  await page.mouse.move(box.x + 120, y, { steps: 6 });
+  await page.mouse.move(leftEdgeX + 140, y, { steps: 6 });
   await page.mouse.up();
   await expect(leftStack).toHaveAttribute("aria-hidden", "false");
 
   // close left (drag ←)
-  await page.mouse.move(box.x + 140, y);
+  const leftStackBox = await leftStack.boundingBox();
+  if (!leftStackBox) throw new Error("left stack not visible");
+  await page.mouse.move(leftStackBox.x + leftStackBox.width - 10, y);
   await page.mouse.down();
-  await page.mouse.move(box.x + 30, y, { steps: 6 });
+  await page.mouse.move(leftStackBox.x + 10, y, { steps: 6 });
   await page.mouse.up();
   await expect(leftStack).toHaveAttribute("aria-hidden", "true");
 
   // open right (drag ← an rechter Kante)
-  const rx = box.x + box.width - 40;
+  const rightEdgeBox = await rightEdge.boundingBox();
+  if (!rightEdgeBox) throw new Error("right edge not visible");
+  const rx = rightEdgeBox.x + rightEdgeBox.width * 0.5;
   await page.mouse.move(rx, y);
   await page.mouse.down();
-  await page.mouse.move(rx - 100, y, { steps: 6 });
+  await page.mouse.move(rx - 120, y, { steps: 6 });
   await page.mouse.up();
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false");
 
   // close right (drag →)
-  await page.mouse.move(rx - 120, y);
+  const filterDrawerBox = await filterDrawer.boundingBox();
+  if (!filterDrawerBox) throw new Error("filter drawer not visible");
+  await page.mouse.move(filterDrawerBox.x + 10, y);
   await page.mouse.down();
-  await page.mouse.move(rx + 20, y, { steps: 6 });
+  await page.mouse.move(filterDrawerBox.x + filterDrawerBox.width - 10, y, { steps: 6 });
   await page.mouse.up();
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true");
 
   // open top (drag ↓ nahe Top)
-  const tx = box.x + box.width * 0.5;
-  const ty = box.y + 40;
+  const topEdgeBox = await topEdge.boundingBox();
+  if (!topEdgeBox) throw new Error("top edge bounding box unavailable");
+  const tx = topEdgeBox.x + topEdgeBox.width * 0.5;
+  const ty = topEdgeBox.y + topEdgeBox.height * 0.5;
   await page.mouse.move(tx, ty);
   await page.mouse.down();
-  await page.mouse.move(tx, ty + 120, { steps: 6 });
+  await page.mouse.move(tx, ty + 140, { steps: 6 });
   await page.mouse.up();
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "false");
 
   // close top (drag ↑)
-  await page.mouse.move(tx, ty + 140);
+  const accountDrawerBox = await accountDrawer.boundingBox();
+  if (!accountDrawerBox) throw new Error("account drawer not visible");
+  await page.mouse.move(tx, accountDrawerBox.y + accountDrawerBox.height - 10);
   await page.mouse.down();
-  await page.mouse.move(tx, ty - 10, { steps: 6 });
+  await page.mouse.move(tx, accountDrawerBox.y + 10, { steps: 6 });
   await page.mouse.up();
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "true");
 });

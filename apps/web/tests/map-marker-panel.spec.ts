@@ -5,12 +5,12 @@ test("marker click opens info panel", async ({ page }) => {
     (window as any).__E2E__ = true;
   });
 
-  await page.goto("/map", { waitUntil: "domcontentloaded" });
+  await page.goto("/map?l=0", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect(markerButton).toBeVisible();
+  await expect(markerButton).toBeVisible({ timeout: 5000 });
   await markerButton.click();
 
   const filterDrawer = page.locator("#filter-drawer");
@@ -26,12 +26,12 @@ test("escape closes info panel and clears selection", async ({ page }) => {
     (window as any).__E2E__ = true;
   });
 
-  await page.goto("/map", { waitUntil: "domcontentloaded" });
+  await page.goto("/map?l=0", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
   await page.waitForFunction(() => !!document.querySelector(".map-marker"));
 
   const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
-  await expect(markerButton).toBeVisible();
+  await expect(markerButton).toBeVisible({ timeout: 5000 });
   await markerButton.click();
 
   const filterDrawer = page.locator("#filter-drawer");
