@@ -135,14 +135,7 @@
       (intent === 'open-top' && topOpen) ||
       (intent === 'close-top' && !topOpen)
     ) {
-      if ((window as any).__E2E__ && intent.includes('top')) {
-        console.log('[startSwipe] Skipped top:', { intent, topOpen });
-      }
       return;
-    }
-
-    if ((window as any).__E2E__ && intent.includes('top')) {
-      console.log('[startSwipe] Started top:', { intent, y: e.clientY });
     }
 
     swipeState = {
@@ -164,10 +157,6 @@
     const absY = Math.abs(dy);
     const threshold = 60;
     const { intent } = swipeState;
-    
-    if ((window as any).__E2E__ && intent.includes('top')) {
-      console.log('[finishSwipe] top:', { intent, dy, absY, absX, topOpen });
-    }
     
     // Clear swipeState immediately to prevent duplicate processing
     swipeState = null;
@@ -217,6 +206,8 @@
       startSwipe(event, intent);
     }
   }
+
+
 
   function handleOpeners(
     event: CustomEvent<{
@@ -510,7 +501,7 @@
   <div class="edge right" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-right')}>
     <div class="edgeHit"></div>
   </div>
-  <div class="edge top" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-top')}>
+  <div class="edge top" role="presentation" on:pointerdown={(event) => handleDrawerPointerDown(event, 'open-top')}>
     <div class="edgeHit"></div>
   </div>
 
