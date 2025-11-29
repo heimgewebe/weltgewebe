@@ -122,7 +122,6 @@
   } | null;
 
   let swipeState: SwipeState = null;
-  let processedPointerIds = new Set<number>();
 
   function startSwipe(e: PointerEvent, intent: SwipeIntent) {
     const allowMouse = (window as any).__E2E__ === true;
@@ -152,11 +151,6 @@
       return;
     }
 
-    // Prevent processing the same swipe twice (Playwright can fire duplicate pointerup events)
-    if (processedPointerIds.has(e.pointerId)) {
-      return;
-    }
-
     const dx = e.clientX - swipeState.startX;
     const dy = e.clientY - swipeState.startY;
     const absX = Math.abs(dx);
@@ -164,11 +158,7 @@
     const threshold = 60;
     const { intent } = swipeState;
     
-    // Mark this pointer as processed BEFORE clearing swipeState
-    processedPointerIds.add(e.pointerId);
-    // Clean up after a short delay
-    setTimeout(() => processedPointerIds.delete(e.pointerId), 500);
-    
+    // Clear swipeState immediately to prevent duplicate processing
     swipeState = null;
 
     switch (intent) {
