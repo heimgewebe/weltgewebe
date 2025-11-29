@@ -122,7 +122,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   });
   // Wait for CSS transition to complete
   await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
-  
+
   // Ensure drawer is truly interactive before attempting to close
   await expect(filterDrawer).toHaveClass(/open/);
 
