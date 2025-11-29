@@ -122,6 +122,7 @@
   } | null;
 
   let swipeState: SwipeState = null;
+  let processedPointerIds = new Set<number>();
 
   function startSwipe(e: PointerEvent, intent: SwipeIntent) {
     const allowMouse = (window as any).__E2E__ === true;
@@ -147,7 +148,14 @@
   }
 
   function finishSwipe(e: PointerEvent) {
-    if (!swipeState || swipeState.pointerId !== e.pointerId) return;
+    if (!swipeState || swipeState.pointerId !== e.pointerId) {
+      return;
+    }
+
+    // Prevent processing the same swipe twice (Playwright can fire duplicate pointerup events)
+    if (processedPointerIds.has(e.pointerId)) {
+      return;
+    }
 
     const dx = e.clientX - swipeState.startX;
     const dy = e.clientY - swipeState.startY;
@@ -155,6 +163,12 @@
     const absY = Math.abs(dy);
     const threshold = 60;
     const { intent } = swipeState;
+    
+    // Mark this pointer as processed BEFORE clearing swipeState
+    processedPointerIds.add(e.pointerId);
+    // Clean up after a short delay
+    setTimeout(() => processedPointerIds.delete(e.pointerId), 500);
+    
     swipeState = null;
 
     switch (intent) {
@@ -344,8 +358,9 @@
     display:grid; grid-template-rows: 1fr 1fr; gap:var(--drawer-gap);
     transform: translateX(calc(-1 * var(--drawer-width) - var(--drawer-slide-offset)));
     transition: transform .18s ease;
+    pointer-events: none;
   }
-  .leftStack.open{ transform:none; }
+  .leftStack.open{ transform:none; pointer-events: auto; }
   .panel{
     background:var(--panel); border:1px solid var(--panel-border); border-radius: var(--radius);
     box-shadow: var(--shadow); color:var(--text); padding:var(--drawer-gap); overflow:auto;
@@ -437,8 +452,7 @@
     class="leftStack"
     class:open={leftOpen}
     aria-hidden={!leftOpen}
-    inert={!leftOpen ? true : undefined}
-    on:pointerdown={(event) => startSwipe(event, 'close-left')}
+    on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-left')}
   >
     <div class="panel">
       <h3>Webrat</h3>
