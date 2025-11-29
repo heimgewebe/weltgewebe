@@ -9,7 +9,7 @@ INTERVAL=${DB_WAIT_INTERVAL:-2}
 declare -i end=$((SECONDS + TIMEOUT))
 
 while ((SECONDS < end)); do
-    if (echo >"/dev/tcp/${HOST}/${PORT}") >/dev/null 2>&1; then
+    if echo >"/dev/tcp/$HOST/$PORT" 2>/dev/null; then
         printf 'Postgres is available at %s:%s\n' "$HOST" "$PORT"
         exit 0
     fi
