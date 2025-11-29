@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   // Maus-Swipes in Tests erlauben
@@ -83,18 +83,28 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   const leftEdgeX = leftEdgeBox.x + leftEdgeBox.width * 0.5;
   await page.mouse.move(leftEdgeX, y);
   await page.mouse.down();
-  await page.mouse.move(leftEdgeX + 140, y, { steps: 6 });
+  await page.mouse.move(leftEdgeX + 200, y, { steps: 20 });
   await page.mouse.up();
   await expect(leftStack).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
 
+  // Wait for transition to complete so bounding box is correct (x >= 0)
+  await expect.poll(async () => {
+    const box = await leftStack.boundingBox();
+    return box && box.x >= 0;
+  }, { timeout: 2000 }).toBe(true);
+
   // close left (drag ←)
   const leftStackBox = await leftStack.boundingBox();
   if (!leftStackBox) throw new Error("left stack not visible");
-  await page.mouse.move(leftStackBox.x + leftStackBox.width - 10, y);
+
+  const startX = leftStackBox.x + 200;
+  const endX = leftStackBox.x + 50;
+
+  await page.mouse.move(startX, y);
   await page.mouse.down();
-  await page.mouse.move(leftStackBox.x + 10, y, { steps: 6 });
+  await page.mouse.move(endX, y, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
   await page.waitForTimeout(300);
@@ -108,20 +118,28 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   const rx = rightEdgeBox.x + rightEdgeBox.width * 0.5;
   await page.mouse.move(rx, y);
   await page.mouse.down();
-  await page.mouse.move(rx - 120, y, { steps: 6 });
+  await page.mouse.move(rx - 200, y, { steps: 20 });
   await page.mouse.up();
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
 
+  // Wait for transition (Right drawer visible on screen)
+  await expect.poll(async () => {
+    const box = await filterDrawer.boundingBox();
+    // Assuming viewport width ~1280. If closed, x is large. If open, x < 1280.
+    return box && box.x < 1280;
+  }, { timeout: 2000 }).toBe(true);
+
   // close right (drag →)
   const filterDrawerBox = await filterDrawer.boundingBox();
   if (!filterDrawerBox) throw new Error("filter drawer not visible");
-  await page.mouse.move(filterDrawerBox.x + 10, y);
+  const startRX = filterDrawerBox.x + 100;
+  const endRX = filterDrawerBox.x + 250;
+
+  await page.mouse.move(startRX, y);
   await page.mouse.down();
-  await page.mouse.move(filterDrawerBox.x + filterDrawerBox.width - 10, y, {
-    steps: 6,
-  });
+  await page.mouse.move(endRX, y, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
   await page.waitForTimeout(300);
@@ -136,18 +154,27 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   const ty = topEdgeBox.y + topEdgeBox.height * 0.5;
   await page.mouse.move(tx, ty);
   await page.mouse.down();
-  await page.mouse.move(tx, ty + 140, { steps: 6 });
+  await page.mouse.move(tx, ty + 200, { steps: 20 });
   await page.mouse.up();
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
 
+  // Wait for transition (Top drawer visible on screen)
+  await expect.poll(async () => {
+    const box = await accountDrawer.boundingBox();
+    return box && box.y >= 0;
+  }, { timeout: 2000 }).toBe(true);
+
   // close top (drag ↑)
   const accountDrawerBox = await accountDrawer.boundingBox();
   if (!accountDrawerBox) throw new Error("account drawer not visible");
-  await page.mouse.move(tx, accountDrawerBox.y + accountDrawerBox.height - 10);
+  const startTY = accountDrawerBox.y + 200;
+  const endTY = accountDrawerBox.y + 50;
+
+  await page.mouse.move(tx, startTY);
   await page.mouse.down();
-  await page.mouse.move(tx, accountDrawerBox.y + 10, { steps: 6 });
+  await page.mouse.move(tx, endTY, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
   await page.waitForTimeout(300);

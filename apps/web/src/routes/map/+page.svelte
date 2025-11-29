@@ -289,6 +289,10 @@
           .setLngLat([item.lon, item.lat])
           .addTo(map);
 
+        // Re-apply accessibility attributes after addTo() to ensure they persist
+        element.setAttribute('aria-label', item.title);
+        element.title = item.title;
+
         markerCleanupFns.push(() => {
           element.removeEventListener('click', handleClick);
           marker.remove();
@@ -517,4 +521,3 @@
   <!-- Zeitleiste -->
   <TimelineDock />
 </main>
-
