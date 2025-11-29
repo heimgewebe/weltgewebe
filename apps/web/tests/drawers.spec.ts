@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+// Wait time for CSS transitions to complete (180ms transition + buffer)
+const DRAWER_ANIMATION_WAIT = 500;
+
 test.beforeEach(async ({ page }) => {
   // Maus-Swipes in Tests erlauben
   await page.addInitScript(() => {
@@ -91,7 +94,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   // Ensure animation completes and state stabilizes
   await expect(leftStack).toHaveClass(/open/, { timeout: 2000 });
   // Wait for CSS transition to complete (180ms transition + buffer)
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // close left (drag ←)
   const leftStackBox = await leftStack.boundingBox();
@@ -101,7 +104,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(leftStackBox.x + 10, y, { steps: 6 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });
@@ -118,7 +121,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
     timeout: 2000,
   });
   // Wait for CSS transition to complete
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // close right (drag →)
   const filterDrawerBox = await filterDrawer.boundingBox();
@@ -130,7 +133,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });
@@ -148,7 +151,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
     timeout: 2000,
   });
   // Wait for CSS transition to complete
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // close top (drag ↑)
   const accountDrawerBox = await accountDrawer.boundingBox();
@@ -158,7 +161,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(tx, accountDrawerBox.y + 10, { steps: 6 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });
