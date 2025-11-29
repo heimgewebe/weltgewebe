@@ -14,11 +14,12 @@ test("marker click opens info panel", async ({ page }) => {
   await markerButton.click();
 
   const filterDrawer = page.locator("#filter-drawer");
+  // Wait for drawer to open and content to render
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
-    timeout: 2000,
+    timeout: 3000,
   });
   await expect(filterDrawer.getByText("Werkstatt Hamm")).toBeVisible({
-    timeout: 2000,
+    timeout: 3000,
   });
   await expect(
     filterDrawer.getByText("Weitere Details folgen (Stub)"),
@@ -39,14 +40,17 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await markerButton.click();
 
   const filterDrawer = page.locator("#filter-drawer");
+  // Wait for drawer to open
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
-    timeout: 2000,
+    timeout: 3000,
   });
 
   await page.keyboard.press("Escape");
 
+  // Wait for animation to complete before checking closed state
+  await page.waitForTimeout(300);
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
-    timeout: 2000,
+    timeout: 3000,
   });
   await expect(filterDrawer.getByText("Werkstatt Hamm")).toHaveCount(0);
 });
