@@ -73,7 +73,16 @@
     topOpen = readDrawerParam(q, 't');
   }
 
-  function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
+  function setLeftOpen(next: boolean) {
+    if (leftOpen === next) return;
+    leftOpen = next;
+    setQuery({ l: leftOpen });
+  }
+
+  function toggleLeft() {
+    setLeftOpen(!leftOpen);
+  }
+
   function setRightOpen(next: boolean) {
     if (rightOpen === next) return;
     rightOpen = next;
@@ -82,8 +91,20 @@
     }
     setQuery({ r: rightOpen });
   }
-  function toggleRight(){ setRightOpen(!rightOpen); }
-  function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
+
+  function toggleRight() {
+    setRightOpen(!rightOpen);
+  }
+
+  function setTopOpen(next: boolean) {
+    if (topOpen === next) return;
+    topOpen = next;
+    setQuery({ t: topOpen });
+  }
+
+  function toggleTop() {
+    setTopOpen(!topOpen);
+  }
 
   type SwipeIntent =
     | 'open-left'
@@ -139,14 +160,12 @@
     switch (intent) {
       case 'open-left':
         if (!leftOpen && dx > threshold && absX > absY) {
-          leftOpen = true;
-          setQuery({ l: true });
+          setLeftOpen(true);
         }
         break;
       case 'close-left':
         if (leftOpen && -dx > threshold && absX > absY) {
-          leftOpen = false;
-          setQuery({ l: false });
+          setLeftOpen(false);
         }
         break;
       case 'open-right':
@@ -161,14 +180,12 @@
         break;
       case 'open-top':
         if (!topOpen && dy > threshold && absY > absX) {
-          topOpen = true;
-          setQuery({ t: true });
+          setTopOpen(true);
         }
         break;
       case 'close-top':
         if (topOpen && -dy > threshold && absY > absX) {
-          topOpen = false;
-          setQuery({ t: false });
+          setTopOpen(false);
         }
         break;
     }
@@ -218,8 +235,7 @@
     keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (topOpen) {
-          topOpen = false;
-          setQuery({ t: false });
+          setTopOpen(false);
           return;
         }
         if (rightOpen) {
@@ -227,8 +243,7 @@
           return;
         }
         if (leftOpen) {
-          leftOpen = false;
-          setQuery({ l: false });
+          setLeftOpen(false);
           return;
         }
       }

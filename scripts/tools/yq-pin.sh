@@ -176,10 +176,10 @@ download_yq() {
 
     if command -v awk >/dev/null 2>&1; then
         expected="$(printf '%s\n' "${expected_line}" | awk '{print $1}')"
-        actual="$(${SHA256_CMD[@]} "${asset_path}" | awk '{print $1}')"
+        actual="$("${SHA256_CMD[@]}" "${asset_path}" | awk '{print $1}')"
     else
         expected="$(printf '%s\n' "${expected_line}" | cut -d' ' -f1)"
-        actual="$(${SHA256_CMD[@]} "${asset_path}" | cut -d' ' -f1)"
+        actual="$("${SHA256_CMD[@]}" "${asset_path}" | cut -d' ' -f1)"
     fi
 
     if [[ "${expected}" != "${actual}" ]]; then
