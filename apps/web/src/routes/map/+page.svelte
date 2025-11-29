@@ -135,7 +135,14 @@
       (intent === 'open-top' && topOpen) ||
       (intent === 'close-top' && !topOpen)
     ) {
+      if ((window as any).__E2E__ && intent.includes('top')) {
+        console.log('[startSwipe] Skipped top:', { intent, topOpen });
+      }
       return;
+    }
+
+    if ((window as any).__E2E__ && intent.includes('top')) {
+      console.log('[startSwipe] Started top:', { intent, y: e.clientY });
     }
 
     swipeState = {
@@ -157,6 +164,10 @@
     const absY = Math.abs(dy);
     const threshold = 60;
     const { intent } = swipeState;
+    
+    if ((window as any).__E2E__ && intent.includes('top')) {
+      console.log('[finishSwipe] top:', { intent, dy, absY, absX, topOpen });
+    }
     
     // Clear swipeState immediately to prevent duplicate processing
     swipeState = null;
@@ -332,10 +343,10 @@
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
   /* Swipe-Edge-Zonen über Tokens (OS-Gesten-freundlich) */
-  .edge{ position:absolute; z-index:27; }
+  .edge{ position:absolute; z-index:29; }
   .edge.left{ left:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-left-width); touch-action: pan-y; }
   .edge.right{ right:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-right-width); touch-action: pan-y; }
-  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-x; }
+  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-y; }
   .edgeHit{ position:absolute; inset:0; }
   /* Linke Spalte: oben Webrat, unten Nähstübchen (hälftig) */
   .leftStack{
