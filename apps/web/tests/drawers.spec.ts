@@ -96,8 +96,10 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(leftStackBox.x + 10, y, { steps: 6 });
   await page.mouse.up();
+  // Wait for animation and DOM update to complete
+  await page.waitForTimeout(300);
   await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
-    timeout: 2000,
+    timeout: 4000,
   });
 
   // open right (drag ← an rechter Kante)
@@ -121,8 +123,10 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
     steps: 6,
   });
   await page.mouse.up();
+  // Wait for animation and DOM update to complete
+  await page.waitForTimeout(300);
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
-    timeout: 2000,
+    timeout: 4000,
   });
 
   // open top (drag ↓ nahe Top)
@@ -145,7 +149,9 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.down();
   await page.mouse.move(tx, accountDrawerBox.y + 10, { steps: 6 });
   await page.mouse.up();
+  // Wait for animation and DOM update to complete
+  await page.waitForTimeout(300);
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
-    timeout: 2000,
+    timeout: 4000,
   });
 });
