@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
 
+// Wait time for CSS transitions to complete (180ms transition + buffer)
+const DRAWER_ANIMATION_WAIT = 500;
+
 test.beforeEach(async ({ page }) => {
   // Maus-Swipes in Tests erlauben
   await page.addInitScript(() => {
@@ -88,6 +91,10 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await expect(leftStack).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
+  // Ensure animation completes and state stabilizes
+  await expect(leftStack).toHaveClass(/open/, { timeout: 2000 });
+  // Wait for CSS transition to complete (180ms transition + buffer)
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // Wait for transition to complete so bounding box is correct (x >= 0)
   await expect.poll(async () => {
@@ -107,7 +114,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(endX, y, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(leftStack).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });
@@ -123,6 +130,11 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
+  // Wait for CSS transition to complete
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
+
+  // Ensure drawer is truly interactive before attempting to close
+  await expect(filterDrawer).toHaveClass(/open/);
 
   // Wait for transition (Right drawer visible on screen)
   await expect.poll(async () => {
@@ -142,7 +154,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(endRX, y, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });
@@ -159,6 +171,8 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "false", {
     timeout: 2000,
   });
+  // Wait for CSS transition to complete
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // Wait for transition (Top drawer visible on screen)
   await expect.poll(async () => {
@@ -177,7 +191,7 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.mouse.move(tx, endTY, { steps: 20 });
   await page.mouse.up();
   // Wait for animation and DOM update to complete
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
   await expect(accountDrawer).toHaveAttribute("aria-hidden", "true", {
     timeout: 4000,
   });

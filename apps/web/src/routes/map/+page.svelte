@@ -147,7 +147,9 @@
   }
 
   function finishSwipe(e: PointerEvent) {
-    if (!swipeState || swipeState.pointerId !== e.pointerId) return;
+    if (!swipeState || swipeState.pointerId !== e.pointerId) {
+      return;
+    }
 
     const dx = e.clientX - swipeState.startX;
     const dy = e.clientY - swipeState.startY;
@@ -155,6 +157,8 @@
     const absY = Math.abs(dy);
     const threshold = 60;
     const { intent } = swipeState;
+    
+    // Clear swipeState immediately to prevent duplicate processing
     swipeState = null;
 
     switch (intent) {
@@ -202,6 +206,8 @@
       startSwipe(event, intent);
     }
   }
+
+
 
   function handleOpeners(
     event: CustomEvent<{
@@ -332,10 +338,10 @@
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
   /* Swipe-Edge-Zonen über Tokens (OS-Gesten-freundlich) */
-  .edge{ position:absolute; z-index:27; }
+  .edge{ position:absolute; z-index:29; }
   .edge.left{ left:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-left-width); touch-action: pan-y; }
   .edge.right{ right:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-right-width); touch-action: pan-y; }
-  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-x; }
+  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-y; }
   .edgeHit{ position:absolute; inset:0; }
   /* Linke Spalte: oben Webrat, unten Nähstübchen (hälftig) */
   .leftStack{
@@ -348,8 +354,9 @@
     display:grid; grid-template-rows: 1fr 1fr; gap:var(--drawer-gap);
     transform: translateX(calc(-1 * var(--drawer-width) - var(--drawer-slide-offset)));
     transition: transform .18s ease;
+    pointer-events: none;
   }
-  .leftStack.open{ transform:none; }
+  .leftStack.open{ transform:none; pointer-events: auto; }
   .panel{
     background:var(--panel); border:1px solid var(--panel-border); border-radius: var(--radius);
     box-shadow: var(--shadow); color:var(--text); padding:var(--drawer-gap); overflow:auto;
@@ -441,8 +448,7 @@
     class="leftStack"
     class:open={leftOpen}
     aria-hidden={!leftOpen}
-    inert={!leftOpen ? true : undefined}
-    on:pointerdown={(event) => startSwipe(event, 'close-left')}
+    on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-left')}
   >
     <div class="panel">
       <h3>Webrat</h3>
@@ -499,7 +505,7 @@
   <div class="edge right" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-right')}>
     <div class="edgeHit"></div>
   </div>
-  <div class="edge top" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-top')}>
+  <div class="edge top" role="presentation" on:pointerdown={(event) => handleDrawerPointerDown(event, 'open-top')}>
     <div class="edgeHit"></div>
   </div>
 
