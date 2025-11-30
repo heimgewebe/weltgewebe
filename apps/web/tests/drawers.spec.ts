@@ -97,10 +97,15 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // Wait for transition to complete so bounding box is correct (x >= 0)
-  await expect.poll(async () => {
-    const box = await leftStack.boundingBox();
-    return box && box.x >= 0;
-  }, { timeout: 2000 }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const box = await leftStack.boundingBox();
+        return box && box.x >= 0;
+      },
+      { timeout: 2000 },
+    )
+    .toBe(true);
 
   // close left (drag ←)
   const leftStackBox = await leftStack.boundingBox();
@@ -137,11 +142,16 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await expect(filterDrawer).toHaveClass(/open/);
 
   // Wait for transition (Right drawer visible on screen)
-  await expect.poll(async () => {
-    const box = await filterDrawer.boundingBox();
-    // Assuming viewport width ~1280. If closed, x is large. If open, x < 1280.
-    return box && box.x < 1280;
-  }, { timeout: 2000 }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const box = await filterDrawer.boundingBox();
+        // Assuming viewport width ~1280. If closed, x is large. If open, x < 1280.
+        return box && box.x < 1280;
+      },
+      { timeout: 2000 },
+    )
+    .toBe(true);
 
   // close right (drag →)
   const filterDrawerBox = await filterDrawer.boundingBox();
@@ -175,10 +185,15 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   await page.waitForTimeout(DRAWER_ANIMATION_WAIT);
 
   // Wait for transition (Top drawer visible on screen)
-  await expect.poll(async () => {
-    const box = await accountDrawer.boundingBox();
-    return box && box.y >= 0;
-  }, { timeout: 2000 }).toBe(true);
+  await expect
+    .poll(
+      async () => {
+        const box = await accountDrawer.boundingBox();
+        return box && box.y >= 0;
+      },
+      { timeout: 2000 },
+    )
+    .toBe(true);
 
   // close top (drag ↑)
   const accountDrawerBox = await accountDrawer.boundingBox();
