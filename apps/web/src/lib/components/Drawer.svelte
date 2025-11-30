@@ -102,6 +102,7 @@
   }
 </style>
 
+<!-- svelte-ignore a11y-no-noninteractive-tabindex -->
 <div
   bind:this={rootEl}
   id={drawerId}
@@ -110,11 +111,12 @@
   class:left={side === 'left'}
   class:right={side === 'right'}
   class:top={side === 'top'}
-  aria-hidden={!open}
+  aria-hidden={open ? 'false' : 'true'}
   aria-labelledby={headingId}
   role={role}
   aria-modal={role === 'dialog' && open ? "true" : undefined}
-  tabindex="-1"
+  tabindex={role === 'dialog' && open ? 0 : -1}
+  inert={!open ? true : undefined}
   on:pointerdown
   on:pointerup
   on:pointercancel
@@ -125,4 +127,3 @@
   <slot name="footer" />
   <slot name="overlays" />
 </div>
-
