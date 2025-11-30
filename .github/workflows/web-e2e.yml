@@ -22,7 +22,7 @@ jobs:
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
-      PREVIEW_PORT: "4173"
+      PREVIEW_PORT: "5173"
       PLAYWRIGHT_SKIP_WEBSERVER: "1"
       GEWEBE_API_BASE: "http://127.0.0.1:8080"
     steps:
