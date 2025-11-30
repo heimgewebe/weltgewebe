@@ -41,13 +41,11 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9.11.0
 
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
-          node-version: '20.19.0'
+          node-version-file: '.node-version'
           cache: 'pnpm'
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
