@@ -19,7 +19,7 @@ if [[ ! "$PREVIEW_PID" =~ ^[0-9]+$ ]]; then
 fi
 
 check_preview_ready() {
-  curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" >/dev/null 2>&1
+  curl -sSf "http://127.0.0.1:${PREVIEW_PORT}" > /dev/null 2>&1
 }
 
 show_preview_logs() {
@@ -45,7 +45,7 @@ verify_port_binding() {
 declare -i end=$((SECONDS + PREVIEW_WAIT_DURATION))
 
 while [ "$SECONDS" -lt "$end" ]; do
-  if ! kill -0 "$PREVIEW_PID" 2>/dev/null; then
+  if ! kill -0 "$PREVIEW_PID" 2> /dev/null; then
     printf 'Preview server process (PID %s) exited early\n' "$PREVIEW_PID" >&2
     show_preview_logs
     exit 1

@@ -11,7 +11,7 @@ corepack prepare pnpm@9.11.0 --activate || true
 
 # Frontend-Install, wenn apps/web existiert
 if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
-    (cd apps/web && pnpm install)
+  (cd apps/web && pnpm install)
 fi
 
 # --- uv installieren (offizieller Installer von Astral) ---
@@ -19,19 +19,19 @@ fi
 # https://docs.astral.sh/uv/getting-started/installation/
 # Download the installer script to a temporary file
 tmpfile=$(mktemp) || {
-    echo "Failed to create temp file" >&2
-    exit 1
+  echo "Failed to create temp file" >&2
+  exit 1
 }
 curl -LsSf https://astral.sh/uv/install.sh -o "$tmpfile" || {
-    echo "Failed to download uv installer" >&2
-    rm -f "$tmpfile"
-    exit 1
+  echo "Failed to download uv installer" >&2
+  rm -f "$tmpfile"
+  exit 1
 }
 # (Optional) Here you could verify the checksum if Astral provides one
 sh "$tmpfile" || {
-    echo "uv install failed" >&2
-    rm -f "$tmpfile"
-    exit 1
+  echo "uv install failed" >&2
+  rm -f "$tmpfile"
+  exit 1
 }
 rm -f "$tmpfile"
 
@@ -45,5 +45,5 @@ echo "uv installed and ready"
 
 # Rust warm-up (optional)
 if [ -f "Cargo.toml" ]; then
-    cargo fetch || true
+  cargo fetch || true
 fi
