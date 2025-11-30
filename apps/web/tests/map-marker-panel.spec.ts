@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async () => {
   // Setup logic if needed
 });
 

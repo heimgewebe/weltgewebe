@@ -23,12 +23,12 @@ console.log(`Nodes file: ${NODES_FILE}`);
 console.log(`Edges file: ${EDGES_FILE}`);
 
 async function readJsonl(path) {
-const raw = await readFile(path, 'utf8').catch(() => '');
-return raw
-.split(/\r?\n/)
-.map((l) => l.trim())
-.filter(Boolean)
-.map((l) => JSON.parse(l));
+  const raw = await readFile(path, 'utf8').catch(() => '');
+  return raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
 }
 
 function parseBBox(q) {

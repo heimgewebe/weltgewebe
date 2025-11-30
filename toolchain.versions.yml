@@ -1,4 +1,4 @@
 ---
-rust: "stable"       # oder z. B. "1.81.0"
+rust: "stable"
 python: "3.12"
 uv: "0.9.11"
