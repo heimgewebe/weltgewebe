@@ -2,26 +2,26 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Reset & Restart Web Dev Environment (Codespaces-tauglich)
 reset-web:
-    echo "🧹 Cleaning up and restarting web environment..."
-    cd apps/web
+	echo "🧹 Cleaning up and restarting web environment..."
+	cd apps/web
 
-    # Kill lingering vite/svelte-kit processes
-    pkill -f vite || true
-    pkill -f svelte-kit || true
+	# Kill lingering vite/svelte-kit processes
+	pkill -f vite || true
+	pkill -f svelte-kit || true
 
-    # Remove stale node_modules & lockfiles
-    rm -rf node_modules package-lock.json
+	# Remove stale node_modules & lockfiles
+	rm -rf node_modules package-lock.json
 
-    # Reinstall dependencies with pnpm
-    pnpm install
+	# Reinstall dependencies with pnpm
+	pnpm install
 
-    # Re-sync routes and SvelteKit structure
-    pnpm svelte-kit sync
+	# Re-sync routes and SvelteKit structure
+	pnpm svelte-kit sync
 
-    echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..."
-    pnpm vite dev --host 0.0.0.0 --port 5173
+	echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..."
+	pnpm vite dev --host 0.0.0.0 --port 5173
 
-    echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
+	echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
 
 alias c := ci
 
@@ -91,12 +91,12 @@ default: lint
 
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:
-    @set -euo pipefail; \
-    mapfile -d '' files < <(git ls-files -z -- '*.sh' '*.bash' || true); \
-    if [ "${#files[@]}" -eq 0 ]; then echo "keine Shell-Dateien"; exit 0; fi; \
-    printf '%s\0' "${files[@]}" | xargs -0 bash -n; \
-    shfmt -d -i 2 -ci -sr -- "${files[@]}"; \
-    shellcheck -S style -- "${files[@]}"
+	@set -euo pipefail; \
+	mapfile -d '' files < <(git ls-files -z -- '*.sh' '*.bash' || true); \
+	if [ "${#files[@]}" -eq 0 ]; then echo "keine Shell-Dateien"; exit 0; fi; \
+	printf '%s\0' "${files[@]}" | xargs -0 bash -n; \
+	shfmt -d -i 2 -ci -sr -- "${files[@]}"; \
+	shellcheck -S style -- "${files[@]}"
 
 # Port überschreibbar: `just serve-demo PORT=9090`
 PORT := "8080"
@@ -131,4 +131,4 @@ check-demo:
 
 # ---------- Contracts ----------
 contracts-domain-check:
-    ./scripts/contracts-domain-check.sh
+	./scripts/contracts-domain-check.sh
