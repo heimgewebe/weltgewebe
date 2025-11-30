@@ -5,9 +5,8 @@ set -euxo pipefail
 sudo apt-get update
 sudo apt-get install -y jq ripgrep vale shfmt hadolint just httpie
 
-# Node/PNPM vorbereiten
+# Node/PNPM vorbereiten (Version aus package.json)
 corepack enable || true
-corepack prepare pnpm@9.11.0 --activate || true
 
 # Frontend-Install, wenn apps/web existiert
 if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
