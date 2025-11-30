@@ -125,13 +125,12 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.11.0
           run_install: false
 
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
-          node-version: '20.19.0'
+          node-version-file: '.node-version'
           check-latest: true
           cache: 'pnpm'
           cache-dependency-path: |
@@ -143,72 +142,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache uv artifacts
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: >-
-            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
-            ${{ runner.os }}-uv-
-
       - name: Install uv (pinned via toolchain.versions.yml)
-        run: |
-          set -euo pipefail
-          UV_VERSION="$(yq -r '.uv // ""' toolchain.versions.yml)"
-          if [ -z "$UV_VERSION" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
-            exit 1
-          fi
-          echo "Attempting to install uv version: ${UV_VERSION}"
-
-          # Build release URL (assume ubuntu-latest x86_64 runner)
-          url="https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz"
-          echo "Downloading from ${url}"
-
-          # Use an isolated temporary directory to avoid scanning /tmp root and permission issues
-          INSTALL_TMPDIR="$(mktemp -d)"
-          trap 'rm -rf "$INSTALL_TMPDIR"' EXIT
-
-          # Download and extract into INSTALL_TMPDIR; fail with diagnostics on error
-          if ! curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors "${url}" \
-            | tar -xz -C "$INSTALL_TMPDIR"; then
-            echo "Failed to download or extract uv archive from ${url}" >&2
-            echo "Listing $INSTALL_TMPDIR for diagnostics:" >&2
-            ls -lA "$INSTALL_TMPDIR" || true
-            exit 1
-          fi
-
-          echo "Archive contents (top-level):"
-          ls -lA "$INSTALL_TMPDIR" || true
-
-          # Find the uv binary only inside INSTALL_TMPDIR and prefer an executable file
-          UV_BIN="$(find "$INSTALL_TMPDIR" -type f -name 'uv' -executable -print -quit || true)"
-          if [ -z "$UV_BIN" ]; then
-            echo "uv binary not found after extraction. Inspecting $INSTALL_TMPDIR contents:" >&2
-            ls -R "$INSTALL_TMPDIR" || true
-            exit 1
-          fi
-
-          echo "Found uv binary at: $UV_BIN"
-          sudo mv "$UV_BIN" /usr/local/bin/uv
-          sudo chmod +x /usr/local/bin/uv
-          hash -r
-
-          # Version überprüfen
-          if ! command -v uv >/dev/null 2>&1; then
-            echo "uv not found in PATH after installation" >&2
-            exit 1
-          fi
-          INSTALLED_VER="$(uv --version 2>/dev/null | awk '{print $2}')"
-          echo "Installed uv version: ${INSTALLED_VER}"
-          if [ "${INSTALLED_VER}" != "${UV_VERSION}" ]; then
-            echo "uv version mismatch." >&2
-            echo "Expected: ${UV_VERSION}, got: ${INSTALLED_VER}" >&2
-            exit 1
-          fi
-          echo "uv version check passed."
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -250,12 +188,11 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.11.0
           run_install: false
 
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
-          node-version: '20.19.0'
+          node-version-file: '.node-version'
           check-latest: true
           cache: 'pnpm'
           cache-dependency-path: |
