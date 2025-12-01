@@ -92,6 +92,37 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
         .collect();
     assert!(ids.contains(&"n1".to_string()) && ids.contains(&"n3".to_string()));
 
+    // Vertauschte BBox-Koordinaten sollen ebenfalls normalisiert werden
+    let res = app
+        .clone()
+        .oneshot(
+            Request::get("/api/nodes?bbox=10.5,53.8,9.5,53.4&limit=10").body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 2);
+    let ids: Vec<_> = arr
+        .iter()
+        .map(|x| {
+            x.get("id")
+                .expect("id missing")
+                .as_str()
+                .expect("must be string")
+                .to_string()
+        })
+        .collect();
+    assert!(ids.contains(&"n1".to_string()) && ids.contains(&"n3".to_string()));
+
+    // Ungültige BBox ergibt 400 Bad Request
+    let res = app
+        .clone()
+        .oneshot(Request::get("/api/nodes?bbox=oops").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
     // Limit=1
     let res = app
         .oneshot(Request::get("/api/nodes?limit=1").body(body::Body::empty())?)
