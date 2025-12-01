@@ -59,9 +59,9 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     write_lines(
         &edges,
         &[
-            r#"{"id":"e1","src":"n1","dst":"n2","kind":"thread"}"#,
-            r#"{"id":"e2","src":"n1","dst":"n3","kind":"thread"}"#,
-            r#"{"id":"e3","src":"n2","dst":"n3","kind":"thread"}"#,
+            r#"{"id":"e1","src":"n1","dst":"n2","kind":"connection"}"#,
+            r#"{"id":"e2","src":"n1","dst":"n3","kind":"connection"}"#,
+            r#"{"id":"e3","src":"n2","dst":"n3","kind":"connection"}"#,
         ],
     );
 

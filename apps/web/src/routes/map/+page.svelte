@@ -48,7 +48,7 @@
     top: HTMLButtonElement | null;
   } = { left: null, right: null, top: null };
 
-  let showThreads = false;
+  let showEdges = false;
 
   function setQuery(next: Partial<Record<DrawerKey, boolean>>) {
     if (typeof window === 'undefined') return;
@@ -450,7 +450,7 @@
     id="left-stack"
     class="leftStack"
     class:open={leftOpen}
-    aria-hidden={!leftOpen}
+    aria-hidden={!leftOpen ? 'true' : 'false'}
     on:pointerdown={(event) => handleDrawerPointerDown(event, 'close-left')}
   >
     <div class="panel">
@@ -519,8 +519,8 @@
     <button
       class="toggle"
       type="button"
-      aria-pressed={showThreads}
-      on:click={() => (showThreads = !showThreads)}
+      aria-pressed={showEdges}
+      on:click={() => (showEdges = !showEdges)}
     >
       Fäden
     </button>
