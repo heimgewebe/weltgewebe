@@ -287,7 +287,10 @@
           selected = item;
           setRightOpen(true);
           await tick();
-          rightDrawerRef?.focus?.();
+          if (rightDrawerRef && typeof rightDrawerRef.focus === 'function') {
+            // Fokus gezielt auf den Info-Drawer legen, sobald er sichtbar ist.
+            rightDrawerRef.focus();
+          }
         };
         element.addEventListener('click', handleClick);
 
