@@ -96,8 +96,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let res = app
         .clone()
         .oneshot(
-            Request::get("/api/nodes?bbox=10.5,53.8,9.5,53.4&limit=10")
-                .body(body::Body::empty())?,
+            Request::get("/api/nodes?bbox=10.5,53.8,9.5,53.4&limit=10").body(body::Body::empty())?,
         )
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
