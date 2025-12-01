@@ -87,21 +87,30 @@ jobs:
             echo "yq is not installed or not in PATH" >&2
             exit 1
           fi
-          RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
+          echo "Content of toolchain.versions.yml:"
+          cat toolchain.versions.yml
+          
+          RUST=$(yq -r '.rust' toolchain.versions.yml | xargs)
           if [ -z "$RUST" ]; then
-            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            echo "rust fehlt in toolchain.versions.yml oder ist leer." >&2
             exit 1
           fi
-          PY=$(yq -r '.python // ""' toolchain.versions.yml | xargs)
+          echo "Parsed RUST_VERSION: ${RUST}"
+          
+          PY=$(yq -r '.python' toolchain.versions.yml | xargs)
           if [ -z "$PY" ]; then
-            echo "failed to parse python version from toolchain.versions.yml" >&2
+            echo "python fehlt in toolchain.versions.yml oder ist leer." >&2
             exit 1
           fi
-          UV=$(yq -r '.uv // ""' toolchain.versions.yml | xargs)
+          echo "Parsed PYTHON_VERSION: ${PY}"
+          
+          UV=$(yq -r '.uv' toolchain.versions.yml | xargs)
           if [ -z "$UV" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            echo "uv fehlt in toolchain.versions.yml oder ist leer." >&2
             exit 1
           fi
+          echo "Parsed UV_VERSION: ${UV}"
+          
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
