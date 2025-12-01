@@ -83,15 +83,25 @@ jobs:
       - name: Read toolchain versions
         run: |
           test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
-          RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
-          PY=$(yq -r '.python // ""' toolchain.versions.yml | xargs)
-          UV=$(yq -r '.uv // ""' toolchain.versions.yml | xargs)
-
-          if [ -z "$RUST" ] || [ -z "$PY" ] || [ -z "$UV" ]; then
-            echo "toolchain.versions.yml muss rust, python und uv enthalten." >&2
+          if ! yq --version >/dev/null 2>&1; then
+            echo "yq ist nicht installiert oder nicht im Pfad" >&2
             exit 1
           fi
-
+          RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
+          if [ -z "$RUST" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          PY=$(yq -r '.python // ""' toolchain.versions.yml | xargs)
+          if [ -z "$PY" ]; then
+            echo "failed to parse python version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          UV=$(yq -r '.uv // ""' toolchain.versions.yml | xargs)
+          if [ -z "$UV" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
