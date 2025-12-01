@@ -84,7 +84,7 @@ jobs:
         run: |
           test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
           if ! yq --version >/dev/null 2>&1; then
-            echo "yq ist nicht installiert oder nicht im Pfad" >&2
+            echo "yq is not installed or not in PATH" >&2
             exit 1
           fi
           RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
