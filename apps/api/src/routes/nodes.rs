@@ -1,4 +1,4 @@
-use axum::{extract::Query, Json};
+use axum::{extract::Query, http::StatusCode, Json};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
@@ -27,21 +27,21 @@ struct BBox {
 
 fn parse_bbox(s: &str) -> Option<BBox> {
     let parts: Vec<_> = s.split(',').collect();
-    if parts.len() != 4 {
-        return None;
-    }
-    let a = parts
-        .iter()
-        .filter_map(|x| x.trim().parse::<f64>().ok())
-        .collect::<Vec<_>>();
-    if a.len() != 4 {
-        return None;
-    }
+    let (lng1, lat1, lng2, lat2) = match parts.as_slice() {
+        [lng1, lat1, lng2, lat2] => (
+            lng1.trim().parse::<f64>().ok()?,
+            lat1.trim().parse::<f64>().ok()?,
+            lng2.trim().parse::<f64>().ok()?,
+            lat2.trim().parse::<f64>().ok()?,
+        ),
+        _ => return None,
+    };
+
     Some(BBox {
-        min_lng: a[0],
-        min_lat: a[1],
-        max_lng: a[2],
-        max_lat: a[3],
+        min_lng: lng1.min(lng2),
+        min_lat: lat1.min(lat2),
+        max_lng: lng1.max(lng2),
+        max_lat: lat1.max(lat2),
     })
 }
 
@@ -61,8 +61,13 @@ fn feature_point_coords(v: &Value) -> Option<(f64, f64)> {
     Some((lng, lat))
 }
 
-pub async fn list_nodes(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Value>> {
-    let bbox = params.get("bbox").and_then(|s| parse_bbox(s));
+pub async fn list_nodes(
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Vec<Value>>, StatusCode> {
+    let bbox = match params.get("bbox") {
+        Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
+        None => None,
+    };
     let limit: usize = params
         .get("limit")
         .and_then(|s| s.parse().ok())
@@ -71,7 +76,7 @@ pub async fn list_nodes(Query(params): Query<HashMap<String, String>>) -> Json<V
     let path = nodes_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
-        Err(_) => return Json(Vec::new()), // robust: leer zurückgeben
+        Err(_) => return Ok(Json(Vec::new())), // robust: leer zurückgeben
     };
     let mut lines = BufReader::new(file).lines();
 
@@ -97,5 +102,5 @@ pub async fn list_nodes(Query(params): Query<HashMap<String, String>>) -> Json<V
         out.push(v);
     }
 
-    Json(out)
+    Ok(Json(out))
 }
