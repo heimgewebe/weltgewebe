@@ -59,8 +59,22 @@ jobs:
 
       - name: Install yq
         run: |
-          ./scripts/tools/yq-pin.sh ensure "4.48.1"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          set -e
+          YQ_VERSION="4.48.1"
+          YQ_DIR="$HOME/.local/bin"
+          YQ_BIN="$YQ_DIR/yq"
+          mkdir -p "$YQ_DIR"
+
+          if [[ ! -f "$YQ_BIN" ]] || ! "$YQ_BIN" --version 2>/dev/null | grep -q "$YQ_VERSION"; then
+            echo "Installing yq v${YQ_VERSION}..."
+            wget -qO "$YQ_BIN" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
+            chmod +x "$YQ_BIN"
+          else
+            echo "yq v${YQ_VERSION} already installed"
+          fi
+
+          echo "$YQ_DIR" >> "$GITHUB_PATH"
+
       - name: Verify yq
         run: $HOME/.local/bin/yq --version
 
