@@ -7,8 +7,9 @@
   import { setUAClasses } from '$lib/utils/ua-flags';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
+  import type { LayoutData } from './$types';
 
-  export let data: any;
+  export let data: LayoutData;
 
   onMount(() => {
     setUAClasses();

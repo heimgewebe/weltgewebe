@@ -13,6 +13,6 @@ use axum::{body::Body, http::Request, middleware::Next, response::Response};
 /// - Anfragen ohne gültige Session abweisen (z.B. mit HTTP 401 Unauthorized).
 pub async fn require_auth(request: Request<Body>, next: Next) -> Response {
     // Aktuell wird die Anfrage einfach durchgelassen.
-    // TODO: Echte Authentifizierungslogik implementieren.
+    tracing::warn!("Authentifizierung ist noch nicht implementiert – Zugriff erlaubt!");
     next.run(request).await
 }

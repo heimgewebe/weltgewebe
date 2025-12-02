@@ -19,12 +19,12 @@ const createAuthStore = () => {
     subscribe,
     // Platzhalter-Funktion für den Login
     login: () => {
-      console.log("Platzhalter: login() aufgerufen");
+      // TODO: Echte Login-Logik implementieren
       set({ loggedIn: true, role: "weber" });
     },
     // Platzhalter-Funktion für den Logout
     logout: () => {
-      console.log("Platzhalter: logout() aufgerufen");
+      // TODO: Echte Logout-Logik implementieren
       set({ loggedIn: false, role: undefined });
     },
   };

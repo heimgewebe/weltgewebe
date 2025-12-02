@@ -57,28 +57,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install yq (official release)
-        env:
-          YQ_VERSION: v4.48.1
+      - name: Install yq
         run: |
-          # einfache, transparente Installation ohne externe Skripte
-          arch="$(uname -m)"
-          case "$arch" in
-            x86_64) bin="yq_linux_amd64" ;;
-            aarch64|arm64) bin="yq_linux_arm64" ;;
-            *)
-              echo "Unsupported arch: $arch" >&2
-              exit 1
-              ;;
-          esac
-
-          url="https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${bin}"
-          echo "Downloading ${url}"
-          curl -sSL "$url" -o /tmp/yq
-          chmod +x /tmp/yq
-          sudo mv /tmp/yq /usr/local/bin/yq
+          ./scripts/tools/yq-pin.sh ensure "4.48.1"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Verify yq
-        run: yq --version
+        run: $HOME/.local/bin/yq --version
 
       - name: Read toolchain versions
         run: |
@@ -135,7 +119,7 @@ jobs:
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version-file: '.node-version'
-          check-latest: true
+          check-latest: false
           cache: 'pnpm'
           cache-dependency-path: |
             pnpm-lock.yaml
@@ -198,7 +182,7 @@ jobs:
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version-file: '.node-version'
-          check-latest: true
+          check-latest: false
           cache: 'pnpm'
           cache-dependency-path: |
             pnpm-lock.yaml

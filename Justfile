@@ -2,26 +2,18 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Reset & Restart Web Dev Environment (Codespaces-tauglich)
 reset-web:
-	echo "🧹 Cleaning up and restarting web environment..."
-	cd apps/web
-
+	@echo "🧹 Cleaning up and restarting web environment..."
 	# Kill lingering vite/svelte-kit processes
 	pkill -f vite || true
 	pkill -f svelte-kit || true
-
-	# Remove stale node_modules & lockfiles
-	rm -rf node_modules package-lock.json
-
-	# Reinstall dependencies with pnpm
-	pnpm install
-
-	# Re-sync routes and SvelteKit structure
-	pnpm svelte-kit sync
-
-	echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..."
-	pnpm vite dev --host 0.0.0.0 --port 5173
-
-	echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
+	# Clean and restart in apps/web
+	cd apps/web && \
+	rm -f package-lock.json && \
+	pnpm install && \
+	pnpm svelte-kit sync && \
+	echo "🚀 Starting Vite Dev Server on 0.0.0.0:5173 ..." && \
+	pnpm run dev -- --host 0.0.0.0 --port 5173
+	@echo "✅ If you see 'localhost:5173' in Ports → set to Public to preview."
 
 alias c := ci
 
