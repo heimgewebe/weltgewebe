@@ -49,15 +49,10 @@ fn point_in_bbox(lng: f64, lat: f64, bb: &BBox) -> bool {
     lng >= bb.min_lng && lng <= bb.max_lng && lat >= bb.min_lat && lat <= bb.max_lat
 }
 
-fn feature_point_coords(v: &Value) -> Option<(f64, f64)> {
-    // Erwartet GeoJSON Feature Point: geometry.coordinates [lng,lat]
-    let coords = v.pointer("/geometry/coordinates")?;
-    let arr = coords.as_array()?;
-    if arr.len() < 2 {
-        return None;
-    }
-    let lng = arr[0].as_f64()?;
-    let lat = arr[1].as_f64()?;
+fn node_coords(v: &Value) -> Option<(f64, f64)> {
+    let loc = v.get("location")?;
+    let lng = loc.get("lon")?.as_f64()?;
+    let lat = loc.get("lat")?.as_f64()?;
     Some((lng, lat))
 }
 
@@ -91,7 +86,7 @@ pub async fn list_nodes(
         };
 
         if let Some(bb) = bbox {
-            if let Some((lng, lat)) = feature_point_coords(&v) {
+            if let Some((lng, lat)) = node_coords(&v) {
                 if !point_in_bbox(lng, lat, &bb) {
                     continue;
                 }

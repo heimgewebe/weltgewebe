@@ -59,9 +59,9 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     write_lines(
         &edges,
         &[
-            r#"{"id":"e1","src":"n1","dst":"n2","kind":"connection"}"#,
-            r#"{"id":"e2","src":"n1","dst":"n3","kind":"connection"}"#,
-            r#"{"id":"e3","src":"n2","dst":"n3","kind":"connection"}"#,
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
+            r#"{"id":"e3","source_id":"n2","target_id":"n3","edge_kind":"reference"}"#,
         ],
     );
 
@@ -69,7 +69,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
 
     let res = app
         .clone()
-        .oneshot(Request::get("/api/edges?src=n1").body(body::Body::empty())?)
+        .oneshot(Request::get("/api/edges?source_id=n1").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
@@ -77,7 +77,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     assert_eq!(v.as_array().context("must be array")?.len(), 2);
 
     let res = app
-        .oneshot(Request::get("/api/edges?src=n1&dst=n2").body(body::Body::empty())?)
+        .oneshot(Request::get("/api/edges?source_id=n1&target_id=n2").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
