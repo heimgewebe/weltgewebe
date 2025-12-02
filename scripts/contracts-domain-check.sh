@@ -16,9 +16,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 AJV_BIN=""
-if ! AJV_BIN="$(command -v ajv 2>/dev/null)"; then
-  echo "error: ajv executable not found in your PATH." >&2
-  echo "Please install 'ajv-cli' and 'ajv-formats' globally (e.g., using pnpm or npm)." >&2
+if command -v ajv >/dev/null 2>&1; then
+  AJV_BIN="$(command -v ajv)"
+elif [ -f "node_modules/.bin/ajv" ]; then
+  AJV_BIN="node_modules/.bin/ajv"
+else
+  echo "error: ajv executable not found in PATH or node_modules." >&2
+  echo "Please install 'ajv-cli' and 'ajv-formats' (e.g., pnpm install)." >&2
   exit 1
 fi
 
