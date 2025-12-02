@@ -147,10 +147,18 @@ download_yq() {
 
   echo "Downloading yq v${ver} from ${url_base}/${asset}"
   curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
-  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}"
+
+  # Try individual sha256 first, then 'checksums'
+  if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}" 2>/dev/null; then
+    echo "Individual sha256 not found, trying 'checksums'..." >&2
+    if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/checksums" -o "${sha_path}"; then
+      echo "checksums file not found at ${url_base}/checksums" >&2
+      exit 1
+    fi
+  fi
 
   if [[ ! -s "${sha_path}" ]]; then
-    echo "missing yq sha256 file at ${sha_path}" >&2
+    echo "missing yq checksum file at ${sha_path}" >&2
     exit 1
   fi
 
@@ -160,9 +168,10 @@ download_yq() {
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
-    [[ -z "${expected_line}" ]] && expected_line="${line}"
+    # Don't default expected_line to the first line; wait for a match
+    # [[ -z "${expected_line}" ]] && expected_line="${line}"
     case "${line}" in
-      *" ${asset_name}" | *"*${asset_name}")
+      "${asset_name} "* | *" ${asset_name}" | *"*${asset_name}")
         expected_line="${line}"
         break
         ;;
@@ -175,15 +184,14 @@ download_yq() {
   fi
 
   if command -v awk > /dev/null 2>&1; then
-    expected="$(printf '%s\n' "${expected_line}" | awk '{print $1}')"
     actual="$("${SHA256_CMD[@]}" "${asset_path}" | awk '{print $1}')"
   else
-    expected="$(printf '%s\n' "${expected_line}" | cut -d' ' -f1)"
     actual="$("${SHA256_CMD[@]}" "${asset_path}" | cut -d' ' -f1)"
   fi
 
-  if [[ "${expected}" != "${actual}" ]]; then
-    echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
+  # Check if the actual checksum matches any part of the expected line
+  if [[ "${expected_line}" != *"${actual}"* ]]; then
+    echo "yq checksum mismatch: calculated ${actual} not found in checksums entry" >&2
     exit 1
   fi
 
