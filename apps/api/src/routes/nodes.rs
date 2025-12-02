@@ -1,4 +1,5 @@
 use axum::{extract::Query, http::StatusCode, Json};
+use serde::Serialize;
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
@@ -25,6 +26,26 @@ struct BBox {
     max_lat: f64,
 }
 
+#[derive(Serialize)]
+pub struct Location {
+    pub lat: f64,
+    pub lon: f64,
+}
+
+#[derive(Serialize)]
+pub struct Node {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    pub location: Location,
+}
+
 fn parse_bbox(s: &str) -> Option<BBox> {
     let parts: Vec<_> = s.split(',').collect();
     let (lng1, lat1, lng2, lat2) = match parts.as_slice() {
@@ -49,16 +70,68 @@ fn point_in_bbox(lng: f64, lat: f64, bb: &BBox) -> bool {
     lng >= bb.min_lng && lng <= bb.max_lng && lat >= bb.min_lat && lat <= bb.max_lat
 }
 
-fn node_coords(v: &Value) -> Option<(f64, f64)> {
-    let loc = v.get("location")?;
-    let lng = loc.get("lon")?.as_f64()?;
-    let lat = loc.get("lat")?.as_f64()?;
-    Some((lng, lat))
+fn map_feature_to_node(v: &Value) -> Option<Node> {
+    let id = v.get("id")?.as_str()?.to_string();
+    let geometry = v.get("geometry")?;
+    let coordinates = geometry.get("coordinates")?.as_array()?;
+    if coordinates.len() < 2 {
+        return None;
+    }
+    let lon = coordinates[0].as_f64()?;
+    let lat = coordinates[1].as_f64()?;
+
+    let props = v.get("properties")?;
+    let title = props
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Untitled")
+        .to_string();
+    let kind = props
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Unknown")
+        .to_string();
+    let updated_at = props
+        .get("updated_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or("1970-01-01T00:00:00Z")
+        .to_string();
+    let created_at = props
+        .get("created_at")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&updated_at)
+        .to_string();
+
+    let summary = props
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let tags = props
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(Node {
+        id,
+        kind,
+        title,
+        created_at,
+        updated_at,
+        summary,
+        tags,
+        location: Location { lat, lon },
+    })
 }
 
 pub async fn list_nodes(
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<Value>>, StatusCode> {
+) -> Result<Json<Vec<Node>>, StatusCode> {
     let bbox = match params.get("bbox") {
         Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
@@ -85,16 +158,14 @@ pub async fn list_nodes(
             Err(_) => continue, // fehlerhafte Zeilen überschringen
         };
 
-        if let Some(bb) = bbox {
-            if let Some((lng, lat)) = node_coords(&v) {
-                if !point_in_bbox(lng, lat, &bb) {
+        if let Some(node) = map_feature_to_node(&v) {
+            if let Some(bb) = bbox {
+                if !point_in_bbox(node.location.lon, node.location.lat, &bb) {
                     continue;
                 }
-            } else {
-                continue; // ohne Koordinate nicht in BBox
             }
+            out.push(node);
         }
-        out.push(v);
     }
 
     Ok(Json(out))

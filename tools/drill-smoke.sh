@@ -11,4 +11,4 @@ fi
 
 docker compose -f infra/compose/compose.core.yml ps
 
-printf "[drill] TODO: Automatisierte Smoke-Tests (Login, Thread-Erstellung) integrieren.\n"
+printf "[drill] TODO: Automatisierte Smoke-Tests (Login, Gesprächserstellung) integrieren.\n"
