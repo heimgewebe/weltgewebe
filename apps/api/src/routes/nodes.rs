@@ -71,12 +71,15 @@ fn point_in_bbox(lng: f64, lat: f64, bb: &BBox) -> bool {
 }
 
 fn map_json_to_node(v: &Value) -> Option<Node> {
-    let id = v.get("id")?.as_str()?.to_string();
-    
-    // Parse location object
+    let id = v
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())?;
+
+    // Parse location object with explicit error handling
     let location = v.get("location")?;
-    let lon = location.get("lon")?.as_f64()?;
-    let lat = location.get("lat")?.as_f64()?;
+    let lon = location.get("lon").and_then(|val| val.as_f64())?;
+    let lat = location.get("lat").and_then(|val| val.as_f64())?;
 
     let title = v
         .get("title")
