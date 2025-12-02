@@ -70,44 +70,41 @@ fn point_in_bbox(lng: f64, lat: f64, bb: &BBox) -> bool {
     lng >= bb.min_lng && lng <= bb.max_lng && lat >= bb.min_lat && lat <= bb.max_lat
 }
 
-fn map_feature_to_node(v: &Value) -> Option<Node> {
+fn map_json_to_node(v: &Value) -> Option<Node> {
     let id = v.get("id")?.as_str()?.to_string();
-    let geometry = v.get("geometry")?;
-    let coordinates = geometry.get("coordinates")?.as_array()?;
-    if coordinates.len() < 2 {
-        return None;
-    }
-    let lon = coordinates[0].as_f64()?;
-    let lat = coordinates[1].as_f64()?;
+    
+    // Parse location object
+    let location = v.get("location")?;
+    let lon = location.get("lon")?.as_f64()?;
+    let lat = location.get("lat")?.as_f64()?;
 
-    let props = v.get("properties")?;
-    let title = props
+    let title = v
         .get("title")
         .and_then(|v| v.as_str())
         .unwrap_or("Untitled")
         .to_string();
-    let kind = props
-        .get("type")
+    let kind = v
+        .get("kind")
         .and_then(|v| v.as_str())
         .unwrap_or("Unknown")
         .to_string();
-    let updated_at = props
+    let updated_at = v
         .get("updated_at")
         .and_then(|v| v.as_str())
         .unwrap_or("1970-01-01T00:00:00Z")
         .to_string();
-    let created_at = props
+    let created_at = v
         .get("created_at")
         .and_then(|v| v.as_str())
         .unwrap_or(&updated_at)
         .to_string();
 
-    let summary = props
+    let summary = v
         .get("summary")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let tags = props
+    let tags = v
         .get("tags")
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -158,7 +155,7 @@ pub async fn list_nodes(
             Err(_) => continue, // fehlerhafte Zeilen überschringen
         };
 
-        if let Some(node) = map_feature_to_node(&v) {
+        if let Some(node) = map_json_to_node(&v) {
             if let Some(bb) = bbox {
                 if !point_in_bbox(node.location.lon, node.location.lat, &bb) {
                     continue;
