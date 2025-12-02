@@ -4,7 +4,7 @@ version: "3.9"
 services:
   web:
     profiles: ["dev"]
-    image: node:20-alpine
+    image: node:20.19.0-alpine
     working_dir: /workspace
     command:
       - sh
@@ -32,7 +32,7 @@ services:
 
   api:
     profiles: ["dev"]
-    image: rust:1.83-bullseye
+    image: rust:1.91.0-bullseye
     working_dir: /workspace
     command: ["cargo", "run", "--manifest-path", "apps/api/Cargo.toml", "--bin", "api"]
     environment:
@@ -96,7 +96,7 @@ services:
 
   caddy:
     profiles: ["dev"]
-    image: caddy:2
+    image: caddy:2.7
     ports:
       - "8081:8081"
     volumes:

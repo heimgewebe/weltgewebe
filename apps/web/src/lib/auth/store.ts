@@ -9,6 +9,7 @@ interface User {
 // Erstellt einen Store, um den Authentifizierungsstatus zu speichern.
 // Dieser Store ist ein Platzhalter und wird später durch eine echte
 // Session-Management-Logik ersetzt.
+// NICHT FÜR PRODUKTIVBETRIEB – nur Demo.
 const createAuthStore = () => {
   const { subscribe, set } = writable<User>({
     loggedIn: false,
