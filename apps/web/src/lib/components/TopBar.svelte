@@ -39,8 +39,10 @@
     padding:env(safe-area-inset-top) 12px 0 12px;
     background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
     color:var(--text);
+    pointer-events: none;
   }
   .btn{
+    pointer-events: auto;
     appearance:none; border:1px solid var(--panel-border); background:var(--panel); color:var(--text);
     height:34px; padding:0 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px;
     box-shadow: var(--shadow); cursor:pointer;
@@ -51,7 +53,7 @@
     outline-offset:3px;
   }
   .btn:focus:not(:focus-visible){ outline:none; }
-  .spacer{ flex:1; }
+  .spacer{ flex:1; pointer-events: none; }
 </style>
 
 <div class="topbar" role="toolbar" aria-label="Navigation">
@@ -92,6 +94,6 @@
     🧶 Gewebekonto
   </button>
   <div class="spacer"></div>
-  <Garnrolle />
+  <div style="pointer-events: auto"><Garnrolle /></div>
 </div>
 

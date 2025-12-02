@@ -198,8 +198,10 @@ test("Swipe öffnet & schließt Drawer symmetrisch", async ({ page }) => {
   // close top (drag ↑)
   const accountDrawerBox = await accountDrawer.boundingBox();
   if (!accountDrawerBox) throw new Error("account drawer not visible");
-  const startTY = accountDrawerBox.y + 200;
-  const endTY = accountDrawerBox.y + 50;
+  // Ensure we drag from within the drawer
+  const startTY =
+    accountDrawerBox.y + Math.min(accountDrawerBox.height - 20, 200);
+  const endTY = startTY - 100;
 
   await page.mouse.move(tx, startTY);
   await page.mouse.down();
