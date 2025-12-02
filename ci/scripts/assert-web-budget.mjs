@@ -41,7 +41,7 @@ for (const [key, expectedValue] of Object.entries(expected)) {
   }
   if (actual !== expectedValue) {
     throw new Error(
-      `Performance budget "${key}" expected ${expectedValue} but found ${actual}`,
+      `Performance budget "${key}" expected ${expectedValue} but found ${actual}`
     );
   }
 }
