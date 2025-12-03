@@ -1,9 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 // Wait time for CSS transitions to complete (180ms transition + buffer)
 const DRAWER_ANIMATION_WAIT = 500;
 
 test.beforeEach(async ({ page }) => {
+  // Mock API responses to avoid needing a running backend
+  await mockApiResponses(page);
+  
   // Maus-Swipes in Tests erlauben
   await page.addInitScript(() => {
     (window as any).__E2E__ = true;
