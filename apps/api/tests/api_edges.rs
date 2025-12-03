@@ -45,7 +45,7 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
 
 fn app() -> Router {
     Router::new()
-        .nest("/api", api_router())
+        .merge(api_router())
         .with_state(test_state().unwrap())
 }
 
@@ -69,7 +69,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
 
     let res = app
         .clone()
-        .oneshot(Request::get("/api/edges?source_id=n1").body(body::Body::empty())?)
+        .oneshot(Request::get("/edges?source_id=n1").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
@@ -77,7 +77,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     assert_eq!(v.as_array().context("must be array")?.len(), 2);
 
     let res = app
-        .oneshot(Request::get("/api/edges?source_id=n1&target_id=n2").body(body::Body::empty())?)
+        .oneshot(Request::get("/edges?source_id=n1&target_id=n2").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;

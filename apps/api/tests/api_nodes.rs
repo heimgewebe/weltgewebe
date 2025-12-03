@@ -46,7 +46,7 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
 
 fn app() -> Router {
     Router::new()
-        .nest("/api", api_router())
+        .merge(api_router())
         .with_state(test_state().unwrap())
 }
 
@@ -71,9 +71,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     // BBox über Hamburg herum (soll n1 & n3 treffen)
     let res = app
         .clone()
-        .oneshot(
-            Request::get("/api/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?,
-        )
+        .oneshot(Request::get("/nodes?bbox=9.5,53.4,10.5,53.8&limit=10").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
@@ -95,9 +93,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     // Vertauschte BBox-Koordinaten sollen ebenfalls normalisiert werden
     let res = app
         .clone()
-        .oneshot(
-            Request::get("/api/nodes?bbox=10.5,53.8,9.5,53.4&limit=10").body(body::Body::empty())?,
-        )
+        .oneshot(Request::get("/nodes?bbox=10.5,53.8,9.5,53.4&limit=10").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
@@ -119,13 +115,13 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     // Ungültige BBox ergibt 400 Bad Request
     let res = app
         .clone()
-        .oneshot(Request::get("/api/nodes?bbox=oops").body(body::Body::empty())?)
+        .oneshot(Request::get("/nodes?bbox=oops").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
     // Limit=1
     let res = app
-        .oneshot(Request::get("/api/nodes?limit=1").body(body::Body::empty())?)
+        .oneshot(Request::get("/nodes?limit=1").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;

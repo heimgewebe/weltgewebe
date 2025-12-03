@@ -1,9 +1,12 @@
 import { expect, test } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("map route", () => {
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page }) => {
     // Map-data fetches can sometimes take slightly longer in CI containers.
     test.setTimeout(15_000);
+    // Mock API responses to avoid needing a running backend
+    await mockApiResponses(page);
   });
 
   test("shows structure layer controls", async ({ page }) => {

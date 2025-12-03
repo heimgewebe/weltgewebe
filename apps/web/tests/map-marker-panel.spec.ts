@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
-test.beforeEach(async () => {
-  // Setup logic if needed
+test.beforeEach(async ({ page }) => {
+  // Mock API responses to avoid needing a running backend
+  await mockApiResponses(page);
 });
 
 test("marker click opens info panel", async ({ page }) => {

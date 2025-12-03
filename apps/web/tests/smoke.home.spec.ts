@@ -1,8 +1,11 @@
 import { expect, test } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("smoke", () => {
-  test.beforeEach(() => {
+  test.beforeEach(async ({ page }) => {
     test.setTimeout(10_000);
+    // Mock API responses to avoid needing a running backend
+    await mockApiResponses(page);
   });
 
   test("loads /map without console errors", async ({ page }) => {
