@@ -7,7 +7,7 @@ test("main landmark is visible and left drawer toggles via keyboard", async ({
 }) => {
   // Mock API responses to avoid needing a running backend
   await mockApiResponses(page);
-  
+
   // Starte explizit mit geschlossenem linken Drawer
   await page.goto("/map?l=0", { waitUntil: "domcontentloaded" });
   await page.waitForLoadState("networkidle");
