@@ -60,9 +60,9 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     write_lines(
         &nodes,
         &[
-            r#"{"type":"Feature","id":"n1","geometry":{"type":"Point","coordinates":[9.9,53.55]},"properties":{"title":"A"}}"#,
-            r#"{"type":"Feature","id":"n2","geometry":{"type":"Point","coordinates":[11.0,54.2]},"properties":{"title":"B"}}"#,
-            r#"{"type":"Feature","id":"n3","geometry":{"type":"Point","coordinates":[10.2,53.6]},"properties":{"title":"C"}}"#,
+            r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#,
+            r#"{"id":"n2","location":{"lon":11.0,"lat":54.2},"title":"B"}"#,
+            r#"{"id":"n3","location":{"lon":10.2,"lat":53.6},"title":"C"}"#,
         ],
     );
 

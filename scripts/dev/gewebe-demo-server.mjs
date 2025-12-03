@@ -40,9 +40,9 @@ const [west, south, east, north] = parts;
 return { west, south, east, north };
 }
 
-function withinBBox(feature, bbox) {
-if (!feature?.geometry || feature.geometry.type !== 'Point') return false;
-const [lng, lat] = feature.geometry.coordinates || [];
+function withinBBox(node, bbox) {
+if (!node?.location) return false;
+const { lon: lng, lat } = node.location;
 return (
 typeof lng === 'number' &&
 typeof lat === 'number' &&

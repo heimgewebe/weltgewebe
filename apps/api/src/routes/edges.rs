@@ -16,8 +16,8 @@ fn edges_path() -> PathBuf {
 }
 
 pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Value>> {
-    let src = params.get("src");
-    let dst = params.get("dst");
+    let src = params.get("source_id");
+    let dst = params.get("target_id");
     let limit: usize = params
         .get("limit")
         .and_then(|s| s.parse().ok())
@@ -41,12 +41,12 @@ pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<V
         };
 
         if let Some(s) = src {
-            if v.get("src").and_then(|x| x.as_str()) != Some(s.as_str()) {
+            if v.get("source_id").and_then(|x| x.as_str()) != Some(s.as_str()) {
                 continue;
             }
         }
         if let Some(d) = dst {
-            if v.get("dst").and_then(|x| x.as_str()) != Some(d.as_str()) {
+            if v.get("target_id").and_then(|x| x.as_str()) != Some(d.as_str()) {
                 continue;
             }
         }
