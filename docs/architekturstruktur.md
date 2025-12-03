@@ -1,15 +1,19 @@
-Weltgewebe – Repository-Struktur
+# Architektur & Struktur
 
-Dieses Dokument beschreibt den Aufbau des Repositories.
-Ziel: Übersicht für Entwickler und KI, damit alle Beiträge am richtigen Ort landen.
+Dieses Dokument beschreibt die Zielstruktur des Weltgewebe-Repositories. Es dient als Referenzrahmen,
+damit sich Contributors schnell orientieren können und klar ist, wo welche Verantwortlichkeiten liegen. Wo die Realität aktuell noch abweicht (z.B. fehlender `apps/worker`), ist dies explizit markiert.
 
 ⸻
 
 ASCII-Baum
 
+Damit das Weltgewebe langfristig wartbar bleibt, folgt das Repo einer bewusst
+einfachen, aber erweiterbaren Struktur:
+
+```txt
 weltgewebe/weltgewebe-repo/
-├─ apps/                       # Anwendungen (Business-Code)
-│  ├─ web/                      # SvelteKit-Frontend (PWA, MapLibre)
+├─ apps/                         # Ausführbare Anwendungen (Web, API, Worker)
+│  ├─ web/                       # SvelteKit-Frontend (PWA, MapLibre)
 │  │  ├─ src/
 │  │  │  ├─ routes/             # Seiten, Endpunkte (+page.svelte/+server.ts)
 │  │  │  ├─ lib/                # UI-Komponenten, Stores, Utilities
@@ -34,17 +38,10 @@ weltgewebe/weltgewebe-repo/
 │  │  ├─ Cargo.toml
 │  │  └─ README.md
 │  │
-│  ├─ worker/                   # Projector/Indexer/Jobs
-│  │  ├─ src/
-│  │  │  ├─ projector_timeline.rs # Outbox→Timeline-Projektion
-│  │  │  ├─ projector_search.rs   # Outbox→Search-Indizes
-│  │  │  └─ replayer.rs           # Rebuilds (DSGVO/DR)
-│  │  ├─ Cargo.toml
-│  │  └─ README.md
-│  │
-│  └─ search/                   # (optional) Such-Adapter/SDKs
-│     ├─ adapters/              # Typesense/Meili-Clients
-│     └─ README.md
+│  ├─ worker/                   # (geplant) Projector/Indexer/Jobs
+│  │                             # Aktuell noch nicht im Repo angelegt.
+│  └─ search/                   # (optional, geplant) Such-Adapter/SDKs
+│                                # Wird bei Bedarf als eigener Ordner ergänzt.
 │
 ├─ packages/                    # (optional) Geteilte Libraries/SDKs
 │  └─ README.md
@@ -53,40 +50,49 @@ weltgewebe/weltgewebe-repo/
 │  ├─ compose/                  # Docker Compose Profile
 │  │  ├─ compose.core.yml       # Basis-Stack: web, api, db, caddy
 │  │  ├─ compose.observ.yml     # Monitoring: Prometheus, Grafana, Loki/Tempo
-│  │  ├─ compose.stream.yml     # Event-Streaming: NATS/JetStream
-│  │  └─ compose.search.yml     # Suche: Typesense/Meili, KeyDB
+│  │  ├─ compose.stream.yml     # (optional) Event-Streaming: NATS/JetStream
+│  │  └─ compose.search.yml     # (optional) Suche: Typesense/Meili, KeyDB
 │  ├─ caddy/
-│  │  ├─ Caddyfile              # Proxy, HTTP/3, CSP, TLS
-│  │  └─ README.md
-│  ├─ db/
-│  │  ├─ init/                  # SQL-Init-Skripte, Extensions (postgis, h3)
-│  │  ├─ partman/               # Partitionierung (pg_partman)
-│  │  └─ README.md
-│  ├─ monitoring/
-│  │  ├─ prometheus.yml         # Prometheus-Konfiguration
-│  │  ├─ grafana/
-│  │  │  ├─ dashboards/         # Web-Vitals, JetStream, Edge-Kosten
-│  │  │  └─ alerts/             # Alarme: Opex, Lag, LongTasks
-│  │  └─ README.md
-│  ├─ nomad/                    # (optional) Orchestrierungsspezifikationen
-│  └─ k8s/                      # (optional) Kubernetes-Manifeste
+│  │  └─ Caddyfile              # Proxy, HTTP/3, CSP, TLS
+│  ├─ compose/
+│  │  ├─ sql/
+│  │  │  └─ init/               # SQL-Init-Skripte, Extensions (z.B. uuid-ossp, pgcrypto)
+│  │  └─ monitoring/
+│  │     └─ prometheus.yml      # Prometheus-Konfiguration
+│  │
+│  │  # Hinweis:
+│  │  # Die frühere Unterscheidung `infra/db` und `infra/monitoring`
+│  │  # wurde in der Realität durch `infra/compose/sql` und
+│  │  # `infra/compose/monitoring` ersetzt.
+│  ├─ nomad/                    # (optional, geplant) Orchestrierungsspezifikationen
+│  └─ k8s/                      # (optional, geplant) Kubernetes-Manifeste
 │
 ├─ docs/                        # Dokumentation & Entscheidungen
 │  ├─ adr/                      # Architecture Decision Records
-│  │  ├─ ADR-0005-auth.md      # Minimales Auth-Konzept
+│  │  └─ ADR-0005-auth.md       # Minimales Auth-Konzept
 │  ├─ techstack.md              # Techstack v3.2 (Referenz)
-│  ├─ architektur.ascii         # Architektur-Poster/ASCII-Diagramme
 │  ├─ datenmodell.md            # Datenbank- und Projektionstabellen
 │  └─ runbook.md                # Woche-1/2 Setup, DR/DSGVO-Drills
 │
-├─ ci/                          # CI/CD & Qualitätsprüfungen
-│  ├─ github/
-│  │  └─ workflows/             # GitHub Actions für Build, Tests, Infra
-│  │     ├─ web.yml
-│  │     ├─ api.yml
-│  │     └─ infra.yml
-│  ├─ scripts/                  # Hilfsskripte (migrate, seed, db-wait)
-│  └─ budget.json               # Performance-Budgets (≤60KB JS, ≤2s TTI)
+├─ .github/
+│  └─ workflows/                # GitHub Actions für Build, Tests, Infra
+│                               # (z.B. ci.yml, web-e2e.yml, infra.yml, metrics.yml, links.yml)
+├─ policies/                    # Governance & Qualitäts-Geländer
+│  ├─ limits.yaml               # Budget-Grenzen (z.B. max. Payload-Größe)
+│  ├─ perf.json                 # Performance-Budgets (Frontend)
+│  ├─ retention.yml             # Aufbewahrungsfristen
+│  ├─ security.yml              # Minimal-Sicherheitsanforderungen
+│  └─ slo.yaml                  # SLO-/SLI-Definitionen
+├─ scripts/                     # Hilfsskripte (Setup, Metriken, Domain-Checks, Dev-Helper)
+│  ├─ dev/
+│  │  └─ gewebe-demo-server.mjs
+│  ├─ tools/
+│  │  ├─ json_escape
+│  │  ├─ uv-pin.sh
+│  │  └─ yq-pin.sh
+│  ├─ contracts-domain-check.sh # Domain-Verträge (JSON Schema) prüfen
+│  ├─ setup.sh                  # Lokales Setup (Rust-Tooling, etc.)
+│  └─ wgx-metrics-snapshot.sh   # Metrik-Snapshot für WGX
 │
 ├─ .env.example                 # Beispiel-Umgebungsvariablen
 ├─ .editorconfig                # Editor-Standards
@@ -99,20 +105,25 @@ weltgewebe/weltgewebe-repo/
 Erläuterungen zu den Hauptordnern
 
 - **apps/**
-  Enthält alle Anwendungen: Web-Frontend (SvelteKit), API (Rust/Axum), Worker (Eventprojektionen, Rebuilds) und
-  optionale Search-Adapter. Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
+  Enthält ausführbare Anwendungen: Web-Frontend (SvelteKit) und API (Rust/Axum). Worker (Eventprojektionen, Rebuilds)
+  und optionale Search-Adapter sind im Architekturplan vorgesehen, aber aktuell noch nicht angelegt.
+  Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
 - **packages/**
   Platz für geteilte Libraries oder SDKs, die von mehreren Apps genutzt werden. Wird erst angelegt, wenn Bedarf an
   gemeinsamem Code entsteht.
 - **infra/**
-  Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi, Caddy-Konfiguration,
-  DB-Init, Monitoring-Setup. Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung.
+  Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi (`infra/compose/*.yml`),
+  Caddy-Konfiguration (`infra/caddy`), DB-Init (`infra/compose/sql/init`), Monitoring-Setup (`infra/compose/monitoring`).
+  Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung können als `infra/nomad` bzw. `infra/k8s` ergänzt werden.
 - **docs/**
   Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme,
   Datenmodellübersicht und Runbooks.
-- **ci/**
-  Alles rund um Continuous Integration/Deployment: Workflows für GitHub Actions, Skripte für Tests/DB-Handling,
-  sowie zentrale Performance-Budgets (Lighthouse).
+- **.github/workflows/**
+  Alle GitHub-Actions-Workflows rund um Continuous Integration/Deployment (Builds, Tests, Link-Checks, Metrics).
+- **scripts/**
+  Hilfsskripte für Setup, Domain-Checks, Dev-Demos und Metriken.
+- **policies/**
+  Zentrale Budgets und Leitplanken (Performance, Limits, Retention, Security, SLOs).
 - **Root**
   Repository-Metadaten: .env.example (Vorlage), Editor- und Git-Configs, Lizenz und README mit Projektüberblick.
 
