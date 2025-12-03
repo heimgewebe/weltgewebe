@@ -1,7 +1,8 @@
 # Architektur & Struktur
 
 Dieses Dokument beschreibt die Zielstruktur des Weltgewebe-Repositories. Es dient als Referenzrahmen,
-damit sich Contributors schnell orientieren können und klar ist, wo welche Verantwortlichkeiten liegen. Wo die Realität aktuell noch abweicht (z.B. fehlender `apps/worker`), ist dies explizit markiert.
+damit sich Contributors schnell orientieren können und klar ist, wo welche Verantwortlichkeiten liegen.
+Wo die Realität aktuell noch abweicht (z.B. fehlender `apps/worker`), ist dies explizit markiert.
 
 ⸻
 
