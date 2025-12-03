@@ -50,7 +50,7 @@ fn app() -> Router {
 }
 
 #[tokio::test]
-async fn edges_filter_src_dst() -> anyhow::Result<()> {
+async fn edges_filter_source_target() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let edges = in_dir.join("demo.edges.jsonl");
@@ -59,9 +59,9 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     write_lines(
         &edges,
         &[
-            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
-            r#"{"id":"e2","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
-            r#"{"id":"e3","source_id":"n2","target_id":"n3","edge_kind":"reference"}"#,
+            r#"{"id":"e1","source_type":"node","source_id":"n1","target_type":"node","target_id":"n2","edge_kind":"reference","created_at":"2025-01-01T00:00:00Z"}"#,
+            r#"{"id":"e2","source_type":"node","source_id":"n1","target_type":"node","target_id":"n3","edge_kind":"reference","created_at":"2025-01-01T00:00:00Z"}"#,
+            r#"{"id":"e3","source_type":"node","source_id":"n2","target_type":"node","target_id":"n3","edge_kind":"reference","created_at":"2025-01-01T00:00:00Z"}"#,
         ],
     );
 

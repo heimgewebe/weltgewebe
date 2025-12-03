@@ -33,21 +33,6 @@ weltgewebe/weltgewebe-repo/
 │  │  ├─ tests/                 # API-Tests (Rust)
 │  │  ├─ Cargo.toml
 │  │  └─ README.md
-│  │
-│  ├─ worker/                   # Projector/Indexer/Jobs
-│  │  ├─ src/
-│  │  │  ├─ projector_timeline.rs # Outbox→Timeline-Projektion
-│  │  │  ├─ projector_search.rs   # Outbox→Search-Indizes
-│  │  │  └─ replayer.rs           # Rebuilds (DSGVO/DR)
-│  │  ├─ Cargo.toml
-│  │  └─ README.md
-│  │
-│  └─ search/                   # (optional) Such-Adapter/SDKs
-│     ├─ adapters/              # Typesense/Meili-Clients
-│     └─ README.md
-│
-├─ packages/                    # (optional) Geteilte Libraries/SDKs
-│  └─ README.md
 │
 ├─ infra/                       # Betrieb/Deployment/Observability
 │  ├─ compose/                  # Docker Compose Profile
@@ -99,11 +84,7 @@ weltgewebe/weltgewebe-repo/
 Erläuterungen zu den Hauptordnern
 
 - **apps/**
-  Enthält alle Anwendungen: Web-Frontend (SvelteKit), API (Rust/Axum), Worker (Eventprojektionen, Rebuilds) und
-  optionale Search-Adapter. Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
-- **packages/**
-  Platz für geteilte Libraries oder SDKs, die von mehreren Apps genutzt werden. Wird erst angelegt, wenn Bedarf an
-  gemeinsamem Code entsteht.
+  Enthält alle Anwendungen: Web-Frontend (SvelteKit) und API (Rust/Axum). Jeder Unterordner ist eine eigenständige App mit eigenem README und Build-Konfig.
 - **infra/**
   Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi, Caddy-Konfiguration,
   DB-Init, Monitoring-Setup. Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung.

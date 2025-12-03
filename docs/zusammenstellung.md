@@ -36,7 +36,7 @@ Nutzer (Garnrollen)
 Inhalte (Knoten, Fäden, Garn)
 
 - Knoten: Dies sind ortsbezogene Bündel von Informationen, wie Ideen, Veranstaltungen, Ressourcen, Werkzeuge oder
-  Schlafplätze. Jeder Knoten eröffnet einen eigenen Raum, der Threads, Informationen und Anträge enthalten kann.
+  Schlafplätze. Jeder Knoten eröffnet einen eigenen Raum, der Gespräche, Informationen und Anträge enthalten kann.
   Informationen können alternativ auch direkt auf der eigenen Garnrolle verortet werden. Knoten sind auf der Karte
   filter- und einblendbar.
 - Fäden: Jede Nutzeraktion erzeugt einen "Faden" von der Garnrolle des Nutzers zu einem Knoten. Es gibt verschiedene
