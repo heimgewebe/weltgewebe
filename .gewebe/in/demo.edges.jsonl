@@ -1,4 +1,0 @@
-{"id":"e1","src":"n1","dst":"n2","kind":"connection","title":"Kooperation Marktplatz ↔ Nachbarschaftshaus"}
-{"id":"e2","src":"n2","dst":"n4","kind":"support","title":"Gemeinschaftsaktion Gartenpflege"}
-{"id":"e3","src":"n1","dst":"n3","kind":"exchange","title":"Tauschbox liefert Material"}
-{"id":"e4","src":"n5","dst":"n1","kind":"support","title":"Reparaturcafé hilft Marktplatz"}

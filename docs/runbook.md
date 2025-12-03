@@ -106,7 +106,7 @@ einer sauberen Umgebung wiederhergestellt werden.
 5. **Verifikation & Abschluss:**
     - **Datenkonsistenz prüfen:** Stichprobenartige Überprüfung der wiederhergestellten Daten in den
       Lese-Modellen.
-    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Thread
+    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Conversation
       erstellen).
     - **Zeitmessung:** Die benötigte Zeit für die Wiederherstellung stoppen und mit dem RTO
       vergleichen.

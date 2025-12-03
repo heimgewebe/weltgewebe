@@ -1,5 +1,5 @@
 use axum::{extract::Query, Json};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
     fs::File,
@@ -15,9 +15,24 @@ fn edges_path() -> PathBuf {
     in_dir().join("demo.edges.jsonl")
 }
 
-pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Value>> {
-    let src = params.get("src");
-    let dst = params.get("dst");
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Edge {
+    pub id: String,
+    pub source_type: String,
+    pub source_id: String,
+    pub target_type: String,
+    pub target_id: String,
+    pub edge_kind: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Edge>> {
+    let source_id = params.get("source_id");
+    let target_id = params.get("target_id");
     let limit: usize = params
         .get("limit")
         .and_then(|s| s.parse().ok())
@@ -35,23 +50,23 @@ pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<V
         if out.len() >= limit {
             break;
         }
-        let v: Value = match serde_json::from_str(&line) {
+        let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => continue,
         };
 
-        if let Some(s) = src {
-            if v.get("src").and_then(|x| x.as_str()) != Some(s.as_str()) {
+        if let Some(s) = source_id {
+            if edge.source_id != *s {
                 continue;
             }
         }
-        if let Some(d) = dst {
-            if v.get("dst").and_then(|x| x.as_str()) != Some(d.as_str()) {
+        if let Some(t) = target_id {
+            if edge.target_id != *t {
                 continue;
             }
         }
 
-        out.push(v);
+        out.push(edge);
     }
 
     Json(out)

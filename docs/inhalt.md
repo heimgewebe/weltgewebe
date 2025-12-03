@@ -27,7 +27,7 @@ der bekommt eine Garnrolle auf seinen Wohnsitz gesteckt. Diese Rolle ermöglicht
 ins Weltgewebe einzuweben, solange er eingeloggt (sichtbar durch Drehung der Rolle) ist. Er kann nun also
 neue Knoten (auf der Karte lokalisierte Informationsbündel, beispielsweise über geplante oder ständige
 Ereignisse, Fragen, Ideen) knüpfen, sich mit bestehenden verbinden (Zustimmung, Interesse, Ablehnung,
-Zusage, Verantwortungsübernahme, etc.), an Gesprächen (Threads auf einem Knoten) teilnehmen, oder Geld an
+Zusage, Verantwortungsübernahme, etc.), an Gesprächen (Conversations auf einem Knoten) teilnehmen, oder Geld an
 ein Ortsgewebekonto (Gemeinschaftskonto) spenden.
 
 Jede dieser Aktionen erzeugt einen Faden, der von der Rolle zu dem jeweiligen Knoten führt. Jeder Faden
@@ -50,8 +50,8 @@ Solch ein Antrag ist ebenso durch einen speziellen Antragsfaden mit der Rolle de
 enthält sichtbar einen 7-Tage Timer. Nun haben alle Weber 7 Tage lang Zeit Einspruch einzulegen.
 Geschieht dies nicht, dann geht der Antrag durch, bei Einspruch verlängert sich die Entscheidungszeit um
 weitere 7 Tage bis schlussendlich abgestimmt wird. Jeder Antrag eröffnet automatisch einen Raum mitsamt
-Thread und Informationen. Überhaupt entsteht mit jedem Knoten ein eigener Raum (Fenster), in dem man
-Informationen, Threads, etc. nebeneinander gestalten kann. Alles, was man gestaltet, kann von allen anderen
+Conversation und Informationen. Überhaupt entsteht mit jedem Knoten ein eigener Raum (Fenster), in dem man
+Informationen, Conversations, etc. nebeneinander gestalten kann. Alles, was man gestaltet, kann von allen anderen
 verändert werden, es sei denn man verzwirnt es. Dies führt automatisch dazu, dass der Faden, der zu dem
 Knoten führt und von der Rolle des Verzwirners ausgeht, zu einem Garn wird. Solange also eine Verzwirnung
 besteht, solange kann ein Knoten sich nicht auflösen. Die Verzwirnung kann einzelne Elemente in einem

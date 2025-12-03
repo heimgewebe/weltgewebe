@@ -105,10 +105,10 @@ demo-data:
 	JSONL
 	}
 	test -s .gewebe/in/demo.edges.jsonl || { echo "→ seeds: edges"; cat > .gewebe/in/demo.edges.jsonl <<'JSONL'
-	{"id":"e1","src":"n1","dst":"n2","kind":"connection","title":"Kooperation Marktplatz ↔ Nachbarschaftshaus"}
-	{"id":"e2","src":"n2","dst":"n4","kind":"support","title":"Gemeinschaftsaktion Gartenpflege"}
-	{"id":"e3","src":"n1","dst":"n3","kind":"exchange","title":"Tauschbox liefert Material"}
-	{"id":"e4","src":"n5","dst":"n1","kind":"support","title":"Reparaturcafé hilft Marktplatz"}
+	{"id":"e1","source_type":"node","source_id":"n1","target_type":"node","target_id":"n2","edge_kind":"reference","created_at":"2025-11-01T10:00:00Z","note":"Kooperation Marktplatz ↔ Nachbarschaftshaus"}
+	{"id":"e2","source_type":"node","source_id":"n2","target_type":"node","target_id":"n4","edge_kind":"reference","created_at":"2025-11-01T10:00:00Z","note":"Gemeinschaftsaktion Gartenpflege"}
+	{"id":"e3","source_type":"node","source_id":"n1","target_type":"node","target_id":"n3","edge_kind":"reference","created_at":"2025-11-01T10:00:00Z","note":"Tauschbox liefert Material"}
+	{"id":"e4","source_type":"node","source_id":"n5","target_type":"node","target_id":"n1","edge_kind":"reference","created_at":"2025-11-01T10:00:00Z","note":"Reparaturcafé hilft Marktplatz"}
 	JSONL
 	}
 

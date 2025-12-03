@@ -33,6 +33,22 @@ Speichert geografische oder logische Knotenpunkte, die als Anker für Gesprächs
 |`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
 |`updated_at`|`timestamptz`|Zeitstempel der letzten Änderung.|
 
+### `edges`
+
+Repräsentiert die Graphen-Verbindungen zwischen Knoten und Rollen ("Fäden").
+
+|Spalte|Typ|Beschreibung|
+|---|---|---|
+|`id`|`uuid` (PK)|Eindeutiger Identifikator der Kante.|
+|`source_type`|`text`|Typ der Quelle (z.B. `node`, `role`).|
+|`source_id`|`uuid`|ID der Quelle.|
+|`target_type`|`text`|Typ des Ziels (z.B. `node`, `role`).|
+|`target_id`|`uuid`|ID des Ziels.|
+|`edge_kind`|`text`|Art der Verbindung (z.B. `reference`, `ownership`, `membership`, `delegation`).|
+|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+|`expires_at`|`timestamptz`|Zeitstempel des Ablaufs (optional).|
+|`note`|`text`|Optionale Notiz oder Titel.|
+
 ### `roles`
 
 Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
