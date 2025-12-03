@@ -3,20 +3,37 @@
 Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten,
 Fäden, Drawer, Zeitachse).
 
-## Dev
+## Development & Preview
 
-Hinweis: Das Projekt verwendet pnpm via Corepack (sowohl lokal als auch im CI).
-Aktiviere es mit `corepack enable`.
+Das Projekt verwendet pnpm via Corepack. Aktiviere es mit `corepack enable`.
+
+### Development (HMR)
+
+Für schnelle Iterationen mit Hot Module Replacement:
 
 ```bash
 cd apps/web
-pnpm install --frozen-lockfile
-pnpm dev
+pnpm install
+pnpm dev -- --host 0.0.0.0 --port 5173
 ```
 
-Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
-In Container- oder Codespaces-Umgebungen kannst du optional `pnpm dev -- --host --port 5173`
-verwenden.
+- **Port:** 5173
+- **URL:** [http://localhost:5173/map](http://localhost:5173/map)
+- **Hinweis:** In Codespaces/Containern ist `--host 0.0.0.0` zwingend nötig. Alternativ: `pnpm dev:cs`.
+
+### Preview (Production Build)
+
+Um den echten Build (wie in CI) zu testen und das Layout final zu prüfen (**idealer Weg**):
+
+```bash
+cd apps/web
+pnpm build
+pnpm preview -- --host 0.0.0.0 --port 4173
+```
+
+- **Port:** 4173
+- **URL:** [http://localhost:4173/map](http://localhost:4173/map)
+- **Hinweis:** Playwright-Tests nutzen lokal standardmäßig diesen Port. Alternativ: `pnpm preview:cs`.
 
 <!-- prettier-ignore-start -->
 > [!TIP]
