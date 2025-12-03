@@ -14,7 +14,7 @@ test("marker click opens info panel", async ({ page }) => {
   // Wait explicitly for markers to be rendered
   await page.waitForSelector(".map-marker", { timeout: 10000 });
 
-  const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
+  const markerButton = page.getByRole("button", { name: "Marktplatz Hamburg" });
   await expect(markerButton).toBeVisible({ timeout: 10000 });
   await markerButton.click();
 
@@ -23,7 +23,7 @@ test("marker click opens info panel", async ({ page }) => {
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
     timeout: 3000,
   });
-  await expect(filterDrawer.getByText("Werkstatt Hamm")).toBeVisible({
+  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toBeVisible({
     timeout: 3000,
   });
   await expect(
@@ -40,7 +40,7 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await page.waitForLoadState("networkidle");
   await page.waitForSelector(".map-marker", { timeout: 10000 });
 
-  const markerButton = page.getByRole("button", { name: "Werkstatt Hamm" });
+  const markerButton = page.getByRole("button", { name: "Marktplatz Hamburg" });
   await expect(markerButton).toBeVisible({ timeout: 10000 });
   await markerButton.click();
 
@@ -57,5 +57,5 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
     timeout: 3000,
   });
-  await expect(filterDrawer.getByText("Werkstatt Hamm")).toHaveCount(0);
+  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toHaveCount(0);
 });

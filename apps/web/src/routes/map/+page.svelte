@@ -13,7 +13,6 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
-  import points from '$lib/data/dummy.json';
 
   export let data: PageData;
 
@@ -24,7 +23,12 @@
     lon: number;
   };
 
-  const markersData = points satisfies MapPoint[];
+  const markersData = (data.nodes || []).map((n: any) => ({
+    id: n.id,
+    title: n.title,
+    lat: n.location.lat,
+    lon: n.location.lon
+  })) satisfies MapPoint[];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -265,11 +269,11 @@
       if (!container) {
         return;
       }
-      // Hamburg-Hamm grob: 10.05, 53.55 — Zoom 13
+      // Hamburg-Mitte: 10.00, 53.55 — Zoom 13
       map = new maplibregl.Map({
         container,
         style: 'https://demotiles.maplibre.org/style.json',
-        center: [10.05, 53.55],
+        center: [10.00, 53.55],
         zoom: 13
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
