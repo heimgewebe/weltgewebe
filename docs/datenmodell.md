@@ -52,7 +52,7 @@ Repräsentiert die Gesprächsräume ("conversations"), die mit unterschiedlichen
 |Spalte|Typ|Beschreibung|
 |---|---|---|
 |`id`|`uuid` (PK)|Eindeutiger Identifikator des Gesprächsraums.|
-|`conversation_type`|`text`|Typ des Gesprächsraums (z.B. `node`, `webrat`, `private`).|
+|`conversation_type`|`text`|Typ des Gesprächsraums (z.B. `node`, `webrat`, `naehstuebchen`, `private`).|
 |`subject_id`|`uuid`|Zugehöriges Subjekt (z.B. `nodes.id`). Kann `NULL` sein.|
 |`author_role_id`|`uuid` (FK, `roles.id`)|Rolle, die den Gesprächsraum eröffnet hat.|
 |`title`|`text`|Titel des Gesprächsraums.|
