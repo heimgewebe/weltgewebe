@@ -50,7 +50,7 @@ pub async fn run() -> anyhow::Result<()> {
     };
 
     let app = Router::new()
-        .nest("/api", api_router().route_layer(from_fn(require_auth)))
+        .merge(api_router().route_layer(from_fn(require_auth)))
         .merge(health_routes())
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
