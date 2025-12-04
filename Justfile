@@ -84,11 +84,13 @@ default: lint
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:
 	@set -euo pipefail; \
-	mapfile -d '' files < <(git ls-files -z -- '*.sh' '*.bash' || true); \
-	if [ "${#files[@]}" -eq 0 ]; then echo "keine Shell-Dateien"; exit 0; fi; \
-	printf '%s\0' "${files[@]}" | xargs -0 bash -n; \
-	shfmt -d -i 2 -ci -sr -- "${files[@]}"; \
-	shellcheck -S style -- "${files[@]}"
+	if [ -n "$(git ls-files -- '*.sh' '*.bash')" ]; then \
+		git ls-files -z -- '*.sh' '*.bash' | xargs -0 -n 1 bash -n --; \
+		git ls-files -z -- '*.sh' '*.bash' | xargs -0 shfmt -d -i 2 -ci -sr --; \
+		git ls-files -z -- '*.sh' '*.bash' | xargs -0 shellcheck -S style --; \
+	else \
+		echo "Keine Shell-Dateien gefunden."; \
+	fi
 
 # Port überschreibbar: `just serve-demo PORT=9090`
 PORT := "8080"
