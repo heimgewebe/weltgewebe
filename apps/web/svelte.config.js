@@ -9,6 +9,19 @@ const config = {
   kit: {
     // adapter-auto ist eine Factory – hier **aufrufen**:
     adapter: adapter(),
+
+    prerender: {
+      handleHttpError: ({ path, message }) => {
+        // Suppress 404 errors for development-only routes (e.g., /_dev)
+        // which are blocked in production builds via +page.server.ts.
+        if (path.startsWith("/_dev") && message.includes("404")) {
+          return;
+        }
+        // Fail the build for other errors
+        throw new Error(message);
+      },
+    },
+
     /**
      * Align Vite runtime resolution with tsconfig.json "paths".
      * Matches:
