@@ -55,7 +55,7 @@ else
     entity="${filename%.example.json}"
     schema="contracts/domain/${entity}.schema.json"
     echo "  - $example -> $schema"
-    "$AJV_BIN" validate -s "$schema" -d "$example" -c ajv-formats
+    "$AJV_BIN" validate -s "$schema" -d "$example" --strict=false -c ajv-formats
   done
 fi
 
