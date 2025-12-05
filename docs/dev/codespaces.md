@@ -1,17 +1,29 @@
 # Codespaces: Dev-Server schnell starten
 
-Im Codespace werden die Web-Abhängigkeiten automatisch installiert.
+Für die schnellste Entwicklung empfehlen wir den "Ein-Klick"-Task.
 
-**Start:**
+### Frontend schnell starten
+
+1. **Dev-Server starten**
+
+   [▶ Frontend in Codespaces starten](command:workbench.action.tasks.runTask?%5B%22Web%3A%20Devserver%20(Codespaces)%22%5D)
+
+2. **Frontend im Browser öffnen**
+
+   [🌍 Karte öffnen](http://localhost:5173/map)
+
+### Manuelle Methode
+
+Alternativ kannst du den Server auch im Terminal starten:
 
 ```bash
 cd apps/web
-npm run dev -- --host
+corepack enable
+pnpm install
+pnpm dev -- --host 0.0.0.0 --port 5173
 ```
-
-Codespaces öffnet automatisch den Port **5173** – Link anklicken, `/map` ansehen.
 
 **Troubleshooting:**
 
-- „vite: not found“: `npm i -D vite` und erneut starten.
-- „leere Seite“: einmal im Kartenbereich klicken (Keyboard-Fokus), dann `[` / `]` / `Alt+G` testen.
+- „vite: not found“: `pnpm install` erneut ausführen.
+- „leere Seite“: Du bist vermutlich auf `/` statt `/map`. Nutze den Link oben oder hänge `/map` an die URL an.

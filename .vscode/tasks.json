@@ -2,13 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "web:dev",
+      "label": "Web: Devserver (Codespaces)",
       "type": "shell",
-      "command": "pnpm dev -- --host",
-      "options": {
-        "cwd": "apps/web"
-      },
-      "problemMatcher": []
+      "command": "cd apps/web && corepack enable && pnpm install && pnpm dev -- --host 0.0.0.0 --port 5173",
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
     }
   ]
 }
