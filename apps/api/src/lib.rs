@@ -4,8 +4,8 @@ pub mod routes;
 pub mod state;
 pub mod telemetry;
 
-#[cfg(test)]
-mod test_helpers;
+#[doc(hidden)]
+pub mod test_helpers;
 
 use std::{env, io::ErrorKind, net::SocketAddr};
 
