@@ -4,6 +4,9 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+mod helpers;
+
+use helpers::set_gewebe_in_dir;
 use std::{fs, path::PathBuf};
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -54,7 +57,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let edges = in_dir.join("demo.edges.jsonl");
-    std::env::set_var("GEWEBE_IN_DIR", &in_dir);
+    let _env = set_gewebe_in_dir(&in_dir);
 
     write_lines(
         &edges,

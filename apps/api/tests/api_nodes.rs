@@ -4,6 +4,9 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+mod helpers;
+
+use helpers::set_gewebe_in_dir;
 use std::{fs, path::PathBuf};
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -55,7 +58,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let nodes = in_dir.join("demo.nodes.jsonl");
-    std::env::set_var("GEWEBE_IN_DIR", &in_dir);
+    let _env = set_gewebe_in_dir(&in_dir);
 
     write_lines(
         &nodes,
