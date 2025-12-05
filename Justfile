@@ -36,6 +36,8 @@ ci:
 		cargo test --locked; \
 		popd >/dev/null; \
 	fi
+	@echo "==> Root: dependency check"
+	cargo deny check
 
 # ---------- Rust ----------
 fmt:       # format all
@@ -51,6 +53,7 @@ check:     # quick hygiene check
 	just fmt
 	just clippy
 	just test
+	cargo deny check
 
 # ---------- Compose ----------
 up:        # dev stack up (dev profile)
