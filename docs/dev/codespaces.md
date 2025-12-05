@@ -2,7 +2,7 @@
 
 Für die schnellste Entwicklung empfehlen wir den "Ein-Klick"-Task.
 
-### Frontend schnell starten
+## Frontend schnell starten
 
 1. **Dev-Server starten**
 
@@ -12,7 +12,7 @@ Für die schnellste Entwicklung empfehlen wir den "Ein-Klick"-Task.
 
    [🌍 Karte öffnen](http://localhost:5173/map)
 
-### Manuelle Methode
+## Manuelle Methode
 
 Alternativ kannst du den Server auch im Terminal starten:
 
