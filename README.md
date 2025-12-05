@@ -29,6 +29,16 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
 > ⚙️ **Preview:** Die folgenden Schritte werden mit Gate C (Infra-light) aktiviert.
 > Solange das Repo Docs-only ist, dienen sie lediglich als Ausblick.
 
+### Frontend schnell starten (Codespaces)
+
+1. **Dev-Server starten**
+
+   [▶ Frontend in Codespaces starten](command:workbench.action.tasks.runTask?%5B%22Web%3A%20Devserver%20(Codespaces)%22%5D)
+
+2. **Frontend im Browser öffnen**
+
+   [🌍 Karte öffnen](http://localhost:5173/map)
+
 ### Development Quickstart
 
 1. **Voraussetzungen:** Docker, Docker Compose und `just` müssen installiert sein.
