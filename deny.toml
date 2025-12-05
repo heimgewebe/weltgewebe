@@ -7,6 +7,15 @@ yanked = "warn"
 # cargo-deny bekannte, noch nicht gefahrlos upgradebare Abhängigkeiten
 # nicht als Fehler markiert.
 
+# RUSTSEC-2025-0134: rustls-pemfile is unmaintained (transitive via async-nats)
+# The crate has been archived and users should migrate to rustls-pki-types.
+# This is a transitive dependency through async-nats v0.35.1, which we cannot
+# directly control. We accept this advisory until async-nats updates or we
+# find an alternative NATS client.
+[[advisories.ignore]]
+id = "RUSTSEC-2025-0134"
+reason = "Transitive dependency via async-nats; waiting for upstream update"
+
 
 
 [bans]
