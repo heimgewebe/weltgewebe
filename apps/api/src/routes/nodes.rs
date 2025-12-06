@@ -155,7 +155,7 @@ pub async fn list_nodes(
         }
         let v: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue, // fehlerhafte Zeilen überschringen
+            Err(_) => continue, // fehlerhafte Zeilen überspringen
         };
 
         if let Some(node) = map_json_to_node(&v) {
