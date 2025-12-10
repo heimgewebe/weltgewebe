@@ -4,6 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use serial_test::serial;
 mod helpers;
 
 use helpers::set_gewebe_in_dir;
@@ -54,6 +55,7 @@ fn app() -> Router {
 }
 
 #[tokio::test]
+#[serial]
 async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
@@ -135,6 +137,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+#[serial]
 async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
