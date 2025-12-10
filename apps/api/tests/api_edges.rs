@@ -4,6 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use serial_test::serial;
 mod helpers;
 
 use helpers::set_gewebe_in_dir;
@@ -53,6 +54,7 @@ fn app() -> Router {
 }
 
 #[tokio::test]
+#[serial]
 async fn edges_filter_src_dst() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
