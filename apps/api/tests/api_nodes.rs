@@ -133,3 +133,45 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes = in_dir.join("demo.nodes.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &nodes,
+        &[
+            r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A","created_at":"2024-01-02T03:04:05Z"}"#,
+        ],
+    );
+
+    let app = app();
+
+    let res = app
+        .oneshot(Request::get("/nodes").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+
+    let node = arr.first().context("node missing")?;
+    let created_at = node
+        .get("created_at")
+        .and_then(|value| value.as_str())
+        .context("created_at missing")?;
+    let updated_at = node
+        .get("updated_at")
+        .and_then(|value| value.as_str())
+        .context("updated_at missing")?;
+
+    assert_eq!(created_at, "2024-01-02T03:04:05Z");
+    assert_eq!(updated_at, created_at);
+
+    Ok(())
+}

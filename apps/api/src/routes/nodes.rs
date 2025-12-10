@@ -91,15 +91,17 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         .and_then(|v| v.as_str())
         .unwrap_or("Unknown")
         .to_string();
-    let updated_at = v
-        .get("updated_at")
-        .and_then(|v| v.as_str())
-        .unwrap_or("1970-01-01T00:00:00Z")
+    let created_at_raw = v.get("created_at").and_then(|v| v.as_str());
+    let updated_at_raw = v.get("updated_at").and_then(|v| v.as_str());
+    let default_timestamp = "1970-01-01T00:00:00Z";
+
+    let created_at = created_at_raw
+        .or(updated_at_raw)
+        .unwrap_or(default_timestamp)
         .to_string();
-    let created_at = v
-        .get("created_at")
-        .and_then(|v| v.as_str())
-        .unwrap_or(&updated_at)
+    let updated_at = updated_at_raw
+        .or(created_at_raw)
+        .unwrap_or(default_timestamp)
         .to_string();
 
     let summary = v
