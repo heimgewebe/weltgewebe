@@ -78,8 +78,12 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 
     // Parse location object with explicit error handling
     let location = v.get("location")?;
-    let lon = location.get("lon").and_then(|val| val.as_f64())?;
-    let lat = location.get("lat").and_then(|val| val.as_f64())?;
+    let lon = location
+        .get("lon")
+        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
+    let lat = location
+        .get("lat")
+        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
 
     let title = v
         .get("title")

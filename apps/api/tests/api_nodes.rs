@@ -138,6 +138,49 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn nodes_accept_string_coordinates() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes = in_dir.join("demo.nodes.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &nodes,
+        &[r#"{"id":"n1","location":{"lon":"9.9","lat":"53.55"},"title":"A"}"#],
+    );
+
+    let app = app();
+
+    let res = app
+        .oneshot(Request::get("/nodes").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+
+    let node = arr.first().context("node missing")?;
+    assert_eq!(node.get("id").and_then(|value| value.as_str()), Some("n1"));
+    assert_eq!(
+        node.get("location")
+            .and_then(|value| value.get("lat"))
+            .and_then(|value| value.as_f64()),
+        Some(53.55)
+    );
+    assert_eq!(
+        node.get("location")
+            .and_then(|value| value.get("lon"))
+            .and_then(|value| value.as_f64()),
+        Some(9.9)
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
