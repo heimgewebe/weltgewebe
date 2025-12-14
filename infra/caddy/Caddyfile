@@ -21,7 +21,7 @@
     # Dev-CSP: HMR/WebSocket & Dev-Assets erlauben; bei Bedarf später härten
     # Für externe Tiles ggf. ergänzen, z.B.:
     #   img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org;
-    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; object-src 'none';"
+    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https://demotiles.maplibre.org; img-src 'self' data: blob: https://demotiles.maplibre.org; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
   }

@@ -10,12 +10,14 @@ services:
       - sh
       - -c
       - |
-        if [ ! -d node_modules ]; then
-          pnpm install --frozen-lockfile;
-        fi;
+        corepack enable
+        if [ ! -d node_modules ] || [ -z "$(ls -A node_modules)" ]; then
+          pnpm install --frozen-lockfile
+        fi
         exec pnpm dev -- --host 0.0.0.0 --port 5173
     volumes:
       - ../../apps/web:/workspace
+      - /workspace/node_modules
     ports:
       - "5173:5173"
     depends_on:
