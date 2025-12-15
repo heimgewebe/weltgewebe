@@ -27,7 +27,20 @@ fi
 # Install cargo-deny if not installed
 if ! command_exists cargo-deny; then
   echo "cargo-deny not found. Installing..."
-  cargo install cargo-deny
+  # Extract version from toolchain.versions.yml (simple grep/awk to avoid dependency on yq)
+  if [ -f toolchain.versions.yml ]; then
+    DENY_VERSION=$(grep 'cargo-deny:' toolchain.versions.yml | awk -F '"' '{print $2}')
+  else
+    DENY_VERSION=""
+  fi
+
+  if [ -z "$DENY_VERSION" ]; then
+    echo "Could not parse cargo-deny version from toolchain.versions.yml. Installing latest..."
+    cargo install cargo-deny
+  else
+    echo "Installing cargo-deny v${DENY_VERSION}..."
+    cargo install cargo-deny --version "$DENY_VERSION" --locked
+  fi
 else
   echo "cargo-deny is already installed."
 fi
