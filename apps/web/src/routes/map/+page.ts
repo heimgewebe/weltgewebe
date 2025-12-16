@@ -1,5 +1,6 @@
 import type { PageLoad } from "./$types";
 import { readDrawerParam } from "./drawerDefaults";
+import type { Node } from "./types";
 
 export const load: PageLoad = async ({ url, fetch }) => {
   const params = url.searchParams;
@@ -12,7 +13,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const apiUrl =
     import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "http://127.0.0.1:8080";
 
-  let nodes = [];
+  let nodes: Node[] = [];
   try {
     const res = await fetch(`${apiUrl}/api/nodes`);
     if (res.ok) {

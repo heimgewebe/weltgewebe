@@ -13,6 +13,7 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import Drawer from '$lib/components/Drawer.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import type { Node } from './types';
 
   export let data: PageData;
 
@@ -23,7 +24,7 @@
     lon: number;
   };
 
-  const markersData = (data.nodes || []).map((n: any) => ({
+  const markersData = (data.nodes || []).map((n) => ({
     id: n.id,
     title: n.title,
     lat: n.location.lat,
