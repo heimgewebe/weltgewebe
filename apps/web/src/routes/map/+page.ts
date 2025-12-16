@@ -10,8 +10,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const topOpen = readDrawerParam(params, "t");
 
   // Fallback to local dev/test default if not configured
-  const apiUrl =
-    import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "http://127.0.0.1:8080";
+  const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
 
   let nodes: Node[] = [];
   try {
