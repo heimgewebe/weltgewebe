@@ -28,13 +28,17 @@ jobs:
       PUBLIC_GEWEBE_API_BASE: "http://127.0.0.1:8080"
     steps:
       - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
       - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version-file: '.node-version'
           cache: "pnpm"
           cache-dependency-path: "**/pnpm-lock.yaml"
-      - name: Enable Corepack (pnpm)
-        run: corepack enable
+
       - name: Install deps
         run: pnpm install --frozen-lockfile
       - name: Install Playwright browsers
@@ -42,9 +46,14 @@ jobs:
       - name: Build app
         run: pnpm --filter weltgewebe-web build
 
+      - name: Generate demo data
+        run: scripts/dev/generate-demo-data.sh
+        working-directory: .
+
       - name: Start demo API
         run: |
           PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
+        working-directory: .
 
       - name: Start preview server
         run: |
@@ -57,6 +66,7 @@ jobs:
           PREVIEW_PID_FILE: /tmp/preview.pid
           PREVIEW_LOG: /tmp/preview.log
         run: scripts/ci/wait-for-preview.sh
+        working-directory: .
 
       - name: Wait for servers
         run: pnpm dlx wait-on "http://127.0.0.1:8080" --timeout 120000
