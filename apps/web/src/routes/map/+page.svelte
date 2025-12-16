@@ -24,7 +24,7 @@
     lon: number;
   };
 
-  const markersData = (data.nodes || []).map((n) => ({
+  $: markersData = (data.nodes || []).map((n) => ({
     id: n.id,
     title: n.title,
     lat: n.location.lat,
@@ -231,6 +231,49 @@
     topDrawerRef.setOpener?.(openerButtons.top ?? null);
   }
 
+  async function updateMarkers(points: MapPoint[]) {
+    if (!map) return;
+    const maplibregl = await import('maplibre-gl');
+
+    markerCleanupFns.forEach((fn) => fn());
+    markerCleanupFns.length = 0;
+
+    for (const item of points) {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.className = 'map-marker';
+      element.setAttribute('aria-label', item.title);
+      element.title = item.title;
+      const handleClick = async () => {
+        selected = item;
+        setRightOpen(true);
+        await tick();
+        if (rightDrawerRef && typeof rightDrawerRef.focus === 'function') {
+          // Fokus gezielt auf den Info-Drawer legen, sobald er sichtbar ist.
+          rightDrawerRef.focus();
+        }
+      };
+      element.addEventListener('click', handleClick);
+
+      const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+        .setLngLat([item.lon, item.lat])
+        .addTo(map);
+
+      // Re-apply accessibility attributes after addTo() to ensure they persist
+      element.setAttribute('aria-label', item.title);
+      element.title = item.title;
+
+      markerCleanupFns.push(() => {
+        element.removeEventListener('click', handleClick);
+        marker.remove();
+      });
+    }
+  }
+
+  $: if (map && markersData) {
+    updateMarkers(markersData);
+  }
+
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
   let popHandler: ((event: PopStateEvent) => void) | null = null;
   onMount(() => {
@@ -278,40 +321,6 @@
         zoom: 13
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
-
-      markerCleanupFns.forEach((fn) => fn());
-      markerCleanupFns.length = 0;
-
-      for (const item of markersData) {
-        const element = document.createElement('button');
-        element.type = 'button';
-        element.className = 'map-marker';
-        element.setAttribute('aria-label', item.title);
-        element.title = item.title;
-        const handleClick = async () => {
-          selected = item;
-          setRightOpen(true);
-          await tick();
-          if (rightDrawerRef && typeof rightDrawerRef.focus === 'function') {
-            // Fokus gezielt auf den Info-Drawer legen, sobald er sichtbar ist.
-            rightDrawerRef.focus();
-          }
-        };
-        element.addEventListener('click', handleClick);
-
-        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-          .setLngLat([item.lon, item.lat])
-          .addTo(map);
-
-        // Re-apply accessibility attributes after addTo() to ensure they persist
-        element.setAttribute('aria-label', item.title);
-        element.title = item.title;
-
-        markerCleanupFns.push(() => {
-          element.removeEventListener('click', handleClick);
-          marker.remove();
-        });
-      }
     })();
 
     return () => {
