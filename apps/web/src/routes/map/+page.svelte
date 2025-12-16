@@ -3,7 +3,6 @@
   import type { PageData } from './$types';
   import {
     drawerQueryDefaults,
-    readDrawerParam,
     writeDrawerParam,
     type DrawerKey
   } from './drawerDefaults';
@@ -38,7 +37,13 @@
   let rightOpen = data.rightOpen ?? drawerQueryDefaults.r;   // Filter / Info
   let topOpen = data.topOpen ?? drawerQueryDefaults.t;       // Gewebekonto
 
+  // Sync state from data (e.g. on navigation)
+  $: leftOpen = data.leftOpen ?? drawerQueryDefaults.l;
+  $: rightOpen = data.rightOpen ?? drawerQueryDefaults.r;
+  $: topOpen = data.topOpen ?? drawerQueryDefaults.t;
+
   let selected: MapPoint | null = null;
+  $: if (!rightOpen) selected = null;
   const markerCleanupFns: Array<() => void> = [];
 
   type DrawerInstance = InstanceType<typeof Drawer> & {
@@ -67,17 +72,6 @@
     history.replaceState(history.state, '', url);
   }
 
-  function syncFromLocation() {
-    if (typeof window === 'undefined') return;
-    const q = new URLSearchParams(window.location.search);
-    leftOpen = readDrawerParam(q, 'l');
-    rightOpen = readDrawerParam(q, 'r');
-    if (!rightOpen) {
-      selected = null;
-    }
-    topOpen = readDrawerParam(q, 't');
-  }
-
   function setLeftOpen(next: boolean) {
     if (leftOpen === next) return;
     leftOpen = next;
@@ -91,9 +85,6 @@
   function setRightOpen(next: boolean) {
     if (rightOpen === next) return;
     rightOpen = next;
-    if (!rightOpen) {
-      selected = null;
-    }
     setQuery({ r: rightOpen });
   }
 
@@ -275,16 +266,11 @@
   }
 
   let keyHandler: ((e: KeyboardEvent) => void) | null = null;
-  let popHandler: ((event: PopStateEvent) => void) | null = null;
   onMount(() => {
     const pointerUp = (event: PointerEvent) => finishSwipe(event);
     const pointerCancel = (event: PointerEvent) => cancelSwipe(event);
     window.addEventListener('pointerup', pointerUp);
     window.addEventListener('pointercancel', pointerCancel);
-
-    syncFromLocation();
-    popHandler = () => syncFromLocation();
-    window.addEventListener('popstate', popHandler);
 
     keyHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -327,12 +313,10 @@
       window.removeEventListener('pointerup', pointerUp);
       window.removeEventListener('pointercancel', pointerCancel);
       if (keyHandler) window.removeEventListener('keydown', keyHandler);
-      if (popHandler) window.removeEventListener('popstate', popHandler);
     };
   });
   onDestroy(() => {
     if (keyHandler) window.removeEventListener('keydown', keyHandler);
-    if (popHandler) window.removeEventListener('popstate', popHandler);
     if (map && typeof map.remove === 'function') map.remove();
     markerCleanupFns.forEach((fn) => fn());
     markerCleanupFns.length = 0;
