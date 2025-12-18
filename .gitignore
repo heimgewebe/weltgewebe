@@ -27,3 +27,7 @@ metrics.json
 __pycache__/
 *.pyc
 *.pyo
+
+# Demo Artifacts
+.gewebe/
+*.log
