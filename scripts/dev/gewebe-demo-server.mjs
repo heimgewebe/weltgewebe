@@ -7,10 +7,11 @@
 
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { mkdir, writeFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const __dirname = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const __dirname = resolve(fileURLToPath(import.meta.url), "..", "..", ".."); // repo root (expected)
 const PORT = Number(process.env.PORT || 8080);
 
 console.log("Starting server...");
@@ -19,8 +20,152 @@ console.log(`Port: ${PORT}`);
 const NODES_FILE = resolve(__dirname, ".gewebe/in/demo.nodes.jsonl");
 const EDGES_FILE = resolve(__dirname, ".gewebe/in/demo.edges.jsonl");
 
-console.log(`Nodes file: ${NODES_FILE}`);
-console.log(`Edges file: ${EDGES_FILE}`);
+function fmtBool(v) {
+  return v ? "yes" : "no";
+}
+
+async function tryStat(p) {
+  try {
+    const s = await stat(p);
+    return { ok: true, size: s.size };
+  } catch (e) {
+    return { ok: false, err: String(e?.message || e) };
+  }
+}
+
+async function printStartupDiagnostics() {
+  // These prints are intentionally noisy: they prevent "it works on my machine"
+  // and make container/path issues obvious in 3 seconds.
+  console.log("---- demo-server diagnostics ----");
+  console.log(`node.version: ${process.version}`);
+  console.log(`node.execPath: ${process.execPath}`);
+  console.log(`cwd: ${process.cwd()}`);
+  console.log(`argv: ${process.argv.join(" ")}`);
+  console.log(`import.meta.url: ${import.meta.url}`);
+  console.log(`repoRoot(__dirname): ${__dirname}`);
+  console.log(`PORT(env): ${process.env.PORT ?? "(unset)"} -> ${PORT}`);
+
+  const nodes = await tryStat(NODES_FILE);
+  const edges = await tryStat(EDGES_FILE);
+  console.log(`nodes.path: ${NODES_FILE}`);
+  console.log(`nodes.exists: ${fmtBool(nodes.ok)}${nodes.ok ? ` (size=${nodes.size})` : ` (err=${nodes.err})`}`);
+  console.log(`edges.path: ${EDGES_FILE}`);
+  console.log(`edges.exists: ${fmtBool(edges.ok)}${edges.ok ? ` (size=${edges.size})` : ` (err=${edges.err})`}`);
+  console.log("---------------------------------");
+}
+
+const DEMO_NODES_JSONL = [
+  {
+    id: "00000000-0000-0000-0000-000000000001",
+    kind: "Ort",
+    title: "Marktplatz Hamburg",
+    created_at: "2025-01-01T12:00:00Z",
+    updated_at: "2025-11-01T09:00:00Z",
+    location: { lon: 9.9937, lat: 53.5511 },
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000002",
+    kind: "Initiative",
+    title: "Nachbarschaftshaus",
+    created_at: "2025-01-01T12:00:00Z",
+    updated_at: "2025-11-02T12:15:00Z",
+    location: { lon: 10.0002, lat: 53.5523 },
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000003",
+    kind: "Projekt",
+    title: "Tauschbox Altona",
+    created_at: "2025-01-01T12:00:00Z",
+    updated_at: "2025-10-30T18:45:00Z",
+    location: { lon: 9.9813, lat: 53.5456 },
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000004",
+    kind: "Ort",
+    title: "Gemeinschaftsgarten",
+    created_at: "2025-01-01T12:00:00Z",
+    updated_at: "2025-11-05T10:00:00Z",
+    location: { lon: 10.0184, lat: 53.5631 },
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000005",
+    kind: "Initiative",
+    title: "Reparaturcafé",
+    created_at: "2025-01-01T12:00:00Z",
+    updated_at: "2025-11-03T16:20:00Z",
+    location: { lon: 9.9708, lat: 53.5615 },
+  },
+];
+
+const DEMO_EDGES_JSONL = [
+  {
+    id: "00000000-0000-0000-0000-000000000101",
+    source_type: "node",
+    source_id: "00000000-0000-0000-0000-000000000001",
+    target_type: "node",
+    target_id: "00000000-0000-0000-0000-000000000002",
+    edge_kind: "reference",
+    note: "Kooperation Marktplatz ↔ Nachbarschaftshaus",
+    created_at: "2025-01-01T12:00:00Z",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000102",
+    source_type: "node",
+    source_id: "00000000-0000-0000-0000-000000000002",
+    target_type: "node",
+    target_id: "00000000-0000-0000-0000-000000000004",
+    edge_kind: "reference",
+    note: "Gemeinschaftsaktion Gartenpflege",
+    created_at: "2025-01-01T12:00:00Z",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000103",
+    source_type: "node",
+    source_id: "00000000-0000-0000-0000-000000000001",
+    target_type: "node",
+    target_id: "00000000-0000-0000-0000-000000000003",
+    edge_kind: "reference",
+    note: "Tauschbox liefert Material",
+    created_at: "2025-01-01T12:00:00Z",
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000104",
+    source_type: "node",
+    source_id: "00000000-0000-0000-0000-000000000005",
+    target_type: "node",
+    target_id: "00000000-0000-0000-0000-000000000001",
+    edge_kind: "reference",
+    note: "Reparaturcafé hilft Marktplatz",
+    created_at: "2025-01-01T12:00:00Z",
+  },
+];
+
+function toJsonl(rows) {
+  return rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
+}
+
+async function fileIsNonEmpty(p) {
+  try {
+    const s = await stat(p);
+    return s.size > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureDemoData() {
+  // Create dir even if it already exists (recursive).
+  await mkdir(resolve(__dirname, ".gewebe/in"), { recursive: true });
+
+  const nodesOk = await fileIsNonEmpty(NODES_FILE);
+  const edgesOk = await fileIsNonEmpty(EDGES_FILE);
+
+  if (nodesOk && edgesOk) return;
+
+  console.log("Demo data missing → writing deterministic seeds (JS, bash-free) ...");
+  if (!nodesOk) await writeFile(NODES_FILE, toJsonl(DEMO_NODES_JSONL), "utf8");
+  if (!edgesOk) await writeFile(EDGES_FILE, toJsonl(DEMO_EDGES_JSONL), "utf8");
+}
 
 async function readJsonl(path) {
   const raw = await readFile(path, "utf8").catch(() => "");
@@ -80,10 +225,18 @@ function parseQuery(url) {
   return q;
 }
 
+await printStartupDiagnostics();
+await ensureDemoData();
+
 const server = createServer(async (req, res) => {
   try {
     const url = req.url || "/";
     const path = url.split("?")[0];
+
+    // Simple diagnostics route (not in spec but helpful)
+    if (path === "/api/health") {
+      return sendJson(res, 200, { status: "ok" });
+    }
 
     if (req.method === "GET" && path === "/api/nodes") {
       const q = parseQuery(url);
@@ -118,7 +271,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`▶ Demo-API läuft: http://127.0.0.1:${PORT}`);
+  console.log(`✅ Demo API server listening on http://localhost:${PORT}`);
   console.log(" GET /api/nodes[?bbox=west,south,east,north]");
   console.log(" GET /api/edges");
 });
