@@ -1,35 +1,10 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { viewPanelOpen } from '$lib/stores/uiView';
   import Garnrolle from './Garnrolle.svelte';
-  export let onToggleLeft: () => void;
-  export let onToggleRight: () => void;
-  export let onToggleTop: () => void;
-  export let leftOpen = false;
-  export let rightOpen = false;
-  export let topOpen = false;
 
-  const dispatch = createEventDispatcher<{
-    openers: {
-      left: HTMLButtonElement | null;
-      right: HTMLButtonElement | null;
-      top: HTMLButtonElement | null;
-    };
-  }>();
-
-  let btnLeft: HTMLButtonElement | null = null;
-  let btnRight: HTMLButtonElement | null = null;
-  let btnTop: HTMLButtonElement | null = null;
-  let leftLabel: string;
-  let rightLabel: string;
-  let topLabel: string;
-
-  $: leftLabel = leftOpen ? 'Webrat/Nähstübchen schließen' : 'Webrat/Nähstübchen öffnen';
-  $: rightLabel = rightOpen ? 'Suche & Filter schließen' : 'Suche & Filter öffnen';
-  $: topLabel = topOpen ? 'Gewebekonto schließen' : 'Gewebekonto öffnen';
-
-  onMount(() => {
-    dispatch('openers', { left: btnLeft, right: btnRight, top: btnTop });
-  });
+  function toggleViewPanel() {
+    $viewPanelOpen = !$viewPanelOpen;
+  }
 </script>
 
 <style>
@@ -60,40 +35,14 @@
   <button
     class="btn"
     type="button"
-    aria-label={leftLabel}
-    aria-pressed={leftOpen}
-    aria-expanded={leftOpen}
-    aria-controls="left-stack"
-    bind:this={btnLeft}
-    on:click={onToggleLeft}
+    aria-label={$viewPanelOpen ? 'Ansicht schließen' : 'Ansicht öffnen'}
+    aria-pressed={$viewPanelOpen}
+    aria-expanded={$viewPanelOpen}
+    on:click={toggleViewPanel}
   >
-    ☰ Webrat/Nähstübchen
+    👁️ Ansicht
   </button>
-  <button
-    class="btn"
-    type="button"
-    aria-label={rightLabel}
-    aria-pressed={rightOpen}
-    aria-expanded={rightOpen}
-    aria-controls="filter-drawer"
-    bind:this={btnRight}
-    on:click={onToggleRight}
-  >
-    🔎 Filter
-  </button>
-  <button
-    class="btn"
-    type="button"
-    aria-label={topLabel}
-    aria-pressed={topOpen}
-    aria-expanded={topOpen}
-    aria-controls="account-drawer"
-    bind:this={btnTop}
-    on:click={onToggleTop}
-  >
-    🧶 Gewebekonto
-  </button>
+
   <div class="spacer"></div>
   <div style="pointer-events: auto"><Garnrolle /></div>
 </div>
-
