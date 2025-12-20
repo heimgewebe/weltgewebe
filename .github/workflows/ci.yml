@@ -85,19 +85,19 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
-          
+
           # Verify file exists with absolute path
           if [ ! -f "toolchain.versions.yml" ]; then
             echo "toolchain.versions.yml nicht gefunden: $PWD" >&2
             exit 1
           fi
-          
+
           # Verify yq is available
           if ! yq --version >/dev/null 2>&1; then
             echo "yq is not installed or not in PATH" >&2
             exit 1
           fi
-          
+
           # Parse versions with better error messages
           RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
           if [ -z "$RUST" ]; then
@@ -106,25 +106,25 @@ jobs:
             cat toolchain.versions.yml >&2
             exit 1
           fi
-          
+
           PY=$(yq -r '.python // ""' toolchain.versions.yml | xargs)
           if [ -z "$PY" ]; then
             echo "failed to parse python version from toolchain.versions.yml" >&2
             exit 1
           fi
-          
+
           UV=$(yq -r '.uv // ""' toolchain.versions.yml | xargs)
           if [ -z "$UV" ]; then
             echo "failed to parse uv version from toolchain.versions.yml" >&2
             exit 1
           fi
-          
+
           DENY=$(yq -r '.["cargo-deny"] // ""' toolchain.versions.yml | xargs)
           if [ -z "$DENY" ]; then
             echo "failed to parse cargo-deny version from toolchain.versions.yml" >&2
             exit 1
           fi
-          
+
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
