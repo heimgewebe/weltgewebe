@@ -95,38 +95,41 @@ const demoEdges = [
  * Setup API mocking for a Playwright page.
  * Intercepts /api/** requests and returns demo data or empty responses.
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
+ * Uses a single route handler with internal dispatch for reliability.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
-  await page.route("**/api/nodes", async (route) => {
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(demoNodes),
-    });
-  });
-
-  await page.route("**/api/edges", async (route) => {
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(demoEdges),
-    });
-  });
-
-  await page.route("**/api/health", async (route) => {
-    return route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ status: "Ready" }),
-    });
-  });
-
-  // Catch-all for any other /api/** requests
   await page.route("**/api/**", async (route) => {
+    const url = route.request().url();
+
+    if (url.endsWith("/api/nodes")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(demoNodes),
+      });
+    }
+
+    if (url.endsWith("/api/edges")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(demoEdges),
+      });
+    }
+
+    if (url.includes("/api/health")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ok" }),
+      });
+    }
+
+    // Default: return empty array for any other API requests
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({}),
+      body: JSON.stringify([]),
     });
   });
 }
