@@ -2,62 +2,35 @@ import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
 test.beforeEach(async ({ page }) => {
-  // Mock API responses to avoid needing a running backend
   await mockApiResponses(page);
+  await page.goto("/map");
 });
 
-test("marker click opens info panel", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as any).__E2E__ = true;
-  });
+test("marker click opens selection card", async ({ page }) => {
+  const marker = page.locator(".map-marker").first();
+  await marker.waitFor({ state: "visible" });
+  await marker.click();
 
-  await page.goto("/map?l=0", { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle");
-  // Wait explicitly for markers to be rendered
-  await page.waitForSelector(".map-marker", { timeout: 10000 });
+  // Check if SelectionCard opens (it replaced the drawer)
+  // We identify it by its specific class since we didn't give it an ID
+  const card = page.locator(".selection-card");
+  await expect(card).toBeVisible();
 
-  const markerButton = page.getByRole("button", { name: "Marktplatz Hamburg" });
-  await expect(markerButton).toBeVisible({ timeout: 10000 });
-  await markerButton.click();
-
-  const filterDrawer = page.locator("#filter-drawer");
-  // Wait for drawer to open and content to render
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
-    timeout: 3000,
-  });
-  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toBeVisible({
-    timeout: 3000,
-  });
-  await expect(
-    filterDrawer.getByText("Weitere Details folgen (Stub)"),
-  ).toBeVisible({ timeout: 5000 });
+  // Check content from mockApi.ts demoNodes
+  await expect(card).toContainText("Marktplatz Hamburg");
 });
 
-test("escape closes info panel and clears selection", async ({ page }) => {
-  await page.addInitScript(() => {
-    (window as any).__E2E__ = true;
-  });
+test("close button closes selection card", async ({ page }) => {
+  const marker = page.locator(".map-marker").first();
+  await marker.waitFor({ state: "visible" });
+  await marker.click();
 
-  await page.goto("/map?l=0", { waitUntil: "domcontentloaded" });
-  await page.waitForLoadState("networkidle");
-  await page.waitForSelector(".map-marker", { timeout: 10000 });
+  const card = page.locator(".selection-card");
+  await expect(card).toBeVisible();
 
-  const markerButton = page.getByRole("button", { name: "Marktplatz Hamburg" });
-  await expect(markerButton).toBeVisible({ timeout: 10000 });
-  await markerButton.click();
+  // Click the close button
+  await card.locator('button[aria-label="Close"]').click();
 
-  const filterDrawer = page.locator("#filter-drawer");
-  // Wait for drawer to open
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
-    timeout: 3000,
-  });
-
-  await page.keyboard.press("Escape");
-
-  // Wait for animation to complete before checking closed state
-  await page.waitForTimeout(300);
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
-    timeout: 3000,
-  });
-  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toHaveCount(0);
+  // Card should disappear
+  await expect(card).toBeHidden();
 });

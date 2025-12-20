@@ -1,99 +1,76 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { viewPanelOpen } from '$lib/stores/uiView';
   import Garnrolle from './Garnrolle.svelte';
-  export let onToggleLeft: () => void;
-  export let onToggleRight: () => void;
-  export let onToggleTop: () => void;
-  export let leftOpen = false;
-  export let rightOpen = false;
-  export let topOpen = false;
 
-  const dispatch = createEventDispatcher<{
-    openers: {
-      left: HTMLButtonElement | null;
-      right: HTMLButtonElement | null;
-      top: HTMLButtonElement | null;
-    };
-  }>();
-
-  let btnLeft: HTMLButtonElement | null = null;
-  let btnRight: HTMLButtonElement | null = null;
-  let btnTop: HTMLButtonElement | null = null;
-  let leftLabel: string;
-  let rightLabel: string;
-  let topLabel: string;
-
-  $: leftLabel = leftOpen ? 'Webrat/Nähstübchen schließen' : 'Webrat/Nähstübchen öffnen';
-  $: rightLabel = rightOpen ? 'Suche & Filter schließen' : 'Suche & Filter öffnen';
-  $: topLabel = topOpen ? 'Gewebekonto schließen' : 'Gewebekonto öffnen';
-
-  onMount(() => {
-    dispatch('openers', { left: btnLeft, right: btnRight, top: btnTop });
-  });
+  function toggleViewPanel() {
+    $viewPanelOpen = !$viewPanelOpen;
+  }
 </script>
 
 <style>
   .topbar{
-    position:absolute; inset:0 0 auto 0; min-height:52px; z-index:30;
+    position:absolute; inset:0 0 auto 0; min-height:52px; z-index:41; /* Above ViewPanel (40) */
     display:flex; align-items:center; gap:8px; padding:0 12px;
     padding:env(safe-area-inset-top) 12px 0 12px;
     background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
     color:var(--text);
     pointer-events: none;
   }
-  .btn{
+
+  .pill-btn {
     pointer-events: auto;
-    appearance:none; border:1px solid var(--panel-border); background:var(--panel); color:var(--text);
-    height:34px; padding:0 12px; border-radius:10px; display:inline-flex; align-items:center; gap:8px;
-    box-shadow: var(--shadow); cursor:pointer;
+    appearance: none;
+    border: 1px solid var(--panel-border);
+    background: var(--panel);
+    color: var(--text);
+    height: 36px;
+    padding: 0 16px;
+    border-radius: 99px; /* Pill shape */
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.15s ease;
   }
-  .btn:hover{ outline:1px solid var(--accent-soft); }
-  .btn:focus-visible{
-    outline:2px solid var(--accent);
-    outline-offset:3px;
+
+  .pill-btn:hover {
+    background: var(--bg);
+    transform: translateY(1px);
   }
-  .btn:focus:not(:focus-visible){ outline:none; }
+
+  .pill-btn[aria-pressed="true"] {
+    background: var(--bg);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .pill-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
   .spacer{ flex:1; pointer-events: none; }
 </style>
 
 <div class="topbar" role="toolbar" aria-label="Navigation">
   <button
-    class="btn"
+    class="pill-btn"
     type="button"
-    aria-label={leftLabel}
-    aria-pressed={leftOpen}
-    aria-expanded={leftOpen}
-    aria-controls="left-stack"
-    bind:this={btnLeft}
-    on:click={onToggleLeft}
+    aria-label={$viewPanelOpen ? 'Ansicht schließen' : 'Ansicht öffnen'}
+    aria-pressed={$viewPanelOpen}
+    aria-expanded={$viewPanelOpen}
+    on:click={toggleViewPanel}
   >
-    ☰ Webrat/Nähstübchen
+    {#if $viewPanelOpen}
+      <span>Ansicht ✕</span>
+    {:else}
+      <span>👁️ Ansicht ▾</span>
+    {/if}
   </button>
-  <button
-    class="btn"
-    type="button"
-    aria-label={rightLabel}
-    aria-pressed={rightOpen}
-    aria-expanded={rightOpen}
-    aria-controls="filter-drawer"
-    bind:this={btnRight}
-    on:click={onToggleRight}
-  >
-    🔎 Filter
-  </button>
-  <button
-    class="btn"
-    type="button"
-    aria-label={topLabel}
-    aria-pressed={topOpen}
-    aria-expanded={topOpen}
-    aria-controls="account-drawer"
-    bind:this={btnTop}
-    on:click={onToggleTop}
-  >
-    🧶 Gewebekonto
-  </button>
+
   <div class="spacer"></div>
   <div style="pointer-events: auto"><Garnrolle /></div>
 </div>
-
