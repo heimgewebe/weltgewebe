@@ -20,17 +20,14 @@ test("marker click opens info panel", async ({ page }) => {
   await expect(markerButton).toBeVisible({ timeout: 10000 });
   await markerButton.click();
 
-  const filterDrawer = page.locator("#filter-drawer");
-  // Wait for drawer to open and content to render
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
+  // SelectionCard replaces the old filter-drawer
+  const selectionCard = page.locator(".selection-card");
+  await expect(selectionCard).toBeVisible({ timeout: 3000 });
+  await expect(selectionCard.getByText("Marktplatz Hamburg")).toBeVisible({
     timeout: 3000,
   });
-  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toBeVisible({
-    timeout: 3000,
-  });
-  await expect(
-    filterDrawer.getByText("Weitere Details folgen (Stub)"),
-  ).toBeVisible({ timeout: 5000 });
+  // The new UI doesn't have "Weitere Details folgen" stub text
+  // Instead it shows "Keine Beschreibung verfügbar." when no description exists
 });
 
 test("escape closes info panel and clears selection", async ({ page }) => {
@@ -46,18 +43,13 @@ test("escape closes info panel and clears selection", async ({ page }) => {
   await expect(markerButton).toBeVisible({ timeout: 10000 });
   await markerButton.click();
 
-  const filterDrawer = page.locator("#filter-drawer");
-  // Wait for drawer to open
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "false", {
-    timeout: 3000,
-  });
+  const selectionCard = page.locator(".selection-card");
+  // Wait for card to appear
+  await expect(selectionCard).toBeVisible({ timeout: 3000 });
 
   await page.keyboard.press("Escape");
 
   // Wait for animation to complete before checking closed state
   await page.waitForTimeout(300);
-  await expect(filterDrawer).toHaveAttribute("aria-hidden", "true", {
-    timeout: 3000,
-  });
-  await expect(filterDrawer.getByText("Marktplatz Hamburg")).toHaveCount(0);
+  await expect(selectionCard).toBeHidden({ timeout: 3000 });
 });

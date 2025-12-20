@@ -14,8 +14,9 @@ test("ViewPanel toggles visibility", async ({ page }) => {
   await viewButton.click();
   await expect(viewPanel).toBeVisible();
 
-  // Click again to close (now it has "Ansicht schließen" text)
-  await page.getByRole("button", { name: /Ansicht schließen/i }).click();
+  // Click backdrop to close
+  const backdrop = page.locator(".backdrop");
+  await backdrop.click({ position: { x: 10, y: 10 } });
   await expect(viewPanel).toBeHidden();
 });
 
