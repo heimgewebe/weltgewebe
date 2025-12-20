@@ -97,41 +97,41 @@ const demoEdges = [
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
-    // 1. Catch-all: registered first (so it's checked if no later route matches? No, Playwright checks reverse order)
-    // "When multiple routes match... the handler that was registered LAST is used."
-    // So to have specific routes override catch-all, we register specific routes LAST.
-    // Register catch-all FIRST.
+  // 1. Catch-all: registered first (so it's checked if no later route matches? No, Playwright checks reverse order)
+  // "When multiple routes match... the handler that was registered LAST is used."
+  // So to have specific routes override catch-all, we register specific routes LAST.
+  // Register catch-all FIRST.
 
-    await page.route("**/api/**", async (route) => {
-        // Fallback for unhandled API calls
-        await route.fulfill({
-            status: 200, // Return 200 to be safe against UI crashes
-            contentType: "application/json",
-            body: JSON.stringify({ note: "Mock fallback" })
-        });
+  await page.route("**/api/**", async (route) => {
+    // Fallback for unhandled API calls
+    await route.fulfill({
+      status: 200, // Return 200 to be safe against UI crashes
+      contentType: "application/json",
+      body: JSON.stringify({ note: "Mock fallback" }),
     });
+  });
 
-    await page.route("**/api/nodes", async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify(demoNodes),
-        });
+  await page.route("**/api/nodes", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(demoNodes),
     });
+  });
 
-    await page.route("**/api/edges", async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify(demoEdges),
-        });
+  await page.route("**/api/edges", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(demoEdges),
     });
+  });
 
-    await page.route("**/api/health/live", async (route) => {
-        await route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({ status: "Ready" }),
-        });
+  await page.route("**/api/health/live", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "Ready" }),
     });
+  });
 }
