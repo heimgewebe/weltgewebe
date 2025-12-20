@@ -16,6 +16,5 @@ export default defineConfig({
       ? parseInt(process.env.PREVIEW_PORT, 10) || 4173
       : 4173,
     strictPort: true,
-    // No proxy in preview mode - tests use Playwright mocking instead
   },
 });
