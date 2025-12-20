@@ -7,7 +7,7 @@ test("ViewPanel toggles visibility", async ({ page }) => {
   const viewButton = page.getByRole("button", { name: /Ansicht/i });
 
   // Initially hidden
-  const viewPanel = page.locator('.view-panel');
+  const viewPanel = page.locator(".view-panel");
   await expect(viewPanel).toBeHidden();
 
   // Click to open
@@ -24,11 +24,11 @@ test("Backdrop click closes ViewPanel", async ({ page }) => {
   await page.goto("/map");
   await page.getByRole("button", { name: /Ansicht/i }).click();
 
-  const viewPanel = page.locator('.view-panel');
+  const viewPanel = page.locator(".view-panel");
   await expect(viewPanel).toBeVisible();
 
   // Click backdrop
-  const backdrop = page.locator('.backdrop');
+  const backdrop = page.locator(".backdrop");
   await backdrop.click({ position: { x: 10, y: 10 } });
 
   await expect(viewPanel).toBeHidden();
@@ -39,13 +39,13 @@ test("Escape key closes ViewPanel reliably", async ({ page }) => {
   await page.goto("/map");
   await page.getByRole("button", { name: /Ansicht/i }).click();
 
-  const viewPanel = page.locator('.view-panel');
+  const viewPanel = page.locator(".view-panel");
   await expect(viewPanel).toBeVisible();
 
   // Focus something else to ensure global handler works
-  await page.locator('body').click();
+  await page.locator("body").click();
 
-  await page.keyboard.press('Escape');
+  await page.keyboard.press("Escape");
 
   await expect(viewPanel).toBeHidden();
 });
@@ -54,7 +54,7 @@ test("Toggle showNodes hides/shows markers", async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
 
-  const marker = page.locator('.map-marker').first();
+  const marker = page.locator(".map-marker").first();
   await expect(marker).toBeVisible({ timeout: 5000 });
 
   // Open ViewPanel
