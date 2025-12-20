@@ -21,7 +21,10 @@
   .view-panel {
     position: absolute;
     z-index: 40;
-    background: var(--panel);
+    /* Glass Effect */
+    background: color-mix(in srgb, var(--panel) 88%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--panel-border);
     box-shadow: var(--shadow);
     border-radius: var(--radius);
@@ -49,8 +52,15 @@
       right: 0;
       border-radius: 16px 16px 0 0;
       border-bottom: none;
-      padding-bottom: max(16px, env(safe-area-inset-bottom) + 16px);
+      /* Padding bottom to respect safe area + some visual breathing room */
+      padding-bottom: max(24px, env(safe-area-inset-bottom) + 16px);
     }
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
 
   h3 {
@@ -59,41 +69,114 @@
     font-weight: 600;
   }
 
+  .close-btn {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    padding: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .close-btn:hover {
+    background: rgba(0,0,0,0.05);
+    color: var(--text);
+  }
+
   .section {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
-  label {
+  /* Switch Toggle Styles */
+  .toggle-row {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 10px;
     cursor: pointer;
-    font-size: 14px;
+  }
+
+  .toggle-label {
+    display: flex;
+    flex-direction: column;
+  }
+  .toggle-title {
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .toggle-desc {
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .switch {
+    position: relative;
+    width: 40px;
+    height: 24px;
+    background: var(--panel-border);
+    border-radius: 99px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  input:checked + .switch {
+    background: var(--accent);
+  }
+  input:checked + .switch::after {
+    transform: translateX(16px);
+  }
+  input:focus-visible + .switch {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Search Styles */
+  .separator {
+    border: 0;
+    border-top: 1px solid var(--panel-border);
+    width: 100%;
+    margin: 4px 0;
   }
 
   .search-label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    cursor: default;
-    align-items: flex-start;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+    display: block;
   }
 
-  input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    accent-color: var(--accent);
-  }
-
-  input[type="text"] {
+  .search-input {
     width: 100%;
-    padding: 6px;
-    border-radius: 4px;
+    padding: 8px 10px;
+    border-radius: 6px;
     border: 1px solid var(--panel-border);
-    background: var(--bg);
+    background: rgba(255,255,255,0.05); /* slightly lighter on dark, darker on light? assuming dark/panel vars handle it */
     color: var(--text);
+    font-size: 14px;
+  }
+  .search-input:focus {
+    outline: 2px solid var(--accent);
+    border-color: transparent;
   }
 
   .backdrop {
@@ -101,6 +184,16 @@
     inset: 0;
     background: rgba(0, 0, 0, 0.2);
     z-index: 39;
+    backdrop-filter: blur(1px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .view-panel {
+      transition: none !important;
+    }
+    .switch, .switch::after {
+      transition: none !important;
+    }
   }
 </style>
 
@@ -108,38 +201,47 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div class="backdrop" on:click={close}></div>
-  <div class="view-panel" transition:slide={{ duration: 200, axis: 'y' }}>
-    <h3>Ansicht</h3>
+  <div class="view-panel" transition:slide={{ duration: 180, axis: 'y' }}>
+    <div class="header">
+      <h3>Ansicht</h3>
+      <button class="close-btn" on:click={close} aria-label="Schließen">✕</button>
+    </div>
 
     <div class="section">
-      <label>
+      <label class="toggle-row">
+        <span class="toggle-label">
+          <span class="toggle-title">Knoten</span>
+          <span class="toggle-desc">Orte & Strukturen</span>
+        </span>
         <input type="checkbox" bind:checked={$view.showNodes}>
-        Knoten anzeigen
+        <div class="switch"></div>
       </label>
-      <label>
+
+      <label class="toggle-row">
+        <span class="toggle-label">
+          <span class="toggle-title">Fäden</span>
+          <span class="toggle-desc">Verbindungen</span>
+        </span>
         <input type="checkbox" bind:checked={$view.showEdges}>
-        Fäden anzeigen
+        <div class="switch"></div>
       </label>
-      <label>
+
+      <label class="toggle-row">
+        <span class="toggle-label">
+          <span class="toggle-title">Governance</span>
+          <span class="toggle-desc">Anträge & Prozesse</span>
+        </span>
         <input type="checkbox" bind:checked={$view.showGovernance}>
-        Anträge & Governance
+        <div class="switch"></div>
       </label>
     </div>
 
     {#if $view.showSearch}
-      <hr style="border: 0; border-top: 1px solid var(--panel-border); width: 100%; margin: 0;">
-      <div class="section">
-        <label for="search-input" class="search-label">
-          Suche (Stub)
-        </label>
-        <input id="search-input" type="text" placeholder="Suchen...">
+      <hr class="separator">
+      <div>
+        <label for="search-input" class="search-label">Suche</label>
+        <input id="search-input" class="search-input" type="text" placeholder="Filtern...">
       </div>
     {/if}
-
-    <div class="section">
-      <button on:click={close} style="padding: 6px; background: var(--bg); border: 1px solid var(--panel-border); border-radius: 4px; cursor: pointer; color: var(--text);">
-        Schließen
-      </button>
-    </div>
   </div>
 {/if}
