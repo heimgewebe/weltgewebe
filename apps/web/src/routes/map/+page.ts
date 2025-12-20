@@ -2,6 +2,10 @@ import type { PageLoad } from "./$types";
 import { readDrawerParam } from "./drawerDefaults";
 import type { Node } from "./types";
 
+// Disable SSR for this page to ensure API calls happen client-side
+// where Playwright mocking can intercept them
+export const ssr = false;
+
 export const load: PageLoad = async ({ url, fetch }) => {
   const params = url.searchParams;
 
