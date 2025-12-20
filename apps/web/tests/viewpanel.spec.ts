@@ -4,7 +4,7 @@ import { mockApiResponses } from "./fixtures/mockApi";
 test("ViewPanel toggles visibility", async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
-  const viewButton = page.getByRole("button", { name: /Ansicht/i });
+  const viewButton = page.getByRole("button", { name: /Ansicht öffnen/i });
 
   // Initially hidden
   const viewPanel = page.locator(".view-panel");
@@ -14,15 +14,15 @@ test("ViewPanel toggles visibility", async ({ page }) => {
   await viewButton.click();
   await expect(viewPanel).toBeVisible();
 
-  // Click again to close
-  await viewButton.click();
+  // Click again to close (now it has "Ansicht schließen" text)
+  await page.getByRole("button", { name: /Ansicht schließen/i }).click();
   await expect(viewPanel).toBeHidden();
 });
 
 test("Backdrop click closes ViewPanel", async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
-  await page.getByRole("button", { name: /Ansicht/i }).click();
+  await page.getByRole("button", { name: /Ansicht öffnen/i }).click();
 
   const viewPanel = page.locator(".view-panel");
   await expect(viewPanel).toBeVisible();
@@ -37,7 +37,7 @@ test("Backdrop click closes ViewPanel", async ({ page }) => {
 test("Escape key closes ViewPanel reliably", async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
-  await page.getByRole("button", { name: /Ansicht/i }).click();
+  await page.getByRole("button", { name: /Ansicht öffnen/i }).click();
 
   const viewPanel = page.locator(".view-panel");
   await expect(viewPanel).toBeVisible();
@@ -58,10 +58,11 @@ test("Toggle showNodes hides/shows markers", async ({ page }) => {
   await expect(marker).toBeVisible({ timeout: 5000 });
 
   // Open ViewPanel
-  await page.getByRole("button", { name: /Ansicht/i }).click();
+  await page.getByRole("button", { name: /Ansicht öffnen/i }).click();
 
-  // Use robust test-id selector
+  // Use robust test-id selector and ensure it's in view
   const toggle = page.getByTestId("toggle-nodes");
+  await toggle.scrollIntoViewIfNeeded();
 
   await toggle.uncheck({ force: true });
 
