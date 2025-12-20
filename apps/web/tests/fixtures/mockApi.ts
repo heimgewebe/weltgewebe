@@ -97,34 +97,32 @@ const demoEdges = [
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
+  await page.route("**/api/nodes", async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(demoNodes),
+    });
+  });
+
+  await page.route("**/api/edges", async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(demoEdges),
+    });
+  });
+
+  await page.route("**/api/health", async (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ status: "Ready" }),
+    });
+  });
+
+  // Catch-all for any other /api/** requests
   await page.route("**/api/**", async (route) => {
-    const url = route.request().url();
-
-    if (url.endsWith("/api/nodes")) {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(demoNodes),
-      });
-    }
-
-    if (url.endsWith("/api/edges")) {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(demoEdges),
-      });
-    }
-
-    if (url.includes("/api/health")) {
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ status: "Ready" }),
-      });
-    }
-
-    // Default: empty, no error objects
     return route.fulfill({
       status: 200,
       contentType: "application/json",
