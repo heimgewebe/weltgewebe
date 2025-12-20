@@ -209,7 +209,7 @@
   <div class="view-panel" transition:slide={{ duration: 180, axis: 'y' }}>
     <div class="header">
       <h3>Ansicht</h3>
-      <button class="close-btn" on:click={close} aria-label="Schließen">✕</button>
+      <button class="close-btn" on:click={close} aria-label="Schließen" data-testid="close-view-panel">✕</button>
     </div>
 
     <div class="section">

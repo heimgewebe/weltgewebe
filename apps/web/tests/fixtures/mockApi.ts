@@ -95,6 +95,7 @@ const demoEdges = [
  * Setup API mocking for a Playwright page.
  * Intercepts /api/** requests and returns demo data or empty responses.
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
+ * Uses a single route handler with internal dispatch for reliability.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
   await page.route("**/api/**", async (route) => {
@@ -120,15 +121,15 @@ export async function mockApiResponses(page: Page): Promise<void> {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ status: "Ready" }),
+        body: JSON.stringify({ status: "ok" }),
       });
     }
 
-    // Default: empty, no error objects
+    // Default: return empty array for any other API requests
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({}),
+      body: JSON.stringify([]),
     });
   });
 }
