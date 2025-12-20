@@ -198,9 +198,14 @@
 </style>
 
 {#if $viewPanelOpen}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <div class="backdrop" on:click={close}></div>
+  <div
+    class="backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Ansicht schließen"
+    on:click={close}
+    on:keydown={(e) => (e.key === "Enter" || e.key === " ") && close()}
+  ></div>
   <div class="view-panel" transition:slide={{ duration: 180, axis: 'y' }}>
     <div class="header">
       <h3>Ansicht</h3>
@@ -213,7 +218,11 @@
           <span class="toggle-title">Knoten</span>
           <span class="toggle-desc">Orte & Strukturen</span>
         </span>
-        <input type="checkbox" bind:checked={$view.showNodes}>
+        <input
+          type="checkbox"
+          bind:checked={$view.showNodes}
+          data-testid="toggle-nodes"
+        >
         <div class="switch"></div>
       </label>
 
@@ -222,7 +231,11 @@
           <span class="toggle-title">Fäden</span>
           <span class="toggle-desc">Verbindungen</span>
         </span>
-        <input type="checkbox" bind:checked={$view.showEdges}>
+        <input
+          type="checkbox"
+          bind:checked={$view.showEdges}
+          data-testid="toggle-edges"
+        >
         <div class="switch"></div>
       </label>
 
@@ -231,7 +244,11 @@
           <span class="toggle-title">Governance</span>
           <span class="toggle-desc">Anträge & Prozesse</span>
         </span>
-        <input type="checkbox" bind:checked={$view.showGovernance}>
+        <input
+          type="checkbox"
+          bind:checked={$view.showGovernance}
+          data-testid="toggle-governance"
+        >
         <div class="switch"></div>
       </label>
     </div>
