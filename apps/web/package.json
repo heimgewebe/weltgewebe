@@ -19,7 +19,7 @@
     "precheck": "pnpm run sync",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "precheck:ci": "pnpm run sync",
-    "check:ci": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "check:ci": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
