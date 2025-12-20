@@ -1,11 +1,21 @@
 <script lang="ts">
   import { view, viewPanelOpen } from '$lib/stores/uiView';
   import { slide } from 'svelte/transition';
+  import { onMount } from 'svelte';
 
   function close() {
     $viewPanelOpen = false;
   }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if ($viewPanelOpen && e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  }
 </script>
+
+<svelte:window on:keydown={onKeyDown} />
 
 <style>
   .view-panel {
@@ -63,10 +73,27 @@
     font-size: 14px;
   }
 
+  .search-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    cursor: default;
+    align-items: flex-start;
+  }
+
   input[type="checkbox"] {
     width: 16px;
     height: 16px;
     accent-color: var(--accent);
+  }
+
+  input[type="text"] {
+    width: 100%;
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+    background: var(--bg);
+    color: var(--text);
   }
 
   .backdrop {
@@ -78,7 +105,9 @@
 </style>
 
 {#if $viewPanelOpen}
-  <div class="backdrop" on:click={close} on:keydown={(e) => e.key === 'Escape' && close()} role="button" tabindex="-1" aria-label="Close view panel"></div>
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="backdrop" on:click={close}></div>
   <div class="view-panel" transition:slide={{ duration: 200, axis: 'y' }}>
     <h3>Ansicht</h3>
 
@@ -100,10 +129,10 @@
     {#if $view.showSearch}
       <hr style="border: 0; border-top: 1px solid var(--panel-border); width: 100%; margin: 0;">
       <div class="section">
-        <label>
+        <label for="search-input" class="search-label">
           Suche (Stub)
-          <input type="text" placeholder="Suchen..." style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid var(--panel-border); background: var(--bg); color: var(--text);">
         </label>
+        <input id="search-input" type="text" placeholder="Suchen...">
       </div>
     {/if}
 
