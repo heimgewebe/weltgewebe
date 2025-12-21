@@ -19,13 +19,15 @@
     title: string;
     lat: number;
     lon: number;
+    summary?: string;
   };
 
   $: markersData = (data.nodes || []).map((n) => ({
     id: n.id,
     title: n.title,
     lat: n.location.lat,
-    lon: n.location.lon
+    lon: n.location.lon,
+    summary: n.summary
   })) satisfies MapPoint[];
 
   let mapContainer: HTMLDivElement | null = null;
