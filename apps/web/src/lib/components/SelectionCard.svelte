@@ -1,9 +1,19 @@
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
   import { slide } from 'svelte/transition';
+  import { tick } from 'svelte';
 
   function close() {
     $selection = null;
+  }
+
+  // Manage focus when card opens
+  let cardRef: HTMLElement;
+  $: if ($selection && cardRef) {
+    (async () => {
+      await tick();
+      cardRef?.focus();
+    })();
   }
 </script>
 
@@ -135,11 +145,19 @@
 </style>
 
 {#if $selection}
-  <div class="selection-card" transition:slide={{ duration: 180, axis: 'y' }}>
+  <div
+    class="selection-card"
+    transition:slide={{ duration: 180, axis: 'y' }}
+    role="dialog"
+    aria-modal="false"
+    tabindex="-1"
+    bind:this={cardRef}
+    aria-labelledby="selection-title"
+  >
     <div class="header">
       <div>
         <span class="badge">{$selection.type}</span>
-        <h3>
+        <h3 id="selection-title">
           {#if $selection.data && $selection.data.title}
             {$selection.data.title}
           {:else}
