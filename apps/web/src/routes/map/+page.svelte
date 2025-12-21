@@ -31,6 +31,7 @@
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
   let isLoading = true;
+  let lastFocusedElement: HTMLElement | null = null;
   const markerCleanupFns: Array<() => void> = [];
 
   // Update markers when data changes or view toggles change
@@ -50,14 +51,23 @@
       element.setAttribute('aria-label', item.title);
       element.title = item.title;
 
-      const handleClick = async () => {
+      const handleClick = async (e: Event) => {
+        // Capture focus for restoration later
+        lastFocusedElement = e.currentTarget as HTMLElement;
+
         $selection = { type: 'node', id: item.id, data: item };
-        map?.flyTo({
-          center: [item.lon, item.lat],
-          zoom: Math.max(map.getZoom(), 14),
-          speed: 0.8,
-          curve: 1
-        });
+
+        // Robust coordinate check before flying
+        const lat = item.lat;
+        const lon = item.lon;
+        if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+          map?.flyTo({
+            center: [lon, lat],
+            zoom: Math.max(map.getZoom(), 14),
+            speed: 0.8,
+            curve: 1
+          });
+        }
       };
       element.addEventListener('click', handleClick);
 
@@ -81,6 +91,15 @@
     updateMarkers(markersData);
   }
 
+  // Restore focus when selection is closed
+  $: if (!$selection && lastFocusedElement) {
+    // Check if element is still in document (it might be gone if view changed)
+    if (document.body.contains(lastFocusedElement)) {
+      lastFocusedElement.focus();
+    }
+    lastFocusedElement = null;
+  }
+
   // Handle Edges visibility (Stub implementation for now as we don't have edges data in this file yet, but logic is prepared)
   $: if (map && $view) {
     // if ($view.showEdges) { ... render edges ... } else { ... remove edges ... }
@@ -102,9 +121,18 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
-      map.on('load', () => {
+      // Fail-safe loading state
+      const loadingTimeout = setTimeout(() => {
         isLoading = false;
-      });
+      }, 10000);
+
+      const finishLoading = () => {
+        clearTimeout(loadingTimeout);
+        isLoading = false;
+      };
+
+      map.on('load', finishLoading);
+      map.on('error', finishLoading);
     })();
 
     return () => {
@@ -144,9 +172,11 @@
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
-  #map :global(.map-marker:hover){
-    transform: scale(1.2);
-    z-index: 10;
+  @media (hover: hover) and (pointer: fine) {
+    #map :global(.map-marker:hover){
+      transform: scale(1.2);
+      z-index: 10;
+    }
   }
   #map :global(.map-marker:focus-visible){
     outline:2px solid var(--fg);
