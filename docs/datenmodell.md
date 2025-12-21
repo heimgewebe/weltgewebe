@@ -44,6 +44,22 @@ Verwaltet Benutzer- oder Systemrollen, die Berechtigungen steuern.
 |`permissions`|`jsonb`|Berechtigungen der Rolle als JSON-Objekt.|
 |`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
 
+### `edges`
+
+Definiert Beziehungen zwischen Knoten und Rollen (z.B. Mitgliedschaften, Zuständigkeiten).
+
+|Spalte|Typ|Beschreibung|
+|---|---|---|
+|`id`|`uuid` (PK)|Eindeutiger Identifikator der Kante.|
+|`source_type`|`text`|Typ des Ursprungs (`role`, `node`).|
+|`source_id`|`uuid`|ID des Ursprungsobjekts.|
+|`target_type`|`text`|Typ des Ziels (`role`, `node`).|
+|`target_id`|`uuid`|ID des Zielobjekts.|
+|`edge_kind`|`text`|Art der Beziehung (`delegation`, `membership`, `ownership`, `reference`).|
+|`note`|`text`|Optionale Notiz zur Beziehung.|
+|`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
+|`expires_at`|`timestamptz`|Optionaler Ablaufzeitpunkt.|
+
 ### `conversations`
 
 Repräsentiert die Gesprächsräume ("conversations"), die mit unterschiedlichen Subjekten

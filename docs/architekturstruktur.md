@@ -30,9 +30,9 @@ weltgewebe/weltgewebe-repo/
 │  │  ├─ src/
 │  │  │  ├─ main.rs             # Einstiegspunkt, Router
 │  │  │  ├─ routes/             # HTTP- und SSE-Endpunkte
-│  │  │  ├─ domain/             # Geschäftslogik, Services
-│  │  │  ├─ repo/               # SQLx-Abfragen, Postgres-Anbindung
-│  │  │  ├─ events/             # Outbox-Publisher, Eventtypen
+│  │  │  ├─ domain/             # (geplant) Geschäftslogik, Services
+│  │  │  ├─ repo/               # (geplant) SQLx-Abfragen, Postgres-Anbindung
+│  │  │  ├─ events/             # (geplant) Outbox-Publisher, Eventtypen
 │  │  │  └─ telemetry/          # Prometheus/OTel-Integration
 │  │  ├─ migrations/            # Datenbankschemata, pg_partman
 │  │  ├─ tests/                 # API-Tests (Rust)
@@ -43,6 +43,10 @@ weltgewebe/weltgewebe-repo/
 │  │                             # Aktuell noch nicht im Repo angelegt.
 │  └─ search/                   # (optional, geplant) Such-Adapter/SDKs
 │                                # Wird bei Bedarf als eigener Ordner ergänzt.
+│
+├─ contracts/                   # Datenverträge & Schemata (JSON Schema)
+│  ├─ domain/                   # Schemata für Kernentitäten (Node, Edge, ...)
+│  └─ README.md
 │
 ├─ packages/                    # (optional) Geteilte Libraries/SDKs
 │  └─ README.md
