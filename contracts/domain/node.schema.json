@@ -24,7 +24,8 @@
       "format": "date-time"
     },
     "summary": {
-      "type": "string"
+      "type": "string",
+      "description": "Short summary. A longer 'description' field is reserved for future use."
     },
     "tags": {
       "type": "array",

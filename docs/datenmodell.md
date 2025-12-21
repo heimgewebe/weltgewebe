@@ -29,7 +29,8 @@ Speichert geografische oder logische Knotenpunkte, die als Anker für Gesprächs
 |`id`|`uuid` (PK)|Eindeutiger Identifikator des Knotens.|
 |`location`|`geography(Point, 4326)`|Geografischer Standort (Längen- und Breitengrad).|
 |`h3_index`|`bigint`|H3-Index für schnelle geografische Abfragen.|
-|`name`|`text`|Anzeigename des Knotens.|
+|`title`|`text`|Anzeigename des Knotens.|
+|`summary`|`text`|Kurze Zusammenfassung. Ein längeres `description`-Feld ist für später reserviert.|
 |`created_at`|`timestamptz`|Zeitstempel der Erstellung.|
 |`updated_at`|`timestamptz`|Zeitstempel der letzten Änderung.|
 
