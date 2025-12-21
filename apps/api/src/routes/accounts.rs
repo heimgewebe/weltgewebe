@@ -106,7 +106,10 @@ pub async fn list_accounts(
     let path = accounts_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
-        Err(_) => return Ok(Json(Vec::new())),
+        Err(e) => {
+            tracing::warn!(?path, ?e, "demo.accounts.jsonl not found or unreadable; returning empty list");
+            return Ok(Json(Vec::new()));
+        }
     };
     let mut lines = BufReader::new(file).lines();
 
