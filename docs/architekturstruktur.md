@@ -118,8 +118,9 @@ Erläuterungen zu den Hauptordnern
   gemeinsamem Code entsteht.
 - **infra/**
   Infrastruktur- und Deployment-Ebene. Compose-Profile für verschiedene Betriebsmodi (`infra/compose/*.yml`),
-  Caddy-Konfiguration (`infra/caddy`), DB-Init (`infra/compose/sql/init`), Monitoring-Setup (`infra/compose/monitoring`).
-  Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung können als `infra/nomad` bzw. `infra/k8s` ergänzt werden.
+  Caddy-Konfiguration (`infra/caddy`), DB-Init (`infra/compose/sql/init`), Monitoring-Setup
+  (`infra/compose/monitoring`). Optional Nomad- oder Kubernetes-Definitionen für spätere Skalierung können als
+  `infra/nomad` bzw. `infra/k8s` ergänzt werden.
 - **docs/**
   Dokumentation und Architekturentscheidungen. Enthält ADRs, Techstack-Beschreibung, Diagramme,
   Datenmodellübersicht und Runbooks.

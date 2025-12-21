@@ -100,6 +100,7 @@
     line-height: 1.5;
     /* Limit to 2 lines */
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -170,7 +171,7 @@
 
     <div class="content">
       {#if $selection.data}
-        {$selection.data.description || 'Keine Beschreibung verfügbar.'}
+        {$selection.data.summary || 'Keine Beschreibung verfügbar.'}
       {:else}
         Wird geladen...
       {/if}
