@@ -9,19 +9,24 @@ export const load: PageLoad = async ({ url, fetch }) => {
   const rightOpen = readDrawerParam(params, "r");
   const topOpen = readDrawerParam(params, "t");
 
-  // Fallback to local dev/test default if not configured
-  const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
+  // Robust API URL handling
+  const apiBase = (import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "").replace(/\/$/, "");
+  const apiPrefix = apiBase.endsWith("/api") ? "" : "/api";
+
+  const getApiUrl = (endpoint: string) =>
+    apiBase ? `${apiBase}${apiPrefix}/${endpoint}` : `/api/${endpoint}`;
 
   let nodes: Node[] = [];
   let accounts: any[] = [];
   let edges: any[] = [];
 
   try {
-    const res = await fetch(`${apiUrl}/api/nodes`);
+    const url = getApiUrl("nodes");
+    const res = await fetch(url);
     if (res.ok) {
       nodes = await res.json();
     } else {
-      console.error("Failed to fetch nodes from", apiUrl, res.status);
+      console.error("Failed to fetch nodes from", url, res.status);
       console.error(await res.text());
     }
   } catch (e) {
@@ -29,11 +34,12 @@ export const load: PageLoad = async ({ url, fetch }) => {
   }
 
   try {
-    const res = await fetch(`${apiUrl}/api/accounts`);
+    const url = getApiUrl("accounts");
+    const res = await fetch(url);
     if (res.ok) {
       accounts = await res.json();
     } else {
-      console.error("Failed to fetch accounts from", apiUrl, res.status);
+      console.error("Failed to fetch accounts from", url, res.status);
       console.error(await res.text());
     }
   } catch (e) {
@@ -41,11 +47,12 @@ export const load: PageLoad = async ({ url, fetch }) => {
   }
 
   try {
-    const res = await fetch(`${apiUrl}/api/edges`);
+    const url = getApiUrl("edges");
+    const res = await fetch(url);
     if (res.ok) {
       edges = await res.json();
     } else {
-      console.error("Failed to fetch edges from", apiUrl, res.status);
+      console.error("Failed to fetch edges from", url, res.status);
       console.error(await res.text());
     }
   } catch (e) {
