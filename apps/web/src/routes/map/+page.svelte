@@ -367,7 +367,9 @@
   <div class="debug-badge">
     Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
     <br>
-    API: {import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '(empty)'}
+    API: {import.meta.env.PUBLIC_GEWEBE_API_BASE || '(empty/local)'}
+    <br>
+    Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
   </div>
   <TopBar />
   <ViewPanel />

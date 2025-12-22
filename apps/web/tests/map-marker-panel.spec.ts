@@ -17,7 +17,8 @@ test("marker click opens selection card", async ({ page }) => {
   await expect(card).toBeVisible();
 
   // Check content from mockApi.ts demoNodes
-  await expect(card).toContainText("Marktplatz Hamburg");
+  // "fairschenkbox" is the title in the new demoData.ts
+  await expect(card).toContainText("fairschenkbox");
 });
 
 test("close button closes selection card", async ({ page }) => {
