@@ -1,39 +1,25 @@
 import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
+test.beforeEach(async ({ page }) => {
+  await mockApiResponses(page);
+  await page.goto("/map");
+});
+
 test.describe("smoke", () => {
-  test.beforeEach(async ({ page }) => {
-    test.setTimeout(10_000);
-    // Mock API responses to avoid needing a running backend
-    await mockApiResponses(page);
-  });
-
   test("loads /map without console errors", async ({ page }) => {
-    const consoleErrors: string[] = [];
-    const pageErrors: string[] = [];
-
-    page.on("console", (message) => {
-      if (message.type() === "error") {
-        consoleErrors.push(message.text());
-      }
+    const consoleLogs: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.type() === "error") consoleLogs.push(msg.text());
     });
 
-    page.on("pageerror", (error) => {
-      pageErrors.push(error.message ?? String(error));
-    });
-
-    await page.goto("/map", { waitUntil: "domcontentloaded" });
-    await page.waitForLoadState("networkidle");
-
-    const main = page.getByRole("main");
-    await expect(main).toBeVisible();
-
-    // Die Karte hängt in einem stabilen Container mit der ID #map.
     await expect(page.locator("#map")).toBeVisible();
-    // Hinweis: Die /map-Route rendert bewusst keine Überschrift-Elemente.
-    // Der Smoke-Test prüft nur Rendering + Fehlerfreiheit, keine Headline-Präsenz.
 
-    expect(consoleErrors, consoleErrors.join("\n")).toHaveLength(0);
-    expect(pageErrors, pageErrors.join("\n")).toHaveLength(0);
+    // Wait for markers to appear to ensure data is loaded
+    // "fairschenkbox" is the title in the new schema-compliant demo data
+    const marker = page.locator('.map-marker[aria-label="fairschenkbox"]');
+    await expect(marker).toBeVisible();
+
+    expect(consoleLogs).toEqual([]);
   });
 });
