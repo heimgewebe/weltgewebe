@@ -43,6 +43,8 @@
 
   $: markersData = [...nodesData, ...accountsData];
 
+  $: edgesData = (data.edges || []);
+
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
   let isLoading = true;
@@ -108,10 +110,89 @@
     }
   }
 
-  // Reactive update
+  // Update edges on map
+  function updateEdges(edges: any[], points: MapPoint[]) {
+    if (!map) return;
+
+    // Clean up existing layers/sources if they exist
+    if (map.getLayer('edges-layer')) map.removeLayer('edges-layer');
+    if (map.getSource('edges-source')) map.removeSource('edges-source');
+
+    if (!$view.showEdges || edges.length === 0) return;
+
+    const features = [];
+
+    // Helper to find location of a node/account
+    const findLoc = (id: string) => points.find(p => p.id === id);
+
+    for (const edge of edges) {
+      const source = findLoc(edge.source_id);
+      const target = findLoc(edge.target_id);
+
+      if (source && target) {
+        const feature: GeoJSON.Feature<GeoJSON.LineString> = {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [source.lon, source.lat],
+              [target.lon, target.lat]
+            ]
+          },
+          properties: {
+             id: edge.id,
+             kind: edge.edge_kind
+          }
+        };
+        features.push(feature);
+      }
+    }
+
+    if (features.length === 0) return;
+
+    map.addSource('edges-source', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: features
+      }
+    });
+
+    map.addLayer({
+      id: 'edges-layer',
+      type: 'line',
+      source: 'edges-source',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#888',
+        'line-width': 2,
+        'line-dasharray': [2, 1]
+      }
+    });
+
+    // Ensure edges are below markers
+    // Note: markers are HTML elements overlaying the canvas, so lines (canvas) are automatically below.
+    // However, if we had other layers, we might need 'beforeId'.
+  }
+
+  // Reactive update for markers
   $: if (map && markersData && $view) {
     updateMarkers(markersData);
   }
+
+  // Reactive update for edges
+  $: if (map && markersData && edgesData && $view && map.getStyle()) {
+     // Ensure style is loaded before adding layers
+     if (map.isStyleLoaded()) {
+        updateEdges(edgesData, markersData);
+     } else {
+        map.once('styledata', () => updateEdges(edgesData, markersData));
+     }
+  }
+
 
   // Restore focus when selection is closed
   $: if (!$selection && lastFocusedElement) {
@@ -120,11 +201,6 @@
       lastFocusedElement.focus();
     }
     lastFocusedElement = null;
-  }
-
-  // Handle Edges visibility (Stub implementation for now as we don't have edges data in this file yet, but logic is prepared)
-  $: if (map && $view) {
-    // if ($view.showEdges) { ... render edges ... } else { ... remove edges ... }
   }
 
   function jumpToDemo() {

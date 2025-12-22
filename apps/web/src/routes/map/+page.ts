@@ -14,6 +14,7 @@ export const load: PageLoad = async ({ url, fetch }) => {
 
   let nodes: Node[] = [];
   let accounts: any[] = [];
+  let edges: any[] = [];
 
   try {
     const res = await fetch(`${apiUrl}/api/nodes`);
@@ -39,5 +40,17 @@ export const load: PageLoad = async ({ url, fetch }) => {
     console.error("Error fetching accounts:", e);
   }
 
-  return { leftOpen, rightOpen, topOpen, nodes, accounts };
+  try {
+    const res = await fetch(`${apiUrl}/api/edges`);
+    if (res.ok) {
+      edges = await res.json();
+    } else {
+      console.error("Failed to fetch edges from", apiUrl, res.status);
+      console.error(await res.text());
+    }
+  } catch (e) {
+    console.error("Error fetching edges:", e);
+  }
+
+  return { leftOpen, rightOpen, topOpen, nodes, accounts, edges };
 };
