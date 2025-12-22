@@ -107,7 +107,11 @@ pub async fn list_accounts(
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "demo.accounts.jsonl not found or unreadable; returning empty list");
+            tracing::warn!(
+                ?path,
+                ?e,
+                "demo.accounts.jsonl not found or unreadable; returning empty list"
+            );
             return Ok(Json(Vec::new()));
         }
     };
