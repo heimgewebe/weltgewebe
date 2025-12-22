@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/account.schema.json",
+  "title": "Account",
+  "description": "An account representing a user or actor in the Weltgewebe, typically anchored to a location (Garnrolle).",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["garnrolle"]
+    },
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "location": {
+      "type": "object",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": ["lat", "lon"],
+      "additionalProperties": false
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["public", "private", "approximate"],
+      "description": "Controls the visibility of the account's location. 'public' shows exact coordinates (use with caution), 'private' hides them, 'approximate' shows a fuzzed location."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["id", "type", "title", "location", "visibility"]
+}

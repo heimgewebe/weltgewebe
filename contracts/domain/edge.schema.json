@@ -11,7 +11,7 @@
     },
     "source_type": {
       "type": "string",
-      "enum": ["role", "node"]
+      "enum": ["role", "node", "account"]
     },
     "source_id": {
       "type": "string",
@@ -19,7 +19,7 @@
     },
     "target_type": {
       "type": "string",
-      "enum": ["role", "node"]
+      "enum": ["role", "node", "account"]
     },
     "target_id": {
       "type": "string",
