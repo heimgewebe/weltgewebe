@@ -53,6 +53,7 @@ check:     # quick hygiene check
 	just fmt
 	just clippy
 	just test
+	just check-demo-data
 	cargo deny check
 
 # ---------- Compose ----------
@@ -114,3 +115,6 @@ check-demo:
 # ---------- Contracts ----------
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh
+
+check-demo-data:
+	pnpm exec tsx scripts/verify-demo-data.ts
