@@ -80,32 +80,38 @@ jobs:
 
       - name: Read toolchain versions
         run: |
+          set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
-          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
-          if ! yq --version >/dev/null 2>&1; then
+
+          if ! command -v yq >/dev/null 2>&1; then
             echo "yq is not installed or not in PATH" >&2
             exit 1
           fi
-          RUST=$(yq -r '.rust // ""' toolchain.versions.yml | xargs)
-          if [ -z "$RUST" ]; then
-            echo "failed to parse rust version from toolchain.versions.yml" >&2
+
+          if [ ! -f toolchain.versions.yml ]; then
+            echo "toolchain.versions.yml not found" >&2
             exit 1
           fi
-          PY=$(yq -r '.python // ""' toolchain.versions.yml | xargs)
-          if [ -z "$PY" ]; then
-            echo "failed to parse python version from toolchain.versions.yml" >&2
-            exit 1
-          fi
-          UV=$(yq -r '.uv // ""' toolchain.versions.yml | xargs)
-          if [ -z "$UV" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
-            exit 1
-          fi
-          DENY=$(yq -r '.["cargo-deny"] // ""' toolchain.versions.yml | xargs)
-          if [ -z "$DENY" ]; then
-            echo "failed to parse cargo-deny version from toolchain.versions.yml" >&2
-            exit 1
-          fi
+
+          # Function to extract and validate version
+          get_version() {
+            local key=$1
+            local val
+            val=$(yq -r ".${key} // \"\"" toolchain.versions.yml | xargs)
+            if [ -z "$val" ] || [ "$val" == "null" ]; then
+              echo "failed to parse ${key} version from toolchain.versions.yml" >&2
+              exit 1
+            fi
+            echo "$val"
+          }
+
+          RUST=$(get_version "rust")
+          PY=$(get_version "python")
+          UV=$(get_version "uv")
+          DENY=$(get_version "[\"cargo-deny\"]")
+
+          echo "Found versions: Rust=$RUST, Python=$PY, uv=$UV, cargo-deny=$DENY"
+
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
           echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
