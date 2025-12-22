@@ -9,8 +9,14 @@ test.beforeEach(async ({ page }) => {
 test.describe("smoke", () => {
   test("loads /map without console errors", async ({ page }) => {
     const consoleLogs: string[] = [];
+    const pageErrors: string[] = [];
+
     page.on("console", (msg) => {
       if (msg.type() === "error") consoleLogs.push(msg.text());
+    });
+
+    page.on("pageerror", (err) => {
+      pageErrors.push(err.toString());
     });
 
     await expect(page.locator("#map")).toBeVisible();
@@ -21,5 +27,6 @@ test.describe("smoke", () => {
     await expect(marker).toBeVisible();
 
     expect(consoleLogs).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 });

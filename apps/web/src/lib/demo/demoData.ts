@@ -6,7 +6,7 @@
 export const demoNodes = [
   {
     id: "b52be17c-4ab7-4434-98ce-520f86290cf0",
-    kind: "Knoten", // Schema: 'kind' is required. 'Knoten' matches 'fairschenkbox' intent.
+    kind: "Knoten", // Schema: 'kind' is free-text string (no enum in node.schema.json). 'Knoten' is valid.
     title: "fairschenkbox",
     summary: "Öffentliche Fair-Schenk-Box",
     // Schema requirement: location must have lat/lon
@@ -47,8 +47,7 @@ export const demoEdges = [
     // Must match the UUID of fairschenkbox
     target_id: "b52be17c-4ab7-4434-98ce-520f86290cf0",
     // Schema requirement: 'edge_kind' must be a valid enum value from the domain contract.
-    // Assuming 'reference' is the standard generic link type.
-    // 'faden' was the UI label/metaphor, but the contract likely uses 'reference'.
+    // Verified against contracts/domain/edge.schema.json: ["delegation", "membership", "ownership", "reference"]
     edge_kind: "reference",
     note: "faden", // Storing the metaphor here
     created_at: "2025-01-01T12:00:00Z"
