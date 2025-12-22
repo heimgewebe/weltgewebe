@@ -55,3 +55,17 @@ Sind alle Checks erfolgreich, ist der Stand kompatibel zur CI-Validierung.
 
 Er verhindert Schema-Drift: Weltgewebe ist ein eigenständiges Projekt, aber die Domain-Contracts sind eine
 stabile, externe Schnittstelle. Durch lokale Validierung bleibt alles synchron zu CI und Dokumentation.
+
+### Mirror absichern
+
+Wenn du Contracts aus dem Metarepo spiegelst (z. B. nach `contracts-mirror/json`),
+nutze den Guard, um Drift zu vermeiden:
+
+```bash
+CANONICAL_CONTRACTS_DIR=/pfad/zum/metarepo/contracts \
+MIRROR_DIR=contracts-mirror/json \
+bash ./scripts/contracts-mirror-guard.sh
+```
+
+Der Guard schlägt fehl, sobald Spiegel und Kanon voneinander abweichen. Änderungen gehören immer zuerst in
+den Kanon; der Mirror wird nur aktualisiert, um lokale Validierung zu ermöglichen.

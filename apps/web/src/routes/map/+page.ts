@@ -3,25 +3,33 @@ import { readDrawerParam } from "./drawerDefaults";
 import type { Node } from "./types";
 
 export const load: PageLoad = async ({ url, fetch }) => {
+  const apiBase = (import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "").replace(
+    /\/$/,
+    "",
+  );
+  const apiPrefix = apiBase.endsWith("/api") ? "" : "/api";
+  const apiUrl = (endpoint: string) =>
+    apiBase ? `${apiBase}${apiPrefix}/${endpoint}` : `${apiPrefix}/${endpoint}`;
   const params = url.searchParams;
 
   const leftOpen = readDrawerParam(params, "l");
   const rightOpen = readDrawerParam(params, "r");
   const topOpen = readDrawerParam(params, "t");
 
-  // Fallback to local dev/test default if not configured
-  const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
-
   let nodes: Node[] = [];
   let accounts: any[] = [];
   let edges: any[] = [];
 
   try {
-    const res = await fetch(`${apiUrl}/api/nodes`);
+    const res = await fetch(apiUrl("nodes"));
     if (res.ok) {
       nodes = await res.json();
     } else {
-      console.error("Failed to fetch nodes from", apiUrl, res.status);
+      console.error(
+        "Failed to fetch nodes from",
+        apiBase || "/api",
+        res.status,
+      );
       console.error(await res.text());
     }
   } catch (e) {
@@ -29,11 +37,15 @@ export const load: PageLoad = async ({ url, fetch }) => {
   }
 
   try {
-    const res = await fetch(`${apiUrl}/api/accounts`);
+    const res = await fetch(apiUrl("accounts"));
     if (res.ok) {
       accounts = await res.json();
     } else {
-      console.error("Failed to fetch accounts from", apiUrl, res.status);
+      console.error(
+        "Failed to fetch accounts from",
+        apiBase || "/api",
+        res.status,
+      );
       console.error(await res.text());
     }
   } catch (e) {
@@ -41,11 +53,15 @@ export const load: PageLoad = async ({ url, fetch }) => {
   }
 
   try {
-    const res = await fetch(`${apiUrl}/api/edges`);
+    const res = await fetch(apiUrl("edges"));
     if (res.ok) {
       edges = await res.json();
     } else {
-      console.error("Failed to fetch edges from", apiUrl, res.status);
+      console.error(
+        "Failed to fetch edges from",
+        apiBase || "/api",
+        res.status,
+      );
       console.error(await res.text());
     }
   } catch (e) {
