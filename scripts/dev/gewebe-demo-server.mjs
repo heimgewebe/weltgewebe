@@ -3,6 +3,7 @@
 // Endpunkte:
 // GET /api/nodes[?bbox=west,south,east,north]
 // GET /api/edges
+// GET /api/accounts
 // Liest JSONL aus ./.gewebe/in/*.jsonl
 
 import { createServer } from "node:http";
@@ -19,6 +20,7 @@ console.log(`Port: ${PORT}`);
 
 const NODES_FILE = resolve(__dirname, ".gewebe/in/demo.nodes.jsonl");
 const EDGES_FILE = resolve(__dirname, ".gewebe/in/demo.edges.jsonl");
+const ACCOUNTS_FILE = resolve(__dirname, ".gewebe/in/demo.accounts.jsonl");
 
 function fmtBool(v) {
   return v ? "yes" : "no";
@@ -47,10 +49,13 @@ async function printStartupDiagnostics() {
 
   const nodes = await tryStat(NODES_FILE);
   const edges = await tryStat(EDGES_FILE);
+  const accounts = await tryStat(ACCOUNTS_FILE);
   console.log(`nodes.path: ${NODES_FILE}`);
   console.log(`nodes.exists: ${fmtBool(nodes.ok)}${nodes.ok ? ` (size=${nodes.size})` : ` (err=${nodes.err})`}`);
   console.log(`edges.path: ${EDGES_FILE}`);
   console.log(`edges.exists: ${fmtBool(edges.ok)}${edges.ok ? ` (size=${edges.size})` : ` (err=${edges.err})`}`);
+  console.log(`accounts.path: ${ACCOUNTS_FILE}`);
+  console.log(`accounts.exists: ${fmtBool(accounts.ok)}${accounts.ok ? ` (size=${accounts.size})` : ` (err=${accounts.err})`}`);
   console.log("---------------------------------");
 }
 
@@ -140,6 +145,18 @@ const DEMO_EDGES_JSONL = [
   },
 ];
 
+const DEMO_ACCOUNTS_JSONL = [
+  {
+    id: "00000000-0000-0000-0000-00000000A001",
+    type: "garnrolle",
+    title: "gewebespinnerAYE",
+    summary: "Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.",
+    location: { lat: 53.5604148, lon: 10.0629844 },
+    visibility: "public",
+    tags: ["account", "garnrolle", "wohnort"]
+  }
+];
+
 function toJsonl(rows) {
   return rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
 }
@@ -159,12 +176,14 @@ async function ensureDemoData() {
 
   const nodesOk = await fileIsNonEmpty(NODES_FILE);
   const edgesOk = await fileIsNonEmpty(EDGES_FILE);
+  const accountsOk = await fileIsNonEmpty(ACCOUNTS_FILE);
 
-  if (nodesOk && edgesOk) return;
+  if (nodesOk && edgesOk && accountsOk) return;
 
   console.log("Demo data missing → writing deterministic seeds (JS, bash-free) ...");
   if (!nodesOk) await writeFile(NODES_FILE, toJsonl(DEMO_NODES_JSONL), "utf8");
   if (!edgesOk) await writeFile(EDGES_FILE, toJsonl(DEMO_EDGES_JSONL), "utf8");
+  if (!accountsOk) await writeFile(ACCOUNTS_FILE, toJsonl(DEMO_ACCOUNTS_JSONL), "utf8");
 }
 
 async function readJsonl(path) {
@@ -252,6 +271,11 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, edges);
     }
 
+    if (req.method === "GET" && path === "/api/accounts") {
+      const accounts = await readJsonl(ACCOUNTS_FILE);
+      return sendJson(res, 200, accounts);
+    }
+
     if (req.method === "OPTIONS") {
       // CORS preflight
       res.writeHead(204, {
@@ -274,4 +298,5 @@ server.listen(PORT, () => {
   console.log(`✅ Demo API server listening on http://localhost:${PORT}`);
   console.log(" GET /api/nodes[?bbox=west,south,east,north]");
   console.log(" GET /api/edges");
+  console.log(" GET /api/accounts");
 });
