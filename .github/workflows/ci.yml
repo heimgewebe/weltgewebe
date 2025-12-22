@@ -155,18 +155,19 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: "3.12"
 
-      - name: Install uv (pinned via toolchain.versions.yml)
+      - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
-          version: ${{ env.UV_VERSION }}
+          version: "0.9.11"
           enable-cache: true
           ignore-nothing-to-cache: true
 
       - name: Install cargo-deny
         run: |
           set -euo pipefail
+          DENY_VERSION="0.18.8"
           DENY_DIR="$HOME/.local/bin"
           DENY_BIN="$DENY_DIR/cargo-deny"
           mkdir -p "$DENY_DIR"

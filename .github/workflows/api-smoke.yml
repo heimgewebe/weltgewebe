@@ -42,51 +42,10 @@ jobs:
         run: |
           echo "GIT_COMMIT_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
           echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-      - name: Install yq
-        run: |
-          set -e
-          YQ_VERSION="4.48.1"
-          YQ_DIR="$HOME/.local/bin"
-          YQ_BIN="$YQ_DIR/yq"
-          mkdir -p "$YQ_DIR"
-
-          if [[ ! -f "$YQ_BIN" ]] || ! "$YQ_BIN" --version 2>/dev/null | grep -q "$YQ_VERSION"; then
-            echo "Installing yq v${YQ_VERSION}..."
-            wget -qO "$YQ_BIN" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
-            chmod +x "$YQ_BIN"
-          else
-            echo "yq v${YQ_VERSION} already installed"
-          fi
-
-          echo "$YQ_DIR" >> "$GITHUB_PATH"
-      - name: Read toolchain versions
-        run: |
-          set -euo pipefail
-          # Assuming we are in apps/api (default for job), need to go up to root
-          cd ../..
-          if [ ! -f toolchain.versions.yml ]; then
-             echo "toolchain.versions.yml not found in $(pwd)" >&2
-             ls -la
-             exit 1
-          fi
-
-          get_version() {
-            local key=$1
-            local val
-            val=$(yq -r ".${key} // \"\"" toolchain.versions.yml | xargs)
-            if [ -z "$val" ] || [ "$val" == "null" ]; then
-              echo "failed to parse ${key} version from toolchain.versions.yml" >&2
-              exit 1
-            fi
-            echo "$val"
-          }
-
-          RUST=$(get_version "rust")
-          echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          toolchain: "1.89.0"
       - name: Print Rust versions
         run: |
           rustc --version
