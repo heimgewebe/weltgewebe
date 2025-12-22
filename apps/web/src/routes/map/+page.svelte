@@ -20,15 +20,28 @@
     lat: number;
     lon: number;
     summary?: string;
+    type?: 'node' | 'account';
   };
 
-  $: markersData = (data.nodes || []).map((n) => ({
+  $: nodesData = (data.nodes || []).map((n) => ({
     id: n.id,
     title: n.title,
     lat: n.location.lat,
     lon: n.location.lon,
-    summary: n.summary
+    summary: n.summary,
+    type: 'node'
   })) satisfies MapPoint[];
+
+  $: accountsData = (data.accounts || []).map((a) => ({
+    id: a.id,
+    title: a.title,
+    lat: a.location.lat,
+    lon: a.location.lon,
+    summary: a.summary,
+    type: 'account'
+  })) satisfies MapPoint[];
+
+  $: markersData = [...nodesData, ...accountsData];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -49,7 +62,7 @@
     for (const item of points) {
       const element = document.createElement('button');
       element.type = 'button';
-      element.className = 'map-marker';
+      element.className = item.type === 'account' ? 'map-marker marker-account' : 'map-marker';
       element.setAttribute('aria-label', item.title);
       element.title = item.title;
 
@@ -57,7 +70,7 @@
         // Capture focus for restoration later
         lastFocusedElement = e.currentTarget as HTMLElement;
 
-        $selection = { type: 'node', id: item.id, data: item };
+        $selection = { type: item.type || 'node', id: item.id, data: item };
 
         // Robust coordinate check before flying
         const lat = item.lat;
@@ -86,6 +99,13 @@
         marker.remove();
       });
     }
+
+    // Force flyTo first marker if available to ensure visibility
+    if (points.length > 0) {
+      const first = points[0];
+      // Only auto-fly if we are fairly sure we want to (optional, per Step 2 instruction)
+      // map.flyTo({ center: [first.lon, first.lat], zoom: 14, animate: true });
+    }
   }
 
   // Reactive update
@@ -105,6 +125,17 @@
   // Handle Edges visibility (Stub implementation for now as we don't have edges data in this file yet, but logic is prepared)
   $: if (map && $view) {
     // if ($view.showEdges) { ... render edges ... } else { ... remove edges ... }
+  }
+
+  function jumpToDemo() {
+    if (!map) return;
+    // Jump to the demo area (Hamburg) where fairschenkbox and gewebespinnerAYE are located
+    // Box: 53.5604 (Garnrolle) to 53.5588 (Fairschenkbox) -> roughly center 53.5596, 10.0616
+    map.flyTo({
+      center: [10.0616, 53.5596],
+      zoom: 15,
+      animate: true
+    });
   }
 
   onMount(() => {
@@ -131,6 +162,15 @@
       const finishLoading = () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
+
+        // Initial flyTo if markers exist (Step 2 mini-patch)
+        if (markersData.length > 0) {
+           map?.flyTo({
+             center: [markersData[0].lon, markersData[0].lat],
+             zoom: 14,
+             animate: true
+           });
+        }
       };
 
       map.on('load', finishLoading);
@@ -174,10 +214,20 @@
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
+  /* Accounts specific style */
+  #map :global(.marker-account) {
+    background: var(--primary, #007acc);
+    border-radius: 4px; /* Square/Diamond for distinction */
+    transform: rotate(45deg);
+  }
+
   @media (hover: hover) and (pointer: fine) {
     #map :global(.map-marker:hover){
       transform: scale(1.2);
       z-index: 10;
+    }
+    #map :global(.marker-account:hover){
+      transform: rotate(45deg) scale(1.2);
     }
   }
   #map :global(.map-marker:focus-visible){
@@ -204,6 +254,23 @@
     animation: spin 1s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  .demo-btn {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    z-index: 20;
+    padding: 8px 16px;
+    background: var(--surface);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .demo-btn:hover {
+    background: var(--panel-bg);
+  }
 </style>
 
 <main class="shell">
@@ -212,6 +279,10 @@
 
   <!-- Karte -->
   <div id="map" bind:this={mapContainer}></div>
+
+  <button class="demo-btn" on:click={jumpToDemo}>
+    Zur Demo springen
+  </button>
 
   {#if isLoading}
     <div class="loading-overlay">

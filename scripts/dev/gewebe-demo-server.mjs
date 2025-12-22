@@ -3,6 +3,7 @@
 // Endpunkte:
 // GET /api/nodes[?bbox=west,south,east,north]
 // GET /api/edges
+// GET /api/accounts
 // Liest JSONL aus ./.gewebe/in/*.jsonl
 
 import { createServer } from "node:http";
@@ -19,6 +20,7 @@ console.log(`Port: ${PORT}`);
 
 const NODES_FILE = resolve(__dirname, ".gewebe/in/demo.nodes.jsonl");
 const EDGES_FILE = resolve(__dirname, ".gewebe/in/demo.edges.jsonl");
+const ACCOUNTS_FILE = resolve(__dirname, ".gewebe/in/demo.accounts.jsonl");
 
 function fmtBool(v) {
   return v ? "yes" : "no";
@@ -47,10 +49,13 @@ async function printStartupDiagnostics() {
 
   const nodes = await tryStat(NODES_FILE);
   const edges = await tryStat(EDGES_FILE);
+  const accounts = await tryStat(ACCOUNTS_FILE);
   console.log(`nodes.path: ${NODES_FILE}`);
   console.log(`nodes.exists: ${fmtBool(nodes.ok)}${nodes.ok ? ` (size=${nodes.size})` : ` (err=${nodes.err})`}`);
   console.log(`edges.path: ${EDGES_FILE}`);
   console.log(`edges.exists: ${fmtBool(edges.ok)}${edges.ok ? ` (size=${edges.size})` : ` (err=${edges.err})`}`);
+  console.log(`accounts.path: ${ACCOUNTS_FILE}`);
+  console.log(`accounts.exists: ${fmtBool(accounts.ok)}${accounts.ok ? ` (size=${accounts.size})` : ` (err=${accounts.err})`}`);
   console.log("---------------------------------");
 }
 
@@ -159,6 +164,8 @@ async function ensureDemoData() {
 
   const nodesOk = await fileIsNonEmpty(NODES_FILE);
   const edgesOk = await fileIsNonEmpty(EDGES_FILE);
+  // Accounts are created by shell script in this context, but we ensure existence if missing
+  // This minimal server focuses on serving. The shell script is authoritative for data content.
 
   if (nodesOk && edgesOk) return;
 
@@ -252,6 +259,11 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, edges);
     }
 
+    if (req.method === "GET" && path === "/api/accounts") {
+      const accounts = await readJsonl(ACCOUNTS_FILE);
+      return sendJson(res, 200, accounts);
+    }
+
     if (req.method === "OPTIONS") {
       // CORS preflight
       res.writeHead(204, {
@@ -274,4 +286,5 @@ server.listen(PORT, () => {
   console.log(`✅ Demo API server listening on http://localhost:${PORT}`);
   console.log(" GET /api/nodes[?bbox=west,south,east,north]");
   console.log(" GET /api/edges");
+  console.log(" GET /api/accounts");
 });

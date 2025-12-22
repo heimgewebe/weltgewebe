@@ -15,7 +15,7 @@ export const view = writable<ViewToggles>({
 });
 
 export type Selection = {
-  type: "node" | "edge";
+  type: "node" | "edge" | "account";
   id: string;
   data?: any;
 } | null;
