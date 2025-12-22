@@ -145,6 +145,18 @@ const DEMO_EDGES_JSONL = [
   },
 ];
 
+const DEMO_ACCOUNTS_JSONL = [
+  {
+    id: "00000000-0000-0000-0000-00000000A001",
+    type: "garnrolle",
+    title: "gewebespinnerAYE",
+    summary: "Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.",
+    location: { lat: 53.5604148, lon: 10.0629844 },
+    visibility: "public",
+    tags: ["account", "garnrolle", "wohnort"]
+  }
+];
+
 function toJsonl(rows) {
   return rows.map((r) => JSON.stringify(r)).join("\n") + "\n";
 }
@@ -164,14 +176,14 @@ async function ensureDemoData() {
 
   const nodesOk = await fileIsNonEmpty(NODES_FILE);
   const edgesOk = await fileIsNonEmpty(EDGES_FILE);
-  // Accounts are created by shell script in this context, but we ensure existence if missing
-  // This minimal server focuses on serving. The shell script is authoritative for data content.
+  const accountsOk = await fileIsNonEmpty(ACCOUNTS_FILE);
 
-  if (nodesOk && edgesOk) return;
+  if (nodesOk && edgesOk && accountsOk) return;
 
   console.log("Demo data missing → writing deterministic seeds (JS, bash-free) ...");
   if (!nodesOk) await writeFile(NODES_FILE, toJsonl(DEMO_NODES_JSONL), "utf8");
   if (!edgesOk) await writeFile(EDGES_FILE, toJsonl(DEMO_EDGES_JSONL), "utf8");
+  if (!accountsOk) await writeFile(ACCOUNTS_FILE, toJsonl(DEMO_ACCOUNTS_JSONL), "utf8");
 }
 
 async function readJsonl(path) {
