@@ -68,8 +68,8 @@ jobs:
         run: scripts/ci/wait-for-preview.sh
         working-directory: .
 
-      - name: Wait for servers
-        run: pnpm dlx wait-on "http://127.0.0.1:8080" --timeout 120000
+      - name: Wait for API (robust)
+        run: scripts/ci/wait-for-api.sh
 
       - name: Run tests
         run: pnpm --filter weltgewebe-web test:ci

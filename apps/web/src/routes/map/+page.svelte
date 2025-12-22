@@ -347,9 +347,28 @@
   .demo-btn:hover {
     background: var(--panel-bg);
   }
+
+  .debug-badge {
+    position: absolute;
+    top: 60px; /* Below TopBar */
+    right: 10px;
+    z-index: 20;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    font-family: monospace;
+  }
 </style>
 
 <main class="shell">
+  <div class="debug-badge">
+    Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
+    <br>
+    API: {import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '(empty)'}
+  </div>
   <TopBar />
   <ViewPanel />
 
