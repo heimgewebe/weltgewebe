@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
-import { demoNodes, demoAccounts, demoEdges } from "../../src/lib/demo/demoData";
+import {
+  demoNodes,
+  demoAccounts,
+  demoEdges,
+} from "../../src/lib/demo/demoData";
 
 /**
  * Mock API responses for E2E tests.

@@ -12,12 +12,12 @@ export const demoNodes = [
     // Schema requirement: location must have lat/lon
     location: {
       lat: 53.558894813662505,
-      lon: 10.060228407382967
+      lon: 10.060228407382967,
     },
     // Schema requirement: timestamps are usually expected by consumers
     created_at: "2025-01-01T12:00:00Z",
-    updated_at: "2025-01-01T12:00:00Z"
-  }
+    updated_at: "2025-01-01T12:00:00Z",
+  },
 ];
 
 export const demoAccounts = [
@@ -28,13 +28,13 @@ export const demoAccounts = [
     summary: "Lokale Garnrolle / Account",
     location: {
       lat: 53.5604148,
-      lon: 10.0629844
+      lon: 10.0629844,
     },
     // Schema requirement: 'visibility' is an enum (public/private/approximate)
     visibility: "public",
     created_at: "2025-01-01T12:00:00Z",
-    tags: ["account", "garnrolle", "demo"]
-  }
+    tags: ["account", "garnrolle", "demo"],
+  },
 ];
 
 export const demoEdges = [
@@ -50,6 +50,6 @@ export const demoEdges = [
     // Verified against contracts/domain/edge.schema.json: ["delegation", "membership", "ownership", "reference"]
     edge_kind: "reference",
     note: "faden", // Storing the metaphor here
-    created_at: "2025-01-01T12:00:00Z"
-  }
+    created_at: "2025-01-01T12:00:00Z",
+  },
 ];
