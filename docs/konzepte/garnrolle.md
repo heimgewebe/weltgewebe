@@ -4,9 +4,9 @@
 
 Die Garnrolle ist der persönliche Anker eines Accounts im Weltgewebe. Sie verbindet die Person, ihren Raum, ihre Ressourcen und ihre Verantwortung.
 
-## Private und öffentliche Bereiche
+## Privater und öffentlichr Bereich
 
-Es gibt eine explizite Trennung zwischen privaten und öffentlichen Bereichen. Die Default-Zustände sind klar benannt.
+Es gibt eine explizite Trennung zwischen privatem und öffentlichem Bereich. Der private Bereich trägt Kontoeinstellungen, im öffentlichen Bereich kann man z.B. anzeigen, was man der Allgemeinheit zur Verfügung stellen will.
 
 ## Verortung der Garnrolle
 
@@ -18,3 +18,5 @@ Der Slider steuert **nicht den Wohnsitz**, sondern dessen **öffentliche Darstel
 
 *   Die **interne Wahrheit bleibt exakt**.
 *   Die **externe Projektion wird verrauscht / generalisiert**.
+
+Gie Garnrolle wird auf der Karte verortet und hat zusätzlich oben rechts eine Repräsentation.
