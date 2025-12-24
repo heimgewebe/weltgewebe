@@ -32,5 +32,11 @@ Es wird strikt zwischen interner und öffentlicher Sicht getrennt:
     *   `public_pos` wird aus `location` + `radius_m` berechnet (Jitter).
     *   Alle öffentlichen Fäden starten optisch an der `public_pos`.
 
+### Default-Policy bei ungültigen Visibility-Werten
+Wenn ein Account eine unbekannte `visibility` angibt (z. B. durch alte Clients, Datenfehler oder Migrationen), fällt die Public-View **bewusst auf `public` zurück** und schreibt eine Warnung ins Log.
+
+*   **Begründung:** Im Weltgewebe ist „exakt sichtbar“ ein legitimer Standard (Opt-in zur Unschärfe existiert). Ein fail-closed Default (`private`) würde im Fehlerfall Accounts unsichtbar machen und damit Karte, Ressourcen und Fäden „verschwinden lassen“, ohne dass der Nutzer es versteht.
+*   **Alternative (fail-closed):** Für Umgebungen mit höherem Sicherheitsbedarf kann diese Policy auf `private` umgestellt werden (unknown → private), um im Zweifel nichts zu zeigen. Diese Entscheidung ist eine bewusste Policy-Frage, nicht ein technischer Zufall.
+
 ### Normative Quelle
 Siehe [ADR-0003: Privacy: Unschärferadius & RoN](../adr/ADR-0003__privacy-unschaerferadius-ron.md).
