@@ -45,7 +45,7 @@ pub struct AccountPublic {
 
     // Privacy: 'location' field is intentionally omitted.
     // 'public_pos' is the only projected location for public consumption.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "public_pos")]
     pub public_pos: Option<Location>,
 
     pub visibility: Visibility,
@@ -139,20 +139,18 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         "public" => Visibility::Public,
         _ => {
             // Warn about unknown visibility and default to Public
-            tracing::warn!(?id, ?visibility_str, "Unknown visibility, defaulting to Public");
+            tracing::warn!(
+                ?id,
+                ?visibility_str,
+                "Unknown visibility, defaulting to Public"
+            );
             Visibility::Public
         }
     };
 
-    let mut radius_m = v
-        .get("radius_m")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
+    let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
-    let ron_flag = v
-        .get("ron_flag")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let tags = v
         .get("tags")
@@ -174,7 +172,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
                 radius_m = 250;
             }
             Some(calculate_jittered_pos(lat, lon, radius_m, &id))
-        },
+        }
         Visibility::Public => Some(Location { lat, lon }),
     };
 
@@ -250,7 +248,10 @@ mod tests {
         let output_value = serde_json::to_value(&account).expect("Serialization failed");
 
         // GUARD: The "location" field must NOT be present in the public JSON output.
-        assert!(output_value.get("location").is_none(), "Public view MUST NOT contain 'location' field!");
+        assert!(
+            output_value.get("location").is_none(),
+            "Public view MUST NOT contain 'location' field!"
+        );
 
         // But public_pos MUST be present (as it is public)
         assert!(output_value.get("public_pos").is_some());

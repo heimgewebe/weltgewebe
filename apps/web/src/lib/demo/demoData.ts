@@ -44,8 +44,8 @@ export const demoAccounts = [
     summary: "Account with fuzziness enabled",
     // Public view: internal location would be different, but here we only show the projected public_pos
     public_pos: {
-       lat: 53.5610000,
-       lon: 10.0630000,
+      lat: 53.561,
+      lon: 10.063,
     },
     visibility: "approximate",
     radius_m: 250,
@@ -64,7 +64,7 @@ export const demoAccounts = [
     ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo", "private"],
-  }
+  },
 ];
 
 export const demoEdges = [
