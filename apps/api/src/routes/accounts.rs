@@ -230,3 +230,79 @@ pub async fn list_accounts(
 
     Ok(Json(out))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_guard_public_view_never_leaks_location() {
+        let input = json!({
+            "id": "test-leak-guard",
+            "type": "garnrolle",
+            "title": "Leak Test",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "public"
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        let output_value = serde_json::to_value(&account).expect("Serialization failed");
+
+        // GUARD: The "location" field must NOT be present in the public JSON output.
+        assert!(output_value.get("location").is_none(), "Public view MUST NOT contain 'location' field!");
+
+        // But public_pos MUST be present (as it is public)
+        assert!(output_value.get("public_pos").is_some());
+    }
+
+    #[test]
+    fn test_guard_private_hides_public_pos() {
+        let input = json!({
+            "id": "test-private",
+            "type": "garnrolle",
+            "title": "Private Test",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "private"
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+
+        // GUARD: Private accounts have no public_pos
+        assert!(account.public_pos.is_none());
+    }
+
+    #[test]
+    fn test_guard_approximate_enforces_minimum_radius() {
+        let input = json!({
+            "id": "test-approx-zero",
+            "type": "garnrolle",
+            "title": "Approx Zero",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "approximate",
+            "radius_m": 0
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+
+        // GUARD: Radius must be bumped to default (250) if 0
+        assert_eq!(account.radius_m, 250);
+        assert!(account.public_pos.is_some());
+    }
+
+    #[test]
+    fn test_guard_unknown_visibility_defaults_to_public() {
+        let input = json!({
+            "id": "test-unknown-vis",
+            "type": "garnrolle",
+            "title": "Unknown Vis",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "garbage_value"
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+
+        assert_eq!(account.visibility, Visibility::Public);
+        assert!(account.public_pos.is_some());
+    }
+}
