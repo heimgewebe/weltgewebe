@@ -26,15 +26,42 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "gewebespinnerAYE",
     summary: "Lokale Garnrolle / Account",
+    // In strict public view, this is the public_pos.
+    // We add radius_m and ron_flag to simulate the expanded model.
     location: {
       lat: 53.5604148,
       lon: 10.0629844,
     },
-    // Schema requirement: 'visibility' is an enum (public/private/approximate)
+    public_pos: {
+      lat: 53.5604148,
+      lon: 10.0629844,
+    },
     visibility: "public",
+    radius_m: 0,
+    ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo"],
   },
+  {
+    id: "00000000-0000-0000-0000-000000000002",
+    type: "garnrolle",
+    title: "PrivateSpinner (Fuzzed)",
+    summary: "Account with fuzziness enabled",
+    // Simulating that public_pos is slightly different from a hypothetical 'real' location
+    location: {
+       lat: 53.5610000,
+       lon: 10.0630000,
+    },
+    public_pos: {
+       lat: 53.5610000,
+       lon: 10.0630000,
+    },
+    visibility: "approximate",
+    radius_m: 250,
+    ron_flag: false,
+    created_at: "2025-01-01T12:00:00Z",
+    tags: ["account", "garnrolle", "demo", "fuzzed"],
+  }
 ];
 
 export const demoEdges = [

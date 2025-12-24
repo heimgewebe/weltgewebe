@@ -17,7 +17,7 @@ fn accounts_path() -> PathBuf {
     in_dir().join("demo.accounts.jsonl")
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
@@ -31,10 +31,61 @@ pub struct Account {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    // Internal location is hidden if not necessary, but for now we keep it structure-wise.
+    // However, the ADR requires strict separation.
+    // In this public endpoint, 'location' should ideally be the public position or hidden.
+    // We expose 'public_pos' as the primary public coordinate.
+    // To support existing frontend, we might map 'location' to 'public_pos' content or deprecate it.
+    // For this implementation, we include both but ensure 'location' == 'public_pos' in the output
+    // to prevent leaking the real location in the default JSON serialization.
     pub location: Location,
+    pub public_pos: Location,
     pub visibility: String,
+    pub radius_m: u32,
+    pub ron_flag: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+/// Simple deterministic pseudo-random number generator based on ID
+fn stable_hash(s: &str) -> u64 {
+    let mut hash: u64 = 5381;
+    for c in s.bytes() {
+        hash = ((hash << 5).wrapping_add(hash)) + c as u64;
+    }
+    hash
+}
+
+/// Calculates the public position based on the real location and radius.
+/// Uses a deterministic "jitter" based on the ID so the position doesn't jump around on every request.
+fn calculate_public_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Location {
+    if radius_m == 0 {
+        return Location { lat, lon };
+    }
+
+    // 1 degree lat is approx 111km. 1m is approx 1/111000 degrees.
+    // This is a rough approximation suitable for small visual jitter.
+    let meters_per_degree = 111_000.0;
+
+    // Seed the RNG with the ID
+    let seed = stable_hash(id);
+
+    // Generate two offsets in range [-1.0, 1.0] derived from seed
+    // We mix bits to get different values for x and y
+    let r1 = ((seed & 0xFFFF) as f64 / 65535.0) * 2.0 - 1.0;
+    let r2 = (((seed >> 16) & 0xFFFF) as f64 / 65535.0) * 2.0 - 1.0;
+
+    // Scale by radius (converted to degrees)
+    // We simply use a square box jitter for simplicity in this minimal core.
+    // A circle would be better but requires sin/cos and proper distance calc.
+    // For visual obfuscation, this is sufficient "phantom world".
+    let lat_offset = (r1 * radius_m as f64) / meters_per_degree;
+    let lon_offset = (r2 * radius_m as f64) / (meters_per_degree * lat.to_radians().cos());
+
+    Location {
+        lat: lat + lat_offset,
+        lon: lon + lon_offset,
+    }
 }
 
 fn map_json_to_account(v: &Value) -> Option<Account> {
@@ -60,11 +111,11 @@ fn map_json_to_account(v: &Value) -> Option<Account> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let location = v.get("location")?;
-    let lon = location
+    let location_obj = v.get("location")?;
+    let lon = location_obj
         .get("lon")
         .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
-    let lat = location
+    let lat = location_obj
         .get("lat")
         .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
 
@@ -73,6 +124,16 @@ fn map_json_to_account(v: &Value) -> Option<Account> {
         .and_then(|v| v.as_str())
         .unwrap_or("public")
         .to_string();
+
+    let radius_m = v
+        .get("radius_m")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u32;
+
+    let ron_flag = v
+        .get("ron_flag")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
 
     let tags = v
         .get("tags")
@@ -84,13 +145,24 @@ fn map_json_to_account(v: &Value) -> Option<Account> {
         })
         .unwrap_or_default();
 
+    // Calculate public position
+    let public_pos = calculate_public_pos(lat, lon, radius_m, &id);
+
+    // Contract: External view MUST see public_pos.
+    // We set 'location' to 'public_pos' to ensure no leak if client uses 'location'.
+    // The real internal location is not returned in this struct.
+    let location = public_pos.clone();
+
     Some(Account {
         id,
         kind,
         title,
         summary,
-        location: Location { lat, lon },
+        location,
+        public_pos,
         visibility,
+        radius_m,
+        ron_flag,
         tags,
     })
 }

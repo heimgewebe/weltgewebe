@@ -1,26 +1,36 @@
-# Garnrolle
+# Garnrolle (Konzept)
 
-## Was ist die Garnrolle?
+Die **Garnrolle** repräsentiert das Konto (Account) eines Akteurs im Weltgewebe. Sie ist der Ursprung aller Fäden (Kanten), die der Akteur spinnt.
 
-Die Garnrolle ist der persönliche Anker eines Accounts im Weltgewebe. Sie verbindet die Person,
-ihren Raum, ihre Ressourcen und ihre Verantwortung.
+## Definition
 
-## Privater und öffentlicher Bereich
+> **Garnrolle** = Konto + private Einstellungen + öffentliche Profil-/Ressourceninfos + Verortung am Wohnsitz.
 
-Es gibt eine explizite Trennung zwischen privatem und öffentlichem Bereich. Der private Bereich
-trägt Kontoeinstellungen, im öffentlichen Bereich kann man z.B. anzeigen, was man der Allgemeinheit
-zur Verfügung stellen will.
+Semantisch ist sie die "Spule, auf der der Faden sitzt".
 
-## Verortung der Garnrolle
+## Privatsphäre & Verortung
 
-Standardmäßig ist die Garnrolle **exakt am Wohnsitz des Accountbesitzers verortet**. Diese exakte
-Verortung ist **systemintern wahr**. Die Sichtbarkeit nach außen ist **konfigurierbar**.
+Da die Garnrolle fest am Wohnsitz verankert ist (**Residence-Lock**), gibt es strenge Mechanismen zum Schutz der Privatsphäre.
 
-### Wohnsitzverortungsungenauigkeit
+### Default: Exakt
+Standardmäßig wird die Position **exakt** angezeigt.
 
-Der Slider steuert **nicht den Wohnsitz**, sondern dessen **öffentliche Darstellung**.
+### Opt-in: Unschärfe (Radius)
+Der Nutzer kann einen **Unschärferadius** (in Metern) definieren.
+*   **Radius = 0m**: Exakte Anzeige (Standard).
+*   **Radius > 0m**: Die öffentliche Anzeige (`public_pos`) ist ein zufälliger, aber stabiler Punkt innerhalb dieses Radius.
 
-* Die **interne Wahrheit bleibt exakt**.
-* Die **externe Projektion wird verrauscht / generalisiert**.
+### RoN (Rolle ohne Namen)
+Optional kann die **RoN-Flag** gesetzt werden, um die Identität zu verschleiern (Anonymisierung).
 
-Die Garnrolle wird auf der Karte verortet und hat zusätzlich oben rechts eine Repräsentation.
+## Technische Umsetzung
+
+### Views
+Es wird strikt zwischen interner und öffentlicher Sicht getrennt:
+*   **Internal View (`roles_view`)**: Kennt die exakte `location` (Wohnsitz). Nur für den Nutzer selbst sichtbar.
+*   **Public View (`public_role_view`)**: Enthält **nie** die exakte `location`, sondern nur die `public_pos`.
+    *   `public_pos` wird aus `location` + `radius_m` berechnet (Jitter).
+    *   Alle öffentlichen Fäden starten optisch an der `public_pos`.
+
+### Normative Quelle
+Siehe [ADR-0003: Privacy: Unschärferadius & RoN](../adr/ADR-0003__privacy-unschaerferadius-ron.md).
