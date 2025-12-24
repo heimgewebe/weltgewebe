@@ -45,7 +45,7 @@ pub struct AccountPublic {
 
     // Privacy: 'location' field is intentionally omitted.
     // 'public_pos' is the only projected location for public consumption.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none", rename = "public_pos")]
     pub public_pos: Option<Location>,
 
     pub visibility: Visibility,
