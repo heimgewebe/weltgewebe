@@ -32,14 +32,16 @@
     type: 'node'
   })) satisfies MapPoint[];
 
-  $: accountsData = (data.accounts || []).map((a) => ({
-    id: a.id,
-    title: a.title,
-    lat: a.location.lat,
-    lon: a.location.lon,
-    summary: a.summary,
-    type: 'account'
-  })) satisfies MapPoint[];
+  $: accountsData = (data.accounts || [])
+    .filter((a) => a.public_pos) // Only show accounts with a visible public position
+    .map((a) => ({
+      id: a.id,
+      title: a.title,
+      lat: a.public_pos.lat,
+      lon: a.public_pos.lon,
+      summary: a.summary,
+      type: 'account'
+    })) satisfies MapPoint[];
 
   $: markersData = [...nodesData, ...accountsData];
 

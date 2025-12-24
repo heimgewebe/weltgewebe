@@ -26,12 +26,7 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "gewebespinnerAYE",
     summary: "Lokale Garnrolle / Account",
-    // In strict public view, this is the public_pos.
-    // We add radius_m and ron_flag to simulate the expanded model.
-    location: {
-      lat: 53.5604148,
-      lon: 10.0629844,
-    },
+    // Public view: Internal location is hidden. Only public_pos is exposed.
     public_pos: {
       lat: 53.5604148,
       lon: 10.0629844,
@@ -47,11 +42,7 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "PrivateSpinner (Fuzzed)",
     summary: "Account with fuzziness enabled",
-    // Simulating that public_pos is slightly different from a hypothetical 'real' location
-    location: {
-       lat: 53.5610000,
-       lon: 10.0630000,
-    },
+    // Public view: internal location would be different, but here we only show the projected public_pos
     public_pos: {
        lat: 53.5610000,
        lon: 10.0630000,
@@ -61,6 +52,18 @@ export const demoAccounts = [
     ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo", "fuzzed"],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000003",
+    type: "garnrolle",
+    title: "InvisibleSpinner",
+    summary: "Private account",
+    // Public view: public_pos is undefined/null for private accounts
+    visibility: "private",
+    radius_m: 0,
+    ron_flag: false,
+    created_at: "2025-01-01T12:00:00Z",
+    tags: ["account", "garnrolle", "demo", "private"],
   }
 ];
 

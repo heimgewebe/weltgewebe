@@ -23,23 +23,23 @@ pub struct Location {
     pub lon: f64,
 }
 
+/// Public view of an Account.
+/// STRICTLY does not contain the internal 'location' (residence).
+/// Only exposes 'public_pos' which is calculated based on visibility settings.
 #[derive(Serialize)]
-pub struct Account {
+pub struct AccountPublic {
     pub id: String,
     #[serde(rename = "type")]
     pub kind: String,
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    // Internal location is hidden if not necessary, but for now we keep it structure-wise.
-    // However, the ADR requires strict separation.
-    // In this public endpoint, 'location' should ideally be the public position or hidden.
-    // We expose 'public_pos' as the primary public coordinate.
-    // To support existing frontend, we might map 'location' to 'public_pos' content or deprecate it.
-    // For this implementation, we include both but ensure 'location' == 'public_pos' in the output
-    // to prevent leaking the real location in the default JSON serialization.
-    pub location: Location,
-    pub public_pos: Location,
+
+    // Privacy: 'location' field is intentionally omitted.
+    // 'public_pos' is the only projected location for public consumption.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_pos: Option<Location>,
+
     pub visibility: String,
     pub radius_m: u32,
     pub ron_flag: bool,
@@ -58,7 +58,7 @@ fn stable_hash(s: &str) -> u64 {
 
 /// Calculates the public position based on the real location and radius.
 /// Uses a deterministic "jitter" based on the ID so the position doesn't jump around on every request.
-fn calculate_public_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Location {
+fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Location {
     if radius_m == 0 {
         return Location { lat, lon };
     }
@@ -88,7 +88,7 @@ fn calculate_public_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Location
     }
 }
 
-fn map_json_to_account(v: &Value) -> Option<Account> {
+fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     let id = v
         .get("id")
         .and_then(|v| v.as_str())
@@ -145,20 +145,21 @@ fn map_json_to_account(v: &Value) -> Option<Account> {
         })
         .unwrap_or_default();
 
-    // Calculate public position
-    let public_pos = calculate_public_pos(lat, lon, radius_m, &id);
+    // Calculate public position based on visibility policy
+    // - private: None
+    // - public: Exact location
+    // - approximate: Jittered location
+    let public_pos = match visibility.as_str() {
+        "private" => None,
+        "approximate" => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
+        "public" | _ => Some(Location { lat, lon }),
+    };
 
-    // Contract: External view MUST see public_pos.
-    // We set 'location' to 'public_pos' to ensure no leak if client uses 'location'.
-    // The real internal location is not returned in this struct.
-    let location = public_pos.clone();
-
-    Some(Account {
+    Some(AccountPublic {
         id,
         kind,
         title,
         summary,
-        location,
         public_pos,
         visibility,
         radius_m,
@@ -169,7 +170,7 @@ fn map_json_to_account(v: &Value) -> Option<Account> {
 
 pub async fn list_accounts(
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<Account>>, StatusCode> {
+) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
     let limit: usize = params
         .get("limit")
         .and_then(|s| s.parse().ok())
@@ -199,7 +200,7 @@ pub async fn list_accounts(
             Err(_) => continue,
         };
 
-        if let Some(account) = map_json_to_account(&v) {
+        if let Some(account) = map_json_to_public_account(&v) {
             out.push(account);
         }
     }
