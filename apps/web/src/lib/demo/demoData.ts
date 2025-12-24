@@ -26,14 +26,44 @@ export const demoAccounts = [
     type: "garnrolle",
     title: "gewebespinnerAYE",
     summary: "Lokale Garnrolle / Account",
-    location: {
+    // Public view: Internal location is hidden. Only public_pos is exposed.
+    public_pos: {
       lat: 53.5604148,
       lon: 10.0629844,
     },
-    // Schema requirement: 'visibility' is an enum (public/private/approximate)
     visibility: "public",
+    radius_m: 0,
+    ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo"],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000002",
+    type: "garnrolle",
+    title: "PrivateSpinner (Fuzzed)",
+    summary: "Account with fuzziness enabled",
+    // Public view: internal location would be different, but here we only show the projected public_pos
+    public_pos: {
+      lat: 53.561,
+      lon: 10.063,
+    },
+    visibility: "approximate",
+    radius_m: 250,
+    ron_flag: false,
+    created_at: "2025-01-01T12:00:00Z",
+    tags: ["account", "garnrolle", "demo", "fuzzed"],
+  },
+  {
+    id: "00000000-0000-0000-0000-000000000003",
+    type: "garnrolle",
+    title: "InvisibleSpinner",
+    summary: "Private account",
+    // Public view: public_pos is undefined/null for private accounts
+    visibility: "private",
+    radius_m: 0,
+    ron_flag: false,
+    created_at: "2025-01-01T12:00:00Z",
+    tags: ["account", "garnrolle", "demo", "private"],
   },
 ];
 

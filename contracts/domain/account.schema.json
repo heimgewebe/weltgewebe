@@ -21,6 +21,21 @@
     },
     "location": {
       "type": "object",
+      "description": "The internal, exact location (residence). Should NOT be exposed in public views if radius_m > 0.",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": ["lat", "lon"],
+      "additionalProperties": false
+    },
+    "public_pos": {
+      "type": "object",
+      "description": "The calculated public position based on location and radius_m. This is the view-facing coordinate.",
       "properties": {
         "lat": {
           "type": "number"
@@ -36,6 +51,17 @@
       "type": "string",
       "enum": ["public", "private", "approximate"],
       "description": "Controls the visibility of the account's location. 'public' shows exact coordinates (use with caution), 'private' hides them, 'approximate' shows a fuzzed location."
+    },
+    "radius_m": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Fuzziness radius in meters. If > 0, public_pos is randomized within this radius."
+    },
+    "ron_flag": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, the account is treated as a Role without Name (anonymized)."
     },
     "tags": {
       "type": "array",
