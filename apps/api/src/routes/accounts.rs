@@ -1,5 +1,5 @@
 use axum::{extract::Query, http::StatusCode, Json};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
@@ -23,6 +23,14 @@ pub struct Location {
     pub lon: f64,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Visibility {
+    Public,
+    Private,
+    Approximate,
+}
+
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
 /// Only exposes 'public_pos' which is calculated based on visibility settings.
@@ -40,7 +48,7 @@ pub struct AccountPublic {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public_pos: Option<Location>,
 
-    pub visibility: String,
+    pub visibility: Visibility,
     pub radius_m: u32,
     pub ron_flag: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -119,13 +127,24 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .get("lat")
         .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
 
-    let visibility = v
+    // Robust enum parsing with default fallback
+    let visibility_str = v
         .get("visibility")
         .and_then(|v| v.as_str())
-        .unwrap_or("public")
-        .to_string();
+        .unwrap_or("public");
 
-    let radius_m = v
+    let visibility = match visibility_str {
+        "private" => Visibility::Private,
+        "approximate" => Visibility::Approximate,
+        "public" => Visibility::Public,
+        _ => {
+            // Warn about unknown visibility and default to Public
+            tracing::warn!(?id, ?visibility_str, "Unknown visibility, defaulting to Public");
+            Visibility::Public
+        }
+    };
+
+    let mut radius_m = v
         .get("radius_m")
         .and_then(|v| v.as_u64())
         .unwrap_or(0) as u32;
@@ -146,13 +165,17 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .unwrap_or_default();
 
     // Calculate public position based on visibility policy
-    // - private: None
-    // - public: Exact location
-    // - approximate: Jittered location
-    let public_pos = match visibility.as_str() {
-        "private" => None,
-        "approximate" => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
-        "public" | _ => Some(Location { lat, lon }),
+    let public_pos = match visibility {
+        Visibility::Private => None,
+        Visibility::Approximate => {
+            // If approximate is requested but radius is 0, enforce a default fuzziness
+            // to avoid "approximate but exact" semantic contradiction.
+            if radius_m == 0 {
+                radius_m = 250;
+            }
+            Some(calculate_jittered_pos(lat, lon, radius_m, &id))
+        },
+        Visibility::Public => Some(Location { lat, lon }),
     };
 
     Some(AccountPublic {
