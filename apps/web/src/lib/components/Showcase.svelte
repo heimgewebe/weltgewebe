@@ -16,12 +16,13 @@
     })();
   }
 
-  // Default buttons for now. In a real app, this would come from the node/account data.
-  // The 'locked' state is also local for now.
+  // STUB: This data structure mimics the future backend contract.
+  // In the final implementation, this should come from $selection.data.showcase.modules
+  // TODO: Connect to backend when 'showcase' schema is available.
   let modules = [
     { id: 'infos', label: 'Infos', locked: false },
     { id: 'besprechungen', label: 'Besprechungen', locked: false },
-    { id: 'verantwortungen', label: 'Verantwortungen', locked: true } // Example of a locked button
+    { id: 'verantwortungen', label: 'Verantwortungen', locked: true }
   ];
 
   function handleModuleClick(module: typeof modules[0]) {
@@ -29,11 +30,11 @@
     console.log('Open module:', module.id);
   }
 
-  function handleModuleContext(e: Event, module: typeof modules[0]) {
-    e.preventDefault(); // Prevent default context menu
-    // Toggle locked state "Verzwirnen"
-    module.locked = !module.locked;
-    modules = modules; // Trigger reactivity
+  function toggleLock(id: string) {
+    // Immutable update to ensure robust reactivity and state history if needed
+    modules = modules.map(m =>
+      m.id === id ? { ...m, locked: !m.locked } : m
+    );
   }
 </script>
 
@@ -132,48 +133,85 @@
     margin-top: 4px;
   }
 
-  .module-btn {
+  .module-card {
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
     background: transparent;
     border: 1px solid var(--panel-border);
     border-radius: 8px;
-    padding: 10px;
+    transition: all 0.2s ease;
+  }
+
+  .module-card:hover {
+    background: rgba(0,0,0,0.03);
+    border-color: var(--muted);
+  }
+
+  .module-card.locked {
+    border-style: dashed;
+    opacity: 0.8;
+    background: rgba(0,0,0,0.02);
+  }
+
+  /* Main action button covers the card area except the lock button */
+  .module-action {
+    flex: 1;
+    height: 100%;
+    border: none;
+    background: transparent;
     cursor: pointer;
     color: var(--text);
     font-size: 13px;
     font-weight: 500;
     text-align: center;
-    transition: all 0.2s ease;
+    padding: 10px;
+    width: 100%;
+  }
+
+  .module-card.locked .module-action {
+    color: var(--muted);
+    cursor: default;
+  }
+
+  /* Discrete Lock Toggle Button */
+  .lock-toggle {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 48px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    opacity: 0.5;
+    transition: opacity 0.2s, background 0.2s;
+    font-size: 12px;
+    padding: 0;
   }
 
-  .module-btn:hover {
-    background: rgba(0,0,0,0.03);
-    border-color: var(--muted);
+  .lock-toggle:hover,
+  .lock-toggle:focus-visible {
+    opacity: 1;
+    background: rgba(0,0,0,0.05);
   }
 
-  .module-btn.locked {
-    border-style: dashed;
-    opacity: 0.7;
-    color: var(--muted);
+  /* Show lock icon always if locked, otherwise on hover/focus */
+  .module-card:not(.locked) .lock-toggle {
+    opacity: 0;
   }
-
-  .lock-icon {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    font-size: 10px;
+  .module-card:not(.locked):hover .lock-toggle,
+  .module-card:not(.locked):focus-within .lock-toggle {
+    opacity: 0.4;
   }
-
-  .hint {
-    font-size: 11px;
-    color: var(--muted);
-    text-align: center;
-    opacity: 0.7;
-    margin-top: 4px;
+  .module-card:not(.locked) .lock-toggle:hover {
+    opacity: 1;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -216,25 +254,28 @@
     </div>
 
     <!-- The "Showcase" Buttons -->
-    <div class="modules-grid">
+    <div class="modules-grid" role="group" aria-label="Module">
       {#each modules as module (module.id)}
-        <button
-          class="module-btn"
-          class:locked={module.locked}
-          on:click={() => handleModuleClick(module)}
-          on:contextmenu={(e) => handleModuleContext(e, module)}
-          title={module.locked ? 'Verzwirnt (Rechtsklick/Longpress zum Entsperren)' : 'Rechtsklick/Longpress zum Verzwirnen'}
-        >
-          {module.label}
-          {#if module.locked}
-             <span class="lock-icon">🔒</span>
-          {/if}
-        </button>
-      {/each}
-    </div>
+        <div class="module-card" class:locked={module.locked}>
+          <button
+            class="module-action"
+            on:click={() => !module.locked && handleModuleClick(module)}
+            aria-disabled={module.locked}
+          >
+            {module.label}
+          </button>
 
-    <div class="hint">
-      Long-Klick (Rechtsklick) zum Verzwirnen
+          <button
+            class="lock-toggle"
+            on:click|stopPropagation={() => toggleLock(module.id)}
+            aria-label={module.locked ? `${module.label} entsperren` : `${module.label} verzwirnen`}
+            aria-pressed={module.locked}
+            title={module.locked ? 'Entsperren' : 'Verzwirnen'}
+          >
+            {module.locked ? '🔒' : '🔓'}
+          </button>
+        </div>
+      {/each}
     </div>
   </div>
 {/if}

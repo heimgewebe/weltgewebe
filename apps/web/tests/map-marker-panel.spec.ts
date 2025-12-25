@@ -25,6 +25,48 @@ test("marker click opens showcase", async ({ page }) => {
   await expect(card.locator('button', { hasText: 'Verantwortungen' })).toBeVisible();
 });
 
+test("can toggle lock state via lock button", async ({ page }) => {
+  const marker = page.locator(".map-marker").first();
+  await marker.waitFor({ state: "visible" });
+  await marker.click();
+
+  const card = page.locator(".showcase-card");
+  await expect(card).toBeVisible();
+
+  // Find the 'Infos' module card
+  // We look for the button with 'Infos' text, then go up to the module-card container
+  // Or we can find the specific lock button related to it.
+  // The structure is: .module-card > .module-action("Infos") + .lock-toggle
+
+  // Use a precise locator strategy
+  const moduleCard = card.locator('.module-card', { hasText: 'Infos' });
+  const lockBtn = moduleCard.locator('.lock-toggle');
+
+  // Initially unlocked (Infos is mocked as locked: false)
+  await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(lockBtn).toHaveText('🔓');
+
+  // Click to lock
+  // We might need to hover first if opacity is 0, but playwight click usually works or we force it
+  // However, our CSS hides it (opacity: 0) unless hovered. Playwright might complain if it's not visible.
+  // Let's hover the card first.
+  await moduleCard.hover();
+  await expect(lockBtn).toBeVisible();
+  await lockBtn.click();
+
+  // Verify locked state
+  await expect(lockBtn).toHaveAttribute('aria-pressed', 'true');
+  await expect(lockBtn).toHaveText('🔒');
+  await expect(moduleCard).toHaveClass(/locked/);
+
+  // Click to unlock
+  await lockBtn.click();
+
+  // Verify unlocked state
+  await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(moduleCard).not.toHaveClass(/locked/);
+});
+
 test("close button closes showcase", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });
