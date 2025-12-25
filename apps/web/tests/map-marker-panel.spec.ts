@@ -20,9 +20,13 @@ test("marker click opens showcase", async ({ page }) => {
   await expect(card).toContainText("fairschenkbox");
 
   // Check for new buttons instead of "Handeln"/"Details"
-  await expect(card.locator('button', { hasText: 'Infos' })).toBeVisible();
-  await expect(card.locator('button', { hasText: 'Besprechungen' })).toBeVisible();
-  await expect(card.locator('button', { hasText: 'Verantwortungen' })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Infos" })).toBeVisible();
+  await expect(
+    card.locator("button", { hasText: "Besprechungen" }),
+  ).toBeVisible();
+  await expect(
+    card.locator("button", { hasText: "Verantwortungen" }),
+  ).toBeVisible();
 });
 
 test("can toggle lock state via lock button", async ({ page }) => {
@@ -39,12 +43,12 @@ test("can toggle lock state via lock button", async ({ page }) => {
   // The structure is: .module-card > .module-action("Infos") + .lock-toggle
 
   // Use a precise locator strategy
-  const moduleCard = card.locator('.module-card', { hasText: 'Infos' });
-  const lockBtn = moduleCard.locator('.lock-toggle');
+  const moduleCard = card.locator(".module-card", { hasText: "Infos" });
+  const lockBtn = moduleCard.locator(".lock-toggle");
 
   // Initially unlocked (Infos is mocked as locked: false)
-  await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
-  await expect(lockBtn).toHaveText('🔓');
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(lockBtn).toHaveText("🔓");
 
   // Click to lock
   // We might need to hover first if opacity is 0, but playwight click usually works or we force it
@@ -55,15 +59,15 @@ test("can toggle lock state via lock button", async ({ page }) => {
   await lockBtn.click();
 
   // Verify locked state
-  await expect(lockBtn).toHaveAttribute('aria-pressed', 'true');
-  await expect(lockBtn).toHaveText('🔒');
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(lockBtn).toHaveText("🔒");
   await expect(moduleCard).toHaveClass(/locked/);
 
   // Click to unlock
   await lockBtn.click();
 
   // Verify unlocked state
-  await expect(lockBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
   await expect(moduleCard).not.toHaveClass(/locked/);
 });
 
