@@ -16,9 +16,9 @@
     })();
   }
 
-  // STUB: This data structure mimics the future backend contract.
-  // In the final implementation, this should come from $selection.data.showcase.modules
-  // TODO: Connect to backend when 'showcase' schema is available.
+  // STUB: This data structure mimics the future backend data.
+  // In the final implementation, this should come from $selection.data.modules
+  // TODO: Replace stub modules with selection-driven data.
   let modules = [
     { id: 'infos', label: 'Infos', locked: false },
     { id: 'besprechungen', label: 'Besprechungen', locked: false },
@@ -39,7 +39,7 @@
 </script>
 
 <style>
-  .showcase-card {
+  .schaufenster-card {
     position: absolute;
     z-index: 35;
     background: var(--panel);
@@ -56,7 +56,7 @@
 
   /* Desktop: Bottom Right */
   @media (min-width: 600px) {
-    .showcase-card {
+    .schaufenster-card {
       bottom: 80px;
       right: 12px;
     }
@@ -64,7 +64,7 @@
 
   /* Mobile: Bottom (above dock) */
   @media (max-width: 599px) {
-    .showcase-card {
+    .schaufenster-card {
       bottom: 80px;
       left: 12px;
       right: 12px;
@@ -212,7 +212,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .showcase-card {
+    .schaufenster-card {
       transition: none !important;
     }
   }
@@ -220,7 +220,7 @@
 
 {#if $selection}
   <div
-    class="showcase-card"
+    class="schaufenster-card"
     transition:slide={{ duration: 180, axis: 'y' }}
     role="dialog"
     aria-modal="false"
@@ -250,7 +250,7 @@
       {/if}
     </div>
 
-    <!-- The "Showcase" Buttons -->
+    <!-- The "Schaufenster" Buttons -->
     <div class="modules-grid" role="group" aria-label="Module">
       {#each modules as module (module.id)}
         <div class="module-card" class:locked={module.locked}>
