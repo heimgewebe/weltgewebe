@@ -12,6 +12,8 @@
 
   import { view, selection } from '$lib/stores/uiView';
 
+  import garnrolleIcon from '$lib/assets/garnrolle.png';
+
   export let data: PageData;
 
   type MapPoint = {
@@ -67,6 +69,20 @@
       const element = document.createElement('button');
       element.type = 'button';
       element.className = item.type === 'account' ? 'map-marker marker-account' : 'map-marker';
+
+      // Special styling for accounts (Garnrolle icon)
+      if (item.type === 'account') {
+        element.style.backgroundImage = `url(${garnrolleIcon})`;
+        element.style.backgroundSize = 'contain';
+        element.style.backgroundRepeat = 'no-repeat';
+        element.style.backgroundColor = 'transparent';
+        element.style.border = 'none';
+        element.style.boxShadow = 'none'; // Remove default marker shadow
+        // Ensure it's large enough to be seen clearly
+        element.style.width = '34px';
+        element.style.height = '34px';
+      }
+
       element.setAttribute('aria-label', item.title);
       element.title = item.title;
 
@@ -292,11 +308,10 @@
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
-  /* Accounts specific style */
+  /* Accounts specific style - now mostly handled inline in updateMarkers for the icon */
   #map :global(.marker-account) {
-    background: var(--primary, #007acc);
-    border-radius: 4px; /* Square/Diamond for distinction */
-    transform: rotate(45deg);
+    /* Previously rotated square */
+    /* Remove overrides to let inline styles work cleanly */
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -304,8 +319,9 @@
       transform: scale(1.2);
       z-index: 10;
     }
+    /* For accounts, we just scale, no rotation needed */
     #map :global(.marker-account:hover){
-      transform: rotate(45deg) scale(1.2);
+      transform: scale(1.2);
     }
   }
   #map :global(.map-marker:focus-visible){
