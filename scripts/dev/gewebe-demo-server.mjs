@@ -152,6 +152,7 @@ const DEMO_ACCOUNTS_JSONL = [
     title: "gewebespinnerAYE",
     summary: "Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.",
     location: { lat: 53.5604148, lon: 10.0629844 },
+    public_pos: { lat: 53.5604148, lon: 10.0629844 },
     visibility: "public",
     tags: ["account", "garnrolle", "wohnort"]
   }

@@ -12,6 +12,8 @@
 
   import { view, selection } from '$lib/stores/uiView';
 
+  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
+
   export let data: PageData;
 
   type MapPoint = {
@@ -20,7 +22,7 @@
     lat: number;
     lon: number;
     summary?: string;
-    type?: 'node' | 'account';
+    type?: string; // Relaxed type to allow 'garnrolle' etc.
   };
 
   $: nodesData = (data.nodes || []).map((n) => ({
@@ -40,7 +42,7 @@
       lat: a.public_pos.lat,
       lon: a.public_pos.lon,
       summary: a.summary,
-      type: 'account'
+      type: a.type // Pass through the domain type (e.g., 'garnrolle')
     })) satisfies MapPoint[];
 
   $: markersData = [...nodesData, ...accountsData];
@@ -52,6 +54,13 @@
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
   const markerCleanupFns: Array<() => void> = [];
+
+  // UI Mapping Helper
+  function getMarkerCategory(type: string | undefined): string {
+    if (type === 'garnrolle') return 'account';
+    // Fallback/Default
+    return type || 'node';
+  }
 
   // Update markers when data changes or view toggles change
   async function updateMarkers(points: MapPoint[]) {
@@ -65,8 +74,20 @@
 
     for (const item of points) {
       const element = document.createElement('button');
+      const markerCategory = getMarkerCategory(item.type);
+
       element.type = 'button';
-      element.className = item.type === 'account' ? 'map-marker marker-account' : 'map-marker';
+      element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
+
+      // Robust testing selector based on domain semantics
+      element.dataset.testid = `marker-${item.type || 'node'}`;
+
+      // Pass declarative config to CSS
+      if (markerCategory === 'account') {
+        element.style.setProperty('--marker-icon', `url(${ICONS.garnrolle})`);
+        element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
+      }
+
       element.setAttribute('aria-label', item.title);
       element.title = item.title;
 
@@ -74,7 +95,10 @@
         // Capture focus for restoration later
         lastFocusedElement = e.currentTarget as HTMLElement;
 
-        $selection = { type: item.type || 'node', id: item.id, data: item };
+        // Use category for UI selection type if needed, or stick to domain?
+        // Existing selection store expects 'node' | 'account'.
+        // Let's normalize for the selection store for now to be safe with existing components.
+        $selection = { type: markerCategory as 'node'|'account', id: item.id, data: item };
 
         // Robust coordinate check before flying
         const lat = item.lat;
@@ -292,11 +316,24 @@
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
-  /* Accounts specific style */
+
+  /* Accounts specific style - handled via CSS variable + CSS rule */
   #map :global(.marker-account) {
-    background: var(--primary, #007acc);
-    border-radius: 4px; /* Square/Diamond for distinction */
-    transform: rotate(45deg);
+    background-image: var(--marker-icon);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+
+    width: var(--marker-size, 34px);
+    height: var(--marker-size, 34px);
+
+    /* Ensure no residual rotation */
+    transform: none;
+    border-radius: 0;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -304,14 +341,21 @@
       transform: scale(1.2);
       z-index: 10;
     }
+    /* Explicitly handle hover for accounts to ensure clean scaling without rotation artifacts */
     #map :global(.marker-account:hover){
-      transform: rotate(45deg) scale(1.2);
+      transform: scale(1.2);
     }
   }
+
   #map :global(.map-marker:focus-visible){
     outline:2px solid var(--fg);
     outline-offset:2px;
     z-index: 10;
+  }
+
+  #map :global(.marker-account:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 
   .loading-overlay {
