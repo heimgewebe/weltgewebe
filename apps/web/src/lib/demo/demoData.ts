@@ -48,9 +48,9 @@ export const demoAccounts = [
     summary: "Account with fuzziness enabled",
     // Public view: internal location would be different, but here we only show the projected public_pos
     location: {
-        lat: 53.561,
-        lon: 10.063,
-      },
+      lat: 53.561,
+      lon: 10.063,
+    },
     public_pos: {
       lat: 53.561,
       lon: 10.063,
@@ -68,9 +68,9 @@ export const demoAccounts = [
     summary: "Private account",
     // Public view: public_pos is undefined/null for private accounts
     location: {
-        lat: 53.561,
-        lon: 10.063,
-      },
+      lat: 53.561,
+      lon: 10.063,
+    },
     visibility: "private",
     radius_m: 0,
     ron_flag: false,
