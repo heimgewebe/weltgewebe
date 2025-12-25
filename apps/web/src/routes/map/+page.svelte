@@ -7,7 +7,7 @@
 
   import TopBar from '$lib/components/TopBar.svelte';
   import ViewPanel from '$lib/components/ViewPanel.svelte';
-  import Showcase from '$lib/components/Showcase.svelte';
+  import Schaufenster from '$lib/components/Schaufenster.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
 
   import { view, selection } from '$lib/stores/uiView';
@@ -437,7 +437,7 @@
     </div>
   {/if}
 
-  <Showcase />
+  <Schaufenster />
 
   <!-- Zeitleiste -->
   <TimelineDock />

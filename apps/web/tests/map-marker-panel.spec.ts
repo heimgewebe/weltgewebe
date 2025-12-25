@@ -6,13 +6,13 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/map");
 });
 
-test("marker click opens showcase", async ({ page }) => {
+test("marker click opens schaufenster", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
-  // Check if Showcase opens (it replaced SelectionCard, but uses .showcase-card class)
-  const card = page.locator(".showcase-card");
+  // Check if Schaufenster opens (it replaced SelectionCard, but uses .schaufenster-card class)
+  const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
   // Check content from mockApi.ts demoNodes
@@ -34,7 +34,7 @@ test("can toggle lock state via lock button", async ({ page }) => {
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
-  const card = page.locator(".showcase-card");
+  const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
   // Find the 'Infos' module card
@@ -71,12 +71,12 @@ test("can toggle lock state via lock button", async ({ page }) => {
   await expect(moduleCard).not.toHaveClass(/locked/);
 });
 
-test("close button closes showcase", async ({ page }) => {
+test("close button closes schaufenster", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
-  const card = page.locator(".showcase-card");
+  const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
   // Click the close button
