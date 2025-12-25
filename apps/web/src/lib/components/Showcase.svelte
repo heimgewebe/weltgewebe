@@ -15,10 +15,30 @@
       cardRef?.focus();
     })();
   }
+
+  // Default buttons for now. In a real app, this would come from the node/account data.
+  // The 'locked' state is also local for now.
+  let modules = [
+    { id: 'infos', label: 'Infos', locked: false },
+    { id: 'besprechungen', label: 'Besprechungen', locked: false },
+    { id: 'verantwortungen', label: 'Verantwortungen', locked: true } // Example of a locked button
+  ];
+
+  function handleModuleClick(module: typeof modules[0]) {
+    // Navigate or open module detail
+    console.log('Open module:', module.id);
+  }
+
+  function handleModuleContext(e: Event, module: typeof modules[0]) {
+    e.preventDefault(); // Prevent default context menu
+    // Toggle locked state "Verzwirnen"
+    module.locked = !module.locked;
+    modules = modules; // Trigger reactivity
+  }
 </script>
 
 <style>
-  .selection-card {
+  .showcase-card {
     position: absolute;
     z-index: 35;
     background: var(--panel);
@@ -28,11 +48,14 @@
     padding: 16px;
     width: 300px;
     color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
 
   /* Desktop: Bottom Right */
   @media (min-width: 600px) {
-    .selection-card {
+    .showcase-card {
       bottom: 80px;
       right: 12px;
     }
@@ -40,7 +63,7 @@
 
   /* Mobile: Bottom (above dock) */
   @media (max-width: 599px) {
-    .selection-card {
+    .showcase-card {
       bottom: 80px;
       left: 12px;
       right: 12px;
@@ -52,8 +75,6 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 8px;
-    gap: 8px;
   }
 
   h3 {
@@ -69,7 +90,6 @@
     text-transform: uppercase;
     padding: 2px 6px;
     border-radius: 4px;
-    background: var(--panel-border); /* fallback */
     background: rgba(125,125,125, 0.15);
     color: var(--muted);
     font-weight: 600;
@@ -93,53 +113,71 @@
     color: var(--text);
   }
 
-  .content {
-    margin-bottom: 16px;
+  .summary {
     font-size: 14px;
     color: var(--muted);
     line-height: 1.5;
-    /* Limit to 2 lines */
+    /* Limit to 3 lines */
     display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
+    line-clamp: 3;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
 
-  .actions {
-    display: flex;
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
+    margin-top: 4px;
   }
 
-  .ghost-btn {
-    flex: 1;
+  .module-btn {
+    position: relative;
     background: transparent;
     border: 1px solid var(--panel-border);
-    border-radius: 6px;
-    padding: 6px 12px;
+    border-radius: 8px;
+    padding: 10px;
     cursor: pointer;
     color: var(--text);
     font-size: 13px;
     font-weight: 500;
     text-align: center;
-    transition: background 0.15s, border-color 0.15s;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
   }
-  .ghost-btn:hover {
+
+  .module-btn:hover {
     background: rgba(0,0,0,0.03);
     border-color: var(--muted);
   }
-  .ghost-btn.primary {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: rgba(var(--accent-rgb), 0.05); /* if accent-rgb existed, fallback: */
+
+  .module-btn.locked {
+    border-style: dashed;
+    opacity: 0.7;
+    color: var(--muted);
   }
-  .ghost-btn.primary:hover {
-    background: var(--accent);
-    color: var(--bg);
+
+  .lock-icon {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 10px;
+  }
+
+  .hint {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    opacity: 0.7;
+    margin-top: 4px;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .selection-card {
+    .showcase-card {
       transition: none !important;
     }
   }
@@ -147,7 +185,7 @@
 
 {#if $selection}
   <div
-    class="selection-card"
+    class="showcase-card"
     transition:slide={{ duration: 180, axis: 'y' }}
     role="dialog"
     aria-modal="false"
@@ -169,7 +207,7 @@
       <button class="close-btn" on:click={close} aria-label="Close">✕</button>
     </div>
 
-    <div class="content">
+    <div class="summary">
       {#if $selection.data}
         {$selection.data.summary || 'Keine Beschreibung verfügbar.'}
       {:else}
@@ -177,9 +215,26 @@
       {/if}
     </div>
 
-    <div class="actions">
-      <button class="ghost-btn">Details</button>
-      <button class="ghost-btn primary">Handeln</button>
+    <!-- The "Showcase" Buttons -->
+    <div class="modules-grid">
+      {#each modules as module (module.id)}
+        <button
+          class="module-btn"
+          class:locked={module.locked}
+          on:click={() => handleModuleClick(module)}
+          on:contextmenu={(e) => handleModuleContext(e, module)}
+          title={module.locked ? 'Verzwirnt (Rechtsklick/Longpress zum Entsperren)' : 'Rechtsklick/Longpress zum Verzwirnen'}
+        >
+          {module.label}
+          {#if module.locked}
+             <span class="lock-icon">🔒</span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+
+    <div class="hint">
+      Long-Klick (Rechtsklick) zum Verzwirnen
     </div>
   </div>
 {/if}

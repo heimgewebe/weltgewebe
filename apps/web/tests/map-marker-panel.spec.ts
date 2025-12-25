@@ -6,27 +6,31 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/map");
 });
 
-test("marker click opens selection card", async ({ page }) => {
+test("marker click opens showcase", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
-  // Check if SelectionCard opens (it replaced the drawer)
-  // We identify it by its specific class since we didn't give it an ID
-  const card = page.locator(".selection-card");
+  // Check if Showcase opens (it replaced SelectionCard, but uses .showcase-card class)
+  const card = page.locator(".showcase-card");
   await expect(card).toBeVisible();
 
   // Check content from mockApi.ts demoNodes
   // "fairschenkbox" is the title in the new demoData.ts
   await expect(card).toContainText("fairschenkbox");
+
+  // Check for new buttons instead of "Handeln"/"Details"
+  await expect(card.locator('button', { hasText: 'Infos' })).toBeVisible();
+  await expect(card.locator('button', { hasText: 'Besprechungen' })).toBeVisible();
+  await expect(card.locator('button', { hasText: 'Verantwortungen' })).toBeVisible();
 });
 
-test("close button closes selection card", async ({ page }) => {
+test("close button closes showcase", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
-  const card = page.locator(".selection-card");
+  const card = page.locator(".showcase-card");
   await expect(card).toBeVisible();
 
   // Click the close button
