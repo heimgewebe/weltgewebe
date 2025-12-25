@@ -16,9 +16,9 @@
     })();
   }
 
-  // STUB: This data structure mimics the future backend contract.
-  // In the final implementation, this should come from $selection.data.schaufenster.modules
-  // TODO: Connect to backend when 'schaufenster' schema is available.
+  // STUB: This data structure mimics the future backend data.
+  // In the final implementation, this should come from $selection.data.modules
+  // TODO: Replace stub modules with selection-driven data.
   let modules = [
     { id: 'infos', label: 'Infos', locked: false },
     { id: 'besprechungen', label: 'Besprechungen', locked: false },
