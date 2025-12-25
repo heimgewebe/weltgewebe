@@ -190,7 +190,8 @@
     border: none;
     cursor: pointer;
     border-radius: 4px;
-    opacity: 0.5;
+    /* Updated for better visibility/UX (Splinter #1) */
+    opacity: 0.3;
     transition: opacity 0.2s, background 0.2s;
     font-size: 12px;
     padding: 0;
@@ -202,15 +203,11 @@
     background: rgba(0,0,0,0.05);
   }
 
-  /* Show lock icon always if locked, otherwise on hover/focus */
-  .module-card:not(.locked) .lock-toggle {
-    opacity: 0;
+  /* When locked, fully visible */
+  .module-card.locked .lock-toggle {
+    opacity: 0.8;
   }
-  .module-card:not(.locked):hover .lock-toggle,
-  .module-card:not(.locked):focus-within .lock-toggle {
-    opacity: 0.4;
-  }
-  .module-card:not(.locked) .lock-toggle:hover {
+  .module-card.locked .lock-toggle:hover {
     opacity: 1;
   }
 
@@ -272,6 +269,7 @@
             aria-pressed={module.locked}
             title={module.locked ? 'Entsperren' : 'Verzwirnen'}
           >
+            <!-- Explicit content for Splinter #2 -->
             {module.locked ? '🔒' : '🔓'}
           </button>
         </div>
