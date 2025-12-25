@@ -27,6 +27,10 @@ export const demoAccounts = [
     title: "gewebespinnerAYE",
     summary: "Lokale Garnrolle / Account",
     // Public view: Internal location is hidden. Only public_pos is exposed.
+    location: {
+      lat: 53.5604148,
+      lon: 10.0629844,
+    },
     public_pos: {
       lat: 53.5604148,
       lon: 10.0629844,
@@ -43,6 +47,10 @@ export const demoAccounts = [
     title: "PrivateSpinner (Fuzzed)",
     summary: "Account with fuzziness enabled",
     // Public view: internal location would be different, but here we only show the projected public_pos
+    location: {
+        lat: 53.561,
+        lon: 10.063,
+      },
     public_pos: {
       lat: 53.561,
       lon: 10.063,
@@ -59,6 +67,10 @@ export const demoAccounts = [
     title: "InvisibleSpinner",
     summary: "Private account",
     // Public view: public_pos is undefined/null for private accounts
+    location: {
+        lat: 53.561,
+        lon: 10.063,
+      },
     visibility: "private",
     radius_m: 0,
     ron_flag: false,
