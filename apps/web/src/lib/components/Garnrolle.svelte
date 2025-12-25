@@ -1,5 +1,5 @@
 <script lang="ts">
-  import garnrolleIcon from '$lib/assets/garnrolle.png';
+  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
 
   export let label = 'Mein Konto';
   export let tooltip = 'Garnrolle – Konto';
@@ -8,7 +8,6 @@
 <style>
   .wrap{ position:relative; display:inline-block; text-decoration: none; color: inherit; }
   .roll{
-    width:34px; height:34px;
     display:block; cursor:pointer;
     transition: transform 0.1s ease;
   }
@@ -30,8 +29,8 @@
 </style>
 
 <a href="/settings" class="wrap" aria-label={label}>
-  <div class="roll" title={tooltip}>
-    <img src={garnrolleIcon} alt={label} />
+  <div class="roll" title={tooltip} style="width: {MARKER_SIZES.account}px; height: {MARKER_SIZES.account}px;">
+    <img src={ICONS.garnrolle} alt={label} />
   </div>
   <div class="tip">{tooltip}</div>
 </a>

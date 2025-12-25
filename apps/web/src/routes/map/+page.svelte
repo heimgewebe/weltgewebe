@@ -12,7 +12,7 @@
 
   import { view, selection } from '$lib/stores/uiView';
 
-  import garnrolleIcon from '$lib/assets/garnrolle.png';
+  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
 
   export let data: PageData;
 
@@ -70,17 +70,10 @@
       element.type = 'button';
       element.className = item.type === 'account' ? 'map-marker marker-account' : 'map-marker';
 
-      // Special styling for accounts (Garnrolle icon)
+      // Pass declarative config to CSS
       if (item.type === 'account') {
-        element.style.backgroundImage = `url(${garnrolleIcon})`;
-        element.style.backgroundSize = 'contain';
-        element.style.backgroundRepeat = 'no-repeat';
-        element.style.backgroundColor = 'transparent';
-        element.style.border = 'none';
-        element.style.boxShadow = 'none'; // Remove default marker shadow
-        // Ensure it's large enough to be seen clearly
-        element.style.width = '34px';
-        element.style.height = '34px';
+        element.style.setProperty('--marker-icon', `url(${ICONS.garnrolle})`);
+        element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
       }
 
       element.setAttribute('aria-label', item.title);
@@ -308,10 +301,24 @@
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
-  /* Accounts specific style - now mostly handled inline in updateMarkers for the icon */
+
+  /* Accounts specific style - handled via CSS variable + CSS rule */
   #map :global(.marker-account) {
-    /* Previously rotated square */
-    /* Remove overrides to let inline styles work cleanly */
+    background-image: var(--marker-icon);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+
+    width: var(--marker-size, 34px);
+    height: var(--marker-size, 34px);
+
+    /* Ensure no residual rotation */
+    transform: none;
+    border-radius: 0;
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -319,15 +326,21 @@
       transform: scale(1.2);
       z-index: 10;
     }
-    /* For accounts, we just scale, no rotation needed */
+    /* Explicitly handle hover for accounts to ensure clean scaling without rotation artifacts */
     #map :global(.marker-account:hover){
       transform: scale(1.2);
     }
   }
+
   #map :global(.map-marker:focus-visible){
     outline:2px solid var(--fg);
     outline-offset:2px;
     z-index: 10;
+  }
+
+  #map :global(.marker-account:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 
   .loading-overlay {
