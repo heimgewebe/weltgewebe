@@ -22,7 +22,7 @@ const createAuthStore = () => {
     subscribe,
     // Platzhalter-Funktion für den Login
     // Allows optional accountId injection for testing
-    login: (accountId: string = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8") => {
+    login: (accountId: string) => {
       // TODO: Echte Login-Logik implementieren
       set({
         loggedIn: true,

@@ -432,9 +432,11 @@
       Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
     {/if}
     <br>
-    <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
-      {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
-    </button>
+    {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
+        {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
+      </button>
+    {/if}
   </div>
   <TopBar />
   <ViewPanel />
