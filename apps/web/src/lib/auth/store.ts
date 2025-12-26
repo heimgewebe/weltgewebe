@@ -12,7 +12,7 @@ interface User {
 // Session-Management-Logik ersetzt.
 // NICHT FÜR PRODUKTIVBETRIEB – nur Demo.
 const createAuthStore = () => {
-  const { subscribe, set, update } = writable<User>({
+  const { subscribe, set } = writable<User>({
     loggedIn: false,
     role: undefined,
     current_account_id: undefined,

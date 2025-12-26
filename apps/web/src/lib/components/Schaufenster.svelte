@@ -36,7 +36,9 @@
   let lastSelectionId: string | null = null;
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
-    // Reset to default locked state on new selection
+    // Reset to default locked state on new selection.
+    // Note: Nodes are currently default-locked for safety, awaiting a defined Node-Ownership model.
+    // If nodes should be public-writable or public-unlocked in the future, change this default.
     modules = modules.map(m => ({ ...m, locked: true }));
   }
 
