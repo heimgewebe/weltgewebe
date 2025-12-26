@@ -254,8 +254,21 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps
 
+      - name: Generate demo data
+        run: scripts/dev/generate-demo-data.sh
+        working-directory: .
+
+      - name: Start demo API
+        run: |
+          PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
+        working-directory: .
+
+      - name: Wait for API
+        run: scripts/ci/wait-for-api.sh
+        working-directory: .
+
       - name: Build application
-        run: pnpm build
+        run: pnpm build --mode test
 
       - name: Start preview server
         run: |
