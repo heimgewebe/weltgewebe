@@ -1,0 +1,32 @@
+weltgewebe.net {
+	log {
+		output stdout
+		level INFO
+	}
+
+	# Handle API requests (stripping the prefix implies using handle_path)
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Explicitly forward health checks to the API
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	# Proxy everything else to Vercel
+	# The Vercel domain must be provided via environment variable
+	reverse_proxy /* https://{env.VERCEL_PROD_DOMAIN} {
+		header_up Host {env.VERCEL_PROD_DOMAIN}
+	}
+
+	header {
+		# Security headers
+		# Connect-src includes ws/wss for potential websocket needs and map tiles
+		# Script/Style src allow unsafe-inline because Vercel/SvelteKit often use inline scripts/styles
+		# CSP should be tightened as deployment matures
+		Content-Security-Policy "default-src 'self' https://{env.VERCEL_PROD_DOMAIN}; script-src 'self' https://{env.VERCEL_PROD_DOMAIN} 'unsafe-inline'; style-src 'self' https://{env.VERCEL_PROD_DOMAIN} 'unsafe-inline'; connect-src 'self' https://{env.VERCEL_PROD_DOMAIN} ws: wss: https://demotiles.maplibre.org; img-src 'self' data: blob: https://demotiles.maplibre.org; worker-src 'self' blob:; object-src 'none';"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+	}
+}
