@@ -6,11 +6,15 @@ test.beforeEach(async ({ page }) => {
   await page.goto("/map");
 });
 
-test("Garnrolle (Account) behaves correctly for public vs owner", async ({ page }) => {
+test("Garnrolle (Account) behaves correctly for public vs owner", async ({
+  page,
+}) => {
   // 1. PUBLIC VIEW (Not logged in / Not owner)
   // Target a Garnrolle marker
   // Note: We use the data-testid we added in +page.svelte
-  const garnrolleMarker = page.locator('[data-testid="marker-garnrolle"]').first();
+  const garnrolleMarker = page
+    .locator('[data-testid="marker-garnrolle"]')
+    .first();
 
   // Wait for map to load and markers to appear
   await garnrolleMarker.waitFor({ state: "visible" });
@@ -34,7 +38,6 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({ page 
   // Close card to reset selection
   await card.locator('button[aria-label="Close"]').click();
   await expect(card).toBeHidden();
-
 
   // 2. OWNER VIEW
   // Click the hidden login button added to the debug badge

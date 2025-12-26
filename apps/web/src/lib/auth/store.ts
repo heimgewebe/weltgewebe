@@ -27,7 +27,7 @@ const createAuthStore = () => {
       set({
         loggedIn: true,
         role: "weber",
-        current_account_id: accountId
+        current_account_id: accountId,
       });
     },
     // Platzhalter-Funktion für den Logout
@@ -36,7 +36,7 @@ const createAuthStore = () => {
       set({
         loggedIn: false,
         role: undefined,
-        current_account_id: undefined
+        current_account_id: undefined,
       });
     },
   };
