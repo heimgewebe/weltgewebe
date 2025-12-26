@@ -12,6 +12,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
 
   db:
     image: postgres:16
@@ -39,10 +44,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      VERCEL_PROD_DOMAIN: ${VERCEL_PROD_DOMAIN}
+      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL}
+      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST}
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   pg_data_prod:

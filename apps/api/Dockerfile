@@ -3,10 +3,18 @@ FROM rust:1.89.0-bullseye as builder
 
 WORKDIR /app
 
-# Copy the entire workspace
+# 1) Copy manifests first to cache dependencies
+COPY Cargo.toml Cargo.lock ./
+COPY apps/api/Cargo.toml apps/api/Cargo.toml
+
+# 2) Fetch dependencies (this caches the index and downloads)
+RUN cargo fetch
+
+# 3) Copy the rest of the workspace
 COPY . .
 
-# Build the API binary in release mode
+# 4) Build the API binary in release mode
+# Offline mode is not strictly necessary but ensures we use what we fetched
 RUN cargo build --release --bin weltgewebe-api
 
 # Runner stage
@@ -15,7 +23,8 @@ FROM debian:bullseye-slim
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+# curl/wget is needed for healthchecks. ca-certificates for HTTPS.
+RUN apt-get update && apt-get install -y ca-certificates wget && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api

@@ -1,6 +1,6 @@
 # VPS Deployment Runbook
 
-Dieses Runbook beschreibt die Schritte zur Bereitstellung der Weltgewebe-Infrastruktur (API, Datenbank, Proxy) auf einem VPS. Das Frontend wird weiterhin über Vercel ausgeliefert, aber über den Caddy-Proxy auf dem VPS unter `weltgewebe.net` eingebunden.
+Dieses Runbook beschreibt die Schritte zur Bereitstellung der Weltgewebe-Infrastruktur (API, Datenbank, Proxy) auf einem VPS. Das Frontend wird weiterhin über einen externen Provider (z.B. Vercel oder Cloudflare Pages) ausgeliefert, aber über den Caddy-Proxy auf dem VPS unter `weltgewebe.net` eingebunden.
 
 ## Voraussetzungen
 
@@ -37,21 +37,19 @@ Kopiere das Repository auf den VPS (z.B. nach `/opt/weltgewebe` oder `~/weltgewe
 
 ### B. Umgebungsvariablen (.env)
 
-Erstelle eine `.env` Datei im Root-Verzeichnis (neben `infra/`), basierend auf `.env.example`. Für die Produktion sind folgende Anpassungen wichtig:
+Erstelle eine `.env` Datei im Root-Verzeichnis (neben `infra/`), basierend auf `.env.prod.example`.
 
-```ini
-# Datenbank (starke Passwörter verwenden!)
-POSTGRES_USER=welt
-POSTGRES_PASSWORD=secure_password_here
-POSTGRES_DB=weltgewebe
-DATABASE_URL=postgres://welt:secure_password_here@db:5432/weltgewebe
-
-# Vercel Upstream (Die Production URL von Vercel)
-VERCEL_PROD_DOMAIN=dein-projekt.vercel.app
-
-# Logging
-RUST_LOG=info
+```bash
+cp .env.prod.example .env
+nano .env
 ```
+
+Für die Produktion sind folgende Anpassungen wichtig:
+
+*   **Datenbank**: Wähle ein starkes Passwort für `POSTGRES_PASSWORD` und passe `DATABASE_URL` entsprechend an.
+*   **Web Upstream**: Konfiguriere den Host und die URL deines Frontends (Vercel oder Cloudflare).
+    *   `WEB_UPSTREAM_HOST`: z.B. `leitstand.pages.dev` oder `dein-projekt.vercel.app`
+    *   `WEB_UPSTREAM_URL`: z.B. `https://leitstand.pages.dev` oder `https://dein-projekt.vercel.app`
 
 ### C. Starten
 
