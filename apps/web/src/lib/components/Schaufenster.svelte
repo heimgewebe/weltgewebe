@@ -1,5 +1,6 @@
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
+  import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
 
@@ -19,11 +20,36 @@
   // STUB: This data structure mimics the future backend data.
   // In the final implementation, this should come from $selection.data.modules
   // TODO: Replace stub modules with selection-driven data.
+  // Initial state is all locked (safe default)
   let modules = [
-    { id: 'infos', label: 'Infos', locked: false },
-    { id: 'besprechungen', label: 'Besprechungen', locked: false },
+    { id: 'infos', label: 'Infos', locked: true },
+    { id: 'besprechungen', label: 'Besprechungen', locked: true },
     { id: 'verantwortungen', label: 'Verantwortungen', locked: true }
   ];
+
+  // Helper to determine ownership and type
+  $: isAccount = $selection?.type === 'account';
+  // Check if current user is the owner of the selected account
+  $: isOwner = $authStore.loggedIn && $selection && $selection.id === $authStore.current_account_id;
+
+  // Reactively reset modules when selection changes
+  let lastSelectionId: string | null = null;
+  $: if ($selection?.id !== lastSelectionId) {
+    lastSelectionId = $selection?.id || null;
+    // Reset to default locked state on new selection.
+    // Note: Nodes are currently default-locked for safety, awaiting a defined Node-Ownership model.
+    // If nodes should be public-writable or public-unlocked in the future, change this default.
+    modules = modules.map(m => ({ ...m, locked: true }));
+  }
+
+  // Enforce invariant: If it's an account and not owner, it MUST be locked.
+  // This auto-corrects any state drift.
+  $: if (isAccount && !isOwner) {
+     const anyUnlocked = modules.some(m => !m.locked);
+     if (anyUnlocked) {
+        modules = modules.map(m => ({ ...m, locked: true }));
+     }
+  }
 
   function handleModuleClick(module: typeof modules[0]) {
     // Navigate or open module detail
@@ -262,16 +288,19 @@
             {module.label}
           </button>
 
-          <button
-            class="lock-toggle"
-            on:click|stopPropagation={() => toggleLock(module.id)}
-            aria-label={module.locked ? `${module.label} entsperren` : `${module.label} verzwirnen`}
-            aria-pressed={module.locked}
-            title={module.locked ? 'Entsperren' : 'Verzwirnen'}
-          >
-            <!-- Explicit content for Splinter #2 -->
-            {module.locked ? '🔒' : '🔓'}
-          </button>
+          <!-- Lock toggle is only visible for owners on accounts (or non-accounts if applicable) -->
+          <!-- "Unlock-UI ist nur sichtbar, wenn isOwner === true" -->
+          {#if !isAccount || isOwner}
+            <button
+              class="lock-toggle"
+              on:click|stopPropagation={() => toggleLock(module.id)}
+              aria-label={module.locked ? `${module.label} entsperren` : `${module.label} verzwirnen`}
+              aria-pressed={module.locked}
+              title={module.locked ? 'Entsperren' : 'Verzwirnen'}
+            >
+              {module.locked ? '🔒' : '🔓'}
+            </button>
+          {/if}
         </div>
       {/each}
     </div>

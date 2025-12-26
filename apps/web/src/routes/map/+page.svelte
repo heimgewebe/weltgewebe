@@ -11,6 +11,7 @@
   import TimelineDock from '$lib/components/TimelineDock.svelte';
 
   import { view, selection } from '$lib/stores/uiView';
+  import { authStore } from '$lib/auth/store';
 
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
 
@@ -240,6 +241,16 @@
     });
   }
 
+  function toggleLogin() {
+    if ($authStore.loggedIn) {
+      authStore.logout();
+    } else {
+      // Login as the owner of the first account (gewebespinnerAYE)
+      // ID: 7d97a42e-3704-4a33-a61f-0e0a6b4d65d8
+      authStore.login('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
+    }
+  }
+
   onMount(() => {
     (async () => {
       const maplibregl = await import('maplibre-gl');
@@ -419,6 +430,12 @@
     {:else}
       Mode: DEMO (local)<br>
       Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
+    {/if}
+    <br>
+    {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
+        {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
+      </button>
     {/if}
   </div>
   <TopBar />

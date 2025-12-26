@@ -46,11 +46,11 @@ test("can toggle lock state via lock button", async ({ page }) => {
   const moduleCard = card.locator(".module-card", { hasText: "Infos" });
   const lockBtn = moduleCard.locator(".lock-toggle");
 
-  // Initially unlocked (Infos is mocked as locked: false)
-  await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
-  await expect(lockBtn).toHaveText("🔓");
+  // Initially locked (default is now locked for safety)
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(lockBtn).toHaveText("🔒");
 
-  // Click to lock
+  // Click to UNLOCK
   // We might need to hover first if opacity is 0, but playwight click usually works or we force it
   // However, our CSS hides it (opacity: 0) unless hovered. Playwright might complain if it's not visible.
   // Let's hover the card first.
@@ -58,17 +58,17 @@ test("can toggle lock state via lock button", async ({ page }) => {
   await expect(lockBtn).toBeVisible();
   await lockBtn.click();
 
-  // Verify locked state
-  await expect(lockBtn).toHaveAttribute("aria-pressed", "true");
-  await expect(lockBtn).toHaveText("🔒");
-  await expect(moduleCard).toHaveClass(/locked/);
-
-  // Click to unlock
-  await lockBtn.click();
-
   // Verify unlocked state
   await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(lockBtn).toHaveText("🔓");
   await expect(moduleCard).not.toHaveClass(/locked/);
+
+  // Click to LOCK
+  await lockBtn.click();
+
+  // Verify locked state
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "true");
+  await expect(moduleCard).toHaveClass(/locked/);
 });
 
 test("close button closes schaufenster", async ({ page }) => {

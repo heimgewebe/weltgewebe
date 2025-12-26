@@ -23,7 +23,7 @@
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
-    "pretest": "pnpm build",
+    "pretest": "pnpm build --mode test",
     "test": "playwright test",
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=dot,html,junit",
