@@ -295,8 +295,8 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`✅ Demo API server listening on http://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ Demo API server listening on http://0.0.0.0:${PORT}`);
   console.log(" GET /api/nodes[?bbox=west,south,east,north]");
   console.log(" GET /api/edges");
   console.log(" GET /api/accounts");

@@ -4,6 +4,7 @@ import { writable } from "svelte/store";
 interface User {
   loggedIn: boolean;
   role?: string;
+  current_account_id?: string;
 }
 
 // Erstellt einen Store, um den Authentifizierungsstatus zu speichern.
@@ -11,22 +12,32 @@ interface User {
 // Session-Management-Logik ersetzt.
 // NICHT FÜR PRODUKTIVBETRIEB – nur Demo.
 const createAuthStore = () => {
-  const { subscribe, set } = writable<User>({
+  const { subscribe, set, update } = writable<User>({
     loggedIn: false,
     role: undefined,
+    current_account_id: undefined,
   });
 
   return {
     subscribe,
     // Platzhalter-Funktion für den Login
-    login: () => {
+    // Allows optional accountId injection for testing
+    login: (accountId: string = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8") => {
       // TODO: Echte Login-Logik implementieren
-      set({ loggedIn: true, role: "weber" });
+      set({
+        loggedIn: true,
+        role: "weber",
+        current_account_id: accountId
+      });
     },
     // Platzhalter-Funktion für den Logout
     logout: () => {
       // TODO: Echte Logout-Logik implementieren
-      set({ loggedIn: false, role: undefined });
+      set({
+        loggedIn: false,
+        role: undefined,
+        current_account_id: undefined
+      });
     },
   };
 };

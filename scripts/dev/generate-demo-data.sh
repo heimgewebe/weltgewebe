@@ -6,7 +6,7 @@ mkdir -p .gewebe/in
 
 # Accounts
 test -s .gewebe/in/demo.accounts.jsonl || { echo "→ seeds: accounts"; cat > .gewebe/in/demo.accounts.jsonl <<-'JSONL'
-{"id":"00000000-0000-0000-0000-00000000A001","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}
+{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}
 JSONL
 }
 
@@ -34,10 +34,10 @@ if [ ! -s .gewebe/in/demo.edges.jsonl ]; then
 {"id":"00000000-0000-0000-0000-000000000102","source_type":"node","source_id":"00000000-0000-0000-0000-000000000002","target_type":"node","target_id":"00000000-0000-0000-0000-000000000004","edge_kind":"reference","note":"Gemeinschaftsaktion Gartenpflege","created_at":"2025-01-01T12:00:00Z"}
 {"id":"00000000-0000-0000-0000-000000000103","source_type":"node","source_id":"00000000-0000-0000-0000-000000000001","target_type":"node","target_id":"00000000-0000-0000-0000-000000000003","edge_kind":"reference","note":"Tauschbox liefert Material","created_at":"2025-01-01T12:00:00Z"}
 {"id":"00000000-0000-0000-0000-000000000104","source_type":"node","source_id":"00000000-0000-0000-0000-000000000005","target_type":"node","target_id":"00000000-0000-0000-0000-000000000001","edge_kind":"reference","note":"Reparaturcafé hilft Marktplatz","created_at":"2025-01-01T12:00:00Z"}
-{"id":"00000000-0000-0000-0000-00000000E001","source_type":"account","source_id":"00000000-0000-0000-0000-00000000A001","target_type":"node","target_id":"00000000-0000-0000-0000-000000000006","edge_kind":"reference","note":"faden","created_at":"2025-12-22T00:00:00Z"}
+{"id":"00000000-0000-0000-0000-00000000E001","source_type":"account","source_id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","target_type":"node","target_id":"00000000-0000-0000-0000-000000000006","edge_kind":"reference","note":"faden","created_at":"2025-12-22T00:00:00Z"}
 JSONL
 else
    if ! grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
-     echo '{"id":"00000000-0000-0000-0000-00000000E001","source_type":"account","source_id":"00000000-0000-0000-0000-00000000A001","target_type":"node","target_id":"00000000-0000-0000-0000-000000000006","edge_kind":"reference","note":"faden","created_at":"2025-12-22T00:00:00Z"}' >> .gewebe/in/demo.edges.jsonl
+     echo '{"id":"00000000-0000-0000-0000-00000000E001","source_type":"account","source_id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","target_type":"node","target_id":"00000000-0000-0000-0000-000000000006","edge_kind":"reference","note":"faden","created_at":"2025-12-22T00:00:00Z"}' >> .gewebe/in/demo.edges.jsonl
    fi
 fi
