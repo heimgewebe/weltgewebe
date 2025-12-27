@@ -1,3 +1,4 @@
+---
 services:
   api:
     image: weltgewebe-api:latest
