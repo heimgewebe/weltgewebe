@@ -56,8 +56,8 @@ Anpassungen:
 
 * **Datenbank**: Wähle ein starkes Passwort für `POSTGRES_PASSWORD` und passe `DATABASE_URL` entsprechend an.
 * **Web Upstream**: Konfiguriere den Host und die URL deines Frontends (Vercel oder Cloudflare).
-  * `WEB_UPSTREAM_HOST`: z.B. `leitstand.pages.dev` oder `dein-projekt.vercel.app`
-  * `WEB_UPSTREAM_URL`: Muss mit `https://` beginnen (z.B. `https://leitstand.pages.dev`).
+  * `WEB_UPSTREAM_HOST`: **Nur die Domain** ohne Schema (z.B. `leitstand.pages.dev`).
+  * `WEB_UPSTREAM_URL`: Die volle Origin **ohne Pfad**, muss mit `https://` beginnen (z.B. `https://leitstand.pages.dev`).
 
 ### C. Starten
 
@@ -103,7 +103,8 @@ Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und a
    # Täglich um 3 Uhr nachts: Dump erstellen, zippen und alte Dateien löschen
    0 3 * * * docker compose -f /opt/weltgewebe/infra/compose/compose.prod.yml \
      exec -T db pg_dump -U welt weltgewebe | gzip > /var/backups/weltgewebe/db_$(date +\%F).sql.gz \
-     && find /var/backups/weltgewebe/ -name "db_*.sql.gz" -mtime +14 -delete
+     && find /var/backups/weltgewebe/ -name "db_*.sql.gz" -mtime +14 -delete \
+     || echo "backup failed $(date)" >> /var/backups/weltgewebe/backup.log
    ```
 
 ## Wartung

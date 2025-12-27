@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Load environment variables if needed, or assume they are in .env
+# Load environment variables robustly
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a
+    source .env
+    set +a
 fi
 
 echo "Deploying to VPS..."
@@ -17,6 +19,11 @@ fi
 
 if [ -z "${WEB_UPSTREAM_HOST:-}" ]; then
     echo "Error: WEB_UPSTREAM_HOST is not set in .env or environment."
+    exit 1
+fi
+
+if [[ "${WEB_UPSTREAM_HOST:-}" =~ ^https?:// ]]; then
+    echo "Error: WEB_UPSTREAM_HOST should not contain http:// or https:// (just the domain)."
     exit 1
 fi
 
