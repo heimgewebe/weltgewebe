@@ -99,11 +99,13 @@ Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und a
 
 2. Cronjob einrichten (`crontab -e`):
 
+   Verwende `set -o pipefail`, um Fehler in der Pipe (z.B. bei `pg_dump`) korrekt zu erkennen und zu loggen.
+
    ```bash
-   # Täglich um 3 Uhr nachts: Dump erstellen, zippen und alte Dateien löschen
-   0 3 * * * docker compose -f /opt/weltgewebe/infra/compose/compose.prod.yml \
+   # Täglich um 3 Uhr nachts: Dump erstellen, zippen, rotieren und Fehler loggen
+   0 3 * * * /bin/bash -c 'set -o pipefail; docker compose -f /opt/weltgewebe/infra/compose/compose.prod.yml \
      exec -T db pg_dump -U welt weltgewebe | gzip > /var/backups/weltgewebe/db_$(date +\%F).sql.gz \
-     && find /var/backups/weltgewebe/ -name "db_*.sql.gz" -mtime +14 -delete \
+     && find /var/backups/weltgewebe/ -name "db_*.sql.gz" -mtime +14 -delete' \
      || echo "backup failed $(date)" >> /var/backups/weltgewebe/backup.log
    ```
 

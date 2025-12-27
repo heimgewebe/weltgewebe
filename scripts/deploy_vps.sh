@@ -34,6 +34,11 @@ fi
 
 # --- Deployment ---
 
+# Generate robust API version tag (fallback to date if git fails or no .git)
+API_VERSION=$(git rev-parse --short HEAD 2>/dev/null || date +%F-%s)
+export API_VERSION
+echo "Deploying with API_VERSION=${API_VERSION}"
+
 # Try to pull latest images (if registry is configured)
 # If pull fails (e.g. no registry auth or local build intended), we continue to build
 echo "Pulling images..."

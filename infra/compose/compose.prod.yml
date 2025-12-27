@@ -1,7 +1,7 @@
 ---
 services:
   api:
-    image: weltgewebe-api:latest
+    image: weltgewebe-api:${API_VERSION:-latest}
     build:
       context: ../..
       dockerfile: apps/api/Dockerfile
