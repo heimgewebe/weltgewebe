@@ -63,6 +63,16 @@ Verwende das bereitgestellte Skript oder Docker Compose direkt:
 docker compose -f infra/compose/compose.prod.yml up -d --build
 ```
 
+**Troubleshooting:**
+Wenn API-Healthchecks fehlschlagen, prüfe im Container:
+```bash
+docker compose -f infra/compose/compose.prod.yml logs api
+# Teste im Container
+docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://localhost:8080/health/ready
+# Oder Fallback
+docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://localhost:8080/health/live
+```
+
 ### D. Backup
 
 Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen:
