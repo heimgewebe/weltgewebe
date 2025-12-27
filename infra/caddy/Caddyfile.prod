@@ -4,6 +4,8 @@ weltgewebe.net {
 		level INFO
 	}
 
+	encode zstd gzip
+
 	# Handle API requests (stripping the prefix implies using handle_path)
 	handle_path /api/* {
 		reverse_proxy api:8080
@@ -12,6 +14,11 @@ weltgewebe.net {
 	# Explicitly forward health checks to the API
 	handle /health/* {
 		reverse_proxy api:8080
+	}
+
+	# Proxy internal health check
+	handle /health/proxy {
+		respond 200
 	}
 
 	# Proxy everything else to the configured web upstream (Cloudflare Pages or Vercel)

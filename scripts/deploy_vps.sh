@@ -2,14 +2,30 @@
 set -euo pipefail
 
 # Load environment variables if needed, or assume they are in .env
-# docker compose will pick up .env automatically
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
 
 echo "Deploying to VPS..."
+
+# --- Validation ---
 
 if [ ! -f "infra/compose/compose.prod.yml" ]; then
     echo "Error: infra/compose/compose.prod.yml not found."
     exit 1
 fi
+
+if [ -z "${WEB_UPSTREAM_HOST:-}" ]; then
+    echo "Error: WEB_UPSTREAM_HOST is not set in .env or environment."
+    exit 1
+fi
+
+if [[ ! "${WEB_UPSTREAM_URL:-}" =~ ^https:// ]]; then
+    echo "Error: WEB_UPSTREAM_URL is not set or does not start with 'https://'."
+    exit 1
+fi
+
+# --- Deployment ---
 
 # Try to pull latest images (if registry is configured)
 # If pull fails (e.g. no registry auth or local build intended), we continue to build
@@ -20,10 +36,14 @@ docker compose -f infra/compose/compose.prod.yml pull || echo "Pull failed or im
 echo "Starting services..."
 docker compose -f infra/compose/compose.prod.yml up -d --build
 
-# Cleanup unused images
-# Using --force to avoid prompt, but could be risky if needed images are pruned.
-# For production updates, it's generally safe to prune dangling images.
-echo "Pruning unused images..."
-docker image prune -f
+# Cleanup unused images (Optional)
+PRUNE_IMAGES=${PRUNE_IMAGES:-0}
+
+if [ "$PRUNE_IMAGES" -eq 1 ]; then
+    echo "Pruning unused images..."
+    docker image prune -f
+else
+    echo "Skipping image prune (set PRUNE_IMAGES=1 to enable)."
+fi
 
 echo "Deployment complete."

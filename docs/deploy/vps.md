@@ -35,7 +35,7 @@ sudo usermod -aG docker $USER
 
 Kopiere das Repository auf den VPS (z.B. nach `/opt/weltgewebe` oder `~/weltgewebe`).
 
-### B. Umgebungsvariablen (.env)
+### B. Umgebungsvariablen (.env) & Secrets
 
 Erstelle eine `.env` Datei im Root-Verzeichnis (neben `infra/`), basierend auf `.env.prod.example`.
 
@@ -44,12 +44,15 @@ cp .env.prod.example .env
 nano .env
 ```
 
-Für die Produktion sind folgende Anpassungen wichtig:
+**WICHTIG (Secrets):**
+*   Die `.env` Datei enthält sensible Daten (Passwörter). Sie darf **niemals** ins Git-Repository committet werden.
+*   Auf dem VPS liegt sie nur lokal vor.
 
+Anpassungen:
 *   **Datenbank**: Wähle ein starkes Passwort für `POSTGRES_PASSWORD` und passe `DATABASE_URL` entsprechend an.
 *   **Web Upstream**: Konfiguriere den Host und die URL deines Frontends (Vercel oder Cloudflare).
     *   `WEB_UPSTREAM_HOST`: z.B. `leitstand.pages.dev` oder `dein-projekt.vercel.app`
-    *   `WEB_UPSTREAM_URL`: z.B. `https://leitstand.pages.dev` oder `https://dein-projekt.vercel.app`
+    *   `WEB_UPSTREAM_URL`: Muss mit `https://` beginnen (z.B. `https://leitstand.pages.dev`).
 
 ### C. Starten
 
@@ -58,6 +61,9 @@ Verwende das bereitgestellte Skript oder Docker Compose direkt:
 ```bash
 # Mit Skript (baut oder pullt Container)
 ./scripts/deploy_vps.sh
+
+# Optional: Mit Image-Cleanup (Vorsicht!)
+PRUNE_IMAGES=1 ./scripts/deploy_vps.sh
 
 # Oder manuell
 docker compose -f infra/compose/compose.prod.yml up -d --build
@@ -73,14 +79,20 @@ docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://local
 docker compose -f infra/compose/compose.prod.yml exec api wget -qO- http://localhost:8080/health/live
 ```
 
-### D. Backup
+### D. Backup (Strategie)
 
-Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen:
+Richte einen Cronjob ein, um regelmäßig Dumps der Datenbank zu erstellen und alte Backups zu rotieren (z.B. 14 Tage behalten).
 
-```bash
-# Beispiel: Tägliches Backup um 3 Uhr nachts
-0 3 * * * docker compose -f /path/to/infra/compose/compose.prod.yml exec -T db pg_dump -U welt weltgewebe > /path/to/backups/db_$(date +\%F).sql
-```
+1.  Verzeichnis anlegen:
+    ```bash
+    mkdir -p /var/backups/weltgewebe
+    ```
+
+2.  Cronjob einrichten (`crontab -e`):
+    ```bash
+    # Täglich um 3 Uhr nachts: Dump erstellen, zippen und alte Dateien löschen
+    0 3 * * * docker compose -f /opt/weltgewebe/infra/compose/compose.prod.yml exec -T db pg_dump -U welt weltgewebe | gzip > /var/backups/weltgewebe/db_$(date +\%F).sql.gz && find /var/backups/weltgewebe/ -name "db_*.sql.gz" -mtime +14 -delete
+    ```
 
 ## Wartung
 
