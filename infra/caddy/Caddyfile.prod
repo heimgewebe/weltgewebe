@@ -1,0 +1,40 @@
+weltgewebe.net {
+	log {
+		output stdout
+		level INFO
+	}
+
+	encode zstd gzip
+
+	# Handle API requests (stripping the prefix implies using handle_path)
+	handle_path /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Explicitly forward health checks to the API
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	# Proxy internal health check
+	handle /health/proxy {
+		respond 200
+	}
+
+	# Proxy everything else to the configured web upstream (Cloudflare Pages or Vercel)
+	reverse_proxy /* {env.WEB_UPSTREAM_URL} {
+		header_up Host {env.WEB_UPSTREAM_HOST}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	header {
+		# Security headers
+		# CSP removed for v0 to avoid side-effects with external upstreams.
+		# Should be tightened later when asset domains are stable.
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+	}
+}

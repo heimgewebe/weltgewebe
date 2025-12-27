@@ -1,0 +1,62 @@
+---
+services:
+  api:
+    image: weltgewebe-api:${API_VERSION:-latest}
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    restart: always
+    environment:
+      API_BIND: 0.0.0.0:8080
+      DATABASE_URL: ${DATABASE_URL}
+      RUST_LOG: ${RUST_LOG:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1 ||
+          wget -qO- http://localhost:8080/health/live >/dev/null 2>&1 ||
+          exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  db:
+    image: postgres:16
+    restart: always
+    volumes:
+      - pg_data_prod:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  caddy:
+    image: caddy:2.7
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL}
+      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST}
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pg_data_prod:
+  caddy_data:
+  caddy_config:
