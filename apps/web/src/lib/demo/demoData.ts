@@ -19,9 +19,19 @@ export const demoNodes = [
     updated_at: "2025-01-01T12:00:00Z",
     modules: [
       { id: "infos", label: "Infos", locked: true, type: "standard" },
-      { id: "besprechungen", label: "Besprechungen", locked: true, type: "standard" },
-      { id: "verantwortungen", label: "Verantwortungen", locked: true, type: "standard" }
-    ]
+      {
+        id: "besprechungen",
+        label: "Besprechungen",
+        locked: true,
+        type: "standard",
+      },
+      {
+        id: "verantwortungen",
+        label: "Verantwortungen",
+        locked: true,
+        type: "standard",
+      },
+    ],
   },
 ];
 
@@ -47,9 +57,19 @@ export const demoAccounts = [
     tags: ["account", "garnrolle", "demo"],
     modules: [
       { id: "infos", label: "Infos", locked: true, type: "standard" },
-      { id: "besprechungen", label: "Besprechungen", locked: true, type: "standard" },
-      { id: "verantwortungen", label: "Verantwortungen", locked: true, type: "standard" }
-    ]
+      {
+        id: "besprechungen",
+        label: "Besprechungen",
+        locked: true,
+        type: "standard",
+      },
+      {
+        id: "verantwortungen",
+        label: "Verantwortungen",
+        locked: true,
+        type: "standard",
+      },
+    ],
   },
   {
     id: "00000000-0000-0000-0000-000000000002",
@@ -70,7 +90,7 @@ export const demoAccounts = [
     ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo", "fuzzed"],
-    modules: []
+    modules: [],
   },
   {
     id: "00000000-0000-0000-0000-000000000003",
@@ -87,7 +107,7 @@ export const demoAccounts = [
     ron_flag: false,
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo", "private"],
-    modules: []
+    modules: [],
   },
 ];
 
