@@ -8,7 +8,7 @@ sowie Konsistenz über Backend, Frontend, Tests und Contracts hinweg.
 
 ## Grundprinzip
 
-**ID ≠ Label**
+### ID ≠ Label
 
 - `id` ist ein **stabiler, technischer Schlüssel**
 - `label` ist **UI-Text** (menschenlesbar, deutsch)
