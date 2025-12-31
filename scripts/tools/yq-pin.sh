@@ -162,7 +162,7 @@ download_yq() {
     exit 1
   fi
 
-  local expected actual asset_name expected_line line
+  local actual asset_name expected_line line
   asset_name="${asset##*/}"
   expected_line=""
 
