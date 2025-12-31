@@ -3,6 +3,7 @@
   import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
+  import type { Module } from '../../routes/map/types';
 
   function close() {
     $selection = null;
@@ -20,7 +21,7 @@
   // Wire real module data from selection
   // Modules come from backend data and include locked state
   // Create working copy that can be mutated for UI state (lock/unlock)
-  let modules: Array<{ id: string; label: string; locked: boolean; type?: string }> = [];
+  let modules: Module[] = [];
   
   // Reset modules when selection changes
   let lastSelectionId: string | null = null;
@@ -28,7 +29,7 @@
     lastSelectionId = $selection?.id || null;
     // Load fresh module data from selection
     const sourceModules = $selection?.data?.modules ?? [];
-    modules = sourceModules.map(m => ({ ...m })); // Shallow copy for local state
+    modules = sourceModules.map((m: Module) => ({ ...m })); // Shallow copy for local state
   }
 
   // Helper to determine ownership and type
