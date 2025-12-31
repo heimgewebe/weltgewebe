@@ -25,8 +25,8 @@ test("schaufenster renders modules from backend data", async ({ page }) => {
   ).toBeVisible();
 
   // Verify they are initially locked
-  const infosLock = card
+  const profileLock = card
     .locator(".module-card", { hasText: "Steckbrief" })
     .locator(".lock-toggle");
-  await expect(infosLock).toHaveAttribute("aria-pressed", "true");
+  await expect(profileLock).toHaveAttribute("aria-pressed", "true");
 });
