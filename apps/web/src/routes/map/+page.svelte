@@ -24,6 +24,7 @@
     lon: number;
     summary?: string;
     type?: string; // Relaxed type to allow 'garnrolle' etc.
+    modules?: Array<{ id: string; label: string; locked: boolean; type?: string }>;
   };
 
   $: nodesData = (data.nodes || []).map((n) => ({
@@ -32,7 +33,8 @@
     lat: n.location.lat,
     lon: n.location.lon,
     summary: n.summary,
-    type: 'node'
+    type: 'node',
+    modules: n.modules
   })) satisfies MapPoint[];
 
   $: accountsData = (data.accounts || [])
@@ -43,7 +45,8 @@
       lat: a.public_pos.lat,
       lon: a.public_pos.lon,
       summary: a.summary,
-      type: a.type // Pass through the domain type (e.g., 'garnrolle')
+      type: a.type, // Pass through the domain type (e.g., 'garnrolle')
+      modules: a.modules
     })) satisfies MapPoint[];
 
   $: markersData = [...nodesData, ...accountsData];

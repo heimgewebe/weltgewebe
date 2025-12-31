@@ -19,7 +19,17 @@
 
   // Wire real module data from selection
   // Modules come from backend data and include locked state
-  $: modules = $selection?.data?.modules ?? [];
+  // Create working copy that can be mutated for UI state (lock/unlock)
+  let modules: Array<{ id: string; label: string; locked: boolean; type?: string }> = [];
+  
+  // Reset modules when selection changes
+  let lastSelectionId: string | null = null;
+  $: if ($selection?.id !== lastSelectionId) {
+    lastSelectionId = $selection?.id || null;
+    // Load fresh module data from selection
+    const sourceModules = $selection?.data?.modules ?? [];
+    modules = sourceModules.map(m => ({ ...m })); // Deep copy for local state
+  }
 
   // Helper to determine ownership and type
   $: isAccount = $selection?.type === 'account';
