@@ -20,10 +20,8 @@ test("marker click opens schaufenster", async ({ page }) => {
   await expect(card).toContainText("fairschenkbox");
 
   // Check for new buttons instead of "Handeln"/"Details"
-  await expect(card.locator("button", { hasText: "Infos" })).toBeVisible();
-  await expect(
-    card.locator("button", { hasText: "Besprechungen" }),
-  ).toBeVisible();
+  await expect(card.locator("button", { hasText: "Steckbrief" })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Forum" })).toBeVisible();
   await expect(
     card.locator("button", { hasText: "Verantwortungen" }),
   ).toBeVisible();
@@ -37,13 +35,13 @@ test("can toggle lock state via lock button", async ({ page }) => {
   const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
-  // Find the 'Infos' module card
-  // We look for the button with 'Infos' text, then go up to the module-card container
+  // Find the 'Steckbrief' module card
+  // We look for the button with 'Steckbrief' text, then go up to the module-card container
   // Or we can find the specific lock button related to it.
-  // The structure is: .module-card > .module-action("Infos") + .lock-toggle
+  // The structure is: .module-card > .module-action("Steckbrief") + .lock-toggle
 
   // Use a precise locator strategy
-  const moduleCard = card.locator(".module-card", { hasText: "Infos" });
+  const moduleCard = card.locator(".module-card", { hasText: "Steckbrief" });
   const lockBtn = moduleCard.locator(".lock-toggle");
 
   // Initially locked (default is now locked for safety)

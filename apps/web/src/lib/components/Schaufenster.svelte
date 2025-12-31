@@ -22,8 +22,8 @@
   // TODO: Replace stub modules with selection-driven data.
   // Initial state is all locked (safe default)
   let modules = [
-    { id: 'infos', label: 'Infos', locked: true },
-    { id: 'besprechungen', label: 'Besprechungen', locked: true },
+    { id: 'infos', label: 'Steckbrief', locked: true },
+    { id: 'besprechungen', label: 'Forum', locked: true },
     { id: 'verantwortungen', label: 'Verantwortungen', locked: true }
   ];
 

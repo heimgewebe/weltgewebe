@@ -17,18 +17,16 @@ test("schaufenster renders modules from backend data", async ({ page }) => {
   await expect(card).toBeVisible();
 
   // 3. Assert: Verify the presence of specific module buttons
-  // "fairschenkbox" should have Infos, Besprechungen, Verantwortungen based on demoData.ts
-  await expect(card.locator("button", { hasText: "Infos" })).toBeVisible();
-  await expect(
-    card.locator("button", { hasText: "Besprechungen" }),
-  ).toBeVisible();
+  // "fairschenkbox" should have Steckbrief, Forum, Verantwortungen based on demoData.ts
+  await expect(card.locator("button", { hasText: "Steckbrief" })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Forum" })).toBeVisible();
   await expect(
     card.locator("button", { hasText: "Verantwortungen" }),
   ).toBeVisible();
 
   // Verify they are initially locked
   const infosLock = card
-    .locator(".module-card", { hasText: "Infos" })
+    .locator(".module-card", { hasText: "Steckbrief" })
     .locator(".lock-toggle");
   await expect(infosLock).toHaveAttribute("aria-pressed", "true");
 });

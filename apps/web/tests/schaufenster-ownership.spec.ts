@@ -32,7 +32,7 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await expect(lockBtns).toHaveCount(0);
 
   // Modules should be locked by default (visual check via class)
-  const moduleCard = card.locator(".module-card", { hasText: "Infos" });
+  const moduleCard = card.locator(".module-card", { hasText: "Steckbrief" });
   await expect(moduleCard).toHaveClass(/locked/);
 
   // Close card to reset selection
@@ -56,7 +56,7 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await expect(lockBtns.first()).toBeVisible();
 
   // Verify we can toggle the lock
-  const infosModule = card.locator(".module-card", { hasText: "Infos" });
+  const infosModule = card.locator(".module-card", { hasText: "Steckbrief" });
   const infosLockBtn = infosModule.locator(".lock-toggle");
 
   // It should be locked by default (reset on open)
