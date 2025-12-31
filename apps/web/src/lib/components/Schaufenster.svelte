@@ -28,7 +28,7 @@
     lastSelectionId = $selection?.id || null;
     // Load fresh module data from selection
     const sourceModules = $selection?.data?.modules ?? [];
-    modules = sourceModules.map(m => ({ ...m })); // Deep copy for local state
+    modules = sourceModules.map(m => ({ ...m })); // Shallow copy for local state
   }
 
   // Helper to determine ownership and type
@@ -38,7 +38,7 @@
 
   // Enforce invariant: If it's an account and not owner, modules MUST be locked.
   // This auto-corrects any state drift from backend.
-  $: if (isAccount && !isOwner && modules.length > 0) {
+  $: if (isAccount && !isOwner) {
      const anyUnlocked = modules.some(m => !m.locked);
      if (anyUnlocked) {
         modules = modules.map(m => ({ ...m, locked: true }));
