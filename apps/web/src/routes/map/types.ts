@@ -3,6 +3,13 @@ export interface Location {
   lon: number;
 }
 
+export interface Module {
+  id: string;
+  label: string;
+  locked: boolean;
+  type?: string;
+}
+
 export interface Node {
   id: string;
   kind: string;
@@ -12,6 +19,7 @@ export interface Node {
   summary?: string;
   tags: string[];
   location: Location;
+  modules?: Module[];
 }
 
 export interface Account {
@@ -27,4 +35,5 @@ export interface Account {
   visibility: string;
   radius_m: number;
   ron_flag: boolean;
+  modules?: Module[];
 }

@@ -32,7 +32,7 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await expect(lockBtns).toHaveCount(0);
 
   // Modules should be locked by default (visual check via class)
-  const moduleCard = card.locator(".module-card", { hasText: "Infos" });
+  const moduleCard = card.locator('[data-module-id="profile"]');
   await expect(moduleCard).toHaveClass(/locked/);
 
   // Close card to reset selection
@@ -56,22 +56,22 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await expect(lockBtns.first()).toBeVisible();
 
   // Verify we can toggle the lock
-  const infosModule = card.locator(".module-card", { hasText: "Infos" });
-  const infosLockBtn = infosModule.locator(".lock-toggle");
+  const profileModule = card.locator('[data-module-id="profile"]');
+  const profileLockBtn = profileModule.locator(".lock-toggle");
 
   // It should be locked by default (reset on open)
-  await expect(infosModule).toHaveClass(/locked/);
-  await expect(infosLockBtn).toHaveText("🔒"); // Lock icon
+  await expect(profileModule).toHaveClass(/locked/);
+  await expect(profileLockBtn).toHaveText("🔒"); // Lock icon
 
   // Unlock
   // Hover first in case of CSS opacity transition (good practice for UI tests)
-  await infosModule.hover();
-  await infosLockBtn.click();
+  await profileModule.hover();
+  await profileLockBtn.click();
 
-  await expect(infosModule).not.toHaveClass(/locked/);
-  await expect(infosLockBtn).toHaveText("🔓"); // Unlock icon
+  await expect(profileModule).not.toHaveClass(/locked/);
+  await expect(profileLockBtn).toHaveText("🔓"); // Unlock icon
 
   // Lock again
-  await infosLockBtn.click();
-  await expect(infosModule).toHaveClass(/locked/);
+  await profileLockBtn.click();
+  await expect(profileModule).toHaveClass(/locked/);
 });
