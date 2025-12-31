@@ -49,6 +49,7 @@ updates_os=${UPDATES_OS:-0}
 updates_pkg=${UPDATES_PKG:-0}
 updates_flatpak=${UPDATES_FLATPAK:-0}
 age_days=${BACKUP_AGE_DAYS:-1}
+[[ "$age_days" =~ ^[0-9]+$ ]] || age_days=1
 if date -d "yesterday" +%F >/dev/null 2>&1; then
   # GNU date
   last_ok=$(date -d "${age_days} day ago" +%F)
