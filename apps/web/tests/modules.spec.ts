@@ -16,19 +16,23 @@ test("schaufenster renders modules from backend data", async ({ page }) => {
   const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
-  // 3. Assert: Verify the presence of specific module buttons
-  // "fairschenkbox" should have Infos, Besprechungen, Verantwortungen based on demoData.ts
-  await expect(card.locator("button", { hasText: "Infos" })).toBeVisible();
+  // 3. Assert: Verify the presence of specific modules by ID
+  // "fairschenkbox" should have profile, forum, responsibilities based on demoData.ts
+  await expect(card.locator('[data-module-id="profile"]')).toBeVisible();
+  await expect(card.locator('[data-module-id="forum"]')).toBeVisible();
   await expect(
-    card.locator("button", { hasText: "Besprechungen" }),
+    card.locator('[data-module-id="responsibilities"]'),
   ).toBeVisible();
+
+  // 4. Also verify labels are rendered correctly (UX check)
+  await expect(card.locator("button", { hasText: "Steckbrief" })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Forum" })).toBeVisible();
   await expect(
     card.locator("button", { hasText: "Verantwortungen" }),
   ).toBeVisible();
 
   // Verify they are initially locked
-  const infosLock = card
-    .locator(".module-card", { hasText: "Infos" })
-    .locator(".lock-toggle");
-  await expect(infosLock).toHaveAttribute("aria-pressed", "true");
+  const profileModule = card.locator('[data-module-id="profile"]');
+  const profileLock = profileModule.locator(".lock-toggle");
+  await expect(profileLock).toHaveAttribute("aria-pressed", "true");
 });
