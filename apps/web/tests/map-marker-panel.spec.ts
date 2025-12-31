@@ -35,13 +35,9 @@ test("can toggle lock state via lock button", async ({ page }) => {
   const card = page.locator(".schaufenster-card");
   await expect(card).toBeVisible();
 
-  // Find the 'Steckbrief' module card
-  // We look for the button with 'Steckbrief' text, then go up to the module-card container
-  // Or we can find the specific lock button related to it.
-  // The structure is: .module-card > .module-action("Steckbrief") + .lock-toggle
-
-  // Use a precise locator strategy
-  const moduleCard = card.locator(".module-card", { hasText: "Steckbrief" });
+  // Find the 'profile' module card by ID
+  // Use ID-based selector for functional test
+  const moduleCard = card.locator('[data-module-id="profile"]');
   const lockBtn = moduleCard.locator(".lock-toggle");
 
   // Initially locked (default is now locked for safety)

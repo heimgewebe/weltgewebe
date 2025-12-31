@@ -17,34 +17,18 @@
     })();
   }
 
-  // STUB: This data structure mimics the future backend data.
-  // In the final implementation, this should come from $selection.data.modules
-  // TODO: Replace stub modules with selection-driven data.
-  // Initial state is all locked (safe default)
-  let modules = [
-    { id: 'profile', label: 'Steckbrief', locked: true },
-    { id: 'forum', label: 'Forum', locked: true },
-    { id: 'responsibilities', label: 'Verantwortungen', locked: true }
-  ];
+  // Wire real module data from selection
+  // Modules come from backend data and include locked state
+  $: modules = $selection?.data?.modules ?? [];
 
   // Helper to determine ownership and type
   $: isAccount = $selection?.type === 'account';
   // Check if current user is the owner of the selected account
   $: isOwner = $authStore.loggedIn && $selection && $selection.id === $authStore.current_account_id;
 
-  // Reactively reset modules when selection changes
-  let lastSelectionId: string | null = null;
-  $: if ($selection?.id !== lastSelectionId) {
-    lastSelectionId = $selection?.id || null;
-    // Reset to default locked state on new selection.
-    // Note: Nodes are currently default-locked for safety, awaiting a defined Node-Ownership model.
-    // If nodes should be public-writable or public-unlocked in the future, change this default.
-    modules = modules.map(m => ({ ...m, locked: true }));
-  }
-
-  // Enforce invariant: If it's an account and not owner, it MUST be locked.
-  // This auto-corrects any state drift.
-  $: if (isAccount && !isOwner) {
+  // Enforce invariant: If it's an account and not owner, modules MUST be locked.
+  // This auto-corrects any state drift from backend.
+  $: if (isAccount && !isOwner && modules.length > 0) {
      const anyUnlocked = modules.some(m => !m.locked);
      if (anyUnlocked) {
         modules = modules.map(m => ({ ...m, locked: true }));
@@ -157,6 +141,14 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     margin-top: 4px;
+  }
+
+  .no-modules {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 16px;
+    color: var(--muted);
+    font-size: 14px;
   }
 
   .module-card {
@@ -278,31 +270,35 @@
 
     <!-- The "Schaufenster" Buttons -->
     <div class="modules-grid" role="group" aria-label="Module">
-      {#each modules as module (module.id)}
-        <div class="module-card" class:locked={module.locked}>
-          <button
-            class="module-action"
-            on:click={() => !module.locked && handleModuleClick(module)}
-            aria-disabled={module.locked}
-          >
-            {module.label}
-          </button>
-
-          <!-- Lock toggle is only visible for owners on accounts (or non-accounts if applicable) -->
-          <!-- "Unlock-UI ist nur sichtbar, wenn isOwner === true" -->
-          {#if !isAccount || isOwner}
+      {#if modules.length === 0}
+        <div class="no-modules">Keine Module</div>
+      {:else}
+        {#each modules as module (module.id)}
+          <div class="module-card" class:locked={module.locked} data-module-id={module.id}>
             <button
-              class="lock-toggle"
-              on:click|stopPropagation={() => toggleLock(module.id)}
-              aria-label={module.locked ? `${module.label} entsperren` : `${module.label} verzwirnen`}
-              aria-pressed={module.locked}
-              title={module.locked ? 'Entsperren' : 'Verzwirnen'}
+              class="module-action"
+              on:click={() => !module.locked && handleModuleClick(module)}
+              aria-disabled={module.locked}
             >
-              {module.locked ? '🔒' : '🔓'}
+              {module.label}
             </button>
-          {/if}
-        </div>
-      {/each}
+
+            <!-- Lock toggle is only visible for owners on accounts (or non-accounts if applicable) -->
+            <!-- "Unlock-UI ist nur sichtbar, wenn isOwner === true" -->
+            {#if !isAccount || isOwner}
+              <button
+                class="lock-toggle"
+                on:click|stopPropagation={() => toggleLock(module.id)}
+                aria-label={module.locked ? `${module.label} entsperren` : `${module.label} verzwirnen`}
+                aria-pressed={module.locked}
+                title={module.locked ? 'Entsperren' : 'Verzwirnen'}
+              >
+                {module.locked ? '🔒' : '🔓'}
+              </button>
+            {/if}
+          </div>
+        {/each}
+      {/if}
     </div>
   </div>
 {/if}
