@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
@@ -46,15 +46,24 @@ pub struct Node {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub steckbrief: Option<String>,
+    pub info: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
     pub location: Location,
 }
 
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize)]
 pub struct UpdateNode {
-    pub steckbrief: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_some")]
+    pub info: Option<Option<String>>,
 }
 
 fn parse_bbox(s: &str) -> Option<BBox> {
@@ -124,8 +133,8 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let steckbrief = v
-        .get("steckbrief")
+    let info = v
+        .get("info")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
@@ -146,7 +155,7 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         created_at,
         updated_at,
         summary,
-        steckbrief,
+        info,
         tags,
         location: Location { lat, lon },
     })
@@ -195,17 +204,19 @@ pub async fn patch_node(
 
         if current_id == id {
             // Update the field
-            match &payload.steckbrief {
-                Some(s) => v["steckbrief"] = Value::String(s.clone()),
-                None => {
-                    // If None is passed, do we delete it or set null?
-                    // Use case implies setting text. Let's treat null as null.
-                    v["steckbrief"] = Value::Null;
-                }
+            match &payload.info {
+                Some(Some(s)) => v["info"] = Value::String(s.clone()),
+                Some(None) => v["info"] = Value::Null,
+                None => {} // No-op
             }
             // Update updated_at
             let now = chrono::Utc::now().to_rfc3339();
             v["updated_at"] = Value::String(now);
+
+            // Clean up old "steckbrief" field if it exists
+             if let Some(obj) = v.as_object_mut() {
+                obj.remove("steckbrief");
+            }
 
             if let Some(n) = map_json_to_node(&v) {
                 found_node = Some(n);

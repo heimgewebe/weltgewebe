@@ -138,6 +138,71 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes = in_dir.join("demo.nodes.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Initial node
+    write_lines(
+        &nodes,
+        &[r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A","info":"Old Info"}"#],
+    );
+
+    let app = app();
+
+    // 1. Update info -> "New Info"
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"info":"New Info"}"#))?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Check response
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v["info"], "New Info");
+
+    // Check persistence by reading via GET
+    let req = Request::get("/nodes/n1").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v["info"], "New Info");
+
+    // 2. Empty PATCH (No-op) -> Info remains "New Info"
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{}"#))?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v["info"], "New Info"); // Still there
+
+    // 3. Set info to null -> Info removed
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"info":null}"#))?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert!(v.get("info").is_none() || v["info"].is_null());
+
+    // Check persistence
+    let req = Request::get("/nodes/n1").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert!(v.get("info").is_none() || v["info"].is_null());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_accept_string_coordinates() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");

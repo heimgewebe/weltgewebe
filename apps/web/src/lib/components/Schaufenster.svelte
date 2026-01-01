@@ -8,7 +8,7 @@
 
   function close() {
     $selection = null;
-    isEditingSteckbrief = false;
+    isEditingInfo = false;
   }
 
   // Manage focus when card opens
@@ -27,8 +27,8 @@
   
   // Reset modules when selection changes
   let lastSelectionId: string | null = null;
-  let isEditingSteckbrief = false;
-  let steckbriefDraft = '';
+  let isEditingInfo = false;
+  let infoDraft = '';
 
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
@@ -37,8 +37,8 @@
     modules = sourceModules.map((m: Module) => ({ ...m })); // Shallow copy for local state
 
     // Reset editing state
-    isEditingSteckbrief = false;
-    steckbriefDraft = '';
+    isEditingInfo = false;
+    infoDraft = '';
   }
 
   // Helper to determine ownership and type
@@ -67,12 +67,12 @@
     );
   }
 
-  function startEditSteckbrief() {
-    steckbriefDraft = $selection?.data?.steckbrief || '';
-    isEditingSteckbrief = true;
+  function startEditInfo() {
+    infoDraft = $selection?.data?.info || '';
+    isEditingInfo = true;
   }
 
-  async function saveSteckbrief() {
+  async function saveInfo() {
     if (!$selection?.id) return;
 
     try {
@@ -84,17 +84,17 @@
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ steckbrief: steckbriefDraft })
+        body: JSON.stringify({ info: infoDraft })
       });
 
       if (res.ok) {
         // Update local store to reflect changes immediately
         if ($selection.data) {
-          $selection.data.steckbrief = steckbriefDraft;
+          $selection.data.info = infoDraft;
         }
-        isEditingSteckbrief = false;
+        isEditingInfo = false;
       } else {
-        console.error('Failed to save steckbrief', res.status);
+        console.error('Failed to save info', res.status);
         alert('Fehler beim Speichern.');
       }
     } catch (e) {
@@ -103,8 +103,8 @@
     }
   }
 
-  function cancelEditSteckbrief() {
-    isEditingSteckbrief = false;
+  function cancelEditInfo() {
+    isEditingInfo = false;
   }
 </script>
 
@@ -289,8 +289,8 @@
     opacity: 1;
   }
 
-  /* Steckbrief Styles */
-  .steckbrief-section {
+  /* Info Styles */
+  .info-section {
     border-top: 1px solid var(--panel-border);
     padding-top: 12px;
     display: flex;
@@ -298,18 +298,18 @@
     gap: 8px;
   }
 
-  .steckbrief-header {
+  .info-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
   }
 
-  .steckbrief-title {
+  .info-title {
     font-size: 14px;
     font-weight: 600;
   }
 
-  .steckbrief-content {
+  .info-content {
     font-size: 14px;
     color: var(--text);
     line-height: 1.5;
@@ -318,7 +318,7 @@
     overflow-y: auto;
   }
 
-  .steckbrief-empty {
+  .info-empty {
     font-style: italic;
     color: var(--muted);
     font-size: 13px;
@@ -337,13 +337,13 @@
     background: rgba(0,0,0,0.05);
   }
 
-  .steckbrief-editor {
+  .info-editor {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  textarea.steckbrief-input {
+  textarea.info-input {
     width: 100%;
     min-height: 100px;
     background: rgba(255,255,255,0.05);
@@ -419,34 +419,34 @@
       {/if}
     </div>
 
-    <!-- Steckbrief Section -->
+    <!-- Info Section -->
     {#if $selection.type === 'node'}
-      <div class="steckbrief-section">
-        <div class="steckbrief-header">
-          <span class="steckbrief-title">Steckbrief</span>
-          {#if !isEditingSteckbrief}
-            <button class="edit-btn" on:click={startEditSteckbrief}>Bearbeiten</button>
+      <div class="info-section">
+        <div class="info-header">
+          <span class="info-title">Info</span>
+          {#if !isEditingInfo}
+            <button class="edit-btn" on:click={startEditInfo}>Bearbeiten</button>
           {/if}
         </div>
 
-        {#if isEditingSteckbrief}
-          <div class="steckbrief-editor">
+        {#if isEditingInfo}
+          <div class="info-editor">
             <textarea
-              class="steckbrief-input"
-              bind:value={steckbriefDraft}
-              placeholder="Steckbrief hier eingeben..."
+              class="info-input"
+              bind:value={infoDraft}
+              placeholder="Info hier eingeben..."
             ></textarea>
             <div class="editor-actions">
-              <button class="action-btn cancel-btn" on:click={cancelEditSteckbrief}>Abbrechen</button>
-              <button class="action-btn save-btn" on:click={saveSteckbrief}>Speichern</button>
+              <button class="action-btn cancel-btn" on:click={cancelEditInfo}>Abbrechen</button>
+              <button class="action-btn save-btn" on:click={saveInfo}>Speichern</button>
             </div>
           </div>
         {:else}
-          <div class="steckbrief-content">
-            {#if $selection.data && $selection.data.steckbrief}
-              {$selection.data.steckbrief}
+          <div class="info-content">
+            {#if $selection.data && $selection.data.info}
+              {$selection.data.info}
             {:else}
-              <span class="steckbrief-empty">Kein Steckbrief vorhanden</span>
+              <span class="info-empty">Keine Info vorhanden</span>
             {/if}
           </div>
         {/if}

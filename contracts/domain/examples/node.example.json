@@ -5,6 +5,7 @@
   "created_at": "2024-01-15T10:00:00Z",
   "updated_at": "2024-01-16T14:30:00Z",
   "summary": "Der zentrale Platz der Altstadt mit historischem Rathaus und Brunnen.",
+  "info": "Hier finden regelmäßig **Wochenmärkte** statt.",
   "tags": ["geschichte", "architektur", "sehenswürdigkeit"],
   "location": {
     "lat": 48.137154,

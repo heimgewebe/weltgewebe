@@ -7,7 +7,7 @@ export interface Module {
   id: string;
   label: string;
   locked: boolean;
-  type?: string;
+  type: string;
 }
 
 export interface Node {
@@ -16,8 +16,8 @@ export interface Node {
   title: string;
   created_at: string;
   updated_at: string;
-  summary?: string;
-  steckbrief?: string | null;
+  summary?: string | null;
+  info?: string | null;
   tags: string[];
   location: Location;
   modules?: Module[];
@@ -27,14 +27,21 @@ export interface Account {
   id: string;
   type: string;
   title: string;
-  summary?: string;
-  tags: string[];
-  // Location is internal/legacy and might be removed in public views
-  location?: Location;
-  // Public position is the projected view
+  summary?: string | null;
+  location: Location;
   public_pos?: Location;
   visibility: string;
   radius_m: number;
   ron_flag: boolean;
+  created_at: string;
+  tags: string[];
   modules?: Module[];
+}
+
+export interface MapPoint {
+  id: string;
+  lat: number;
+  lng: number;
+  kind: string; // 'node' | 'account'
+  data: Node | Account | unknown;
 }
