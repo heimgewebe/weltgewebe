@@ -17,12 +17,16 @@
 
   export let data: PageData;
 
+  // Local MapPoint type: flattened structure optimized for map marker rendering.
+  // Note: ./types.ts exports a different MapPoint with nested data structure,
+  // but this local type is more convenient for direct use with maplibre-gl.
   type MapPoint = {
     id: string;
     title: string;
     lat: number;
     lon: number;
-    summary?: string;
+    summary?: string | null;
+    info?: string | null;
     type?: string; // Relaxed type to allow 'garnrolle' etc.
     modules?: Array<{ id: string; label: string; locked: boolean; type?: string }>;
   };
@@ -33,6 +37,7 @@
     lat: n.location.lat,
     lon: n.location.lon,
     summary: n.summary,
+    info: n.info,
     type: 'node',
     modules: n.modules
   })) satisfies MapPoint[];

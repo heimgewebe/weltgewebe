@@ -23,9 +23,9 @@
       "type": "string",
       "format": "date-time"
     },
-    "steckbrief": {
+    "info": {
       "type": ["string", "null"],
-      "description": "Freitext Steckbrief (Markdown allowed)."
+      "description": "Freitext-Info (Markdown erlaubt)."
     },
     "summary": {
       "type": "string",

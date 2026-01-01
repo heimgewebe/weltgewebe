@@ -12,7 +12,7 @@ JSONL
 
 # Nodes
 # Define the correct new node line
-NODE_LINE='{"id":"b52be17c-4ab7-4434-98ce-520f86290cf0","kind":"Knoten","title":"fairschenkbox","summary":"Öffentliche Fair-Schenk-Box","created_at":"2025-12-22T00:00:00Z","updated_at":"2025-12-22T00:00:00Z","location":{"lat":53.558894813662505,"lon":10.060228407382967}}'
+NODE_LINE='{"id":"b52be17c-4ab7-4434-98ce-520f86290cf0","kind":"Knoten","title":"fairschenkbox","summary":"Öffentliche Fair-Schenk-Box","info":"Dies ist eine **Demo-Info** für den Test.","created_at":"2025-12-22T00:00:00Z","updated_at":"2025-12-22T00:00:00Z","location":{"lat":53.558894813662505,"lon":10.060228407382967}}'
 
 if [ ! -s .gewebe/in/demo.nodes.jsonl ]; then
   echo "→ seeds: nodes"; cat > .gewebe/in/demo.nodes.jsonl <<EOF
