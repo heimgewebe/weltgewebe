@@ -37,7 +37,7 @@ Begründung:
 
 | ID                 | Label (de)      | Bedeutung                          |
 | ------------------ | --------------- | ---------------------------------- |
-| `profile`          | Steckbrief      | Beschreibung, Kontext, Selbstbild  |
+| `profile`          | Info            | Beschreibung, Kontext, Selbstbild  |
 | `forum`            | Forum           | Diskussion, Austausch, Besprechung |
 | `responsibilities` | Verantwortungen | Zuständigkeiten, Rollen, Aufgaben  |
 
