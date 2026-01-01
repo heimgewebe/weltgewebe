@@ -17,6 +17,9 @@
 
   export let data: PageData;
 
+  // Local MapPoint type: flattened structure optimized for map marker rendering.
+  // Note: types.ts exports a different MapPoint with nested data structure,
+  // but this local type is more convenient for direct use with maplibre-gl.
   type MapPoint = {
     id: string;
     title: string;
