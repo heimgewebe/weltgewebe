@@ -20,7 +20,7 @@ test("marker click opens schaufenster", async ({ page }) => {
   await expect(card).toContainText("fairschenkbox");
 
   // Check for new buttons instead of "Handeln"/"Details"
-  await expect(card.locator("button", { hasText: "Steckbrief" })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Info" })).toBeVisible();
   await expect(card.locator("button", { hasText: "Forum" })).toBeVisible();
   await expect(
     card.locator("button", { hasText: "Verantwortungen" }),

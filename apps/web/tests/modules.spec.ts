@@ -25,7 +25,7 @@ test("schaufenster renders modules from backend data", async ({ page }) => {
   ).toBeVisible();
 
   // 4. Also verify labels are rendered correctly (UX check)
-  await expect(card.locator("button", { hasText: "Steckbrief" })).toBeVisible();
+  await expect(card.locator("button", { hasText: "Info" })).toBeVisible();
   await expect(card.locator("button", { hasText: "Forum" })).toBeVisible();
   await expect(
     card.locator("button", { hasText: "Verantwortungen" }),
