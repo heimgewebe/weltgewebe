@@ -204,18 +204,30 @@ pub async fn patch_node(
 
         if current_id == id {
             // Update the field
+            let mut has_changes = false;
             match &payload.info {
-                Some(Some(s)) => v["info"] = Value::String(s.clone()),
-                Some(None) => v["info"] = Value::Null,
+                Some(Some(s)) => {
+                    v["info"] = Value::String(s.clone());
+                    has_changes = true;
+                }
+                Some(None) => {
+                    v["info"] = Value::Null;
+                    has_changes = true;
+                }
                 None => {} // No-op
             }
-            // Update updated_at
-            let now = chrono::Utc::now().to_rfc3339();
-            v["updated_at"] = Value::String(now);
 
-            // Clean up old "steckbrief" field if it exists
-             if let Some(obj) = v.as_object_mut() {
-                obj.remove("steckbrief");
+            // Clean up old "steckbrief" field if it exists (migration logic)
+            if let Some(obj) = v.as_object_mut() {
+                if obj.remove("steckbrief").is_some() {
+                    has_changes = true;
+                }
+            }
+
+            // Update updated_at only if we actually changed something
+            if has_changes {
+                let now = chrono::Utc::now().to_rfc3339();
+                v["updated_at"] = Value::String(now);
             }
 
             if let Some(n) = map_json_to_node(&v) {
