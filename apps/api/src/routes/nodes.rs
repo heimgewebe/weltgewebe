@@ -217,7 +217,6 @@ pub async fn patch_node(
                 }
             }
             // If payload.steckbrief is None, field was not provided → don't modify
-            
             // Update updated_at
             let now = chrono::Utc::now().to_rfc3339();
             v["updated_at"] = Value::String(now);
