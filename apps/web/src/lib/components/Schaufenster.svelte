@@ -4,9 +4,11 @@
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
   import type { Module } from '../../routes/map/types';
+  import { env } from '$env/dynamic/public';
 
   function close() {
     $selection = null;
+    isEditingSteckbrief = false;
   }
 
   // Manage focus when card opens
@@ -25,11 +27,18 @@
   
   // Reset modules when selection changes
   let lastSelectionId: string | null = null;
+  let isEditingSteckbrief = false;
+  let steckbriefDraft = '';
+
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
     // Load fresh module data from selection
     const sourceModules = $selection?.data?.modules ?? [];
     modules = sourceModules.map((m: Module) => ({ ...m })); // Shallow copy for local state
+
+    // Reset editing state
+    isEditingSteckbrief = false;
+    steckbriefDraft = '';
   }
 
   // Helper to determine ownership and type
@@ -56,6 +65,46 @@
     modules = modules.map(m =>
       m.id === id ? { ...m, locked: !m.locked } : m
     );
+  }
+
+  function startEditSteckbrief() {
+    steckbriefDraft = $selection?.data?.steckbrief || '';
+    isEditingSteckbrief = true;
+  }
+
+  async function saveSteckbrief() {
+    if (!$selection?.id) return;
+
+    try {
+      const apiBase = env.PUBLIC_GEWEBE_API_BASE || '/api';
+      const endpoint = `${apiBase}/nodes/${$selection.id}`;
+
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ steckbrief: steckbriefDraft })
+      });
+
+      if (res.ok) {
+        // Update local store to reflect changes immediately
+        if ($selection.data) {
+          $selection.data.steckbrief = steckbriefDraft;
+        }
+        isEditingSteckbrief = false;
+      } else {
+        console.error('Failed to save steckbrief', res.status);
+        alert('Fehler beim Speichern.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Fehler beim Speichern.');
+    }
+  }
+
+  function cancelEditSteckbrief() {
+    isEditingSteckbrief = false;
   }
 </script>
 
@@ -240,6 +289,97 @@
     opacity: 1;
   }
 
+  /* Steckbrief Styles */
+  .steckbrief-section {
+    border-top: 1px solid var(--panel-border);
+    padding-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .steckbrief-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .steckbrief-title {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .steckbrief-content {
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .steckbrief-empty {
+    font-style: italic;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .edit-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent, #0066cc);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  .edit-btn:hover {
+    background: rgba(0,0,0,0.05);
+  }
+
+  .steckbrief-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  textarea.steckbrief-input {
+    width: 100%;
+    min-height: 100px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 8px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  .editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .action-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+
+  .save-btn {
+    background: var(--accent, #0066cc);
+    color: white;
+  }
+  .cancel-btn {
+    background: transparent;
+    border-color: var(--panel-border);
+    color: var(--text);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .schaufenster-card {
       transition: none !important;
@@ -278,6 +418,40 @@
         Wird geladen...
       {/if}
     </div>
+
+    <!-- Steckbrief Section -->
+    {#if $selection.type === 'node'}
+      <div class="steckbrief-section">
+        <div class="steckbrief-header">
+          <span class="steckbrief-title">Steckbrief</span>
+          {#if !isEditingSteckbrief}
+            <button class="edit-btn" on:click={startEditSteckbrief}>Bearbeiten</button>
+          {/if}
+        </div>
+
+        {#if isEditingSteckbrief}
+          <div class="steckbrief-editor">
+            <textarea
+              class="steckbrief-input"
+              bind:value={steckbriefDraft}
+              placeholder="Steckbrief hier eingeben..."
+            ></textarea>
+            <div class="editor-actions">
+              <button class="action-btn cancel-btn" on:click={cancelEditSteckbrief}>Abbrechen</button>
+              <button class="action-btn save-btn" on:click={saveSteckbrief}>Speichern</button>
+            </div>
+          </div>
+        {:else}
+          <div class="steckbrief-content">
+            {#if $selection.data && $selection.data.steckbrief}
+              {$selection.data.steckbrief}
+            {:else}
+              <span class="steckbrief-empty">Kein Steckbrief vorhanden</span>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <!-- The "Schaufenster" Buttons -->
     <div class="modules-grid" role="group" aria-label="Module">
