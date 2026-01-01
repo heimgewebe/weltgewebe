@@ -1,10 +1,14 @@
-use axum::{extract::Query, http::StatusCode, Json};
-use serde::Serialize;
+use axum::{
+    extract::{Path, Query},
+    http::StatusCode,
+    Json,
+};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
-    fs::File,
-    io::{AsyncBufReadExt, BufReader},
+    fs::{File, OpenOptions},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
 };
 
 fn in_dir() -> PathBuf {
@@ -41,9 +45,16 @@ pub struct Node {
     pub updated_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub steckbrief: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
     pub location: Location,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateNode {
+    pub steckbrief: Option<String>,
 }
 
 fn parse_bbox(s: &str) -> Option<BBox> {
@@ -113,6 +124,11 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    let steckbrief = v
+        .get("steckbrief")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
     let tags = v
         .get("tags")
         .and_then(|v| v.as_array())
@@ -130,9 +146,102 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
         created_at,
         updated_at,
         summary,
+        steckbrief,
         tags,
         location: Location { lat, lon },
     })
+}
+
+pub async fn get_node(Path(id): Path<String>) -> Result<Json<Node>, StatusCode> {
+    let path = nodes_path();
+    let file = File::open(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let mut lines = BufReader::new(file).lines();
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        let v: Value =
+            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if let Some(node) = map_json_to_node(&v) {
+            if node.id == id {
+                return Ok(Json(node));
+            }
+        }
+    }
+
+    Err(StatusCode::NOT_FOUND)
+}
+
+pub async fn patch_node(
+    Path(id): Path<String>,
+    Json(payload): Json<UpdateNode>,
+) -> Result<Json<Node>, StatusCode> {
+    let path = nodes_path();
+    // Read all lines
+    let file = File::open(&path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut lines = BufReader::new(file).lines();
+    let mut all_lines = Vec::new();
+    let mut found_node: Option<Node> = None;
+    let mut updated = false;
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        let mut v: Value =
+            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let current_id = v
+            .get("id")
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        if current_id == id {
+            // Update the field
+            match &payload.steckbrief {
+                Some(s) => v["steckbrief"] = Value::String(s.clone()),
+                None => {
+                    // If None is passed, do we delete it or set null?
+                    // Use case implies setting text. Let's treat null as null.
+                    v["steckbrief"] = Value::Null;
+                }
+            }
+            // Update updated_at
+            let now = chrono::Utc::now().to_rfc3339();
+            v["updated_at"] = Value::String(now);
+
+            if let Some(n) = map_json_to_node(&v) {
+                found_node = Some(n);
+            }
+            all_lines
+                .push(serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
+            updated = true;
+        } else {
+            all_lines.push(line);
+        }
+    }
+
+    if !updated {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    // Write back
+    let mut file = OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(&path)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    for line in all_lines {
+        file.write_all(line.as_bytes())
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        file.write_all(b"\n")
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    found_node
+        .map(Json)
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub async fn list_nodes(

@@ -23,6 +23,10 @@
       "type": "string",
       "format": "date-time"
     },
+    "steckbrief": {
+      "type": ["string", "null"],
+      "description": "Freitext Steckbrief (Markdown allowed)."
+    },
     "summary": {
       "type": "string",
       "description": "Short summary. A longer 'description' field is reserved for future use."

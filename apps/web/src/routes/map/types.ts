@@ -17,6 +17,7 @@ export interface Node {
   created_at: string;
   updated_at: string;
   summary?: string;
+  steckbrief?: string | null;
   tags: string[];
   location: Location;
   modules?: Module[];
