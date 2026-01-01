@@ -216,15 +216,18 @@ pub async fn patch_node(
                 }
                 None => {} // No-op
             }
+            
+            // Clean up old "steckbrief" field if it exists (migration logic)
+            if let Some(obj) = v.as_object_mut() {
+                if obj.remove("steckbrief").is_some() {
+                    has_changes = true;
+                }
+            }
+            
             // Update updated_at only if we actually changed something
             if has_changes {
                 let now = chrono::Utc::now().to_rfc3339();
                 v["updated_at"] = Value::String(now);
-            }
-
-            // Clean up old "steckbrief" field if it exists
-            if let Some(obj) = v.as_object_mut() {
-                obj.remove("steckbrief");
             }
 
             if let Some(n) = map_json_to_node(&v) {
