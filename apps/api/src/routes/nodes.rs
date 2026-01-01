@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
@@ -52,9 +52,21 @@ pub struct Node {
     pub location: Location,
 }
 
+fn deserialize_optional_field<'de, D>(deserializer: D) -> Result<Option<Option<String>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Wraps Option deserialization to distinguish between:
+    // - Field missing: None
+    // - Field explicitly null: Some(None)
+    // - Field with value: Some(Some(value))
+    Option::deserialize(deserializer).map(Some)
+}
+
 #[derive(Deserialize)]
 pub struct UpdateNode {
-    pub steckbrief: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_field")]
+    pub steckbrief: Option<Option<String>>,
 }
 
 fn parse_bbox(s: &str) -> Option<BBox> {
@@ -194,15 +206,18 @@ pub async fn patch_node(
             .to_string();
 
         if current_id == id {
-            // Update the field
-            match &payload.steckbrief {
-                Some(s) => v["steckbrief"] = Value::String(s.clone()),
-                None => {
-                    // If None is passed, do we delete it or set null?
-                    // Use case implies setting text. Let's treat null as null.
-                    v["steckbrief"] = Value::Null;
+            // Update the field only if provided
+            if let Some(steckbrief_update) = &payload.steckbrief {
+                match steckbrief_update {
+                    Some(s) => v["steckbrief"] = Value::String(s.clone()),
+                    None => {
+                        // Explicitly set to null (clear the field)
+                        v["steckbrief"] = Value::Null;
+                    }
                 }
             }
+            // If payload.steckbrief is None, field was not provided → don't modify
+            
             // Update updated_at
             let now = chrono::Utc::now().to_rfc3339();
             v["updated_at"] = Value::String(now);
@@ -238,6 +253,10 @@ pub async fn patch_node(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
+
+    file.flush()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     found_node
         .map(Json)
