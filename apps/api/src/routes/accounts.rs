@@ -105,7 +105,7 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     let lon_offset = lon_offset_raw.clamp(-max_deg, max_deg);
 
     let mut lon_jittered = (lon + lon_offset).rem_euclid(360.0);
-    if lon_jittered >= 180.0 {
+    if lon_jittered > 180.0 {
         lon_jittered -= 360.0;
     }
 
