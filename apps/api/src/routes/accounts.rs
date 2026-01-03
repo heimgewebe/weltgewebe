@@ -105,7 +105,7 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     let lon_offset = lon_offset_raw.clamp(-max_deg, max_deg);
 
     let mut lon_jittered = (lon + lon_offset).rem_euclid(360.0);
-    if lon_jittered > 180.0 {
+    if lon_jittered >= 180.0 {
         lon_jittered -= 360.0;
     }
 
@@ -253,6 +253,15 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// Calculate circular distance between two longitude values
+    fn lon_delta(a: f64, b: f64) -> f64 {
+        let mut d = (a - b).abs();
+        if d > 180.0 {
+            d = 360.0 - d;
+        }
+        d
+    }
+
     #[test]
     fn test_guard_public_view_never_leaks_location() {
         let input = json!({
@@ -328,14 +337,6 @@ mod tests {
 
     #[test]
     fn test_public_pos_remains_finite_near_poles() {
-        fn lon_delta(a: f64, b: f64) -> f64 {
-            let mut d = (a - b).abs();
-            if d > 180.0 {
-                d = 360.0 - d;
-            }
-            d
-        }
-
         let input = json!({
             "id": "polar-test",
             "type": "garnrolle",
@@ -366,14 +367,6 @@ mod tests {
 
     #[test]
     fn test_public_pos_remains_finite_near_south_pole() {
-        fn lon_delta(a: f64, b: f64) -> f64 {
-            let mut d = (a - b).abs();
-            if d > 180.0 {
-                d = 360.0 - d;
-            }
-            d
-        }
-
         let input = json!({
             "id": "south-polar-test",
             "type": "garnrolle",
