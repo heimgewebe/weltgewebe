@@ -7,6 +7,9 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader},
 };
 
+const METERS_PER_DEGREE: f64 = 111_000.0;
+const COS_LAT_FLOOR: f64 = 1e-3;
+
 fn in_dir() -> PathBuf {
     env::var("GEWEBE_IN_DIR")
         .map(PathBuf::from)
@@ -73,7 +76,7 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
 
     // 1 degree lat is approx 111km. 1m is approx 1/111000 degrees.
     // This is a rough approximation suitable for small visual jitter.
-    let meters_per_degree = 111_000.0;
+    let max_deg = radius_m as f64 / METERS_PER_DEGREE;
 
     // Seed the RNG with the ID
     let seed = stable_hash(id);
@@ -87,12 +90,27 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     // We simply use a square box jitter for simplicity in this minimal core.
     // A circle would be better but requires sin/cos and proper distance calc.
     // For visual obfuscation, this is sufficient "phantom world".
-    let lat_offset = (r1 * radius_m as f64) / meters_per_degree;
-    let lon_offset = (r2 * radius_m as f64) / (meters_per_degree * lat.to_radians().cos());
+    let lat_offset = (r1 * radius_m as f64) / METERS_PER_DEGREE;
+
+    // Near the poles cos(latitude) approaches 0 which would explode the offset or
+    // even lead to division by zero. Clamp the denominator to a reasonable floor
+    // so that the longitude offset remains bounded and plausible instead of
+    // merely finite.
+    let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
+    let lon_offset_raw = (r2 * radius_m as f64) / (METERS_PER_DEGREE * cos_lat);
+    let lon_offset = lon_offset_raw.clamp(-max_deg, max_deg);
+
+    let mut lon_jittered = lon + lon_offset;
+    while lon_jittered > 180.0 {
+        lon_jittered -= 360.0;
+    }
+    while lon_jittered < -180.0 {
+        lon_jittered += 360.0;
+    }
 
     Location {
-        lat: lat + lat_offset,
-        lon: lon + lon_offset,
+        lat: (lat + lat_offset).clamp(-90.0, 90.0),
+        lon: lon_jittered,
     }
 }
 
@@ -305,5 +323,43 @@ mod tests {
 
         assert_eq!(account.visibility, Visibility::Public);
         assert!(account.public_pos.is_some());
+    }
+
+    #[test]
+    fn test_public_pos_remains_finite_near_poles() {
+        fn lon_delta(a: f64, b: f64) -> f64 {
+            let mut d = (a - b).abs();
+            if d > 180.0 {
+                d = 360.0 - d;
+            }
+            d
+        }
+
+        let input = json!({
+            "id": "polar-test",
+            "type": "garnrolle",
+            "title": "Polar Account",
+            "location": { "lat": 89.9999, "lon": 10.0 },
+            "visibility": "approximate",
+            "radius_m": 500,
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        let public_pos = account.public_pos.expect("public position present");
+
+        let max_deg = 500.0 / METERS_PER_DEGREE;
+
+        assert!(public_pos.lat.is_finite());
+        assert!(public_pos.lon.is_finite());
+        assert!(public_pos.lat <= 90.0 && public_pos.lat >= -90.0);
+        assert!(public_pos.lon <= 180.0 && public_pos.lon >= -180.0);
+        assert!(
+            (public_pos.lat - 89.9999).abs() <= max_deg + 1e-6,
+            "lat jitter exceeded expected bound"
+        );
+        assert!(
+            lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
+            "lon jitter exceeded expected bound"
+        );
     }
 }
