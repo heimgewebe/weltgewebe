@@ -93,7 +93,7 @@
 
       // Pass declarative config to CSS
       if (markerCategory === 'account') {
-        element.style.setProperty('--marker-icon', `url(${ICONS.garnrolle})`);
+        element.style.setProperty('--marker-icon', `url('${ICONS.garnrolle}')`);
         element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
       }
 

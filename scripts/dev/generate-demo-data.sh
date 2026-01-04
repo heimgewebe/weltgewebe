@@ -5,10 +5,50 @@ set -euo pipefail
 mkdir -p .gewebe/in
 
 # Accounts
-test -s .gewebe/in/demo.accounts.jsonl || { echo "→ seeds: accounts"; cat > .gewebe/in/demo.accounts.jsonl <<-'JSONL'
-{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}
-JSONL
-}
+ACCOUNT_ID="7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"
+ACCOUNT_JSON='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}'
+
+if [ -s .gewebe/in/demo.accounts.jsonl ]; then
+  NEEDS_MIGRATION=0
+  EXISTING_LINE=$(grep -F "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl || true)
+
+  if [ -n "$EXISTING_LINE" ]; then
+     # Deduplication Check: If ID appears more than once, force migration to cleanup
+     COUNT=$(echo "$EXISTING_LINE" | wc -l)
+     if [ "$COUNT" -gt 1 ]; then
+        NEEDS_MIGRATION=1
+     else
+        # Check for location field
+        if command -v jq >/dev/null 2>&1; then
+          if echo "$EXISTING_LINE" | jq -e 'has("location") | not' >/dev/null 2>&1; then
+            NEEDS_MIGRATION=1
+          fi
+        else
+          # Fallback: simple grep for "location": pattern
+          if ! echo "$EXISTING_LINE" | grep -q '"location"[[:space:]]*:'; then
+            NEEDS_MIGRATION=1
+          fi
+        fi
+     fi
+  else
+     # ID not present, simply needs adding
+     :
+  fi
+
+  if [ "$NEEDS_MIGRATION" -eq 1 ]; then
+    echo "→ migrating: fixing/deduping account $ACCOUNT_ID"
+    # Atomic update: remove old, add new, move
+    grep -vF "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
+    echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl.tmp
+    mv .gewebe/in/demo.accounts.jsonl.tmp .gewebe/in/demo.accounts.jsonl
+  elif [ -z "$EXISTING_LINE" ]; then
+    echo "→ updating: adding account $ACCOUNT_ID"
+    echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl
+  fi
+else
+  echo "→ seeds: accounts"
+  echo "$ACCOUNT_JSON" > .gewebe/in/demo.accounts.jsonl
+fi
 
 # Nodes
 # Define the correct new node line
@@ -28,7 +68,8 @@ else
   if grep -q "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl; then
      echo "→ migrating: removing stale node 0000...0006"
      # Use a temporary file to delete the line safely
-     grep -v "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl > .gewebe/in/demo.nodes.jsonl.tmp && mv .gewebe/in/demo.nodes.jsonl.tmp .gewebe/in/demo.nodes.jsonl
+     grep -v "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl > .gewebe/in/demo.nodes.jsonl.tmp || true
+     mv .gewebe/in/demo.nodes.jsonl.tmp .gewebe/in/demo.nodes.jsonl
   fi
 
   # Ensure correct node exists
@@ -55,12 +96,13 @@ else
    if grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
       if ! grep -q "b52be17c-4ab7-4434-98ce-520f86290cf0" .gewebe/in/demo.edges.jsonl; then
           echo "→ migrating: removing stale edge E001 (wrong target)"
-          grep -v "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp && mv .gewebe/in/demo.edges.jsonl.tmp .gewebe/in/demo.edges.jsonl
+          grep -v "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp || true
+          mv .gewebe/in/demo.edges.jsonl.tmp .gewebe/in/demo.edges.jsonl
       fi
    fi
 
    if ! grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
      echo "→ updating: adding edge E001"
      echo "${EDGE_LINE}" >> .gewebe/in/demo.edges.jsonl
-   fi
+  fi
 fi
