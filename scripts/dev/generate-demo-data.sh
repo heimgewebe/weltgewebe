@@ -5,10 +5,29 @@ set -euo pipefail
 mkdir -p .gewebe/in
 
 # Accounts
-test -s .gewebe/in/demo.accounts.jsonl || { echo "→ seeds: accounts"; cat > .gewebe/in/demo.accounts.jsonl <<-'JSONL'
-{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}
-JSONL
-}
+ACCOUNT_LINE='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}'
+
+if [ ! -s .gewebe/in/demo.accounts.jsonl ]; then
+  echo "→ seeds: accounts"; cat > .gewebe/in/demo.accounts.jsonl <<EOF
+${ACCOUNT_LINE}
+EOF
+else
+  # Migration: Check if main demo account exists but lacks location (stale)
+  if grep -q "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8" .gewebe/in/demo.accounts.jsonl; then
+      # If location is missing on the line with that ID
+      if grep "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8" .gewebe/in/demo.accounts.jsonl | grep -qv "\"location\":"; then
+          echo "→ migrating: removing stale account (missing location)"
+          # grep -v returns 1 if no lines remain (file becomes empty), which is fine here.
+          grep -v "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
+          mv .gewebe/in/demo.accounts.jsonl.tmp .gewebe/in/demo.accounts.jsonl
+      fi
+  fi
+
+  if ! grep -q "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8" .gewebe/in/demo.accounts.jsonl; then
+      echo "→ updating: adding account gewebespinnerAYE"
+      echo "${ACCOUNT_LINE}" >> .gewebe/in/demo.accounts.jsonl
+  fi
+fi
 
 # Nodes
 # Define the correct new node line
@@ -28,7 +47,8 @@ else
   if grep -q "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl; then
      echo "→ migrating: removing stale node 0000...0006"
      # Use a temporary file to delete the line safely
-     grep -v "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl > .gewebe/in/demo.nodes.jsonl.tmp && mv .gewebe/in/demo.nodes.jsonl.tmp .gewebe/in/demo.nodes.jsonl
+     grep -v "00000000-0000-0000-0000-000000000006" .gewebe/in/demo.nodes.jsonl > .gewebe/in/demo.nodes.jsonl.tmp || true
+     mv .gewebe/in/demo.nodes.jsonl.tmp .gewebe/in/demo.nodes.jsonl
   fi
 
   # Ensure correct node exists
@@ -55,7 +75,8 @@ else
    if grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
       if ! grep -q "b52be17c-4ab7-4434-98ce-520f86290cf0" .gewebe/in/demo.edges.jsonl; then
           echo "→ migrating: removing stale edge E001 (wrong target)"
-          grep -v "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp && mv .gewebe/in/demo.edges.jsonl.tmp .gewebe/in/demo.edges.jsonl
+          grep -v "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp || true
+          mv .gewebe/in/demo.edges.jsonl.tmp .gewebe/in/demo.edges.jsonl
       fi
    fi
 
