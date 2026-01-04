@@ -10,7 +10,11 @@ ACCOUNT_JSON='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","t
 
 if [ -s .gewebe/in/demo.accounts.jsonl ]; then
   NEEDS_MIGRATION=0
-  EXISTING_LINE=$(grep -F "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl || true)
+  # Strict matching: look for the ID key structure to avoid false positives in summary/text
+  # We escape quotes for grep: "id":"UUID"
+  MATCH_PATTERN="\"id\":\"$ACCOUNT_ID\""
+
+  EXISTING_LINE=$(grep -F "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl || true)
 
   if [ -n "$EXISTING_LINE" ]; then
      # Deduplication Check: If ID appears more than once, force migration to cleanup
@@ -37,8 +41,8 @@ if [ -s .gewebe/in/demo.accounts.jsonl ]; then
 
   if [ "$NEEDS_MIGRATION" -eq 1 ]; then
     echo "→ migrating: fixing/deduping account $ACCOUNT_ID"
-    # Atomic update: remove old, add new, move
-    grep -vF "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
+    # Atomic update: remove old (all occurrences), add new, move
+    grep -vF "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
     echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl.tmp
     mv .gewebe/in/demo.accounts.jsonl.tmp .gewebe/in/demo.accounts.jsonl
   elif [ -z "$EXISTING_LINE" ]; then
@@ -73,7 +77,8 @@ else
   fi
 
   # Ensure correct node exists
-  if ! grep -q "b52be17c-4ab7-4434-98ce-520f86290cf0" .gewebe/in/demo.nodes.jsonl; then
+  MATCH_PATTERN="\"id\":\"b52be17c-4ab7-4434-98ce-520f86290cf0\""
+  if ! grep -Fq "$MATCH_PATTERN" .gewebe/in/demo.nodes.jsonl; then
      echo "→ updating: adding node b52be17c..."
      echo "${NODE_LINE}" >> .gewebe/in/demo.nodes.jsonl
   fi
@@ -93,15 +98,16 @@ EOF
 else
    # Migration: Check if edge exists but with wrong target (stale)
    # We define "wrong" as having the ID but NOT the new target ID on the same line.
-   if grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
+   MATCH_PATTERN="\"id\":\"00000000-0000-0000-0000-00000000E001\""
+   if grep -Fq "$MATCH_PATTERN" .gewebe/in/demo.edges.jsonl; then
       if ! grep -q "b52be17c-4ab7-4434-98ce-520f86290cf0" .gewebe/in/demo.edges.jsonl; then
           echo "→ migrating: removing stale edge E001 (wrong target)"
-          grep -v "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp || true
+          grep -vF "$MATCH_PATTERN" .gewebe/in/demo.edges.jsonl > .gewebe/in/demo.edges.jsonl.tmp || true
           mv .gewebe/in/demo.edges.jsonl.tmp .gewebe/in/demo.edges.jsonl
       fi
    fi
 
-   if ! grep -q "00000000-0000-0000-0000-00000000E001" .gewebe/in/demo.edges.jsonl; then
+   if ! grep -Fq "$MATCH_PATTERN" .gewebe/in/demo.edges.jsonl; then
      echo "→ updating: adding edge E001"
      echo "${EDGE_LINE}" >> .gewebe/in/demo.edges.jsonl
   fi
