@@ -13,16 +13,22 @@ if [ -s .gewebe/in/demo.accounts.jsonl ]; then
   EXISTING_LINE=$(grep -F "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl || true)
 
   if [ -n "$EXISTING_LINE" ]; then
-     # Check for location field
-     if command -v jq >/dev/null 2>&1; then
-       if echo "$EXISTING_LINE" | jq -e 'has("location") | not' >/dev/null 2>&1; then
-         NEEDS_MIGRATION=1
-       fi
+     # Deduplication Check: If ID appears more than once, force migration to cleanup
+     COUNT=$(echo "$EXISTING_LINE" | wc -l)
+     if [ "$COUNT" -gt 1 ]; then
+        NEEDS_MIGRATION=1
      else
-       # Fallback: simple grep for "location": pattern
-       if ! echo "$EXISTING_LINE" | grep -q '"location"[[:space:]]*:'; then
-         NEEDS_MIGRATION=1
-       fi
+        # Check for location field
+        if command -v jq >/dev/null 2>&1; then
+          if echo "$EXISTING_LINE" | jq -e 'has("location") | not' >/dev/null 2>&1; then
+            NEEDS_MIGRATION=1
+          fi
+        else
+          # Fallback: simple grep for "location": pattern
+          if ! echo "$EXISTING_LINE" | grep -q '"location"[[:space:]]*:'; then
+            NEEDS_MIGRATION=1
+          fi
+        fi
      fi
   else
      # ID not present, simply needs adding
@@ -30,7 +36,7 @@ if [ -s .gewebe/in/demo.accounts.jsonl ]; then
   fi
 
   if [ "$NEEDS_MIGRATION" -eq 1 ]; then
-    echo "→ migrating: fixing stale account $ACCOUNT_ID"
+    echo "→ migrating: fixing/deduping account $ACCOUNT_ID"
     # Atomic update: remove old, add new, move
     grep -vF "$ACCOUNT_ID" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
     echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl.tmp
