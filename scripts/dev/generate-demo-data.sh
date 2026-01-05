@@ -14,40 +14,44 @@ if [ -s .gewebe/in/demo.accounts.jsonl ]; then
   # Regex pattern: ^{"id":"UUID"
   MATCH_PATTERN="^{\"id\":\"$ACCOUNT_ID\""
 
-  EXISTING_LINE=$(grep "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl || true)
-
-  if [ -n "$EXISTING_LINE" ]; then
-     # Deduplication Check: If ID appears more than once, force migration to cleanup
-     COUNT=$(echo "$EXISTING_LINE" | wc -l)
+  # Check if ID exists (using grep because it's fast)
+  if grep -q "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl; then
+     # Check for duplicate entries (count occurrences)
+     COUNT=$(grep -c "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl || true)
      if [ "$COUNT" -gt 1 ]; then
+        echo "→ migrating: deduplicating account $ACCOUNT_ID"
         NEEDS_MIGRATION=1
      else
-        # Check for location field
+        # Exact one match found. Now check correctness (location field).
+        EXISTING_LINE=$(grep "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl)
+
         if command -v jq >/dev/null 2>&1; then
+          # Use jq for semantic check
           if echo "$EXISTING_LINE" | jq -e 'has("location") | not' >/dev/null 2>&1; then
-            NEEDS_MIGRATION=1
+             echo "→ migrating: fixing stale account (missing location) $ACCOUNT_ID"
+             NEEDS_MIGRATION=1
           fi
         else
-          # Fallback: simple grep for "location": pattern
+          # Fallback: anchored grep check for "location":
           if ! echo "$EXISTING_LINE" | grep -q '"location"[[:space:]]*:'; then
-            NEEDS_MIGRATION=1
+             echo "→ migrating: fixing stale account (missing location) $ACCOUNT_ID"
+             NEEDS_MIGRATION=1
           fi
         fi
      fi
   else
      # ID not present, simply needs adding
-     :
+     echo "→ updating: adding account $ACCOUNT_ID"
+     echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl
   fi
 
   if [ "$NEEDS_MIGRATION" -eq 1 ]; then
-    echo "→ migrating: fixing/deduping account $ACCOUNT_ID"
-    # Atomic update: remove old (all occurrences), add new, move
-    grep -v "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl > .gewebe/in/demo.accounts.jsonl.tmp || true
-    echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl.tmp
-    mv .gewebe/in/demo.accounts.jsonl.tmp .gewebe/in/demo.accounts.jsonl
-  elif [ -z "$EXISTING_LINE" ]; then
-    echo "→ updating: adding account $ACCOUNT_ID"
-    echo "$ACCOUNT_JSON" >> .gewebe/in/demo.accounts.jsonl
+    # Atomic update: remove all occurrences of the ID, then append the correct line
+    TMP_FILE=$(mktemp)
+    grep -v "$MATCH_PATTERN" .gewebe/in/demo.accounts.jsonl > "$TMP_FILE" || true
+    echo "$ACCOUNT_JSON" >> "$TMP_FILE"
+    mv "$TMP_FILE" .gewebe/in/demo.accounts.jsonl
+    chmod 644 .gewebe/in/demo.accounts.jsonl
   fi
 else
   echo "→ seeds: accounts"
