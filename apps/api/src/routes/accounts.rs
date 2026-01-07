@@ -74,10 +74,6 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
         return Location { lat, lon };
     }
 
-    // 1 degree lat is approx 111km. 1m is approx 1/111000 degrees.
-    // This is a rough approximation suitable for small visual jitter.
-    let max_deg = radius_m as f64 / METERS_PER_DEGREE;
-
     // Seed the RNG with the ID
     let seed = stable_hash(id);
 
@@ -95,14 +91,9 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     // Near the poles cos(latitude) approaches 0 which would explode the offset or
     // even lead to division by zero. Clamp the denominator to a reasonable floor
     // so that the longitude offset remains bounded and plausible instead of
-    // merely finite. This means that at very high latitudes the effective
-    // longitude jitter can be significantly smaller than the latitude jitter,
-    // so the jitter region is no longer approximately circular but becomes
-    // anisotropic/elliptical. This asymmetry is intentional to avoid unrealistic
-    // longitude wraparound near the poles.
+    // merely finite.
     let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
-    let lon_offset_raw = (r2 * radius_m as f64) / (METERS_PER_DEGREE * cos_lat);
-    let lon_offset = lon_offset_raw.clamp(-max_deg, max_deg);
+    let lon_offset = (r2 * radius_m as f64) / (METERS_PER_DEGREE * cos_lat);
 
     let mut lon_jittered = (lon + lon_offset).rem_euclid(360.0);
     if lon_jittered > 180.0 {
@@ -337,11 +328,12 @@ mod tests {
 
     #[test]
     fn test_public_pos_remains_finite_near_poles() {
+        let lat: f64 = 89.9999;
         let input = json!({
             "id": "polar-test",
             "type": "garnrolle",
             "title": "Polar Account",
-            "location": { "lat": 89.9999, "lon": 10.0 },
+            "location": { "lat": lat, "lon": 10.0 },
             "visibility": "approximate",
             "radius_m": 500,
         });
@@ -349,29 +341,33 @@ mod tests {
         let account = map_json_to_public_account(&input).expect("Mapping failed");
         let public_pos = account.public_pos.expect("public position present");
 
-        let max_deg = 500.0 / METERS_PER_DEGREE;
+        let max_deg_lat = 500.0 / METERS_PER_DEGREE;
+        // Correctly scale expected longitude jitter by 1/cos(lat)
+        let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
+        let max_deg_lon = max_deg_lat / cos_lat;
 
         assert!(public_pos.lat.is_finite());
         assert!(public_pos.lon.is_finite());
         assert!(public_pos.lat <= 90.0 && public_pos.lat >= -90.0);
         assert!(public_pos.lon <= 180.0 && public_pos.lon >= -180.0);
         assert!(
-            (public_pos.lat - 89.9999).abs() <= max_deg + 1e-6,
+            (public_pos.lat - lat).abs() <= max_deg_lat + 1e-6,
             "lat jitter exceeded expected bound"
         );
         assert!(
-            lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
+            lon_delta(public_pos.lon, 10.0) <= max_deg_lon + 1e-6,
             "lon jitter exceeded expected bound"
         );
     }
 
     #[test]
     fn test_public_pos_remains_finite_near_south_pole() {
+        let lat: f64 = -89.9999;
         let input = json!({
             "id": "south-polar-test",
             "type": "garnrolle",
             "title": "South Polar Account",
-            "location": { "lat": -89.9999, "lon": 10.0 },
+            "location": { "lat": lat, "lon": 10.0 },
             "visibility": "approximate",
             "radius_m": 500,
         });
@@ -379,19 +375,88 @@ mod tests {
         let account = map_json_to_public_account(&input).expect("Mapping failed");
         let public_pos = account.public_pos.expect("public position present");
 
-        let max_deg = 500.0 / METERS_PER_DEGREE;
+        let max_deg_lat = 500.0 / METERS_PER_DEGREE;
+        // Correctly scale expected longitude jitter by 1/cos(lat)
+        let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
+        let max_deg_lon = max_deg_lat / cos_lat;
 
         assert!(public_pos.lat.is_finite());
         assert!(public_pos.lon.is_finite());
         assert!(public_pos.lat <= 90.0 && public_pos.lat >= -90.0);
         assert!(public_pos.lon <= 180.0 && public_pos.lon >= -180.0);
         assert!(
-            (public_pos.lat - (-89.9999)).abs() <= max_deg + 1e-6,
+            (public_pos.lat - lat).abs() <= max_deg_lat + 1e-6,
             "lat jitter exceeded expected bound"
         );
         assert!(
-            lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
+            lon_delta(public_pos.lon, 10.0) <= max_deg_lon + 1e-6,
             "lon jitter exceeded expected bound"
         );
+    }
+
+    #[test]
+    fn test_jitter_scaling_at_high_latitudes() {
+        // At 60 degrees latitude, cos(60) = 0.5.
+        // A radius of 111km (1 deg lat) should result in approx 2 deg longitude jitter max.
+        // Since we scale by 1/cos(lat), the longitude jitter range should be [-2.0, 2.0] degrees.
+        // If the code incorrectly clamps to 1 deg (max_deg), the max observed will be ~1.0.
+
+        let radius_m = 111_000;
+        let lat = 60.0;
+        let max_deg = radius_m as f64 / METERS_PER_DEGREE; // ~1.0 degree
+
+        // We iterate through many IDs to find the maximum extent of the jitter
+        let mut max_observed = 0.0;
+
+        for i in 0..10000 {
+            // Use simple varying string for hash distribution
+            let id = i.to_string();
+            let pos = calculate_jittered_pos(lat, 0.0, radius_m, &id);
+            let d_lon = pos.lon.abs();
+
+            if d_lon > max_observed {
+                max_observed = d_lon;
+            }
+        }
+
+        // Assert that we observed a jitter significantly larger than max_deg.
+        // Theoretical max is 2.0 * max_deg. We check for > 1.2 to be robust against hash distribution variance
+        // while still proving that the value is not clamped to 1.0.
+        assert!(
+            max_observed > max_deg * 1.2,
+            "Longitude jitter should scale with latitude. Expected > {}, got max {}",
+            max_deg * 1.2,
+            max_observed
+        );
+    }
+
+    #[test]
+    fn test_jitter_wraparound() {
+        // Test that longitude wraps correctly across the dateline (180/-180)
+        let radius_m = 500_000; // ~5 degrees at equator
+        let lat = 0.0;
+        let lon = 179.0;
+
+        // We need a specific ID that pushes longitude POSITIVE (East)
+        // lon (179) + offset (> 1) should wrap to negative (e.g. -179)
+
+        let mut wrapped = false;
+
+        for i in 0..1000 {
+            let id = format!("test-wrap-{}", i);
+            let pos = calculate_jittered_pos(lat, lon, radius_m, &id);
+
+            // If we wrapped, pos.lon should be negative (e.g. -178, -179)
+            // Original is 179.
+            if pos.lon < 0.0 {
+                wrapped = true;
+                // Verify it's valid longitude
+                assert!(pos.lon >= -180.0);
+                assert!(pos.lon <= 180.0);
+                break;
+            }
+        }
+
+        assert!(wrapped, "Jitter should be able to wrap around the dateline");
     }
 }

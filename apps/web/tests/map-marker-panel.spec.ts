@@ -65,6 +65,42 @@ test("can toggle lock state via lock button", async ({ page }) => {
   await expect(moduleCard).toHaveClass(/locked/);
 });
 
+test("lock state persists when re-opening schaufenster", async ({ page }) => {
+  // Use specific marker to ensure we interact with the same entity
+  const marker = page.locator('[data-testid="marker-node"]').first();
+  await marker.waitFor({ state: "visible" });
+  await marker.click();
+
+  const card = page.locator(".schaufenster-card");
+  await expect(card).toBeVisible();
+
+  const moduleCard = card.locator('[data-module-id="profile"]');
+  const lockBtn = moduleCard.locator(".lock-toggle");
+
+  // Initially locked
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "true");
+
+  // UNLOCK it
+  await moduleCard.hover();
+  await lockBtn.click();
+  await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
+
+  // Close the card
+  await card.locator('button[aria-label="Close"]').click();
+  await expect(card).toBeHidden();
+
+  // Re-open the same marker
+  await marker.click();
+  await expect(card).toBeVisible();
+
+  // Re-query locators to ensure we are checking the new DOM elements
+  const newModuleCard = card.locator('[data-module-id="profile"]');
+  const newLockBtn = newModuleCard.locator(".lock-toggle");
+
+  // It should STILL be unlocked (persistent session state)
+  await expect(newLockBtn).toHaveAttribute("aria-pressed", "false");
+});
+
 test("close button closes schaufenster", async ({ page }) => {
   const marker = page.locator(".map-marker").first();
   await marker.waitFor({ state: "visible" });

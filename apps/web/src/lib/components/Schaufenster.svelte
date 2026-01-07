@@ -1,10 +1,17 @@
+<script context="module" lang="ts">
+  import type { Module } from '../../routes/map/types';
+  // Simple in-memory cache for session persistence
+  // Cache policy: Session-only, unbounded (bounded by typical session usage), persists across component re-mounts
+  const modulesCache = new Map<string, Module[]>();
+</script>
+
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
-  import type { Module } from '../../routes/map/types';
   import { env } from '$env/dynamic/public';
+  import { browser } from '$app/environment';
 
   function close() {
     $selection = null;
@@ -32,9 +39,25 @@
 
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
-    // Load fresh module data from selection
-    const sourceModules = $selection?.data?.modules ?? [];
-    modules = sourceModules.map((m: Module) => ({ ...m })); // Shallow copy for local state
+
+    if ($selection?.id) {
+        // Use cache only in browser to avoid SSR shared state leaks
+        if (browser && modulesCache.has($selection.id)) {
+            // Restore from cache
+            const cached = modulesCache.get($selection.id) || [];
+            modules = cached.map(m => ({...m}));
+        } else {
+             // Initialize from selection data
+             const sourceModules = $selection?.data?.modules ?? [];
+             modules = sourceModules.map((m: Module) => ({ ...m }));
+
+             if (browser) {
+                 modulesCache.set($selection.id, modules);
+             }
+        }
+    } else {
+        modules = [];
+    }
 
     // Reset editing state
     isEditingInfo = false;
@@ -65,6 +88,11 @@
     modules = modules.map(m =>
       m.id === id ? { ...m, locked: !m.locked } : m
     );
+
+    // Persist to cache (browser only)
+    if ($selection?.id && browser) {
+        modulesCache.set($selection.id, modules);
+    }
   }
 
   function startEditInfo() {
