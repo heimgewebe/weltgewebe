@@ -398,38 +398,36 @@ mod tests {
     fn test_jitter_scaling_at_high_latitudes() {
         // At 60 degrees latitude, cos(60) = 0.5.
         // A radius of 111km (1 deg lat) should result in approx 2 deg longitude jitter max.
-        // If the code incorrectly clamps to 1 deg (max_deg), this test will fail if the jitter happens to be > 1.
+        // Since we scale by 1/cos(lat), the longitude jitter range should be [-2.0, 2.0] degrees.
+        // If the code incorrectly clamps to 1 deg (max_deg), the max observed will be ~1.0.
 
         let radius_m = 111_000;
         let lat = 60.0;
         let max_deg = radius_m as f64 / METERS_PER_DEGREE; // ~1.0 degree
 
-        // We iterate through a few IDs to find one that produces a large longitude jitter
-        let mut found_large_jitter = false;
+        // We iterate through many IDs to find the maximum extent of the jitter
         let mut max_observed = 0.0;
 
-        for i in 0..1000 {
-            // Use UUID-like pattern for better hash distribution
-            let id = format!("7d97a42e-3704-4a33-a61f-{:012x}", i);
+        for i in 0..10000 {
+            // Use simple varying string for hash distribution
+            let id = i.to_string();
             let pos = calculate_jittered_pos(lat, 0.0, radius_m, &id);
             let d_lon = pos.lon.abs();
 
             if d_lon > max_observed {
                 max_observed = d_lon;
             }
-
-            // If the code is correct, d_lon can go up to ~2.0 degrees (max_deg / 0.5)
-            // If the code is incorrect (clamped), d_lon will be <= max_deg (~1.0)
-
-            if d_lon > max_deg + 0.01 {
-                // Lower threshold to catch any excess
-                found_large_jitter = true;
-                break;
-            }
         }
 
-        // Debugging hint: if this fails, check if r2 generation covers full range
-        assert!(found_large_jitter, "Longitude jitter should be able to exceed max_deg ({}) at high latitudes. Max observed: {}", max_deg, max_observed);
+        // Assert that we observed a jitter significantly larger than max_deg.
+        // Theoretical max is 2.0 * max_deg. We check for > 1.2 to be robust against hash distribution variance
+        // while still proving that the value is not clamped to 1.0.
+        assert!(
+            max_observed > max_deg * 1.2,
+            "Longitude jitter should scale with latitude. Expected > {}, got max {}",
+            max_deg * 1.2,
+            max_observed
+        );
     }
 
     #[test]
