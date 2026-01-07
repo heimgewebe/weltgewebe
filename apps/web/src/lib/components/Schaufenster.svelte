@@ -1,6 +1,7 @@
 <script context="module" lang="ts">
   import type { Module } from '../../routes/map/types';
   // Simple in-memory cache for session persistence
+  // Cache policy: Session-only, unbounded (bounded by typical session usage), persists across component re-mounts
   const modulesCache = new Map<string, Module[]>();
 </script>
 

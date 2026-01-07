@@ -74,10 +74,6 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
         return Location { lat, lon };
     }
 
-    // 1 degree lat is approx 111km. 1m is approx 1/111000 degrees.
-    // This is a rough approximation suitable for small visual jitter.
-    let _max_deg = radius_m as f64 / METERS_PER_DEGREE;
-
     // Seed the RNG with the ID
     let seed = stable_hash(id);
 
@@ -332,11 +328,12 @@ mod tests {
 
     #[test]
     fn test_public_pos_remains_finite_near_poles() {
+        let lat: f64 = 89.9999;
         let input = json!({
             "id": "polar-test",
             "type": "garnrolle",
             "title": "Polar Account",
-            "location": { "lat": 89.9999, "lon": 10.0 },
+            "location": { "lat": lat, "lon": 10.0 },
             "visibility": "approximate",
             "radius_m": 500,
         });
@@ -344,29 +341,33 @@ mod tests {
         let account = map_json_to_public_account(&input).expect("Mapping failed");
         let public_pos = account.public_pos.expect("public position present");
 
-        let max_deg = 500.0 / METERS_PER_DEGREE;
+        let max_deg_lat = 500.0 / METERS_PER_DEGREE;
+        // Correctly scale expected longitude jitter by 1/cos(lat)
+        let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
+        let max_deg_lon = max_deg_lat / cos_lat;
 
         assert!(public_pos.lat.is_finite());
         assert!(public_pos.lon.is_finite());
         assert!(public_pos.lat <= 90.0 && public_pos.lat >= -90.0);
         assert!(public_pos.lon <= 180.0 && public_pos.lon >= -180.0);
         assert!(
-            (public_pos.lat - 89.9999).abs() <= max_deg + 1e-6,
+            (public_pos.lat - lat).abs() <= max_deg_lat + 1e-6,
             "lat jitter exceeded expected bound"
         );
         assert!(
-            lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
+            lon_delta(public_pos.lon, 10.0) <= max_deg_lon + 1e-6,
             "lon jitter exceeded expected bound"
         );
     }
 
     #[test]
     fn test_public_pos_remains_finite_near_south_pole() {
+        let lat: f64 = -89.9999;
         let input = json!({
             "id": "south-polar-test",
             "type": "garnrolle",
             "title": "South Polar Account",
-            "location": { "lat": -89.9999, "lon": 10.0 },
+            "location": { "lat": lat, "lon": 10.0 },
             "visibility": "approximate",
             "radius_m": 500,
         });
@@ -374,18 +375,21 @@ mod tests {
         let account = map_json_to_public_account(&input).expect("Mapping failed");
         let public_pos = account.public_pos.expect("public position present");
 
-        let max_deg = 500.0 / METERS_PER_DEGREE;
+        let max_deg_lat = 500.0 / METERS_PER_DEGREE;
+        // Correctly scale expected longitude jitter by 1/cos(lat)
+        let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
+        let max_deg_lon = max_deg_lat / cos_lat;
 
         assert!(public_pos.lat.is_finite());
         assert!(public_pos.lon.is_finite());
         assert!(public_pos.lat <= 90.0 && public_pos.lat >= -90.0);
         assert!(public_pos.lon <= 180.0 && public_pos.lon >= -180.0);
         assert!(
-            (public_pos.lat - (-89.9999)).abs() <= max_deg + 1e-6,
+            (public_pos.lat - lat).abs() <= max_deg_lat + 1e-6,
             "lat jitter exceeded expected bound"
         );
         assert!(
-            lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
+            lon_delta(public_pos.lon, 10.0) <= max_deg_lon + 1e-6,
             "lon jitter exceeded expected bound"
         );
     }
@@ -417,7 +421,8 @@ mod tests {
             // If the code is correct, d_lon can go up to ~2.0 degrees (max_deg / 0.5)
             // If the code is incorrect (clamped), d_lon will be <= max_deg (~1.0)
 
-            if d_lon > max_deg + 0.01 { // Lower threshold to catch any excess
+            if d_lon > max_deg + 0.01 {
+                // Lower threshold to catch any excess
                 found_large_jitter = true;
                 break;
             }

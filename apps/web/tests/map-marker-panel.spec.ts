@@ -93,8 +93,12 @@ test("lock state persists when re-opening schaufenster", async ({ page }) => {
   await marker.click();
   await expect(card).toBeVisible();
 
+  // Re-query locators to ensure we are checking the new DOM elements
+  const newModuleCard = card.locator('[data-module-id="profile"]');
+  const newLockBtn = newModuleCard.locator(".lock-toggle");
+
   // It should STILL be unlocked (persistent session state)
-  await expect(lockBtn).toHaveAttribute("aria-pressed", "false");
+  await expect(newLockBtn).toHaveAttribute("aria-pressed", "false");
 });
 
 test("close button closes schaufenster", async ({ page }) => {
