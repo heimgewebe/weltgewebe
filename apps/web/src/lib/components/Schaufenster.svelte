@@ -11,6 +11,7 @@
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
   import { env } from '$env/dynamic/public';
+  import { browser } from '$app/environment';
 
   function close() {
     $selection = null;
@@ -40,7 +41,8 @@
     lastSelectionId = $selection?.id || null;
 
     if ($selection?.id) {
-        if (modulesCache.has($selection.id)) {
+        // Use cache only in browser to avoid SSR shared state leaks
+        if (browser && modulesCache.has($selection.id)) {
             // Restore from cache
             const cached = modulesCache.get($selection.id) || [];
             modules = cached.map(m => ({...m}));
@@ -48,8 +50,10 @@
              // Initialize from selection data
              const sourceModules = $selection?.data?.modules ?? [];
              modules = sourceModules.map((m: Module) => ({ ...m }));
-             // Cache immediately
-             modulesCache.set($selection.id, modules);
+
+             if (browser) {
+                 modulesCache.set($selection.id, modules);
+             }
         }
     } else {
         modules = [];
@@ -85,8 +89,8 @@
       m.id === id ? { ...m, locked: !m.locked } : m
     );
 
-    // Persist to cache
-    if ($selection?.id) {
+    // Persist to cache (browser only)
+    if ($selection?.id && browser) {
         modulesCache.set($selection.id, modules);
     }
   }
