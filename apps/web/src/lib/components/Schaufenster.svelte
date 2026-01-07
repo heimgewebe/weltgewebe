@@ -1,9 +1,14 @@
+<script context="module" lang="ts">
+  import type { Module } from '../../routes/map/types';
+  // Simple in-memory cache for session persistence
+  const modulesCache = new Map<string, Module[]>();
+</script>
+
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
   import { tick } from 'svelte';
-  import type { Module } from '../../routes/map/types';
   import { env } from '$env/dynamic/public';
 
   function close() {
@@ -32,9 +37,22 @@
 
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
-    // Load fresh module data from selection
-    const sourceModules = $selection?.data?.modules ?? [];
-    modules = sourceModules.map((m: Module) => ({ ...m })); // Shallow copy for local state
+
+    if ($selection?.id) {
+        if (modulesCache.has($selection.id)) {
+            // Restore from cache
+            const cached = modulesCache.get($selection.id) || [];
+            modules = cached.map(m => ({...m}));
+        } else {
+             // Initialize from selection data
+             const sourceModules = $selection?.data?.modules ?? [];
+             modules = sourceModules.map((m: Module) => ({ ...m }));
+             // Cache immediately
+             modulesCache.set($selection.id, modules);
+        }
+    } else {
+        modules = [];
+    }
 
     // Reset editing state
     isEditingInfo = false;
@@ -65,6 +83,11 @@
     modules = modules.map(m =>
       m.id === id ? { ...m, locked: !m.locked } : m
     );
+
+    // Persist to cache
+    if ($selection?.id) {
+        modulesCache.set($selection.id, modules);
+    }
   }
 
   function startEditInfo() {

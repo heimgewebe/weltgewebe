@@ -76,7 +76,7 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
 
     // 1 degree lat is approx 111km. 1m is approx 1/111000 degrees.
     // This is a rough approximation suitable for small visual jitter.
-    let max_deg = radius_m as f64 / METERS_PER_DEGREE;
+    let _max_deg = radius_m as f64 / METERS_PER_DEGREE;
 
     // Seed the RNG with the ID
     let seed = stable_hash(id);
@@ -95,14 +95,9 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     // Near the poles cos(latitude) approaches 0 which would explode the offset or
     // even lead to division by zero. Clamp the denominator to a reasonable floor
     // so that the longitude offset remains bounded and plausible instead of
-    // merely finite. This means that at very high latitudes the effective
-    // longitude jitter can be significantly smaller than the latitude jitter,
-    // so the jitter region is no longer approximately circular but becomes
-    // anisotropic/elliptical. This asymmetry is intentional to avoid unrealistic
-    // longitude wraparound near the poles.
+    // merely finite.
     let cos_lat = lat.to_radians().cos().max(COS_LAT_FLOOR);
-    let lon_offset_raw = (r2 * radius_m as f64) / (METERS_PER_DEGREE * cos_lat);
-    let lon_offset = lon_offset_raw.clamp(-max_deg, max_deg);
+    let lon_offset = (r2 * radius_m as f64) / (METERS_PER_DEGREE * cos_lat);
 
     let mut lon_jittered = (lon + lon_offset).rem_euclid(360.0);
     if lon_jittered > 180.0 {
@@ -393,5 +388,72 @@ mod tests {
             lon_delta(public_pos.lon, 10.0) <= max_deg + 1e-6,
             "lon jitter exceeded expected bound"
         );
+    }
+
+    #[test]
+    fn test_jitter_scaling_at_high_latitudes() {
+        // At 60 degrees latitude, cos(60) = 0.5.
+        // A radius of 111km (1 deg lat) should result in approx 2 deg longitude jitter max.
+        // If the code incorrectly clamps to 1 deg (max_deg), this test will fail if the jitter happens to be > 1.
+
+        let radius_m = 111_000;
+        let lat = 60.0;
+        let max_deg = radius_m as f64 / METERS_PER_DEGREE; // ~1.0 degree
+
+        // We iterate through a few IDs to find one that produces a large longitude jitter
+        let mut found_large_jitter = false;
+        let mut max_observed = 0.0;
+
+        for i in 0..1000 {
+            // Use UUID-like pattern for better hash distribution
+            let id = format!("7d97a42e-3704-4a33-a61f-{:012x}", i);
+            let pos = calculate_jittered_pos(lat, 0.0, radius_m, &id);
+            let d_lon = pos.lon.abs();
+
+            if d_lon > max_observed {
+                max_observed = d_lon;
+            }
+
+            // If the code is correct, d_lon can go up to ~2.0 degrees (max_deg / 0.5)
+            // If the code is incorrect (clamped), d_lon will be <= max_deg (~1.0)
+
+            if d_lon > max_deg + 0.01 { // Lower threshold to catch any excess
+                found_large_jitter = true;
+                break;
+            }
+        }
+
+        // Debugging hint: if this fails, check if r2 generation covers full range
+        assert!(found_large_jitter, "Longitude jitter should be able to exceed max_deg ({}) at high latitudes. Max observed: {}", max_deg, max_observed);
+    }
+
+    #[test]
+    fn test_jitter_wraparound() {
+        // Test that longitude wraps correctly across the dateline (180/-180)
+        let radius_m = 500_000; // ~5 degrees at equator
+        let lat = 0.0;
+        let lon = 179.0;
+
+        // We need a specific ID that pushes longitude POSITIVE (East)
+        // lon (179) + offset (> 1) should wrap to negative (e.g. -179)
+
+        let mut wrapped = false;
+
+        for i in 0..1000 {
+            let id = format!("test-wrap-{}", i);
+            let pos = calculate_jittered_pos(lat, lon, radius_m, &id);
+
+            // If we wrapped, pos.lon should be negative (e.g. -178, -179)
+            // Original is 179.
+            if pos.lon < 0.0 {
+                wrapped = true;
+                // Verify it's valid longitude
+                assert!(pos.lon >= -180.0);
+                assert!(pos.lon <= 180.0);
+                break;
+            }
+        }
+
+        assert!(wrapped, "Jitter should be able to wrap around the dateline");
     }
 }
