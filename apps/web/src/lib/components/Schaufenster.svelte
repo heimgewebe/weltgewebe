@@ -90,8 +90,9 @@
     );
 
     // Persist to cache (browser only)
-    if ($selection?.id && browser) {
-        modulesCache.set($selection.id, modules);
+    const selectionId = $selection?.id;
+    if (selectionId && browser) {
+        modulesCache.set(selectionId, modules);
     }
   }
 
@@ -105,21 +106,33 @@
 
     try {
       const apiBase = env.PUBLIC_GEWEBE_API_BASE || '/api';
-      const endpoint = `${apiBase}/nodes/${$selection.id}`;
+      const selectionId = $selection.id;
+      const nextInfo = infoDraft;
+      const endpoint = `${apiBase}/nodes/${selectionId}`;
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ info: infoDraft })
+        body: JSON.stringify({ info: nextInfo })
       });
 
       if (res.ok) {
         // Update local store to reflect changes immediately
-        if ($selection.data) {
-          $selection.data.info = infoDraft;
-        }
+        selection.update((current) => {
+          if (!current || current.id !== selectionId || !current.data) {
+            return current;
+          }
+
+          return {
+            ...current,
+            data: {
+              ...current.data,
+              info: nextInfo
+            }
+          };
+        });
         isEditingInfo = false;
       } else {
         console.error('Failed to save info', res.status);
