@@ -21,7 +21,7 @@ const createAuthStore = () => {
   return {
     subscribe,
     // Platzhalter-Funktion für den Login
-    // Allows optional accountId injection for testing
+    // Requires accountId; injected for testing convenience
     login: (accountId: string) => {
       // TODO: Echte Login-Logik implementieren
       set({
