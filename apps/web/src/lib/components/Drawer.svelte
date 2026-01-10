@@ -117,9 +117,10 @@
   aria-modal={role === 'dialog' && open ? "true" : undefined}
   tabindex={role === 'dialog' && open ? 0 : -1}
   inert={!open ? true : undefined}
-  on:pointerdown
-  on:pointerup
-  on:pointercancel
+  on:pointerdown|stopPropagation
+  on:pointerup|stopPropagation
+  on:pointercancel|stopPropagation
+  on:wheel|stopPropagation
   {...$$restProps}
 >
   {#if title}<h3 id={headingId}>{title}</h3>{/if}
