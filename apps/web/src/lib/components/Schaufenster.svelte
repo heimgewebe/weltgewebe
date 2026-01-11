@@ -80,7 +80,6 @@
 
   function handleModuleClick(module: typeof modules[0]) {
     // Navigate or open module detail
-    // console.log('Open module:', module.id);
   }
 
   function toggleLock(id: string) {
