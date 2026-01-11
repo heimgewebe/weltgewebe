@@ -9,7 +9,7 @@
   import ViewPanel from '$lib/components/ViewPanel.svelte';
   import Schaufenster from '$lib/components/Schaufenster.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
-  import type { Edge } from './types';
+  import type { Edge, RenderableMapPoint } from './types';
 
   import { view, selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
@@ -17,20 +17,6 @@
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
 
   export let data: PageData;
-
-  // Local MapPoint type: flattened structure optimized for map marker rendering.
-  // Note: ./types.ts exports a different MapPoint with nested data structure,
-  // but this local type is more convenient for direct use with maplibre-gl.
-  type MapPoint = {
-    id: string;
-    title: string;
-    lat: number;
-    lon: number;
-    summary?: string | null;
-    info?: string | null;
-    type?: string; // Relaxed type to allow 'garnrolle' etc.
-    modules?: Array<{ id: string; label: string; locked: boolean; type?: string }>;
-  };
 
   $: nodesData = (data.nodes || []).map((n) => ({
     id: n.id,
@@ -41,9 +27,9 @@
     info: n.info,
     type: 'node',
     modules: n.modules
-  })) satisfies MapPoint[];
+  })) satisfies RenderableMapPoint[];
 
-  $: accountsData = (data.accounts || []).reduce<MapPoint[]>((acc, a) => {
+  $: accountsData = (data.accounts || []).reduce<RenderableMapPoint[]>((acc, a) => {
     if (a.public_pos) {
       acc.push({
         id: a.id,
@@ -89,7 +75,7 @@
   }
 
   // Update markers when data changes or view toggles change
-  async function updateMarkers(points: MapPoint[]) {
+  async function updateMarkers(points: RenderableMapPoint[]) {
     if (!map) return;
     const maplibregl = await import('maplibre-gl');
 
@@ -163,71 +149,74 @@
   }
 
   // Update edges on map
-  function updateEdges(edges: Edge[], points: MapPoint[]) {
+  function updateEdges(edges: Edge[], points: RenderableMapPoint[]) {
     if (!map) return;
 
-    // Clean up existing layers/sources if they exist
-    if (map.getLayer('edges-layer')) map.removeLayer('edges-layer');
-    if (map.getSource('edges-source')) map.removeSource('edges-source');
+    const shouldShow = $view.showEdges && edges.length > 0;
+    const sourceId = 'edges-source';
+    const layerId = 'edges-layer';
 
-    if (!$view.showEdges || edges.length === 0) return;
+    const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
 
-    const features = [];
+    // Build GeoJSON features
+    const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+    if (shouldShow) {
+      // Create a map for faster lookup (optimization)
+      const pointMap = new Map(points.map(p => [p.id, p]));
 
-    // Helper to find location of a node/account
-    const findLoc = (id: string) => points.find(p => p.id === id);
+      for (const edge of edges) {
+        const s = pointMap.get(edge.source_id);
+        const t = pointMap.get(edge.target_id);
 
-    for (const edge of edges) {
-      const source = findLoc(edge.source_id);
-      const target = findLoc(edge.target_id);
-
-      if (source && target) {
-        const feature: GeoJSON.Feature<GeoJSON.LineString> = {
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [source.lon, source.lat],
-              [target.lon, target.lat]
-            ]
-          },
-          properties: {
-             id: edge.id,
-             kind: edge.edge_kind
-          }
-        };
-        features.push(feature);
+        if (s && t) {
+          features.push({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: [
+                [s.lon, s.lat],
+                [t.lon, t.lat]
+              ]
+            },
+            properties: {
+              id: edge.id,
+              kind: edge.edge_kind
+            }
+          });
+        }
       }
     }
 
-    if (features.length === 0) return;
+    const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+      type: 'FeatureCollection',
+      features: features
+    };
 
-    map.addSource('edges-source', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features: features
-      }
-    });
+    if (source) {
+      // Efficiently update data without removing layer
+      source.setData(geoJsonData);
+    } else if (features.length > 0) {
+      // Initial creation
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: geoJsonData
+      });
 
-    map.addLayer({
-      id: 'edges-layer',
-      type: 'line',
-      source: 'edges-source',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round'
-      },
-      paint: {
-        'line-color': '#888',
-        'line-width': 2,
-        'line-dasharray': [2, 1]
-      }
-    });
-
-    // Ensure edges are below markers
-    // Note: markers are HTML elements overlaying the canvas, so lines (canvas) are automatically below.
-    // However, if we had other layers, we might need 'beforeId'.
+      map.addLayer({
+        id: layerId,
+        type: 'line',
+        source: sourceId,
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#888',
+          'line-width': 2,
+          'line-dasharray': [2, 1]
+        }
+      });
+    }
   }
 
   // Reactive update for markers
