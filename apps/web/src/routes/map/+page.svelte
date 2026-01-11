@@ -9,6 +9,7 @@
   import ViewPanel from '$lib/components/ViewPanel.svelte';
   import Schaufenster from '$lib/components/Schaufenster.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import type { Edge } from './types';
 
   import { view, selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
@@ -47,8 +48,8 @@
     .map((a) => ({
       id: a.id,
       title: a.title,
-      lat: a.public_pos.lat,
-      lon: a.public_pos.lon,
+      lat: a.public_pos!.lat,
+      lon: a.public_pos!.lon,
       summary: a.summary,
       type: a.type, // Pass through the domain type (e.g., 'garnrolle')
       modules: a.modules
@@ -56,7 +57,7 @@
 
   $: markersData = [...nodesData, ...accountsData];
 
-  $: edgesData = (data.edges || []);
+  $: edgesData = (data.edges || []) satisfies Edge[];
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -146,7 +147,7 @@
   }
 
   // Update edges on map
-  function updateEdges(edges: any[], points: MapPoint[]) {
+  function updateEdges(edges: Edge[], points: MapPoint[]) {
     if (!map) return;
 
     // Clean up existing layers/sources if they exist
