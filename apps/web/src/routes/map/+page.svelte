@@ -3,7 +3,7 @@
   import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { Map as MapLibreMap } from 'maplibre-gl';
+  import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 
   import TopBar from '$lib/components/TopBar.svelte';
   import ViewPanel from '$lib/components/ViewPanel.svelte';
@@ -156,7 +156,7 @@
     const sourceId = 'edges-source';
     const layerId = 'edges-layer';
 
-    const source = map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+    const source = map.getSource(sourceId) as GeoJSONSource | undefined;
 
     // Build GeoJSON features
     const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];

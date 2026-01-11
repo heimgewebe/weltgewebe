@@ -7,19 +7,15 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 
-# 2) Create dummy source to compile dependencies
-RUN mkdir -p apps/api/src && echo "fn main() {println!(\"dummy\");}" > apps/api/src/main.rs
+# 2) Fetch dependencies (this caches the index and downloads)
+RUN cargo fetch
 
-# 3) Build dependencies (caches compilation of external crates)
-RUN cargo build --release --bin weltgewebe-api
-
-# 4) Remove dummy source and copy actual source
-RUN rm -rf apps/api/src
+# 3) Copy the rest of the workspace
 COPY . .
 
-# 5) Build the actual API binary
-# Note: 'touch' might be needed to ensure cargo sees files as new if file times are preserved
-RUN touch apps/api/src/main.rs && cargo build --release --bin weltgewebe-api
+# 4) Build the API binary in release mode
+# Offline mode is not strictly necessary but ensures we use what we fetched
+RUN cargo build --release --bin weltgewebe-api
 
 # Runner stage
 FROM debian:bullseye-slim
