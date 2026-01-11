@@ -9,6 +9,7 @@
   import ViewPanel from '$lib/components/ViewPanel.svelte';
   import Schaufenster from '$lib/components/Schaufenster.svelte';
   import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import type { Edge } from './types';
 
   import { view, selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
@@ -42,21 +43,37 @@
     modules: n.modules
   })) satisfies MapPoint[];
 
-  $: accountsData = (data.accounts || [])
-    .filter((a) => a.public_pos) // Only show accounts with a visible public position
-    .map((a) => ({
-      id: a.id,
-      title: a.title,
-      lat: a.public_pos.lat,
-      lon: a.public_pos.lon,
-      summary: a.summary,
-      type: a.type, // Pass through the domain type (e.g., 'garnrolle')
-      modules: a.modules
-    })) satisfies MapPoint[];
+  $: accountsData = (data.accounts || []).reduce<MapPoint[]>((acc, a) => {
+    if (a.public_pos) {
+      acc.push({
+        id: a.id,
+        title: a.title,
+        lat: a.public_pos.lat,
+        lon: a.public_pos.lon,
+        summary: a.summary,
+        type: a.type, // Pass through the domain type (e.g., 'garnrolle')
+        modules: a.modules
+      });
+    }
+    return acc;
+  }, []);
 
   $: markersData = [...nodesData, ...accountsData];
 
-  $: edgesData = (data.edges || []);
+  function isEdge(e: any): e is Edge {
+    return (
+      e !== null &&
+      typeof e === 'object' &&
+      typeof e.id === 'string' &&
+      typeof e.source_id === 'string' &&
+      typeof e.target_id === 'string' &&
+      typeof e.edge_kind === 'string'
+    );
+  }
+
+  $: validEdges = (data.edges || []).filter(isEdge);
+  $: pointIds = new Set(markersData.map(p => p.id));
+  $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -146,7 +163,7 @@
   }
 
   // Update edges on map
-  function updateEdges(edges: any[], points: MapPoint[]) {
+  function updateEdges(edges: Edge[], points: MapPoint[]) {
     if (!map) return;
 
     // Clean up existing layers/sources if they exist

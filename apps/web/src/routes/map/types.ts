@@ -45,3 +45,10 @@ export interface MapPoint {
   kind: string; // 'node' | 'account'
   data: Node | Account | unknown;
 }
+
+export interface Edge {
+  id: string;
+  source_id: string;
+  target_id: string;
+  edge_kind: string;
+}

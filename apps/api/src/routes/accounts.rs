@@ -107,10 +107,13 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
 }
 
 fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
-    let id = v
-        .get("id")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())?;
+    let id = match v.get("id").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => {
+            tracing::debug!("Skipping account with missing or invalid id");
+            return None;
+        }
+    };
 
     let kind = v
         .get("type")
@@ -129,13 +132,28 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let location_obj = v.get("location")?;
+    let location_obj = match v.get("location") {
+        Some(obj) => obj,
+        None => {
+            tracing::debug!(%id, "Skipping account with missing location");
+            return None;
+        }
+    };
+
     let lon = location_obj
         .get("lon")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
+        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
     let lat = location_obj
         .get("lat")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()))?;
+        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
+
+    let (lat, lon) = match (lat, lon) {
+        (Some(lat), Some(lon)) => (lat, lon),
+        _ => {
+            tracing::debug!(%id, "Skipping account with invalid lat/lon");
+            return None;
+        }
+    };
 
     // Robust enum parsing with default fallback
     let visibility_str = v
