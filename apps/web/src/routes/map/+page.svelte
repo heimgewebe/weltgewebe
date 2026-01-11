@@ -60,7 +60,20 @@
 
   $: markersData = [...nodesData, ...accountsData];
 
-  $: edgesData = (data.edges || []).filter(e => e.source_id && e.target_id);
+  function isEdge(e: any): e is Edge {
+    return (
+      e !== null &&
+      typeof e === 'object' &&
+      typeof e.id === 'string' &&
+      typeof e.source_id === 'string' &&
+      typeof e.target_id === 'string' &&
+      typeof e.edge_kind === 'string'
+    );
+  }
+
+  $: validEdges = (data.edges || []).filter(isEdge);
+  $: pointIds = new Set(markersData.map(p => p.id));
+  $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
