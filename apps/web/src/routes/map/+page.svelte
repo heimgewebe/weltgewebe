@@ -46,10 +46,14 @@
 
   $: markersData = [...nodesData, ...accountsData];
 
-  function isEdge(e: any): e is Edge {
+  // Robust type guards
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object';
+  }
+
+  function isEdge(e: unknown): e is Edge {
+    if (!isRecord(e)) return false;
     return (
-      e !== null &&
-      typeof e === 'object' &&
       typeof e.id === 'string' &&
       typeof e.source_id === 'string' &&
       typeof e.target_id === 'string' &&
@@ -435,23 +439,23 @@
 </style>
 
 <main class="shell">
-  <div class="debug-badge">
-    Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
-    <br>
-    {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
-      Mode: REMOTE<br>
-      API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
-    {:else}
-      Mode: DEMO (local)<br>
-      Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
-    {/if}
-    <br>
-    {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+  {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+    <div class="debug-badge">
+      Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
+      <br>
+      {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
+        Mode: REMOTE<br>
+        API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
+      {:else}
+        Mode: DEMO (local)<br>
+        Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
+      {/if}
+      <br>
       <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
         {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
       </button>
-    {/if}
-  </div>
+    </div>
+  {/if}
   <TopBar />
   <ViewPanel />
 
