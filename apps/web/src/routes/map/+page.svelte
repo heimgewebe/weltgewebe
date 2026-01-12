@@ -60,14 +60,19 @@
 
   $: markersData = [...nodesData, ...accountsData];
 
-  function isEdge(e: any): e is Edge {
+  // Type guard optimized for runtime safety
+  function isEdge(e: unknown): e is Edge {
     return (
       e !== null &&
       typeof e === 'object' &&
-      typeof e.id === 'string' &&
-      typeof e.source_id === 'string' &&
-      typeof e.target_id === 'string' &&
-      typeof e.edge_kind === 'string'
+      'id' in e &&
+      typeof (e as any).id === 'string' &&
+      'source_id' in e &&
+      typeof (e as any).source_id === 'string' &&
+      'target_id' in e &&
+      typeof (e as any).target_id === 'string' &&
+      'edge_kind' in e &&
+      typeof (e as any).edge_kind === 'string'
     );
   }
 
@@ -446,23 +451,25 @@
 </style>
 
 <main class="shell">
-  <div class="debug-badge">
-    Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
-    <br>
-    {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
-      Mode: REMOTE<br>
-      API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
-    {:else}
-      Mode: DEMO (local)<br>
-      Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
-    {/if}
-    <br>
-    {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
-      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
-        {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
-      </button>
-    {/if}
-  </div>
+  {#if import.meta.env.DEV}
+    <div class="debug-badge">
+      Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
+      <br>
+      {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
+        Mode: REMOTE<br>
+        API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
+      {:else}
+        Mode: DEMO (local)<br>
+        Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
+      {/if}
+      <br>
+      {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+        <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
+          {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
+        </button>
+      {/if}
+    </div>
+  {/if}
   <TopBar />
   <ViewPanel />
 
