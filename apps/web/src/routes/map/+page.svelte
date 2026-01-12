@@ -13,6 +13,7 @@
 
   import { view, selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
+  import { isRecord } from '$lib/utils/guards';
 
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
 
@@ -47,10 +48,6 @@
   $: markersData = [...nodesData, ...accountsData];
 
   // Robust type guards
-  function isRecord(value: unknown): value is Record<string, unknown> {
-    return value !== null && typeof value === 'object';
-  }
-
   function isEdge(e: unknown): e is Edge {
     if (!isRecord(e)) return false;
     return (

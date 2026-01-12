@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { browser } from "$app/environment";
+import { isRecord } from "$lib/utils/guards";
 
 // Definiert die Struktur des Benutzer-Objekts.
 interface User {
@@ -9,11 +10,6 @@ interface User {
 }
 
 const STORAGE_KEY = "gewebe_auth_user";
-
-// Helper to safely check if a value is a generic object record
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object";
-}
 
 // Erstellt einen Store, um den Authentifizierungsstatus zu speichern.
 // Dieser Store ist ein Platzhalter und wird später durch eine echte
