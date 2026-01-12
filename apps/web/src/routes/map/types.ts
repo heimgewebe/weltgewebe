@@ -52,3 +52,14 @@ export interface Edge {
   target_id: string;
   edge_kind: string;
 }
+
+export interface RenderableMapPoint {
+  id: string;
+  title: string;
+  lat: number;
+  lon: number;
+  summary?: string | null;
+  info?: string | null;
+  type?: string;
+  modules?: Module[];
+}

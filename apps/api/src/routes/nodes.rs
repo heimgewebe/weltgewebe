@@ -296,12 +296,32 @@ pub async fn list_nodes(
             Err(_) => continue, // fehlerhafte Zeilen überspringen
         };
 
-        if let Some(node) = map_json_to_node(&v) {
-            if let Some(bb) = bbox {
-                if !point_in_bbox(node.location.lon, node.location.lat, &bb) {
+        // Optimization: Check BBox *before* expensive mapping (string cloning)
+        if let Some(bb) = bbox {
+            // Access location directly from Value (cheap reference access)
+            if let Some(loc) = v.get("location") {
+                let lat = loc
+                    .get("lat")
+                    .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
+                let lon = loc
+                    .get("lon")
+                    .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
+
+                if let (Some(lat), Some(lon)) = (lat, lon) {
+                    if !point_in_bbox(lon, lat, &bb) {
+                        continue;
+                    }
+                } else {
+                    // Invalid location data, skip
                     continue;
                 }
+            } else {
+                continue;
             }
+        }
+
+        if let Some(node) = map_json_to_node(&v) {
+            // Note: BBox check already done above for optimization
             out.push(node);
         }
     }
