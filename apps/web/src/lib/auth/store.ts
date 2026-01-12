@@ -10,6 +10,11 @@ interface User {
 
 const STORAGE_KEY = "gewebe_auth_user";
 
+// Helper to safely check if a value is a generic object record
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
 // Erstellt einen Store, um den Authentifizierungsstatus zu speichern.
 // Dieser Store ist ein Platzhalter und wird später durch eine echte
 // Session-Management-Logik ersetzt.
@@ -26,7 +31,18 @@ const createAuthStore = () => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        initialUser = JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+
+        // Validation: Ensure we have a valid object and only restore safe fields
+        if (isRecord(parsed) && typeof parsed.loggedIn === 'boolean') {
+           initialUser = {
+             loggedIn: parsed.loggedIn,
+             // Do NOT restore role from storage to prevent privilege escalation via localStorage tampering.
+             // For this demo mock, we hardcode 'weber' if logged in, mirroring the login logic.
+             role: parsed.loggedIn ? "weber" : undefined,
+             current_account_id: typeof parsed.current_account_id === 'string' ? parsed.current_account_id : undefined
+           };
+        }
       }
     } catch (e) {
       console.warn("Auth restoration failed:", e);
@@ -47,7 +63,12 @@ const createAuthStore = () => {
       };
       set(user);
       if (browser) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+        // Only persist safe fields, never the role
+        const safeStorage = {
+          loggedIn: true,
+          current_account_id: accountId
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStorage));
       }
     },
     // Platzhalter-Funktion für den Logout
