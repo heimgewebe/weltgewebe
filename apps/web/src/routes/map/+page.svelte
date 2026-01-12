@@ -18,10 +18,10 @@
 
   export let data: PageData;
 
-  // Local MapPoint type: flattened structure optimized for map marker rendering.
-  // Note: ./types.ts exports a different MapPoint with nested data structure,
+  // Local RenderedMapPoint type: flattened structure optimized for map marker rendering.
+  // Note: ./types.ts exports a MapPoint with nested data structure,
   // but this local type is more convenient for direct use with maplibre-gl.
-  type MapPoint = {
+  type RenderedMapPoint = {
     id: string;
     title: string;
     lat: number;
@@ -41,9 +41,9 @@
     info: n.info,
     type: 'node',
     modules: n.modules
-  })) satisfies MapPoint[];
+  })) satisfies RenderedMapPoint[];
 
-  $: accountsData = (data.accounts || []).reduce<MapPoint[]>((acc, a) => {
+  $: accountsData = (data.accounts || []).reduce<RenderedMapPoint[]>((acc, a) => {
     if (a.public_pos) {
       acc.push({
         id: a.id,
@@ -89,7 +89,7 @@
   }
 
   // Update markers when data changes or view toggles change
-  async function updateMarkers(points: MapPoint[]) {
+  async function updateMarkers(points: RenderedMapPoint[]) {
     if (!map) return;
     const maplibregl = await import('maplibre-gl');
 
@@ -163,7 +163,7 @@
   }
 
   // Update edges on map
-  function updateEdges(edges: Edge[], points: MapPoint[]) {
+  function updateEdges(edges: Edge[], points: RenderedMapPoint[]) {
     if (!map) return;
 
     // Clean up existing layers/sources if they exist
@@ -174,12 +174,12 @@
 
     const features = [];
 
-    // Helper to find location of a node/account
-    const findLoc = (id: string) => points.find(p => p.id === id);
+    // Optimization: Create a map for O(1) lookups instead of O(N) searching
+    const pointMap = new Map(points.map(p => [p.id, p]));
 
     for (const edge of edges) {
-      const source = findLoc(edge.source_id);
-      const target = findLoc(edge.target_id);
+      const source = pointMap.get(edge.source_id);
+      const target = pointMap.get(edge.target_id);
 
       if (source && target) {
         const feature: GeoJSON.Feature<GeoJSON.LineString> = {
