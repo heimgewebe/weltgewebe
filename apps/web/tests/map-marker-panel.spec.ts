@@ -5,9 +5,9 @@ test.beforeEach(async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
   // Robust wait for map
-  await page.locator('#map').waitFor();
+  await page.locator("#map").waitFor();
   // Ensure loading overlay is gone before interacting
-  await expect(page.locator('.loading-overlay')).toBeHidden();
+  await expect(page.locator(".loading-overlay")).toBeHidden();
 });
 
 test("marker click opens schaufenster", async ({ page }) => {
