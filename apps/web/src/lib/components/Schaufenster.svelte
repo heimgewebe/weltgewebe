@@ -451,17 +451,20 @@
   }
 
   .error-msg {
-    color: #ff4444;
+    color: var(--error-text, #b00020);
+    background: var(--error-bg, #fdecea);
     font-size: 13px;
     margin-top: 4px;
-    background: rgba(255,0,0,0.1);
     padding: 4px 8px;
     border-radius: 4px;
   }
   .success-msg {
-    color: #44ff44;
+    color: var(--success-text, #1b5e20);
+    background: var(--success-bg, #e8f5e9);
     font-size: 13px;
     margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
   }
 
   @media (prefers-reduced-motion: reduce) {
