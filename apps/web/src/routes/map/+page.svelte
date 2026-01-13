@@ -93,7 +93,20 @@
     for (const item of points) {
         currentIds.add(item.id);
         const markerCategory = getMarkerCategory(item.type);
-        const existing = activeMarkers.get(item.id);
+        let existing = activeMarkers.get(item.id);
+
+        // Robustness: Check if category changed (e.g. node became account, unlikely but possible)
+        if (existing) {
+             const isAccount = existing.element.classList.contains('marker-account');
+             const shouldBeAccount = markerCategory === 'account';
+
+             if (isAccount !== shouldBeAccount) {
+                 // Category mismatch - force recreate
+                 existing.cleanup();
+                 activeMarkers.delete(item.id);
+                 existing = undefined;
+             }
+        }
 
         // Check if we need to update or create
         if (existing) {
@@ -108,7 +121,6 @@
                  element.title = item.title;
                  element.setAttribute('aria-label', item.title);
              }
-             // NOTE: If category changes, we might need to recreate, but domain types usually don't morph.
         } else {
             // Create new
             const element = document.createElement('button');

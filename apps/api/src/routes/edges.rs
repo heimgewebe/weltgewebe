@@ -12,7 +12,7 @@ pub struct Edge {
     pub id: String,
     pub source_id: String,
     pub target_id: String,
-    #[serde(alias = "kind")]
+    #[serde(alias = "kind", alias = "edgeKind")]
     pub edge_kind: String,
 }
 
@@ -40,7 +40,8 @@ pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<V
         let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
-                tracing::warn!(error = %e, line = %line, "failed to parse edge JSON");
+                // Secure logging: avoid logging full payload, just length and error
+                tracing::warn!(error = %e, line_len = line.len(), "failed to parse edge JSON");
                 continue;
             }
         };
