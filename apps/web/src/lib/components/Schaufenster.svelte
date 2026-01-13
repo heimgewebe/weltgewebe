@@ -9,7 +9,7 @@
   import { selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
-  import { tick } from 'svelte';
+  import { tick, onDestroy } from 'svelte';
   import { env } from '$env/dynamic/public';
   import { browser } from '$app/environment';
 
@@ -40,11 +40,13 @@
   // UI State for errors
   let errorMessage: string | null = null;
   let showSuccess = false;
+  let successTimer: ReturnType<typeof setTimeout> | null = null;
 
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
     errorMessage = null;
     showSuccess = false;
+    clearSuccessTimer();
 
     if ($selection?.id) {
         // Use cache only in browser to avoid SSR shared state leaks
@@ -105,11 +107,21 @@
     infoDraft = $selection?.data?.info || '';
     isEditingInfo = true;
     errorMessage = null;
+    clearSuccessTimer();
+  }
+
+  function clearSuccessTimer() {
+    if (successTimer) {
+        clearTimeout(successTimer);
+        successTimer = null;
+    }
+    showSuccess = false;
   }
 
   async function saveInfo() {
     if (!$selection?.id) return;
     errorMessage = null;
+    clearSuccessTimer();
 
     try {
       const apiBase = env.PUBLIC_GEWEBE_API_BASE || '/api';
@@ -142,7 +154,10 @@
         });
         isEditingInfo = false;
         showSuccess = true;
-        setTimeout(() => showSuccess = false, 3000);
+        successTimer = setTimeout(() => {
+             showSuccess = false;
+             successTimer = null;
+        }, 3000);
       } else {
         console.error('Failed to save info', res.status);
         errorMessage = 'Fehler beim Speichern (Server).';
@@ -157,6 +172,10 @@
     isEditingInfo = false;
     errorMessage = null;
   }
+
+  onDestroy(() => {
+    clearSuccessTimer();
+  });
 </script>
 
 <style>

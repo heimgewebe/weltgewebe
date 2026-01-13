@@ -12,6 +12,7 @@ pub struct Edge {
     pub id: String,
     pub source_id: String,
     pub target_id: String,
+    #[serde(alias = "kind")]
     pub edge_kind: String,
 }
 
@@ -38,7 +39,10 @@ pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<V
 
         let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(e) => {
+                tracing::warn!(error = %e, line = %line, "failed to parse edge JSON");
+                continue;
+            }
         };
 
         if let Some(s) = src {

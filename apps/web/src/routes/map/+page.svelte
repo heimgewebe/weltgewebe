@@ -3,7 +3,7 @@
   import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
+  import type { Map as MapLibreMap, GeoJSONSource, Marker } from 'maplibre-gl';
 
   import TopBar from '$lib/components/TopBar.svelte';
   import ViewPanel from '$lib/components/ViewPanel.svelte';
@@ -68,7 +68,7 @@
   let lastFocusedElement: HTMLElement | null = null;
 
   // Optimization: Track active markers to allow updating instead of rebuilding
-  const activeMarkers = new Map<string, { marker: any, element: HTMLElement, cleanup: () => void }>();
+  const activeMarkers = new Map<string, { marker: Marker, element: HTMLElement, cleanup: () => void }>();
 
   // UI Mapping Helper
   function getMarkerCategory(type: string | undefined): string {
@@ -114,7 +114,9 @@
             const element = document.createElement('button');
             element.type = 'button';
             element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
-            element.dataset.testid = `marker-${item.type || 'node'}`;
+
+            // Robust testing selector based on domain semantics (and unique ID for stability)
+            element.dataset.testid = `marker-${item.type || 'node'}-${item.id}`;
 
             if (markerCategory === 'account') {
                 element.style.setProperty('--marker-icon', `url('${ICONS.garnrolle}')`);
@@ -167,8 +169,6 @@
             activeMarkers.delete(id);
         }
     }
-
-    // Initial flyTo logic only on first load (handled via onMount/finishLoading now)
   }
 
   // Update edges on map
