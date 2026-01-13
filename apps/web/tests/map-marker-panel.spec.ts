@@ -4,10 +4,15 @@ import { mockApiResponses } from "./fixtures/mockApi";
 test.beforeEach(async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
+  // Robust wait for map
+  await page.locator("#map").waitFor();
+  // Ensure loading overlay is gone before interacting
+  await expect(page.locator(".loading-overlay")).toBeHidden();
 });
 
 test("marker click opens schaufenster", async ({ page }) => {
-  const marker = page.locator(".map-marker").first();
+  // Use robust prefix selector for ANY node marker
+  const marker = page.locator('[data-testid^="marker-node-"]').first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
@@ -28,7 +33,7 @@ test("marker click opens schaufenster", async ({ page }) => {
 });
 
 test("can toggle lock state via lock button", async ({ page }) => {
-  const marker = page.locator(".map-marker").first();
+  const marker = page.locator('[data-testid^="marker-node-"]').first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
@@ -67,7 +72,7 @@ test("can toggle lock state via lock button", async ({ page }) => {
 
 test("lock state persists when re-opening schaufenster", async ({ page }) => {
   // Use specific marker to ensure we interact with the same entity
-  const marker = page.locator('[data-testid="marker-node"]').first();
+  const marker = page.locator('[data-testid^="marker-node-"]').first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 
@@ -102,7 +107,7 @@ test("lock state persists when re-opening schaufenster", async ({ page }) => {
 });
 
 test("close button closes schaufenster", async ({ page }) => {
-  const marker = page.locator(".map-marker").first();
+  const marker = page.locator('[data-testid^="marker-node-"]').first();
   await marker.waitFor({ state: "visible" });
   await marker.click();
 

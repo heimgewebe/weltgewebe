@@ -4,16 +4,20 @@ import { mockApiResponses } from "./fixtures/mockApi";
 test.beforeEach(async ({ page }) => {
   await mockApiResponses(page);
   await page.goto("/map");
+  // Robust wait for map
+  await page.locator("#map").waitFor();
+  // Ensure loading overlay is gone before interacting
+  await expect(page.locator(".loading-overlay")).toBeHidden();
 });
 
 test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   page,
 }) => {
   // 1. PUBLIC VIEW (Not logged in / Not owner)
-  // Target a Garnrolle marker
-  // Note: We use the data-testid we added in +page.svelte
+  // Target a Garnrolle marker using prefix match
+  // Note: data-testid is now `marker-garnrolle-<id>`
   const garnrolleMarker = page
-    .locator('[data-testid="marker-garnrolle"]')
+    .locator('[data-testid^="marker-garnrolle-"]')
     .first();
 
   // Wait for map to load and markers to appear

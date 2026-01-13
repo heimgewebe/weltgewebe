@@ -9,7 +9,7 @@
   import { selection } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { slide } from 'svelte/transition';
-  import { tick } from 'svelte';
+  import { tick, onDestroy } from 'svelte';
   import { env } from '$env/dynamic/public';
   import { browser } from '$app/environment';
 
@@ -37,8 +37,16 @@
   let isEditingInfo = false;
   let infoDraft = '';
 
+  // UI State for errors
+  let errorMessage: string | null = null;
+  let showSuccess = false;
+  let successTimer: ReturnType<typeof setTimeout> | null = null;
+
   $: if ($selection?.id !== lastSelectionId) {
     lastSelectionId = $selection?.id || null;
+    errorMessage = null;
+    showSuccess = false;
+    clearSuccessTimer();
 
     if ($selection?.id) {
         // Use cache only in browser to avoid SSR shared state leaks
@@ -98,10 +106,22 @@
   function startEditInfo() {
     infoDraft = $selection?.data?.info || '';
     isEditingInfo = true;
+    errorMessage = null;
+    clearSuccessTimer();
+  }
+
+  function clearSuccessTimer() {
+    if (successTimer) {
+        clearTimeout(successTimer);
+        successTimer = null;
+    }
+    showSuccess = false;
   }
 
   async function saveInfo() {
     if (!$selection?.id) return;
+    errorMessage = null;
+    clearSuccessTimer();
 
     try {
       const apiBase = env.PUBLIC_GEWEBE_API_BASE || '/api';
@@ -133,19 +153,29 @@
           };
         });
         isEditingInfo = false;
+        showSuccess = true;
+        successTimer = setTimeout(() => {
+             showSuccess = false;
+             successTimer = null;
+        }, 3000);
       } else {
         console.error('Failed to save info', res.status);
-        alert('Fehler beim Speichern.');
+        errorMessage = 'Fehler beim Speichern (Server).';
       }
     } catch (e) {
       console.error(e);
-      alert('Fehler beim Speichern.');
+      errorMessage = 'Netzwerkfehler beim Speichern.';
     }
   }
 
   function cancelEditInfo() {
     isEditingInfo = false;
+    errorMessage = null;
   }
+
+  onDestroy(() => {
+    clearSuccessTimer();
+  });
 </script>
 
 <style>
@@ -420,6 +450,23 @@
     color: var(--text);
   }
 
+  .error-msg {
+    color: var(--error-text, #b00020);
+    background: var(--error-bg, #fdecea);
+    font-size: 13px;
+    margin-top: 4px;
+    padding: 4px 8px;
+    border-radius: 4px;
+  }
+  .success-msg {
+    color: var(--success-text, #1b5e20);
+    background: var(--success-bg, #e8f5e9);
+    font-size: 13px;
+    margin-left: 8px;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .schaufenster-card {
       transition: none !important;
@@ -463,7 +510,11 @@
     {#if $selection.type === 'node'}
       <div class="info-section">
         <div class="info-header">
-          <span class="info-title">Info</span>
+          <span class="info-title">Info
+            {#if showSuccess}
+               <span class="success-msg" role="status">Gespeichert!</span>
+            {/if}
+          </span>
           {#if !isEditingInfo}
             <button class="edit-btn" on:click={startEditInfo}>Bearbeiten</button>
           {/if}
@@ -476,6 +527,9 @@
               bind:value={infoDraft}
               placeholder="Info hier eingeben..."
             ></textarea>
+            {#if errorMessage}
+              <div class="error-msg" role="alert">{errorMessage}</div>
+            {/if}
             <div class="editor-actions">
               <button class="action-btn cancel-btn" on:click={cancelEditInfo}>Abbrechen</button>
               <button class="action-btn save-btn" on:click={saveInfo}>Speichern</button>

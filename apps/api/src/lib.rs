@@ -3,6 +3,7 @@ pub mod middleware;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
+pub mod utils;
 
 #[doc(hidden)]
 pub mod test_helpers;
