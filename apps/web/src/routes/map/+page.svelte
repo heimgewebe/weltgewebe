@@ -66,12 +66,13 @@
   let map: MapLibreMap | null = null;
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
-  const markerCleanupFns: Array<() => void> = [];
+
+  // Optimization: Track active markers to allow updating instead of rebuilding
+  const activeMarkers = new Map<string, { marker: any, element: HTMLElement, cleanup: () => void }>();
 
   // UI Mapping Helper
   function getMarkerCategory(type: string | undefined): string {
     if (type === 'garnrolle') return 'account';
-    // Fallback/Default
     return type || 'node';
   }
 
@@ -80,73 +81,94 @@
     if (!map) return;
     const maplibregl = await import('maplibre-gl');
 
-    markerCleanupFns.forEach((fn) => fn());
-    markerCleanupFns.length = 0;
+    if (!$view.showNodes) {
+        // If hidden, remove all
+        activeMarkers.forEach(({ cleanup }) => cleanup());
+        activeMarkers.clear();
+        return;
+    }
 
-    if (!$view.showNodes) return; // Hide nodes if toggle is off
+    const currentIds = new Set<string>();
 
     for (const item of points) {
-      const element = document.createElement('button');
-      const markerCategory = getMarkerCategory(item.type);
+        currentIds.add(item.id);
+        const markerCategory = getMarkerCategory(item.type);
+        const existing = activeMarkers.get(item.id);
 
-      element.type = 'button';
-      element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
+        // Check if we need to update or create
+        if (existing) {
+             // Update position if changed
+             const { marker, element } = existing;
+             const lngLat = marker.getLngLat();
+             if (Math.abs(lngLat.lng - item.lon) > 0.000001 || Math.abs(lngLat.lat - item.lat) > 0.000001) {
+                 marker.setLngLat([item.lon, item.lat]);
+             }
+             // Update attributes
+             if (element.title !== item.title) {
+                 element.title = item.title;
+                 element.setAttribute('aria-label', item.title);
+             }
+             // NOTE: If category changes, we might need to recreate, but domain types usually don't morph.
+        } else {
+            // Create new
+            const element = document.createElement('button');
+            element.type = 'button';
+            element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
+            element.dataset.testid = `marker-${item.type || 'node'}`;
 
-      // Robust testing selector based on domain semantics
-      element.dataset.testid = `marker-${item.type || 'node'}`;
+            if (markerCategory === 'account') {
+                element.style.setProperty('--marker-icon', `url('${ICONS.garnrolle}')`);
+                element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
+            }
 
-      // Pass declarative config to CSS
-      if (markerCategory === 'account') {
-        element.style.setProperty('--marker-icon', `url('${ICONS.garnrolle}')`);
-        element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
-      }
+            element.setAttribute('aria-label', item.title);
+            element.title = item.title;
 
-      element.setAttribute('aria-label', item.title);
-      element.title = item.title;
+            const handleClick = async (e: Event) => {
+                lastFocusedElement = e.currentTarget as HTMLElement;
+                $selection = { type: markerCategory as 'node'|'account', id: item.id, data: item };
 
-      const handleClick = async (e: Event) => {
-        // Capture focus for restoration later
-        lastFocusedElement = e.currentTarget as HTMLElement;
+                const lat = item.lat;
+                const lon = item.lon;
+                if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+                map?.flyTo({
+                    center: [lon, lat],
+                    zoom: Math.max(map.getZoom(), 14),
+                    speed: 0.8,
+                    curve: 1
+                });
+                }
+            };
+            element.addEventListener('click', handleClick);
 
-        // Use category for UI selection type if needed, or stick to domain?
-        // Existing selection store expects 'node' | 'account'.
-        // Let's normalize for the selection store for now to be safe with existing components.
-        $selection = { type: markerCategory as 'node'|'account', id: item.id, data: item };
+            const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
+                .setLngLat([item.lon, item.lat])
+                .addTo(map);
 
-        // Robust coordinate check before flying
-        const lat = item.lat;
-        const lon = item.lon;
-        if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
-          map?.flyTo({
-            center: [lon, lat],
-            zoom: Math.max(map.getZoom(), 14),
-            speed: 0.8,
-            curve: 1
-          });
+            // Re-apply accessibility attributes after addTo()
+            element.setAttribute('aria-label', item.title);
+            element.title = item.title;
+
+            activeMarkers.set(item.id, {
+                marker,
+                element,
+                cleanup: () => {
+                    element.removeEventListener('click', handleClick);
+                    marker.remove();
+                }
+            });
         }
-      };
-      element.addEventListener('click', handleClick);
-
-      const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-        .setLngLat([item.lon, item.lat])
-        .addTo(map);
-
-      // Re-apply accessibility attributes after addTo() to ensure they persist
-      element.setAttribute('aria-label', item.title);
-      element.title = item.title;
-
-      markerCleanupFns.push(() => {
-        element.removeEventListener('click', handleClick);
-        marker.remove();
-      });
     }
 
-    // Force flyTo first marker if available to ensure visibility
-    if (points.length > 0) {
-      const first = points[0];
-      // Only auto-fly if we are fairly sure we want to (optional, per Step 2 instruction)
-      // map.flyTo({ center: [first.lon, first.lat], zoom: 14, animate: true });
+    // Cleanup removed markers
+    for (const [id, { cleanup }] of activeMarkers.entries()) {
+        if (!currentIds.has(id)) {
+            cleanup();
+            activeMarkers.delete(id);
+        }
     }
+
+    // Initial flyTo logic only on first load (handled via onMount/finishLoading now)
   }
 
   // Update edges on map
@@ -194,10 +216,8 @@
     };
 
     if (source) {
-      // Efficiently update data without removing layer
       source.setData(geoJsonData);
     } else if (features.length > 0) {
-      // Initial creation
       map.addSource(sourceId, {
         type: 'geojson',
         data: geoJsonData
@@ -227,7 +247,6 @@
 
   // Reactive update for edges
   $: if (map && markersData && edgesData && $view && map.getStyle()) {
-     // Ensure style is loaded before adding layers
      if (map.isStyleLoaded()) {
         updateEdges(edgesData, markersData);
      } else {
@@ -238,7 +257,6 @@
 
   // Restore focus when selection is closed
   $: if (!$selection && lastFocusedElement) {
-    // Check if element is still in document (it might be gone if view changed)
     if (document.body.contains(lastFocusedElement)) {
       lastFocusedElement.focus();
     }
@@ -247,8 +265,6 @@
 
   function jumpToDemo() {
     if (!map) return;
-    // Jump to the demo area (Hamburg) where fairschenkbox and gewebespinnerAYE are located
-    // Box: 53.5604 (Garnrolle) to 53.5588 (Fairschenkbox) -> roughly center 53.5596, 10.0616
     map.flyTo({
       center: [10.0616, 53.5596],
       zoom: 15,
@@ -260,8 +276,6 @@
     if ($authStore.loggedIn) {
       authStore.logout();
     } else {
-      // Login as the owner of the first account (gewebespinnerAYE)
-      // ID: 7d97a42e-3704-4a33-a61f-0e0a6b4d65d8
       authStore.login('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
     }
   }
@@ -273,7 +287,6 @@
       if (!container) {
         return;
       }
-      // Hamburg-Mitte: 10.00, 53.55 — Zoom 13
       map = new maplibregl.Map({
         container,
         style: 'https://demotiles.maplibre.org/style.json',
@@ -282,7 +295,6 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
-      // Fail-safe loading state
       const loadingTimeout = setTimeout(() => {
         isLoading = false;
       }, 10000);
@@ -291,7 +303,7 @@
         clearTimeout(loadingTimeout);
         isLoading = false;
 
-        // Initial flyTo if markers exist (Step 2 mini-patch)
+        // Initial flyTo if markers exist
         if (markersData.length > 0) {
            map?.flyTo({
              center: [markersData[0].lon, markersData[0].lat],
@@ -307,8 +319,8 @@
 
     return () => {
       if (map && typeof map.remove === 'function') map.remove();
-      markerCleanupFns.forEach((fn) => fn());
-      markerCleanupFns.length = 0;
+      activeMarkers.forEach(({ cleanup }) => cleanup());
+      activeMarkers.clear();
     };
   });
 </script>
@@ -317,7 +329,6 @@
   .shell{
     position:relative;
     height:100dvh;
-    /* keep the raw dynamic viewport height as a fallback for browsers missing safe-area support */
     height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     width:100vw;
     overflow:hidden;
@@ -343,7 +354,6 @@
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
 
-  /* Accounts specific style - handled via CSS variable + CSS rule */
   #map :global(.marker-account) {
     background-image: var(--marker-icon);
     background-size: contain;
@@ -356,8 +366,6 @@
 
     width: var(--marker-size, 34px);
     height: var(--marker-size, 34px);
-
-    /* Ensure no residual rotation */
     transform: none;
     border-radius: 0;
   }
@@ -367,7 +375,6 @@
       transform: scale(1.2);
       z-index: 10;
     }
-    /* Explicitly handle hover for accounts to ensure clean scaling without rotation artifacts */
     #map :global(.marker-account:hover){
       transform: scale(1.2);
     }
@@ -422,7 +429,7 @@
 
   .debug-badge {
     position: absolute;
-    top: 60px; /* Below TopBar */
+    top: 60px;
     right: 10px;
     z-index: 20;
     padding: 4px 8px;
@@ -455,22 +462,15 @@
   {/if}
   <TopBar />
   <ViewPanel />
-
-  <!-- Karte -->
   <div id="map" bind:this={mapContainer}></div>
-
   <button class="demo-btn" on:click={jumpToDemo}>
     Zur Demo springen
   </button>
-
   {#if isLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>
     </div>
   {/if}
-
   <Schaufenster />
-
-  <!-- Zeitleiste -->
   <TimelineDock />
 </main>

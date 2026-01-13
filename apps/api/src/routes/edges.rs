@@ -1,21 +1,21 @@
+use crate::utils::edges_path;
 use axum::{extract::Query, Json};
-use serde_json::Value;
-use std::{collections::HashMap, env, path::PathBuf};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
 };
 
-fn in_dir() -> PathBuf {
-    env::var("GEWEBE_IN_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(".gewebe/in"))
-}
-fn edges_path() -> PathBuf {
-    in_dir().join("demo.edges.jsonl")
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Edge {
+    pub id: String,
+    pub source_id: String,
+    pub target_id: String,
+    pub edge_kind: String,
 }
 
-pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Value>> {
+pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<Vec<Edge>> {
     let src = params.get("source_id");
     let dst = params.get("target_id");
     let limit: usize = params
@@ -35,23 +35,24 @@ pub async fn list_edges(Query(params): Query<HashMap<String, String>>) -> Json<V
         if out.len() >= limit {
             break;
         }
-        let v: Value = match serde_json::from_str(&line) {
+
+        let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => continue,
         };
 
         if let Some(s) = src {
-            if v.get("source_id").and_then(|x| x.as_str()) != Some(s.as_str()) {
+            if edge.source_id != *s {
                 continue;
             }
         }
         if let Some(d) = dst {
-            if v.get("target_id").and_then(|x| x.as_str()) != Some(d.as_str()) {
+            if edge.target_id != *d {
                 continue;
             }
         }
 
-        out.push(v);
+        out.push(edge);
     }
 
     Json(out)

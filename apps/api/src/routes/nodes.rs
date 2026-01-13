@@ -1,3 +1,4 @@
+use crate::utils::nodes_path;
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
@@ -5,22 +6,11 @@ use axum::{
 };
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, env, path::PathBuf};
+use std::collections::HashMap;
 use tokio::{
     fs::{File, OpenOptions},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
 };
-
-fn in_dir() -> PathBuf {
-    // Überschreibbar in Tests via GEWEBE_IN_DIR
-    env::var("GEWEBE_IN_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from(".gewebe/in"))
-}
-
-fn nodes_path() -> PathBuf {
-    in_dir().join("demo.nodes.jsonl")
-}
 
 #[derive(Clone, Copy, Debug)]
 struct BBox {
