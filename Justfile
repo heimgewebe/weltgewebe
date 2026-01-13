@@ -54,6 +54,7 @@ check:     # quick hygiene check
 	just clippy
 	just test
 	just check-demo-data
+	just contracts-domain-check
 	cargo deny check
 
 # ---------- Compose ----------
