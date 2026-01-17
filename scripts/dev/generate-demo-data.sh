@@ -2,7 +2,10 @@
 set -euo pipefail
 
 # Erzeugt Demo-Daten falls nicht vorhanden.
-mkdir -p .gewebe/in
+# Argument 1: Ziel-Verzeichnis (default: .gewebe/in)
+DIR="${1:-.gewebe/in}"
+
+mkdir -p "$DIR"
 
 # --- Helpers ---
 
@@ -109,8 +112,8 @@ ACCOUNT_ID="7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"
 ACCOUNT_JSON='{"id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","type":"garnrolle","title":"gewebespinnerAYE","summary":"Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.","location":{"lat":53.5604148,"lon":10.0629844},"visibility":"public","tags":["account","garnrolle","wohnort"]}'
 
 # Just ensure the file exists so ensure_jsonl_line doesn't complain about missing file if Logic A branches
-touch .gewebe/in/demo.accounts.jsonl
-ensure_jsonl_line ".gewebe/in/demo.accounts.jsonl" "$ACCOUNT_ID" "$ACCOUNT_JSON" "location"
+touch "$DIR/demo.accounts.jsonl"
+ensure_jsonl_line "$DIR/demo.accounts.jsonl" "$ACCOUNT_ID" "$ACCOUNT_JSON" "location"
 
 
 # --- NODES ---
@@ -118,9 +121,9 @@ NODE_ID="b52be17c-4ab7-4434-98ce-520f86290cf0"
 NODE_LINE='{"id":"b52be17c-4ab7-4434-98ce-520f86290cf0","kind":"Knoten","title":"fairschenkbox","summary":"Öffentliche Fair-Schenk-Box","info":"Dies ist eine **Demo-Info** für den Test.","created_at":"2025-12-22T00:00:00Z","updated_at":"2025-12-22T00:00:00Z","location":{"lat":53.558894813662505,"lon":10.060228407382967}}'
 
 # Pre-seed bulk data if missing
-if [ ! -s .gewebe/in/demo.nodes.jsonl ]; then
+if [ ! -s "$DIR/demo.nodes.jsonl" ]; then
   echo "→ seeds: nodes"
-  cat > .gewebe/in/demo.nodes.jsonl <<EOF
+  cat > "$DIR/demo.nodes.jsonl" <<EOF
 {"id":"00000000-0000-0000-0000-000000000001","kind":"Ort","title":"Marktplatz Hamburg","created_at":"2025-01-01T12:00:00Z","updated_at":"2025-11-01T09:00:00Z","location":{"lon":9.9937,"lat":53.5511}}
 {"id":"00000000-0000-0000-0000-000000000002","kind":"Initiative","title":"Nachbarschaftshaus","created_at":"2025-01-01T12:00:00Z","updated_at":"2025-11-02T12:15:00Z","location":{"lon":10.0002,"lat":53.5523}}
 {"id":"00000000-0000-0000-0000-000000000003","kind":"Projekt","title":"Tauschbox Altona","created_at":"2025-01-01T12:00:00Z","updated_at":"2025-10-30T18:45:00Z","location":{"lon":9.9813,"lat":53.5456}}
@@ -130,10 +133,10 @@ EOF
 fi
 
 # Clean up legacy node
-remove_line_by_id ".gewebe/in/demo.nodes.jsonl" "00000000-0000-0000-0000-000000000006"
+remove_line_by_id "$DIR/demo.nodes.jsonl" "00000000-0000-0000-0000-000000000006"
 
 # Ensure canonical node
-ensure_jsonl_line ".gewebe/in/demo.nodes.jsonl" "$NODE_ID" "$NODE_LINE"
+ensure_jsonl_line "$DIR/demo.nodes.jsonl" "$NODE_ID" "$NODE_LINE"
 
 
 # --- EDGES ---
@@ -141,9 +144,9 @@ EDGE_ID="00000000-0000-0000-0000-00000000E001"
 EDGE_LINE='{"id":"00000000-0000-0000-0000-00000000E001","source_type":"account","source_id":"7d97a42e-3704-4a33-a61f-0e0a6b4d65d8","target_type":"node","target_id":"b52be17c-4ab7-4434-98ce-520f86290cf0","edge_kind":"reference","note":"faden","created_at":"2025-12-22T00:00:00Z"}'
 
 # Pre-seed bulk data if missing
-if [ ! -s .gewebe/in/demo.edges.jsonl ]; then
+if [ ! -s "$DIR/demo.edges.jsonl" ]; then
   echo "→ seeds: edges"
-  cat > .gewebe/in/demo.edges.jsonl <<EOF
+  cat > "$DIR/demo.edges.jsonl" <<EOF
 {"id":"00000000-0000-0000-0000-000000000101","source_type":"node","source_id":"00000000-0000-0000-0000-000000000001","target_type":"node","target_id":"00000000-0000-0000-0000-000000000002","edge_kind":"reference","note":"Kooperation Marktplatz ↔ Nachbarschaftshaus","created_at":"2025-01-01T12:00:00Z"}
 {"id":"00000000-0000-0000-0000-000000000102","source_type":"node","source_id":"00000000-0000-0000-0000-000000000002","target_type":"node","target_id":"00000000-0000-0000-0000-000000000004","edge_kind":"reference","note":"Gemeinschaftsaktion Gartenpflege","created_at":"2025-01-01T12:00:00Z"}
 {"id":"00000000-0000-0000-0000-000000000103","source_type":"node","source_id":"00000000-0000-0000-0000-000000000001","target_type":"node","target_id":"00000000-0000-0000-0000-000000000003","edge_kind":"reference","note":"Tauschbox liefert Material","created_at":"2025-01-01T12:00:00Z"}
@@ -152,4 +155,4 @@ EOF
 fi
 
 # Ensure canonical edge (Note: we use 'target_id' as semantic check field to ensure it points to the right place)
-ensure_jsonl_line ".gewebe/in/demo.edges.jsonl" "$EDGE_ID" "$EDGE_LINE" "target_id"
+ensure_jsonl_line "$DIR/demo.edges.jsonl" "$EDGE_ID" "$EDGE_LINE" "target_id"

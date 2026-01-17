@@ -24,13 +24,23 @@ WORKDIR /app
 
 # Install runtime dependencies
 # curl/wget is needed for healthchecks. ca-certificates for HTTPS.
-RUN apt-get update && apt-get install -y ca-certificates wget && rm -rf /var/lib/apt/lists/*
+# jq is needed for data seeding scripts.
+RUN apt-get update && apt-get install -y ca-certificates wget jq && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
 
+# Copy scripts for data seeding
+# Note: Docker context is repo root
+COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
+COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/entrypoint.sh
+
 # Expose the port
 EXPOSE 8080
 
-# Run the binary
+# Use entrypoint to handle data initialization
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# Run the binary (passed to entrypoint)
 CMD ["./weltgewebe-api"]

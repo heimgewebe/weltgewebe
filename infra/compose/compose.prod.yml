@@ -6,8 +6,14 @@ services:
       context: ../..
       dockerfile: apps/api/Dockerfile
     restart: always
+    volumes:
+      - gewebe_fs_data:/data
     environment:
       API_BIND: 0.0.0.0:8080
+      GEWEBE_IN_DIR: /data
+      # Enable demo data seeding via env var (default: false).
+      # Set GEWEBE_SEED_DEMO=true in .env for development deployments.
+      GEWEBE_SEED_DEMO: ${GEWEBE_SEED_DEMO:-false}
       DATABASE_URL: ${DATABASE_URL}
       RUST_LOG: ${RUST_LOG:-info}
     depends_on:
@@ -60,3 +66,4 @@ volumes:
   pg_data_prod:
   caddy_data:
   caddy_config:
+  gewebe_fs_data:
