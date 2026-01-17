@@ -11,6 +11,9 @@ services:
     environment:
       API_BIND: 0.0.0.0:8080
       GEWEBE_IN_DIR: /data
+      # Enable demo data seeding for development deployments.
+      # WARNING: Set to 'false' in actual production to prevent unintended data modification.
+      GEWEBE_SEED_DEMO: "true"
       DATABASE_URL: ${DATABASE_URL}
       RUST_LOG: ${RUST_LOG:-info}
     depends_on:

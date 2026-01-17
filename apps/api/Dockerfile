@@ -24,7 +24,8 @@ WORKDIR /app
 
 # Install runtime dependencies
 # curl/wget is needed for healthchecks. ca-certificates for HTTPS.
-RUN apt-get update && apt-get install -y ca-certificates wget && rm -rf /var/lib/apt/lists/*
+# jq is needed for data seeding scripts.
+RUN apt-get update && apt-get install -y ca-certificates wget jq && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
