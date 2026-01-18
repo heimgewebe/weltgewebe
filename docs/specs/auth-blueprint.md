@@ -112,8 +112,8 @@ Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
 - Session-Datensatz:
   - `session_id`
   - `account_id`
-  - `role`
   - `expires_at`
+  - _(Rolle wird dynamisch via `account_id` geladen)_
 - Neue Routen:
   - `POST /auth/login` (Dev-Mechanik)
   - `POST /auth/logout`
@@ -186,8 +186,13 @@ Login hat **reale Konsequenzen**.
 - Gates auf schreibenden Endpunkten:
   - z. B. `PATCH /nodes/:id`
 
+- **CSRF-Minimum (erste Schutzlinie):**
+  - `SameSite=Strict` (via Cookie)
+  - Origin/Referer-Check für state-changing Requests
+
 - Regel:
-  - `Gast` → 401/403
+  - **401 Unauthorized** → kein gültiger Session-Cookie
+  - **403 Forbidden** → authentifiziert als `Gast` (read-only)
   - `Weber/Admin` → erlaubt
 
 ### Ergebnis
@@ -217,10 +222,11 @@ Entwicklung ermöglichen, ohne Registrierung.
 ### Schutz
 
 - Feature-Flag:
-  - `AUTH_DEV_LOGIN=1`
+  - `AUTH_DEV_LOGIN=1` (oder `true`)
+  - Ausgeschaltet bei `0`, `false` oder ungesetzt.
 
 - In Prod:
-  - Route deaktiviert oder 404
+  - Route deaktiviert oder 404 (selbst wenn Flag versehentlich gesetzt).
 
 ### Ergebnis
 
@@ -307,7 +313,7 @@ Dev-Abkürzungen sauber absichern.
 
 ---
 
-## Ungewissheitsgrad & Ursachen
+## Unsicherheitsgrad & Ursachen
 
 **Unsicherheitsgrad:** 0.21 (niedrig)
 
