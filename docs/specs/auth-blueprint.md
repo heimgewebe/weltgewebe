@@ -1,0 +1,307 @@
+# Blaupause: Schrittweise Implementierung von Account- und Login-Logik im Weltgewebe
+
+> Ziel dieses Dokuments ist eine **dump- und ADR-konforme**, schrittweise Abarbeitung
+> von **Account → Auth → Login → Rollen → Schutzmechanismen**.
+>
+> Reihenfolge ist kein Stilmittel, sondern Architektur.
+
+---
+
+## 0. Ausgangslage (aus dem Weltgewebe-Dump)
+
+### Was bereits existiert
+
+- **Accounts als Domänenobjekte**
+  - Laden aus `GEWEBE_IN_DIR` (`demo.accounts.jsonl`)
+  - Öffentliche Projektion (`AccountPublic`)
+  - **Privacy-Invariante:** interne `location` wird **nie** ausgeliefert, nur `public_pos`
+- **ADR-0005 (Auth & Rollen)**
+  - Cookie-basierte Sessions (kein JWT-first)
+  - Rollen: `Gast`, `Weber`, `Admin`
+  - Gast = read-only
+- **Auth-Middleware existiert**, ist aber explizit **Platzhalter** (lässt alles durch)
+- **Keine `/auth/*`-Routen**
+- Schreibpfade (z. B. `PATCH /nodes/:id`) sind aktuell **ungeschützt**
+
+### Zentrale Leitplanke
+
+> **Login ist UX.
+> Auth ist Infrastruktur.
+> Accounts sind Domäne.**
+>
+> Wir bauen sie in genau dieser Reihenfolge.
+
+---
+
+## 1. Phase: Invarianten festschreiben (Vorarbeit)
+
+### Ziel
+
+Verhindern, dass spätere Implementierung bestehende Architektur bricht.
+
+### Nicht verhandelbare Invarianten
+
+1. **Session-basiertes Auth-Modell**
+   - Server hält Sessions
+   - Cookie enthält nur Session-ID
+2. **Cookie-Policy**
+   - `HttpOnly = true`
+   - `SameSite = Strict`
+   - `Secure = env-abhängig` (sonst Dev-Bruch)
+3. **Rollenmodell**
+   - `Gast` → lesen
+   - `Weber` → schreiben
+   - `Admin` → administrativ
+4. **Privacy bleibt erhalten**
+   - `/auth/me` liefert **keine** internen Account-Felder
+   - Orientierung an `AccountPublic` oder Minimal-Subset
+
+### Artefakt
+
+- Kurzer Abschnitt in `docs/auth.md` oder Ergänzung ADR-0005:
+  > „Diese Invarianten dürfen durch keine Auth-Implementierung verletzt werden.“
+
+---
+
+## 2. Phase: Account-Grundlage (Domäne, kein Login)
+
+### Ziel
+
+Accounts sind **existierende Identitäten**, nicht Login-Artefakte.
+
+### Scope
+
+- Accounts bleiben:
+  - seeded (Datei-basiert)
+  - ohne Registrierung
+- Keine Passwörter
+- Keine Auth-Logik
+
+### Ergebnis
+
+- Accounts können referenziert werden
+- Rollen sind Account-Eigenschaften
+- Auth kann sich später **darauf beziehen**, ohne Accounts zu verändern
+
+> **Wichtig:**
+> In dieser Phase wird _kein_ Login gebaut.
+
+---
+
+## 3. Phase: Session-Kern (Backend-Infrastruktur)
+
+### Ziel
+
+Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
+
+### To-dos
+
+- SessionStore (Dev-Start):
+  - In-Memory
+  - explizit flüchtig (Neustart = Logout)
+- Session-Datensatz:
+  - `session_id`
+  - `account_id`
+  - `role`
+  - `expires_at`
+- Neue Routen:
+  - `POST /auth/login` (Dev-Mechanik)
+  - `POST /auth/logout`
+  - `GET /auth/me`
+
+### `/auth/me` – Rückgabe (Minimal)
+
+```json
+{
+  "authenticated": true,
+  "role": "weber",
+  "account": {
+    "id": "...",
+    "name": "..."
+  }
+}
+```
+
+### Ergebnis
+
+- Server kann Identität **merken**
+- Browser trägt nur ein Cookie
+- Noch keine Autorisierung
+
+---
+
+## 4. Phase: Auth-Middleware realisieren
+
+### Ziel
+
+Jede Anfrage bekommt einen **AuthContext**.
+
+### To-dos
+
+- Platzhalter-Middleware ersetzen
+- Ablauf:
+  1. Cookie lesen
+  2. Session validieren
+  3. AuthContext setzen
+
+- Fallback:
+  - kein Cookie / ungültig → `role = Gast`
+
+### Ergebnis
+
+- **Zentrale Wahrheit** pro Request:
+
+  ```rust
+  AuthContext {
+    role,
+    account_id?,
+  }
+  ```
+
+> Ab hier existiert echte Auth-Information im System.
+
+---
+
+## 5. Phase: Autorisierung (Gates auf Schreibpfade)
+
+### Ziel
+
+Login hat **reale Konsequenzen**.
+
+### To-dos
+
+- Gates auf schreibenden Endpunkten:
+  - z. B. `PATCH /nodes/:id`
+
+- Regel:
+  - `Gast` → 401/403
+  - `Weber/Admin` → erlaubt
+
+### Ergebnis
+
+- Ohne Login: read-only
+- Mit Login: schreibfähig
+
+> **Ohne diese Phase ist Login wertlos.**
+
+---
+
+## 6. Phase: Dev-Login-Mechanik (kontrolliert)
+
+### Ziel
+
+Entwicklung ermöglichen, ohne Registrierung.
+
+### Scope (Dev-only)
+
+- Login z. B. über:
+  - `account_id`
+  - oder Handle
+
+- Optional:
+  - `GET /auth/dev/accounts` (nur Dev, nur Public-Daten)
+
+### Schutz
+
+- Feature-Flag:
+  - `AUTH_DEV_LOGIN=1`
+
+- In Prod:
+  - Route deaktiviert oder 404
+
+### Ergebnis
+
+- Reproduzierbare Dev-Identitäten
+- Kein Sicherheitsleck Richtung Prod
+
+---
+
+## 7. Phase: Frontend-Minimum
+
+### Ziel
+
+UX sichtbar machen, nicht perfektionieren.
+
+### To-dos
+
+- Beim App-Start:
+  - `GET /auth/me`
+
+- UI-Zustände:
+  - Gast
+  - Eingeloggt (Rolle sichtbar)
+
+- Buttons:
+  - Login (Dev)
+  - Logout
+
+### Ergebnis
+
+- Benutzer sieht, **wer er ist**
+- UI reagiert auf Rollen
+
+---
+
+## 8. Phase: Hardening & Vorbereitung auf Prod
+
+### Ziel
+
+Dev-Abkürzungen sauber absichern.
+
+### To-dos
+
+- Session TTL + Cleanup
+- Feature-Flags prüfen
+- Cookie-Secure nur bei HTTPS
+- Erste CSRF-Überlegungen (Cookie-Auth!)
+
+### Ergebnis
+
+- Kein stilles Durchrutschen von Dev-Auth in Prod
+- Saubere Basis für spätere:
+  - Registrierung
+  - Passkeys / OAuth
+  - Invite-Flows
+
+---
+
+## Typische Fehler (präventiv markiert)
+
+- ❌ Login bauen **vor** Middleware
+- ❌ `/auth/me` leakt interne Account-Felder
+- ❌ Dev-Login ohne Feature-Flag
+- ❌ Secure-Cookie im lokalen HTTP
+- ❌ Auth ohne Gates (Scheinsicherheit)
+
+---
+
+## Verdichtete Essenz
+
+> Wir bauen **erst Wirkung**, dann Komfort.
+>
+> **Accounts → Sessions → Middleware → Gates → Login → UX → Hardening**
+>
+> Alles andere ist Kosmetik.
+
+---
+
+## Ungewissheitsgrad & Ursachen
+
+**Unsicherheitsgrad:** 0.21 (niedrig)
+
+**Ursachen**
+
+- Persistenzform von Sessions (Memory vs Datei/DB) ist bewusst offen
+- Frontend-Details nicht vollständig spezifiziert
+- ADR lässt Spielraum bei konkreter Login-Mechanik
+
+Diese Unsicherheit ist **produktiver Spielraum**, kein Architekturrisiko.
+
+---
+
+## Abschlussfrage (∴fore)
+
+1. Ist dies die kritischste Abfolge?
+   → Ja, weil sie Scheinsicherheit systematisch verhindert.
+2. Was fehlt noch?
+   → Ownership-Regeln („eigene Inhalte“) und Registrierungslogik – **bewusst nachgelagert**.
