@@ -60,6 +60,7 @@ pub struct AccountPublic {
     pub ron_flag: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+    pub role: String,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -194,6 +195,12 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         })
         .unwrap_or_default();
 
+    let role = v
+        .get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("weber")
+        .to_string();
+
     // Calculate public position based on visibility policy
     let public_pos = match visibility {
         Visibility::Private => None,
@@ -218,6 +225,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         radius_m,
         ron_flag,
         tags,
+        role,
     })
 }
 
@@ -261,15 +269,9 @@ pub async fn list_accounts(
     Ok(Json(out))
 }
 
-pub async fn get_account(Path(id): Path<String>) -> Result<Json<AccountPublic>, StatusCode> {
+pub async fn find_account(id: &str) -> Option<AccountPublic> {
     let path = accounts_path();
-    let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(?path, ?e, "demo.accounts.jsonl not found");
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let file = File::open(&path).await.ok()?;
     let mut lines = BufReader::new(file).lines();
 
     while let Ok(Some(line)) = lines.next_line().await {
@@ -281,14 +283,18 @@ pub async fn get_account(Path(id): Path<String>) -> Result<Json<AccountPublic>, 
         // Check ID match on raw JSON before mapping to save effort
         if let Some(json_id) = v.get("id").and_then(|v| v.as_str()) {
             if json_id == id {
-                if let Some(account) = map_json_to_public_account(&v) {
-                    return Ok(Json(account));
-                }
+                return map_json_to_public_account(&v);
             }
         }
     }
+    None
+}
 
-    Err(StatusCode::NOT_FOUND)
+pub async fn get_account(Path(id): Path<String>) -> Result<Json<AccountPublic>, StatusCode> {
+    match find_account(&id).await {
+        Some(account) => Ok(Json(account)),
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 #[cfg(test)]

@@ -24,9 +24,11 @@ pub async fn auth_middleware(
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         if let Some(session) = state.sessions.get(cookie.value()) {
-            ctx.authenticated = true;
-            ctx.account_id = Some(session.account_id);
-            ctx.role = "weber".to_string();
+            if let Some(account) = crate::routes::accounts::find_account(&session.account_id).await {
+                ctx.authenticated = true;
+                ctx.account_id = Some(session.account_id);
+                ctx.role = account.role;
+            }
         }
     }
 

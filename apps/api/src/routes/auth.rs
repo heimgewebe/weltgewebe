@@ -2,12 +2,13 @@ use axum::{
     extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
+    Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::{Deserialize, Serialize};
 use time::Duration;
 
-use crate::state::ApiState;
+use crate::{middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 
@@ -41,10 +42,13 @@ pub async fn login(
 
     let session = state.sessions.create(payload.account_id);
 
+    let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
+
     let cookie = Cookie::build((SESSION_COOKIE_NAME, session.id))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Strict)
+        .secure(is_prod)
         .build();
 
     (jar.add(cookie), StatusCode::OK)
@@ -55,32 +59,23 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
         state.sessions.delete(cookie.value());
     }
 
+    let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
+
     let cookie = Cookie::build((SESSION_COOKIE_NAME, ""))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Strict)
+        .secure(is_prod)
         .max_age(Duration::seconds(0))
         .build();
 
     (jar.add(cookie), StatusCode::OK)
 }
 
-pub async fn me(State(state): State<ApiState>, jar: CookieJar) -> impl IntoResponse {
-    let mut authenticated = false;
-    let mut account_id = None;
-    let mut role = "gast".to_string();
-
-    if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
-        if let Some(session) = state.sessions.get(cookie.value()) {
-            authenticated = true;
-            account_id = Some(session.account_id);
-            role = "weber".to_string();
-        }
-    }
-
+pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(AuthStatus {
-        authenticated,
-        account_id,
-        role,
+        authenticated: ctx.authenticated,
+        account_id: ctx.account_id,
+        role: ctx.role,
     })
 }

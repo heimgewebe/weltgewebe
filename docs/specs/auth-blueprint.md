@@ -11,6 +11,7 @@
 - **Bindung:** ADR-0005
 - **Verändert keine bestehenden Contracts**
 - **Zielgruppe:** Backend, Frontend, Review
+- **Implementierungs-Status:** Phase 2 (Account-Grundlage) war bereits vorhanden. Die Implementierung startete effektiv bei Phase 3+4.
 
 > Diese Blaupause definiert **keinen neuen Contract**, sondern beschreibt
 > die schrittweise Aktivierung bereits beschlossener Architektur.
