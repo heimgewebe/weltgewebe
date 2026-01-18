@@ -5,6 +5,16 @@
 >
 > Reihenfolge ist kein Stilmittel, sondern Architektur.
 
+## Status & Geltungsbereich
+
+- **Typ:** Implementierungsblaupause
+- **Bindung:** ADR-0005
+- **Verändert keine bestehenden Contracts**
+- **Zielgruppe:** Backend, Frontend, Review
+
+> Diese Blaupause definiert **keinen neuen Contract**, sondern beschreibt
+> die schrittweise Aktivierung bereits beschlossener Architektur.
+
 ---
 
 ## 0. Ausgangslage (aus dem Weltgewebe-Dump)
@@ -121,6 +131,9 @@ Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
   }
 }
 ```
+
+> ⚠️ `/auth/me` ist **kein Account-Endpoint**.
+> Er liefert Auth-Status, nicht Account-Wahrheit.
 
 ### Ergebnis
 
@@ -262,6 +275,15 @@ Dev-Abkürzungen sauber absichern.
   - Registrierung
   - Passkeys / OAuth
   - Invite-Flows
+
+---
+
+## Explizit nicht Teil dieser Blaupause
+
+- Registrierung / Signup
+- Passwort- oder Passkey-Design
+- OAuth / externe Identitäten
+- Ownership-Logik auf Node-Ebene
 
 ---
 
