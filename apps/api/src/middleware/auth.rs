@@ -1,18 +1,35 @@
-use axum::{body::Body, http::Request, middleware::Next, response::Response};
+use axum::{body::Body, extract::State, http::Request, middleware::Next, response::Response};
+use axum_extra::extract::cookie::CookieJar;
 
-/// Platzhalter-Middleware für die Authentifizierung.
-///
-/// Diese Middleware ist aktuell nur ein Platzhalter und lässt alle Anfragen unverändert
-/// durch. Sie dient als Einhängepunkt für die zukünftige Implementierung der
-/// echten Authentifizierungs- und Autorisierungslogik.
-///
-/// In Zukunft wird diese Funktion:
-/// - Den Session-Token aus dem Cookie extrahieren.
-/// - Die Session serverseitig validieren.
-/// - Den Benutzerkontext in die Anfrage einfügen (z.B. als Extension).
-/// - Anfragen ohne gültige Session abweisen (z.B. mit HTTP 401 Unauthorized).
-pub async fn require_auth(request: Request<Body>, next: Next) -> Response {
-    // Aktuell wird die Anfrage einfach durchgelassen.
-    tracing::warn!("Authentifizierung ist noch nicht implementiert – Zugriff erlaubt!");
+use crate::{routes::auth::SESSION_COOKIE_NAME, state::ApiState};
+
+#[derive(Clone, Debug)]
+pub struct AuthContext {
+    pub authenticated: bool,
+    pub account_id: Option<String>,
+    pub role: String,
+}
+
+pub async fn auth_middleware(
+    State(state): State<ApiState>,
+    jar: CookieJar,
+    mut request: Request<Body>,
+    next: Next,
+) -> Response {
+    let mut ctx = AuthContext {
+        authenticated: false,
+        account_id: None,
+        role: "gast".to_string(),
+    };
+
+    if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
+        if let Some(session) = state.sessions.get(cookie.value()) {
+            ctx.authenticated = true;
+            ctx.account_id = Some(session.account_id);
+            ctx.role = "weber".to_string();
+        }
+    }
+
+    request.extensions_mut().insert(ctx);
     next.run(request).await
 }

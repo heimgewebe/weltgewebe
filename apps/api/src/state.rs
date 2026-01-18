@@ -1,4 +1,4 @@
-use crate::{config::AppConfig, telemetry::Metrics};
+use crate::{auth::session::SessionStore, config::AppConfig, telemetry::Metrics};
 use async_nats::Client as NatsClient;
 use sqlx::PgPool;
 
@@ -10,4 +10,5 @@ pub struct ApiState {
     pub nats_configured: bool,
     pub config: AppConfig,
     pub metrics: Metrics,
+    pub sessions: SessionStore,
 }
