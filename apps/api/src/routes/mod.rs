@@ -9,7 +9,7 @@ use axum::{routing::get, Router};
 use crate::state::ApiState;
 
 use self::{
-    accounts::list_accounts,
+    accounts::{get_account, list_accounts},
     edges::list_edges,
     nodes::{get_node, list_nodes, patch_node},
 };
@@ -20,4 +20,5 @@ pub fn api_router() -> Router<ApiState> {
         .route("/nodes/:id", get(get_node).patch(patch_node))
         .route("/edges", get(list_edges))
         .route("/accounts", get(list_accounts))
+        .route("/accounts/:id", get(get_account))
 }

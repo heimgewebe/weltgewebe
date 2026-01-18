@@ -1,4 +1,8 @@
-use axum::{extract::Query, http::StatusCode, Json};
+use axum::{
+    extract::{Path, Query},
+    http::StatusCode,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
@@ -215,6 +219,24 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         ron_flag,
         tags,
     })
+}
+
+pub async fn get_account(Path(id): Path<String>) -> Result<Json<AccountPublic>, StatusCode> {
+    let path = accounts_path();
+    let file = File::open(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let mut lines = BufReader::new(file).lines();
+
+    while let Ok(Some(line)) = lines.next_line().await {
+        let v: Value =
+            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        if let Some(account) = map_json_to_public_account(&v) {
+            if account.id == id {
+                return Ok(Json(account));
+            }
+        }
+    }
+
+    Err(StatusCode::NOT_FOUND)
 }
 
 pub async fn list_accounts(
