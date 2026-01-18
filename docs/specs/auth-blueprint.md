@@ -45,7 +45,7 @@
 
 ## 1. Phase: Invarianten festschreiben (Vorarbeit)
 
-### Ziel
+### Ziel: Invarianten
 
 Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 
@@ -75,11 +75,11 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 
 ## 2. Phase: Account-Grundlage (Domäne, kein Login)
 
-### Ziel
+### Ziel: Account-Grundlage
 
 Accounts sind **existierende Identitäten**, nicht Login-Artefakte.
 
-### Scope
+### Scope: Account-Grundlage
 
 - Accounts bleiben:
   - seeded (Datei-basiert)
@@ -87,7 +87,7 @@ Accounts sind **existierende Identitäten**, nicht Login-Artefakte.
 - Keine Passwörter
 - Keine Auth-Logik
 
-### Ergebnis
+### Ergebnis: Account-Grundlage
 
 - Accounts können referenziert werden
 - Rollen sind Account-Eigenschaften
@@ -100,11 +100,11 @@ Accounts sind **existierende Identitäten**, nicht Login-Artefakte.
 
 ## 3. Phase: Session-Kern (Backend-Infrastruktur)
 
-### Ziel
+### Ziel: Session-Kern
 
 Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
 
-### To-dos
+### To-dos: Session-Kern
 
 - SessionStore (Dev-Start):
   - In-Memory
@@ -135,7 +135,7 @@ Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
 > ⚠️ `/auth/me` ist **kein Account-Endpoint**.
 > Er liefert Auth-Status, nicht Account-Wahrheit.
 
-### Ergebnis
+### Ergebnis: Session-Kern
 
 - Server kann Identität **merken**
 - Browser trägt nur ein Cookie
@@ -145,11 +145,11 @@ Technische Auth-Wirkung herstellen – unabhängig vom Frontend.
 
 ## 4. Phase: Auth-Middleware realisieren
 
-### Ziel
+### Ziel: Auth-Middleware
 
 Jede Anfrage bekommt einen **AuthContext**.
 
-### To-dos
+### To-dos: Auth-Middleware
 
 - Platzhalter-Middleware ersetzen
 - Ablauf:
@@ -160,7 +160,7 @@ Jede Anfrage bekommt einen **AuthContext**.
 - Fallback:
   - kein Cookie / ungültig → `role = Gast`
 
-### Ergebnis
+### Ergebnis: Auth-Middleware
 
 - **Zentrale Wahrheit** pro Request:
 
@@ -177,11 +177,11 @@ Jede Anfrage bekommt einen **AuthContext**.
 
 ## 5. Phase: Autorisierung (Gates auf Schreibpfade)
 
-### Ziel
+### Ziel: Autorisierung
 
 Login hat **reale Konsequenzen**.
 
-### To-dos
+### To-dos: Autorisierung
 
 - Gates auf schreibenden Endpunkten:
   - z. B. `PATCH /nodes/:id`
@@ -195,7 +195,7 @@ Login hat **reale Konsequenzen**.
   - **403 Forbidden** → authentifiziert als `Gast` (read-only)
   - `Weber/Admin` → erlaubt
 
-### Ergebnis
+### Ergebnis: Autorisierung
 
 - Ohne Login: read-only
 - Mit Login: schreibfähig
@@ -206,11 +206,11 @@ Login hat **reale Konsequenzen**.
 
 ## 6. Phase: Dev-Login-Mechanik (kontrolliert)
 
-### Ziel
+### Ziel: Dev-Login
 
 Entwicklung ermöglichen, ohne Registrierung.
 
-### Scope (Dev-only)
+### Scope: Dev-Login
 
 - Login z. B. über:
   - `account_id`
@@ -219,7 +219,7 @@ Entwicklung ermöglichen, ohne Registrierung.
 - Optional:
   - `GET /auth/dev/accounts` (nur Dev, nur Public-Daten)
 
-### Schutz
+### Schutz: Dev-Login
 
 - Feature-Flag:
   - `AUTH_DEV_LOGIN=1` (oder `true`)
@@ -228,7 +228,7 @@ Entwicklung ermöglichen, ohne Registrierung.
 - In Prod:
   - Route deaktiviert oder 404 (selbst wenn Flag versehentlich gesetzt).
 
-### Ergebnis
+### Ergebnis: Dev-Login
 
 - Reproduzierbare Dev-Identitäten
 - Kein Sicherheitsleck Richtung Prod
@@ -237,11 +237,11 @@ Entwicklung ermöglichen, ohne Registrierung.
 
 ## 7. Phase: Frontend-Minimum
 
-### Ziel
+### Ziel: Frontend-Minimum
 
 UX sichtbar machen, nicht perfektionieren.
 
-### To-dos
+### To-dos: Frontend-Minimum
 
 - Beim App-Start:
   - `GET /auth/me`
@@ -254,7 +254,7 @@ UX sichtbar machen, nicht perfektionieren.
   - Login (Dev)
   - Logout
 
-### Ergebnis
+### Ergebnis: Frontend-Minimum
 
 - Benutzer sieht, **wer er ist**
 - UI reagiert auf Rollen
@@ -263,18 +263,18 @@ UX sichtbar machen, nicht perfektionieren.
 
 ## 8. Phase: Hardening & Vorbereitung auf Prod
 
-### Ziel
+### Ziel: Hardening
 
 Dev-Abkürzungen sauber absichern.
 
-### To-dos
+### To-dos: Hardening
 
 - Session TTL + Cleanup
 - Feature-Flags prüfen
 - Cookie-Secure nur bei HTTPS
 - Erste CSRF-Überlegungen (Cookie-Auth!)
 
-### Ergebnis
+### Ergebnis: Hardening
 
 - Kein stilles Durchrutschen von Dev-Auth in Prod
 - Saubere Basis für spätere:
@@ -317,7 +317,7 @@ Dev-Abkürzungen sauber absichern.
 
 **Unsicherheitsgrad:** 0.21 (niedrig)
 
-**Ursachen**
+### Ursachen
 
 - Persistenzform von Sessions (Memory vs Datei/DB) ist bewusst offen
 - Frontend-Details nicht vollständig spezifiziert
