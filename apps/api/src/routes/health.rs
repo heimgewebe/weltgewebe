@@ -257,6 +257,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 mod tests {
     use super::*;
     use crate::{
+        auth::session::SessionStore,
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
@@ -285,6 +286,7 @@ mod tests {
                 delegation_expire_days: 28,
             },
             metrics,
+            sessions: SessionStore::new(),
         })
     }
 
