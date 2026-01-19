@@ -262,6 +262,7 @@ mod tests {
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
     };
+    use std::{collections::HashMap, sync::Arc};
     use anyhow::Result;
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
@@ -287,6 +288,7 @@ mod tests {
             },
             metrics,
             sessions: SessionStore::new(),
+            accounts: Arc::new(HashMap::new()),
         })
     }
 

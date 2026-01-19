@@ -1,4 +1,9 @@
-use crate::{auth::session::SessionStore, config::AppConfig, telemetry::Metrics};
+use std::{collections::HashMap, sync::Arc};
+
+use crate::{
+    auth::session::SessionStore, config::AppConfig, routes::accounts::AccountInternal,
+    telemetry::Metrics,
+};
 use async_nats::Client as NatsClient;
 use sqlx::PgPool;
 
@@ -11,4 +16,5 @@ pub struct ApiState {
     pub config: AppConfig,
     pub metrics: Metrics,
     pub sessions: SessionStore,
+    pub accounts: Arc<HashMap<String, AccountInternal>>,
 }

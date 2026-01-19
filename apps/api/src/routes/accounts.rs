@@ -24,13 +24,13 @@ fn accounts_path() -> PathBuf {
     in_dir().join("demo.accounts.jsonl")
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     Public,
@@ -41,7 +41,7 @@ pub enum Visibility {
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
 /// Only exposes 'public_pos' which is calculated based on visibility settings.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct AccountPublic {
     pub id: String,
     #[serde(rename = "type")]
@@ -60,6 +60,11 @@ pub struct AccountPublic {
     pub ron_flag: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AccountInternal {
+    pub public: AccountPublic,
     pub role: String,
 }
 
@@ -195,12 +200,6 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         })
         .unwrap_or_default();
 
-    let role = v
-        .get("role")
-        .and_then(|v| v.as_str())
-        .unwrap_or("weber")
-        .to_string();
-
     // Calculate public position based on visibility policy
     let public_pos = match visibility {
         Visibility::Private => None,
@@ -225,11 +224,44 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         radius_m,
         ron_flag,
         tags,
-        role,
     })
 }
 
+pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
+    let mut map = HashMap::new();
+    let path = accounts_path();
+
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(_) => return map,
+    };
+
+    let mut lines = BufReader::new(file).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let v: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let role = v
+            .get("role")
+            .and_then(|v| v.as_str())
+            .unwrap_or("gast")
+            .to_string();
+
+        if let Some(public) = map_json_to_public_account(&v) {
+            let id = public.id.clone();
+            map.insert(id, AccountInternal { public, role });
+        }
+    }
+    map
+}
+
+use crate::state::ApiState;
+use axum::extract::State;
+
 pub async fn list_accounts(
+    State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
     let limit: usize = params
@@ -237,63 +269,24 @@ pub async fn list_accounts(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let path = accounts_path();
-    let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(
-                ?path,
-                ?e,
-                "demo.accounts.jsonl not found or unreadable; returning empty list"
-            );
-            return Ok(Json(Vec::new()));
-        }
-    };
-    let mut lines = BufReader::new(file).lines();
+    let accounts: Vec<AccountPublic> = state
+        .accounts
+        .values()
+        .take(limit)
+        .map(|internal| internal.public.clone())
+        .collect();
 
-    let mut out = Vec::with_capacity(limit.min(1024));
-    while let Ok(Some(line)) = lines.next_line().await {
-        if out.len() >= limit {
-            break;
-        }
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        if let Some(account) = map_json_to_public_account(&v) {
-            out.push(account);
-        }
-    }
-
-    Ok(Json(out))
+    Ok(Json(accounts))
 }
 
-pub async fn find_account(id: &str) -> Option<AccountPublic> {
-    let path = accounts_path();
-    let file = File::open(&path).await.ok()?;
-    let mut lines = BufReader::new(file).lines();
-
-    while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
-
-        // Check ID match on raw JSON before mapping to save effort
-        if let Some(json_id) = v.get("id").and_then(|v| v.as_str()) {
-            if json_id == id {
-                return map_json_to_public_account(&v);
-            }
-        }
-    }
-    None
-}
-
-pub async fn get_account(Path(id): Path<String>) -> Result<Json<AccountPublic>, StatusCode> {
-    match find_account(&id).await {
-        Some(account) => Ok(Json(account)),
-        None => Err(StatusCode::NOT_FOUND),
+pub async fn get_account(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<AccountPublic>, StatusCode> {
+    if let Some(internal) = state.accounts.get(&id) {
+        Ok(Json(internal.public.clone()))
+    } else {
+        Err(StatusCode::NOT_FOUND)
     }
 }
 

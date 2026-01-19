@@ -9,7 +9,7 @@ pub mod utils;
 #[doc(hidden)]
 pub mod test_helpers;
 
-use std::{env, io::ErrorKind, net::SocketAddr};
+use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
@@ -47,6 +47,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
+    let accounts = Arc::new(routes::accounts::load_all_accounts().await);
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -55,6 +56,7 @@ pub async fn run() -> anyhow::Result<()> {
         config: app_config.clone(),
         metrics: metrics.clone(),
         sessions,
+        accounts,
     };
 
     let app = Router::new()
