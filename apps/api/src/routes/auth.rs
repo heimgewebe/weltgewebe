@@ -40,6 +40,11 @@ pub async fn login(
         return (jar, StatusCode::NOT_FOUND);
     }
 
+    if !state.accounts.contains_key(&payload.account_id) {
+        tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
+        return (jar, StatusCode::BAD_REQUEST);
+    }
+
     let session = state.sessions.create(payload.account_id);
 
     let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
