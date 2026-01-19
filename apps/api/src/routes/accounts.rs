@@ -1,5 +1,7 @@
+use crate::auth::role::Role;
+use crate::state::ApiState;
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -65,7 +67,7 @@ pub struct AccountPublic {
 #[derive(Clone, Debug)]
 pub struct AccountInternal {
     pub public: AccountPublic,
-    pub role: String,
+    pub role: Role,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -249,8 +251,8 @@ pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
         let role = v
             .get("role")
             .and_then(|v| v.as_str())
-            .unwrap_or("gast")
-            .to_string();
+            .map(Role::from_str_lossy)
+            .unwrap_or(Role::Gast);
 
         if let Some(public) = map_json_to_public_account(&v) {
             let id = public.id.clone();
@@ -259,9 +261,6 @@ pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
     }
     map
 }
-
-use crate::state::ApiState;
-use axum::extract::State;
 
 pub async fn list_accounts(
     State(state): State<ApiState>,

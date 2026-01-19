@@ -262,8 +262,8 @@ mod tests {
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
     };
-    use std::{collections::HashMap, sync::Arc};
     use anyhow::Result;
+    use std::{collections::HashMap, sync::Arc};
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;

@@ -8,7 +8,7 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::{Deserialize, Serialize};
 use time::Duration;
 
-use crate::{middleware::auth::AuthContext, state::ApiState};
+use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 
@@ -22,7 +22,7 @@ pub struct AuthStatus {
     pub authenticated: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
-    pub role: String,
+    pub role: Role,
 }
 
 pub async fn login(

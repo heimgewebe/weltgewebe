@@ -1,7 +1,7 @@
-use chrono::{DateTime, Duration, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use chrono::{DateTime, Duration, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -33,7 +33,6 @@ impl SessionStore {
     pub fn create(&self, account_id: String) -> Session {
         let session_id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        // Session validity: 24 hours
         let expires_at = now + Duration::days(1);
 
         let session = Session {

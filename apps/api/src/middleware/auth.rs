@@ -1,13 +1,13 @@
 use axum::{body::Body, extract::State, http::Request, middleware::Next, response::Response};
 use axum_extra::extract::cookie::CookieJar;
 
-use crate::{routes::auth::SESSION_COOKIE_NAME, state::ApiState};
+use crate::{auth::role::Role, routes::auth::SESSION_COOKIE_NAME, state::ApiState};
 
 #[derive(Clone, Debug)]
 pub struct AuthContext {
     pub authenticated: bool,
     pub account_id: Option<String>,
-    pub role: String,
+    pub role: Role,
 }
 
 pub async fn auth_middleware(
@@ -19,7 +19,7 @@ pub async fn auth_middleware(
     let mut ctx = AuthContext {
         authenticated: false,
         account_id: None,
-        role: "gast".to_string(),
+        role: Role::Gast,
     };
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
