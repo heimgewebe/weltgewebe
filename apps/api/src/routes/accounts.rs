@@ -1,4 +1,10 @@
-use axum::{extract::Query, http::StatusCode, Json};
+use crate::auth::role::Role;
+use crate::state::ApiState;
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, env, path::PathBuf};
@@ -20,13 +26,13 @@ fn accounts_path() -> PathBuf {
     in_dir().join("demo.accounts.jsonl")
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     Public,
@@ -37,7 +43,7 @@ pub enum Visibility {
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
 /// Only exposes 'public_pos' which is calculated based on visibility settings.
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug)]
 pub struct AccountPublic {
     pub id: String,
     #[serde(rename = "type")]
@@ -56,6 +62,12 @@ pub struct AccountPublic {
     pub ron_flag: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct AccountInternal {
+    pub public: AccountPublic,
+    pub role: Role,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -217,7 +229,45 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
+pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
+    let mut map = HashMap::new();
+    let path = accounts_path();
+
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open accounts file, returning empty map"
+            );
+            return map;
+        }
+    };
+
+    let mut lines = BufReader::new(file).lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let v: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        let role = v
+            .get("role")
+            .and_then(|v| v.as_str())
+            .map(Role::from_str_lossy)
+            .unwrap_or(Role::Gast);
+
+        if let Some(public) = map_json_to_public_account(&v) {
+            let id = public.id.clone();
+            map.insert(id, AccountInternal { public, role });
+        }
+    }
+    map
+}
+
 pub async fn list_accounts(
+    State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
     let limit: usize = params
@@ -225,36 +275,28 @@ pub async fn list_accounts(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let path = accounts_path();
-    let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(e) => {
-            tracing::warn!(
-                ?path,
-                ?e,
-                "demo.accounts.jsonl not found or unreadable; returning empty list"
-            );
-            return Ok(Json(Vec::new()));
-        }
-    };
-    let mut lines = BufReader::new(file).lines();
+    let mut ids: Vec<_> = state.accounts.keys().collect();
+    ids.sort();
 
-    let mut out = Vec::with_capacity(limit.min(1024));
-    while let Ok(Some(line)) = lines.next_line().await {
-        if out.len() >= limit {
-            break;
-        }
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue,
-        };
+    let accounts: Vec<AccountPublic> = ids
+        .into_iter()
+        .take(limit)
+        .filter_map(|id| state.accounts.get(id))
+        .map(|internal| internal.public.clone())
+        .collect();
 
-        if let Some(account) = map_json_to_public_account(&v) {
-            out.push(account);
-        }
+    Ok(Json(accounts))
+}
+
+pub async fn get_account(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<AccountPublic>, StatusCode> {
+    if let Some(internal) = state.accounts.get(&id) {
+        Ok(Json(internal.public.clone()))
+    } else {
+        Err(StatusCode::NOT_FOUND)
     }
-
-    Ok(Json(out))
 }
 
 #[cfg(test)]

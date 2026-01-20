@@ -8,9 +8,10 @@ use serial_test::serial;
 mod helpers;
 
 use helpers::set_gewebe_in_dir;
-use std::{fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use tower::ServiceExt;
 use weltgewebe_api::{
+    auth::session::SessionStore,
     config::AppConfig,
     routes::api_router,
     state::ApiState,
@@ -36,6 +37,8 @@ fn test_state() -> Result<ApiState> {
             delegation_expire_days: 28,
         },
         metrics,
+        sessions: SessionStore::new(),
+        accounts: Arc::new(HashMap::new()),
     })
 }
 

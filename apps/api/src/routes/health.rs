@@ -257,6 +257,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 mod tests {
     use super::*;
     use crate::{
+        auth::session::SessionStore,
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
@@ -265,6 +266,7 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
+    use std::{collections::HashMap, sync::Arc};
 
     fn test_state() -> Result<ApiState> {
         let metrics = Metrics::try_new(BuildInfo {
@@ -285,6 +287,8 @@ mod tests {
                 delegation_expire_days: 28,
             },
             metrics,
+            sessions: SessionStore::new(),
+            accounts: Arc::new(HashMap::new()),
         })
     }
 

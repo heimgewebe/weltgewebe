@@ -7,12 +7,18 @@ use axum::{
 use serial_test::serial;
 mod helpers;
 
+use axum::middleware::from_fn_with_state;
 use helpers::set_gewebe_in_dir;
-use std::{fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use tower::ServiceExt;
 use weltgewebe_api::{
+    auth::{role::Role, session::SessionStore},
     config::AppConfig,
-    routes::api_router,
+    middleware::auth::auth_middleware,
+    routes::{
+        accounts::{AccountInternal, AccountPublic, Visibility},
+        api_router,
+    },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
 };
@@ -36,6 +42,8 @@ fn test_state() -> Result<ApiState> {
             delegation_expire_days: 28,
         },
         metrics,
+        sessions: SessionStore::new(),
+        accounts: Arc::new(HashMap::new()),
     })
 }
 
@@ -150,11 +158,43 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         &[r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A","info":"Old Info"}"#],
     );
 
-    let app = app();
+    // Setup Auth State with Account
+    let mut account_map = HashMap::new();
+    let account = AccountPublic {
+        id: "weber1".to_string(),
+        kind: "garnrolle".to_string(),
+        title: "Weber".to_string(),
+        summary: None,
+        public_pos: None,
+        visibility: Visibility::Public,
+        radius_m: 0,
+        ron_flag: false,
+        tags: vec![],
+    };
+    account_map.insert(
+        "weber1".to_string(),
+        AccountInternal {
+            public: account,
+            role: Role::Weber,
+        },
+    );
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(account_map);
+
+    // Create Session
+    let session = state.sessions.create("weber1".to_string());
+    let cookie_val = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .with_state(state);
 
     // 1. Update info -> "New Info"
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
         .body(body::Body::from(r#"{"info":"New Info"}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -174,6 +214,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     // 2. Empty PATCH (No-op) -> Info remains "New Info"
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
         .body(body::Body::from(r#"{}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -184,6 +225,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     // 3. Set info to null -> Info removed
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
         .body(body::Body::from(r#"{"info":null}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);

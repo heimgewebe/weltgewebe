@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod config;
 pub mod middleware;
 pub mod routes;
@@ -8,13 +9,13 @@ pub mod utils;
 #[doc(hidden)]
 pub mod test_helpers;
 
-use std::{env, io::ErrorKind, net::SocketAddr};
+use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
-use axum::{middleware::from_fn, routing::get, Router};
+use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::AppConfig;
-use middleware::auth::require_auth;
+use middleware::auth::auth_middleware;
 use routes::{api_router, health::health_routes, meta::meta_routes};
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
@@ -41,6 +42,8 @@ pub async fn run() -> anyhow::Result<()> {
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
+    let sessions = crate::auth::session::SessionStore::new();
+    let accounts = Arc::new(routes::accounts::load_all_accounts().await);
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -48,13 +51,18 @@ pub async fn run() -> anyhow::Result<()> {
         nats_configured,
         config: app_config.clone(),
         metrics: metrics.clone(),
+        sessions,
+        accounts,
     };
 
     let app = Router::new()
         // Serve at root for Caddy (which strips /api prefix)
-        .merge(api_router().route_layer(from_fn(require_auth)))
+        .merge(api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)))
         // Serve at /api for direct access (e.g. apps/web fallback)
-        .nest("/api", api_router().route_layer(from_fn(require_auth)))
+        .nest(
+            "/api",
+            api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)),
+        )
         .merge(health_routes())
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))

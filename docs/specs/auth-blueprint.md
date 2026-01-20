@@ -11,6 +11,8 @@
 - **Bindung:** ADR-0005
 - **Verändert keine bestehenden Contracts**
 - **Zielgruppe:** Backend, Frontend, Review
+- **Implementierungs-Status:** Phase 2 war vorhanden. Implementiert: Phase 3 (Session),
+  Phase 4 (Middleware), Phase 5 (Write-Gates), Phase 6 (Dev-Login).
 
 > Diese Blaupause definiert **keinen neuen Contract**, sondern beschreibt
 > die schrittweise Aktivierung bereits beschlossener Architektur.
@@ -57,7 +59,7 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 2. **Cookie-Policy**
    - `HttpOnly = true`
    - `SameSite = Strict`
-   - `Secure = env-abhängig` (sonst Dev-Bruch)
+   - `Secure = true` (immer! Dev läuft über HTTPS oder localhost)
 3. **Rollenmodell**
    - `Gast` → lesen
    - `Weber` → schreiben
