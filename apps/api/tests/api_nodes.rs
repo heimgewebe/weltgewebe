@@ -14,7 +14,7 @@ use tower::ServiceExt;
 use weltgewebe_api::{
     auth::{role::Role, session::SessionStore},
     config::AppConfig,
-    middleware::auth::auth_middleware,
+    middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, Visibility},
         api_router,
@@ -189,12 +189,17 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(api_router())
         .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state);
 
     // 1. Update info -> "New Info"
+    // Note: We MUST provide Origin or Referer because a session cookie is present,
+    // otherwise CSRF middleware will block it.
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"info":"New Info"}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -215,6 +220,8 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -226,6 +233,8 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"info":null}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);

@@ -1,20 +1,27 @@
+use std::env;
+
 use axum::{
     body::Body,
     http::{Method, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::cookie::CookieJar;
+
+use crate::routes::auth::SESSION_COOKIE_NAME;
 
 /// Middleware to enforce CSRF protection via Origin/Referer checks.
 ///
 /// Logic:
 /// 1. Allow safe methods (GET, HEAD, OPTIONS).
-/// 2. For state-changing methods:
+/// 2. If no session cookie is present, skip CSRF check (no session to hijack).
+/// 3. For state-changing methods with session:
+///    - Check `CSRF_ALLOWED_ORIGINS` (dev fallback).
 ///    - Extract `Host` header.
 ///    - Check `Origin` header: MUST match `Host` (ignoring scheme).
 ///    - If `Origin` missing, check `Referer`: MUST start with `Scheme://Host/`.
 ///    - If both missing or mismatch: 403 Forbidden.
-pub async fn require_csrf(req: Request<Body>, next: Next) -> Response {
+pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
     let method = req.method();
 
     // 1. Pass through safe methods
@@ -22,7 +29,25 @@ pub async fn require_csrf(req: Request<Body>, next: Next) -> Response {
         return next.run(req).await;
     }
 
+    // 2. Skip if no session cookie (Session invariant: No cookie = No Auth = No CSRF risk)
+    if jar.get(SESSION_COOKIE_NAME).is_none() {
+        return next.run(req).await;
+    }
+
     let headers = req.headers();
+
+    // 3. Allowlist Check (Dev/Special cases)
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        if let Ok(allowlist) = env::var("CSRF_ALLOWED_ORIGINS") {
+            for allowed in allowlist.split(',') {
+                if origin == allowed.trim() {
+                    return next.run(req).await;
+                }
+            }
+        }
+    }
+
+    // 4. Host Validation
     let host = headers
         .get("host")
         .and_then(|v| v.to_str().ok())
@@ -33,10 +58,9 @@ pub async fn require_csrf(req: Request<Body>, next: Next) -> Response {
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    // 2. Check Origin
+    // 5. Check Origin
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         // Strict Check: strip scheme and compare exact match.
-        // Prevents suffix spoofing (e.g. attacker-example.com vs example.com).
         let origin_host = origin
             .strip_prefix("https://")
             .or_else(|| origin.strip_prefix("http://"))
@@ -49,13 +73,8 @@ pub async fn require_csrf(req: Request<Body>, next: Next) -> Response {
         return next.run(req).await;
     }
 
-    // 3. Fallback: Check Referer
+    // 6. Fallback: Check Referer
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
-        // Strict Check: Must start with http(s)://<Host>/ or be exactly http(s)://<Host>
-        // This prevents "example.com.attacker.com" attacks.
-
-        // We construct the valid prefixes.
-        // Note: This assumes standard ports or Host header includes port.
         let valid_starts = [
             format!("https://{}/", host),
             format!("http://{}/", host),
@@ -75,7 +94,7 @@ pub async fn require_csrf(req: Request<Body>, next: Next) -> Response {
         return next.run(req).await;
     }
 
-    // 4. Block if neither is present (Strict Mode)
+    // 7. Block if neither is present (Strict Mode)
     tracing::warn!(method = ?method, "CSRF check failed: Missing Origin and Referer");
     StatusCode::FORBIDDEN.into_response()
 }
