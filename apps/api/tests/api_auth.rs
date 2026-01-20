@@ -83,10 +83,6 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     unsafe { std::env::set_var("AUTH_DEV_LOGIN", "1"); }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
 
-    // Ensure we test the Secure flag logic
-    unsafe { std::env::set_var("AUTH_COOKIE_SECURE", "1"); }
-    let _defer2 = defer_env_remove("AUTH_COOKIE_SECURE");
-
     let mut account_map = HashMap::new();
     let account = AccountPublic {
         id: "u1".to_string(),

@@ -59,7 +59,7 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 2. **Cookie-Policy**
    - `HttpOnly = true`
    - `SameSite = Strict`
-   - `Secure = env-abhängig` (sonst Dev-Bruch)
+   - `Secure = true` (immer! Dev läuft über HTTPS oder localhost)
 3. **Rollenmodell**
    - `Gast` → lesen
    - `Weber` → schreiben
