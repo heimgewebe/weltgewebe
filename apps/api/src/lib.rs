@@ -13,11 +13,7 @@ use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
-use axum::{
-    middleware::from_fn_with_state,
-    routing::get,
-    Router,
-};
+use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::AppConfig;
 use middleware::auth::auth_middleware;
 use routes::{api_router, health::health_routes, meta::meta_routes};

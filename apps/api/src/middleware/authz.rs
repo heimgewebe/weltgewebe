@@ -11,7 +11,9 @@ use crate::middleware::auth::AuthContext;
 ///   - no valid session -> 401
 ///   - authenticated as Gast -> 403
 pub async fn require_write(req: Request<Body>, next: Next) -> Response {
-    if req.method() == Method::GET || req.method() == Method::HEAD || req.method() == Method::OPTIONS
+    if req.method() == Method::GET
+        || req.method() == Method::HEAD
+        || req.method() == Method::OPTIONS
     {
         return next.run(req).await;
     }

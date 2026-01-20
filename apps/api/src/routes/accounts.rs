@@ -236,7 +236,11 @@ pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open accounts file, returning empty map");
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open accounts file, returning empty map"
+            );
             return map;
         }
     };

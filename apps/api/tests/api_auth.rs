@@ -46,15 +46,15 @@ fn test_state() -> Result<ApiState> {
 }
 
 fn app(state: ApiState) -> Router {
-    Router::new()
-        .merge(api_router())
-        .with_state(state)
+    Router::new().merge(api_router()).with_state(state)
 }
 
 struct DeferEnvRemove(&'static str);
 impl Drop for DeferEnvRemove {
     fn drop(&mut self) {
-        unsafe { std::env::remove_var(self.0); }
+        unsafe {
+            std::env::remove_var(self.0);
+        }
     }
 }
 fn defer_env_remove(key: &'static str) -> DeferEnvRemove {
@@ -64,7 +64,9 @@ fn defer_env_remove(key: &'static str) -> DeferEnvRemove {
 #[tokio::test]
 #[serial]
 async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
-    unsafe { std::env::remove_var("AUTH_DEV_LOGIN"); }
+    unsafe {
+        std::env::remove_var("AUTH_DEV_LOGIN");
+    }
     let state = test_state()?;
     let app = app(state);
 
@@ -80,7 +82,9 @@ async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
-    unsafe { std::env::set_var("AUTH_DEV_LOGIN", "1"); }
+    unsafe {
+        std::env::set_var("AUTH_DEV_LOGIN", "1");
+    }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
 
     let mut account_map = HashMap::new();
@@ -95,7 +99,13 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         ron_flag: false,
         tags: vec![],
     };
-    account_map.insert("u1".to_string(), AccountInternal { public: account, role: Role::Gast });
+    account_map.insert(
+        "u1".to_string(),
+        AccountInternal {
+            public: account,
+            role: Role::Gast,
+        },
+    );
 
     let mut state = test_state()?;
     state.accounts = Arc::new(account_map);
@@ -109,7 +119,11 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
 
-    let cookie = res.headers().get("set-cookie").context("missing set-cookie")?.to_str()?;
+    let cookie = res
+        .headers()
+        .get("set-cookie")
+        .context("missing set-cookie")?
+        .to_str()?;
     assert!(cookie.contains(SESSION_COOKIE_NAME));
     assert!(cookie.contains("Secure"));
     assert!(cookie.contains("HttpOnly"));
