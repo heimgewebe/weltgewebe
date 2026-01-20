@@ -19,8 +19,6 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
-mod helpers;
-
 fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
