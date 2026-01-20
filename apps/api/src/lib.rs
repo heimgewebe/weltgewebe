@@ -16,6 +16,7 @@ use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::AppConfig;
 use middleware::auth::auth_middleware;
+use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
@@ -67,6 +68,7 @@ pub async fn run() -> anyhow::Result<()> {
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .with_state(state)
+        .layer(axum::middleware::from_fn(require_csrf))
         .layer(MetricsLayer::new(metrics));
 
     let bind_addr: SocketAddr = env::var("API_BIND")
