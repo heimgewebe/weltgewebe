@@ -1,5 +1,7 @@
 ---
 name: "Validate Domain Schemas"
+permissions:
+  contents: read
 "on":
   push:
     paths:
