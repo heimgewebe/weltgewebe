@@ -13,11 +13,17 @@ use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
+    let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
+    let force_secure = std::env::var("AUTH_COOKIE_SECURE")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    let secure = is_prod || force_secure;
+
     let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
         .path("/")
         .http_only(true)
         .same_site(SameSite::Strict)
-        .secure(true);
+        .secure(secure);
 
     if let Some(age) = max_age {
         builder = builder.max_age(age);

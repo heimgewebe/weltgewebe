@@ -11,7 +11,8 @@
 - **Bindung:** ADR-0005
 - **Verändert keine bestehenden Contracts**
 - **Zielgruppe:** Backend, Frontend, Review
-- **Implementierungs-Status:** Phase 2 war vorhanden. Implementiert: Phase 3 (Session), Phase 4 (Middleware), Phase 5 (Write-Gates), Phase 6 (Dev-Login).
+- **Implementierungs-Status:** Phase 2 war vorhanden. Implementiert: Phase 3 (Session),
+  Phase 4 (Middleware), Phase 5 (Write-Gates), Phase 6 (Dev-Login).
 
 > Diese Blaupause definiert **keinen neuen Contract**, sondern beschreibt
 > die schrittweise Aktivierung bereits beschlossener Architektur.
