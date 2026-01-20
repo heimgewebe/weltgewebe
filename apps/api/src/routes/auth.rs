@@ -12,6 +12,20 @@ use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 
+fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
+    let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
+        .path("/")
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .secure(true);
+
+    if let Some(age) = max_age {
+        builder = builder.max_age(age);
+    }
+
+    builder.build()
+}
+
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub account_id: String,
@@ -47,14 +61,7 @@ pub async fn login(
 
     let session = state.sessions.create(payload.account_id);
 
-    let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
-
-    let cookie = Cookie::build((SESSION_COOKIE_NAME, session.id))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .secure(is_prod)
-        .build();
+    let cookie = build_session_cookie(session.id, None);
 
     (jar.add(cookie), StatusCode::OK)
 }
@@ -64,15 +71,7 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
         state.sessions.delete(cookie.value());
     }
 
-    let is_prod = std::env::var("GEWEBE_ENV").unwrap_or_default() == "prod";
-
-    let cookie = Cookie::build((SESSION_COOKIE_NAME, ""))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .secure(is_prod)
-        .max_age(Duration::seconds(0))
-        .build();
+    let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
 
     (jar.add(cookie), StatusCode::OK)
 }

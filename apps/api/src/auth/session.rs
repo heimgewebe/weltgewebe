@@ -30,7 +30,16 @@ impl SessionStore {
         }
     }
 
+    pub fn cleanup_expired(&self) {
+        if let Ok(mut store) = self.store.write() {
+            let now = Utc::now();
+            store.retain(|_, session| session.expires_at > now);
+        }
+    }
+
     pub fn create(&self, account_id: String) -> Session {
+        self.cleanup_expired();
+
         let session_id = Uuid::new_v4().to_string();
         let now = Utc::now();
         let expires_at = now + Duration::days(1);
