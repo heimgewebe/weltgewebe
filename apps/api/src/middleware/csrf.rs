@@ -15,9 +15,11 @@ use crate::routes::auth::SESSION_COOKIE_NAME;
 /// Logic:
 /// 1. Allow safe methods (GET, HEAD, OPTIONS).
 ///    - TRACE is deliberately excluded as it is typically disabled or unsafe.
-/// 2. If no session cookie is present, skip CSRF check (no session to hijack).
-/// 3. For state-changing methods with session:
+/// 2. Skip explicitly exempted paths (e.g., /auth/login).
+/// 3. If no session cookie is present, skip CSRF check (no session to hijack).
+/// 4. For state-changing methods with session:
 ///    - Check `CSRF_ALLOWED_ORIGINS` (dev fallback).
+///      - Normalizes both header and env var to lowercase.
 ///    - Extract `Host` header.
 ///    - Check `Origin` header: MUST match `Host` (ignoring scheme).
 ///      - Validates format (no path/query/fragment).
@@ -33,25 +35,31 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return next.run(req).await;
     }
 
-    // 2. Skip if no session cookie (Session invariant: No cookie = No Auth = No CSRF risk)
+    // 2. Explicit exemptions (e.g. Login doesn't need CSRF protection as it establishes session)
+    if req.uri().path() == "/auth/login" {
+        return next.run(req).await;
+    }
+
+    // 3. Skip if no session cookie (Session invariant: No cookie = No Auth = No CSRF risk)
     if jar.get(SESSION_COOKIE_NAME).is_none() {
         return next.run(req).await;
     }
 
     let headers = req.headers();
 
-    // 3. Allowlist Check (Dev/Special cases)
+    // 4. Allowlist Check (Dev/Special cases)
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         if let Ok(allowlist) = env::var("CSRF_ALLOWED_ORIGINS") {
+            let origin_lc = origin.to_ascii_lowercase();
             for allowed in allowlist.split(',') {
-                if origin == allowed.trim() {
+                if origin_lc == allowed.trim().to_ascii_lowercase() {
                     return next.run(req).await;
                 }
             }
         }
     }
 
-    // 4. Host Validation
+    // 5. Host Validation
     let host_raw = headers
         .get("host")
         .and_then(|v| v.to_str().ok())
@@ -63,7 +71,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
     let host = host_raw.to_ascii_lowercase();
 
-    // 5. Check Origin
+    // 6. Check Origin
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         // Strict Check: strip scheme and compare exact match.
         let origin_host_raw = origin
@@ -87,7 +95,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return next.run(req).await;
     }
 
-    // 6. Fallback: Check Referer
+    // 7. Fallback: Check Referer
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
         let referer_lc = referer.to_ascii_lowercase();
 
@@ -110,7 +118,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return next.run(req).await;
     }
 
-    // 7. Block if neither is present (Strict Mode)
+    // 8. Block if neither is present (Strict Mode)
     tracing::warn!(method = ?method, "CSRF check failed: Missing Origin and Referer");
     StatusCode::FORBIDDEN.into_response()
 }
