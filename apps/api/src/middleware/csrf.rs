@@ -14,12 +14,16 @@ use crate::routes::auth::SESSION_COOKIE_NAME;
 ///
 /// Logic:
 /// 1. Allow safe methods (GET, HEAD, OPTIONS).
+///    - TRACE is deliberately excluded as it is typically disabled or unsafe.
 /// 2. If no session cookie is present, skip CSRF check (no session to hijack).
 /// 3. For state-changing methods with session:
 ///    - Check `CSRF_ALLOWED_ORIGINS` (dev fallback).
 ///    - Extract `Host` header.
 ///    - Check `Origin` header: MUST match `Host` (ignoring scheme).
+///      - Validates format (no path/query/fragment).
+///      - Case-insensitive comparison.
 ///    - If `Origin` missing, check `Referer`: MUST start with `Scheme://Host/`.
+///      - Case-insensitive comparison.
 ///    - If both missing or mismatch: 403 Forbidden.
 pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
     let method = req.method();
@@ -48,23 +52,33 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
 
     // 4. Host Validation
-    let host = headers
+    let host_raw = headers
         .get("host")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    if host.is_empty() {
+    if host_raw.is_empty() {
         tracing::warn!("CSRF check failed: Missing Host header");
         return StatusCode::FORBIDDEN.into_response();
     }
+    let host = host_raw.to_ascii_lowercase();
 
     // 5. Check Origin
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         // Strict Check: strip scheme and compare exact match.
-        let origin_host = origin
+        let origin_host_raw = origin
             .strip_prefix("https://")
             .or_else(|| origin.strip_prefix("http://"))
             .unwrap_or(origin);
+
+        // Hardening 1: Validate Origin format (must be just host:port, no path/query/fragment)
+        if origin_host_raw.contains(['/', '?', '#']) {
+            tracing::warn!(?origin, "CSRF check failed: Invalid Origin format");
+            return StatusCode::FORBIDDEN.into_response();
+        }
+
+        // Hardening 2: Case-insensitive comparison
+        let origin_host = origin_host_raw.to_ascii_lowercase();
 
         if origin_host != host {
             tracing::warn!(?origin, ?host, "CSRF check failed: Origin mismatch");
@@ -75,6 +89,8 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 
     // 6. Fallback: Check Referer
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
+        let referer_lc = referer.to_ascii_lowercase();
+
         let valid_starts = [
             format!("https://{}/", host),
             format!("http://{}/", host),
@@ -84,8 +100,8 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             format!("http://{}", host),
         ];
 
-        let is_valid = valid_starts.iter().any(|p| referer.starts_with(p))
-            || valid_exact.iter().any(|e| referer == e);
+        let is_valid = valid_starts.iter().any(|p| referer_lc.starts_with(p))
+            || valid_exact.iter().any(|e| referer_lc == *e);
 
         if !is_valid {
             tracing::warn!(?referer, ?host, "CSRF check failed: Referer mismatch");
