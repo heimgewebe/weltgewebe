@@ -97,8 +97,11 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         }
 
         if origin_scheme == "http" && !is_localhost {
-             tracing::warn!(?origin, "CSRF check failed: Insecure Origin (HTTP) on non-localhost");
-             return StatusCode::FORBIDDEN.into_response();
+            tracing::warn!(
+                ?origin,
+                "CSRF check failed: Insecure Origin (HTTP) on non-localhost"
+            );
+            return StatusCode::FORBIDDEN.into_response();
         }
 
         let (origin_domain, origin_port_raw) = parse_host_header(origin_host_raw);
@@ -132,17 +135,20 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 
         // Enforce HTTPS
         if ref_scheme == "http" && !is_localhost {
-             tracing::warn!(?referer, "CSRF check failed: Insecure Referer (HTTP) on non-localhost");
-             return StatusCode::FORBIDDEN.into_response();
+            tracing::warn!(
+                ?referer,
+                "CSRF check failed: Insecure Referer (HTTP) on non-localhost"
+            );
+            return StatusCode::FORBIDDEN.into_response();
         }
 
         // Extract Authority from Referer
         let (ref_host, ref_port) = if let Some(auth) = referer_uri.authority() {
-             (auth.host().to_string(), auth.port_u16())
+            (auth.host().to_string(), auth.port_u16())
         } else {
-             // Relative referer? Block.
-             tracing::warn!(?referer, "CSRF check failed: Relative Referer");
-             return StatusCode::FORBIDDEN.into_response();
+            // Relative referer? Block.
+            tracing::warn!(?referer, "CSRF check failed: Relative Referer");
+            return StatusCode::FORBIDDEN.into_response();
         };
 
         // Match Host
@@ -190,16 +196,29 @@ mod tests {
 
     #[test]
     fn test_parse_host_header() {
-        assert_eq!(parse_host_header("example.com"), ("example.com".to_string(), None));
-        assert_eq!(parse_host_header("example.com:8080"), ("example.com".to_string(), Some(8080)));
-        assert_eq!(parse_host_header("[::1]:8080"), ("[::1]".to_string(), Some(8080)));
+        assert_eq!(
+            parse_host_header("example.com"),
+            ("example.com".to_string(), None)
+        );
+        assert_eq!(
+            parse_host_header("example.com:8080"),
+            ("example.com".to_string(), Some(8080))
+        );
+        assert_eq!(
+            parse_host_header("[::1]:8080"),
+            ("[::1]".to_string(), Some(8080))
+        );
         assert_eq!(parse_host_header("[::1]"), ("[::1]".to_string(), None));
     }
 
     #[tokio::test]
     async fn test_exemption_logic() {
         use axum::http::Request;
-        let req = Request::builder().uri("/auth/login").method("POST").body(Body::empty()).unwrap();
+        let req = Request::builder()
+            .uri("/auth/login")
+            .method("POST")
+            .body(Body::empty())
+            .unwrap();
         assert!(req.uri().path().ends_with("/auth/login"));
     }
 
@@ -211,9 +230,9 @@ mod tests {
         let referer_bad = "https://my-dev.com.evil.com".to_string(); // Suffix spoof
 
         let check = |ref_val: &str| {
-            allowlist.iter().any(|allowed| {
-                ref_val == allowed || ref_val.starts_with(&format!("{}/", allowed))
-            })
+            allowlist
+                .iter()
+                .any(|allowed| ref_val == allowed || ref_val.starts_with(&format!("{}/", allowed)))
         };
 
         assert!(check(&referer_exact));
