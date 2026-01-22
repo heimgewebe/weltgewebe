@@ -11,35 +11,16 @@ use axum_extra::extract::cookie::CookieJar;
 use crate::routes::auth::SESSION_COOKIE_NAME;
 
 /// Middleware to enforce CSRF protection via Origin/Referer checks.
-///
-/// Logic:
-/// 1. Allow safe methods (GET, HEAD, OPTIONS).
-///    - TRACE is excluded (unsafe).
-/// 2. Skip explicitly exempted paths (e.g., /auth/login, /api/auth/login).
-/// 3. If no session cookie is present, skip CSRF check (no session to hijack).
-/// 4. Allowlist Check:
-///    - Checks `Origin` AND `Referer` against `CSRF_ALLOWED_ORIGINS` (if set).
-/// 5. Host Validation:
-///    - Extract Host domain and optional port.
-/// 6. Origin Validation:
-///    - HTTPS Enforcement: Reject `http://` Origins unless Host is localhost/loopback.
-///    - Host Match: Domains must match (case-insensitive).
-///    - Port Match:
-///      - If Host has port, Origin MUST match it.
-///      - If Host has NO port, ignore Origin port (robustness for proxies).
-/// 7. Referer Fallback:
-///    - If Origin missing, Referer must start with `https://<Host>` (or http for localhost).
 pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
     let method = req.method();
 
-    // 1. Pass through safe methods
+    // 1. Pass through safe methods (GET, HEAD, OPTIONS). TRACE excluded.
     if method == Method::GET || method == Method::HEAD || method == Method::OPTIONS {
         return next.run(req).await;
     }
 
     // 2. Explicit exemptions
-    let path = req.uri().path();
-    if path.ends_with("/auth/login") {
+    if req.uri().path().ends_with("/auth/login") {
         return next.run(req).await;
     }
 
@@ -64,10 +45,18 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             }
         }
 
-        // Check Referer (prefix match)
+        // Check Referer (robust prefix match for boundary safety)
+        // Ensure allowed origin ends with slash for prefix matching or match exactly?
+        // Simpler: Just check if referer starts with allowed_origin.
+        // Risk: allowed="https://site.com", referer="https://site.com.evil.com"
+        // Mitigation: Users should provide full origins. We can enforce slash check if we want strictness.
+        // For now, we trust the env config is sane (e.g. includes scheme+host).
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
             let ref_lc = referer.to_ascii_lowercase();
-            if allowed_list.iter().any(|allowed| ref_lc.starts_with(allowed)) {
+            if allowed_list.iter().any(|allowed| {
+                // Prevent suffix spoofing: Match exact, OR match as prefix ending in /
+                ref_lc == *allowed || ref_lc.starts_with(&format!("{}/", allowed))
+            }) {
                 return next.run(req).await;
             }
         }
@@ -86,6 +75,12 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 
     let (host_domain, host_port) = parse_host_header(host_raw);
 
+    // Robust localhost check (handles IPv6 [::1] and ::1)
+    let is_localhost = host_domain == "localhost"
+        || host_domain == "127.0.0.1"
+        || host_domain == "::1"
+        || host_domain == "[::1]";
+
     // 6. Check Origin
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         let (origin_scheme, origin_host_raw) = if let Some(rest) = origin.strip_prefix("https://") {
@@ -96,28 +91,23 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             ("", origin)
         };
 
-        // Validate format
         if origin_host_raw.contains(['/', '?', '#']) {
             tracing::warn!(?origin, "CSRF check failed: Invalid Origin format");
             return StatusCode::FORBIDDEN.into_response();
         }
 
-        // HTTPS Enforcement (except localhost)
-        let is_localhost = host_domain == "localhost" || host_domain == "127.0.0.1" || host_domain == "::1";
         if origin_scheme == "http" && !is_localhost {
              tracing::warn!(?origin, "CSRF check failed: Insecure Origin (HTTP) on non-localhost");
              return StatusCode::FORBIDDEN.into_response();
         }
 
         let (origin_domain, origin_port_raw) = parse_host_header(origin_host_raw);
-
         let domains_match = host_domain.eq_ignore_ascii_case(&origin_domain);
 
-        // Simplified Port Rule
         let ports_match = match (host_port, origin_port_raw) {
             (Some(h), Some(o)) => h == o,
-            (Some(_), None) => false, // Host has strict port, Origin missing -> Fail
-            (None, _) => true,        // Host has no port (proxy/default), ignore Origin port
+            (Some(_), None) => false,
+            (None, _) => true,
         };
 
         if !domains_match || !ports_match {
@@ -127,28 +117,45 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return next.run(req).await;
     }
 
-    // 7. Fallback: Check Referer
+    // 7. Fallback: Check Referer (Parsed as URI)
     if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
-        let referer_lc = referer.to_ascii_lowercase();
-        let host_lc = host_raw.to_ascii_lowercase();
+        // Parse Referer to extract Scheme, Host, Port
+        let referer_uri = match referer.parse::<Uri>() {
+            Ok(u) => u,
+            Err(_) => {
+                tracing::warn!(?referer, "CSRF check failed: Invalid Referer URI");
+                return StatusCode::FORBIDDEN.into_response();
+            }
+        };
 
-        let valid_starts = [
-            format!("https://{}/", host_lc),
-            format!("http://{}/", host_lc), // allow http check logic handled by strict HTTPS check above? No, referer logic is simpler fallback.
-        ];
+        let ref_scheme = referer_uri.scheme_str().unwrap_or("http"); // default fallback, unlikely to matter if invalid
 
-        // HTTPS Enforcement for Referer
-        let is_localhost = host_domain == "localhost" || host_domain == "127.0.0.1" || host_domain == "::1";
-        if referer_lc.starts_with("http://") && !is_localhost {
+        // Enforce HTTPS
+        if ref_scheme == "http" && !is_localhost {
              tracing::warn!(?referer, "CSRF check failed: Insecure Referer (HTTP) on non-localhost");
              return StatusCode::FORBIDDEN.into_response();
         }
 
-        let is_valid = valid_starts.iter().any(|p| referer_lc.starts_with(p))
-            || referer_lc == format!("https://{}", host_lc)
-            || referer_lc == format!("http://{}", host_lc);
+        // Extract Authority from Referer
+        let (ref_host, ref_port) = if let Some(auth) = referer_uri.authority() {
+             (auth.host().to_string(), auth.port_u16())
+        } else {
+             // Relative referer? Block.
+             tracing::warn!(?referer, "CSRF check failed: Relative Referer");
+             return StatusCode::FORBIDDEN.into_response();
+        };
 
-        if !is_valid {
+        // Match Host
+        let domains_match = host_domain.eq_ignore_ascii_case(&ref_host);
+
+        // Match Port (Reuse simplification logic)
+        let ports_match = match (host_port, ref_port) {
+            (Some(h), Some(o)) => h == o,
+            (Some(_), None) => false,
+            (None, _) => true,
+        };
+
+        if !domains_match || !ports_match {
             tracing::warn!(?referer, ?host_raw, "CSRF check failed: Referer mismatch");
             return StatusCode::FORBIDDEN.into_response();
         }
@@ -161,7 +168,6 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 }
 
 /// Helper to parse host:port string using http::Uri logic.
-/// Returns (host_string, Option<port>)
 fn parse_host_header(input: &str) -> (String, Option<u16>) {
     if let Some(rest) = input.strip_suffix(':') {
         return parse_host_header(rest);
@@ -196,12 +202,22 @@ mod tests {
         let req = Request::builder().uri("/auth/login").method("POST").body(Body::empty()).unwrap();
         assert!(req.uri().path().ends_with("/auth/login"));
     }
-}
 
     #[test]
     fn test_referer_allowlist_match() {
-        // Logic check: verify prefix matching logic works conceptually
         let allowlist = vec!["https://my-dev.com".to_string()];
-        let referer = "https://my-dev.com/foo".to_string();
-        assert!(allowlist.iter().any(|allowed| referer.starts_with(allowed)));
+        let referer_exact = "https://my-dev.com".to_string();
+        let referer_sub = "https://my-dev.com/foo".to_string();
+        let referer_bad = "https://my-dev.com.evil.com".to_string(); // Suffix spoof
+
+        let check = |ref_val: &str| {
+            allowlist.iter().any(|allowed| {
+                ref_val == allowed || ref_val.starts_with(&format!("{}/", allowed))
+            })
+        };
+
+        assert!(check(&referer_exact));
+        assert!(check(&referer_sub));
+        assert!(!check(&referer_bad));
     }
+}
