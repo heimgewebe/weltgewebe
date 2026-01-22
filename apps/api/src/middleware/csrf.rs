@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_referer_allowlist_match() {
-        let allowlist = vec!["https://my-dev.com".to_string()];
+        let allowlist = ["https://my-dev.com".to_string()];
         let referer_exact = "https://my-dev.com".to_string();
         let referer_sub = "https://my-dev.com/foo".to_string();
         let referer_bad = "https://my-dev.com.evil.com".to_string(); // Suffix spoof
