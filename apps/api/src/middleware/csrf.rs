@@ -2,7 +2,7 @@ use std::env;
 
 use axum::{
     body::Body,
-    http::{Method, Request, StatusCode},
+    http::{Method, Request, StatusCode, Uri},
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -72,6 +72,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         return StatusCode::FORBIDDEN.into_response();
     }
 
+    // Use robust parsing via http::Uri
     let (host_domain, host_port) = parse_host_header(host_raw);
 
     // 6. Check Origin
@@ -103,7 +104,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             }
         };
 
-        let domains_match = host_domain.eq_ignore_ascii_case(origin_domain);
+        let domains_match = host_domain.eq_ignore_ascii_case(&origin_domain);
 
         // Strict Port Matching Rule
         let ports_match = match (host_port, origin_port) {
@@ -156,19 +157,27 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     StatusCode::FORBIDDEN.into_response()
 }
 
-/// Helper to split "host:port" or "host"
-fn parse_host_header(input: &str) -> (&str, Option<u16>) {
-    // Edge Case: Trailing colon without port (e.g. "example.com:") should be treated as no port
-    if let Some((host, port_str)) = input.rsplit_once(':') {
-        if port_str.is_empty() {
-            return (input, None);
-        }
-        // Basic check: if it parses as u16, it's a port.
-        if let Ok(port) = port_str.parse::<u16>() {
-            return (host, Some(port));
+/// Helper to parse host:port string using http::Uri logic.
+/// Returns (host_string, Option<port>)
+fn parse_host_header(input: &str) -> (String, Option<u16>) {
+    // 1. Handle trailing colon edge case first
+    if let Some(rest) = input.strip_suffix(':') {
+        // Recursively parse the part without colon
+        return parse_host_header(rest);
+    }
+
+    // 2. Prepend scheme to satisfy Uri parser (Authority requires scheme or // prefix)
+    // We use "http://" as dummy scheme to enable authority parsing.
+    let uri_string = format!("http://{}", input);
+
+    if let Ok(uri) = uri_string.parse::<Uri>() {
+        if let Some(authority) = uri.authority() {
+            return (authority.host().to_string(), authority.port_u16());
         }
     }
-    (input, None)
+
+    // Fallback: return input as-is if parsing fails
+    (input.to_string(), None)
 }
 
 #[cfg(test)]
@@ -177,18 +186,37 @@ mod tests {
 
     #[test]
     fn test_parse_host_header() {
-        assert_eq!(parse_host_header("example.com"), ("example.com", None));
+        assert_eq!(
+            parse_host_header("example.com"),
+            ("example.com".to_string(), None)
+        );
         assert_eq!(
             parse_host_header("example.com:8080"),
-            ("example.com", Some(8080))
+            ("example.com".to_string(), Some(8080))
         );
-        assert_eq!(parse_host_header("localhost"), ("localhost", None));
+        assert_eq!(
+            parse_host_header("localhost"),
+            ("localhost".to_string(), None)
+        );
         assert_eq!(
             parse_host_header("example.com:443"),
-            ("example.com", Some(443))
+            ("example.com".to_string(), Some(443))
         );
         // Trailing colon case
-        assert_eq!(parse_host_header("example.com:"), ("example.com:", None));
+        assert_eq!(
+            parse_host_header("example.com:"),
+            ("example.com".to_string(), None)
+        );
+
+        // IPv6 cases
+        assert_eq!(
+            parse_host_header("[::1]"),
+            ("[::1]".to_string(), None)
+        );
+        assert_eq!(
+            parse_host_header("[::1]:8080"),
+            ("[::1]".to_string(), Some(8080))
+        );
     }
 
     #[tokio::test]

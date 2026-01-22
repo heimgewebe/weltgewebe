@@ -58,17 +58,22 @@ pub async fn run() -> anyhow::Result<()> {
 
     let app = Router::new()
         // Serve at root for Caddy (which strips /api prefix)
-        .merge(api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)))
+        .merge(
+            api_router()
+                .route_layer(from_fn_with_state(state.clone(), auth_middleware))
+                .layer(axum::middleware::from_fn(require_csrf)),
+        )
         // Serve at /api for direct access (e.g. apps/web fallback)
         .nest(
             "/api",
-            api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)),
+            api_router()
+                .route_layer(from_fn_with_state(state.clone(), auth_middleware))
+                .layer(axum::middleware::from_fn(require_csrf)),
         )
         .merge(health_routes())
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .with_state(state)
-        .layer(axum::middleware::from_fn(require_csrf))
         .layer(MetricsLayer::new(metrics));
 
     let bind_addr: SocketAddr = env::var("API_BIND")
