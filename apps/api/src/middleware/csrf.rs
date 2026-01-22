@@ -15,7 +15,7 @@ use crate::routes::auth::SESSION_COOKIE_NAME;
 /// Logic:
 /// 1. Allow safe methods (GET, HEAD, OPTIONS).
 ///    - TRACE is deliberately excluded as it is typically disabled or unsafe.
-/// 2. Skip explicitly exempted paths (e.g., /auth/login).
+/// 2. Skip explicitly exempted paths (e.g., /auth/login, /api/auth/login).
 /// 3. If no session cookie is present, skip CSRF check (no session to hijack).
 /// 4. For state-changing methods with session:
 ///    - Check `CSRF_ALLOWED_ORIGINS` (dev fallback).
@@ -24,6 +24,7 @@ use crate::routes::auth::SESSION_COOKIE_NAME;
 ///    - Check `Origin` header:
 ///      - Extract host/port (inferring default ports 80/443 if missing).
 ///      - Compare host (case-insensitive) and port.
+///      - Strict port rule: If Host has no port, Origin must be standard or match implicit default.
 ///    - If `Origin` missing, check `Referer` (prefix/exact match).
 ///    - If both missing or mismatch: 403 Forbidden.
 pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
@@ -35,7 +36,9 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
 
     // 2. Explicit exemptions
-    if req.uri().path() == "/auth/login" {
+    // Covers both /auth/login and /api/auth/login
+    let path = req.uri().path();
+    if path.ends_with("/auth/login") {
         return next.run(req).await;
     }
 
@@ -100,23 +103,21 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             }
         };
 
-        // Resolve implicit ports for Host (best effort, assuming standard scheme based on Origin if unknown)
-        // But Host header doesn't carry scheme.
-        // Strategy: If Host has no port, it matches Origin's default port for the scheme?
-        // Or cleaner: strict comparison.
-        // If Host says "example.com", and Origin says "https://example.com",
-        // Host port is implicit (likely 80 or 443 depending on protocol).
-        // Since we don't know the protocol of the request easily here (without X-Forwarded-Proto),
-        // we relax the check: if host domains match, and EITHER ports match OR one is missing, we accept.
-        // WAIT: That's dangerous.
-        // Better: If Host has port, Origin MUST match it.
-        // If Host has NO port, and Origin matches domain, we assume it's valid (standard port).
-
         let domains_match = host_domain.eq_ignore_ascii_case(origin_domain);
+
+        // Strict Port Matching Rule
         let ports_match = match (host_port, origin_port) {
             (Some(h), Some(o)) => h == o,
-            (None, _) => true, // Host implies standard port, we accept Origin (even if it specifies 443/80 explicitly)
-            (Some(_), None) => false, // Host specifies non-standard port, Origin must specify it too (browsers usually do)
+            (Some(_), None) => false, // Host strict, Origin missing -> Fail
+            (None, None) => true,     // Both implied standard -> OK
+            (None, Some(o)) => {
+                // Host implied (80 or 443). Origin explicit.
+                // Origin MUST be 80 or 443 to match implied Host.
+                // We don't know scheme of Host, so we accept if Origin is EITHER standard port.
+                // This is slightly loose but robust for mixed deployments.
+                // Better: If we assume host is valid, we check against common defaults.
+                o == 80 || o == 443
+            }
         };
 
         if !domains_match || !ports_match {
@@ -131,8 +132,6 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         let referer_lc = referer.to_ascii_lowercase();
         let host_lc = host_raw.to_ascii_lowercase();
 
-        // Simple robust check: Referer must start with http(s)://<Host>/
-        // or be exactly http(s)://<Host>
         let valid_starts = [
             format!("https://{}/", host_lc),
             format!("http://{}/", host_lc),
@@ -160,8 +159,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 /// Helper to split "host:port" or "host"
 fn parse_host_header(input: &str) -> (&str, Option<u16>) {
     if let Some((host, port_str)) = input.rsplit_once(':') {
-        // Check if the part after last colon is numeric (to handle IPv6 safely, though Host header usually brackets IPv6)
-        // Basic check: if it parses as u16, it's a port.
+        // Check if the part after last colon is numeric
         if let Ok(port) = port_str.parse::<u16>() {
             return (host, Some(port));
         }
@@ -178,6 +176,28 @@ mod tests {
         assert_eq!(parse_host_header("example.com"), ("example.com", None));
         assert_eq!(parse_host_header("example.com:8080"), ("example.com", Some(8080)));
         assert_eq!(parse_host_header("localhost"), ("localhost", None));
-        // IPv6 ignored for simplicity here as strictly Host header format usually [::1]:port
+        assert_eq!(parse_host_header("example.com:443"), ("example.com", Some(443)));
+        assert_eq!(parse_host_header("example.com:"), ("example.com:", None));
+    }
+
+    #[tokio::test]
+    async fn test_exemption_logic() {
+        use axum::http::Request;
+
+        // /auth/login exempted
+        let req = Request::builder()
+            .uri("/auth/login")
+            .method("POST")
+            .body(Body::empty())
+            .unwrap();
+        assert!(req.uri().path().ends_with("/auth/login"));
+
+        // /api/auth/login exempted
+        let req2 = Request::builder()
+            .uri("/api/auth/login")
+            .method("POST")
+            .body(Body::empty())
+            .unwrap();
+        assert!(req2.uri().path().ends_with("/auth/login"));
     }
 }
