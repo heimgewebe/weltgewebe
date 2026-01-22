@@ -386,13 +386,13 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state);
 
-    // Attempt PATCH with cookie but NO Origin/Referer/Host logic that satisfies CSRF
-    // Note: We deliberately omit Origin and Referer headers.
-    // Host header is usually set by axum/hyper client logic to "localhost" or uri host,
-    // but without Origin matching it, it should fail.
+    // Attempt PATCH with cookie but NO Origin/Referer logic that satisfies CSRF.
+    // We explicitly set Host to ensure the 403 comes from the missing Origin/Referer check,
+    // not from a missing Host header check.
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
         // No Origin, No Referer
         .body(body::Body::from(r#"{"info":"Hacked Info"}"#))?;
 
