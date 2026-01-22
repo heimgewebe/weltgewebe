@@ -270,35 +270,3 @@ mod tests {
         assert!(!check_ports(Some(8080), Some(9090)));
     }
 }
-
-    #[tokio::test]
-    async fn test_strict_port_matching() {
-        // Need to simulate request context, but we can verify the logic via parse_host_header and reasoning.
-        // Actually, we can unit test the logic if we extract it, but  is a middleware.
-        // We will trust integration tests or unit tests covering  + logic review.
-        // But the plan asked to add a negative test case.
-        // I'll add a logic test that mimics the middleware logic for ports.
-
-        let check_ports = |host_port: Option<u16>, origin_port: Option<u16>| -> bool {
-            match (host_port, origin_port) {
-                (Some(h), Some(o)) => h == o,
-                (Some(_), None) => false,
-                (None, None) => true,
-                (None, Some(o)) => o == 80 || o == 443,
-            }
-        };
-
-        // Host has no port (implied standard), Origin has non-standard port -> FAIL
-        assert!(!check_ports(None, Some(1234)));
-
-        // Host has no port, Origin has standard port -> PASS
-        assert!(check_ports(None, Some(80)));
-        assert!(check_ports(None, Some(443)));
-
-        // Host has explicit port, Origin has same port -> PASS
-        assert!(check_ports(Some(8080), Some(8080)));
-
-        // Host has explicit port, Origin has different port -> FAIL
-        assert!(!check_ports(Some(8080), Some(9090)));
-    }
-}
