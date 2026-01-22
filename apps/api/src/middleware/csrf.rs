@@ -142,7 +142,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         ];
 
         let is_valid = valid_starts.iter().any(|p| referer_lc.starts_with(p))
-            || valid_exact.iter().any(|e| referer_lc == *e);
+            || valid_exact.contains(&referer_lc);
 
         if !is_valid {
             tracing::warn!(?referer, ?host_raw, "CSRF check failed: Referer mismatch");
