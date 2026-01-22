@@ -14,7 +14,7 @@ use tower::ServiceExt;
 use weltgewebe_api::{
     auth::{role::Role, session::SessionStore},
     config::AppConfig,
-    middleware::auth::auth_middleware,
+    middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic, Visibility},
         api_router,
@@ -189,12 +189,17 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let app = Router::new()
         .merge(api_router())
         .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
         .with_state(state);
 
     // 1. Update info -> "New Info"
+    // Note: We MUST provide Origin or Referer because a session cookie is present,
+    // otherwise CSRF middleware will block it.
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"info":"New Info"}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -215,6 +220,8 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -226,6 +233,8 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let req = Request::patch("/nodes/n1")
         .header("Content-Type", "application/json")
         .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"info":null}"#))?;
     let res = app.clone().oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -325,6 +334,70 @@ async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
 
     assert_eq!(created_at, "2024-01-02T03:04:05Z");
     assert_eq!(updated_at, created_at);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes = in_dir.join("demo.nodes.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Initial node
+    write_lines(
+        &nodes,
+        &[r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A","info":"Old Info"}"#],
+    );
+
+    // Setup Auth State with Account
+    let mut account_map = HashMap::new();
+    let account = AccountPublic {
+        id: "weber1".to_string(),
+        kind: "garnrolle".to_string(),
+        title: "Weber".to_string(),
+        summary: None,
+        public_pos: None,
+        visibility: Visibility::Public,
+        radius_m: 0,
+        ron_flag: false,
+        tags: vec![],
+    };
+    account_map.insert(
+        "weber1".to_string(),
+        AccountInternal {
+            public: account,
+            role: Role::Weber,
+        },
+    );
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(account_map);
+
+    // Create Session
+    let session = state.sessions.create("weber1".to_string());
+    let cookie_val = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state);
+
+    // Attempt PATCH with cookie but NO Origin/Referer logic that satisfies CSRF.
+    // We explicitly set Host to ensure the 403 comes from the missing Origin/Referer check,
+    // not from a missing Host header check.
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        // No Origin, No Referer
+        .body(body::Body::from(r#"{"info":"Hacked Info"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
 
     Ok(())
 }

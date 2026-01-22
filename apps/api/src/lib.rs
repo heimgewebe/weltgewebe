@@ -16,6 +16,7 @@ use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::AppConfig;
 use middleware::auth::auth_middleware;
+use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
 use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
@@ -57,11 +58,17 @@ pub async fn run() -> anyhow::Result<()> {
 
     let app = Router::new()
         // Serve at root for Caddy (which strips /api prefix)
-        .merge(api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)))
+        .merge(
+            api_router()
+                .route_layer(from_fn_with_state(state.clone(), auth_middleware))
+                .layer(axum::middleware::from_fn(require_csrf)),
+        )
         // Serve at /api for direct access (e.g. apps/web fallback)
         .nest(
             "/api",
-            api_router().route_layer(from_fn_with_state(state.clone(), auth_middleware)),
+            api_router()
+                .route_layer(from_fn_with_state(state.clone(), auth_middleware))
+                .layer(axum::middleware::from_fn(require_csrf)),
         )
         .merge(health_routes())
         .merge(meta_routes())
