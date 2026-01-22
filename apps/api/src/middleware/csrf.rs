@@ -79,6 +79,8 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         || host_domain == "::1"
         || host_domain == "[::1]";
 
+    let uri_path = req.uri().path();
+
     // 6. Check Origin
     if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
         let (origin_scheme, origin_host_raw) = if let Some(rest) = origin.strip_prefix("https://") {
@@ -90,13 +92,15 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         };
 
         if origin_host_raw.contains(['/', '?', '#']) {
-            tracing::warn!(?origin, "CSRF check failed: Invalid Origin format");
+            tracing::warn!(?origin, ?host_raw, uri = ?uri_path, "CSRF check failed: Invalid Origin format");
             return StatusCode::FORBIDDEN.into_response();
         }
 
         if origin_scheme == "http" && !is_localhost {
             tracing::warn!(
                 ?origin,
+                ?host_raw,
+                uri = ?uri_path,
                 "CSRF check failed: Insecure Origin (HTTP) on non-localhost"
             );
             return StatusCode::FORBIDDEN.into_response();
@@ -128,7 +132,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         };
 
         if !domains_match || !ports_match {
-            tracing::warn!(?origin, ?host_raw, "CSRF check failed: Origin mismatch");
+            tracing::warn!(?origin, ?host_raw, uri = ?uri_path, "CSRF check failed: Origin mismatch");
             return StatusCode::FORBIDDEN.into_response();
         }
         return next.run(req).await;
@@ -139,7 +143,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         let referer_uri = match referer.parse::<Uri>() {
             Ok(u) => u,
             Err(_) => {
-                tracing::warn!(?referer, "CSRF check failed: Invalid Referer URI");
+                tracing::warn!(?referer, ?host_raw, uri = ?uri_path, "CSRF check failed: Invalid Referer URI");
                 return StatusCode::FORBIDDEN.into_response();
             }
         };
@@ -149,6 +153,8 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         if ref_scheme == "http" && !is_localhost {
             tracing::warn!(
                 ?referer,
+                ?host_raw,
+                uri = ?uri_path,
                 "CSRF check failed: Insecure Referer (HTTP) on non-localhost"
             );
             return StatusCode::FORBIDDEN.into_response();
@@ -157,7 +163,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         let (ref_host, ref_port) = if let Some(auth) = referer_uri.authority() {
             (auth.host().to_string(), auth.port_u16())
         } else {
-            tracing::warn!(?referer, "CSRF check failed: Relative Referer");
+            tracing::warn!(?referer, ?host_raw, uri = ?uri_path, "CSRF check failed: Relative Referer");
             return StatusCode::FORBIDDEN.into_response();
         };
 
@@ -171,14 +177,14 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         };
 
         if !domains_match || !ports_match {
-            tracing::warn!(?referer, ?host_raw, "CSRF check failed: Referer mismatch");
+            tracing::warn!(?referer, ?host_raw, uri = ?uri_path, "CSRF check failed: Referer mismatch");
             return StatusCode::FORBIDDEN.into_response();
         }
         return next.run(req).await;
     }
 
     // 8. Block if neither is present
-    tracing::warn!(method = ?method, "CSRF check failed: Missing Origin and Referer");
+    tracing::warn!(method = ?method, ?host_raw, uri = ?uri_path, "CSRF check failed: Missing Origin and Referer");
     StatusCode::FORBIDDEN.into_response()
 }
 

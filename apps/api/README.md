@@ -32,6 +32,22 @@ This README provides a quick orientation for running and developing the service 
 
    By default the service listens on <http://localhost:8080>.
 
+## Security: CSRF & Proxy Configuration
+
+The API implements strict CSRF protection for all state-changing endpoints (POST, PATCH, PUT, DELETE) that use session authentication.
+
+### Host Header Requirement
+The middleware validates the `Origin` and `Referer` headers against the request's `Host` header.
+If you deploy behind a reverse proxy (e.g., Caddy, Cloudflare, NGINX):
+- Ensure the proxy **forwards the original Host header** or rewrites it to match the external domain seen by the client.
+- If the proxy terminates TLS but communicates with the API over HTTP, ensure the `X-Forwarded-Proto` header is set correctly (though currently the API enforces HTTPS for non-localhost based on Origin scheme).
+
+### Development Overrides
+For local development where Origin/Host might mismatch (e.g. strict frontend/backend separation on different ports), you can whitelist origins:
+- `CSRF_ALLOWED_ORIGINS` &mdash; Comma-separated list of allowed origins (e.g., `http://localhost:5173,https://my-dev-env.com`).
+
+**Note:** The `/auth/login` endpoint is exempted from CSRF checks to facilitate initial session creation.
+
 ## Observability
 
 - `GET /health/live` and `GET /health/ready` expose liveness and readiness information.
