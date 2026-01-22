@@ -1,4 +1,3 @@
----
 lockfileVersion: "9.0"
 
 settings:
@@ -23,10 +22,10 @@ importers:
         version: 1.55.1
       "@sveltejs/adapter-static":
         specifier: ^3.0.4
-        version: 3.0.10(@sveltejs/kit@2.20.6(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))
+        version: 3.0.10(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(typescript@5.9.2)(vite@5.4.21(@types/node@20.19.25)))
       "@sveltejs/kit":
-        specifier: 2.20.6
-        version: 2.20.6(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))
+        specifier: 2.49.5
+        version: 2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(typescript@5.9.2)(vite@5.4.21(@types/node@20.19.25))
       "@sveltejs/vite-plugin-svelte":
         specifier: ^3.1.1
         version: 3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))
@@ -673,6 +672,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  "@standard-schema/spec@1.1.0":
+    resolution:
+      {
+        integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==,
+      }
+
+  "@sveltejs/acorn-typescript@1.0.8":
+    resolution:
+      {
+        integrity: sha512-esgN+54+q0NjB0Y/4BomT9samII7jGwNy/2a3wNZbT2A2RpmXsXwUt24LvLhx6jUq2gVk4cWEvcRO6MFQbOfNA==,
+      }
+    peerDependencies:
+      acorn: ^8.9.0
+
   "@sveltejs/adapter-static@3.0.10":
     resolution:
       {
@@ -681,17 +694,24 @@ packages:
     peerDependencies:
       "@sveltejs/kit": ^2.0.0
 
-  "@sveltejs/kit@2.20.6":
+  "@sveltejs/kit@2.49.5":
     resolution:
       {
-        integrity: sha512-ImUkSQ//Xf4N9r0HHAe5vRA7RyQ7U1Ue1YUT235Ig+IiIqbsixEulHTHrP5LtBiC8xOkJoPZQ1VZ/nWHNOaGGw==,
+        integrity: sha512-dCYqelr2RVnWUuxc+Dk/dB/SjV/8JBndp1UovCyCZdIQezd8TRwFLNZctYkzgHxRJtaNvseCSRsuuHPeUgIN/A==,
       }
     engines: { node: ">=18.13" }
     hasBin: true
     peerDependencies:
-      "@sveltejs/vite-plugin-svelte": ^3.0.0 || ^4.0.0-next.1 || ^5.0.0
+      "@opentelemetry/api": ^1.0.0
+      "@sveltejs/vite-plugin-svelte": ^3.0.0 || ^4.0.0-next.1 || ^5.0.0 || ^6.0.0-next.0
       svelte: ^4.0.0 || ^5.0.0-next.0
-      vite: ^5.0.3 || ^6.0.0
+      typescript: ^5.3.3
+      vite: ^5.0.3 || ^6.0.0 || ^7.0.0-beta.0
+    peerDependenciesMeta:
+      "@opentelemetry/api":
+        optional: true
+      typescript:
+        optional: true
 
   "@sveltejs/vite-plugin-svelte-inspector@2.1.0":
     resolution:
@@ -1050,10 +1070,10 @@ packages:
       }
     engines: { node: ">=0.10.0" }
 
-  devalue@5.5.0:
+  devalue@5.6.2:
     resolution:
       {
-        integrity: sha512-69sM5yrHfFLJt0AZ9QqZXGCPfJ7fQjvpln3Rq5+PS03LD32Ost1Q9N+eEnaQwGRIriKkMImXD56ocjQmfjbV3w==,
+        integrity: sha512-nPRkjWzzDQlsejL1WVifk5rvcFi/y1onBRxjaFMjZeR9mFpqu2gmAZ9xUB9/IEanEP/vBtGeGganC/GO1fmufg==,
       }
 
   earcut@3.0.2:
@@ -1405,12 +1425,6 @@ packages:
         integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==,
       }
     engines: { node: ">=6" }
-
-  import-meta-resolve@4.2.0:
-    resolution:
-      {
-        integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==,
-      }
 
   imurmurhash@0.1.4:
     resolution:
@@ -2523,18 +2537,26 @@ snapshots:
   "@rollup/rollup-win32-x64-msvc@4.53.3":
     optional: true
 
-  "@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.20.6(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))":
-    dependencies:
-      "@sveltejs/kit": 2.20.6(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))
+  "@standard-schema/spec@1.1.0": {}
 
-  "@sveltejs/kit@2.20.6(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))":
+  "@sveltejs/acorn-typescript@1.0.8(acorn@8.15.0)":
     dependencies:
+      acorn: 8.15.0
+
+  "@sveltejs/adapter-static@3.0.10(@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(typescript@5.9.2)(vite@5.4.21(@types/node@20.19.25)))":
+    dependencies:
+      "@sveltejs/kit": 2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(typescript@5.9.2)(vite@5.4.21(@types/node@20.19.25))
+
+  "@sveltejs/kit@2.49.5(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(typescript@5.9.2)(vite@5.4.21(@types/node@20.19.25))":
+    dependencies:
+      "@standard-schema/spec": 1.1.0
+      "@sveltejs/acorn-typescript": 1.0.8(acorn@8.15.0)
       "@sveltejs/vite-plugin-svelte": 3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))
       "@types/cookie": 0.6.0
+      acorn: 8.15.0
       cookie: 0.7.2
-      devalue: 5.5.0
+      devalue: 5.6.2
       esm-env: 1.2.2
-      import-meta-resolve: 4.2.0
       kleur: 4.1.5
       magic-string: 0.30.21
       mrmime: 2.0.1
@@ -2543,6 +2565,9 @@ snapshots:
       sirv: 3.0.2
       svelte: 4.2.20
       vite: 5.4.21(@types/node@20.19.25)
+    optionalDependencies:
+      "@opentelemetry/api": 1.9.0
+      typescript: 5.9.2
 
   "@sveltejs/vite-plugin-svelte-inspector@2.1.0(@sveltejs/vite-plugin-svelte@3.1.2(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25)))(svelte@4.2.20)(vite@5.4.21(@types/node@20.19.25))":
     dependencies:
@@ -2772,7 +2797,7 @@ snapshots:
 
   deepmerge@4.3.1: {}
 
-  devalue@5.5.0: {}
+  devalue@5.6.2: {}
 
   earcut@3.0.2: {}
 
@@ -3016,8 +3041,6 @@ snapshots:
     dependencies:
       parent-module: 1.0.1
       resolve-from: 4.0.0
-
-  import-meta-resolve@4.2.0: {}
 
   imurmurhash@0.1.4: {}
 
