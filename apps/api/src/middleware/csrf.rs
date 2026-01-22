@@ -11,6 +11,10 @@ use axum_extra::extract::cookie::CookieJar;
 use crate::routes::auth::SESSION_COOKIE_NAME;
 
 /// Middleware to enforce CSRF protection via Origin/Referer checks.
+///
+/// Note: This middleware relies on the `Host` header being accurate. In reverse proxy setups
+/// (e.g., Caddy, Cloudflare), ensure the proxy is configured to forward the original Host
+/// or overwrite it correctly so it matches the external Origin/Referer seen by the client.
 pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Response {
     let method = req.method();
 
