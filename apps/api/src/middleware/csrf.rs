@@ -161,7 +161,7 @@ fn parse_host_header(input: &str) -> (&str, Option<u16>) {
     // Edge Case: Trailing colon without port (e.g. "example.com:") should be treated as no port
     if let Some((host, port_str)) = input.rsplit_once(':') {
         if port_str.is_empty() {
-             return (input, None);
+            return (input, None);
         }
         // Basic check: if it parses as u16, it's a port.
         if let Ok(port) = port_str.parse::<u16>() {
@@ -178,9 +178,15 @@ mod tests {
     #[test]
     fn test_parse_host_header() {
         assert_eq!(parse_host_header("example.com"), ("example.com", None));
-        assert_eq!(parse_host_header("example.com:8080"), ("example.com", Some(8080)));
+        assert_eq!(
+            parse_host_header("example.com:8080"),
+            ("example.com", Some(8080))
+        );
         assert_eq!(parse_host_header("localhost"), ("localhost", None));
-        assert_eq!(parse_host_header("example.com:443"), ("example.com", Some(443)));
+        assert_eq!(
+            parse_host_header("example.com:443"),
+            ("example.com", Some(443))
+        );
         // Trailing colon case
         assert_eq!(parse_host_header("example.com:"), ("example.com:", None));
     }
