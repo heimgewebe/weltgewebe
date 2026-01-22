@@ -39,8 +39,8 @@ The API implements strict CSRF protection for all state-changing endpoints (POST
 ### Host Header Requirement
 The middleware validates the `Origin` and `Referer` headers against the request's `Host` header.
 If you deploy behind a reverse proxy (e.g., Caddy, Cloudflare, NGINX):
-- Ensure the proxy **forwards the original Host header** (e.g., `Host: weltgewebe.org`) to the API.
-- If the proxy rewrites the Host header (e.g., to `api:8080` internally), the CSRF check will fail because the browser sends an `Origin` matching the external domain. In this case, you must configure the proxy to preserve the Host or add the external origin to `CSRF_ALLOWED_ORIGINS`.
+- **Preferred Standard:** Ensure the proxy **forwards the original Host header** (e.g., `Host: weltgewebe.org`) to the API. This maintains the "same-origin" integrity check naturally.
+- **Exception/Fallback:** If the proxy *must* rewrite the Host header (e.g., to `api:8080` internally), the CSRF check will fail because the browser sends an `Origin` matching the external domain. Only in this case should you add the external origin to `CSRF_ALLOWED_ORIGINS`. Do not use the allowlist as a permanent workaround for misconfigured proxies if Host forwarding is possible.
 
 The middleware determines HTTP vs HTTPS enforcement solely based on the `Origin` or `Referer` scheme provided by the client (except for localhost). It does **not** currently use `X-Forwarded-Proto` to infer protocol security.
 

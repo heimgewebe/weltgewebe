@@ -337,3 +337,67 @@ async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes = in_dir.join("demo.nodes.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Initial node
+    write_lines(
+        &nodes,
+        &[r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A","info":"Old Info"}"#],
+    );
+
+    // Setup Auth State with Account
+    let mut account_map = HashMap::new();
+    let account = AccountPublic {
+        id: "weber1".to_string(),
+        kind: "garnrolle".to_string(),
+        title: "Weber".to_string(),
+        summary: None,
+        public_pos: None,
+        visibility: Visibility::Public,
+        radius_m: 0,
+        ron_flag: false,
+        tags: vec![],
+    };
+    account_map.insert(
+        "weber1".to_string(),
+        AccountInternal {
+            public: account,
+            role: Role::Weber,
+        },
+    );
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(account_map);
+
+    // Create Session
+    let session = state.sessions.create("weber1".to_string());
+    let cookie_val = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state);
+
+    // Attempt PATCH with cookie but NO Origin/Referer/Host logic that satisfies CSRF
+    // Note: We deliberately omit Origin and Referer headers.
+    // Host header is usually set by axum/hyper client logic to "localhost" or uri host,
+    // but without Origin matching it, it should fail.
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
+        // No Origin, No Referer
+        .body(body::Body::from(r#"{"info":"Hacked Info"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+    Ok(())
+}
