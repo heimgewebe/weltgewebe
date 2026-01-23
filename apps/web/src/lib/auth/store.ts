@@ -70,7 +70,7 @@ const createAuthStore = () => {
           const newState = await checkAuth(); // Refresh state
           if (!newState.authenticated) {
             throw new Error(
-              "Login appeared successful but session was not established (cookie issue?)."
+              "Login appeared successful but session was not established (cookie issue?).",
             );
           }
         } else {
