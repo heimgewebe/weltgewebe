@@ -16,7 +16,7 @@ use crate::state::ApiState;
 
 use self::{
     accounts::{get_account, list_accounts},
-    auth::{login, logout, me},
+    auth::{list_dev_accounts, login, logout, me},
     edges::list_edges,
     nodes::{get_node, list_nodes, patch_node},
 };
@@ -33,6 +33,7 @@ pub fn api_router() -> Router<ApiState> {
         .route("/edges", get(list_edges))
         .route("/accounts", get(list_accounts))
         .route("/accounts/:id", get(get_account))
+        .route("/auth/dev/accounts", get(list_dev_accounts))
         .route("/auth/login", post(login))
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))

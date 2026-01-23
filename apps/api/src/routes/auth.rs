@@ -8,7 +8,9 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::{Deserialize, Serialize};
 use time::Duration;
 
-use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
+use crate::{
+    auth::role::Role, middleware::auth::AuthContext, routes::accounts::AccountPublic, state::ApiState,
+};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 
@@ -42,6 +44,39 @@ pub struct AuthStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub account_id: Option<String>,
     pub role: Role,
+}
+
+#[derive(Serialize)]
+pub struct DevAccount {
+    #[serde(flatten)]
+    pub public: AccountPublic,
+    pub role: Role,
+}
+
+pub async fn list_dev_accounts(
+    State(state): State<ApiState>,
+) -> Result<Json<Vec<DevAccount>>, StatusCode> {
+    let dev_login_enabled = std::env::var("AUTH_DEV_LOGIN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !dev_login_enabled {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let mut accounts: Vec<DevAccount> = state
+        .accounts
+        .values()
+        .map(|acc| DevAccount {
+            public: acc.public.clone(),
+            role: acc.role.clone(),
+        })
+        .collect();
+
+    // Sort by ID for deterministic order
+    accounts.sort_by(|a, b| a.public.id.cmp(&b.public.id));
+
+    Ok(Json(accounts))
 }
 
 pub async fn login(
