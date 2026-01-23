@@ -75,7 +75,7 @@
   // Helper to determine ownership and type
   $: isAccount = $selection?.type === 'account';
   // Check if current user is the owner of the selected account
-  $: isOwner = $authStore.loggedIn && $selection && $selection.id === $authStore.current_account_id;
+  $: isOwner = $authStore.authenticated && $selection && $selection.id === $authStore.account_id;
 
   // Enforce invariant: If it's an account and not owner, modules MUST be locked.
   // This auto-corrects any state drift from backend.

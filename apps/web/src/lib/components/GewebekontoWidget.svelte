@@ -15,7 +15,7 @@
   let loggedIn = false;
 
   const unsubscribe = authStore.subscribe((value) => {
-    loggedIn = value.loggedIn;
+    loggedIn = value.authenticated;
   });
 
   onDestroy(unsubscribe);

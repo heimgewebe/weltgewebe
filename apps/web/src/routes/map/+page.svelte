@@ -285,7 +285,7 @@
   }
 
   function toggleLogin() {
-    if ($authStore.loggedIn) {
+    if ($authStore.authenticated) {
       authStore.logout();
     } else {
       authStore.login('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
@@ -468,7 +468,7 @@
       {/if}
       <br>
       <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
-        {$authStore.loggedIn ? 'Logout' : 'Login Demo'}
+        {$authStore.authenticated ? 'Logout' : 'Login Demo'}
       </button>
     </div>
   {/if}
