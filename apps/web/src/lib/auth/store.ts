@@ -2,87 +2,106 @@ import { writable } from "svelte/store";
 import { browser } from "$app/environment";
 import { isRecord } from "$lib/utils/guards";
 
-// Definiert die Struktur des Benutzer-Objekts.
-interface User {
-  loggedIn: boolean;
-  role?: string;
-  current_account_id?: string;
+// Definiert die Struktur des Benutzer-Objekts passend zur API /auth/me
+export interface AuthStatus {
+  authenticated: boolean;
+  account_id?: string;
+  role: string;
 }
 
-const STORAGE_KEY = "gewebe_auth_user";
+const initialUser: AuthStatus = {
+  authenticated: false,
+  role: "gast",
+  account_id: undefined,
+};
 
-// Erstellt einen Store, um den Authentifizierungsstatus zu speichern.
-// Dieser Store ist ein Platzhalter und wird später durch eine echte
-// Session-Management-Logik ersetzt.
-// NICHT FÜR PRODUKTIVBETRIEB – nur Demo.
 const createAuthStore = () => {
-  // Initialisiere State aus localStorage, falls im Browser verfügbar
-  let initialUser: User = {
-    loggedIn: false,
-    role: undefined,
-    current_account_id: undefined,
-  };
+  const store = writable<AuthStatus>(initialUser);
+  const { subscribe, set } = store;
 
-  if (browser) {
+  // Helper to fetch current status
+  const checkAuth = async () => {
+    if (!browser) return initialUser;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-
-        // Validation: Ensure we have a valid object and only restore safe fields
-        if (isRecord(parsed) && typeof parsed.loggedIn === "boolean") {
-          initialUser = {
-            loggedIn: parsed.loggedIn,
-            // Do NOT restore role from storage to prevent privilege escalation via localStorage tampering.
-            // For this demo mock, we hardcode 'weber' if logged in, mirroring the login logic.
-            role: parsed.loggedIn ? "weber" : undefined,
-            current_account_id:
-              typeof parsed.current_account_id === "string"
-                ? parsed.current_account_id
-                : undefined,
+      const res = await fetch("/api/auth/me", { credentials: "include" });
+      if (res.ok) {
+        const data = await res.json();
+        // Validation: Ensure robust handling of API response
+        if (
+          isRecord(data) &&
+          typeof data.authenticated === "boolean" &&
+          typeof data.role === "string"
+        ) {
+          const validated: AuthStatus = {
+            authenticated: data.authenticated,
+            role: data.role,
+            account_id:
+              typeof data.account_id === "string" ? data.account_id : undefined,
           };
+          set(validated);
+          return validated;
+        } else {
+          console.warn("Invalid auth payload:", data);
         }
       }
+      // Fallback
+      set(initialUser);
+      return initialUser;
     } catch (e) {
-      console.warn("Auth restoration failed:", e);
+      console.warn("Auth check failed:", e);
+      set(initialUser);
+      return initialUser;
     }
-  }
-
-  const { subscribe, set } = writable<User>(initialUser);
+  };
 
   return {
     subscribe,
-    // Platzhalter-Funktion für den Login
-    // Requires accountId; injected for testing convenience
-    login: (accountId: string) => {
-      const user: User = {
-        loggedIn: true,
-        role: "weber",
-        current_account_id: accountId,
-      };
-      set(user);
-      if (browser) {
-        // Only persist safe fields, never the role
-        const safeStorage = {
-          loggedIn: true,
-          current_account_id: accountId,
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(safeStorage));
+    checkAuth,
+    login: async (accountId: string) => {
+      if (!browser) return;
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ account_id: accountId }),
+          credentials: "include",
+        });
+        if (res.ok) {
+          const newState = await checkAuth(); // Refresh state
+          if (!newState.authenticated) {
+            throw new Error(
+              "Login appeared successful but session was not established (cookie issue?).",
+            );
+          }
+        } else {
+          console.error("Login failed:", res.status);
+          throw new Error("Login failed");
+        }
+      } catch (e) {
+        console.error("Login error:", e);
+        throw e;
       }
     },
-    // Platzhalter-Funktion für den Logout
-    logout: () => {
-      const user: User = {
-        loggedIn: false,
-        role: undefined,
-        current_account_id: undefined,
-      };
-      set(user);
-      if (browser) {
-        localStorage.removeItem(STORAGE_KEY);
+    logout: async () => {
+      if (!browser) return;
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+        set(initialUser);
+      } catch (e) {
+        console.error("Logout error:", e);
+        // Even if network fails, we should clear local state
+        set(initialUser);
       }
     },
   };
 };
 
 export const authStore = createAuthStore();
+
+// Initialize in browser to restore session
+if (browser) {
+  authStore.checkAuth();
+}

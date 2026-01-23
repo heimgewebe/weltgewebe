@@ -24,7 +24,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
 
     // 2. Explicit exemptions
-    if req.uri().path().ends_with("/auth/login") {
+    if req.uri().path().ends_with("/auth/login") || req.uri().path().ends_with("/auth/logout") {
         return next.run(req).await;
     }
 
@@ -52,9 +52,10 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         // Check Referer
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
             let ref_lc = referer.to_ascii_lowercase();
-            if allowed_list.iter().any(|allowed| {
-                ref_lc == *allowed || ref_lc.starts_with(&format!("{}/", allowed))
-            }) {
+            if allowed_list
+                .iter()
+                .any(|allowed| ref_lc == *allowed || ref_lc.starts_with(&format!("{}/", allowed)))
+            {
                 return next.run(req).await;
             }
         }
