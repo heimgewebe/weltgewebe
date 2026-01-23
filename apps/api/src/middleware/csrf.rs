@@ -24,7 +24,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
 
     // 2. Explicit exemptions
-    if req.uri().path().ends_with("/auth/login") {
+    if req.uri().path().ends_with("/auth/login") || req.uri().path().ends_with("/auth/logout") {
         return next.run(req).await;
     }
 

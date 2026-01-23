@@ -21,7 +21,7 @@ const createAuthStore = () => {
   const checkAuth = async () => {
     if (!browser) return;
     try {
-      const res = await fetch("/api/auth/me");
+      const res = await fetch("/api/auth/me", { credentials: "include" });
       if (res.ok) {
         const data: AuthStatus = await res.json();
         set(data);
@@ -45,6 +45,7 @@ const createAuthStore = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ account_id: accountId }),
+          credentials: "include",
         });
         if (res.ok) {
           await checkAuth(); // Refresh state
@@ -60,7 +61,7 @@ const createAuthStore = () => {
     logout: async () => {
       if (!browser) return;
       try {
-        await fetch("/api/auth/logout", { method: "POST" });
+        await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
         set(initialUser);
       } catch (e) {
         console.error("Logout error:", e);
