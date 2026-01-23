@@ -23,6 +23,7 @@ This README provides a quick orientation for running and developing the service 
    - `API_BIND` &mdash; socket address to bind the API (default `0.0.0.0:8080`)
    - `DATABASE_URL` &mdash; PostgreSQL connection string (e.g. `postgres://user:password@localhost:5432/weltgewebe`)
    - `NATS_URL` &mdash; URL of the NATS server (e.g. `nats://127.0.0.1:4222`) when messaging is enabled
+   - `AUTH_COOKIE_SECURE` &mdash; Set to `0` if you are developing locally over HTTP (non-HTTPS) to ensure cookies are accepted by the browser.
 
 4. **Run the API**
 
