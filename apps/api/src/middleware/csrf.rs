@@ -52,9 +52,10 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         // Check Referer
         if let Some(referer) = headers.get("referer").and_then(|v| v.to_str().ok()) {
             let ref_lc = referer.to_ascii_lowercase();
-            if allowed_list.iter().any(|allowed| {
-                ref_lc == *allowed || ref_lc.starts_with(&format!("{}/", allowed))
-            }) {
+            if allowed_list
+                .iter()
+                .any(|allowed| ref_lc == *allowed || ref_lc.starts_with(&format!("{}/", allowed)))
+            {
                 return next.run(req).await;
             }
         }
