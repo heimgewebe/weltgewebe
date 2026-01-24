@@ -63,6 +63,15 @@ you can whitelist origins:
 
 **Note:** The `/auth/login` endpoint is exempted from CSRF checks to facilitate initial session creation.
 
+## Developer Login (Security Warning)
+
+For development purposes, a specialized login route is available to facilitate role-based testing without authentication providers.
+
+- **Variable:** `AUTH_DEV_LOGIN`
+- **Default:** `0` (disabled)
+- **Usage:** Set to `1` to enable `GET /auth/dev/accounts` and bypass production authentication flows.
+- **WARNING:** **NEVER enable this in production.** It exposes a list of all accounts and allows impersonation of any role (Admin/Weber) without credentials.
+
 ## Observability
 
 - `GET /health/live` and `GET /health/ready` expose liveness and readiness information.

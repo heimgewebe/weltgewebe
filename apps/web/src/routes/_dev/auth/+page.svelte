@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { authStore } from '$lib/auth/store';
+  import { browser } from '$app/environment';
 
   interface DevAccount {
     id: string;
@@ -34,7 +35,7 @@
     try {
       await authStore.login(id);
       // Refresh to update UI
-      window.location.reload();
+      if (browser) window.location.reload();
     } catch (e) {
       alert('Login failed: ' + e);
     }
@@ -42,7 +43,7 @@
 
   async function logout() {
     await authStore.logout();
-    window.location.reload();
+    if (browser) window.location.reload();
   }
 </script>
 
