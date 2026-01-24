@@ -3,6 +3,7 @@
   import { browser } from '$app/environment';
 
   async function logout() {
+    if (!browser) return;
     await authStore.logout();
     window.location.reload();
   }

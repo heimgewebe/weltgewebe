@@ -1,11 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { authStore } from '$lib/auth/store';
-  import { goto } from '$app/navigation';
 
   interface DevAccount {
     id: string;
-    type: string;
     title: string;
     role: string;
     summary?: string;
@@ -20,6 +18,8 @@
       const res = await fetch('/api/auth/dev/accounts');
       if (res.ok) {
         accounts = await res.json();
+      } else if (res.status === 404) {
+        error = 'Dev login disabled (AUTH_DEV_LOGIN=0).';
       } else {
         error = `Failed to load accounts: ${res.status}`;
       }
