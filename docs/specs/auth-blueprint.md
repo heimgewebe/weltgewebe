@@ -278,7 +278,8 @@ Dev-Abkürzungen sauber absichern.
 
 ### Dev-Login Hardening
 
-- **Guardrail:** `/auth/dev/accounts` zusätzlich auf `localhost` einschränken oder explizites `AUTH_DEV_LOGIN_ALLOW_REMOTE` Flag fordern.
+- **Guardrail:** `/auth/dev/accounts` zusätzlich auf `localhost` einschränken oder explizites
+  `AUTH_DEV_LOGIN_ALLOW_REMOTE` Flag fordern.
 - **Auditability:** Zugriff auf Dev-Endpunkte loggen (Warn-Level), um versehentliche Aktivierung sichtbar zu machen.
 - **UX:** `window.location.reload()` im Frontend durch reaktive `checkAuth()`-Updates ersetzen (vermeidet State-Verlust).
 

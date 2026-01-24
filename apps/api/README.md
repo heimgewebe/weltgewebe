@@ -70,7 +70,8 @@ For development purposes, a specialized login route is available to facilitate r
 - **Variable:** `AUTH_DEV_LOGIN`
 - **Default:** `0` (disabled)
 - **Usage:** Set to `1` to enable `GET /auth/dev/accounts` and bypass production authentication flows.
-- **WARNING:** **NEVER enable this in production.** It exposes a list of all accounts and allows impersonation of any role (Admin/Weber) without credentials.
+- **WARNING:** **NEVER enable this in production.** It exposes a list of all accounts and allows impersonation of
+  any role (Admin/Weber) without credentials.
 
 ## Observability
 

@@ -37,7 +37,7 @@
       // Refresh to update UI
       if (browser) window.location.reload();
     } catch (e) {
-      alert('Login failed: ' + e);
+      error = 'Login failed: ' + String(e);
     }
   }
 
