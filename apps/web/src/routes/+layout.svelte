@@ -8,6 +8,7 @@
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
   import type { LayoutData } from './$types';
+  import AuthStatus from '$lib/auth/AuthStatus.svelte';
 
   export let data: LayoutData;
 
@@ -26,4 +27,5 @@
   {/if}
 </svelte:head>
 
+<AuthStatus />
 <slot />

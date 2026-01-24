@@ -44,6 +44,42 @@ pub struct AuthStatus {
     pub role: Role,
 }
 
+#[derive(Serialize)]
+pub struct DevAccount {
+    pub id: String,
+    pub title: String,
+    pub summary: Option<String>,
+    pub role: Role,
+}
+
+pub async fn list_dev_accounts(
+    State(state): State<ApiState>,
+) -> Result<Json<Vec<DevAccount>>, StatusCode> {
+    let dev_login_enabled = std::env::var("AUTH_DEV_LOGIN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !dev_login_enabled {
+        return Err(StatusCode::NOT_FOUND);
+    }
+
+    let mut accounts: Vec<DevAccount> = state
+        .accounts
+        .values()
+        .map(|acc| DevAccount {
+            id: acc.public.id.clone(),
+            title: acc.public.title.clone(),
+            summary: acc.public.summary.clone(),
+            role: acc.role.clone(),
+        })
+        .collect();
+
+    // Sort by ID for deterministic order
+    accounts.sort_by(|a, b| a.id.cmp(&b.id));
+
+    Ok(Json(accounts))
+}
+
 pub async fn login(
     State(state): State<ApiState>,
     jar: CookieJar,
