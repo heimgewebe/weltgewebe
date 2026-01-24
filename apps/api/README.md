@@ -36,7 +36,8 @@ This README provides a quick orientation for running and developing the service 
 
 ## Security: CSRF & Proxy Configuration
 
-The API implements strict CSRF protection for all state-changing endpoints (POST, PATCH, PUT, DELETE) that use session authentication.
+The API implements strict CSRF protection for all state-changing endpoints (POST, PATCH, PUT, DELETE) that use session
+authentication.
 
 ### Host Header Requirement
 
@@ -65,7 +66,8 @@ you can whitelist origins:
 
 ## Developer Login (Security Warning)
 
-For development purposes, a specialized login route is available to facilitate role-based testing without authentication providers.
+For development purposes, a specialized login route is available to facilitate role-based testing without
+authentication providers.
 
 - **Variable:** `AUTH_DEV_LOGIN`
 - **Default:** `0` (disabled)
