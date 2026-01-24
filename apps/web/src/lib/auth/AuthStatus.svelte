@@ -1,6 +1,6 @@
 <script lang="ts">
   import { authStore } from './store';
-  import { browser } from '$app/environment';
+  import { browser, dev } from '$app/environment';
 
   async function logout() {
     if (!browser) return;
@@ -9,7 +9,7 @@
   }
 </script>
 
-{#if browser && $authStore.authenticated}
+{#if browser && dev && $authStore.authenticated}
   <div class="auth-status">
     <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'}>
       {$authStore.role}
