@@ -56,8 +56,8 @@
   }
 
   .role-badge.gast {
-    background: #888;
-    color: var(--color-bg-1);
+    background: var(--muted);
+    color: var(--bg);
   }
 
   .logout-btn {

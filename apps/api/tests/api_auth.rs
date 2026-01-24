@@ -169,6 +169,26 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn list_dev_accounts_succeeds_ipv6_localhost() -> Result<()> {
+    unsafe { std::env::set_var("AUTH_DEV_LOGIN", "1"); }
+    let _defer = defer_env_remove("AUTH_DEV_LOGIN");
+
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    // Test bracketed IPv6 with port
+    let req = Request::get("/auth/dev/accounts")
+        .header("Host", "[::1]:8080")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn list_dev_accounts_fails_when_dev_login_disabled() -> Result<()> {
     unsafe { std::env::remove_var("AUTH_DEV_LOGIN"); }
     let state = test_state_with_accounts()?;

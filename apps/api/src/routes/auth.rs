@@ -69,15 +69,15 @@ pub async fn list_dev_accounts(
         .unwrap_or(false);
 
     let host = headers
-        .get("host")
+        .get(axum::http::header::HOST)
         .and_then(|h| h.to_str().ok())
         .unwrap_or("");
 
-    // Simple localhost detection
+    // Simple localhost detection (stripping ports and brackets)
     let hostname = if host.starts_with('[') {
         // IPv6 literal, e.g. [::1] or [::1]:8080
         if let Some(end) = host.rfind(']') {
-            &host[0..=end]
+            &host[1..end] // Strip brackets to get pure ::1
         } else {
             host
         }
@@ -86,7 +86,7 @@ pub async fn list_dev_accounts(
         host.split(':').next().unwrap_or(host)
     };
 
-    let is_localhost = matches!(hostname, "localhost" | "127.0.0.1" | "::1" | "[::1]");
+    let is_localhost = matches!(hostname, "localhost" | "127.0.0.1" | "::1");
 
     tracing::warn!(
         host = host,
