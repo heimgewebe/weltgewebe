@@ -89,7 +89,8 @@ const createAuthStore = () => {
           method: "POST",
           credentials: "include",
         });
-        set(initialUser);
+        // Verify logout with server and update state
+        await checkAuth();
       } catch (e) {
         console.error("Logout error:", e);
         // Even if network fails, we should clear local state

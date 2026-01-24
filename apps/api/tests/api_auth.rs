@@ -43,6 +43,43 @@ fn test_state() -> Result<ApiState> {
     })
 }
 
+fn test_state_with_accounts() -> Result<ApiState> {
+    let mut state = test_state()?;
+    let mut account_map = HashMap::new();
+
+    account_map.insert("u1".to_string(), AccountInternal {
+        public: AccountPublic {
+            id: "u1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User One".to_string(),
+            summary: Some("Summary 1".to_string()),
+            public_pos: None,
+            visibility: Visibility::Public,
+            radius_m: 0,
+            ron_flag: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+    });
+    account_map.insert("a1".to_string(), AccountInternal {
+        public: AccountPublic {
+            id: "a1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Admin One".to_string(),
+            summary: None,
+            public_pos: None,
+            visibility: Visibility::Public,
+            radius_m: 0,
+            ron_flag: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+    });
+
+    state.accounts = Arc::new(account_map);
+    Ok(state)
+}
+
 fn app(state: ApiState) -> Router {
     Router::new().merge(api_router()).with_state(state)
 }
@@ -127,5 +164,91 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     assert!(cookie.contains("HttpOnly"));
     assert!(cookie.contains("SameSite=Strict"));
 
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn list_dev_accounts_fails_when_dev_login_disabled() -> Result<()> {
+    unsafe { std::env::remove_var("AUTH_DEV_LOGIN"); }
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    let req = Request::get("/auth/dev/accounts")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn list_dev_accounts_succeeds_localhost() -> Result<()> {
+    unsafe { std::env::set_var("AUTH_DEV_LOGIN", "1"); }
+    let _defer = defer_env_remove("AUTH_DEV_LOGIN");
+
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    let req = Request::get("/auth/dev/accounts")
+        .header("Host", "localhost:8080")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let accounts: Vec<serde_json::Value> = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(accounts.len(), 2);
+    // Sort order check: a1 should be before u1
+    assert_eq!(accounts[0]["id"], "a1");
+    assert_eq!(accounts[1]["id"], "u1");
+    assert_eq!(accounts[0]["role"], "admin");
+    assert_eq!(accounts[1]["role"], "gast");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn list_dev_accounts_fails_remote() -> Result<()> {
+    unsafe {
+        std::env::set_var("AUTH_DEV_LOGIN", "1");
+        std::env::remove_var("AUTH_DEV_LOGIN_ALLOW_REMOTE");
+    }
+    let _defer = defer_env_remove("AUTH_DEV_LOGIN");
+
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    let req = Request::get("/auth/dev/accounts")
+        .header("Host", "example.com")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn list_dev_accounts_succeeds_remote_allowed() -> Result<()> {
+    unsafe {
+        std::env::set_var("AUTH_DEV_LOGIN", "1");
+        std::env::set_var("AUTH_DEV_LOGIN_ALLOW_REMOTE", "1");
+    }
+    let _defer1 = defer_env_remove("AUTH_DEV_LOGIN");
+    let _defer2 = defer_env_remove("AUTH_DEV_LOGIN_ALLOW_REMOTE");
+
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    let req = Request::get("/auth/dev/accounts")
+        .header("Host", "example.com")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
     Ok(())
 }

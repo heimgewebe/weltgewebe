@@ -5,13 +5,12 @@
   async function logout() {
     if (!browser) return;
     await authStore.logout();
-    window.location.reload();
   }
 </script>
 
 {#if browser && dev && $authStore.authenticated}
   <div class="auth-status">
-    <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'}>
+    <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
       {$authStore.role}
     </span>
     <button class="logout-btn" on:click={logout} title="Logout">
@@ -53,6 +52,11 @@
 
   .role-badge.weber {
     background: var(--color-theme-2);
+    color: var(--color-bg-1);
+  }
+
+  .role-badge.gast {
+    background: #888;
     color: var(--color-bg-1);
   }
 

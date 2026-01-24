@@ -54,6 +54,7 @@ pub struct DevAccount {
 
 pub async fn list_dev_accounts(
     State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     let dev_login_enabled = std::env::var("AUTH_DEV_LOGIN")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
@@ -61,6 +62,41 @@ pub async fn list_dev_accounts(
 
     if !dev_login_enabled {
         return Err(StatusCode::NOT_FOUND);
+    }
+
+    let allow_remote = std::env::var("AUTH_DEV_LOGIN_ALLOW_REMOTE")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    let host = headers
+        .get("host")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("");
+
+    // Simple localhost detection
+    let hostname = if host.starts_with('[') {
+        // IPv6 literal, e.g. [::1] or [::1]:8080
+        if let Some(end) = host.rfind(']') {
+            &host[0..=end]
+        } else {
+            host
+        }
+    } else {
+        // IPv4 or domain, strip port
+        host.split(':').next().unwrap_or(host)
+    };
+
+    let is_localhost = matches!(hostname, "localhost" | "127.0.0.1" | "::1" | "[::1]");
+
+    tracing::warn!(
+        host = host,
+        remote = !is_localhost,
+        allow_remote = allow_remote,
+        "dev-login endpoint accessed"
+    );
+
+    if !is_localhost && !allow_remote {
+        return Err(StatusCode::FORBIDDEN);
     }
 
     let mut accounts: Vec<DevAccount> = state
