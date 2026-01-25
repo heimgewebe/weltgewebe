@@ -65,7 +65,8 @@ export async function mockApiResponses(page: Page): Promise<void> {
         return route.fulfill({
           status: 200,
           headers: {
-            "Set-Cookie": "gewebe_session=mock_session; Path=/; HttpOnly; SameSite=Strict; Secure",
+            "Set-Cookie":
+              "gewebe_session=mock_session; Path=/; HttpOnly; SameSite=Strict; Secure",
           },
         });
       } catch {
@@ -80,7 +81,8 @@ export async function mockApiResponses(page: Page): Promise<void> {
       return route.fulfill({
         status: 200,
         headers: {
-          "Set-Cookie": "gewebe_session=; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=0",
+          "Set-Cookie":
+            "gewebe_session=; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=0",
         },
       });
     }
@@ -88,15 +90,13 @@ export async function mockApiResponses(page: Page): Promise<void> {
     // Handle auth/me
     if (url.includes("/api/auth/me")) {
       if (isAuthenticated && currentAccountId) {
-        // Find account role from demoAccounts
-        const account = demoAccounts.find((a) => a.id === currentAccountId);
         return route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
             authenticated: true,
             account_id: currentAccountId,
-            role: account?.role || "gast",
+            role: "gast",
           }),
         });
       } else {
