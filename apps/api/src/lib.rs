@@ -84,7 +84,11 @@ pub async fn run() -> anyhow::Result<()> {
     tracing::info!(%bind_addr, "starting API server");
 
     let listener = TcpListener::bind(bind_addr).await?;
-    axum::serve(listener, app).await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await?;
 
     Ok(())
 }
