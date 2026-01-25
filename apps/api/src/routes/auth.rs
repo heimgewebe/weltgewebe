@@ -1,11 +1,12 @@
 use axum::{
-    extract::{Json, State},
+    extract::{ConnectInfo, Json, State},
     http::StatusCode,
     response::IntoResponse,
     Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use time::Duration;
 
 use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
@@ -52,10 +53,9 @@ pub struct DevAccount {
     pub role: Role,
 }
 
-pub async fn list_dev_accounts(
-    State(state): State<ApiState>,
-    headers: axum::http::HeaderMap,
-) -> Result<Json<Vec<DevAccount>>, StatusCode> {
+/// Checks if dev-login is enabled and if the request is from an allowed source.
+/// Returns Ok(()) if the request should be allowed, or Err(StatusCode) otherwise.
+fn check_dev_login_guard(addr: SocketAddr) -> Result<(), StatusCode> {
     let dev_login_enabled = std::env::var("AUTH_DEV_LOGIN")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
@@ -68,36 +68,32 @@ pub async fn list_dev_accounts(
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
         .unwrap_or(false);
 
-    let host = headers
-        .get(axum::http::header::HOST)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-
-    // Simple localhost detection (stripping ports and brackets)
-    let hostname = if host.starts_with('[') {
-        // IPv6 literal, e.g. [::1] or [::1]:8080
-        if let Some(end) = host.rfind(']') {
-            &host[1..end] // Strip brackets to get pure ::1
-        } else {
-            host
-        }
-    } else {
-        // IPv4 or domain, strip port
-        host.split(':').next().unwrap_or(host)
+    // Check if the client address is localhost (IPv4 or IPv6)
+    let is_localhost = match addr.ip() {
+        std::net::IpAddr::V4(ip) => ip.is_loopback(),
+        std::net::IpAddr::V6(ip) => ip.is_loopback(),
     };
 
-    let is_localhost = matches!(hostname, "localhost" | "127.0.0.1" | "::1");
-
+    // Audit log for security monitoring
     tracing::warn!(
-        host = host,
-        remote = !is_localhost,
+        client_addr = %addr,
+        is_localhost = is_localhost,
         allow_remote = allow_remote,
-        "dev-login endpoint accessed"
+        "dev-login access attempt"
     );
 
     if !is_localhost && !allow_remote {
         return Err(StatusCode::FORBIDDEN);
     }
+
+    Ok(())
+}
+
+pub async fn list_dev_accounts(
+    State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Result<Json<Vec<DevAccount>>, StatusCode> {
+    check_dev_login_guard(addr)?;
 
     let mut accounts: Vec<DevAccount> = state
         .accounts
@@ -118,17 +114,22 @@ pub async fn list_dev_accounts(
 
 pub async fn login(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
-    // SECURITY: Dev-Login only active if explicitly enabled via feature flag
-    let dev_login_enabled = std::env::var("AUTH_DEV_LOGIN")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if !dev_login_enabled {
-        tracing::warn!("Login attempt refused: AUTH_DEV_LOGIN is not enabled");
-        return (jar, StatusCode::NOT_FOUND);
+    // Check dev-login guard (enabled + localhost/remote check)
+    if let Err(status) = check_dev_login_guard(addr) {
+        if status == StatusCode::NOT_FOUND {
+            tracing::warn!("Login attempt refused: AUTH_DEV_LOGIN is not enabled");
+        } else if status == StatusCode::FORBIDDEN {
+            tracing::warn!(
+                client_addr = %addr,
+                account_id = %payload.account_id,
+                "Login attempt refused: remote access not allowed"
+            );
+        }
+        return (jar, status);
     }
 
     if !state.accounts.contains_key(&payload.account_id) {
