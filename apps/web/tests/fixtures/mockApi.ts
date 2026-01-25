@@ -16,8 +16,13 @@ import {
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
+  // Track auth state in the mock
+  let isAuthenticated = false;
+  let currentAccountId: string | null = null;
+
   await page.route("**/api/**", async (route) => {
     const url = route.request().url();
+    const method = route.request().method();
 
     if (url.endsWith("/api/nodes")) {
       return route.fulfill({
@@ -49,6 +54,61 @@ export async function mockApiResponses(page: Page): Promise<void> {
         contentType: "application/json",
         body: JSON.stringify({ status: "Ready" }),
       });
+    }
+
+    // Handle auth/login
+    if (url.includes("/api/auth/login") && method === "POST") {
+      try {
+        const postData = route.request().postDataJSON();
+        currentAccountId = postData?.account_id || null;
+        isAuthenticated = true;
+        return route.fulfill({
+          status: 200,
+          headers: {
+            "Set-Cookie": "gewebe_session=mock_session; Path=/; HttpOnly; SameSite=Strict; Secure",
+          },
+        });
+      } catch {
+        return route.fulfill({ status: 400 });
+      }
+    }
+
+    // Handle auth/logout
+    if (url.includes("/api/auth/logout") && method === "POST") {
+      isAuthenticated = false;
+      currentAccountId = null;
+      return route.fulfill({
+        status: 200,
+        headers: {
+          "Set-Cookie": "gewebe_session=; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=0",
+        },
+      });
+    }
+
+    // Handle auth/me
+    if (url.includes("/api/auth/me")) {
+      if (isAuthenticated && currentAccountId) {
+        // Find account role from demoAccounts
+        const account = demoAccounts.find((a) => a.id === currentAccountId);
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            authenticated: true,
+            account_id: currentAccountId,
+            role: account?.role || "gast",
+          }),
+        });
+      } else {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            authenticated: false,
+            role: "gast",
+          }),
+        });
+      }
     }
 
     // Default: empty, no error objects
