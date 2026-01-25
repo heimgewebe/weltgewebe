@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { authStore } from '$lib/auth/store';
-  import { browser } from '$app/environment';
 
   interface DevAccount {
     id: string;

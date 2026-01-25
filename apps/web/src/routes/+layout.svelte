@@ -27,6 +27,6 @@
   {/if}
 </svelte:head>
 
-<!-- Dev-only: shows auth status when using AUTH_DEV_LOGIN -->
+<!-- Dev-only: shows auth status overlay in dev mode -->
 <AuthStatus />
 <slot />
