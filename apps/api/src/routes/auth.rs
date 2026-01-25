@@ -74,6 +74,14 @@ fn check_dev_login_guard(addr: SocketAddr) -> Result<(), StatusCode> {
         std::net::IpAddr::V6(ip) => ip.is_loopback(),
     };
 
+    // Audit log for security monitoring
+    tracing::warn!(
+        client_addr = %addr,
+        is_localhost = is_localhost,
+        allow_remote = allow_remote,
+        "dev-login access attempt"
+    );
+
     if !is_localhost && !allow_remote {
         return Err(StatusCode::FORBIDDEN);
     }
@@ -86,23 +94,6 @@ pub async fn list_dev_accounts(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     check_dev_login_guard(addr)?;
-
-    // Check if the client address is localhost (IPv4 or IPv6)
-    let is_localhost = match addr.ip() {
-        std::net::IpAddr::V4(ip) => ip.is_loopback(),
-        std::net::IpAddr::V6(ip) => ip.is_loopback(),
-    };
-
-    let allow_remote = std::env::var("AUTH_DEV_LOGIN_ALLOW_REMOTE")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    tracing::warn!(
-        client_addr = %addr,
-        is_localhost = is_localhost,
-        allow_remote = allow_remote,
-        "dev-login endpoint accessed"
-    );
 
     let mut accounts: Vec<DevAccount> = state
         .accounts
