@@ -9,14 +9,19 @@
   }
 </script>
 
-{#if browser && dev && $authStore.authenticated}
+{#if browser && dev}
   <div class="auth-status">
-    <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'}>
-      {$authStore.role}
-    </span>
-    <button class="logout-btn" on:click={logout} title="Logout">
-      ✕
-    </button>
+    {#if $authStore.authenticated}
+      <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'}>
+        {$authStore.role}
+      </span>
+      <button class="logout-btn" on:click={logout} title="Logout">
+        ✕
+      </button>
+    {:else}
+      <span class="role-badge gast">Gast</span>
+      <a href="/_dev/auth" class="login-link">Login</a>
+    {/if}
   </div>
 {/if}
 
@@ -29,7 +34,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    background: var(--color-bg-1);
+    background: var(--color-bg-1, var(--panel));
     padding: 0.25rem;
     border-radius: 99px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.2);
@@ -40,10 +45,15 @@
   .role-badge {
     padding: 0.1rem 0.5rem;
     border-radius: 99px;
-    background: var(--color-bg-2);
+    background: var(--color-bg-2, var(--muted));
     text-transform: uppercase;
     font-weight: bold;
     font-size: 0.7rem;
+  }
+
+  .role-badge.gast {
+    background: var(--muted);
+    color: var(--bg);
   }
 
   .role-badge.admin {
@@ -54,6 +64,18 @@
   .role-badge.weber {
     background: var(--color-theme-2);
     color: var(--color-bg-1);
+  }
+
+  .login-link {
+    font-size: 0.8rem;
+    color: var(--fg, #e7ebee);
+    text-decoration: none;
+    font-weight: bold;
+    padding: 0 0.25rem;
+    margin-right: 0.25rem;
+  }
+  .login-link:hover {
+     text-decoration: underline;
   }
 
   .logout-btn {
