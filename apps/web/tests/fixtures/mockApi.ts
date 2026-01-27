@@ -96,7 +96,7 @@ export async function mockApiResponses(page: Page): Promise<void> {
           body: JSON.stringify({
             authenticated: true,
             account_id: currentAccountId,
-            role: "gast",
+            role: account?.role ?? "gast",
           }),
         });
       } else {
