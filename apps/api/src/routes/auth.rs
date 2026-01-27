@@ -125,9 +125,10 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
 
     // Check Forwarded header (RFC 7239)
     // Format: Forwarded: for=1.2.3.4, for=5.6.7.8;proto=http
+    // We only trust the first (left-most) element as the client IP.
     if let Some(forwarded_val) = headers.get("Forwarded").and_then(|v| v.to_str().ok()) {
-        for element in forwarded_val.split(',') {
-            for part in element.split(';') {
+        if let Some(first_element) = forwarded_val.split(',').next() {
+            for part in first_element.split(';') {
                 let part = part.trim();
                 if part.to_lowercase().starts_with("for=") {
                     let val = part["for=".len()..].trim();
@@ -192,7 +193,7 @@ fn check_dev_login_guard(headers: &HeaderMap, addr: SocketAddr) -> Result<(), St
     };
 
     // Audit log for security monitoring
-    tracing::warn!(
+    tracing::info!(
         peer_addr = %addr,
         effective_ip = %client_ip,
         is_trusted_proxy = is_trusted_proxy,
@@ -202,6 +203,11 @@ fn check_dev_login_guard(headers: &HeaderMap, addr: SocketAddr) -> Result<(), St
     );
 
     if !is_localhost && !allow_remote {
+        tracing::warn!(
+            peer_addr = %addr,
+            effective_ip = %client_ip,
+            "dev-login access rejected (remote source)"
+        );
         return Err(StatusCode::FORBIDDEN);
     }
 
