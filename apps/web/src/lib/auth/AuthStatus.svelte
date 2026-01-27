@@ -8,14 +8,19 @@
   }
 </script>
 
-{#if browser && dev && $authStore.authenticated}
+{#if browser && dev}
   <div class="auth-status">
     <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
       {$authStore.role}
     </span>
-    <button class="logout-btn" on:click={logout} title="Logout">
-      ✕
-    </button>
+
+    {#if $authStore.authenticated}
+      <button class="logout-btn" on:click={logout} title="Logout" aria-label="Logout">
+        ✕
+      </button>
+    {:else}
+      <a href="/_dev/auth" class="login-link" title="Dev Login">Login</a>
+    {/if}
   </div>
 {/if}
 
@@ -72,5 +77,17 @@
   .logout-btn:hover {
     opacity: 1;
     color: var(--color-danger);
+  }
+
+  .login-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 0 0.5rem;
+    opacity: 0.8;
+  }
+  .login-link:hover {
+    opacity: 1;
+    text-decoration: underline;
   }
 </style>
