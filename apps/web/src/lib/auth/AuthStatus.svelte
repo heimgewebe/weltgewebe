@@ -10,22 +10,15 @@
 
 {#if browser && dev}
   <div class="auth-status">
+    <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
+      {$authStore.role}
+    </span>
+
     {#if $authStore.authenticated}
-      <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
-        {$authStore.role}
-      </span>
       <button class="logout-btn" on:click={logout} title="Logout">
         ✕
       </button>
     {:else}
-      <span
-        class="role-badge"
-        class:admin={$authStore.role === 'admin'}
-        class:weber={$authStore.role === 'weber'}
-        class:gast={$authStore.role === 'gast'}
-      >
-        {$authStore.role}
-      </span>
       <a href="/_dev/auth" class="login-link" title="Dev Login">Login</a>
     {/if}
   </div>
