@@ -90,8 +90,6 @@ export async function mockApiResponses(page: Page): Promise<void> {
     // Handle auth/me
     if (url.includes("/api/auth/me")) {
       if (isAuthenticated && currentAccountId) {
-        // Find account role from demoAccounts
-        const account = demoAccounts.find((a) => a.id === currentAccountId);
         return route.fulfill({
           status: 200,
           contentType: "application/json",
