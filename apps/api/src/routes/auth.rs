@@ -8,6 +8,8 @@ use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::net::{IpAddr, SocketAddr};
+#[cfg(not(test))]
+use std::sync::OnceLock;
 use time::Duration;
 
 use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
@@ -54,21 +56,66 @@ pub struct DevAccount {
     pub role: Role,
 }
 
-fn is_trusted_peer(ip: IpAddr) -> bool {
-    let trusted_proxies_str = std::env::var("AUTH_TRUSTED_PROXIES").unwrap_or_default();
-    trusted_proxies_str
+#[derive(Clone)]
+enum TrustedProxyRule {
+    Ip(IpAddr),
+    Net(IpNet),
+}
+
+impl TrustedProxyRule {
+    fn matches(&self, ip: IpAddr) -> bool {
+        match self {
+            TrustedProxyRule::Ip(addr) => *addr == ip,
+            TrustedProxyRule::Net(net) => net.contains(&ip),
+        }
+    }
+}
+
+fn parse_trusted_proxies(env_val: String) -> Vec<TrustedProxyRule> {
+    // Default to localhost if unset or empty (Strategy A: Secure defaults for dev)
+    let config = if env_val.trim().is_empty() {
+        "127.0.0.1,::1"
+    } else {
+        &env_val
+    };
+
+    config
         .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
-        .any(|s| {
+        .filter_map(|s| {
             if let Ok(net) = s.parse::<IpNet>() {
-                net.contains(&ip)
+                Some(TrustedProxyRule::Net(net))
             } else if let Ok(addr) = s.parse::<IpAddr>() {
-                addr == ip
+                Some(TrustedProxyRule::Ip(addr))
             } else {
-                false
+                tracing::warn!(rule = s, "failed to parse trusted proxy rule; ignoring");
+                None
             }
         })
+        .collect()
+}
+
+fn get_trusted_proxies() -> &'static [TrustedProxyRule] {
+    #[cfg(not(test))]
+    {
+        static TRUSTED_PROXIES: OnceLock<Vec<TrustedProxyRule>> = OnceLock::new();
+        TRUSTED_PROXIES.get_or_init(|| {
+            let env_val = std::env::var("AUTH_TRUSTED_PROXIES").unwrap_or_default();
+            parse_trusted_proxies(env_val)
+        })
+    }
+    #[cfg(test)]
+    {
+        // Leak memory to return a static reference in tests (acceptable for test suite execution)
+        let env_val = std::env::var("AUTH_TRUSTED_PROXIES").unwrap_or_default();
+        let rules = parse_trusted_proxies(env_val);
+        Box::leak(rules.into_boxed_slice())
+    }
+}
+
+fn is_trusted_peer(ip: IpAddr) -> bool {
+    get_trusted_proxies().iter().any(|rule| rule.matches(ip))
 }
 
 fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
@@ -77,28 +124,31 @@ fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
     }
 
     // Check Forwarded header (RFC 7239)
+    // Format: Forwarded: for=1.2.3.4, for=5.6.7.8;proto=http
     if let Some(forwarded_val) = headers.get("Forwarded").and_then(|v| v.to_str().ok()) {
-        for part in forwarded_val.split(';') {
-            let part = part.trim();
-            if part.to_lowercase().starts_with("for=") {
-                let val = part["for=".len()..].trim();
-                let val = val.trim_matches('"');
+        for element in forwarded_val.split(',') {
+            for part in element.split(';') {
+                let part = part.trim();
+                if part.to_lowercase().starts_with("for=") {
+                    let val = part["for=".len()..].trim();
+                    let val = val.trim_matches('"');
 
-                // Try parsing as SocketAddr first (handles [ipv6]:port)
-                if let Ok(addr) = val.parse::<SocketAddr>() {
-                    return addr.ip();
-                }
+                    // Try parsing as SocketAddr first (handles [ipv6]:port)
+                    if let Ok(addr) = val.parse::<SocketAddr>() {
+                        return addr.ip();
+                    }
 
-                // Try parsing as IpAddr (handles ipv4, ipv6)
-                if let Ok(addr) = val.parse::<IpAddr>() {
-                    return addr;
-                }
-
-                // Handle [ipv6] without port (strip brackets)
-                if val.starts_with('[') && val.ends_with(']') {
-                    let inner = &val[1..val.len() - 1];
-                    if let Ok(addr) = inner.parse::<IpAddr>() {
+                    // Try parsing as IpAddr (handles ipv4, ipv6)
+                    if let Ok(addr) = val.parse::<IpAddr>() {
                         return addr;
+                    }
+
+                    // Handle [ipv6] without port (strip brackets)
+                    if val.starts_with('[') && val.ends_with(']') {
+                        let inner = &val[1..val.len() - 1];
+                        if let Ok(addr) = inner.parse::<IpAddr>() {
+                            return addr;
+                        }
                     }
                 }
             }
@@ -301,8 +351,9 @@ mod tests {
     #[serial]
     fn test_untrusted_proxy_spoofing_localhost_rejected() {
         let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
-        // No trusted proxies configured (or empty)
-        let _guard_proxy = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+        // Explicitly set trusted proxies to something else (or ::1) to ensure 1.2.3.4 is untrusted
+        // OR rely on peer not matching default
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
         let mut headers = HeaderMap::new();
         headers.insert("X-Forwarded-For", "127.0.0.1".parse().unwrap());
@@ -310,6 +361,21 @@ mod tests {
         let addr: SocketAddr = "1.2.3.4:8080".parse().unwrap();
         // Untrusted peer (1.2.3.4) sends XFF: 127.0.0.1
         // Should ignore XFF, see 1.2.3.4 -> Rejected
+        assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    #[serial]
+    fn test_default_trusted_proxies_include_localhost() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        // Unset AUTH_TRUSTED_PROXIES to test default behavior (Strategy A)
+        let _guard_proxy = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "1.2.3.4".parse().unwrap());
+
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        // Default trusts localhost -> Reads XFF -> Sees 1.2.3.4 -> Rejected
         assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
     }
 
@@ -329,6 +395,20 @@ mod tests {
         // Remote IPv4 in Forwarded
         let mut headers = HeaderMap::new();
         headers.insert("Forwarded", "for=1.2.3.4".parse().unwrap());
+        assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
+    }
+
+    #[test]
+    #[serial]
+    fn test_forwarded_multi_element_parsing() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+
+        let mut headers = HeaderMap::new();
+        // Comma separated elements. First one is remote, second is localhost. Should pick first -> Rejected.
+        headers.insert("Forwarded", "for=1.2.3.4, for=127.0.0.1".parse().unwrap());
+
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
     }
 }
