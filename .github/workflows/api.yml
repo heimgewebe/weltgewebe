@@ -53,9 +53,9 @@ jobs:
           PY
 
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "stable"
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache cargo
@@ -83,9 +83,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "stable"
+          toolchain: stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --force
       - name: cargo audit
