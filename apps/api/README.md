@@ -75,6 +75,18 @@ authentication providers.
 - **WARNING:** **NEVER enable this in production.** It exposes a list of all accounts and allows impersonation of
   any role (Admin/Weber) without credentials.
 
+### Remote Access & Proxies
+
+By default, dev-login is restricted to requests originating from **localhost**.
+
+- **`AUTH_DEV_LOGIN_ALLOW_REMOTE`**: Set to `1` to allow requests from non-localhost IPs (e.g., LAN devices).
+  **Use with extreme caution.**
+- **`AUTH_TRUSTED_PROXIES`**: Comma-separated list of trusted proxy IPs or CIDRs (e.g., `127.0.0.1,::1,10.0.0.0/8`).
+  - If set, the API will trust `Forwarded` and `X-Forwarded-For` headers from these IPs to determine the
+    effective client IP.
+  - **Default:** If unset, defaults to `127.0.0.1,::1` (localhost) to support local development proxies out-of-the-box.
+  - Required if running the API behind a local reverse proxy (e.g., Caddy) that forwards traffic from localhost.
+
 ## Observability
 
 - `GET /health/live` and `GET /health/ready` expose liveness and readiness information.
