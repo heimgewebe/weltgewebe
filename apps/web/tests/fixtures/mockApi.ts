@@ -90,13 +90,14 @@ export async function mockApiResponses(page: Page): Promise<void> {
     // Handle auth/me
     if (url.includes("/api/auth/me")) {
       if (isAuthenticated && currentAccountId) {
+        // Demo accounts don't have explicit roles, default to "gast"
         return route.fulfill({
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({
             authenticated: true,
             account_id: currentAccountId,
-            role: account?.role ?? "gast",
+            role: "gast",
           }),
         });
       } else {
