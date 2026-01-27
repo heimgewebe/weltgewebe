@@ -55,7 +55,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.89.0"
+          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache cargo
@@ -85,7 +85,7 @@ jobs:
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.89.0"
+          toolchain: stable
       - name: Install cargo-audit
         run: cargo install cargo-audit --force
       - name: cargo audit

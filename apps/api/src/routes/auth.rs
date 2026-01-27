@@ -332,7 +332,7 @@ mod tests {
         let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-Forwarded-For", "1.2.3.4".parse().unwrap());
+        headers.insert("X-Forwarded-For".parse::<axum::http::HeaderName>().unwrap(), "1.2.3.4".parse().unwrap());
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         // Trusted proxy (127.0.0.1) says client is 1.2.3.4 -> Rejected
@@ -346,7 +346,7 @@ mod tests {
         let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-Forwarded-For", "127.0.0.1".parse().unwrap());
+        headers.insert("X-Forwarded-For".parse::<axum::http::HeaderName>().unwrap(), "127.0.0.1".parse().unwrap());
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         // Trusted proxy (127.0.0.1) says client is 127.0.0.1 -> Allowed
@@ -362,7 +362,7 @@ mod tests {
         let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-Forwarded-For", "127.0.0.1".parse().unwrap());
+        headers.insert("X-Forwarded-For".parse::<axum::http::HeaderName>().unwrap(), "127.0.0.1".parse().unwrap());
 
         let addr: SocketAddr = "1.2.3.4:8080".parse().unwrap();
         // Untrusted peer (1.2.3.4) sends XFF: 127.0.0.1
@@ -378,7 +378,7 @@ mod tests {
         let _guard_proxy = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
 
         let mut headers = HeaderMap::new();
-        headers.insert("X-Forwarded-For", "1.2.3.4".parse().unwrap());
+        headers.insert("X-Forwarded-For".parse::<axum::http::HeaderName>().unwrap(), "1.2.3.4".parse().unwrap());
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         // Default trusts localhost -> Reads XFF -> Sees 1.2.3.4 -> Rejected
@@ -393,14 +393,14 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         // IPv6 in Forwarded
-        headers.insert("Forwarded", "for=\"[::1]:1234\"".parse().unwrap());
+        headers.insert("Forwarded".parse::<axum::http::HeaderName>().unwrap(), "for=\"[::1]:1234\"".parse().unwrap());
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         assert!(check_dev_login_guard(&headers, addr).is_ok());
 
         // Remote IPv4 in Forwarded
         let mut headers = HeaderMap::new();
-        headers.insert("Forwarded", "for=1.2.3.4".parse().unwrap());
+        headers.insert("Forwarded".parse::<axum::http::HeaderName>().unwrap(), "for=1.2.3.4".parse().unwrap());
         assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
     }
 
@@ -412,7 +412,7 @@ mod tests {
 
         let mut headers = HeaderMap::new();
         // Comma separated elements. First one is remote, second is localhost. Should pick first -> Rejected.
-        headers.insert("Forwarded", "for=1.2.3.4, for=127.0.0.1".parse().unwrap());
+        headers.insert("Forwarded".parse::<axum::http::HeaderName>().unwrap(), "for=1.2.3.4, for=127.0.0.1".parse().unwrap());
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         assert_eq!(check_dev_login_guard(&headers, addr), Err(StatusCode::FORBIDDEN));
