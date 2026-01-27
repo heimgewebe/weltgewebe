@@ -18,7 +18,14 @@
         ✕
       </button>
     {:else}
-      <span class="role-badge gast">gast</span>
+      <span
+        class="role-badge"
+        class:admin={$authStore.role === 'admin'}
+        class:weber={$authStore.role === 'weber'}
+        class:gast={$authStore.role === 'gast'}
+      >
+        {$authStore.role}
+      </span>
       <a href="/_dev/auth" class="login-link" title="Dev Login">Login</a>
     {/if}
   </div>
