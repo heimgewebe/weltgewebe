@@ -108,7 +108,7 @@ jobs:
           RUST=$(get_version "rust")
           PY=$(get_version "python")
           UV=$(get_version "uv")
-          DENY=$(get_version "[\"cargo-deny\"]")
+          DENY=$(get_version "cargo-deny")
 
           echo "Found versions: Rust=$RUST, Python=$PY, uv=$UV, cargo-deny=$DENY"
 
