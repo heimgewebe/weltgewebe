@@ -19,7 +19,7 @@ jobs:
         run: |
           # Get list of changed files using 3-dot diff for PR context robustness
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          HEAD_SHA="${{ github.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
           # Fetch logic is implicitly handled by fetch-depth: 0,
           # but we need to ensure the remote ref is reachable if not fetched by checkout action
