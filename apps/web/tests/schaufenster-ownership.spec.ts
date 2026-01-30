@@ -58,7 +58,9 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   // Let's check where "Login Demo" comes from. It's likely `GewebekontoWidget` or similar.
   // Given this is an integration test using mocks, let's just assert that the login flow completed.
   // We can target the logout button that replaces "Login Demo".
-  await expect(page.getByRole("button", { name: "Logout" }).first()).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Logout" }).first(),
+  ).toBeVisible();
 
   // Click the SAME Garnrolle marker (id matches the login ID hardcoded in store.ts)
   await garnrolleMarker.click();
