@@ -17,14 +17,15 @@ jobs:
 
       - name: Check for Deployment Docs/Script Updates
         run: |
-          # Get list of changed files
-          # Use event base sha for robustness if available, fallback to fetch
-          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
-             CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
-          else
-             git fetch --no-tags origin ${{ github.base_ref }}
-             CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.sha }})
-          fi
+          # Get list of changed files using 3-dot diff for PR context robustness
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+
+          # Fetch logic is implicitly handled by fetch-depth: 0,
+          # but we need to ensure the remote ref is reachable if not fetched by checkout action
+          # However, actions/checkout@v4 with fetch-depth: 0 usually fetches history.
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
 
           # Check if infra changed
           INFRA_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(infra/compose/|infra/caddy/)' || true)
