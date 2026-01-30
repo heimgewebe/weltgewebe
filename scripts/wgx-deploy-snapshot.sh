@@ -77,6 +77,7 @@ COMPOSE_FILE_SHA="$(sha256 "$COMPOSE_FILE")"
 RENDER_DEGRADED="false"
 CONFIG_SHA="null"
 WARNINGS=()
+cfg_out=""
 
 if cfg_out="$(collect_compose_config)"; then
   CONFIG_SHA="$(printf "%s" "$cfg_out" | sha256sum | awk '{print $1}')"
@@ -89,7 +90,7 @@ while IFS= read -r line; do
     RENDER_DEGRADED="true"
     WARNINGS+=("$(printf "%s" "$line")")
   fi
-done <<< "$cfg_out"
+done <<< "${cfg_out:-}"
 
 WARNINGS_JSON="[]"
 if [ ${#WARNINGS[@]} -gt 0 ]; then

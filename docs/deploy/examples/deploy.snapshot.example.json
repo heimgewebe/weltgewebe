@@ -1,0 +1,59 @@
+{
+  "ts": "2026-01-01T00:00:00+00:00",
+  "host": "example-host",
+  "repo": {
+    "path": "/opt/weltgewebe",
+    "sha_short": "abcdef0",
+    "dirty": false
+  },
+  "compose": {
+    "file": "infra/compose/compose.prod.yml",
+    "file_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "config_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "render_degraded": false,
+    "warnings": []
+  },
+  "containers": [
+    {
+      "service": "api",
+      "name": "compose-api-1",
+      "image": "weltgewebe-api:latest",
+      "digest": "sha256:...",
+      "status": "running",
+      "health": "healthy",
+      "ports": []
+    },
+    {
+      "service": "caddy",
+      "name": "compose-caddy-1",
+      "image": "caddy:2.7",
+      "digest": "sha256:...",
+      "status": "running",
+      "health": null,
+      "ports": ["0.0.0.0:80->80/tcp", "0.0.0.0:443->443/tcp"]
+    },
+    {
+      "service": "db",
+      "name": "compose-db-1",
+      "image": "postgres:16",
+      "digest": "sha256:...",
+      "status": "running",
+      "health": "healthy",
+      "ports": []
+    }
+  ],
+  "volumes": [
+    { "logical": "pg_data_prod", "compose_name": "compose_pg_data_prod", "exists": true },
+    { "logical": "caddy_data", "compose_name": "compose_caddy_data", "exists": true },
+    { "logical": "caddy_config", "compose_name": "compose_caddy_config", "exists": true },
+    { "logical": "gewebe_fs_data", "compose_name": "compose_gewebe_fs_data", "exists": true }
+  ],
+  "mounts": [],
+  "health": {
+    "mode": "container",
+    "url": null,
+    "ok": true,
+    "http_code": 200,
+    "reason": null
+  }
+}

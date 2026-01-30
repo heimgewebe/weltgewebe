@@ -18,9 +18,13 @@ jobs:
       - name: Check for Deployment Docs/Script Updates
         run: |
           # Get list of changed files
-          # origin/HEAD might not work if not fetched, use base_ref
-          git fetch --no-tags origin ${{ github.base_ref }}
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.sha }})
+          # Use event base sha for robustness if available, fallback to fetch
+          if [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+             CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.sha }})
+          else
+             git fetch --no-tags origin ${{ github.base_ref }}
+             CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.sha }})
+          fi
 
           # Check if infra changed
           INFRA_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(infra/compose/|infra/caddy/)' || true)
