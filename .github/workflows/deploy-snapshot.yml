@@ -1,9 +1,7 @@
+---
 name: Deploy Snapshot
 
-permissions:
-  contents: read
-
-on:
+"on":
   workflow_dispatch:
 
 jobs:

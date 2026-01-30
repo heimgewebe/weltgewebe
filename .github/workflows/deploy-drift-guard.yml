@@ -1,9 +1,7 @@
+---
 name: Deploy Drift Guard
 
-permissions:
-  contents: read
-
-on:
+"on":
   pull_request:
     paths:
       - 'infra/compose/**'
@@ -33,7 +31,8 @@ jobs:
           fi
 
           # Check if mitigation files changed
-          MITIGATION_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(scripts/wgx-deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
+          MITIGATION_CHANGED=$(echo "$CHANGED_FILES" | \
+            grep -E '^(scripts/wgx-deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
 
           if [ -z "$MITIGATION_CHANGED" ]; then
             echo "::error::Deployment drift risk: infra changed without updating deploy snapshot or docs."
