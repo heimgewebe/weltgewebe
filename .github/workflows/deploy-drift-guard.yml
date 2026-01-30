@@ -1,0 +1,60 @@
+---
+name: Deploy Drift Guard
+
+"on":
+  pull_request:
+    paths:
+      - 'infra/compose/**'
+      - 'infra/caddy/**'
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Deployment Docs/Script Updates
+        run: |
+          # Get list of changed files using 3-dot diff for PR context robustness
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          # Ensure SHAs are reachable (forks / shallow edge cases)
+          git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BASE_SHA"
+
+          # HEAD is typically checked out, but if missing, use current HEAD as fallback or fetch if possible
+          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null || \
+            echo "HEAD_SHA not present locally; assuming checked-out HEAD is correct"
+          if ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
+             HEAD_SHA="$(git rev-parse HEAD)"
+          fi
+
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+
+          # Check if infra changed
+          INFRA_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(infra/compose/|infra/caddy/)' || true)
+
+          if [ -z "$INFRA_CHANGED" ]; then
+            echo "No infra changes detected (filtered by workflow paths). Skipping."
+            exit 0
+          fi
+
+          # Check if mitigation files changed
+          MITIGATION_CHANGED=$(echo "$CHANGED_FILES" | \
+            grep -E '^(scripts/wgx-deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
+
+          if [ -z "$MITIGATION_CHANGED" ]; then
+            echo "::error::Deployment drift risk: infra changed without updating deploy snapshot or docs."
+            echo "Changed infra files:"
+            echo "$INFRA_CHANGED"
+            echo ""
+            echo "Please update one of the following to acknowledge the change:"
+            echo "- scripts/wgx-deploy-snapshot.sh"
+            echo "- .github/workflows/deploy-snapshot.yml"
+            echo "- docs/deploy/**"
+            exit 1
+          else
+            echo "Drift guard passed. Infra changed, and deployment docs/scripts also changed."
+          fi
