@@ -44,6 +44,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         accounts: Arc::new(HashMap::new()),
+        sorted_account_ids: Arc::new(vec![]),
     })
 }
 
@@ -181,6 +182,10 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
 
     let mut state = test_state()?;
     state.accounts = Arc::new(account_map);
+    // sorted_account_ids not strictly needed for this test as it doesn't list accounts, but good to keep consistent if needed
+    // However, since we don't update it, let's leave it empty or update it properly.
+    // The test updates nodes, not accounts listing. But to be safe:
+    state.sorted_account_ids = Arc::new(vec!["weber1".to_string()]);
 
     // Create Session
     let session = state.sessions.create("weber1".to_string());
@@ -375,6 +380,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
 
     let mut state = test_state()?;
     state.accounts = Arc::new(account_map);
+    state.sorted_account_ids = Arc::new(vec!["weber1".to_string()]);
 
     // Create Session
     let session = state.sessions.create("weber1".to_string());

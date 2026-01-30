@@ -39,6 +39,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         accounts: Arc::new(HashMap::new()),
+        sorted_account_ids: Arc::new(vec![]),
     })
 }
 

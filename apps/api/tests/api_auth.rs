@@ -41,6 +41,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         accounts: Arc::new(HashMap::new()),
+        sorted_account_ids: Arc::new(vec![]),
     })
 }
 
@@ -83,6 +84,9 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
     );
 
+    let mut ids: Vec<_> = account_map.keys().cloned().collect();
+    ids.sort();
+    state.sorted_account_ids = Arc::new(ids);
     state.accounts = Arc::new(account_map);
     Ok(state)
 }
@@ -157,6 +161,9 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     );
 
     let mut state = test_state()?;
+    let mut ids: Vec<_> = account_map.keys().cloned().collect();
+    ids.sort();
+    state.sorted_account_ids = Arc::new(ids);
     state.accounts = Arc::new(account_map);
 
     let app = app(state);
