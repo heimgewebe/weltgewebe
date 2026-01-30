@@ -1,5 +1,8 @@
 name: Deploy Drift Guard
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     paths:
