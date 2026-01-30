@@ -1,0 +1,47 @@
+name: Deploy Drift Guard
+
+on:
+  pull_request:
+    paths:
+      - 'infra/compose/**'
+      - 'infra/caddy/**'
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Deployment Docs/Script Updates
+        run: |
+          # Get list of changed files
+          # origin/HEAD might not work if not fetched, use base_ref
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
+
+          # Check if infra changed
+          INFRA_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(infra/compose/|infra/caddy/)' || true)
+
+          if [ -z "$INFRA_CHANGED" ]; then
+            echo "No infra changes detected (filtered by workflow paths). Skipping."
+            exit 0
+          fi
+
+          # Check if mitigation files changed
+          MITIGATION_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(scripts/wgx-deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
+
+          if [ -z "$MITIGATION_CHANGED" ]; then
+            echo "::error::Deployment drift risk: infra changed without updating deploy snapshot or docs."
+            echo "Changed infra files:"
+            echo "$INFRA_CHANGED"
+            echo ""
+            echo "Please update one of the following to acknowledge the change:"
+            echo "- scripts/wgx-deploy-snapshot.sh"
+            echo "- .github/workflows/deploy-snapshot.yml"
+            echo "- docs/deploy/**"
+            exit 1
+          else
+            echo "Drift guard passed. Infra changed, and deployment docs/scripts also changed."
+          fi
