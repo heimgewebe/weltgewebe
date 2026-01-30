@@ -25,7 +25,8 @@ jobs:
           git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BASE_SHA"
 
           # HEAD is typically checked out, but if missing, use current HEAD as fallback or fetch if possible
-          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null || echo "HEAD_SHA not present locally; assuming checked-out HEAD is correct"
+          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null || \
+            echo "HEAD_SHA not present locally; assuming checked-out HEAD is correct"
           if ! git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null; then
              HEAD_SHA="$(git rev-parse HEAD)"
           fi
