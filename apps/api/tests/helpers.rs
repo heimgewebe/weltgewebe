@@ -6,6 +6,7 @@ use weltgewebe_api::routes::accounts::AccountInternal;
 use weltgewebe_api::state::ApiState;
 use weltgewebe_api::test_helpers::EnvGuard;
 
+#[allow(dead_code)]
 pub fn set_accounts(state: &mut ApiState, accounts: HashMap<String, AccountInternal>) {
     let mut ids: Vec<_> = accounts.keys().cloned().collect();
     ids.sort();
