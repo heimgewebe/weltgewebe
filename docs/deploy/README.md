@@ -67,11 +67,11 @@ Andere Kopien oder Exporte gelten als nicht autoritativ.
 - **Caddy**
   - einziges öffentliches Entry-Gateway
   - published:
-    - `127.0.0.1:80`
-    - `127.0.0.1:443`
+    - `0.0.0.0:80` (Host 80 -> Container 80)
+    - `0.0.0.0:443` (Host 443 -> Container 443)
 
 **Konsequenz:**
-Health-Checks dürfen **nicht** über `127.0.0.1:8080` erfolgen.
+Health-Checks dürfen **nicht** über `127.0.0.1:8080` (Host) erfolgen, sondern müssen container-intern laufen.
 
 ---
 
@@ -88,12 +88,12 @@ Docker Compose verwendet automatisch ein Prefix:
 | Logisch | Compose-Name |
 | ------- | ------------ |
 | pg_data_prod | compose_pg_data_prod |
-| nats_js | compose_nats_js |
 | gewebe_fs_data | compose_gewebe_fs_data |
 | caddy_data | compose_caddy_data |
 | caddy_config | compose_caddy_config |
 
 Snapshots speichern **beide Namen**, um Verwechslungen zu vermeiden.
+Sollten weitere Volumes live existieren (z. B. Legacy-Volumes), werden diese im Live-Snapshot ebenfalls mit Prefix erkannt.
 
 ---
 
@@ -141,11 +141,10 @@ SNAPSHOT_MODE=live bash scripts/wgx-deploy-snapshot.sh
 ```
 
 - erfasst zusätzlich:
-  - laufende Container
-  - Image-Digests
-  - Volumes
+  - laufende Container (Status, Digest)
+  - Volumes (dynamisch ermittelt per Prefix)
   - Bind-Mounts
-  - Health (standardmäßig per Container-Check)
+  - Health (standardmäßig per Container-Check via `wget`/`curl` Fallback)
 
 ---
 

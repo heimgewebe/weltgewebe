@@ -19,8 +19,8 @@ jobs:
         run: |
           # Get list of changed files
           # origin/HEAD might not work if not fetched, use base_ref
-          git fetch origin ${{ github.base_ref }}
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} ${{ github.sha }})
+          git fetch --no-tags origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...${{ github.sha }})
 
           # Check if infra changed
           INFRA_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(infra/compose/|infra/caddy/)' || true)

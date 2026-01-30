@@ -1,15 +1,15 @@
 {
-  "ts": "2026-01-30T06:23:27+00:00",
+  "ts": "2026-01-30T06:45:23+00:00",
   "host": "devbox",
   "repo": {
     "path": "/app",
     "sha_short": "296ee2b",
-    "dirty": false
+    "dirty": true
   },
   "compose": {
     "file": "infra/compose/compose.prod.yml",
     "file_sha256": "42313f168de8f197824ed11ff96b408fd7d35efb0ffbf5d2ea0914d28cc2d455",
-    "config_sha256": "cd208cb2ed913b33fe161f5156470fba8c10fcaa2d32a1e42ec8333a5f86fdf7",
+    "config_sha256": "8b6dbb26cd90116d4dca494693aa259770bbc55d578050ecd148502a88a93649",
     "render_degraded": false,
     "warnings": []
   },

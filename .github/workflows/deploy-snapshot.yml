@@ -23,8 +23,8 @@ jobs:
 
       - name: Validate Snapshot Schema
         run: |
-          npm install -g ajv-cli
-          ajv validate -s docs/deploy/deploy.snapshot.schema.json -d artifacts/deploy.snapshot.json
+          npm install -g ajv-cli ajv-formats
+          ajv validate -s docs/deploy/deploy.snapshot.schema.json -d artifacts/deploy.snapshot.json -c ajv-formats
 
       - name: Upload Snapshot
         uses: actions/upload-artifact@v4
