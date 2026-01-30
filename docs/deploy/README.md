@@ -95,6 +95,8 @@ Docker Compose verwendet automatisch ein Prefix:
 Snapshots speichern **beide Namen**, um Verwechslungen zu vermeiden.
 Sollten weitere Volumes live existieren (z. B. Legacy-Volumes), werden diese im Live-Snapshot ebenfalls mit Prefix erkannt.
 
+Die kanonischen Volume-Suffixe sind im Compose-YAML definiert; Snapshot erkennt live alle `${COMPOSE_PROJECT}_*`. Die obige Tabelle dient als Referenz für erwartete Volumes.
+
 ---
 
 ## 5. Konfiguration & Env-Variablen
@@ -127,7 +129,7 @@ Der Snapshot ist eine **maschinelle Zustandsaufnahme**.
 
 ### Dry Snapshot (CI)
 
-- kein Docker-Daemon erforderlich
+- kein laufender Compose-Stack erforderlich; Compose-Rendering erfolgt best-effort (CI-Umgebung).
 - erfasst:
   - Compose-Datei-Hash
   - Render-WARNINGS

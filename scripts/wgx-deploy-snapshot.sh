@@ -44,13 +44,17 @@ REPO_SHA=""
 REPO_DIRTY="null"
 
 if have git && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  REPO_SHA="$(git rev-parse --short HEAD)"
+  REPO_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo "")"
   # Robust dirty check: staged + unstaged changes
-  # git diff-index --quiet HEAD -- returns 1 if dirty, 0 if clean
-  if git diff-index --quiet HEAD -- 2>/dev/null; then
-    REPO_DIRTY="false"
+  if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    if git diff-index --quiet HEAD -- 2>/dev/null; then
+      REPO_DIRTY="false"
+    else
+      REPO_DIRTY="true"
+    fi
   else
-    REPO_DIRTY="true"
+    # No commits yet (fresh repo)
+    REPO_DIRTY="null"
   fi
 else
   REPO_SHA=""
