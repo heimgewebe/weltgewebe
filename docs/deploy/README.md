@@ -172,3 +172,5 @@ Live-Snapshot > Dokumentation > Annahmen
 ```
 
 Drift ist kein Fehler – **unsichtbare Drift ist es**.
+
+Detaillierte Klassifizierung: [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md)
