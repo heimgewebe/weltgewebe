@@ -21,9 +21,9 @@ jobs:
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
 
-          # Fetch logic is implicitly handled by fetch-depth: 0,
-          # but we need to ensure the remote ref is reachable if not fetched by checkout action
-          # However, actions/checkout@v4 with fetch-depth: 0 usually fetches history.
+          # Ensure SHAs are reachable (forks / shallow edge cases)
+          git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git cat-file -e "$HEAD_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$HEAD_SHA"
 
           CHANGED_FILES=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
 
