@@ -132,50 +132,96 @@ PY
 import json, subprocess, os
 
 service_map = json.loads(os.environ['SVC_MAP_JSON'])
+project_name = os.environ.get('COMPOSE_PROJECT', 'compose')
 out = []
 
-for svc, name in service_map.items():
-    try:
-        insp = subprocess.check_output(
-            ["docker", "inspect", name], stderr=subprocess.DEVNULL
-        )
-        data = json.loads(insp)[0]
+try:
+    # Try discovery via docker compose project label
+    # This is more robust than guessing names
+    cmd = ["docker", "ps", "-a", "--filter", f"label=com.docker.compose.project={project_name}", "--format", "{{.ID}}"]
+    container_ids = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode().strip().split()
 
-        # Ports
-        ports = []
-        if data.get("NetworkSettings", {}).get("Ports"):
-            for k, v in data["NetworkSettings"]["Ports"].items():
-                if v:
-                    for e in v:
-                        ports.append(f'{e["HostIp"]}:{e["HostPort"]}->{k}')
+    if container_ids:
+        # Inspect all discovered containers
+        insp_json = subprocess.check_output(["docker", "inspect"] + container_ids, stderr=subprocess.DEVNULL)
+        containers_data = json.loads(insp_json)
 
-        # Digest (try to get it from image inspect if needed, or from Config.Image)
-        # docker inspect output usually contains RepoDigests in the Image struct,
-        # but here we are inspecting the container.
-        # Container inspect -> Image is the ID. We'd need to inspect the image ID to get RepoDigests.
-        # For simplicity, we leave digest null here unless we add a second call.
-        # Let's try a lightweight attempt if feasible, else null.
-        digest = None
-        try:
-             image_id = data["Image"]
-             img_insp = subprocess.check_output(["docker", "inspect", image_id], stderr=subprocess.DEVNULL)
-             img_data = json.loads(img_insp)[0]
-             if img_data.get("RepoDigests"):
-                 digest = img_data["RepoDigests"][0]
-        except:
-             pass
+        for data in containers_data:
+            labels = data.get("Config", {}).get("Labels", {})
+            svc_name = labels.get("com.docker.compose.service", "unknown")
 
-        out.append({
-            "service": svc,
-            "name": name,
-            "image": data["Config"]["Image"],
-            "digest": digest,
-            "status": data["State"]["Status"],
-            "health": data["State"].get("Health", {}).get("Status"),
-            "ports": ports
-        })
-    except Exception:
-        pass
+            # Map standard services
+            # (If unknown, keep it; drift detection might care)
+
+            # Extract basic info
+            ports = []
+            if data.get("NetworkSettings", {}).get("Ports"):
+                for k, v in data["NetworkSettings"]["Ports"].items():
+                    if v:
+                        for e in v:
+                            ports.append(f'{e["HostIp"]}:{e["HostPort"]}->{k}')
+
+            digest = None
+            try:
+                 image_id = data["Image"]
+                 img_insp = subprocess.check_output(["docker", "inspect", image_id], stderr=subprocess.DEVNULL)
+                 img_data = json.loads(img_insp)[0]
+                 if img_data.get("RepoDigests"):
+                     digest = img_data["RepoDigests"][0]
+            except:
+                 pass
+
+            out.append({
+                "service": svc_name,
+                "name": data["Name"].lstrip('/'),
+                "image": data["Config"]["Image"],
+                "digest": digest,
+                "status": data["State"]["Status"],
+                "health": data["State"].get("Health", {}).get("Status"),
+                "ports": ports
+            })
+    else:
+        # Fallback to name guessing if no labels found (e.g. non-compose or different driver)
+        for svc, name in service_map.items():
+            try:
+                insp = subprocess.check_output(["docker", "inspect", name], stderr=subprocess.DEVNULL)
+                data = json.loads(insp)[0]
+                # ... reuse extraction logic ...
+                # (Simplifying fallback to avoid duplication: just try inspect)
+                ports = []
+                if data.get("NetworkSettings", {}).get("Ports"):
+                    for k, v in data["NetworkSettings"]["Ports"].items():
+                        if v:
+                            for e in v:
+                                ports.append(f'{e["HostIp"]}:{e["HostPort"]}->{k}')
+
+                digest = None
+                try:
+                     image_id = data["Image"]
+                     img_insp = subprocess.check_output(["docker", "inspect", image_id], stderr=subprocess.DEVNULL)
+                     img_data = json.loads(img_insp)[0]
+                     if img_data.get("RepoDigests"):
+                         digest = img_data["RepoDigests"][0]
+                except:
+                     pass
+
+                out.append({
+                    "service": svc,
+                    "name": name,
+                    "image": data["Config"]["Image"],
+                    "digest": digest,
+                    "status": data["State"]["Status"],
+                    "health": data["State"].get("Health", {}).get("Status"),
+                    "ports": ports
+                })
+            except Exception:
+                pass
+
+except Exception:
+    pass
+
+# Sort output by service name for deterministic snapshot
+out.sort(key=lambda x: x["service"])
 print(json.dumps(out, indent=2))
 PY
 )"
