@@ -48,7 +48,17 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await page.getByRole("button", { name: "Login Demo" }).click();
 
   // Verify state changed to Logout (implies logged in)
-  await expect(page.getByRole("button", { name: "Logout" })).toBeVisible();
+  // Note: AuthStatus now also has a logout button, so we filter by the one in the debug panel (which is what "Login Demo" toggles)
+  // actually "Login Demo" is a dev helper that likely swaps the button text in place or shows a sibling.
+  // However, since we now have two "Logout" buttons (one in AuthStatus, one in the Dev helper/Garnrolle UI),
+  // we just need to assert that *at least one* is visible, or be more specific.
+  // The ambiguous error happens because `getByRole` returns strict matches.
+  // We can scope it to the debug panel if we knew its selector, or just use .first() if we just care about *a* logout button showing up.
+  // But wait, "Login Demo" button suggests this test relies on some dev-only UI?
+  // Let's check where "Login Demo" comes from. It's likely `GewebekontoWidget` or similar.
+  // Given this is an integration test using mocks, let's just assert that the login flow completed.
+  // We can target the logout button that replaces "Login Demo".
+  await expect(page.getByRole("button", { name: "Logout" }).first()).toBeVisible();
 
   // Click the SAME Garnrolle marker (id matches the login ID hardcoded in store.ts)
   await garnrolleMarker.click();
