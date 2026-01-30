@@ -8,6 +8,7 @@
     "host": { "type": "string" },
     "repo": {
       "type": "object",
+      "required": ["path", "sha_short", "dirty"],
       "properties": {
         "path": { "type": "string" },
         "sha_short": { "type": ["string", "null"] },
@@ -16,6 +17,7 @@
     },
     "compose": {
       "type": "object",
+      "required": ["file", "file_sha256", "render_degraded"],
       "properties": {
         "file": { "type": "string" },
         "file_sha256": { "type": "string" },
@@ -31,6 +33,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["service", "name", "status"],
         "properties": {
           "service": { "type": "string" },
           "name": { "type": "string" },
@@ -49,6 +52,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["logical", "compose_name"],
         "properties": {
           "logical": { "type": "string" },
           "compose_name": { "type": "string" },
@@ -60,6 +64,7 @@
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["container", "source", "destination"],
         "properties": {
           "container": { "type": "string" },
           "type": { "type": "string" },

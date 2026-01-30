@@ -253,7 +253,8 @@ PY
       fi
     "
 
-    if docker ps -q -f name="$TARGET_CONTAINER" | grep -q .; then
+    # Check if container is running using exact match via inspect
+    if docker inspect --format '{{.State.Running}}' "$TARGET_CONTAINER" 2>/dev/null | grep -q "true"; then
        RES=$(docker exec "$TARGET_CONTAINER" sh -c "$HEALTH_CMD" 2>/dev/null || echo "exec_fail")
        if [[ "$RES" == "ok" ]]; then
          HEALTH_JSON='{ "mode":"container","url":null,"ok":true,"http_code":200,"reason":null }'
