@@ -23,7 +23,7 @@ jobs:
 
       - name: Validate Snapshot Schema
         run: |
-          npm install -g ajv-cli ajv-formats
+          npm install -g ajv-cli@5.0.0 ajv@8.12.0 ajv-formats@2.1.1
           ajv validate -s docs/deploy/deploy.snapshot.schema.json -d artifacts/deploy.snapshot.json -c ajv-formats
 
       - name: Upload Snapshot

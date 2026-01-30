@@ -108,12 +108,20 @@ if [[ "$SNAPSHOT_MODE" == "live" ]]; then
 
   # Dynamic container names based on project prefix
   # Typical compose naming: <project>-<service>-<index>
-  API_CONTAINER="${COMPOSE_PROJECT}-api-1"
-  CADDY_CONTAINER="${COMPOSE_PROJECT}-caddy-1"
-  DB_CONTAINER="${COMPOSE_PROJECT}-db-1"
+  export API_CONTAINER="${COMPOSE_PROJECT}-api-1"
+  export CADDY_CONTAINER="${COMPOSE_PROJECT}-caddy-1"
+  export DB_CONTAINER="${COMPOSE_PROJECT}-db-1"
 
   # Pass service mapping to python via environment to avoid injection
-  export SVC_MAP_JSON=$(python3 -c "import json; print(json.dumps({'api': '$API_CONTAINER', 'caddy': '$CADDY_CONTAINER', 'db': '$DB_CONTAINER'}))")
+  export SVC_MAP_JSON="$(python3 - <<'PY'
+import json, os
+print(json.dumps({
+  "api": os.environ["API_CONTAINER"],
+  "caddy": os.environ["CADDY_CONTAINER"],
+  "db": os.environ["DB_CONTAINER"],
+}))
+PY
+)"
 
   CONTAINERS_JSON="$(python3 - <<'PY'
 import json, subprocess, os
@@ -182,7 +190,7 @@ try:
     ls_out = subprocess.check_output(["docker", "volume", "ls", "--format", "{{.Name}}"], stderr=subprocess.DEVNULL)
     volumes = ls_out.decode().strip().split('\n')
 
-    for v in volumes:
+    for v in sorted(volumes):
         if v.startswith(prefix):
             logical = v[len(prefix):]
             out.append({
@@ -255,10 +263,19 @@ PY
     fi
   elif [[ "$HEALTH_MODE" == "url" ]]; then
       if [[ -n "$HEALTH_URL" ]]; then
+          export HEALTH_URL
           if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
-             HEALTH_JSON='{ "mode":"url","url":"'"$HEALTH_URL"'","ok":true,"http_code":200,"reason":null }'
+             HEALTH_JSON="$(python3 - <<'PY'
+import json, os
+print(json.dumps({"mode":"url","url":os.environ["HEALTH_URL"],"ok":True,"http_code":200,"reason":None}))
+PY
+)"
           else
-             HEALTH_JSON='{ "mode":"url","url":"'"$HEALTH_URL"'","ok":false,"http_code":null,"reason":"connection failed" }'
+             HEALTH_JSON="$(python3 - <<'PY'
+import json, os
+print(json.dumps({"mode":"url","url":os.environ["HEALTH_URL"],"ok":False,"http_code":None,"reason":"connection failed"}))
+PY
+)"
           fi
       fi
   fi
