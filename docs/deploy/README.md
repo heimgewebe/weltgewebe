@@ -22,7 +22,7 @@ Der Snapshot beschreibt **was ist**.
 
 ### Operativer Repo-Pfad
 
-```
+```text
 /opt/weltgewebe
 ```
 
@@ -32,14 +32,16 @@ Andere Kopien oder Exporte gelten als nicht autoritativ.
 ### Docker-Compose
 
 - **Kanonische Datei:**
-```
-infra/compose/compose.prod.yml
-```
+
+  ```text
+  infra/compose/compose.prod.yml
+  ```
 
 - **Compose-Projektname:**
-```
-compose
-```
+
+  ```text
+  compose
+  ```
 
 - Weitere Compose-Dateien (nicht primär produktiv):
   - `compose.core.yml` – Basiskomponenten
@@ -52,7 +54,7 @@ compose
 ### Services
 
 | Service | Rolle | Netzwerk |
-|------|-----|---------|
+| ------- | ----- | -------- |
 | api | Applikationslogik | intern |
 | caddy | Entry-Gateway | host-published |
 | db | PostgreSQL | intern |
@@ -77,14 +79,14 @@ Health-Checks dürfen **nicht** über `127.0.0.1:8080` erfolgen.
 
 Docker Compose verwendet automatisch ein Prefix:
 
-```
+```text
 <compose-project>_<volume-name>
 ```
 
 ### Logische Volumes
 
 | Logisch | Compose-Name |
-|------|-------------|
+| ------- | ------------ |
 | pg_data_prod | compose_pg_data_prod |
 | nats_js | compose_nats_js |
 | gewebe_fs_data | compose_gewebe_fs_data |
@@ -104,7 +106,7 @@ In diesem Fall entstehen **WARNINGS** und Default-Werte (leere Strings).
 
 Der Deployment-Snapshot markiert dies explizit als:
 
-```
+```yaml
 render_degraded: true
 ```
 
@@ -119,7 +121,7 @@ Der Snapshot ist eine **maschinelle Zustandsaufnahme**.
 ### Modi
 
 | Modus | Zweck |
-|----|-----|
+| ----- | ----- |
 | dry | CI / Konfigurationsstand |
 | live | Heimserver / Realzustand |
 
@@ -163,7 +165,7 @@ Er dient ausschließlich der **Drift-Sichtbarmachung**.
 
 Bei Widerspruch gilt:
 
-```
+```text
 Live-Snapshot > Dokumentation > Annahmen
 ```
 
