@@ -14,6 +14,7 @@ pub fn set_accounts(state: &mut ApiState, accounts: HashMap<String, AccountInter
     state.accounts = Arc::new(accounts);
 }
 
+#[allow(dead_code)]
 pub fn set_gewebe_in_dir(dir: &Path) -> EnvGuard {
     EnvGuard::set(
         "GEWEBE_IN_DIR",
