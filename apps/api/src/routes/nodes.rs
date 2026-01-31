@@ -236,10 +236,21 @@ pub async fn patch_node(
     }
 
     // Write back
+    // Use a temporary file + rename for atomic writes to prevent data corruption
+    let mut tmp_path = path.clone();
+    if let Some(filename) = tmp_path.file_name() {
+        let mut new_filename = filename.to_os_string();
+        new_filename.push(".tmp");
+        tmp_path.set_file_name(new_filename);
+    } else {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
     let file = OpenOptions::new()
         .write(true)
+        .create(true)
         .truncate(true)
-        .open(&path)
+        .open(&tmp_path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -257,6 +268,10 @@ pub async fn patch_node(
     }
     writer
         .flush()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    tokio::fs::rename(&tmp_path, &path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
