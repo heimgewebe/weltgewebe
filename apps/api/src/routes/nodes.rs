@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -236,21 +236,29 @@ pub async fn patch_node(
     }
 
     // Write back
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .write(true)
         .truncate(true)
         .open(&path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    let mut writer = BufWriter::new(file);
+
     for line in all_lines {
-        file.write_all(line.as_bytes())
+        writer
+            .write_all(line.as_bytes())
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        file.write_all(b"\n")
+        writer
+            .write_all(b"\n")
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
+    writer
+        .flush()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     found_node
         .map(Json)
