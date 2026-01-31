@@ -153,6 +153,15 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
     })
 }
 
+/// Loads nodes from the JSONL file into memory.
+///
+/// **Architecture Note:**
+/// The in-memory cache populated by this function is considered the "Source of Truth"
+/// for read operations during the API process lifetime.
+/// - The file is strictly used for persistence.
+/// - `patch_node` updates both the file (for durability) and this cache (for consistency).
+/// - External modifications to the nodes file (e.g. via deployment or manual edit)
+///   will NOT be detected until the API process is restarted.
 pub async fn load_nodes() -> Vec<Node> {
     let path = nodes_path();
     let file = match File::open(&path).await {
@@ -174,6 +183,8 @@ pub async fn load_nodes() -> Vec<Node> {
             nodes.push(node);
         }
     }
+
+    tracing::info!(count = nodes.len(), ?path, "Loaded nodes into memory cache");
     nodes
 }
 
