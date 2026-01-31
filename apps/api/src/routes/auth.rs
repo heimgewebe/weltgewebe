@@ -317,8 +317,8 @@ pub async fn request_login(
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
-        let base_url = std::env::var("APP_BASE_URL")
-            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let base_url =
+            std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
