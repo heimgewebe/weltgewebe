@@ -472,7 +472,7 @@
         Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
       {/if}
       <br>
-      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
+      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
         {$authStore.authenticated ? 'Logout' : 'Login Demo'}
       </button>
     </div>

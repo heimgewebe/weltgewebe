@@ -328,6 +328,7 @@ pub async fn patch_node(
     }
 
     // Update in-memory cache
+    // cache update only after successful persist
     if let Some(ref updated_node) = found_node {
         let mut nodes_guard = state.nodes.write().await;
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
