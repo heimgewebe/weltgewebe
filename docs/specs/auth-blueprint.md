@@ -294,6 +294,18 @@ Dev-Abkürzungen sauber absichern.
 
 ---
 
+## Architektur-Nachtrag: Daten-Cache & Persistenz
+
+Seit **Optimierung der List-Endpoints** gilt:
+
+- **Cache ist Wahrheit:** Die API (`ApiState`) hält den aktuellen Datenbestand (z. B. Nodes) im Arbeitsspeicher (`Arc<RwLock<Vec<Node>>>`).
+  - Alle Lese-Zugriffe (`GET /nodes`, `GET /nodes/:id`) werden aus dem Cache bedient.
+- **Datei ist Persistenz:** Die JSONL-Datei (`demo.nodes.jsonl`) dient ausschließlich der Persistenz über Neustarts hinweg.
+- **Dual-Write:** Schreiboperationen (`PATCH`) aktualisieren zuerst die Datei (atomar) und bei Erfolg sofort den Cache.
+- **Konsequenz:** Externe Änderungen an der Datei (z. B. durch Deployment oder manuelles Editieren) werden von der laufenden API **nicht** erkannt. Ein Neustart des API-Prozesses ist erforderlich, um externe Änderungen zu laden.
+
+---
+
 ## Explizit nicht Teil dieser Blaupause
 
 - Registrierung / Signup
