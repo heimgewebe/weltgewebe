@@ -15,7 +15,7 @@
     </span>
 
     {#if $authStore.authenticated}
-      <button class="logout-btn" on:click={logout} title="Logout" aria-label="Logout">
+      <button class="logout-btn" on:click={logout} title="Logout" aria-label="Logout" data-testid="auth-status-logout">
         ✕
       </button>
     {:else}

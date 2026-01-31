@@ -53,13 +53,14 @@ impl TokenStore {
     }
 
     pub fn consume(&self, token: &str) -> Option<String> {
+        let now = Utc::now();
         let hash = Self::hash_token(token);
         let mut store = self.store.write().expect("TokenStore lock poisoned");
 
+        // Cleanup expired tokens
+        store.retain(|_, v| v.expires_at > now);
+
         if let Some(data) = store.get_mut(&hash) {
-            if Utc::now() > data.expires_at {
-                return None;
-            }
             if data.used {
                 return None;
             }
