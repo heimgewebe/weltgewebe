@@ -17,4 +17,5 @@ pub struct ApiState {
     pub metrics: Metrics,
     pub sessions: SessionStore,
     pub accounts: Arc<HashMap<String, AccountInternal>>,
+    pub sorted_account_ids: Arc<Vec<String>>,
 }

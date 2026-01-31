@@ -289,6 +289,7 @@ mod tests {
             metrics,
             sessions: SessionStore::new(),
             accounts: Arc::new(HashMap::new()),
+            sorted_account_ids: Arc::new(vec![]),
         })
     }
 

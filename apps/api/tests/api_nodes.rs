@@ -8,7 +8,7 @@ use serial_test::serial;
 mod helpers;
 
 use axum::middleware::from_fn_with_state;
-use helpers::set_gewebe_in_dir;
+use helpers::{set_accounts, set_gewebe_in_dir};
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -44,6 +44,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         accounts: Arc::new(HashMap::new()),
+        sorted_account_ids: Arc::new(vec![]),
     })
 }
 
@@ -180,7 +181,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     );
 
     let mut state = test_state()?;
-    state.accounts = Arc::new(account_map);
+    set_accounts(&mut state, account_map);
 
     // Create Session
     let session = state.sessions.create("weber1".to_string());
@@ -374,7 +375,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     );
 
     let mut state = test_state()?;
-    state.accounts = Arc::new(account_map);
+    set_accounts(&mut state, account_map);
 
     // Create Session
     let session = state.sessions.create("weber1".to_string());
