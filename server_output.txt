@@ -1,0 +1,4 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.23s
+     Running `target/debug/weltgewebe-api`
+[2m2026-01-31T05:16:51.488772Z[0m [32m INFO[0m [2mweltgewebe_api[0m[2m:[0m starting API server [3mbind_addr[0m[2m=[0m0.0.0.0:8080
+[2m2026-01-31T05:17:12.420750Z[0m [32m INFO[0m [2memail_outbox[0m[2m:[0m Magic Link Generated [3memail[0m[2m=[0mtest@example.com [3maccount_id[0m[2m=[0mtest-user-2 [3mlink[0m[2m=[0mhttp://localhost:5173/api/auth/login/consume?token=8b5b7b7a-449e-4d03-b7d4-804638754d4f

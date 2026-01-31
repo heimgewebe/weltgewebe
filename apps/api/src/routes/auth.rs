@@ -1,7 +1,7 @@
 use axum::{
-    extract::{ConnectInfo, Json, State},
+    extract::{ConnectInfo, Json, Query, State},
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect},
     Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -38,6 +38,16 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub account_id: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginRequestEmail {
+    pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct ConsumeTokenParams {
+    pub token: String,
 }
 
 #[derive(Serialize)]
@@ -238,7 +248,7 @@ pub async fn list_dev_accounts(
     Ok(Json(accounts))
 }
 
-pub async fn login(
+pub async fn dev_login(
     State(state): State<ApiState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
@@ -256,19 +266,104 @@ pub async fn login(
                 "Login attempt refused: remote access not allowed"
             );
         }
-        return (jar, status);
+        return (jar, status).into_response();
     }
 
     if !state.accounts.contains_key(&payload.account_id) {
         tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
-        return (jar, StatusCode::BAD_REQUEST);
+        return (jar, StatusCode::BAD_REQUEST).into_response();
     }
 
     let session = state.sessions.create(payload.account_id);
 
     let cookie = build_session_cookie(session.id, None);
 
-    (jar.add(cookie), StatusCode::OK)
+    (jar.add(cookie), StatusCode::OK).into_response()
+}
+
+pub async fn request_login(
+    State(state): State<ApiState>,
+    Json(payload): Json<LoginRequestEmail>,
+) -> impl IntoResponse {
+    let public_login_enabled = std::env::var("AUTH_PUBLIC_LOGIN")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !public_login_enabled {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    // 1. Validate email format (simple check)
+    if !payload.email.contains('@') {
+        tracing::warn!("Invalid email format in login request");
+        return (
+            StatusCode::OK,
+            "If your email is registered, you will receive a login link.",
+        )
+            .into_response();
+    }
+
+    // 2. Lookup account by email
+    let account = state.accounts.values().find(|acc| {
+        acc.email
+            .as_ref()
+            .map(|e| e.eq_ignore_ascii_case(&payload.email))
+            .unwrap_or(false)
+    });
+
+    if let Some(acc) = account {
+        // 3. Generate Token
+        let token = state.tokens.create(payload.email.clone());
+
+        // 4. "Send" Email (Log for now)
+        // Ensure the base URL does not have a trailing slash for clean formatting
+        let base_url =
+            std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+        let base_url = base_url.trim_end_matches('/');
+        let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
+
+        tracing::info!(
+            target: "email_outbox",
+            email = %payload.email,
+            account_id = %acc.public.id,
+            %link,
+            "Magic Link Generated"
+        );
+    } else {
+        tracing::info!(email = %payload.email, "Login requested for unknown email");
+    }
+
+    (
+        StatusCode::OK,
+        "If your email is registered, you will receive a login link.",
+    )
+        .into_response()
+}
+
+pub async fn consume_login(
+    State(state): State<ApiState>,
+    jar: CookieJar,
+    Query(params): Query<ConsumeTokenParams>,
+) -> impl IntoResponse {
+    if let Some(email) = state.tokens.consume(&params.token) {
+        // Find account
+        let account = state.accounts.values().find(|acc| {
+            acc.email
+                .as_ref()
+                .map(|e| e.eq_ignore_ascii_case(&email))
+                .unwrap_or(false)
+        });
+
+        if let Some(acc) = account {
+            let session = state.sessions.create(acc.public.id.clone());
+            let cookie = build_session_cookie(session.id, None);
+
+            return (jar.add(cookie), Redirect::to("/")).into_response();
+        }
+    }
+
+    // Invalid or expired token
+    Redirect::to("/login?error=invalid_token").into_response()
 }
 
 pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoResponse {

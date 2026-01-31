@@ -44,13 +44,8 @@ pub async fn run() -> anyhow::Result<()> {
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
-    let accounts_map = routes::accounts::load_all_accounts().await;
-    let mut account_ids: Vec<_> = accounts_map.keys().cloned().collect();
-    account_ids.sort();
-
-    let accounts = Arc::new(accounts_map);
-    let sorted_account_ids = Arc::new(account_ids);
-
+    let tokens = crate::auth::tokens::TokenStore::new();
+    let accounts = Arc::new(routes::accounts::load_all_accounts().await);
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -59,8 +54,8 @@ pub async fn run() -> anyhow::Result<()> {
         config: app_config.clone(),
         metrics: metrics.clone(),
         sessions,
+        tokens,
         accounts,
-        sorted_account_ids,
     };
 
     let app = Router::new()

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { authStore } from './store';
-  import { browser, dev } from '$app/environment';
+  import { browser } from '$app/environment';
 
   async function logout() {
     if (!browser) return;
@@ -8,18 +8,18 @@
   }
 </script>
 
-{#if browser && dev}
+{#if browser}
   <div class="auth-status">
     <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
       {$authStore.role}
     </span>
 
     {#if $authStore.authenticated}
-      <button class="logout-btn" on:click={logout} title="Logout" aria-label="Logout">
+      <button class="logout-btn" on:click={logout} title="Logout" aria-label="Logout" data-testid="auth-status-logout">
         ✕
       </button>
     {:else}
-      <a href="/_dev/auth" class="login-link" title="Dev Login">Login</a>
+      <a href="/login" class="login-link" title="Login">Login</a>
     {/if}
   </div>
 {/if}

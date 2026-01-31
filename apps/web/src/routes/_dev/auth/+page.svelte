@@ -32,7 +32,7 @@
 
   async function login(id: string) {
     try {
-      await authStore.login(id);
+      await authStore.devLogin(id);
       // Reactivity handles UI update
     } catch (e) {
       error = 'Login failed: ' + String(e);
