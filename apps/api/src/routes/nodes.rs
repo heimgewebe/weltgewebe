@@ -207,6 +207,7 @@ pub async fn patch_node(
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
     // PATCH holds write lock during persistence to guarantee consistency (read-your-writes)
+    // Serialize PATCH commits: block node reads during file+cache commit to guarantee read-your-writes (per-process).
     let mut nodes_guard = state.nodes.write().await;
 
     let path = nodes_path();
