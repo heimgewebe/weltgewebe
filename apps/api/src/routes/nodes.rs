@@ -327,7 +327,7 @@ pub async fn patch_node(
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
             nodes_guard[idx] = updated_node.clone();
         } else {
-             nodes_guard.push(updated_node.clone());
+            nodes_guard.push(updated_node.clone());
         }
     }
 
@@ -351,7 +351,8 @@ pub async fn list_nodes(
 
     let nodes = state.nodes.read().await;
 
-    let out: Vec<Node> = nodes.iter()
+    let out: Vec<Node> = nodes
+        .iter()
         .filter(|node| {
             if let Some(bb) = &bbox {
                 point_in_bbox(node.location.lon, node.location.lat, bb)
