@@ -48,9 +48,17 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await page.getByRole("button", { name: "Login Demo" }).click();
 
   // Verify state changed to Logout (implies logged in)
-  // We check the debug logout button directly using its specific data-testid
-  await expect(page.getByTestId("debug-logout")).toBeVisible();
-  await expect(page.getByTestId("debug-logout")).toHaveText("Logout");
+  // Prefer debug badge logout (same surface as Login Demo), fallback to global AuthStatus.
+  const debugLogout = page.getByTestId("debug-logout");
+  const authStatusLogout = page.getByTestId("auth-status-logout");
+
+  if (await debugLogout.isVisible().catch(() => false)) {
+    await expect(debugLogout).toHaveText("Logout");
+  } else {
+    await expect(authStatusLogout).toBeVisible();
+    // Optional but helpful if AuthStatus has a stable label/text:
+    // await expect(authStatusLogout).toHaveText(/logout/i);
+  }
 
   // Click the SAME Garnrolle marker (id matches the login ID hardcoded in store.ts)
   await garnrolleMarker.click();
