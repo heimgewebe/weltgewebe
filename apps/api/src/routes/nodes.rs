@@ -9,8 +9,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
 };
+use uuid::Uuid;
 
 #[derive(Clone, Copy, Debug)]
 struct BBox {
@@ -236,20 +237,62 @@ pub async fn patch_node(
     }
 
     // Write back
-    let mut file = OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .open(&path)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Use a unique temporary file + rename for atomic writes to prevent data corruption and race conditions
+    let mut tmp_path = path.clone();
+    if let Some(filename) = tmp_path.file_name() {
+        let mut new_filename = filename.to_os_string();
+        new_filename.push(format!(".tmp.{}", Uuid::new_v4()));
+        tmp_path.set_file_name(new_filename);
+    } else {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
 
-    for line in all_lines {
-        file.write_all(line.as_bytes())
+    // Inner function to handle writing logic so we can catch errors and cleanup
+    let write_result = async {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&tmp_path)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        file.write_all(b"\n")
+
+        let mut writer = BufWriter::new(file);
+
+        for line in all_lines {
+            writer
+                .write_all(line.as_bytes())
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            writer
+                .write_all(b"\n")
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        }
+        writer
+            .flush()
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Ensure durability
+        let file = writer.into_inner();
+        file.sync_all()
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        Ok::<(), StatusCode>(())
+    }
+    .await;
+
+    if let Err(e) = write_result {
+        // Cleanup temp file on failure
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return Err(e);
+    }
+
+    if let Err(_e) = tokio::fs::rename(&tmp_path, &path).await {
+        // Cleanup temp file if rename fails
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     found_node
