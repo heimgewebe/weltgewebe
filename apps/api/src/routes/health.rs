@@ -290,6 +290,7 @@ mod tests {
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(HashMap::new()),
+            sorted_account_ids: Arc::new(vec![]),
         })
     }
 

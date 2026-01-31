@@ -20,4 +20,5 @@ pub struct ApiState {
     pub sessions: SessionStore,
     pub tokens: TokenStore,
     pub accounts: Arc<HashMap<String, AccountInternal>>,
+    pub sorted_account_ids: Arc<Vec<String>>,
 }

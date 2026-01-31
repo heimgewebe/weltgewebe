@@ -6,6 +6,9 @@ use axum::{
     Router,
 };
 use serial_test::serial;
+mod helpers;
+
+use helpers::set_accounts;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -42,6 +45,7 @@ fn test_state() -> Result<ApiState> {
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(HashMap::new()),
+        sorted_account_ids: Arc::new(vec![]),
     })
 }
 
@@ -86,7 +90,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
     );
 
-    state.accounts = Arc::new(account_map);
+    set_accounts(&mut state, account_map);
     Ok(state)
 }
 
@@ -161,7 +165,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     );
 
     let mut state = test_state()?;
-    state.accounts = Arc::new(account_map);
+    set_accounts(&mut state, account_map);
 
     let app = app(state);
 
