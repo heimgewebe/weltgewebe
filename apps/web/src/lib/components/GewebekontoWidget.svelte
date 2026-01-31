@@ -38,7 +38,7 @@
     {#if loggedIn}
       <button class="btn ghost" type="button" on:click={() => authStore.logout()}>Abmelden</button>
     {:else}
-      <button class="btn" type="button" on:click={() => authStore.login('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8')}>Anmelden</button>
+      <button class="btn" type="button" on:click={() => authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8')}>Login Demo</button>
     {/if}
   </div>
 </div>

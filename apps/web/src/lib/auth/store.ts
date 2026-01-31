@@ -57,10 +57,10 @@ const createAuthStore = () => {
   return {
     subscribe,
     checkAuth,
-    login: async (accountId: string) => {
+    devLogin: async (accountId: string) => {
       if (!browser) return;
       try {
-        const res = await fetch("/api/auth/login", {
+        const res = await fetch("/api/auth/dev/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ account_id: accountId }),
@@ -79,6 +79,28 @@ const createAuthStore = () => {
         }
       } catch (e) {
         console.error("Login error:", e);
+        throw e;
+      }
+    },
+    requestLogin: async (email: string) => {
+      if (!browser) return;
+      try {
+        const res = await fetch("/api/auth/login/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+          credentials: "include",
+        });
+        if (!res.ok) {
+          // If 404/403 (disabled), throw specific error
+          if (res.status === 404 || res.status === 403) {
+            throw new Error("Public login is disabled.");
+          }
+          throw new Error(`Request failed: ${res.status}`);
+        }
+        // Success: UI should show "Check Inbox"
+      } catch (e) {
+        console.error("Request Login error:", e);
         throw e;
       }
     },

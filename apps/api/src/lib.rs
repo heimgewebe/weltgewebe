@@ -44,6 +44,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
+    let tokens = crate::auth::tokens::TokenStore::new();
     let accounts = Arc::new(routes::accounts::load_all_accounts().await);
     let state = ApiState {
         db_pool,
@@ -53,6 +54,7 @@ pub async fn run() -> anyhow::Result<()> {
         config: app_config.clone(),
         metrics: metrics.clone(),
         sessions,
+        tokens,
         accounts,
     };
 

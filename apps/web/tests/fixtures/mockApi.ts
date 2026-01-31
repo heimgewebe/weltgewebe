@@ -56,8 +56,8 @@ export async function mockApiResponses(page: Page): Promise<void> {
       });
     }
 
-    // Handle auth/login
-    if (url.includes("/api/auth/login") && method === "POST") {
+    // Handle auth/dev/login
+    if (url.includes("/api/auth/dev/login") && method === "POST") {
       try {
         const postData = route.request().postDataJSON();
         currentAccountId = postData?.account_id || null;

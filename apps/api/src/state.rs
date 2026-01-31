@@ -1,7 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    auth::session::SessionStore, config::AppConfig, routes::accounts::AccountInternal,
+    auth::{session::SessionStore, tokens::TokenStore},
+    config::AppConfig,
+    routes::accounts::AccountInternal,
     telemetry::Metrics,
 };
 use async_nats::Client as NatsClient;
@@ -16,5 +18,6 @@ pub struct ApiState {
     pub config: AppConfig,
     pub metrics: Metrics,
     pub sessions: SessionStore,
+    pub tokens: TokenStore,
     pub accounts: Arc<HashMap<String, AccountInternal>>,
 }

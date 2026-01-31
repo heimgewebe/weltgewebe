@@ -68,6 +68,7 @@ pub struct AccountPublic {
 pub struct AccountInternal {
     pub public: AccountPublic,
     pub role: Role,
+    pub email: Option<String>,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -258,9 +259,21 @@ pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
             .map(Role::from_str_lossy)
             .unwrap_or(Role::Gast);
 
+        let email = v
+            .get("email")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
         if let Some(public) = map_json_to_public_account(&v) {
             let id = public.id.clone();
-            map.insert(id, AccountInternal { public, role });
+            map.insert(
+                id,
+                AccountInternal {
+                    public,
+                    role,
+                    email,
+                },
+            );
         }
     }
     map

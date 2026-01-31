@@ -62,7 +62,7 @@ you can whitelist origins:
 - `CSRF_ALLOWED_ORIGINS` &mdash; Comma-separated list of allowed origins
   (e.g., `http://localhost:5173,https://my-dev-env.com`).
 
-**Note:** The `/auth/login` endpoint is exempted from CSRF checks to facilitate initial session creation.
+**Note:** The `/auth/dev/login` and `/auth/login/request` endpoints are exempted from CSRF checks to facilitate initial session creation.
 
 ## Developer Login (Security Warning)
 
@@ -81,6 +81,8 @@ By default, dev-login is restricted to requests originating from **localhost**.
 
 - **`AUTH_DEV_LOGIN_ALLOW_REMOTE`**: Set to `1` to allow requests from non-localhost IPs (e.g., LAN devices).
   **Use with extreme caution.**
+- **`AUTH_PUBLIC_LOGIN`**: Set to `1` to enable public Magic Link login flow (`/auth/login/request`). Defaults to `0` (disabled).
+- **`APP_BASE_URL`**: Base URL for constructing Magic Links sent via email/log. Defaults to `http://localhost:5173`.
 - **`AUTH_TRUSTED_PROXIES`**: Comma-separated list of trusted proxy IPs or CIDRs (e.g., `127.0.0.1,::1,10.0.0.0/8`).
   - If set, the API will trust `Forwarded` and `X-Forwarded-For` headers from these IPs to determine the
     effective client IP.

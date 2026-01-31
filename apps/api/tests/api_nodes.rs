@@ -43,6 +43,7 @@ fn test_state() -> Result<ApiState> {
         },
         metrics,
         sessions: SessionStore::new(),
+        tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(HashMap::new()),
     })
 }
@@ -176,6 +177,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         AccountInternal {
             public: account,
             role: Role::Weber,
+            email: Some("weber1@example.com".to_string()),
         },
     );
 
@@ -370,6 +372,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         AccountInternal {
             public: account,
             role: Role::Weber,
+            email: Some("weber1@example.com".to_string()),
         },
     );
 

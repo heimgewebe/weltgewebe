@@ -40,6 +40,7 @@ fn test_state() -> Result<ApiState> {
         },
         metrics,
         sessions: SessionStore::new(),
+        tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(HashMap::new()),
     })
 }
@@ -63,6 +64,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
                 tags: vec![],
             },
             role: Role::Gast,
+            email: Some("u1@example.com".to_string()),
         },
     );
     account_map.insert(
@@ -80,6 +82,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
                 tags: vec![],
             },
             role: Role::Admin,
+            email: Some("a1@example.com".to_string()),
         },
     );
 
@@ -119,7 +122,7 @@ async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
     let state = test_state()?;
     let app = app(state);
 
-    let req = Request::post("/auth/login")
+    let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"account_id":"any"}"#))?;
 
@@ -153,6 +156,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         AccountInternal {
             public: account,
             role: Role::Gast,
+            email: Some("u1@example.com".to_string()),
         },
     );
 
@@ -161,7 +165,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
 
     let app = app(state);
 
-    let req = Request::post("/auth/login")
+    let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
@@ -323,7 +327,7 @@ async fn auth_login_fails_from_remote_without_allow_flag() -> Result<()> {
     // Use a non-localhost IP to simulate remote access
     let app = app_with_addr(state, "192.168.1.100:8080".parse()?);
 
-    let req = Request::post("/auth/login")
+    let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
@@ -346,7 +350,7 @@ async fn auth_login_succeeds_from_remote_with_allow_flag() -> Result<()> {
     // Use a non-localhost IP to simulate remote access
     let app = app_with_addr(state, "192.168.1.100:8080".parse()?);
 
-    let req = Request::post("/auth/login")
+    let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 

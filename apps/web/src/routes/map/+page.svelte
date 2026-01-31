@@ -289,7 +289,7 @@
       await authStore.logout();
     } else {
       try {
-        await authStore.login('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
+        await authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
       } catch (e: any) {
         // Simple UI feedback for dev login issues
         window.alert(`Login failed: ${e.message}\nCheck console for details.`);
