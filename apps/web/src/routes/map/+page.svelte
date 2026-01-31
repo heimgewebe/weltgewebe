@@ -461,7 +461,7 @@
 
 <main class="shell">
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
-    <div class="debug-badge">
+    <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
       <br>
       {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}

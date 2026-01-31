@@ -177,22 +177,17 @@ pub async fn load_nodes() -> Vec<Node> {
     nodes
 }
 
-pub async fn get_node(Path(id): Path<String>) -> Result<Json<Node>, StatusCode> {
-    let path = nodes_path();
-    let file = File::open(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
-    let mut lines = BufReader::new(file).lines();
-
-    while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value =
-            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        if let Some(node) = map_json_to_node(&v) {
-            if node.id == id {
-                return Ok(Json(node));
-            }
-        }
-    }
-
-    Err(StatusCode::NOT_FOUND)
+pub async fn get_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<Node>, StatusCode> {
+    let nodes = state.nodes.read().await;
+    nodes
+        .iter()
+        .find(|n| n.id == id)
+        .cloned()
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 pub async fn patch_node(
