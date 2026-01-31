@@ -23,7 +23,7 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
-fn test_state() -> Result<ApiState> {
+async fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
         commit: "test",
@@ -45,6 +45,9 @@ fn test_state() -> Result<ApiState> {
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(HashMap::new()),
+        nodes: Arc::new(tokio::sync::RwLock::new(
+            weltgewebe_api::routes::nodes::load_nodes().await,
+        )),
     })
 }
 
@@ -57,10 +60,10 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
     fs::write(path, lines.join("\n")).unwrap();
 }
 
-fn app() -> Router {
+async fn app() -> Router {
     Router::new()
         .merge(api_router())
-        .with_state(test_state().unwrap())
+        .with_state(test_state().await.unwrap())
 }
 
 #[tokio::test]
@@ -80,7 +83,7 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
         ],
     );
 
-    let app = app();
+    let app = app().await;
 
     // BBox über Hamburg herum (soll n1 & n3 treffen)
     let res = app
@@ -181,7 +184,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         },
     );
 
-    let mut state = test_state()?;
+    let mut state = test_state().await?;
     state.accounts = Arc::new(account_map);
 
     // Create Session
@@ -267,7 +270,7 @@ async fn nodes_accept_string_coordinates() -> anyhow::Result<()> {
         &[r#"{"id":"n1","location":{"lon":"9.9","lat":"53.55"},"title":"A"}"#],
     );
 
-    let app = app();
+    let app = app().await;
 
     let res = app
         .oneshot(Request::get("/nodes").body(body::Body::empty())?)
@@ -312,7 +315,7 @@ async fn nodes_fill_missing_updated_at_from_created_at() -> anyhow::Result<()> {
         ],
     );
 
-    let app = app();
+    let app = app().await;
 
     let res = app
         .oneshot(Request::get("/nodes").body(body::Body::empty())?)
@@ -376,7 +379,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         },
     );
 
-    let mut state = test_state()?;
+    let mut state = test_state().await?;
     state.accounts = Arc::new(account_map);
 
     // Create Session
