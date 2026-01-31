@@ -48,8 +48,8 @@ test("Garnrolle (Account) behaves correctly for public vs owner", async ({
   await page.getByRole("button", { name: "Login Demo" }).click();
 
   // Verify state changed to Logout (implies logged in)
-  // We target the specific logout button in the widget to avoid ambiguity with the global AuthStatus
-  await expect(page.getByTestId("widget-logout")).toBeVisible();
+  // We use the global AuthStatus logout button since the widget is no longer present
+  await expect(page.getByTestId("auth-status-logout")).toBeVisible();
 
   // Click the SAME Garnrolle marker (id matches the login ID hardcoded in store.ts)
   await garnrolleMarker.click();
