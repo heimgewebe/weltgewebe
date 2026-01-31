@@ -67,9 +67,7 @@ async fn app_with_nodes(in_dir: &std::path::Path, lines: &[&str]) -> (Router, En
     write_lines(&nodes_path, lines);
     let env = set_gewebe_in_dir(in_dir);
     let state = test_state().await.unwrap();
-    let app = Router::new()
-        .merge(api_router())
-        .with_state(state);
+    let app = Router::new().merge(api_router()).with_state(state);
     (app, env)
 }
 
@@ -79,11 +77,15 @@ async fn nodes_bbox_and_limit() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
 
-    let (app, _env) = app_with_nodes(&in_dir, &[
-        r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#,
-        r#"{"id":"n2","location":{"lon":11.0,"lat":54.2},"title":"B"}"#,
-        r#"{"id":"n3","location":{"lon":10.2,"lat":53.6},"title":"C"}"#,
-    ]).await;
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[
+            r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#,
+            r#"{"id":"n2","location":{"lon":11.0,"lat":54.2},"title":"B"}"#,
+            r#"{"id":"n3","location":{"lon":10.2,"lat":53.6},"title":"C"}"#,
+        ],
+    )
+    .await;
 
     // BBox über Hamburg herum (soll n1 & n3 treffen)
     let res = app
@@ -262,9 +264,11 @@ async fn nodes_accept_string_coordinates() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
 
-    let (app, _env) = app_with_nodes(&in_dir, &[
-        r#"{"id":"n1","location":{"lon":"9.9","lat":"53.55"},"title":"A"}"#
-    ]).await;
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[r#"{"id":"n1","location":{"lon":"9.9","lat":"53.55"},"title":"A"}"#],
+    )
+    .await;
 
     let res = app
         .oneshot(Request::get("/nodes").body(body::Body::empty())?)

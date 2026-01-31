@@ -206,6 +206,9 @@ pub async fn patch_node(
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
+    // PATCH holds write lock during persistence to guarantee consistency (read-your-writes)
+    let mut nodes_guard = state.nodes.write().await;
+
     let path = nodes_path();
     // Read all lines
     let file = File::open(&path)
@@ -328,9 +331,7 @@ pub async fn patch_node(
     }
 
     // Update in-memory cache
-    // cache update only after successful persist
     if let Some(ref updated_node) = found_node {
-        let mut nodes_guard = state.nodes.write().await;
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
             nodes_guard[idx] = updated_node.clone();
         } else {
