@@ -288,9 +288,11 @@ pub async fn list_accounts(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let accounts: Vec<AccountPublic> = state
-        .sorted_account_ids
-        .iter()
+    let mut ids: Vec<_> = state.accounts.keys().collect();
+    ids.sort();
+
+    let accounts: Vec<AccountPublic> = ids
+        .into_iter()
         .take(limit)
         .filter_map(|id| state.accounts.get(id))
         .map(|internal| internal.public.clone())

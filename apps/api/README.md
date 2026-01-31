@@ -62,7 +62,8 @@ you can whitelist origins:
 - `CSRF_ALLOWED_ORIGINS` &mdash; Comma-separated list of allowed origins
   (e.g., `http://localhost:5173,https://my-dev-env.com`).
 
-**Note:** The `/auth/dev/login` and `/auth/login/request` endpoints are exempted from CSRF checks to facilitate initial session creation.
+**Note:** The `/auth/dev/login` and `/auth/login/request` endpoints are exempted from CSRF checks to facilitate initial
+session creation.
 
 ## Developer Login (Security Warning)
 

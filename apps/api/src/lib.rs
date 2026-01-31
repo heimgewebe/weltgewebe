@@ -36,7 +36,6 @@ pub async fn run() -> anyhow::Result<()> {
             _ => tracing::warn!(%error, "failed to load environment from .env file"),
         }
     }
-
     init_tracing()?;
 
     let app_config = AppConfig::load().context("failed to load API configuration")?;
@@ -46,15 +45,7 @@ pub async fn run() -> anyhow::Result<()> {
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
-
-    // Load accounts once and derive deterministic account ID order
-    let accounts_map = routes::accounts::load_all_accounts().await;
-    let mut account_ids: Vec<_> = accounts_map.keys().cloned().collect();
-    account_ids.sort();
-
-    let accounts = Arc::new(accounts_map);
-    let sorted_account_ids = Arc::new(account_ids);
-
+    let accounts = Arc::new(routes::accounts::load_all_accounts().await);
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -65,7 +56,6 @@ pub async fn run() -> anyhow::Result<()> {
         sessions,
         tokens,
         accounts,
-        sorted_account_ids,
     };
 
     let app = Router::new()
