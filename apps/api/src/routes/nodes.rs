@@ -222,8 +222,8 @@ pub async fn patch_node(
     // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
     let start_wait = std::time::Instant::now();
     let mut nodes_guard = state.nodes.write().await;
-    let start_hold = std::time::Instant::now();
     let lock_contention_ms = start_wait.elapsed().as_millis();
+    let start_hold = std::time::Instant::now();
 
     let path = nodes_path();
     // Read all lines
