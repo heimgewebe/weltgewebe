@@ -1,6 +1,7 @@
+use crate::state::ApiState;
 use crate::utils::nodes_path;
 use axum::{
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -21,13 +22,13 @@ struct BBox {
     max_lat: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct Node {
     pub id: String,
     pub kind: String,
@@ -152,28 +153,62 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
     })
 }
 
-pub async fn get_node(Path(id): Path<String>) -> Result<Json<Node>, StatusCode> {
+/// Loads nodes from the JSONL file into memory.
+///
+/// **Architecture Note:**
+/// The in-memory cache populated by this function is considered the "Source of Truth"
+/// for read operations during the API process lifetime.
+/// - The file is strictly used for persistence.
+/// - `patch_node` updates both the file (for durability) and this cache (for consistency).
+/// - External modifications to the nodes file (e.g. via deployment or manual edit)
+///   will NOT be detected until the API process is restarted.
+pub async fn load_nodes() -> Vec<Node> {
     let path = nodes_path();
-    let file = File::open(&path).await.map_err(|_| StatusCode::NOT_FOUND)?;
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(e) => {
+            tracing::warn!(?path, ?e, "Failed to open nodes file, returning empty list");
+            return Vec::new();
+        }
+    };
     let mut lines = BufReader::new(file).lines();
+    let mut nodes = Vec::new();
 
     while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value =
-            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let v: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
         if let Some(node) = map_json_to_node(&v) {
-            if node.id == id {
-                return Ok(Json(node));
-            }
+            nodes.push(node);
         }
     }
 
-    Err(StatusCode::NOT_FOUND)
+    tracing::info!(count = nodes.len(), ?path, "Loaded nodes into memory cache");
+    nodes
+}
+
+pub async fn get_node(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+) -> Result<Json<Node>, StatusCode> {
+    let nodes = state.nodes.read().await;
+    nodes
+        .iter()
+        .find(|n| n.id == id)
+        .cloned()
+        .map(Json)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 pub async fn patch_node(
+    State(state): State<ApiState>,
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
+    // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
+    let mut nodes_guard = state.nodes.write().await;
+
     let path = nodes_path();
     // Read all lines
     let file = File::open(&path)
@@ -295,12 +330,22 @@ pub async fn patch_node(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    // Update in-memory cache
+    if let Some(ref updated_node) = found_node {
+        if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
+            nodes_guard[idx] = updated_node.clone();
+        } else {
+            nodes_guard.push(updated_node.clone());
+        }
+    }
+
     found_node
         .map(Json)
         .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 pub async fn list_nodes(
+    State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<Node>>, StatusCode> {
     let bbox = match params.get("bbox") {
@@ -312,52 +357,20 @@ pub async fn list_nodes(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let path = nodes_path();
-    let file = match File::open(&path).await {
-        Ok(f) => f,
-        Err(_) => return Ok(Json(Vec::new())), // robust: leer zurückgeben
-    };
-    let mut lines = BufReader::new(file).lines();
+    let nodes = state.nodes.read().await;
 
-    let mut out = Vec::with_capacity(limit.min(1024));
-    while let Ok(Some(line)) = lines.next_line().await {
-        if out.len() >= limit {
-            break;
-        }
-        let v: Value = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(_) => continue, // fehlerhafte Zeilen überspringen
-        };
-
-        // Optimization: Check BBox *before* expensive mapping (string cloning)
-        if let Some(bb) = bbox {
-            // Access location directly from Value (cheap reference access)
-            if let Some(loc) = v.get("location") {
-                let lat = loc
-                    .get("lat")
-                    .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
-                let lon = loc
-                    .get("lon")
-                    .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
-
-                if let (Some(lat), Some(lon)) = (lat, lon) {
-                    if !point_in_bbox(lon, lat, &bb) {
-                        continue;
-                    }
-                } else {
-                    // Invalid location data, skip
-                    continue;
-                }
+    let out: Vec<Node> = nodes
+        .iter()
+        .filter(|node| {
+            if let Some(bb) = &bbox {
+                point_in_bbox(node.location.lon, node.location.lat, bb)
             } else {
-                continue;
+                true
             }
-        }
-
-        if let Some(node) = map_json_to_node(&v) {
-            // Note: BBox check already done above for optimization
-            out.push(node);
-        }
-    }
+        })
+        .take(limit)
+        .cloned()
+        .collect();
 
     Ok(Json(out))
 }

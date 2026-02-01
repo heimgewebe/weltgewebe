@@ -267,6 +267,7 @@ mod tests {
     use serde_json::Value;
     use serial_test::serial;
     use std::{collections::HashMap, sync::Arc};
+    use tokio::sync::RwLock;
 
     fn test_state() -> Result<ApiState> {
         let metrics = Metrics::try_new(BuildInfo {
@@ -290,6 +291,7 @@ mod tests {
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(HashMap::new()),
+            nodes: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
