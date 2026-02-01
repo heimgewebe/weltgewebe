@@ -54,8 +54,7 @@ impl Metrics {
         let build_info_metric =
             IntGaugeVec::new(build_opts, &["version", "commit", "build_timestamp"])?;
 
-        let nodes_count_opts =
-            Opts::new("nodes_cache_count", "Number of nodes in memory cache");
+        let nodes_count_opts = Opts::new("nodes_cache_count", "Number of nodes in memory cache");
         let nodes_cache_count = IntGauge::with_opts(nodes_count_opts)?;
 
         let registry = Registry::new();

@@ -191,7 +191,13 @@ pub async fn load_nodes() -> Vec<Node> {
         .map(|m| m.len())
         .unwrap_or(0);
 
-    tracing::info!(count = nodes.len(), load_ms, file_size_bytes, ?path, "Loaded nodes into memory cache");
+    tracing::info!(
+        count = nodes.len(),
+        load_ms,
+        file_size_bytes,
+        ?path,
+        "Loaded nodes into memory cache"
+    );
     nodes
 }
 
@@ -352,7 +358,9 @@ pub async fn patch_node(
     }
 
     // Update metrics
-    state.metrics.set_nodes_cache_count(nodes_guard.len() as i64);
+    state
+        .metrics
+        .set_nodes_cache_count(nodes_guard.len() as i64);
 
     let lock_held_ms = start_lock.elapsed().as_millis();
     if let Some(n) = &found_node {
