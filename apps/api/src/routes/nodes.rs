@@ -365,15 +365,14 @@ pub async fn patch_node(
         .set_nodes_cache_count(nodes_guard.len() as i64);
 
     let lock_hold_ms = start_hold.elapsed().as_millis();
-    if let Some(n) = &found_node {
-        tracing::info!(
-            persist_ms,
-            lock_hold_ms,
-            lock_contention_ms,
-            node_id = %n.id,
-            "Node patched"
-        );
-    }
+    tracing::info!(
+        persist_ms,
+        lock_hold_ms,
+        lock_contention_ms,
+        node_id = %id,
+        patched = found_node.is_some(),
+        "Node patch attempt finished"
+    );
 
     found_node
         .map(Json)
