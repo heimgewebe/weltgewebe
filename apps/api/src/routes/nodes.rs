@@ -370,8 +370,8 @@ pub async fn patch_node(
         lock_hold_ms,
         lock_contention_ms,
         node_id = %id,
-        patched = found_node.is_some(),
-        "Node patch attempt finished"
+        node_found = found_node.is_some(),
+        "Node patch committed"
     );
 
     found_node
