@@ -302,7 +302,7 @@ Seit **Optimierung der List-Endpoints** gilt:
   - Alle Lese-Zugriffe (`GET /nodes`, `GET /nodes/:id`) werden aus dem Cache bedient.
 - **Datei ist Persistenz:** Die JSONL-Datei (`demo.nodes.jsonl`) dient ausschließlich der Persistenz über Neustarts hinweg.
 - **Dual-Write:** Schreiboperationen (`PATCH`) aktualisieren zuerst die Datei (atomar) und bei Erfolg sofort den Cache.
-- **Read-Your-Writes:** Während `PATCH /nodes` wird innerhalb einer Instanz der Nodes-Read-Zugriff kurz blockiert (`RwLock`),
+- **Read-Your-Writes:** Während `PATCH /nodes/:id` wird innerhalb einer Instanz der Nodes-Read-Zugriff kurz blockiert (`RwLock`),
   um read-your-writes zu garantieren.
 - **Konsequenz:** Externe Änderungen an der Datei (z. B. durch Deployment oder manuelles Editieren) werden von der
   laufenden API **nicht** erkannt. Ein Neustart des API-Prozesses ist erforderlich, um externe Änderungen zu laden.
