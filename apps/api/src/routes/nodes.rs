@@ -206,7 +206,7 @@ pub async fn patch_node(
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
-    // Serialize PATCH commits: block node reads during file+cache commit to guarantee read-your-writes (per-process).
+    // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
     let mut nodes_guard = state.nodes.write().await;
 
     let path = nodes_path();
