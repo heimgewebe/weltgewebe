@@ -461,7 +461,7 @@
 
 <main class="shell">
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
-    <div class="debug-badge">
+    <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
       <br>
       {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
@@ -472,7 +472,7 @@
         Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
       {/if}
       <br>
-      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;">
+      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
         {$authStore.authenticated ? 'Logout' : 'Login Demo'}
       </button>
     </div>
