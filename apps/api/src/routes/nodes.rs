@@ -163,6 +163,7 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 /// - External modifications to the nodes file (e.g. via deployment or manual edit)
 ///   will NOT be detected until the API process is restarted.
 pub async fn load_nodes() -> Vec<Node> {
+    let start = std::time::Instant::now();
     let path = nodes_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
@@ -184,7 +185,19 @@ pub async fn load_nodes() -> Vec<Node> {
         }
     }
 
-    tracing::info!(count = nodes.len(), ?path, "Loaded nodes into memory cache");
+    let load_ms = start.elapsed().as_millis();
+    let file_size_bytes = tokio::fs::metadata(&path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
+
+    tracing::info!(
+        count = nodes.len(),
+        load_ms,
+        file_size_bytes,
+        ?path,
+        "Loaded nodes into memory cache"
+    );
     nodes
 }
 
@@ -207,7 +220,10 @@ pub async fn patch_node(
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
     // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
+    let start_wait = std::time::Instant::now();
     let mut nodes_guard = state.nodes.write().await;
+    let lock_contention_ms = start_wait.elapsed().as_millis();
+    let start_hold = std::time::Instant::now();
 
     let path = nodes_path();
     // Read all lines
@@ -282,6 +298,8 @@ pub async fn patch_node(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    let start_persist = std::time::Instant::now();
+
     // Inner function to handle writing logic so we can catch errors and cleanup
     let write_result = async {
         let file = OpenOptions::new()
@@ -330,6 +348,8 @@ pub async fn patch_node(
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     }
 
+    let persist_ms = start_persist.elapsed().as_millis();
+
     // Update in-memory cache
     if let Some(ref updated_node) = found_node {
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
@@ -338,6 +358,21 @@ pub async fn patch_node(
             nodes_guard.push(updated_node.clone());
         }
     }
+
+    // Update metrics
+    state
+        .metrics
+        .set_nodes_cache_count(nodes_guard.len() as i64);
+
+    let lock_hold_ms = start_hold.elapsed().as_millis();
+    tracing::info!(
+        persist_ms,
+        lock_hold_ms,
+        lock_contention_ms,
+        node_id = %id,
+        node_found = found_node.is_some(),
+        "Node patch finished"
+    );
 
     found_node
         .map(Json)

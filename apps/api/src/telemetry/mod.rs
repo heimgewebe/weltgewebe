@@ -12,7 +12,7 @@ use axum::{
     http::{header, HeaderValue, Request, StatusCode},
     response::{IntoResponse, Response},
 };
-use prometheus::{Encoder, IntCounterVec, IntGaugeVec, Opts, Registry, TextEncoder};
+use prometheus::{Encoder, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry, TextEncoder};
 use tower::{Layer, Service};
 
 use crate::state::ApiState;
@@ -42,6 +42,7 @@ pub struct Metrics {
 struct MetricsInner {
     registry: Registry,
     pub http_requests_total: IntCounterVec,
+    pub nodes_cache_count: IntGauge,
 }
 
 impl Metrics {
@@ -53,9 +54,13 @@ impl Metrics {
         let build_info_metric =
             IntGaugeVec::new(build_opts, &["version", "commit", "build_timestamp"])?;
 
+        let nodes_count_opts = Opts::new("nodes_cache_count", "Number of nodes in memory cache");
+        let nodes_cache_count = IntGauge::with_opts(nodes_count_opts)?;
+
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
         registry.register(Box::new(build_info_metric.clone()))?;
+        registry.register(Box::new(nodes_cache_count.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -69,8 +74,13 @@ impl Metrics {
             inner: Arc::new(MetricsInner {
                 registry,
                 http_requests_total,
+                nodes_cache_count,
             }),
         })
+    }
+
+    pub fn set_nodes_cache_count(&self, count: i64) {
+        self.inner.nodes_cache_count.set(count);
     }
 
     pub fn http_requests_total(&self) -> &IntCounterVec {

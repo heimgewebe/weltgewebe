@@ -307,6 +307,22 @@ Seit **Optimierung der List-Endpoints** gilt:
 - **Konsequenz:** Externe Änderungen an der Datei (z. B. durch Deployment oder manuelles Editieren) werden von der
   laufenden API **nicht** erkannt. Ein Neustart des API-Prozesses ist erforderlich, um externe Änderungen zu laden.
 
+### Observability & Metriken (Locking)
+
+Um die Performance der Cache-Konsistenz zu überwachen, werden bei Schreibvorgängen (`PATCH`) folgende Zeiten gemessen und
+geloggt:
+
+- **`lock_contention_ms`**: Zeit, die der Request warten musste, um den exklusiven Schreib-Lock (`RwLock::write`) zu
+  erhalten.
+  - Hohe Werte deuten auf Konkurrenz durch viele gleichzeitige Reads oder Writes hin.
+- **`lock_hold_ms`**: Zeit, die der Schreib-Lock gehalten wurde.
+  - Dies umfasst: File-I/O (Persistenz) und Cache-Update.
+  - Während dieser Zeit sind **alle** Lesezugriffe auf Nodes blockiert (Read-Your-Writes Garantie).
+- **`persist_ms`**: Reine Dauer der Datei-Operationen (Write + Rename).
+
+Zusätzlich existiert eine Prometheus-Metrik `nodes_cache_count` (Gauge), die die aktuelle Anzahl der Nodes im
+Arbeitsspeicher anzeigt.
+
 ---
 
 ## Explizit nicht Teil dieser Blaupause
