@@ -174,6 +174,9 @@ pub async fn load_nodes() -> Vec<Node> {
     };
     let mut lines = BufReader::new(file).lines();
     let mut nodes = Vec::new();
+    // Temporary map to handle duplicates efficiently during load
+    let mut id_map: HashMap<String, usize> = HashMap::new();
+    let mut duplicates_count = 0;
 
     while let Ok(Some(line)) = lines.next_line().await {
         let v: Value = match serde_json::from_str(&line) {
@@ -181,7 +184,14 @@ pub async fn load_nodes() -> Vec<Node> {
             Err(_) => continue,
         };
         if let Some(node) = map_json_to_node(&v) {
-            nodes.push(node);
+            if let Some(&idx) = id_map.get(&node.id) {
+                // Last-write-wins: Overwrite existing node
+                nodes[idx] = node;
+                duplicates_count += 1;
+            } else {
+                id_map.insert(node.id.clone(), nodes.len());
+                nodes.push(node);
+            }
         }
     }
 
@@ -193,6 +203,7 @@ pub async fn load_nodes() -> Vec<Node> {
 
     tracing::info!(
         count = nodes.len(),
+        duplicates_count,
         load_ms,
         file_size_bytes,
         ?path,
