@@ -291,7 +291,7 @@ mod tests {
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(HashMap::new()),
-            nodes: Arc::new(RwLock::new(crate::routes::nodes::NodesCache::default())),
+            nodes: Arc::new(RwLock::new(Vec::new())),
         })
     }
 

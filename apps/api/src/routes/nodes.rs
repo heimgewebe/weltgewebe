@@ -44,12 +44,6 @@ pub struct Node {
     pub location: Location,
 }
 
-#[derive(Default, Clone)]
-pub struct NodesCache {
-    pub list: Vec<Node>,
-    pub map: HashMap<String, usize>,
-}
-
 fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
@@ -168,19 +162,21 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 /// - `patch_node` updates both the file (for durability) and this cache (for consistency).
 /// - External modifications to the nodes file (e.g. via deployment or manual edit)
 ///   will NOT be detected until the API process is restarted.
-pub async fn load_nodes() -> NodesCache {
+pub async fn load_nodes() -> Vec<Node> {
     let start = std::time::Instant::now();
     let path = nodes_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(?path, ?e, "Failed to open nodes file, returning empty list");
-            return NodesCache::default();
+            return Vec::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut list = Vec::new();
-    let mut map = HashMap::new();
+    let mut nodes = Vec::new();
+    // Temporary map to handle duplicates efficiently during load
+    let mut id_map: HashMap<String, usize> = HashMap::new();
+    let mut duplicates_count = 0;
 
     while let Ok(Some(line)) = lines.next_line().await {
         let v: Value = match serde_json::from_str(&line) {
@@ -188,8 +184,14 @@ pub async fn load_nodes() -> NodesCache {
             Err(_) => continue,
         };
         if let Some(node) = map_json_to_node(&v) {
-            map.insert(node.id.clone(), list.len());
-            list.push(node);
+            if let Some(&idx) = id_map.get(&node.id) {
+                // Last-write-wins: Overwrite existing node
+                nodes[idx] = node;
+                duplicates_count += 1;
+            } else {
+                id_map.insert(node.id.clone(), nodes.len());
+                nodes.push(node);
+            }
         }
     }
 
@@ -200,13 +202,14 @@ pub async fn load_nodes() -> NodesCache {
         .unwrap_or(0);
 
     tracing::info!(
-        count = list.len(),
+        count = nodes.len(),
+        duplicates_count,
         load_ms,
         file_size_bytes,
         ?path,
         "Loaded nodes into memory cache"
     );
-    NodesCache { list, map }
+    nodes
 }
 
 pub async fn get_node(
@@ -215,9 +218,8 @@ pub async fn get_node(
 ) -> Result<Json<Node>, StatusCode> {
     let nodes = state.nodes.read().await;
     nodes
-        .map
-        .get(&id)
-        .and_then(|idx| nodes.list.get(*idx))
+        .iter()
+        .find(|n| n.id == id)
         .cloned()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
@@ -361,19 +363,17 @@ pub async fn patch_node(
 
     // Update in-memory cache
     if let Some(ref updated_node) = found_node {
-        if let Some(&idx) = nodes_guard.map.get(&id) {
-            nodes_guard.list[idx] = updated_node.clone();
+        if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
+            nodes_guard[idx] = updated_node.clone();
         } else {
-            let idx = nodes_guard.list.len();
-            nodes_guard.map.insert(id.clone(), idx);
-            nodes_guard.list.push(updated_node.clone());
+            nodes_guard.push(updated_node.clone());
         }
     }
 
     // Update metrics
     state
         .metrics
-        .set_nodes_cache_count(nodes_guard.list.len() as i64);
+        .set_nodes_cache_count(nodes_guard.len() as i64);
 
     let lock_hold_ms = start_hold.elapsed().as_millis();
     tracing::info!(
@@ -406,7 +406,6 @@ pub async fn list_nodes(
     let nodes = state.nodes.read().await;
 
     let out: Vec<Node> = nodes
-        .list
         .iter()
         .filter(|node| {
             if let Some(bb) = &bbox {
