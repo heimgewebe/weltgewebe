@@ -315,8 +315,7 @@ pub async fn patch_node(
                 if let Some(n) = map_json_to_node(&v) {
                     found_node = Some(n);
                 }
-                let s = serde_json::to_string(&v)
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let s = serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                 writer
                     .write_all(s.as_bytes())
                     .await
