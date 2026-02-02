@@ -4,10 +4,7 @@ use tokio::sync::RwLock;
 use crate::{
     auth::{session::SessionStore, tokens::TokenStore},
     config::AppConfig,
-    routes::{
-        accounts::AccountInternal,
-        nodes::NodesCache,
-    },
+    routes::{accounts::AccountInternal, nodes::NodesCache},
     telemetry::Metrics,
 };
 use async_nats::Client as NatsClient;
