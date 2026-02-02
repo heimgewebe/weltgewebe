@@ -4,7 +4,10 @@ use tokio::sync::RwLock;
 use crate::{
     auth::{session::SessionStore, tokens::TokenStore},
     config::AppConfig,
-    routes::{accounts::AccountInternal, nodes::Node},
+    routes::{
+        accounts::AccountInternal,
+        nodes::NodesCache,
+    },
     telemetry::Metrics,
 };
 use async_nats::Client as NatsClient;
@@ -21,5 +24,5 @@ pub struct ApiState {
     pub sessions: SessionStore,
     pub tokens: TokenStore,
     pub accounts: Arc<HashMap<String, AccountInternal>>,
-    pub nodes: Arc<RwLock<Vec<Node>>>,
+    pub nodes: Arc<RwLock<NodesCache>>,
 }

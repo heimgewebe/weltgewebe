@@ -40,7 +40,9 @@ fn test_state() -> Result<ApiState> {
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(HashMap::new()),
-        nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+        nodes: Arc::new(tokio::sync::RwLock::new(
+            weltgewebe_api::routes::nodes::NodesCache::default(),
+        )),
     })
 }
 
