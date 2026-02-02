@@ -54,12 +54,21 @@ async fn nodes_load_deduplication_last_write_wins() -> Result<()> {
     assert_eq!(nodes.len(), 2, "Should have 2 unique nodes");
 
     // Verify "n1" is the "New" one
-    let n1 = nodes.iter().find(|n| n.id == "n1").expect("n1 should exist");
-    assert_eq!(n1.title, "New", "Should use the last occurrence (Last-Write-Wins)");
+    let n1 = nodes
+        .iter()
+        .find(|n| n.id == "n1")
+        .expect("n1 should exist");
+    assert_eq!(
+        n1.title, "New",
+        "Should use the last occurrence (Last-Write-Wins)"
+    );
     assert_eq!(n1.location.lat, 1.0);
 
     // Verify "n2" exists
-    let n2 = nodes.iter().find(|n| n.id == "n2").expect("n2 should exist");
+    let n2 = nodes
+        .iter()
+        .find(|n| n.id == "n2")
+        .expect("n2 should exist");
     assert_eq!(n2.title, "Other");
 
     Ok(())
