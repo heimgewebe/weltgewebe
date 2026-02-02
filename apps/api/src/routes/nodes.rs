@@ -58,6 +58,11 @@ pub struct UpdateNode {
     pub info: Option<Option<String>>,
 }
 
+#[derive(Deserialize)]
+struct IdOnly {
+    id: Option<String>,
+}
+
 fn parse_bbox(s: &str) -> Option<BBox> {
     let parts: Vec<_> = s.split(',').collect();
     let (lng1, lat1, lng2, lat2) = match parts.as_slice() {
@@ -237,68 +242,12 @@ pub async fn patch_node(
     let start_hold = std::time::Instant::now();
 
     let path = nodes_path();
-    // Read all lines
+    // Open source file for reading
     let file = File::open(&path)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut lines = BufReader::new(file).lines();
-    let mut all_lines = Vec::new();
-    let mut found_node: Option<Node> = None;
-    let mut updated = false;
 
-    while let Ok(Some(line)) = lines.next_line().await {
-        let mut v: Value =
-            serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        let current_id = v
-            .get("id")
-            .and_then(|s| s.as_str())
-            .unwrap_or("")
-            .to_string();
-
-        if current_id == id {
-            // Update the field
-            let mut has_changes = false;
-            match &payload.info {
-                Some(Some(s)) => {
-                    v["info"] = Value::String(s.clone());
-                    has_changes = true;
-                }
-                Some(None) => {
-                    v["info"] = Value::Null;
-                    has_changes = true;
-                }
-                None => {} // No-op
-            }
-
-            // Clean up old "steckbrief" field if it exists (migration logic)
-            if let Some(obj) = v.as_object_mut() {
-                if obj.remove("steckbrief").is_some() {
-                    has_changes = true;
-                }
-            }
-
-            // Update updated_at only if we actually changed something
-            if has_changes {
-                let now = chrono::Utc::now().to_rfc3339();
-                v["updated_at"] = Value::String(now);
-            }
-
-            if let Some(n) = map_json_to_node(&v) {
-                found_node = Some(n);
-            }
-            all_lines
-                .push(serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?);
-            updated = true;
-        } else {
-            all_lines.push(line);
-        }
-    }
-
-    if !updated {
-        return Err(StatusCode::NOT_FOUND);
-    }
-
-    // Write back
     // Use a unique temporary file + rename for atomic writes to prevent data corruption and race conditions
     let mut tmp_path = path.clone();
     if let Some(filename) = tmp_path.file_name() {
@@ -311,9 +260,9 @@ pub async fn patch_node(
 
     let start_persist = std::time::Instant::now();
 
-    // Inner function to handle writing logic so we can catch errors and cleanup
-    let write_result = async {
-        let file = OpenOptions::new()
+    // Inner function to handle processing and writing logic so we can catch errors and cleanup
+    let process_result = async {
+        let tmp_file = OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
@@ -321,18 +270,74 @@ pub async fn patch_node(
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let mut writer = BufWriter::new(file);
+        let mut writer = BufWriter::new(tmp_file);
+        let mut found_node: Option<Node> = None;
+        let mut updated = false;
 
-        for line in all_lines {
-            writer
-                .write_all(line.as_bytes())
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        while let Ok(Some(line)) = lines.next_line().await {
+            // Optimization: check ID without parsing full Value
+            let should_update = match serde_json::from_str::<IdOnly>(&line) {
+                Ok(obj) => obj.id.as_deref() == Some(id.as_str()),
+                Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+            };
+
+            if should_update {
+                let mut v: Value =
+                    serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                // Update the field
+                let mut has_changes = false;
+                match &payload.info {
+                    Some(Some(s)) => {
+                        v["info"] = Value::String(s.clone());
+                        has_changes = true;
+                    }
+                    Some(None) => {
+                        v["info"] = Value::Null;
+                        has_changes = true;
+                    }
+                    None => {} // No-op
+                }
+
+                // Clean up old "steckbrief" field if it exists (migration logic)
+                if let Some(obj) = v.as_object_mut() {
+                    if obj.remove("steckbrief").is_some() {
+                        has_changes = true;
+                    }
+                }
+
+                // Update updated_at only if we actually changed something
+                if has_changes {
+                    let now = chrono::Utc::now().to_rfc3339();
+                    v["updated_at"] = Value::String(now);
+                }
+
+                if let Some(n) = map_json_to_node(&v) {
+                    found_node = Some(n);
+                }
+                let s = serde_json::to_string(&v)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                writer
+                    .write_all(s.as_bytes())
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                updated = true;
+            } else {
+                writer
+                    .write_all(line.as_bytes())
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
             writer
                 .write_all(b"\n")
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         }
+
+        if !updated {
+            return Err(StatusCode::NOT_FOUND);
+        }
+
         writer
             .flush()
             .await
@@ -343,15 +348,19 @@ pub async fn patch_node(
         file.sync_all()
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        Ok::<(), StatusCode>(())
+
+        Ok(found_node)
     }
     .await;
 
-    if let Err(e) = write_result {
-        // Cleanup temp file on failure
-        let _ = tokio::fs::remove_file(&tmp_path).await;
-        return Err(e);
-    }
+    let found_node = match process_result {
+        Ok(n) => n,
+        Err(e) => {
+            // Cleanup temp file on failure
+            let _ = tokio::fs::remove_file(&tmp_path).await;
+            return Err(e);
+        }
+    };
 
     if let Err(_e) = tokio::fs::rename(&tmp_path, &path).await {
         // Cleanup temp file if rename fails
