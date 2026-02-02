@@ -309,7 +309,8 @@ Seit **Optimierung der List-Endpoints** gilt:
 
 ### Observability & Metriken (Locking)
 
-Um die Performance der Cache-Konsistenz zu überwachen, werden bei Schreibvorgängen (`PATCH`) folgende Zeiten gemessen und geloggt:
+Um die Performance der Cache-Konsistenz zu überwachen, werden bei Schreibvorgängen (`PATCH`) folgende Zeiten gemessen und
+geloggt:
 
 - **`lock_contention_ms`**: Zeit, die der Request warten musste, um den exklusiven Schreib-Lock (`RwLock::write`) zu
   erhalten.
