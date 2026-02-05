@@ -313,12 +313,12 @@ pub async fn request_login(
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
-        // This is safe to unwrap because AppConfig validation ensures APP_BASE_URL is set if public login is enabled.
+        // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
         let base_url = state
             .config
             .app_base_url
             .as_deref()
-            .unwrap_or("http://localhost:5173");
+            .expect("APP_BASE_URL must be set when AUTH_PUBLIC_LOGIN is enabled (validated at startup)");
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 

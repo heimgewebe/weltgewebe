@@ -6,7 +6,7 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            match value.parse() {
+            match value.trim().parse() {
                 Ok(parsed) => {
                     $self.$field = parsed;
                 }
@@ -91,16 +91,19 @@ impl AppConfig {
 
         // Auth Overrides
         if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
+            let val = val.trim();
             self.auth_public_login = val == "1" || val.eq_ignore_ascii_case("true");
         }
         if let Ok(val) = env::var("APP_BASE_URL") {
+            let val = val.trim();
             if !val.is_empty() {
-                self.app_base_url = Some(val);
+                self.app_base_url = Some(val.to_string());
             }
         }
         if let Ok(val) = env::var("AUTH_TRUSTED_PROXIES") {
+            let val = val.trim();
             if !val.is_empty() {
-                self.auth_trusted_proxies = Some(val);
+                self.auth_trusted_proxies = Some(val.to_string());
             }
         }
 
