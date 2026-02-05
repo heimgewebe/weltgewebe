@@ -16,6 +16,10 @@ services:
       GEWEBE_SEED_DEMO: ${GEWEBE_SEED_DEMO:-false}
       DATABASE_URL: ${DATABASE_URL}
       RUST_LOG: ${RUST_LOG:-info}
+      # Auth
+      AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
+      APP_BASE_URL: ${APP_BASE_URL}
+      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES}
     depends_on:
       db:
         condition: service_healthy

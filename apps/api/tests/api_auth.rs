@@ -37,6 +37,9 @@ fn test_state() -> Result<ApiState> {
             ron_days: 84,
             anonymize_opt_in: true,
             delegation_expire_days: 28,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
         },
         metrics,
         sessions: SessionStore::new(),
@@ -364,5 +367,39 @@ async fn auth_login_succeeds_from_remote_with_allow_flag() -> Result<()> {
         .context("missing set-cookie")?
         .to_str()?;
     assert!(cookie.contains(SESSION_COOKIE_NAME));
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_fails_when_public_login_disabled() -> Result<()> {
+    let mut state = test_state()?;
+    state.config.auth_public_login = false;
+    let app = app(state);
+
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_succeeds_when_public_login_enabled() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state);
+
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
     Ok(())
 }

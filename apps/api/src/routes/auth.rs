@@ -285,11 +285,7 @@ pub async fn request_login(
     State(state): State<ApiState>,
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
-    let public_login_enabled = std::env::var("AUTH_PUBLIC_LOGIN")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if !public_login_enabled {
+    if !state.config.auth_public_login {
         return StatusCode::NOT_FOUND.into_response();
     }
 
@@ -317,8 +313,12 @@ pub async fn request_login(
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
-        let base_url =
-            std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+        // This is safe to unwrap because AppConfig validation ensures APP_BASE_URL is set if public login is enabled.
+        let base_url = state
+            .config
+            .app_base_url
+            .as_deref()
+            .unwrap_or("http://localhost:5173");
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
