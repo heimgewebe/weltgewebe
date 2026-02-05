@@ -15,6 +15,7 @@ use time::Duration;
 use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
+pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
     // Default to secure, but allow override via env for local dev (http)
@@ -25,7 +26,7 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
         .path("/")
         .http_only(true)
-        .same_site(SameSite::Strict)
+        .same_site(SameSite::Lax) // Allow cross-site navigation from email clients
         .secure(secure_cookies);
 
     if let Some(age) = max_age {
@@ -64,6 +65,12 @@ pub struct DevAccount {
     pub title: String,
     pub summary: Option<String>,
     pub role: Role,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub ok: bool,
+    pub message: String,
 }
 
 #[derive(Clone)]
@@ -285,22 +292,19 @@ pub async fn request_login(
     State(state): State<ApiState>,
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
-    let public_login_enabled = std::env::var("AUTH_PUBLIC_LOGIN")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if !public_login_enabled {
+    if !state.config.auth_public_login {
         return StatusCode::NOT_FOUND.into_response();
     }
+
+    let generic_response = LoginResponse {
+        ok: true,
+        message: GENERIC_LOGIN_MSG.to_string(),
+    };
 
     // 1. Validate email format (simple check)
     if !payload.email.contains('@') {
         tracing::warn!("Invalid email format in login request");
-        return (
-            StatusCode::OK,
-            "If your email is registered, you will receive a login link.",
-        )
-            .into_response();
+        return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
     // 2. Lookup account by email
@@ -317,8 +321,10 @@ pub async fn request_login(
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
-        let base_url =
-            std::env::var("APP_BASE_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
+        // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
+        let base_url = state.config.app_base_url.as_deref().expect(
+            "APP_BASE_URL must be set when AUTH_PUBLIC_LOGIN is enabled (validated at startup)",
+        );
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
@@ -333,11 +339,7 @@ pub async fn request_login(
         tracing::info!(email = %payload.email, "Login requested for unknown email");
     }
 
-    (
-        StatusCode::OK,
-        "If your email is registered, you will receive a login link.",
-    )
-        .into_response()
+    (StatusCode::OK, Json(generic_response)).into_response()
 }
 
 pub async fn consume_login(

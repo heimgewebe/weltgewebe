@@ -174,3 +174,28 @@ Live-Snapshot > Dokumentation > Annahmen
 Drift ist kein Fehler – **unsichtbare Drift ist es**.
 
 Detaillierte Klassifizierung: [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md)
+
+---
+
+## 9. Feature Flags (Public Login)
+
+Das System unterstützt einen öffentlichen "Magic Link" Login.
+Standardmäßig ist dieser **deaktiviert**.
+
+### Aktivierung
+
+Um den Public Login zu aktivieren, müssen folgende Variablen in der `.env` gesetzt werden:
+
+```bash
+AUTH_PUBLIC_LOGIN=1
+APP_BASE_URL=https://mein-weltgewebe.de
+# Optional: Trusted Proxies konfigurieren (wichtig für Sicherheit hinter Caddy/Proxy)
+# Hinweis: wird aktuell nur konfiguriert (plumbing); Auswertung/Enforcement folgt in PR3 (Client-IP trust + Rate-Limit).
+AUTH_TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
+```
+
+**Wichtig:**
+
+- Wenn `AUTH_PUBLIC_LOGIN=1` gesetzt ist, **muss** `APP_BASE_URL` gesetzt sein.
+  Andernfalls startet der API-Service nicht (Validierungsfehler beim Startup).
+- `APP_BASE_URL` wird verwendet, um korrekte Links in E-Mails/Logs zu generieren.

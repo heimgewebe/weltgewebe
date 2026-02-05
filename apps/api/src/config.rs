@@ -6,7 +6,7 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            match value.parse() {
+            match value.trim().parse() {
                 Ok(parsed) => {
                     $self.$field = parsed;
                 }
@@ -29,6 +29,14 @@ pub struct AppConfig {
     pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
+
+    // Public Login Configuration
+    #[serde(default)]
+    pub auth_public_login: bool,
+    #[serde(default)]
+    pub app_base_url: Option<String>,
+    #[serde(default)]
+    pub auth_trusted_proxies: Option<String>,
 }
 
 impl AppConfig {
@@ -81,6 +89,31 @@ impl AppConfig {
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
 
+        // Auth Overrides
+        if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
+            let val = val.trim();
+            self.auth_public_login = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+        if let Ok(val) = env::var("APP_BASE_URL") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.app_base_url = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_TRUSTED_PROXIES") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_trusted_proxies = Some(val.to_string());
+            }
+        }
+
+        self.validate()
+    }
+
+    fn validate(self) -> Result<Self> {
+        if self.auth_public_login && self.app_base_url.is_none() {
+            anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
+        }
         Ok(self)
     }
 }
@@ -182,6 +215,60 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_public_login_enabled_without_base_url() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::unset("APP_BASE_URL");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("APP_BASE_URL is not set"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_public_login_and_base_url() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "https://example.com");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_public_login);
+        assert_eq!(cfg.app_base_url.unwrap(), "https://example.com");
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_fields_default_correctly() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Ensure envs are unset
+        let _public = EnvGuard::unset("AUTH_PUBLIC_LOGIN");
+        let _url = EnvGuard::unset("APP_BASE_URL");
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.auth_public_login);
+        assert!(cfg.app_base_url.is_none());
+        assert!(cfg.auth_trusted_proxies.is_none());
 
         Ok(())
     }
