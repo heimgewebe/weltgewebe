@@ -21,15 +21,18 @@ pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
 fn escape_attr(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '"' => "&quot;".to_string(),
-            '&' => "&amp;".to_string(),
-            '<' => "&lt;".to_string(),
-            '>' => "&gt;".to_string(),
-            _ => c.to_string(),
-        })
-        .collect()
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#x27;"),
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {

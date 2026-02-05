@@ -25,12 +25,14 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, cookie_name: &str) -> O
         .get_all("set-cookie")
         .iter()
         .filter_map(|v| v.to_str().ok())
-        .find(|s| s.trim().starts_with(cookie_name))
-        .and_then(|s| {
-            s.split(';')
-                .find(|p| p.trim().starts_with(cookie_name))
-                .and_then(|p| p.split_once('=').map(|x| x.1))
-                .map(|v| v.to_string())
+        .find_map(|set_cookie| {
+            let first_part = set_cookie.split(';').next()?.trim();
+            let (key, value) = first_part.split_once('=')?;
+            if key.trim() == cookie_name {
+                Some(value.trim().to_string())
+            } else {
+                None
+            }
         })
 }
 
