@@ -61,8 +61,8 @@ pub struct UpdateNode {
 /// Lightweight struct for fast-path ID checking during node updates.
 ///
 /// Used to check if a line matches the target node ID without fully parsing
-/// the entire JSON Value. This optimization keeps memory usage O(1) by avoiding
-/// full deserialization for non-matching lines (the vast majority during PATCH).
+/// the entire JSON `Value`. This avoids full deserialization for non-matching
+/// lines (the vast majority during PATCH) and keeps memory usage O(1).
 #[derive(Deserialize)]
 struct IdOnly {
     id: Option<String>,
@@ -317,8 +317,8 @@ pub async fn patch_node(
                     v["updated_at"] = Value::String(now);
                 }
 
-                // Map to Node and fail hard if mapping fails
-                // This ensures we never persist changes without a valid response
+                // Map to Node and fail hard if mapping fails.
+                // Ensures we never persist changes without a valid Node response.
                 let node = map_json_to_node(&v).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
                 found_node = Some(node);
 
@@ -334,6 +334,7 @@ pub async fn patch_node(
                     .await
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             }
+
             writer
                 .write_all(b"\n")
                 .await
