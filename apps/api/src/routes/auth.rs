@@ -20,6 +20,18 @@ pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
+fn escape_attr(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '"' => "&quot;".to_string(),
+            '&' => "&amp;".to_string(),
+            '<' => "&lt;".to_string(),
+            '>' => "&gt;".to_string(),
+            _ => c.to_string(),
+        })
+        .collect()
+}
+
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
     // Default to secure, but allow override via env for local dev (http)
     let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
@@ -39,13 +51,18 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     builder.build()
 }
 
-fn build_nonce_cookie(value: String) -> Cookie<'static> {
+fn build_nonce_cookie(value: String, max_age: Duration) -> Cookie<'static> {
+    // Respect AUTH_COOKIE_SECURE like the session cookie
+    let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(true);
+
     Cookie::build((NONCE_COOKIE_NAME, value))
         .path("/api/auth/login/consume")
         .http_only(true)
         .same_site(SameSite::Lax)
-        .secure(true) // Always secure for nonce
-        .max_age(Duration::minutes(5))
+        .secure(secure_cookies)
+        .max_age(max_age)
         .build()
 }
 
@@ -390,7 +407,7 @@ pub async fn consume_login_get(
 
     // 2. Generate Nonce
     let nonce = Uuid::new_v4().to_string();
-    let cookie = build_nonce_cookie(nonce.clone());
+    let cookie = build_nonce_cookie(nonce.clone(), Duration::minutes(5));
 
     // 3. Render HTML confirmation page
     let html = format!(
@@ -418,7 +435,8 @@ pub async fn consume_login_get(
     </div>
 </body>
 </html>"#,
-        params.token, nonce
+        escape_attr(&params.token),
+        escape_attr(&nonce)
     );
 
     (jar.add(cookie), Html(html)).into_response()
@@ -453,6 +471,8 @@ pub async fn consume_login_post(
         if let Some(acc) = account {
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
+            // Clear the nonce cookie
+            let nonce_cleanup = build_nonce_cookie("".to_string(), Duration::seconds(0));
 
             tracing::info!(
                 event = "login.consumed",
@@ -460,7 +480,7 @@ pub async fn consume_login_post(
                 "Login successful"
             );
 
-            return (jar.add(cookie), Redirect::to("/")).into_response();
+            return (jar.add(cookie).add(nonce_cleanup), Redirect::to("/")).into_response();
         }
     }
 
