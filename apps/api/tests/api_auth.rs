@@ -432,9 +432,7 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
 
     let req = Request::post("/auth/login/request")
         .header("Content-Type", "application/json")
-        .body(body::Body::from(
-            r#"{"email":"unknown@example.com"}"#,
-        ))?;
+        .body(body::Body::from(r#"{"email":"unknown@example.com"}"#))?;
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
