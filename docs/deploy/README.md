@@ -194,6 +194,7 @@ AUTH_TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
 ```
 
 **Wichtig:**
+
 - Wenn `AUTH_PUBLIC_LOGIN=1` gesetzt ist, **muss** `APP_BASE_URL` gesetzt sein.
   Andernfalls startet der API-Service nicht (Validierungsfehler beim Startup).
 - `APP_BASE_URL` wird verwendet, um korrekte Links in E-Mails/Logs zu generieren.

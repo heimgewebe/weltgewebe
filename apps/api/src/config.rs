@@ -108,10 +108,8 @@ impl AppConfig {
     }
 
     fn validate(self) -> Result<Self> {
-        if self.auth_public_login {
-            if self.app_base_url.is_none() {
-                anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
-            }
+        if self.auth_public_login && self.app_base_url.is_none() {
+            anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
         }
         Ok(self)
     }
