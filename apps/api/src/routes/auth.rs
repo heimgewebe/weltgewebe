@@ -311,7 +311,9 @@ pub async fn request_login(
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
     hasher.update(payload.email.as_bytes());
-    let email_hash = format!("{:x}", hasher.finalize());
+    let email_hash_full = format!("{:x}", hasher.finalize());
+    // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
+    let email_hash = &email_hash_full[..16];
 
     tracing::info!(
         event = "login.requested",
