@@ -194,11 +194,8 @@ async fn check_policy() -> CheckResult {
 }
 
 async fn ready(State(state): State<ApiState>) -> Response {
-    let (nats, database, policy) = tokio::join!(
-        check_nats(&state),
-        check_database(&state),
-        check_policy()
-    );
+    let (nats, database, policy) =
+        tokio::join!(check_nats(&state), check_database(&state), check_policy());
 
     let status = if matches!(database.status, CheckStatus::Failed)
         || matches!(nats.status, CheckStatus::Failed)
