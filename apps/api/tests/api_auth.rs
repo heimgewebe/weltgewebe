@@ -29,7 +29,7 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, cookie_name: &str) -> O
         .and_then(|s| {
             s.split(';')
                 .find(|p| p.trim().starts_with(cookie_name))
-                .and_then(|p| p.splitn(2, '=').nth(1))
+                .and_then(|p| p.split_once('=').map(|x| x.1))
                 .map(|v| v.to_string())
         })
 }
