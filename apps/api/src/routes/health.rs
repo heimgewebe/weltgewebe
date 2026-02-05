@@ -85,16 +85,13 @@ fn readiness_verbose() -> bool {
 }
 
 async fn check_policy_file(path: &Path) -> Result<(), String> {
-    fs::read_to_string(path)
-        .await
-        .map(|_| ())
-        .map_err(|error| {
-            format!(
-                "failed to read policy file at {}: {}",
-                path.display(),
-                error
-            )
-        })
+    fs::read_to_string(path).await.map(|_| ()).map_err(|error| {
+        format!(
+            "failed to read policy file at {}: {}",
+            path.display(),
+            error
+        )
+    })
 }
 
 async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
