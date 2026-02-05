@@ -1,7 +1,8 @@
 use std::{
-    env, fs,
+    env,
     path::{Path, PathBuf},
 };
+use tokio::fs;
 
 use axum::{
     extract::State,
@@ -83,20 +84,23 @@ fn readiness_verbose() -> bool {
         .unwrap_or(false)
 }
 
-fn check_policy_file(path: &Path) -> Result<(), String> {
-    fs::read_to_string(path).map(|_| ()).map_err(|error| {
-        format!(
-            "failed to read policy file at {}: {}",
-            path.display(),
-            error
-        )
-    })
+async fn check_policy_file(path: &Path) -> Result<(), String> {
+    fs::read_to_string(path)
+        .await
+        .map(|_| ())
+        .map_err(|error| {
+            format!(
+                "failed to read policy file at {}: {}",
+                path.display(),
+                error
+            )
+        })
 }
 
-fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
+async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
     let mut errors = Vec::new();
     for path in paths {
-        match check_policy_file(path) {
+        match check_policy_file(path).await {
             Ok(()) => return CheckResult::ready(),
             Err(message) => errors.push(message),
         }
@@ -169,7 +173,7 @@ async fn check_database(state: &ApiState) -> CheckResult {
     }
 }
 
-fn check_policy() -> CheckResult {
+async fn check_policy() -> CheckResult {
     // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
     // Fallbacks stay for dev/CI convenience.
     let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
@@ -180,7 +184,7 @@ fn check_policy() -> CheckResult {
     ];
 
     if let Some(path) = env_path {
-        match check_policy_file(&path) {
+        match check_policy_file(&path).await {
             Ok(()) => CheckResult::ready(),
             Err(message) => {
                 readiness_check_failed("policy", &message);
@@ -188,14 +192,14 @@ fn check_policy() -> CheckResult {
             }
         }
     } else {
-        check_policy_fallbacks(&fallback_paths)
+        check_policy_fallbacks(&fallback_paths).await
     }
 }
 
 async fn ready(State(state): State<ApiState>) -> Response {
     let nats = check_nats(&state).await;
     let database = check_database(&state).await;
-    let policy = check_policy();
+    let policy = check_policy().await;
 
     let status = if matches!(database.status, CheckStatus::Failed)
         || matches!(nats.status, CheckStatus::Failed)
