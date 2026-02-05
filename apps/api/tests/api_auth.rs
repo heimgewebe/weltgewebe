@@ -562,8 +562,8 @@ async fn consume_login_fails_reuse() -> Result<()> {
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
-    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
-        .context("nonce missing")?;
+    let nonce_val =
+        extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME).context("nonce missing")?;
 
     // POST
     let body_str = format!("token={}&nonce={}", token, nonce_val);
@@ -607,8 +607,8 @@ async fn consume_login_fails_bad_nonce() -> Result<()> {
     let req = Request::get(&uri).body(body::Body::empty())?;
     let res = app.clone().oneshot(req).await?;
 
-    let nonce_val = extract_cookie_value(res.headers(), NONCE_COOKIE_NAME)
-        .context("nonce missing")?;
+    let nonce_val =
+        extract_cookie_value(res.headers(), NONCE_COOKIE_NAME).context("nonce missing")?;
 
     // POST with wrong nonce in form
     let body_str = format!("token={}&nonce=WRONG_NONCE", token);
