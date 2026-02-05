@@ -8,7 +8,6 @@ use uuid::Uuid;
 pub struct TokenData {
     pub email: String,
     pub expires_at: DateTime<Utc>,
-    pub used: bool,
 }
 
 #[derive(Clone, Default)]
@@ -31,17 +30,17 @@ impl TokenStore {
     }
 
     pub fn create(&self, email: String) -> String {
+        self.create_with_expiry(email, Duration::minutes(15))
+    }
+
+    pub fn create_with_expiry(&self, email: String, duration: Duration) -> String {
         let token = Uuid::new_v4().to_string();
         let hash = Self::hash_token(&token);
 
         let now = Utc::now();
-        let expires_at = now + Duration::minutes(15);
+        let expires_at = now + duration;
 
-        let data = TokenData {
-            email,
-            expires_at,
-            used: false,
-        };
+        let data = TokenData { email, expires_at };
 
         let mut store = self.store.write().expect("TokenStore lock poisoned");
         // Cleanup expired tokens on every write to keep memory check in check
@@ -62,10 +61,6 @@ impl TokenStore {
 
         // Strict single-use: remove immediately upon lookup
         if let Some(data) = store.remove(&hash) {
-            if data.used {
-                // Should technically not happen if we remove on use, but good for safety
-                return None;
-            }
             // Double check expiry just in case retain didn't catch it (though it should have)
             if data.expires_at <= now {
                 return None;
