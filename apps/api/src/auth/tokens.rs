@@ -51,6 +51,19 @@ impl TokenStore {
         token
     }
 
+    pub fn peek(&self, token: &str) -> Option<String> {
+        let now = Utc::now();
+        let hash = Self::hash_token(token);
+        let store = self.store.read().expect("TokenStore lock poisoned");
+
+        if let Some(data) = store.get(&hash) {
+            if data.expires_at > now {
+                return Some(data.email.clone());
+            }
+        }
+        None
+    }
+
     pub fn consume(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);

@@ -14,7 +14,7 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic, Visibility},
         api_router,
-        auth::{GENERIC_LOGIN_MSG, SESSION_COOKIE_NAME},
+        auth::{GENERIC_LOGIN_MSG, NONCE_COOKIE_NAME, SESSION_COOKIE_NAME},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -456,21 +456,53 @@ async fn consume_login_succeeds() -> Result<()> {
 
     let app = app(state);
 
+    // 1. GET request (Confirm step)
     let uri = format!("/auth/login/consume?token={}", token);
-    let req = Request::get(uri).body(body::Body::empty())?;
+    let req = Request::get(&uri).body(body::Body::empty())?;
 
-    let res = app.oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res.headers().get("location").unwrap(), "/");
+    // Clone app because we need to make a second request to the same app state
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let content_type = res.headers().get("content-type").unwrap().to_str()?;
+    assert!(content_type.contains("text/html"));
 
-    let cookie = res
+    // Check nonce cookie presence
+    let cookie_header = res
         .headers()
         .get("set-cookie")
-        .context("missing set-cookie")?
+        .context("missing nonce cookie")?
         .to_str()?;
-    assert!(cookie.contains(SESSION_COOKIE_NAME));
-    assert!(cookie.contains("HttpOnly"));
-    assert!(cookie.contains("SameSite=Lax"));
+    assert!(cookie_header.contains(NONCE_COOKIE_NAME));
+    assert!(!cookie_header.contains(SESSION_COOKIE_NAME)); // Should NOT set session yet
+
+    // Extract nonce value from cookie
+    let nonce_val = cookie_header
+        .split(';')
+        .find(|p| p.trim().starts_with(NONCE_COOKIE_NAME))
+        .context("nonce cookie part missing")?
+        .split('=')
+        .nth(1)
+        .context("nonce value missing")?;
+
+    // 2. POST request (Consume step)
+    let body_str = format!("token={}&nonce={}", token, nonce_val);
+    let req2 = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res2 = app.oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res2.headers().get("location").unwrap(), "/");
+
+    let session_cookie = res2
+        .headers()
+        .get("set-cookie")
+        .context("missing session cookie")?
+        .to_str()?;
+    assert!(session_cookie.contains(SESSION_COOKIE_NAME));
+    assert!(session_cookie.contains("HttpOnly"));
+    assert!(session_cookie.contains("SameSite=Lax"));
 
     Ok(())
 }
@@ -511,18 +543,79 @@ async fn consume_login_fails_reuse() -> Result<()> {
 
     let app = app(state);
 
-    // First consume
+    // 1. First full flow (Success)
+    // GET
     let uri = format!("/auth/login/consume?token={}", token);
-    let req1 = Request::get(&uri).body(body::Body::empty())?;
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+    let cookie_header = res_get.headers().get("set-cookie").unwrap().to_str()?;
+    let nonce_val = cookie_header
+        .split(';')
+        .find(|p| p.trim().starts_with(NONCE_COOKIE_NAME))
+        .unwrap()
+        .split('=')
+        .nth(1)
+        .unwrap();
 
-    // Use clone to reuse the app (which shares the Arc state)
-    let res1 = app.clone().oneshot(req1).await?;
-    assert_eq!(res1.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res1.headers().get("location").unwrap(), "/");
+    // POST
+    let body_str = format!("token={}&nonce={}", token, nonce_val);
+    let req_post = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str.clone()))?;
 
-    // Second consume
-    let req2 = Request::get(&uri).body(body::Body::empty())?;
+    let res_post = app.clone().oneshot(req_post).await?;
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res_post.headers().get("location").unwrap(), "/");
+
+    // 2. Second attempt (Reuse Token)
+    // Even if we have a valid nonce (or get a new one), the token is gone.
+    // Let's assume we got a new nonce (simulating user clicking link again)
+    let req_get2 = Request::get(&uri).body(body::Body::empty())?;
+    let res_get2 = app.clone().oneshot(req_get2).await?;
+    // GET should fail because peek checks expiry/existence.
+    // Since consume removes the token, peek should fail.
+    assert_eq!(res_get2.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res_get2.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_bad_nonce() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state.tokens.create("u1@example.com".to_string());
+    let app = app(state);
+
+    // GET to get a nonce
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req = Request::get(&uri).body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    let cookie_header = res.headers().get("set-cookie").unwrap().to_str()?;
+    let nonce_val = cookie_header
+        .split(';')
+        .find(|p| p.trim().starts_with(NONCE_COOKIE_NAME))
+        .unwrap()
+        .split('=')
+        .nth(1)
+        .unwrap();
+
+    // POST with wrong nonce in form
+    let body_str = format!("token={}&nonce=WRONG_NONCE", token);
+    let req2 = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
     let res2 = app.oneshot(req2).await?;
+    // Should fail
     assert_eq!(res2.status(), StatusCode::SEE_OTHER);
     assert_eq!(
         res2.headers().get("location").unwrap(),

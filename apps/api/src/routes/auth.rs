@@ -1,7 +1,7 @@
 use axum::{
-    extract::{ConnectInfo, Json, Query, State},
+    extract::{ConnectInfo, Form, Json, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -12,10 +12,12 @@ use std::net::{IpAddr, SocketAddr};
 #[cfg(not(test))]
 use std::sync::OnceLock;
 use time::Duration;
+use uuid::Uuid;
 
 use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
+pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
@@ -37,6 +39,16 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     builder.build()
 }
 
+fn build_nonce_cookie(value: String) -> Cookie<'static> {
+    Cookie::build((NONCE_COOKIE_NAME, value))
+        .path("/api/auth/login/consume")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(true) // Always secure for nonce
+        .max_age(Duration::minutes(5))
+        .build()
+}
+
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub account_id: String,
@@ -50,6 +62,12 @@ pub struct LoginRequestEmail {
 #[derive(Deserialize)]
 pub struct ConsumeTokenParams {
     pub token: String,
+}
+
+#[derive(Deserialize)]
+pub struct ConsumeTokenForm {
+    pub token: String,
+    pub nonce: String,
 }
 
 #[derive(Serialize)]
@@ -360,12 +378,70 @@ pub async fn request_login(
     (StatusCode::OK, Json(generic_response)).into_response()
 }
 
-pub async fn consume_login(
+pub async fn consume_login_get(
     State(state): State<ApiState>,
     jar: CookieJar,
     Query(params): Query<ConsumeTokenParams>,
 ) -> impl IntoResponse {
-    if let Some(email) = state.tokens.consume(&params.token) {
+    // 1. Peek token to see if it exists/valid
+    if state.tokens.peek(&params.token).is_none() {
+        return Redirect::to("/login?error=invalid_token").into_response();
+    }
+
+    // 2. Generate Nonce
+    let nonce = Uuid::new_v4().to_string();
+    let cookie = build_nonce_cookie(nonce.clone());
+
+    // 3. Render HTML confirmation page
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Confirmation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f0f0; }}
+        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
+        button {{ background: #0070f3; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; font-size: 1rem; cursor: pointer; }}
+        button:hover {{ background: #005bb5; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Confirm Login</h2>
+        <p>Click below to sign in.</p>
+        <form method="POST" action="/api/auth/login/consume">
+            <input type="hidden" name="token" value="{}"/>
+            <input type="hidden" name="nonce" value="{}"/>
+            <button type="submit">Sign in</button>
+        </form>
+    </div>
+</body>
+</html>"#,
+        params.token, nonce
+    );
+
+    (jar.add(cookie), Html(html)).into_response()
+}
+
+pub async fn consume_login_post(
+    State(state): State<ApiState>,
+    jar: CookieJar,
+    Form(form): Form<ConsumeTokenForm>,
+) -> impl IntoResponse {
+    // 1. Check Nonce
+    let nonce_valid = jar
+        .get(NONCE_COOKIE_NAME)
+        .map(|c| c.value() == form.nonce)
+        .unwrap_or(false);
+
+    if !nonce_valid {
+        tracing::warn!("Login attempt failed: Invalid or missing nonce");
+        return Redirect::to("/login?error=invalid_token").into_response();
+    }
+
+    // 2. Consume Token
+    if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
         let account = state.accounts.values().find(|acc| {
             acc.email
