@@ -25,7 +25,7 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
         .path("/")
         .http_only(true)
-        .same_site(SameSite::Strict)
+        .same_site(SameSite::Lax)
         .secure(secure_cookies);
 
     if let Some(age) = max_age {
@@ -64,6 +64,12 @@ pub struct DevAccount {
     pub title: String,
     pub summary: Option<String>,
     pub role: Role,
+}
+
+#[derive(Serialize)]
+pub struct LoginResponse {
+    pub ok: bool,
+    pub message: String,
 }
 
 #[derive(Clone)]
@@ -289,14 +295,15 @@ pub async fn request_login(
         return StatusCode::NOT_FOUND.into_response();
     }
 
+    let generic_response = LoginResponse {
+        ok: true,
+        message: "If your email is registered, you will receive a login link.".to_string(),
+    };
+
     // 1. Validate email format (simple check)
     if !payload.email.contains('@') {
         tracing::warn!("Invalid email format in login request");
-        return (
-            StatusCode::OK,
-            "If your email is registered, you will receive a login link.",
-        )
-            .into_response();
+        return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
     // 2. Lookup account by email
@@ -331,11 +338,7 @@ pub async fn request_login(
         tracing::info!(email = %payload.email, "Login requested for unknown email");
     }
 
-    (
-        StatusCode::OK,
-        "If your email is registered, you will receive a login link.",
-    )
-        .into_response()
+    (StatusCode::OK, Json(generic_response)).into_response()
 }
 
 pub async fn consume_login(

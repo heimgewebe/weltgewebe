@@ -60,12 +60,17 @@ impl TokenStore {
         // Cleanup expired tokens
         store.retain(|_, v| v.expires_at > now);
 
-        if let Some(data) = store.get_mut(&hash) {
+        // Strict single-use: remove immediately upon lookup
+        if let Some(data) = store.remove(&hash) {
             if data.used {
+                // Should technically not happen if we remove on use, but good for safety
                 return None;
             }
-            data.used = true;
-            return Some(data.email.clone());
+            // Double check expiry just in case retain didn't catch it (though it should have)
+            if data.expires_at <= now {
+                return None;
+            }
+            return Some(data.email);
         }
         None
     }
