@@ -85,13 +85,22 @@ fn readiness_verbose() -> bool {
 }
 
 async fn check_policy_file(path: &Path) -> Result<(), String> {
-    fs::metadata(path).await.map(|_| ()).map_err(|error| {
+    let metadata = fs::metadata(path).await.map_err(|error| {
         format!(
-            "failed to read policy file at {}: {}",
+            "failed to access policy file at {}: {}",
             path.display(),
             error
         )
-    })
+    })?;
+
+    if !metadata.is_file() {
+        return Err(format!(
+            "policy file at {} is not a regular file",
+            path.display()
+        ));
+    }
+
+    Ok(())
 }
 
 async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
@@ -421,7 +430,7 @@ mod tests {
         assert!(errors
             .iter()
             .filter_map(|value| value.as_str())
-            .any(|message| message.contains("failed to read policy file")));
+            .any(|message| message.contains("failed to access policy file")));
 
         Ok(())
     }
