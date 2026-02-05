@@ -190,6 +190,7 @@ Um den Public Login zu aktivieren, müssen folgende Variablen in der `.env` gese
 AUTH_PUBLIC_LOGIN=1
 APP_BASE_URL=https://mein-weltgewebe.de
 # Optional: Trusted Proxies konfigurieren (wichtig für Sicherheit hinter Caddy/Proxy)
+# Hinweis: wird aktuell nur konfiguriert (plumbing); Auswertung/Enforcement folgt in PR3 (Client-IP trust + Rate-Limit).
 AUTH_TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
 ```
 

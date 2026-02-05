@@ -401,5 +401,14 @@ async fn request_login_succeeds_when_public_login_enabled() -> Result<()> {
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_str = String::from_utf8(body.to_vec())?;
+
+    // Anti-enumeration check: generic success message
+    assert!(body_str.contains("If your email is registered"));
+    // Security check: no token leak
+    assert!(!body_str.contains("token="));
+
     Ok(())
 }
