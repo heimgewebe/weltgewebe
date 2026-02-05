@@ -484,8 +484,8 @@ async fn consume_login_fails_invalid_token() -> Result<()> {
 
     let app = app(state);
 
-    let req = Request::get("/auth/login/consume?token=invalid_token_123")
-        .body(body::Body::empty())?;
+    let req =
+        Request::get("/auth/login/consume?token=invalid_token_123").body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
@@ -540,10 +540,9 @@ async fn consume_login_fails_expired_token() -> Result<()> {
     state.config.app_base_url = Some("http://localhost".to_string());
 
     // Create an expired token (expired 1 second ago)
-    let token = state.tokens.create_with_expiry(
-        "u1@example.com".to_string(),
-        chrono::Duration::seconds(-1)
-    );
+    let token = state
+        .tokens
+        .create_with_expiry("u1@example.com".to_string(), chrono::Duration::seconds(-1));
 
     let app = app(state);
 
