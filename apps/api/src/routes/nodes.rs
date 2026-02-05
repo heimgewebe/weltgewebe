@@ -58,8 +58,11 @@ pub struct UpdateNode {
     pub info: Option<Option<String>>,
 }
 
-/// Helper struct for fast-path parsing to check if a line matches the target ID.
-/// This avoids parsing the full `Value` for every line, keeping memory usage O(1).
+/// Lightweight struct for fast-path ID checking during node updates.
+///
+/// Used to check if a line matches the target node ID without fully parsing
+/// the entire JSON `Value`. This avoids full deserialization for non-matching
+/// lines (the vast majority during PATCH) and keeps memory usage O(1).
 #[derive(Deserialize)]
 struct IdOnly {
     id: Option<String>,
@@ -314,13 +317,10 @@ pub async fn patch_node(
                     v["updated_at"] = Value::String(now);
                 }
 
-                if let Some(n) = map_json_to_node(&v) {
-                    found_node = Some(n);
-                } else {
-                    // Fail hard if we cannot map the updated JSON back to a valid Node.
-                    // This prevents persisting invalid state where the API would later fail to load or serve this node.
-                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
-                }
+                // Map to Node and fail hard if mapping fails.
+                // Ensures we never persist changes without a valid Node response.
+                let node = map_json_to_node(&v).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+                found_node = Some(node);
 
                 let s = serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                 writer
@@ -334,6 +334,7 @@ pub async fn patch_node(
                     .await
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
             }
+
             writer
                 .write_all(b"\n")
                 .await
