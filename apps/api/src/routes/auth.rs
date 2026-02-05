@@ -15,6 +15,7 @@ use time::Duration;
 use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
+pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
     // Default to secure, but allow override via env for local dev (http)
@@ -25,7 +26,7 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     let mut builder = Cookie::build((SESSION_COOKIE_NAME, value))
         .path("/")
         .http_only(true)
-        .same_site(SameSite::Lax)
+        .same_site(SameSite::Lax) // Allow cross-site navigation from email clients
         .secure(secure_cookies);
 
     if let Some(age) = max_age {
@@ -297,7 +298,7 @@ pub async fn request_login(
 
     let generic_response = LoginResponse {
         ok: true,
-        message: "If your email is registered, you will receive a login link.".to_string(),
+        message: GENERIC_LOGIN_MSG.to_string(),
     };
 
     // 1. Validate email format (simple check)

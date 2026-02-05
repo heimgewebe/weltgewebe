@@ -14,7 +14,7 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic, Visibility},
         api_router,
-        auth::SESSION_COOKIE_NAME,
+        auth::{GENERIC_LOGIN_MSG, SESSION_COOKIE_NAME},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -407,10 +407,7 @@ async fn request_login_succeeds_when_public_login_enabled() -> Result<()> {
 
     // Check JSON contract
     assert_eq!(body_val["ok"], true);
-    assert_eq!(
-        body_val["message"],
-        "If your email is registered, you will receive a login link."
-    );
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
 
     // Security check: no token leak in the entire JSON string representation
     let body_str = body_val.to_string();
@@ -441,10 +438,7 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
     let body_val: serde_json::Value = serde_json::from_slice(&body)?;
 
     assert_eq!(body_val["ok"], true);
-    assert_eq!(
-        body_val["message"],
-        "If your email is registered, you will receive a login link."
-    );
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
     assert!(!body_val.to_string().contains("unknown@example.com"));
 
     Ok(())
