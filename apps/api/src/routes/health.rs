@@ -85,7 +85,7 @@ fn readiness_verbose() -> bool {
 }
 
 async fn check_policy_file(path: &Path) -> Result<(), String> {
-    fs::read_to_string(path).await.map(|_| ()).map_err(|error| {
+    fs::metadata(path).await.map(|_| ()).map_err(|error| {
         format!(
             "failed to read policy file at {}: {}",
             path.display(),
@@ -194,9 +194,11 @@ async fn check_policy() -> CheckResult {
 }
 
 async fn ready(State(state): State<ApiState>) -> Response {
-    let nats = check_nats(&state).await;
-    let database = check_database(&state).await;
-    let policy = check_policy().await;
+    let (nats, database, policy) = tokio::join!(
+        check_nats(&state),
+        check_database(&state),
+        check_policy()
+    );
 
     let status = if matches!(database.status, CheckStatus::Failed)
         || matches!(nats.status, CheckStatus::Failed)
