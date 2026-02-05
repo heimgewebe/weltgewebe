@@ -7,6 +7,7 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::net::{IpAddr, SocketAddr};
 #[cfg(not(test))]
 use std::sync::OnceLock;
@@ -307,6 +308,17 @@ pub async fn request_login(
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
+    // Compute hash for privacy-preserving logging
+    let mut hasher = Sha256::new();
+    hasher.update(payload.email.as_bytes());
+    let email_hash = format!("{:x}", hasher.finalize());
+
+    tracing::info!(
+        event = "login.requested",
+        email_hash = %email_hash,
+        "Login requested"
+    );
+
     // 2. Lookup account by email
     let account = state.accounts.values().find(|acc| {
         acc.email
@@ -336,7 +348,11 @@ pub async fn request_login(
             "Magic Link Generated"
         );
     } else {
-        tracing::info!(email = %payload.email, "Login requested for unknown email");
+        tracing::info!(
+            event = "login.requested_unknown",
+            email_hash = %email_hash,
+            "Login requested for unknown email"
+        );
     }
 
     (StatusCode::OK, Json(generic_response)).into_response()
@@ -360,9 +376,21 @@ pub async fn consume_login(
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
 
+            tracing::info!(
+                event = "login.consumed",
+                account_id = %acc.public.id,
+                "Login successful"
+            );
+
             return (jar.add(cookie), Redirect::to("/")).into_response();
         }
     }
+
+    tracing::warn!(
+        event = "login.failed",
+        reason = "invalid_token",
+        "Login failed"
+    );
 
     // Invalid or expired token
     Redirect::to("/login?error=invalid_token").into_response()

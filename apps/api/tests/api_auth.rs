@@ -443,3 +443,119 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn consume_login_succeeds() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Create a valid token
+    let token = state.tokens.create("u1@example.com".to_string());
+
+    let app = app(state);
+
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req = Request::get(uri).body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res.headers().get("location").unwrap(), "/");
+
+    let cookie = res
+        .headers()
+        .get("set-cookie")
+        .context("missing set-cookie")?
+        .to_str()?;
+    assert!(cookie.contains(SESSION_COOKIE_NAME));
+    assert!(cookie.contains("HttpOnly"));
+    assert!(cookie.contains("SameSite=Lax"));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_invalid_token() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state);
+
+    let req = Request::get("/auth/login/consume?token=invalid_token_123")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+
+    // Ensure no session cookie is set
+    assert!(res.headers().get("set-cookie").is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_reuse() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state.tokens.create("u1@example.com".to_string());
+
+    let app = app(state);
+
+    // First consume
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req1 = Request::get(&uri).body(body::Body::empty())?;
+
+    // Use clone to reuse the app (which shares the Arc state)
+    let res1 = app.clone().oneshot(req1).await?;
+    assert_eq!(res1.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res1.headers().get("location").unwrap(), "/");
+
+    // Second consume
+    let req2 = Request::get(&uri).body(body::Body::empty())?;
+    let res2 = app.oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res2.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_expired_token() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Create an expired token (expired 1 second ago)
+    let token = state.tokens.create_with_expiry(
+        "u1@example.com".to_string(),
+        chrono::Duration::seconds(-1)
+    );
+
+    let app = app(state);
+
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req = Request::get(uri).body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+
+    Ok(())
+}
