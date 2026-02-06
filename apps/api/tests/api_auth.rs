@@ -521,13 +521,9 @@ async fn consume_login_flow_succeeds() -> Result<()> {
     // Ensure nonce cookie is cleared (Max-Age=0 or Expires)
     let nonce_cleared = set_cookies.iter().any(|c| {
         let val = c.to_str().unwrap_or("");
-        val.contains(NONCE_COOKIE_NAME)
-            && (val.contains("Max-Age=0") || val.contains("Expires="))
+        val.contains(NONCE_COOKIE_NAME) && (val.contains("Max-Age=0") || val.contains("Expires="))
     });
-    assert!(
-        nonce_cleared,
-        "Nonce cookie should be cleared in response"
-    );
+    assert!(nonce_cleared, "Nonce cookie should be cleared in response");
 
     Ok(())
 }
