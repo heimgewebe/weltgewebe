@@ -181,7 +181,12 @@ rate_limit {
 To verify rate limiting is active, you can use a loop to trigger the limit:
 
 ```bash
-for i in {1..10}; do curl -i -X POST -H "Content-Type: application/json" -d '{"email":"test@example.com"}' https://weltgewebe.net/api/auth/login/request; done
+for i in {1..10}; do \
+  curl -i -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com"}' \
+    https://weltgewebe.net/api/auth/login/request; \
+done
 ```
 
 After 5 requests, you should receive a `429 Too Many Requests` response.
