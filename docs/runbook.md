@@ -171,20 +171,26 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
 
    ```bash
    docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
+   # Optional: If you have jq installed, filter for IPs
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy | \
+     jq -r '.. | objects | select(.request) | .request.remote_ip'
    ```
 
-   Look for the field containing the remote address (e.g., `request > remote_ip` in JSON logs).
+2. **Verify Proxy Visibility:**
+   > **Critical Warning:** If Caddy is behind a CDN (e.g., Cloudflare) or Load Balancer, `{remote_host}` will likely
+   > contain the CDN's IP, not the user's. This causes **all users** to share the same rate limit bucket.
 
-2. **Verify Proxy Headers:**
-   > **Warning:** If behind Cloudflare/CDN, Caddy sees the CDN's IP by default. Without correct `trusted_proxies`
-   > configuration, `{remote_host}` will rate-limit the CDN, blocking all users.
-   Ensure `trusted_proxies` are set in `infra/caddy/Caddyfile.prod` so Caddy trusts `X-Forwarded-For` or
-   `CF-Connecting-IP`.
+   **Mitigation:**
+   - Ensure `trusted_proxies` is configured in `infra/caddy/Caddyfile.prod` to trust the upstream CIDRs.
+   - Only then will Caddy correctly parse `X-Forwarded-For` or `CF-Connecting-IP` into `{remote_host}`.
+   - **Do not blindly trust headers** if Caddy is directly exposed to the internet alongside the CDN.
 
-3. **Test:**
-   - Trigger 10 requests from Device A (e.g., WiFi) -> should hit limit.
-   - Trigger requests from Device B (e.g., Mobile Data) -> should NOT hit limit immediately.
-   - **Failure Mode:** If Device B gets 429s instantly after Device A triggers them, Caddy is seeing the Proxy IP.
+3. **Practical Test (Device Isolation):**
+   - **Step A:** Connect Device A (e.g., WiFi) and trigger 10 requests -> Expect `429 Too Many Requests`.
+   - **Step B:** Connect Device B (e.g., Mobile Data) and trigger 1 request -> Expect `200 OK`.
+   - **Result:**
+     - If Device B gets `200 OK`: Rate limiting is correctly keyed by Client IP.
+     - If Device B gets `429`: Caddy sees the upstream Proxy IP. **Action required:** Fix `trusted_proxies`.
 
 #### Request Endpoint (`login_limit`)
 
