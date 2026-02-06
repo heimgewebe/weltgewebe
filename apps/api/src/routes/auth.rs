@@ -461,7 +461,9 @@ pub async fn consume_login_get(
     );
     headers.insert(
         axum::http::header::CONTENT_SECURITY_POLICY,
-        "default-src 'self'; style-src 'unsafe-inline'".parse().unwrap(),
+        "default-src 'self'; style-src 'unsafe-inline'"
+            .parse()
+            .unwrap(),
     );
 
     (headers, jar.add(cookie), Html(html)).into_response()

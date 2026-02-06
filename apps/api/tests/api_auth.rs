@@ -456,7 +456,11 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
         let s = val.to_str().ok()?;
         if s.starts_with(name) {
             // format: name=value; ...
-            s.split(';').next()?.split('=').nth(1).map(|v| v.to_string())
+            s.split(';')
+                .next()?
+                .split('=')
+                .nth(1)
+                .map(|v| v.to_string())
         } else {
             None
         }
@@ -505,12 +509,11 @@ async fn consume_login_flow_succeeds() -> Result<()> {
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
     assert_eq!(res_post.headers().get("location").unwrap(), "/");
 
-    let cookie = res_post
-        .headers()
-        .get("set-cookie")
-        .context("missing session cookie")?
-        .to_str()?;
-    assert!(cookie.contains(SESSION_COOKIE_NAME));
+    let set_cookies = res_post.headers().get_all("set-cookie");
+    let session_cookie_present = set_cookies
+        .iter()
+        .any(|c| c.to_str().unwrap_or("").contains(SESSION_COOKIE_NAME));
+    assert!(session_cookie_present, "Session cookie not found in response");
 
     Ok(())
 }
