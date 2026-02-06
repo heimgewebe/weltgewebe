@@ -1,7 +1,7 @@
 use axum::{
-    extract::{ConnectInfo, Form, Json, Query, State},
+    extract::{ConnectInfo, Json, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{Html, IntoResponse, Redirect},
+    response::{IntoResponse, Redirect},
     Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -12,43 +12,11 @@ use std::net::{IpAddr, SocketAddr};
 #[cfg(not(test))]
 use std::sync::OnceLock;
 use time::Duration;
-use uuid::Uuid;
 
-use crate::{
-    auth::{role::Role, tokens::TokenStore},
-    middleware::auth::AuthContext,
-    state::ApiState,
-};
+use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
-pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
-
-fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff: u8 = 0;
-    for (x, y) in a.bytes().zip(b.bytes()) {
-        diff |= x ^ y;
-    }
-    diff == 0
-}
-
-fn escape_attr(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#x27;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
     // Default to secure, but allow override via env for local dev (http)
@@ -69,26 +37,6 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     builder.build()
 }
 
-fn build_nonce_cookie(nonce: String, token: &str, max_age: Duration) -> Cookie<'static> {
-    // Respect AUTH_COOKIE_SECURE like the session cookie
-    let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
-        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
-        .unwrap_or(true);
-
-    // Bind nonce to token: cookie value = "token_hash_prefix:nonce"
-    // We use the full token hash for binding to ensure strict correspondence
-    let token_hash = TokenStore::hash_token(token);
-    let cookie_value = format!("{}:{}", token_hash, nonce);
-
-    Cookie::build((NONCE_COOKIE_NAME, cookie_value))
-        .path("/api/auth/login/consume")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .secure(secure_cookies)
-        .max_age(max_age)
-        .build()
-}
-
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub account_id: String,
@@ -102,12 +50,6 @@ pub struct LoginRequestEmail {
 #[derive(Deserialize)]
 pub struct ConsumeTokenParams {
     pub token: String,
-}
-
-#[derive(Deserialize)]
-pub struct ConsumeTokenForm {
-    pub token: String,
-    pub nonce: String,
 }
 
 #[derive(Serialize)]
@@ -418,110 +360,12 @@ pub async fn request_login(
     (StatusCode::OK, Json(generic_response)).into_response()
 }
 
-pub async fn consume_login_get(
+pub async fn consume_login(
     State(state): State<ApiState>,
     jar: CookieJar,
     Query(params): Query<ConsumeTokenParams>,
 ) -> impl IntoResponse {
-    // 1. Peek token to see if it exists/valid
-    if state.tokens.peek(&params.token).is_none() {
-        tracing::warn!(
-            event = "login.consume.peek",
-            ok = false,
-            "Invalid or expired token during peek"
-        );
-        return Redirect::to("/login?error=invalid_token").into_response();
-    }
-
-    tracing::info!(
-        event = "login.consume.peek",
-        ok = true,
-        "Token validated for confirmation"
-    );
-
-    // 2. Generate Nonce
-    let nonce = Uuid::new_v4().to_string();
-    let cookie = build_nonce_cookie(nonce.clone(), &params.token, Duration::minutes(5));
-
-    // 3. Render HTML confirmation page
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>Login Confirmation</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {{ font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f0f0f0; }}
-        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center; }}
-        button {{ background: #0070f3; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; font-size: 1rem; cursor: pointer; }}
-        button:hover {{ background: #005bb5; }}
-    </style>
-</head>
-<body>
-    <div class="card">
-        <h2>Confirm Login</h2>
-        <p>Click below to sign in.</p>
-        <form method="POST" action="/api/auth/login/consume">
-            <input type="hidden" name="token" value="{}"/>
-            <input type="hidden" name="nonce" value="{}"/>
-            <button type="submit">Sign in</button>
-        </form>
-    </div>
-</body>
-</html>"#,
-        escape_attr(&params.token),
-        escape_attr(&nonce)
-    );
-
-    let mut response = (jar.add(cookie), Html(html)).into_response();
-    let headers = response.headers_mut();
-    headers.insert(
-        "Cache-Control",
-        "no-store".parse().expect("valid header value"),
-    );
-    headers.insert(
-        "Content-Security-Policy",
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
-            .parse()
-            .expect("valid header value"),
-    );
-
-    response
-}
-
-pub async fn consume_login_post(
-    State(state): State<ApiState>,
-    jar: CookieJar,
-    Form(form): Form<ConsumeTokenForm>,
-) -> impl IntoResponse {
-    // 1. Check Nonce (and binding)
-    // Cookie value format: "token_hash:nonce"
-    // Form value: "nonce" (raw nonce)
-    // Token: form.token
-    let nonce_valid = jar
-        .get(NONCE_COOKIE_NAME)
-        .map(|c| {
-            let cookie_val = c.value();
-            if let Some((stored_hash, stored_nonce)) = cookie_val.split_once(':') {
-                let computed_hash = TokenStore::hash_token(&form.token);
-                // Verify token binding AND nonce match
-                // We use constant_time_eq for both critical parts to be safe,
-                // though strictly nonce match is the most sensitive timing target here.
-                constant_time_eq(stored_hash, &computed_hash)
-                    && constant_time_eq(stored_nonce, &form.nonce)
-            } else {
-                false
-            }
-        })
-        .unwrap_or(false);
-
-    if !nonce_valid {
-        tracing::warn!("Login attempt failed: Invalid or missing nonce (or token mismatch)");
-        return Redirect::to("/login?error=invalid_token").into_response();
-    }
-
-    // 2. Consume Token
-    if let Some(email) = state.tokens.consume(&form.token) {
+    if let Some(email) = state.tokens.consume(&params.token) {
         // Find account
         let account = state.accounts.values().find(|acc| {
             acc.email
@@ -533,15 +377,6 @@ pub async fn consume_login_post(
         if let Some(acc) = account {
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
-            // Clear the nonce cookie (use random values to satisfy static analysis,
-            // though functionally we just want to expire it)
-            let mut nonce_cleanup = build_nonce_cookie(
-                Uuid::new_v4().to_string(),
-                &Uuid::new_v4().to_string(),
-                Duration::seconds(0),
-            );
-            // Explicitly expire the cookie to ensure removal
-            nonce_cleanup.set_expires(time::OffsetDateTime::UNIX_EPOCH);
 
             tracing::info!(
                 event = "login.consumed",
@@ -549,7 +384,7 @@ pub async fn consume_login_post(
                 "Login successful"
             );
 
-            return (jar.add(cookie).add(nonce_cleanup), Redirect::to("/")).into_response();
+            return (jar.add(cookie), Redirect::to("/")).into_response();
         }
     }
 
