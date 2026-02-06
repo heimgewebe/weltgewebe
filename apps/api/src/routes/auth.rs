@@ -386,6 +386,7 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
 fn escape_attr(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
 }
@@ -461,7 +462,7 @@ pub async fn consume_login_get(
     );
     headers.insert(
         axum::http::header::CONTENT_SECURITY_POLICY,
-        "default-src 'self'; style-src 'unsafe-inline'"
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
             .parse()
             .unwrap(),
     );
