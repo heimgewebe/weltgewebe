@@ -456,15 +456,11 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
         let s = val.to_str().ok()?;
         if s.starts_with(name) {
             // format: name=value; ...
-            s.split(';')
-                .next()?
-                .split('=')
-                .nth(1)
-                .map(|v| {
-                    v.replace("%2E", ".")
-                        .replace("%3A", ":")
-                        .replace("%2F", "/")
-                })
+            s.split(';').next()?.split('=').nth(1).map(|v| {
+                v.replace("%2E", ".")
+                    .replace("%3A", ":")
+                    .replace("%2F", "/")
+            })
         } else {
             None
         }
