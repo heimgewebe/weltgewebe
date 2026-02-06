@@ -147,22 +147,27 @@ AUTH_PUBLIC_LOGIN=1
 # The base URL of the application (required for generating magic links)
 APP_BASE_URL=https://weltgewebe.net
 
-# Trusted proxies (required for correct IP resolution behind reverse proxies)
-# Set to the IP or CIDR of your reverse proxy (e.g. Caddy)
-AUTH_TRUSTED_PROXIES=127.0.0.1,::1
+# Trusted proxies (Example! Update with actual proxy IP/CIDR)
+# If Caddy runs in the same Docker network, use the container network CIDR.
+# Without this, the app may not see the correct client IP.
+AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
 ```
 
 ### Rate Limiting (Edge Defense)
 
 To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
 
-- **Zone:** `login_limit`
-- **Key:** Remote Host IP
-- **Rate:** 5 requests per minute
+#### Request Endpoint (`login_limit`)
+- **Rate:** 5 requests per minute (per IP)
 - **Window:** 1 minute
-- **Protected Endpoint:** `POST /api/auth/login/request`
+- **Endpoint:** `POST /api/auth/login/request`
 
-This configuration is defined in `infra/caddy/Caddyfile.prod` using the `rate_limit` directive.
+#### Consume Endpoint (`login_consume_limit`)
+- **Rate:** 30 requests per minute (per IP)
+- **Window:** 1 minute
+- **Endpoint:** `POST /api/auth/login/consume`
+
+This configuration is defined in `infra/caddy/Caddyfile.prod`.
 
 **Tuning Limits:**
 To adjust the rate limits, modify `infra/caddy/Caddyfile.prod`:
@@ -178,15 +183,15 @@ rate_limit {
 ```
 
 **Verification:**
-To verify rate limiting is active, you can use a loop to trigger the limit:
+To verify rate limiting is active, use a loop to trigger the limit. Using `curl` with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot the `429` status code.
 
 ```bash
+# Expect 5x 200, then 429
 for i in {1..10}; do \
-  curl -i -X POST \
+  curl -sS -o /dev/null -w "%{http_code}\n" \
+    -X POST \
     -H "Content-Type: application/json" \
     -d '{"email":"test@example.com"}' \
     https://weltgewebe.net/api/auth/login/request; \
 done
 ```
-
-After 5 requests, you should receive a `429 Too Many Requests` response.

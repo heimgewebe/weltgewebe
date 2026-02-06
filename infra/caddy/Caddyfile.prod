@@ -16,6 +16,11 @@ weltgewebe.net {
 			events 5
 			window 1m
 		}
+		zone login_consume_limit {
+			key {remote_host}
+			events 30
+			window 1m
+		}
 	}
 
 	# Handle API requests (stripping the prefix implies using handle_path)
@@ -26,6 +31,12 @@ weltgewebe.net {
 			path /auth/login/request
 		}
 		rate_limit @login_request login_limit
+
+		@login_consume {
+			method POST
+			path /auth/login/consume
+		}
+		rate_limit @login_consume login_consume_limit
 
 		reverse_proxy api:8080
 	}
