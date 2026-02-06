@@ -69,11 +69,7 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     builder.build()
 }
 
-fn build_nonce_cookie(
-    nonce: String,
-    token: &str,
-    max_age: Duration,
-) -> Cookie<'static> {
+fn build_nonce_cookie(nonce: String, token: &str, max_age: Duration) -> Cookie<'static> {
     // Respect AUTH_COOKIE_SECURE like the session cookie
     let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
         .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
