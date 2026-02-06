@@ -457,7 +457,9 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
         let (cookie_part, _) = s.split_once(';').unwrap_or((s, ""));
         let (key, value) = cookie_part.split_once('=')?;
         if key.trim() == name {
-            Some(value.trim().to_string())
+            let v = value.trim();
+            let v = v.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(v);
+            Some(v.to_string())
         } else {
             None
         }
