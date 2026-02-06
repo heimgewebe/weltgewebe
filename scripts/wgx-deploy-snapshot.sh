@@ -4,6 +4,7 @@ set -euo pipefail
 # -----------------------------
 # Configuration (sane defaults)
 # -----------------------------
+# (Note: Infra updates in PR3a require Caddy build; ensure snapshot captures this context if extended)
 SNAPSHOT_MODE="${SNAPSHOT_MODE:-dry}"          # dry | live
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-compose}"

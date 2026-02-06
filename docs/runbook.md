@@ -113,7 +113,8 @@ einer sauberen Umgebung wiederhergestellt werden.
     - **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten
       WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den
       Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
-6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse dokumentieren.
+6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse
+   dokumentieren.
 
 | Startzeit | Endzeit | RTO erreicht?     | RPO erreicht?     |
 |-----------|---------|-------------------|-------------------|
@@ -126,3 +127,83 @@ einer sauberen Umgebung wiederhergestellt werden.
 - **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
 - **Automatisierung nutzen:** `just drill` ausführen, um den Drill reproduzierbar zu starten und
   Smoke-Tests anzustoßen.
+
+---
+
+## 3. Public Login Configuration
+
+The system supports a Magic Link-based public login flow. This feature is
+gated by environment variables and requires specific infrastructure
+configuration for security.
+
+### Enable Public Login
+
+To enable public login, set the following environment variables in your `.env` file (or deployment configuration):
+
+```bash
+# Enable the public login feature
+AUTH_PUBLIC_LOGIN=1
+
+# The base URL of the application (required for generating magic links)
+APP_BASE_URL=https://weltgewebe.net
+
+# Trusted proxies
+# CRITICAL: In production, set this to the actual IP/CIDR of your reverse proxy (e.g. Caddy).
+# If Caddy runs in the same Docker network, you must inspect the network to find the subnet.
+# Example: docker network inspect <project_name>_default | grep Subnet
+AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
+```
+
+### Rate Limiting (Edge Defense)
+
+To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
+
+> **Warning:** Rate limits are keyed by `{remote_host}`. Ensure your reverse
+> proxy configuration (trusted proxies) is correct so that Caddy sees the real
+> client IP, especially if behind a CDN like Cloudflare. Otherwise, you risk
+> rate-limiting the CDN itself.
+
+#### Request Endpoint (`login_limit`)
+
+- **Rate:** 5 requests per minute (per IP)
+- **Window:** 1 minute
+- **Endpoint:** `POST /api/auth/login/request`
+
+#### Consume Endpoint (`login_consume_limit`)
+
+- **Rate:** 30 requests per minute (per IP)
+- **Window:** 1 minute
+- **Endpoint:** `POST /api/auth/login/consume`
+- **Note:** The consume endpoint is typically called once per flow. Frequent
+  429s here indicate abuse or incorrect client IP resolution.
+
+This configuration is defined in `infra/caddy/Caddyfile.prod`.
+
+**Tuning Limits:**
+To adjust the rate limits, modify `infra/caddy/Caddyfile.prod`:
+
+```caddy
+rate_limit {
+    zone login_limit {
+        key {remote_host}
+        events 10   # Increase to 10 requests
+        window 1m
+    }
+}
+```
+
+**Verification:**
+To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
+with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
+the `429` status code.
+
+```bash
+# Expect 5x 200, then 429
+for i in {1..10}; do \
+  curl -sS -o /dev/null -w "%{http_code}\n" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com"}' \
+    https://weltgewebe.net/api/auth/login/request; \
+done
+```
