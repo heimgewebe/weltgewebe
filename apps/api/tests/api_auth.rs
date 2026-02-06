@@ -29,7 +29,9 @@ fn extract_cookie_value(headers: &axum::http::HeaderMap, cookie_name: &str) -> O
             let first_part = set_cookie.split(';').next()?.trim();
             let (key, value) = first_part.split_once('=')?;
             if key.trim() == cookie_name {
-                Some(value.trim().to_string())
+                // Manually handle percent-encoding for colon, as axum/cookie might encode it.
+                // We keep it simple to avoid adding deps, as we only care about the format we control.
+                Some(value.trim().replace("%3A", ":").to_string())
             } else {
                 None
             }
@@ -483,18 +485,27 @@ async fn consume_login_succeeds() -> Result<()> {
     assert!(content_type.contains("text/html"));
 
     // Check nonce cookie presence
-    let nonce_val = extract_cookie_value(res.headers(), NONCE_COOKIE_NAME)
+    let nonce_cookie_val = extract_cookie_value(res.headers(), NONCE_COOKIE_NAME)
         .context("nonce cookie missing in GET response")?;
-    assert!(!nonce_val.is_empty());
+    assert!(!nonce_cookie_val.is_empty());
+
+    // Extract raw nonce from bound cookie value "hash:nonce"
+    let (_, raw_nonce) = nonce_cookie_val
+        .split_once(':')
+        .context("invalid nonce cookie format")?;
 
     // Ensure NO session cookie is set
     assert!(extract_cookie_value(res.headers(), SESSION_COOKIE_NAME).is_none());
 
     // 2. POST request (Consume step)
-    let body_str = format!("token={}&nonce={}", token, nonce_val);
+    // We send the raw nonce in the form, and the full cookie in headers
+    let body_str = format!("token={}&nonce={}", token, raw_nonce);
     let req2 = Request::post("/auth/login/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .header(
+            "Cookie",
+            format!("{}={}", NONCE_COOKIE_NAME, nonce_cookie_val),
+        )
         .body(body::Body::from(body_str))?;
 
     let res2 = app.oneshot(req2).await?;
@@ -564,14 +575,20 @@ async fn consume_login_fails_reuse() -> Result<()> {
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
-    let nonce_val =
+    let nonce_cookie_val =
         extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME).context("nonce missing")?;
+    let (_, raw_nonce) = nonce_cookie_val
+        .split_once(':')
+        .context("invalid nonce cookie format")?;
 
     // POST
-    let body_str = format!("token={}&nonce={}", token, nonce_val);
+    let body_str = format!("token={}&nonce={}", token, raw_nonce);
     let req_post = Request::post("/auth/login/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .header(
+            "Cookie",
+            format!("{}={}", NONCE_COOKIE_NAME, nonce_cookie_val),
+        )
         .body(body::Body::from(body_str.clone()))?;
 
     let res_post = app.clone().oneshot(req_post).await?;
@@ -609,18 +626,63 @@ async fn consume_login_fails_bad_nonce() -> Result<()> {
     let req = Request::get(&uri).body(body::Body::empty())?;
     let res = app.clone().oneshot(req).await?;
 
-    let nonce_val =
+    let nonce_cookie_val =
         extract_cookie_value(res.headers(), NONCE_COOKIE_NAME).context("nonce missing")?;
 
     // POST with wrong nonce in form
     let body_str = format!("token={}&nonce=WRONG_NONCE", token);
     let req2 = Request::post("/auth/login/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .header(
+            "Cookie",
+            format!("{}={}", NONCE_COOKIE_NAME, nonce_cookie_val),
+        )
         .body(body::Body::from(body_str))?;
 
     let res2 = app.oneshot(req2).await?;
     // Should fail
+    assert_eq!(res2.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res2.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_token_mismatch() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token_a = state.tokens.create("u1@example.com".to_string());
+    let token_b = state.tokens.create("u1@example.com".to_string());
+    let app = app(state);
+
+    // GET for token A (get valid nonce for A)
+    let uri = format!("/auth/login/consume?token={}", token_a);
+    let req = Request::get(&uri).body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+
+    let nonce_cookie_val =
+        extract_cookie_value(res.headers(), NONCE_COOKIE_NAME).context("nonce missing")?;
+    let (_, raw_nonce) = nonce_cookie_val
+        .split_once(':')
+        .context("invalid nonce cookie format")?;
+
+    // POST for token B using nonce from A (should fail due to binding)
+    let body_str = format!("token={}&nonce={}", token_b, raw_nonce);
+    let req2 = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header(
+            "Cookie",
+            format!("{}={}", NONCE_COOKIE_NAME, nonce_cookie_val),
+        )
+        .body(body::Body::from(body_str))?;
+
+    let res2 = app.oneshot(req2).await?;
     assert_eq!(res2.status(), StatusCode::SEE_OTHER);
     assert_eq!(
         res2.headers().get("location").unwrap(),

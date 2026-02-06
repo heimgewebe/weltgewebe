@@ -22,7 +22,7 @@ impl TokenStore {
         }
     }
 
-    fn hash_token(token: &str) -> String {
+    pub(crate) fn hash_token(token: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
         // Simple salt/pepper could be added here if we had a config for it
@@ -51,6 +51,13 @@ impl TokenStore {
         token
     }
 
+    /// Checks if a token is valid without consuming it.
+    ///
+    /// Returns `Some(email)` if the token exists and is not expired.
+    /// Returns `None` otherwise.
+    ///
+    /// This is used for the "confirmation" step of the magic link flow,
+    /// allowing a preview/check (e.g. by email scanners) without invalidating the single-use token.
     pub fn peek(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);

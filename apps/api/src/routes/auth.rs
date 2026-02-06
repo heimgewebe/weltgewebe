@@ -14,7 +14,11 @@ use std::sync::OnceLock;
 use time::Duration;
 use uuid::Uuid;
 
-use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
+use crate::{
+    auth::{role::Role, tokens::TokenStore},
+    middleware::auth::AuthContext,
+    state::ApiState,
+};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
@@ -65,13 +69,22 @@ fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'sta
     builder.build()
 }
 
-fn build_nonce_cookie(value: String, max_age: Duration) -> Cookie<'static> {
+fn build_nonce_cookie(
+    nonce: String,
+    token: &str,
+    max_age: Duration,
+) -> Cookie<'static> {
     // Respect AUTH_COOKIE_SECURE like the session cookie
     let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
         .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
         .unwrap_or(true);
 
-    Cookie::build((NONCE_COOKIE_NAME, value))
+    // Bind nonce to token: cookie value = "token_hash_prefix:nonce"
+    // We use the full token hash for binding to ensure strict correspondence
+    let token_hash = TokenStore::hash_token(token);
+    let cookie_value = format!("{}:{}", token_hash, nonce);
+
+    Cookie::build((NONCE_COOKIE_NAME, cookie_value))
         .path("/api/auth/login/consume")
         .http_only(true)
         .same_site(SameSite::Lax)
@@ -416,12 +429,23 @@ pub async fn consume_login_get(
 ) -> impl IntoResponse {
     // 1. Peek token to see if it exists/valid
     if state.tokens.peek(&params.token).is_none() {
+        tracing::warn!(
+            event = "login.consume.peek",
+            ok = false,
+            "Invalid or expired token during peek"
+        );
         return Redirect::to("/login?error=invalid_token").into_response();
     }
 
+    tracing::info!(
+        event = "login.consume.peek",
+        ok = true,
+        "Token validated for confirmation"
+    );
+
     // 2. Generate Nonce
     let nonce = Uuid::new_v4().to_string();
-    let cookie = build_nonce_cookie(nonce.clone(), Duration::minutes(5));
+    let cookie = build_nonce_cookie(nonce.clone(), &params.token, Duration::minutes(5));
 
     // 3. Render HTML confirmation page
     let html = format!(
@@ -453,7 +477,20 @@ pub async fn consume_login_get(
         escape_attr(&nonce)
     );
 
-    (jar.add(cookie), Html(html)).into_response()
+    let mut response = (jar.add(cookie), Html(html)).into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        "Cache-Control",
+        "no-store".parse().expect("valid header value"),
+    );
+    headers.insert(
+        "Content-Security-Policy",
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'"
+            .parse()
+            .expect("valid header value"),
+    );
+
+    response
 }
 
 pub async fn consume_login_post(
@@ -461,14 +498,29 @@ pub async fn consume_login_post(
     jar: CookieJar,
     Form(form): Form<ConsumeTokenForm>,
 ) -> impl IntoResponse {
-    // 1. Check Nonce
+    // 1. Check Nonce (and binding)
+    // Cookie value format: "token_hash:nonce"
+    // Form value: "nonce" (raw nonce)
+    // Token: form.token
     let nonce_valid = jar
         .get(NONCE_COOKIE_NAME)
-        .map(|c| constant_time_eq(c.value(), &form.nonce))
+        .map(|c| {
+            let cookie_val = c.value();
+            if let Some((stored_hash, stored_nonce)) = cookie_val.split_once(':') {
+                let computed_hash = TokenStore::hash_token(&form.token);
+                // Verify token binding AND nonce match
+                // We use constant_time_eq for both critical parts to be safe,
+                // though strictly nonce match is the most sensitive timing target here.
+                constant_time_eq(stored_hash, &computed_hash)
+                    && constant_time_eq(stored_nonce, &form.nonce)
+            } else {
+                false
+            }
+        })
         .unwrap_or(false);
 
     if !nonce_valid {
-        tracing::warn!("Login attempt failed: Invalid or missing nonce");
+        tracing::warn!("Login attempt failed: Invalid or missing nonce (or token mismatch)");
         return Redirect::to("/login?error=invalid_token").into_response();
     }
 
@@ -486,7 +538,7 @@ pub async fn consume_login_post(
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
             // Clear the nonce cookie
-            let mut nonce_cleanup = build_nonce_cookie("".to_string(), Duration::seconds(0));
+            let mut nonce_cleanup = build_nonce_cookie("".to_string(), "", Duration::seconds(0));
             // Explicitly expire the cookie to ensure removal
             nonce_cleanup.set_expires(time::OffsetDateTime::UNIX_EPOCH);
 
