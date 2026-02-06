@@ -168,9 +168,11 @@ To protect the authentication endpoints from abuse, rate limiting is configured 
 Before enforcing strict limits, verify that Caddy sees the correct client IP:
 
 1. **Check Access Logs:** Inspect Caddy's logs to confirm the remote IP matches the client, not the load balancer.
+
    ```bash
    docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
    ```
+
    Look for the field containing the remote address (e.g., `request > remote_ip` in JSON logs).
 
 2. **Verify Proxy Headers:**
