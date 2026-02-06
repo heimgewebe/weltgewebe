@@ -158,7 +158,10 @@ AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
 
 To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
 
-> **Warning:** Rate limits are keyed by `{remote_host}`. Ensure your reverse proxy configuration (trusted proxies) is correct so that Caddy sees the real client IP, especially if behind a CDN like Cloudflare. Otherwise, you risk rate-limiting the CDN itself.
+> **Warning:** Rate limits are keyed by `{remote_host}`. Ensure your reverse
+> proxy configuration (trusted proxies) is correct so that Caddy sees the real
+> client IP, especially if behind a CDN like Cloudflare. Otherwise, you risk
+> rate-limiting the CDN itself.
 
 #### Request Endpoint (`login_limit`)
 
@@ -171,7 +174,8 @@ To protect the authentication endpoints from abuse, rate limiting is configured 
 - **Rate:** 30 requests per minute (per IP)
 - **Window:** 1 minute
 - **Endpoint:** `POST /api/auth/login/consume`
-- **Note:** The consume endpoint is typically called once per flow. Frequent 429s here indicate abuse or incorrect client IP resolution.
+- **Note:** The consume endpoint is typically called once per flow. Frequent
+  429s here indicate abuse or incorrect client IP resolution.
 
 This configuration is defined in `infra/caddy/Caddyfile.prod`.
 
