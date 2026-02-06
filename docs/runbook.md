@@ -163,6 +163,16 @@ To protect the authentication endpoints from abuse, rate limiting is configured 
 > client IP, especially if behind a CDN like Cloudflare. Otherwise, you risk
 > rate-limiting the CDN itself.
 
+#### Check Client IP Visibility
+
+Before enforcing strict limits, verify that Caddy sees the correct client IP:
+
+1.  **Check Access Logs:** Look for `remote_ip` or `client_ip` fields in Caddy's JSON logs.
+2.  **Verify Proxy Headers:** If behind Cloudflare/Load Balancer, ensure `X-Forwarded-For` or `CF-Connecting-IP`
+    is correctly parsed.
+3.  **Test:** Trigger 10 requests from two different devices (e.g., WiFi + Mobile Data). They should be counted
+    separately. If both hit the limit simultaneously, Caddy likely sees the upstream proxy's IP.
+
 #### Request Endpoint (`login_limit`)
 
 - **Rate:** 5 requests per minute (per IP)
