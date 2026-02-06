@@ -113,7 +113,8 @@ einer sauberen Umgebung wiederhergestellt werden.
     - **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten
       WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den
       Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
-6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse dokumentieren.
+6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse
+   dokumentieren.
 
 | Startzeit | Endzeit | RTO erreicht?     | RPO erreicht?     |
 |-----------|---------|-------------------|-------------------|
@@ -131,7 +132,9 @@ einer sauberen Umgebung wiederhergestellt werden.
 
 ## 3. Public Login Configuration
 
-The system supports a Magic Link-based public login flow. This feature is gated by environment variables and requires specific infrastructure configuration for security.
+The system supports a Magic Link-based public login flow. This feature is
+gated by environment variables and requires specific infrastructure
+configuration for security.
 
 ### Enable Public Login
 
@@ -153,11 +156,11 @@ AUTH_TRUSTED_PROXIES=127.0.0.1,::1
 
 To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
 
-*   **Zone:** `login_limit`
-*   **Key:** Remote Host IP
-*   **Rate:** 5 requests per minute
-*   **Window:** 1 minute
-*   **Protected Endpoint:** `POST /api/auth/login/request`
+- **Zone:** `login_limit`
+- **Key:** Remote Host IP
+- **Rate:** 5 requests per minute
+- **Window:** 1 minute
+- **Protected Endpoint:** `POST /api/auth/login/request`
 
 This configuration is defined in `infra/caddy/Caddyfile.prod` using the `rate_limit` directive.
 
