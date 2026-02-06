@@ -197,7 +197,8 @@ To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
 with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
 the `429` status code.
 
-> **Note:** The verification loop must send a valid JSON body. A `400 Bad Request` or `422 Unprocessable Entity` response indicates an invalid payload, not a failure of the rate limit.
+> **Note:** The verification loop must send a valid JSON body. A `400 Bad Request` or `422 Unprocessable Entity`
+> response indicates an invalid payload, not a failure of the rate limit.
 
 ```bash
 # Expect 5x 200, then 429
