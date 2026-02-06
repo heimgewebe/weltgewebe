@@ -560,37 +560,39 @@ async fn consume_login_fails_reuse() -> Result<()> {
     let token = state.tokens.create("u1@example.com".to_string());
     let app = app(state);
 
-    // 1. Successful flow
-    // Setup nonce manually
-    let nonce = "testnonce";
-    let token_hash = hash_token(&token);
-    let cookie_val = format!("{}.{}", token_hash, nonce);
+    // 1. GET (Confirm Page)
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+
+    assert_eq!(res_get.status(), StatusCode::OK);
+
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("missing nonce cookie")?;
+
+    // Extract nonce from cookie (hash.nonce)
+    let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
+    let nonce = nonce.to_string(); // Keep only nonce part for form
+
+    // 2. POST (Consume)
     let body_str = format!("token={}&nonce={}", token, nonce);
-
-    let req1 = Request::post("/auth/login/consume")
+    let req_post = Request::post("/auth/login/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
-        .body(body::Body::from(body_str.clone()))?;
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
 
-    let res1 = app.clone().oneshot(req1).await?;
-    assert_eq!(res1.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res1.headers().get("location").unwrap(), "/");
+    let res_post = app.clone().oneshot(req_post).await?;
 
-    // 2. Reuse attempts
-    // Generate new nonce/cookie to pass the nonce check, but token should be gone
-    let nonce2 = "testnonce2";
-    let cookie_val2 = format!("{}.{}", token_hash, nonce2);
-    let body_str2 = format!("token={}&nonce={}", token, nonce2);
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res_post.headers().get("location").unwrap(), "/");
 
-    let req2 = Request::post("/auth/login/consume")
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val2))
-        .body(body::Body::from(body_str2))?;
+    // 3. GET Reuse (Should fail)
+    let req_reuse = Request::get(&uri).body(body::Body::empty())?;
+    let res_reuse = app.oneshot(req_reuse).await?;
 
-    let res2 = app.oneshot(req2).await?;
-    assert_eq!(res2.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res_reuse.status(), StatusCode::SEE_OTHER);
     assert_eq!(
-        res2.headers().get("location").unwrap(),
+        res_reuse.headers().get("location").unwrap(),
         "/login?error=invalid_token"
     );
 
