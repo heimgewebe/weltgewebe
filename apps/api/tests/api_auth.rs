@@ -460,7 +460,11 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
                 .next()?
                 .split('=')
                 .nth(1)
-                .map(|v| v.to_string())
+                .map(|v| {
+                    v.replace("%2E", ".")
+                        .replace("%3A", ":")
+                        .replace("%2F", "/")
+                })
         } else {
             None
         }
