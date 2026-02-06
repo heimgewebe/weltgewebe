@@ -20,6 +20,17 @@ pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.bytes().zip(b.bytes()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 fn escape_attr(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
@@ -453,7 +464,7 @@ pub async fn consume_login_post(
     // 1. Check Nonce
     let nonce_valid = jar
         .get(NONCE_COOKIE_NAME)
-        .map(|c| c.value() == form.nonce)
+        .map(|c| constant_time_eq(c.value(), &form.nonce))
         .unwrap_or(false);
 
     if !nonce_valid {
@@ -475,7 +486,9 @@ pub async fn consume_login_post(
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
             // Clear the nonce cookie
-            let nonce_cleanup = build_nonce_cookie("".to_string(), Duration::seconds(0));
+            let mut nonce_cleanup = build_nonce_cookie("".to_string(), Duration::seconds(0));
+            // Explicitly expire the cookie to ensure removal
+            nonce_cleanup.set_expires(time::OffsetDateTime::UNIX_EPOCH);
 
             tracing::info!(
                 event = "login.consumed",
