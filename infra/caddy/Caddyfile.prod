@@ -21,6 +21,11 @@ weltgewebe.net {
 			events 30
 			window 1m
 		}
+		zone login_consume_get_limit {
+			key {remote_host}
+			events 60
+			window 1m
+		}
 	}
 
 	# Handle API requests (stripping the prefix implies using handle_path)
@@ -37,6 +42,14 @@ weltgewebe.net {
 			path /auth/login/consume
 		}
 		rate_limit @login_consume login_consume_limit
+
+		# GET /auth/login/consume may be triggered by link scanners or prefetchers.
+		# A relaxed rate limit prevents abuse without impacting normal login flows.
+		@login_consume_get {
+			method GET
+			path /auth/login/consume
+		}
+		rate_limit @login_consume_get login_consume_get_limit
 
 		reverse_proxy api:8080
 	}
