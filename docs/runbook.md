@@ -158,11 +158,13 @@ AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
 To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
 
 #### Request Endpoint (`login_limit`)
+
 - **Rate:** 5 requests per minute (per IP)
 - **Window:** 1 minute
 - **Endpoint:** `POST /api/auth/login/request`
 
 #### Consume Endpoint (`login_consume_limit`)
+
 - **Rate:** 30 requests per minute (per IP)
 - **Window:** 1 minute
 - **Endpoint:** `POST /api/auth/login/consume`
@@ -183,7 +185,9 @@ rate_limit {
 ```
 
 **Verification:**
-To verify rate limiting is active, use a loop to trigger the limit. Using `curl` with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot the `429` status code.
+To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
+with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
+the `429` status code.
 
 ```bash
 # Expect 5x 200, then 429
