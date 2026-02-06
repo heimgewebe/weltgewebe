@@ -173,7 +173,7 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
    docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
    # Optional: If you have jq installed, filter for IPs
    docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy | \
-     jq -r '.. | objects | select(.request) | .request.remote_ip'
+     jq -r '.. | objects | select(.request) | (.request.remote_ip // .request.remote_addr)'
    ```
 
 2. **Verify Proxy Visibility:**
@@ -181,8 +181,9 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
    > contain the CDN's IP, not the user's. This causes **all users** to share the same rate limit bucket.
 
    **Mitigation:**
-   - Ensure `trusted_proxies` is configured in `infra/caddy/Caddyfile.prod` to trust the upstream CIDRs.
-   - Only then will Caddy correctly parse `X-Forwarded-For` or `CF-Connecting-IP` into `{remote_host}`.
+   - **Caddy:** Ensure `trusted_proxies` is configured in `infra/caddy/Caddyfile.prod` (global options) so Caddy
+     correctly resolves `{remote_host}` for rate limiting.
+   - **App:** Separately, check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (audit logs).
    - **Do not blindly trust headers** if Caddy is directly exposed to the internet alongside the CDN.
 
 3. **Practical Test (Device Isolation):**
