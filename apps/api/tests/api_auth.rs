@@ -454,13 +454,10 @@ fn hash_token(token: &str) -> String {
 fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     headers.get_all("set-cookie").iter().find_map(|val| {
         let s = val.to_str().ok()?;
-        if s.starts_with(name) {
-            // format: name=value; ...
-            s.split(';').next()?.split('=').nth(1).map(|v| {
-                v.replace("%2E", ".")
-                    .replace("%3A", ":")
-                    .replace("%2F", "/")
-            })
+        let (cookie_part, _) = s.split_once(';').unwrap_or((s, ""));
+        let (key, value) = cookie_part.split_once('=')?;
+        if key.trim() == name {
+            Some(value.trim().to_string())
         } else {
             None
         }
