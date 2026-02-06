@@ -22,11 +22,26 @@ impl TokenStore {
         }
     }
 
-    fn hash_token(token: &str) -> String {
+    pub(crate) fn hash_token(token: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(token.as_bytes());
         // Simple salt/pepper could be added here if we had a config for it
         format!("{:x}", hasher.finalize())
+    }
+
+    /// Checks if a token exists and is valid without consuming it.
+    /// Returns the associated email if valid.
+    pub fn peek(&self, token: &str) -> Option<String> {
+        let now = Utc::now();
+        let hash = Self::hash_token(token);
+        let store = self.store.read().expect("TokenStore lock poisoned");
+
+        if let Some(data) = store.get(&hash) {
+            if data.expires_at > now {
+                return Some(data.email.clone());
+            }
+        }
+        None
     }
 
     pub fn create(&self, email: String) -> String {

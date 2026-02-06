@@ -2,10 +2,11 @@ use anyhow::{Context, Result};
 use axum::{
     body,
     extract::connect_info::MockConnectInfo,
-    http::{Request, StatusCode},
+    http::{HeaderMap, Request, StatusCode},
     Router,
 };
 use serial_test::serial;
+use sha2::{Digest, Sha256};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -14,7 +15,7 @@ use weltgewebe_api::{
     routes::{
         accounts::{AccountInternal, AccountPublic, Visibility},
         api_router,
-        auth::{GENERIC_LOGIN_MSG, SESSION_COOKIE_NAME},
+        auth::{GENERIC_LOGIN_MSG, NONCE_COOKIE_NAME, SESSION_COOKIE_NAME},
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
@@ -444,33 +445,85 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
     Ok(())
 }
 
+fn hash_token(token: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(token.as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers.get_all("set-cookie").iter().find_map(|val| {
+        let s = val.to_str().ok()?;
+        if s.starts_with(name) {
+            // format: name=value; ...
+            s.split(';')
+                .next()?
+                .split('=')
+                .nth(1)
+                .map(|v| v.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 #[tokio::test]
 #[serial]
-async fn consume_login_succeeds() -> Result<()> {
+async fn consume_login_flow_succeeds() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
     // Create a valid token
     let token = state.tokens.create("u1@example.com".to_string());
-
     let app = app(state);
 
+    // 1. GET (Confirm Page)
     let uri = format!("/auth/login/consume?token={}", token);
-    let req = Request::get(uri).body(body::Body::empty())?;
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
 
-    let res = app.oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::SEE_OTHER);
-    assert_eq!(res.headers().get("location").unwrap(), "/");
+    assert_eq!(res_get.status(), StatusCode::OK);
+    // Should NOT set session cookie yet
+    let set_cookies = res_get.headers().get_all("set-cookie");
+    for c in set_cookies.iter() {
+        assert!(!c.to_str()?.contains(SESSION_COOKIE_NAME));
+    }
+    // Should set nonce cookie
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("missing nonce cookie")?;
 
-    let cookie = res
-        .headers()
-        .get("set-cookie")
-        .context("missing set-cookie")?
-        .to_str()?;
-    assert!(cookie.contains(SESSION_COOKIE_NAME));
-    assert!(cookie.contains("HttpOnly"));
-    assert!(cookie.contains("SameSite=Lax"));
+    // Extract nonce from cookie (hash.nonce)
+    let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
+    let nonce = nonce.to_string(); // Keep only nonce part for form
+
+    // 2. POST (Consume)
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res_post = app.oneshot(req_post).await?;
+
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res_post.headers().get("location").unwrap(), "/");
+
+    let set_cookies = res_post.headers().get_all("set-cookie");
+    let session_cookie_present = set_cookies
+        .iter()
+        .any(|c| c.to_str().unwrap_or("").contains(SESSION_COOKIE_NAME));
+    assert!(
+        session_cookie_present,
+        "Session cookie not found in response"
+    );
+
+    // Ensure nonce cookie is cleared (Max-Age=0 or Expires)
+    let nonce_cleared = set_cookies.iter().any(|c| {
+        let val = c.to_str().unwrap_or("");
+        val.contains(NONCE_COOKIE_NAME) && (val.contains("Max-Age=0") || val.contains("Expires="))
+    });
+    assert!(nonce_cleared, "Nonce cookie should be cleared in response");
 
     Ok(())
 }
@@ -494,9 +547,6 @@ async fn consume_login_fails_invalid_token() -> Result<()> {
         "/login?error=invalid_token"
     );
 
-    // Ensure no session cookie is set
-    assert!(res.headers().get("set-cookie").is_none());
-
     Ok(())
 }
 
@@ -508,20 +558,35 @@ async fn consume_login_fails_reuse() -> Result<()> {
     state.config.app_base_url = Some("http://localhost".to_string());
 
     let token = state.tokens.create("u1@example.com".to_string());
-
     let app = app(state);
 
-    // First consume
-    let uri = format!("/auth/login/consume?token={}", token);
-    let req1 = Request::get(&uri).body(body::Body::empty())?;
+    // 1. Successful flow
+    // Setup nonce manually
+    let nonce = "testnonce";
+    let token_hash = hash_token(&token);
+    let cookie_val = format!("{}.{}", token_hash, nonce);
+    let body_str = format!("token={}&nonce={}", token, nonce);
 
-    // Use clone to reuse the app (which shares the Arc state)
+    let req1 = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
+        .body(body::Body::from(body_str.clone()))?;
+
     let res1 = app.clone().oneshot(req1).await?;
     assert_eq!(res1.status(), StatusCode::SEE_OTHER);
     assert_eq!(res1.headers().get("location").unwrap(), "/");
 
-    // Second consume
-    let req2 = Request::get(&uri).body(body::Body::empty())?;
+    // 2. Reuse attempts
+    // Generate new nonce/cookie to pass the nonce check, but token should be gone
+    let nonce2 = "testnonce2";
+    let cookie_val2 = format!("{}.{}", token_hash, nonce2);
+    let body_str2 = format!("token={}&nonce={}", token, nonce2);
+
+    let req2 = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val2))
+        .body(body::Body::from(body_str2))?;
+
     let res2 = app.oneshot(req2).await?;
     assert_eq!(res2.status(), StatusCode::SEE_OTHER);
     assert_eq!(
@@ -546,6 +611,7 @@ async fn consume_login_fails_expired_token() -> Result<()> {
 
     let app = app(state);
 
+    // GET should fail
     let uri = format!("/auth/login/consume?token={}", token);
     let req = Request::get(uri).body(body::Body::empty())?;
 
@@ -555,6 +621,73 @@ async fn consume_login_fails_expired_token() -> Result<()> {
         res.headers().get("location").unwrap(),
         "/login?error=invalid_token"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_bad_nonce() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state.tokens.create("u1@example.com".to_string());
+    let app = app(state.clone());
+
+    // Mismatch nonce
+    let nonce_cookie = "nonce1";
+    let nonce_form = "nonce2";
+    let token_hash = hash_token(&token);
+    let cookie_val = format!("{}.{}", token_hash, nonce_cookie);
+    let body_str = format!("token={}&nonce={}", token, nonce_form);
+
+    let req = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+    // Token should NOT be consumed
+    assert!(state.tokens.peek(&token).is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_bad_token_binding() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state.tokens.create("u1@example.com".to_string());
+    let other_token = state.tokens.create("u1@example.com".to_string());
+    let app = app(state.clone());
+
+    let nonce = "nonce1";
+    let token_hash = hash_token(&other_token); // Hash of WRONG token
+    let cookie_val = format!("{}.{}", token_hash, nonce);
+    let body_str = format!("token={}&nonce={}", token, nonce); // Correct token in form
+
+    let req = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+    // Token should NOT be consumed
+    assert!(state.tokens.peek(&token).is_some());
 
     Ok(())
 }

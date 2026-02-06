@@ -1,7 +1,7 @@
 use axum::{
-    extract::{ConnectInfo, Json, Query, State},
+    extract::{ConnectInfo, Form, Json, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     Extension,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
@@ -12,10 +12,16 @@ use std::net::{IpAddr, SocketAddr};
 #[cfg(not(test))]
 use std::sync::OnceLock;
 use time::Duration;
+use uuid::Uuid;
 
-use crate::{auth::role::Role, middleware::auth::AuthContext, state::ApiState};
+use crate::{
+    auth::{role::Role, tokens::TokenStore},
+    middleware::auth::AuthContext,
+    state::ApiState,
+};
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
+pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
@@ -50,6 +56,12 @@ pub struct LoginRequestEmail {
 #[derive(Deserialize)]
 pub struct ConsumeTokenParams {
     pub token: String,
+}
+
+#[derive(Deserialize)]
+pub struct ConsumeTokenForm {
+    pub token: String,
+    pub nonce: String,
 }
 
 #[derive(Serialize)]
@@ -360,12 +372,133 @@ pub async fn request_login(
     (StatusCode::OK, Json(generic_response)).into_response()
 }
 
-pub async fn consume_login(
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes()
+        .zip(b.bytes())
+        .fold(0, |acc, (x, y)| acc | (x ^ y))
+        == 0
+}
+
+/// Simple HTML escape to avoid XSS in hidden fields
+fn escape_attr(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#x27;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+pub async fn consume_login_get(
     State(state): State<ApiState>,
     jar: CookieJar,
     Query(params): Query<ConsumeTokenParams>,
 ) -> impl IntoResponse {
-    if let Some(email) = state.tokens.consume(&params.token) {
+    // Check if token exists and is valid (peek only)
+    if state.tokens.peek(&params.token).is_none() {
+        // Invalid or expired token
+        return Redirect::to("/login?error=invalid_token").into_response();
+    }
+
+    // Generate Nonce
+    let nonce = Uuid::new_v4().to_string();
+
+    // Bind nonce to token: cookie value = "token_hash.nonce"
+    // We use the full token hash for binding to ensure strict correspondence
+    // Using '.' as separator to avoid URL encoding issues in cookies
+    let token_hash = TokenStore::hash_token(&params.token);
+    let cookie_value = format!("{}.{}", token_hash, nonce);
+
+    // Respect AUTH_COOKIE_SECURE like the session cookie
+    let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(true);
+
+    let cookie = Cookie::build((NONCE_COOKIE_NAME, cookie_value))
+        .path("/api/auth/login/consume")
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .secure(secure_cookies)
+        .max_age(Duration::minutes(5)) // Short lived
+        .build();
+
+    // Render HTML Form
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Confirm Login</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{ font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f4f4f4; }}
+        .card {{ background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }}
+        button {{ background: #0070f3; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 4px; font-size: 1rem; cursor: pointer; }}
+        button:hover {{ background: #005bb5; }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Confirm Sign In</h2>
+        <p>Click below to complete your login.</p>
+        <form method="POST" action="/api/auth/login/consume">
+            <input type="hidden" name="token" value="{}">
+            <input type="hidden" name="nonce" value="{}">
+            <button type="submit">Sign In</button>
+        </form>
+    </div>
+</body>
+</html>"#,
+        escape_attr(&params.token),
+        escape_attr(&nonce)
+    );
+
+    // Set Cache-Control to prevent history/caching issues
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        axum::http::header::CACHE_CONTROL,
+        "no-store, no-cache, must-revalidate".parse().unwrap(),
+    );
+    headers.insert(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+            .parse()
+            .unwrap(),
+    );
+
+    (headers, jar.add(cookie), Html(html)).into_response()
+}
+
+pub async fn consume_login_post(
+    State(state): State<ApiState>,
+    jar: CookieJar,
+    Form(form): Form<ConsumeTokenForm>,
+) -> impl IntoResponse {
+    // 1. Check Nonce (and binding)
+    // Cookie value format: "token_hash.nonce"
+    let nonce_valid = jar
+        .get(NONCE_COOKIE_NAME)
+        .map(|c| {
+            let cookie_val = c.value();
+            if let Some((stored_hash, stored_nonce)) = cookie_val.split_once('.') {
+                let computed_hash = TokenStore::hash_token(&form.token);
+                // Verify token binding AND nonce match
+                constant_time_eq(stored_hash, &computed_hash)
+                    && constant_time_eq(stored_nonce, &form.nonce)
+            } else {
+                false
+            }
+        })
+        .unwrap_or(false);
+
+    if !nonce_valid {
+        tracing::warn!("Login failed: Invalid or missing nonce");
+        return Redirect::to("/login?error=invalid_token").into_response();
+    }
+
+    // 2. Consume Token
+    if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
         let account = state.accounts.values().find(|acc| {
             acc.email
@@ -378,13 +511,28 @@ pub async fn consume_login(
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
 
+            // Clear the nonce cookie
+            // Respect AUTH_COOKIE_SECURE
+            let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
+                .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+                .unwrap_or(true);
+
+            let nonce_cleanup = Cookie::build((NONCE_COOKIE_NAME, ""))
+                .path("/api/auth/login/consume")
+                .http_only(true)
+                .same_site(SameSite::Lax)
+                .secure(secure_cookies)
+                .max_age(Duration::seconds(0))
+                .expires(time::OffsetDateTime::UNIX_EPOCH)
+                .build();
+
             tracing::info!(
                 event = "login.consumed",
                 account_id = %acc.public.id,
                 "Login successful"
             );
 
-            return (jar.add(cookie), Redirect::to("/")).into_response();
+            return (jar.add(cookie).add(nonce_cleanup), Redirect::to("/")).into_response();
         }
     }
 
