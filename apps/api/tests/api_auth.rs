@@ -513,7 +513,10 @@ async fn consume_login_flow_succeeds() -> Result<()> {
     let session_cookie_present = set_cookies
         .iter()
         .any(|c| c.to_str().unwrap_or("").contains(SESSION_COOKIE_NAME));
-    assert!(session_cookie_present, "Session cookie not found in response");
+    assert!(
+        session_cookie_present,
+        "Session cookie not found in response"
+    );
 
     Ok(())
 }
