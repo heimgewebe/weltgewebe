@@ -126,3 +126,59 @@ einer sauberen Umgebung wiederhergestellt werden.
 - **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
 - **Automatisierung nutzen:** `just drill` ausführen, um den Drill reproduzierbar zu starten und
   Smoke-Tests anzustoßen.
+
+---
+
+## 3. Public Login Configuration
+
+The system supports a Magic Link-based public login flow. This feature is gated by environment variables and requires specific infrastructure configuration for security.
+
+### Enable Public Login
+
+To enable public login, set the following environment variables in your `.env` file (or deployment configuration):
+
+```bash
+# Enable the public login feature
+AUTH_PUBLIC_LOGIN=1
+
+# The base URL of the application (required for generating magic links)
+APP_BASE_URL=https://weltgewebe.net
+
+# Trusted proxies (required for correct IP resolution behind reverse proxies)
+# Set to the IP or CIDR of your reverse proxy (e.g. Caddy)
+AUTH_TRUSTED_PROXIES=127.0.0.1,::1
+```
+
+### Rate Limiting (Edge Defense)
+
+To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
+
+*   **Zone:** `login_limit`
+*   **Key:** Remote Host IP
+*   **Rate:** 5 requests per minute
+*   **Window:** 1 minute
+*   **Protected Endpoint:** `POST /api/auth/login/request`
+
+This configuration is defined in `infra/caddy/Caddyfile.prod` using the `rate_limit` directive.
+
+**Tuning Limits:**
+To adjust the rate limits, modify `infra/caddy/Caddyfile.prod`:
+
+```caddy
+rate_limit {
+    zone login_limit {
+        key {remote_host}
+        events 10   # Increase to 10 requests
+        window 1m
+    }
+}
+```
+
+**Verification:**
+To verify rate limiting is active, you can use a loop to trigger the limit:
+
+```bash
+for i in {1..10}; do curl -X POST https://weltgewebe.net/api/auth/login/request; done
+```
+
+After 5 requests, you should receive a `429 Too Many Requests` response.
