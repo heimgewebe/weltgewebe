@@ -167,11 +167,22 @@ To protect the authentication endpoints from abuse, rate limiting is configured 
 
 Before enforcing strict limits, verify that Caddy sees the correct client IP:
 
-1. **Check Access Logs:** Look for `remote_ip` or `client_ip` fields in Caddy's JSON logs.
-2. **Verify Proxy Headers:** If behind Cloudflare/Load Balancer, ensure `X-Forwarded-For` or `CF-Connecting-IP`
-   is correctly parsed.
-3. **Test:** Trigger 10 requests from two different devices (e.g., WiFi + Mobile Data). They should be counted
-   separately. If both hit the limit simultaneously, Caddy likely sees the upstream proxy's IP.
+1. **Check Access Logs:** Inspect Caddy's logs to confirm the remote IP matches the client, not the load balancer.
+   ```bash
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
+   ```
+   Look for the field containing the remote address (e.g., `request > remote_ip` in JSON logs).
+
+2. **Verify Proxy Headers:**
+   > **Warning:** If behind Cloudflare/CDN, Caddy sees the CDN's IP by default. Without correct `trusted_proxies`
+   > configuration, `{remote_host}` will rate-limit the CDN, blocking all users.
+   Ensure `trusted_proxies` are set in `infra/caddy/Caddyfile.prod` so Caddy trusts `X-Forwarded-For` or
+   `CF-Connecting-IP`.
+
+3. **Test:**
+   - Trigger 10 requests from Device A (e.g., WiFi) -> should hit limit.
+   - Trigger requests from Device B (e.g., Mobile Data) -> should NOT hit limit immediately.
+   - **Failure Mode:** If Device B gets 429s instantly after Device A triggers them, Caddy is seeing the Proxy IP.
 
 #### Request Endpoint (`login_limit`)
 
