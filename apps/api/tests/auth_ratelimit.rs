@@ -70,7 +70,8 @@ fn default_config() -> AppConfig {
         smtp_user: None,
         smtp_pass: None,
         smtp_from: None,
-        auth_log_magic_token: false,
+        // Enable token logging to satisfy "delivery mechanism required" policy for tests
+        auth_log_magic_token: true,
     }
 }
 
