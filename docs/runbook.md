@@ -188,6 +188,7 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
      {
        # Example ONLY – do not add unless behind CDN/LB
        # Replace <CDN_OR_LB_CIDRS> with actual CIDRs (e.g. 10.0.0.0/8)
+       # Note: Merge into existing global options block if present (do not create a second one).
        servers {
          trusted_proxies static <CDN_OR_LB_CIDRS>
        }
