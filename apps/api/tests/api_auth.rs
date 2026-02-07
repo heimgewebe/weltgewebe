@@ -49,7 +49,8 @@ fn test_state() -> Result<ApiState> {
         smtp_user: None,
         smtp_pass: None,
         smtp_from: None,
-        auth_log_magic_token: false,
+        // Enable token logging to satisfy "delivery mechanism required" policy for tests
+        auth_log_magic_token: true,
     };
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));

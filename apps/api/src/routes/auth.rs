@@ -452,11 +452,25 @@ pub async fn request_login(
     };
 
     if let Some(id) = account_id {
-        // 3. Generate Token
+        // 3. Check Delivery Mechanism
+        let can_deliver = state.mailer.is_some();
+        let can_log = state.config.auth_log_magic_token;
+
+        if !can_deliver && !can_log {
+            tracing::error!(
+                event = "login.delivery_unavailable",
+                email_hash = %email_hash,
+                account_id = %id,
+                "Public login enabled but no delivery path configured"
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+
+        // 4. Generate Token (only if deliverable)
         // Use normalized email for token creation too
         let token = state.tokens.create(email_norm.clone());
 
-        // 4. Send Email
+        // 5. Send/Log Email
         // Ensure the base URL does not have a trailing slash for clean formatting
         // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
         let base_url = state.config.app_base_url.as_deref().expect(
@@ -495,8 +509,7 @@ pub async fn request_login(
             );
         }
 
-        // Dev/Ops Fallback: Log token if enabled or if mailer is missing AND we are in a safe environment?
-        // Actually, policy says: "Dev-Fallback 'Token im Log' strikt als Dev-Only" controlled by AUTH_LOG_MAGIC_TOKEN.
+        // Dev/Ops Fallback: Log token if enabled
         if state.config.auth_log_magic_token {
             tracing::info!(
                 target: "email_outbox",
@@ -506,9 +519,12 @@ pub async fn request_login(
                 "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
             );
         } else if !sent && state.mailer.is_none() {
-            // If mailer is missing and logging is disabled, we are in a bad state (user can't login).
-            // But in PROD we must not log token by default.
-            // We logged a warning above.
+            // Should be unreachable due to check above, but safe fallback
+            tracing::warn!(
+                event = "login.delivery_failed_silent",
+                account_id = %id,
+                "Mailer missing and logging disabled; token generated but lost"
+            );
         }
     } else {
         tracing::info!(
