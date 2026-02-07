@@ -152,6 +152,25 @@ APP_BASE_URL=https://weltgewebe.net
 # If Caddy runs in the same Docker network, you must inspect the network to find the subnet.
 # Example: docker network inspect <project_name>_default | grep Subnet
 AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
+
+# Rate Limiting (Application Level)
+# Keyed by IP and Email. Defaults are infinite if unset.
+AUTH_RL_IP_PER_MIN=5
+AUTH_RL_IP_PER_HOUR=100
+AUTH_RL_EMAIL_PER_MIN=3
+AUTH_RL_EMAIL_PER_HOUR=10
+
+# SMTP Configuration (Required for Magic Links)
+# If unset, magic links are only logged (dev mode) or disabled.
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=secret
+SMTP_FROM=noreply@weltgewebe.net
+
+# Development / Debugging
+# If true, the magic link token is logged to stdout. DO NOT ENABLE IN PROD.
+AUTH_LOG_MAGIC_TOKEN=0
 ```
 
 ### Rate Limiting (Edge Defense)

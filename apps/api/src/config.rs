@@ -23,6 +23,28 @@ macro_rules! apply_env_override {
     };
 }
 
+macro_rules! apply_env_override_option {
+    ($self:ident, $field:ident, $type:ty, $env_var:literal) => {
+        if let Ok(value) = env::var($env_var) {
+            if !value.trim().is_empty() {
+                match value.trim().parse::<$type>() {
+                    Ok(parsed) => {
+                        $self.$field = Some(parsed);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            env_var = $env_var,
+                            value = %value,
+                            error = %e,
+                            "failed to parse environment override; keeping configured value"
+                        );
+                    }
+                }
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -45,6 +67,32 @@ pub struct AppConfig {
     pub auth_allow_email_domains: Option<Vec<String>>,
     #[serde(default)]
     pub auth_auto_provision: bool,
+
+    // Rate Limiting Configuration
+    #[serde(default)]
+    pub auth_rl_ip_per_min: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_ip_per_hour: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_email_per_min: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_email_per_hour: Option<u32>,
+
+    // SMTP Configuration
+    #[serde(default)]
+    pub smtp_host: Option<String>,
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    #[serde(default)]
+    pub smtp_user: Option<String>,
+    #[serde(default)]
+    pub smtp_pass: Option<String>,
+    #[serde(default)]
+    pub smtp_from: Option<String>,
+
+    // Dev/Ops Configuration
+    #[serde(default)]
+    pub auth_log_magic_token: bool,
 }
 
 impl AppConfig {
@@ -141,6 +189,41 @@ impl AppConfig {
             self.auth_auto_provision = val == "1" || val.eq_ignore_ascii_case("true");
         }
 
+        // Rate Limit Overrides
+        apply_env_override_option!(self, auth_rl_ip_per_min, u32, "AUTH_RL_IP_PER_MIN");
+        apply_env_override_option!(self, auth_rl_ip_per_hour, u32, "AUTH_RL_IP_PER_HOUR");
+        apply_env_override_option!(self, auth_rl_email_per_min, u32, "AUTH_RL_EMAIL_PER_MIN");
+        apply_env_override_option!(self, auth_rl_email_per_hour, u32, "AUTH_RL_EMAIL_PER_HOUR");
+
+        // SMTP Overrides
+        if let Ok(val) = env::var("SMTP_HOST") {
+            if !val.trim().is_empty() {
+                self.smtp_host = Some(val.trim().to_string());
+            }
+        }
+        apply_env_override_option!(self, smtp_port, u16, "SMTP_PORT");
+        if let Ok(val) = env::var("SMTP_USER") {
+            if !val.trim().is_empty() {
+                self.smtp_user = Some(val.trim().to_string());
+            }
+        }
+        if let Ok(val) = env::var("SMTP_PASS") {
+            if !val.trim().is_empty() {
+                self.smtp_pass = Some(val.trim().to_string());
+            }
+        }
+        if let Ok(val) = env::var("SMTP_FROM") {
+            if !val.trim().is_empty() {
+                self.smtp_from = Some(val.trim().to_string());
+            }
+        }
+
+        // Dev/Ops Overrides
+        if let Ok(val) = env::var("AUTH_LOG_MAGIC_TOKEN") {
+            let val = val.trim();
+            self.auth_log_magic_token = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+
         self.normalize().validate()
     }
 
@@ -194,6 +277,12 @@ impl AppConfig {
             if !has_email_allowlist && !has_domain_allowlist {
                 anyhow::bail!("AUTH_AUTO_PROVISION is enabled but no allowlist is configured. Set AUTH_ALLOW_EMAILS or AUTH_ALLOW_EMAIL_DOMAINS to prevent open registration spam.");
             }
+        }
+
+        if self.smtp_host.is_some() && self.smtp_from.is_none() {
+            anyhow::bail!(
+                "SMTP_HOST is set but SMTP_FROM is missing. Please set SMTP_FROM (e.g. noreply@example.com)."
+            );
         }
 
         Ok(self)

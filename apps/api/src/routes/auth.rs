@@ -307,6 +307,8 @@ pub async fn dev_login(
 
 pub async fn request_login(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
     if !state.config.auth_public_login {
@@ -326,6 +328,13 @@ pub async fn request_login(
 
     // Normalize email: trim and lowercase
     let email_norm = payload.email.trim().to_ascii_lowercase();
+
+    // 1b. Rate Limiting (IP + Email)
+    let client_ip = effective_client_ip(addr, &headers);
+    if let Err(e) = state.rate_limiter.check(client_ip, &email_norm) {
+        tracing::warn!(%client_ip, email = %email_norm, error = %e, "Login request rate limited");
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
 
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
@@ -447,7 +456,7 @@ pub async fn request_login(
         // Use normalized email for token creation too
         let token = state.tokens.create(email_norm.clone());
 
-        // 4. "Send" Email (Log for now)
+        // 4. Send Email
         // Ensure the base URL does not have a trailing slash for clean formatting
         // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
         let base_url = state.config.app_base_url.as_deref().expect(
@@ -456,13 +465,51 @@ pub async fn request_login(
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
-        tracing::info!(
-            target: "email_outbox",
-            email = %email_norm,
-            account_id = %id,
-            %link,
-            "Magic Link Generated"
-        );
+        let mut sent = false;
+        if let Some(mailer) = &state.mailer {
+            match mailer.send_magic_link(&email_norm, &link).await {
+                Ok(_) => {
+                    sent = true;
+                    tracing::info!(
+                        event = "login.sent",
+                        account_id = %id,
+                        email_hash = %email_hash,
+                        "Magic Link sent via email"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        event = "login.send_failed",
+                        account_id = %id,
+                        email_hash = %email_hash,
+                        error = %e,
+                        "Failed to send Magic Link email"
+                    );
+                }
+            }
+        } else {
+            tracing::warn!(
+                event = "login.mailer_missing",
+                account_id = %id,
+                "Mailer not configured; cannot send Magic Link"
+            );
+        }
+
+        // Dev/Ops Fallback: Log token if enabled or if mailer is missing AND we are in a safe environment?
+        // Actually, policy says: "Dev-Fallback 'Token im Log' strikt als Dev-Only" controlled by AUTH_LOG_MAGIC_TOKEN.
+        if state.config.auth_log_magic_token {
+            tracing::info!(
+                target: "email_outbox",
+                email = %email_norm,
+                account_id = %id,
+                %link,
+                "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
+            );
+        } else if !sent && state.mailer.is_none() {
+            // If mailer is missing and logging is disabled, we are in a bad state (user can't login).
+            // But in PROD we must not log token by default.
+            // We logged a warning above.
+        }
     } else {
         tracing::info!(
             event = "login.requested_unknown",

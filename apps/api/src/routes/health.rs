@@ -266,7 +266,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 mod tests {
     use super::*;
     use crate::{
-        auth::session::SessionStore,
+    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
@@ -285,28 +285,44 @@ mod tests {
             build_timestamp: "test",
         })?;
 
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_pass: None,
+            smtp_from: None,
+            auth_log_magic_token: false,
+        };
+
+        let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
         Ok(ApiState {
             db_pool: None,
             db_pool_configured: false,
             nats_client: None,
             nats_configured: false,
-            config: AppConfig {
-                fade_days: 7,
-                ron_days: 84,
-                anonymize_opt_in: true,
-                delegation_expire_days: 28,
-                auth_public_login: false,
-                app_base_url: None,
-                auth_trusted_proxies: None,
-                auth_allow_emails: None,
-                auth_allow_email_domains: None,
-                auth_auto_provision: false,
-            },
+            config,
             metrics,
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(RwLock::new(HashMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
+            rate_limiter,
+            mailer: None,
         })
     }
 
