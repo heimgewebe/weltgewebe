@@ -8,6 +8,7 @@ use axum::{
 use serial_test::serial;
 use sha2::{Digest, Sha256};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
     auth::{role::Role, session::SessionStore},
@@ -41,11 +42,14 @@ fn test_state() -> Result<ApiState> {
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
         },
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(HashMap::new()),
+        accounts: Arc::new(RwLock::new(HashMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
     })
 }
@@ -91,7 +95,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
     );
 
-    state.accounts = Arc::new(account_map);
+    state.accounts = Arc::new(RwLock::new(account_map));
     Ok(state)
 }
 
@@ -166,7 +170,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     );
 
     let mut state = test_state()?;
-    state.accounts = Arc::new(account_map);
+    state.accounts = Arc::new(RwLock::new(account_map));
 
     let app = app(state);
 
@@ -692,6 +696,250 @@ async fn consume_login_fails_bad_token_binding() -> Result<()> {
     );
     // Token should NOT be consumed
     assert!(state.tokens.peek(&token).is_some());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_disabled_for_unknown() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = false;
+
+    let app = app(state.clone());
+
+    let email = "newuser@example.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Should NOT have created an account
+    let accounts = state.accounts.read().await;
+    let found = accounts
+        .values()
+        .any(|acc| acc.email.as_deref() == Some(email));
+    assert!(!found);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_enabled_success() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_emails = Some(vec!["allowed@example.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "allowed@example.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Should have created an account
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .find(|acc| acc.email.as_deref() == Some(email));
+        assert!(found.is_some());
+        let acc = found.unwrap();
+        assert_eq!(acc.role, Role::Gast);
+        assert_eq!(acc.public.title, "allowed");
+    }
+
+    // Should have created a token
+    // We can't easily peek by email with current TokenStore public API in tests (peek takes token string)
+    // But we can rely on the fact that if account was created, token generation follows.
+    // However, let's verify if we can check token count or something?
+    // TokenStore::create returns the token string. We don't have it here.
+    // But we know it succeeded if we see the account.
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_enabled_denied() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_emails = Some(vec!["allowed@example.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "denied@example.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Should NOT have created an account
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(email));
+        assert!(!found);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_enabled_domain_allowlist() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_email_domains = Some(vec!["allowed.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "user@allowed.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Should have created an account
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(email));
+        assert!(found);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_domain_allowlist_rejects_multi_at_attack() -> Result<()> {
+    // Attack vector: attacker@allowed.com@evil.com
+    // Should NOT match "allowed.com"
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_email_domains = Some(vec!["allowed.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "attacker@allowed.com@evil.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account NOT created
+    // We check against the normalized email because if it were created, it would be normalized.
+    let email_norm = email.trim().to_ascii_lowercase();
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(email_norm.as_str()));
+        assert!(
+            !found,
+            "Account should not be created for multi-@ attack email"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_empty_domain_rejected() -> Result<()> {
+    // Edge case: "user@" (empty domain)
+    // Config: "allowed.com" (and potentially empty strings filtered out)
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_email_domains = Some(vec!["allowed.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "user@";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account NOT created
+    let email_norm = email.trim().to_ascii_lowercase();
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(email_norm.as_str()));
+        assert!(!found, "Account should not be created for empty domain");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_email_normalization_works() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    // Config uses lowercase
+    state.config.auth_allow_emails = Some(vec!["allowed@example.com".to_string()]);
+
+    let app = app(state.clone());
+
+    // Input has whitespace and mixed case
+    let input_email = "  Allowed@EXAMPLE.com  ";
+    let normalized_email = "allowed@example.com";
+
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"email":"{}"}}"#,
+            input_email
+        )))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account created with normalized email
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .find(|acc| acc.email.as_deref() == Some(normalized_email));
+        assert!(
+            found.is_some(),
+            "Account should be created with normalized email"
+        );
+    }
 
     Ok(())
 }

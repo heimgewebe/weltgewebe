@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::{
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
+    routes::accounts::{AccountInternal, AccountPublic, Visibility},
     state::ApiState,
 };
 
@@ -251,8 +252,8 @@ pub async fn list_dev_accounts(
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     check_dev_login_guard(&headers, addr)?;
 
-    let mut accounts: Vec<DevAccount> = state
-        .accounts
+    let accounts_map = state.accounts.read().await;
+    let mut accounts: Vec<DevAccount> = accounts_map
         .values()
         .map(|acc| DevAccount {
             id: acc.public.id.clone(),
@@ -289,9 +290,12 @@ pub async fn dev_login(
         return (jar, status).into_response();
     }
 
-    if !state.accounts.contains_key(&payload.account_id) {
-        tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
-        return (jar, StatusCode::BAD_REQUEST).into_response();
+    {
+        let accounts_map = state.accounts.read().await;
+        if !accounts_map.contains_key(&payload.account_id) {
+            tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
+            return (jar, StatusCode::BAD_REQUEST).into_response();
+        }
     }
 
     let session = state.sessions.create(payload.account_id);
@@ -320,9 +324,12 @@ pub async fn request_login(
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
+    // Normalize email: trim and lowercase
+    let email_norm = payload.email.trim().to_ascii_lowercase();
+
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
-    hasher.update(payload.email.as_bytes());
+    hasher.update(email_norm.as_bytes());
     let email_hash_full = format!("{:x}", hasher.finalize());
     // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
     let email_hash = &email_hash_full[..16];
@@ -334,16 +341,111 @@ pub async fn request_login(
     );
 
     // 2. Lookup account by email
-    let account = state.accounts.values().find(|acc| {
-        acc.email
-            .as_ref()
-            .map(|e| e.eq_ignore_ascii_case(&payload.email))
-            .unwrap_or(false)
-    });
+    // We check existence first with a read lock.
+    // If found, we proceed.
+    // If not found, we check policy and potentially acquire a write lock to provision.
+    let existing_account_id = {
+        let accounts_map = state.accounts.read().await;
+        accounts_map
+            .values()
+            .find(|acc| {
+                acc.email
+                    .as_ref()
+                    .map(|e| e == &email_norm)
+                    .unwrap_or(false)
+            })
+            .map(|acc| acc.public.id.clone())
+    };
 
-    if let Some(acc) = account {
+    let account_id = if let Some(id) = existing_account_id {
+        Some(id)
+    } else {
+        // Account not found. Check Entry Policy.
+        let mut allowed = false;
+
+        // Auto-provisioning Check
+        if state.config.auth_auto_provision {
+            // Check Allowlist: Emails
+            if let Some(emails) = &state.config.auth_allow_emails {
+                // Config is already normalized (lowercase)
+                if emails.iter().any(|e| e == &email_norm) {
+                    allowed = true;
+                }
+            }
+
+            // Check Allowlist: Domains (only if not already allowed)
+            if !allowed {
+                // Ensure exactly one '@' to prevent multi-@ attacks (e.g. attacker@allowed.com@evil.com)
+                if email_norm.matches('@').count() == 1 {
+                    if let Some(domains) = &state.config.auth_allow_email_domains {
+                        // split_once ensures we get the domain part safely.
+                        // We also reject empty domains explicitly.
+                        if let Some((_, domain)) = email_norm.split_once('@') {
+                            // Config domains are already lowercase
+                            if !domain.is_empty() && domains.iter().any(|d| d == domain) {
+                                allowed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if allowed {
+            // Provision new account
+            let new_id = Uuid::new_v4().to_string();
+            let new_account = AccountInternal {
+                public: AccountPublic {
+                    id: new_id.clone(),
+                    kind: "garnrolle".to_string(), // Default type
+                    title: email_norm.split('@').next().unwrap_or("User").to_string(),
+                    summary: None,
+                    public_pos: None,
+                    visibility: Visibility::Private, // Safe default
+                    radius_m: 0,
+                    ron_flag: false,
+                    tags: vec![],
+                },
+                role: Role::Gast,
+                email: Some(email_norm.clone()),
+            };
+
+            {
+                let mut accounts_map = state.accounts.write().await;
+                // Double-checked locking to avoid race condition
+                let collision_id = accounts_map
+                    .values()
+                    .find(|acc| {
+                        acc.email
+                            .as_ref()
+                            .map(|e| e == &email_norm)
+                            .unwrap_or(false)
+                    })
+                    .map(|acc| acc.public.id.clone());
+
+                if let Some(id) = collision_id {
+                    // Another request provisioned it in the meantime
+                    Some(id)
+                } else {
+                    accounts_map.insert(new_id.clone(), new_account);
+                    tracing::info!(
+                        event = "login.provisioned",
+                        account_id = %new_id,
+                        email_hash = %email_hash,
+                        "Auto-provisioned new account"
+                    );
+                    Some(new_id)
+                }
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(id) = account_id {
         // 3. Generate Token
-        let token = state.tokens.create(payload.email.clone());
+        // Use normalized email for token creation too
+        let token = state.tokens.create(email_norm.clone());
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
@@ -356,8 +458,8 @@ pub async fn request_login(
 
         tracing::info!(
             target: "email_outbox",
-            email = %payload.email,
-            account_id = %acc.public.id,
+            email = %email_norm,
+            account_id = %id,
             %link,
             "Magic Link Generated"
         );
@@ -365,6 +467,8 @@ pub async fn request_login(
         tracing::info!(
             event = "login.requested_unknown",
             email_hash = %email_hash,
+            reason = "policy_denied",
+            auto_provision_enabled = state.config.auth_auto_provision,
             "Login requested for unknown email"
         );
     }
@@ -500,7 +604,8 @@ pub async fn consume_login_post(
     // 2. Consume Token
     if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
-        let account = state.accounts.values().find(|acc| {
+        let accounts_map = state.accounts.read().await;
+        let account = accounts_map.values().find(|acc| {
             acc.email
                 .as_ref()
                 .map(|e| e.eq_ignore_ascii_case(&email))

@@ -298,11 +298,14 @@ mod tests {
                 auth_public_login: false,
                 app_base_url: None,
                 auth_trusted_proxies: None,
+                auth_allow_emails: None,
+                auth_allow_email_domains: None,
+                auth_auto_provision: false,
             },
             metrics,
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
-            accounts: Arc::new(HashMap::new()),
+            accounts: Arc::new(RwLock::new(HashMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
         })
     }

@@ -45,7 +45,9 @@ pub async fn run() -> anyhow::Result<()> {
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
-    let accounts = Arc::new(routes::accounts::load_all_accounts().await);
+    let accounts = Arc::new(tokio::sync::RwLock::new(
+        routes::accounts::load_all_accounts().await,
+    ));
 
     let nodes_list = routes::nodes::load_nodes().await;
     metrics.set_nodes_cache_count(nodes_list.len() as i64);

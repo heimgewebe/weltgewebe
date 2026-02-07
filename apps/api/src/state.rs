@@ -20,6 +20,6 @@ pub struct ApiState {
     pub metrics: Metrics,
     pub sessions: SessionStore,
     pub tokens: TokenStore,
-    pub accounts: Arc<HashMap<String, AccountInternal>>,
+    pub accounts: Arc<RwLock<HashMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
 }

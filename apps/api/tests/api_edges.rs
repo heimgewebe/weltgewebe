@@ -9,6 +9,7 @@ mod helpers;
 
 use helpers::set_gewebe_in_dir;
 use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
     auth::session::SessionStore,
@@ -38,11 +39,14 @@ fn test_state() -> Result<ApiState> {
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
         },
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(HashMap::new()),
+        accounts: Arc::new(RwLock::new(HashMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
     })
 }
