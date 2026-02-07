@@ -375,24 +375,16 @@ pub async fn request_login(
 
             // Check Allowlist: Domains (only if not already allowed)
             if !allowed {
-                if let Some(domains) = &state.config.auth_allow_email_domains {
-                    // Robust domain extraction: split_once ensures we get everything after the first @
-                    // However, we want strict domain check.
-                    // If multiple @ exist, it's ambiguous. But standard says last part is domain.
-                    // Let's use split_once from the right or standard split.
-                    // But here, let's stick to a safe heuristic: split_once('@') gives (local, domain).
-                    // If domain contains another @, it might be weird but we check against allowlist.
-                    // Actually, `split_once` splits at the *first* occurrence.
-                    // `rsplit_once` splits at the *last*.
-                    // Standard email: local-part@domain. Domain can't contain @ (unless quoted local part, but we split once).
-                    // If we assume simple emails:
-                    // `user@domain.com` -> (user, domain.com)
-                    // `attacker@allowed.com@evil.com` -> (attacker, allowed.com@evil.com) -> won't match "allowed.com"
-                    // So `split_once` is safer than `nth(1)` which might pick `allowed.com` from `user@allowed.com@evil.com` if split creates 3 parts.
-                    if let Some((_, domain)) = email_norm.split_once('@') {
-                        // Config domains are already lowercase
-                        if domains.iter().any(|d| d == domain) {
-                            allowed = true;
+                // Ensure exactly one '@' to prevent multi-@ attacks (e.g. attacker@allowed.com@evil.com)
+                if email_norm.matches('@').count() == 1 {
+                    if let Some(domains) = &state.config.auth_allow_email_domains {
+                        // split_once ensures we get the domain part safely.
+                        // We also reject empty domains explicitly.
+                        if let Some((_, domain)) = email_norm.split_once('@') {
+                            // Config domains are already lowercase
+                            if !domain.is_empty() && domains.iter().any(|d| d == domain) {
+                                allowed = true;
+                            }
                         }
                     }
                 }
@@ -476,6 +468,7 @@ pub async fn request_login(
             event = "login.requested_unknown",
             email_hash = %email_hash,
             reason = "policy_denied",
+            auto_provision_enabled = state.config.auth_auto_provision,
             "Login requested for unknown email"
         );
     }

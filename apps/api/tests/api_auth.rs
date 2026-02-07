@@ -853,15 +853,51 @@ async fn request_login_provisioning_domain_allowlist_rejects_multi_at_attack() -
     assert_eq!(res.status(), StatusCode::OK);
 
     // Verify account NOT created
+    // We check against the normalized email because if it were created, it would be normalized.
+    let email_norm = email.trim().to_ascii_lowercase();
     {
         let accounts = state.accounts.read().await;
         let found = accounts
             .values()
-            .any(|acc| acc.email.as_deref() == Some(email));
+            .any(|acc| acc.email.as_deref() == Some(&email_norm));
         assert!(
             !found,
             "Account should not be created for multi-@ attack email"
         );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_empty_domain_rejected() -> Result<()> {
+    // Edge case: "user@" (empty domain)
+    // Config: "allowed.com" (and potentially empty strings filtered out)
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_email_domains = Some(vec!["allowed.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "user@";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account NOT created
+    let email_norm = email.trim().to_ascii_lowercase();
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(&email_norm));
+        assert!(!found, "Account should not be created for empty domain");
     }
 
     Ok(())
