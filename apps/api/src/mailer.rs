@@ -52,7 +52,10 @@ impl Mailer {
             ))
             .context("failed to build email")?;
 
-        self.transport.send(email).await.context("failed to send email")?;
+        self.transport
+            .send(email)
+            .await
+            .context("failed to send email")?;
         Ok(())
     }
 }

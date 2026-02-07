@@ -266,7 +266,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 mod tests {
     use super::*;
     use crate::{
-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
+        auth::{rate_limit::AuthRateLimiter, session::SessionStore},
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,

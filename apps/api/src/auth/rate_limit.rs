@@ -1,9 +1,5 @@
 use crate::config::AppConfig;
-use governor::{
-    clock::DefaultClock,
-    state::{keyed::DefaultKeyedStateStore},
-    Quota, RateLimiter,
-};
+use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use thiserror::Error;
@@ -29,27 +25,19 @@ pub struct AuthRateLimiter {
 impl AuthRateLimiter {
     pub fn new(config: &AppConfig) -> Self {
         let ip_limiter_min = config.auth_rl_ip_per_min.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| {
-                RateLimiter::keyed(Quota::per_minute(l))
-            })
+            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_minute(l)))
         });
 
         let ip_limiter_hour = config.auth_rl_ip_per_hour.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| {
-                RateLimiter::keyed(Quota::per_hour(l))
-            })
+            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_hour(l)))
         });
 
         let email_limiter_min = config.auth_rl_email_per_min.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| {
-                RateLimiter::keyed(Quota::per_minute(l))
-            })
+            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_minute(l)))
         });
 
         let email_limiter_hour = config.auth_rl_email_per_hour.and_then(|limit| {
-            NonZeroU32::new(limit).map(|l| {
-                RateLimiter::keyed(Quota::per_hour(l))
-            })
+            NonZeroU32::new(limit).map(|l| RateLimiter::keyed(Quota::per_hour(l)))
         });
 
         Self {
