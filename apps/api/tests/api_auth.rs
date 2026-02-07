@@ -859,7 +859,7 @@ async fn request_login_provisioning_domain_allowlist_rejects_multi_at_attack() -
         let accounts = state.accounts.read().await;
         let found = accounts
             .values()
-            .any(|acc| acc.email.as_deref() == Some(&email_norm));
+            .any(|acc| acc.email.as_deref() == Some(email_norm.as_str()));
         assert!(
             !found,
             "Account should not be created for multi-@ attack email"
@@ -896,7 +896,7 @@ async fn request_login_provisioning_empty_domain_rejected() -> Result<()> {
         let accounts = state.accounts.read().await;
         let found = accounts
             .values()
-            .any(|acc| acc.email.as_deref() == Some(&email_norm));
+            .any(|acc| acc.email.as_deref() == Some(email_norm.as_str()));
         assert!(!found, "Account should not be created for empty domain");
     }
 
