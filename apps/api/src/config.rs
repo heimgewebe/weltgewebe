@@ -141,7 +141,37 @@ impl AppConfig {
             self.auth_auto_provision = val == "1" || val.eq_ignore_ascii_case("true");
         }
 
-        self.validate()
+        self.normalize().validate()
+    }
+
+    fn normalize(mut self) -> Self {
+        if let Some(emails) = self.auth_allow_emails {
+            let normalized: Vec<String> = emails
+                .into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.auth_allow_emails = if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            };
+        }
+
+        if let Some(domains) = self.auth_allow_email_domains {
+            let normalized: Vec<String> = domains
+                .into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.auth_allow_email_domains = if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            };
+        }
+
+        self
     }
 
     fn validate(self) -> Result<Self> {
@@ -381,6 +411,30 @@ delegation_expire_days: 28
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.auth_auto_provision);
         assert_eq!(cfg.auth_allow_email_domains.unwrap().len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_normalizes_mixed_case_inputs() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        // Simulate YAML input with mixed case
+        let yaml_content = format!(
+            "{}\nauth_allow_email_domains: [\"Example.COM\", \"  Space.net \"]\n",
+            YAML
+        );
+        std::fs::write(file.path(), yaml_content)?;
+
+        // Ensure env doesn't override
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        let domains = cfg.auth_allow_email_domains.expect("domains set");
+
+        assert_eq!(domains.len(), 2);
+        assert!(domains.contains(&"example.com".to_string()));
+        assert!(domains.contains(&"space.net".to_string()));
 
         Ok(())
     }
