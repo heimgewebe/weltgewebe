@@ -556,6 +556,10 @@ delegation_expire_days: 28
         let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
         // Ensure no SMTP and no dev logging
         let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _smtp_user = EnvGuard::unset("SMTP_USER");
+        let _smtp_pass = EnvGuard::unset("SMTP_PASS");
+        let _smtp_from = EnvGuard::unset("SMTP_FROM");
+        let _smtp_port = EnvGuard::unset("SMTP_PORT");
         let _log_token = EnvGuard::unset("AUTH_LOG_MAGIC_TOKEN");
 
         let res = AppConfig::load_from_path(file.path());
@@ -578,6 +582,10 @@ delegation_expire_days: 28
         let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
         // No SMTP but enable dev logging
         let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _smtp_user = EnvGuard::unset("SMTP_USER");
+        let _smtp_pass = EnvGuard::unset("SMTP_PASS");
+        let _smtp_from = EnvGuard::unset("SMTP_FROM");
+        let _smtp_port = EnvGuard::unset("SMTP_PORT");
         let _log_token = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
 
         let cfg = AppConfig::load_from_path(file.path())?;

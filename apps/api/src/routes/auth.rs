@@ -500,7 +500,7 @@ pub async fn request_login(
         if state.config.auth_log_magic_token {
             tracing::info!(
                 target: "email_outbox",
-                email = %email_norm,
+                email_hash = %email_hash,
                 account_id = %id,
                 %link,
                 "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
