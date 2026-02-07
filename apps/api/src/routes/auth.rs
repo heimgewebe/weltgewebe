@@ -338,7 +338,7 @@ pub async fn request_login(
 
     // 1b. Rate Limiting (IP + Email)
     let client_ip = effective_client_ip(addr, &headers);
-    if let Err(e) = state.rate_limiter.check(client_ip, &email_norm) {
+    if let Err(e) = state.rate_limiter.check(client_ip, email_hash) {
         tracing::warn!(%client_ip, email_hash = %email_hash, error = %e, "Login request rate limited");
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     }
@@ -479,11 +479,9 @@ pub async fn request_login(
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
-        let mut sent = false;
         if let Some(mailer) = &state.mailer {
             match mailer.send_magic_link(&email_norm, &link).await {
                 Ok(_) => {
-                    sent = true;
                     tracing::info!(
                         event = "login.sent",
                         account_id = %id,

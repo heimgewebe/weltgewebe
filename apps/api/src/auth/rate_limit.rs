@@ -48,7 +48,7 @@ impl AuthRateLimiter {
         }
     }
 
-    pub fn check(&self, ip: IpAddr, email: &str) -> Result<(), RateLimitError> {
+    pub fn check(&self, ip: IpAddr, email_key: &str) -> Result<(), RateLimitError> {
         if let Some(limiter) = &self.ip_limiter_min {
             if limiter.check_key(&ip).is_err() {
                 tracing::warn!(%ip, "Rate limit exceeded (IP/min)");
@@ -62,16 +62,14 @@ impl AuthRateLimiter {
             }
         }
 
-        let email_key = email.to_string();
-
         if let Some(limiter) = &self.email_limiter_min {
-            if limiter.check_key(&email_key).is_err() {
+            if limiter.check_key(&email_key.to_string()).is_err() {
                 tracing::warn!("Rate limit exceeded (Email/min)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
         if let Some(limiter) = &self.email_limiter_hour {
-            if limiter.check_key(&email_key).is_err() {
+            if limiter.check_key(&email_key.to_string()).is_err() {
                 tracing::warn!("Rate limit exceeded (Email/hour)");
                 return Err(RateLimitError::EmailLimited);
             }
