@@ -58,8 +58,16 @@ pub async fn run() -> anyhow::Result<()> {
     let mailer = match crate::mailer::Mailer::new(&app_config) {
         Ok(mailer) => Some(Arc::new(mailer)),
         Err(error) => {
-            // If SMTP config is present but invalid, log a warning.
-            // If just missing, it's fine (dev mode or feature disabled).
+            // If Public Login is enabled AND Dev Logging is disabled, failure to init mailer is fatal.
+            // (We must not run in a state where users can request login but receive nothing)
+            if app_config.auth_public_login && !app_config.auth_log_magic_token {
+                return Err(anyhow!(
+                    "Public Login enabled without working mailer: {}",
+                    error
+                ));
+            }
+
+            // Otherwise (Dev mode or feature disabled), just warn.
             if app_config.smtp_host.is_some() {
                 tracing::warn!(%error, "failed to initialize mailer; email sending will be disabled");
             }

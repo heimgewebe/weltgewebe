@@ -5,6 +5,7 @@ use lettre::{
     AsyncTransport, Message, Tokio1Executor,
 };
 
+#[derive(Debug)]
 pub struct Mailer {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     from: String,
@@ -19,6 +20,11 @@ impl Mailer {
         let from = config.smtp_from.clone().context("SMTP_FROM missing")?;
 
         let creds = Credentials::new(user.to_string(), pass.to_string());
+
+        // Validate from address format early
+        if from.parse::<lettre::message::Mailbox>().is_err() {
+            anyhow::bail!("invalid from address: {}", from);
+        }
 
         // Use relay builder
         let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
@@ -57,5 +63,47 @@ impl Mailer {
             .await
             .context("failed to send email")?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
+    use tempfile::NamedTempFile;
+
+    const YAML: &str = r#"fade_days: 7
+ron_days: 84
+anonymize_opt_in: true
+delegation_expire_days: 28
+"#;
+
+    #[test]
+    #[serial]
+    fn mailer_fails_with_invalid_from_address() {
+        let file = NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), YAML).unwrap();
+
+        // Valid SMTP host/port to pass builder construction until From parsing
+        let _host = EnvGuard::set("SMTP_HOST", "127.0.0.1");
+        let _port = EnvGuard::set("SMTP_PORT", "1025");
+        let _user = EnvGuard::set("SMTP_USER", "user");
+        let _pass = EnvGuard::set("SMTP_PASS", "pass");
+
+        // Invalid From Address
+        let _from = EnvGuard::set("SMTP_FROM", "not-an-email");
+
+        let config = AppConfig::load_from_path(file.path()).unwrap();
+
+        // This should fail because "not-an-email" cannot be parsed into a Mailbox
+        // The Mailer::new implementation parses `from` immediately.
+        let res = Mailer::new(&config);
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("invalid from address"));
     }
 }
