@@ -329,19 +329,19 @@ pub async fn request_login(
     // Normalize email: trim and lowercase
     let email_norm = payload.email.trim().to_ascii_lowercase();
 
-    // 1b. Rate Limiting (IP + Email)
-    let client_ip = effective_client_ip(addr, &headers);
-    if let Err(e) = state.rate_limiter.check(client_ip, &email_norm) {
-        tracing::warn!(%client_ip, email = %email_norm, error = %e, "Login request rate limited");
-        return StatusCode::TOO_MANY_REQUESTS.into_response();
-    }
-
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
     hasher.update(email_norm.as_bytes());
     let email_hash_full = format!("{:x}", hasher.finalize());
     // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
     let email_hash = &email_hash_full[..16];
+
+    // 1b. Rate Limiting (IP + Email)
+    let client_ip = effective_client_ip(addr, &headers);
+    if let Err(e) = state.rate_limiter.check(client_ip, &email_norm) {
+        tracing::warn!(%client_ip, email_hash = %email_hash, error = %e, "Login request rate limited");
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
 
     tracing::info!(
         event = "login.requested",

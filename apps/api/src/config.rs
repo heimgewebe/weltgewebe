@@ -279,7 +279,23 @@ impl AppConfig {
             }
         }
 
-        if self.smtp_host.is_some() && self.smtp_from.is_none() {
+        if self.auth_public_login {
+            // Check for valid SMTP configuration
+            let smtp_valid = self.smtp_host.is_some()
+                && self.smtp_user.is_some()
+                && self.smtp_pass.is_some()
+                && self.smtp_from.is_some();
+
+            // Check if dev logging fallback is enabled
+            let dev_logging = self.auth_log_magic_token;
+
+            if !smtp_valid && !dev_logging {
+                anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but no delivery mechanism is configured. Configure SMTP_* or set AUTH_LOG_MAGIC_TOKEN=1 for dev.");
+            }
+        } else if self.smtp_host.is_some() && self.smtp_from.is_none() {
+            // Only check this consistency if we didn't already bail above,
+            // though the above check implies strictness when public login is on.
+            // This clause catches "SMTP partially configured but Public Login OFF" edge cases.
             anyhow::bail!(
                 "SMTP_HOST is set but SMTP_FROM is missing. Please set SMTP_FROM (e.g. noreply@example.com)."
             );
@@ -417,6 +433,8 @@ delegation_expire_days: 28
 
         let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
         let _url = EnvGuard::set("APP_BASE_URL", "https://example.com");
+        // Enable token logging to satisfy delivery requirement for this test
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.auth_public_login);
@@ -524,6 +542,47 @@ delegation_expire_days: 28
         assert_eq!(domains.len(), 2);
         assert!(domains.contains(&"example.com".to_string()));
         assert!(domains.contains(&"space.net".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_public_login_without_delivery() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        // Ensure no SMTP and no dev logging
+        let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _log_token = EnvGuard::unset("AUTH_LOG_MAGIC_TOKEN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("no delivery mechanism is configured"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_if_public_login_with_auth_log_magic_token() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        // No SMTP but enable dev logging
+        let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _log_token = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_public_login);
+        assert!(cfg.auth_log_magic_token);
 
         Ok(())
     }

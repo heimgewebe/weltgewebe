@@ -161,7 +161,7 @@ AUTH_RL_EMAIL_PER_MIN=3
 AUTH_RL_EMAIL_PER_HOUR=10
 
 # SMTP Configuration (Required for Magic Links)
-# If unset, magic links are only logged (dev mode) or disabled.
+# If unset, magic links are NOT deliverable. They are only logged if AUTH_LOG_MAGIC_TOKEN=1 (Dev).
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=apikey

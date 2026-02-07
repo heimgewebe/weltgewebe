@@ -62,15 +62,17 @@ impl AuthRateLimiter {
             }
         }
 
+        let email_key = email.to_string();
+
         if let Some(limiter) = &self.email_limiter_min {
-            if limiter.check_key(&email.to_string()).is_err() {
-                tracing::warn!(email, "Rate limit exceeded (Email/min)");
+            if limiter.check_key(&email_key).is_err() {
+                tracing::warn!("Rate limit exceeded (Email/min)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
         if let Some(limiter) = &self.email_limiter_hour {
-            if limiter.check_key(&email.to_string()).is_err() {
-                tracing::warn!(email, "Rate limit exceeded (Email/hour)");
+            if limiter.check_key(&email_key).is_err() {
+                tracing::warn!("Rate limit exceeded (Email/hour)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
