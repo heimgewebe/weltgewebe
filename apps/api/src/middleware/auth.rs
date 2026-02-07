@@ -24,7 +24,8 @@ pub async fn auth_middleware(
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         if let Some(session) = state.sessions.get(cookie.value()) {
-            if let Some(internal) = state.accounts.get(&session.account_id) {
+            let accounts_map = state.accounts.read().await;
+            if let Some(internal) = accounts_map.get(&session.account_id) {
                 ctx.authenticated = true;
                 ctx.account_id = Some(session.account_id);
                 ctx.role = internal.role.clone();

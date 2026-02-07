@@ -288,13 +288,14 @@ pub async fn list_accounts(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let mut ids: Vec<_> = state.accounts.keys().collect();
+    let accounts_map = state.accounts.read().await;
+    let mut ids: Vec<_> = accounts_map.keys().collect();
     ids.sort();
 
     let accounts: Vec<AccountPublic> = ids
         .into_iter()
         .take(limit)
-        .filter_map(|id| state.accounts.get(id))
+        .filter_map(|id| accounts_map.get(id))
         .map(|internal| internal.public.clone())
         .collect();
 
@@ -305,7 +306,8 @@ pub async fn get_account(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<AccountPublic>, StatusCode> {
-    if let Some(internal) = state.accounts.get(&id) {
+    let accounts_map = state.accounts.read().await;
+    if let Some(internal) = accounts_map.get(&id) {
         Ok(Json(internal.public.clone()))
     } else {
         Err(StatusCode::NOT_FOUND)

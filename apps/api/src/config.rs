@@ -37,6 +37,14 @@ pub struct AppConfig {
     pub app_base_url: Option<String>,
     #[serde(default)]
     pub auth_trusted_proxies: Option<String>,
+
+    // Entry Policy Configuration
+    #[serde(default)]
+    pub auth_allow_emails: Option<Vec<String>>,
+    #[serde(default)]
+    pub auth_allow_email_domains: Option<Vec<String>>,
+    #[serde(default)]
+    pub auth_auto_provision: bool,
 }
 
 impl AppConfig {
@@ -107,6 +115,26 @@ impl AppConfig {
             }
         }
 
+        // Entry Policy Overrides
+        if let Ok(val) = env::var("AUTH_ALLOW_EMAILS") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_allow_emails =
+                    Some(val.split(',').map(|s| s.trim().to_string()).collect());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_ALLOW_EMAIL_DOMAINS") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_allow_email_domains =
+                    Some(val.split(',').map(|s| s.trim().to_string()).collect());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_AUTO_PROVISION") {
+            let val = val.trim();
+            self.auth_auto_provision = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+
         self.validate()
     }
 
@@ -114,6 +142,24 @@ impl AppConfig {
         if self.auth_public_login && self.app_base_url.is_none() {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
         }
+
+        if self.auth_auto_provision {
+            let has_email_allowlist = self
+                .auth_allow_emails
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+            let has_domain_allowlist = self
+                .auth_allow_email_domains
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+
+            if !has_email_allowlist && !has_domain_allowlist {
+                anyhow::bail!("AUTH_AUTO_PROVISION is enabled but no allowlist is configured. Set AUTH_ALLOW_EMAILS or AUTH_ALLOW_EMAIL_DOMAINS to prevent open registration spam.");
+            }
+        }
+
         Ok(self)
     }
 }
@@ -264,11 +310,71 @@ delegation_expire_days: 28
         let _public = EnvGuard::unset("AUTH_PUBLIC_LOGIN");
         let _url = EnvGuard::unset("APP_BASE_URL");
         let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _auto = EnvGuard::unset("AUTH_AUTO_PROVISION");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(!cfg.auth_public_login);
         assert!(cfg.app_base_url.is_none());
         assert!(cfg.auth_trusted_proxies.is_none());
+        assert!(cfg.auth_allow_emails.is_none());
+        assert!(cfg.auth_allow_email_domains.is_none());
+        assert!(!cfg.auth_auto_provision);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_auto_provision_enabled_without_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("AUTH_AUTO_PROVISION is enabled but no allowlist is configured"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_auto_provision_and_email_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "test@example.com, foo@bar.com");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert_eq!(cfg.auth_allow_emails.unwrap().len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_auto_provision_and_domain_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::set("AUTH_ALLOW_EMAIL_DOMAINS", "example.com");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert_eq!(cfg.auth_allow_email_domains.unwrap().len(), 1);
 
         Ok(())
     }

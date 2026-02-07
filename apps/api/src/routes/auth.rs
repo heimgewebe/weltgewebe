@@ -17,6 +17,7 @@ use uuid::Uuid;
 use crate::{
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
+    routes::accounts::{AccountInternal, AccountPublic, Visibility},
     state::ApiState,
 };
 
@@ -251,8 +252,8 @@ pub async fn list_dev_accounts(
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     check_dev_login_guard(&headers, addr)?;
 
-    let mut accounts: Vec<DevAccount> = state
-        .accounts
+    let accounts_map = state.accounts.read().await;
+    let mut accounts: Vec<DevAccount> = accounts_map
         .values()
         .map(|acc| DevAccount {
             id: acc.public.id.clone(),
@@ -289,9 +290,12 @@ pub async fn dev_login(
         return (jar, status).into_response();
     }
 
-    if !state.accounts.contains_key(&payload.account_id) {
-        tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
-        return (jar, StatusCode::BAD_REQUEST).into_response();
+    {
+        let accounts_map = state.accounts.read().await;
+        if !accounts_map.contains_key(&payload.account_id) {
+            tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
+            return (jar, StatusCode::BAD_REQUEST).into_response();
+        }
     }
 
     let session = state.sessions.create(payload.account_id);
@@ -334,14 +338,108 @@ pub async fn request_login(
     );
 
     // 2. Lookup account by email
-    let account = state.accounts.values().find(|acc| {
-        acc.email
-            .as_ref()
-            .map(|e| e.eq_ignore_ascii_case(&payload.email))
-            .unwrap_or(false)
-    });
+    // We check existence first with a read lock.
+    // If found, we proceed.
+    // If not found, we check policy and potentially acquire a write lock to provision.
+    let existing_account_id = {
+        let accounts_map = state.accounts.read().await;
+        accounts_map
+            .values()
+            .find(|acc| {
+                acc.email
+                    .as_ref()
+                    .map(|e| e.eq_ignore_ascii_case(&payload.email))
+                    .unwrap_or(false)
+            })
+            .map(|acc| acc.public.id.clone())
+    };
 
-    if let Some(acc) = account {
+    let account_id = if let Some(id) = existing_account_id {
+        Some(id)
+    } else {
+        // Account not found. Check Entry Policy.
+        let mut allowed = false;
+
+        // Auto-provisioning Check
+        if state.config.auth_auto_provision {
+            // Check Allowlist: Emails
+            if let Some(emails) = &state.config.auth_allow_emails {
+                if emails
+                    .iter()
+                    .any(|e| e.eq_ignore_ascii_case(&payload.email))
+                {
+                    allowed = true;
+                }
+            }
+
+            // Check Allowlist: Domains (only if not already allowed)
+            if !allowed {
+                if let Some(domains) = &state.config.auth_allow_email_domains {
+                    let domain = payload.email.split('@').nth(1).unwrap_or("");
+                    if domains.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
+                        allowed = true;
+                    }
+                }
+            }
+        }
+
+        if allowed {
+            // Provision new account
+            let new_id = Uuid::new_v4().to_string();
+            let new_account = AccountInternal {
+                public: AccountPublic {
+                    id: new_id.clone(),
+                    kind: "garnrolle".to_string(), // Default type
+                    title: payload
+                        .email
+                        .split('@')
+                        .next()
+                        .unwrap_or("User")
+                        .to_string(),
+                    summary: None,
+                    public_pos: None,
+                    visibility: Visibility::Private, // Safe default
+                    radius_m: 0,
+                    ron_flag: false,
+                    tags: vec![],
+                },
+                role: Role::Gast,
+                email: Some(payload.email.clone()),
+            };
+
+            {
+                let mut accounts_map = state.accounts.write().await;
+                // Double-checked locking to avoid race condition
+                let collision_id = accounts_map
+                    .values()
+                    .find(|acc| {
+                        acc.email
+                            .as_ref()
+                            .map(|e| e.eq_ignore_ascii_case(&payload.email))
+                            .unwrap_or(false)
+                    })
+                    .map(|acc| acc.public.id.clone());
+
+                if let Some(id) = collision_id {
+                    // Another request provisioned it in the meantime
+                    Some(id)
+                } else {
+                    accounts_map.insert(new_id.clone(), new_account);
+                    tracing::info!(
+                        event = "login.provisioned",
+                        account_id = %new_id,
+                        email_hash = %email_hash,
+                        "Auto-provisioned new account"
+                    );
+                    Some(new_id)
+                }
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(id) = account_id {
         // 3. Generate Token
         let token = state.tokens.create(payload.email.clone());
 
@@ -357,7 +455,7 @@ pub async fn request_login(
         tracing::info!(
             target: "email_outbox",
             email = %payload.email,
-            account_id = %acc.public.id,
+            account_id = %id,
             %link,
             "Magic Link Generated"
         );
@@ -365,7 +463,7 @@ pub async fn request_login(
         tracing::info!(
             event = "login.requested_unknown",
             email_hash = %email_hash,
-            "Login requested for unknown email"
+            "Login requested for unknown email (policy denied)"
         );
     }
 
@@ -500,7 +598,8 @@ pub async fn consume_login_post(
     // 2. Consume Token
     if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
-        let account = state.accounts.values().find(|acc| {
+        let accounts_map = state.accounts.read().await;
+        let account = accounts_map.values().find(|acc| {
             acc.email
                 .as_ref()
                 .map(|e| e.eq_ignore_ascii_case(&email))
