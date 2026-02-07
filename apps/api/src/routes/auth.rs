@@ -324,9 +324,12 @@ pub async fn request_login(
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
+    // Normalize email: trim and lowercase
+    let email_norm = payload.email.trim().to_ascii_lowercase();
+
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
-    hasher.update(payload.email.as_bytes());
+    hasher.update(email_norm.as_bytes());
     let email_hash_full = format!("{:x}", hasher.finalize());
     // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
     let email_hash = &email_hash_full[..16];
@@ -348,7 +351,7 @@ pub async fn request_login(
             .find(|acc| {
                 acc.email
                     .as_ref()
-                    .map(|e| e.eq_ignore_ascii_case(&payload.email))
+                    .map(|e| e == &email_norm)
                     .unwrap_or(false)
             })
             .map(|acc| acc.public.id.clone())
@@ -364,10 +367,8 @@ pub async fn request_login(
         if state.config.auth_auto_provision {
             // Check Allowlist: Emails
             if let Some(emails) = &state.config.auth_allow_emails {
-                if emails
-                    .iter()
-                    .any(|e| e.eq_ignore_ascii_case(&payload.email))
-                {
+                // Config is already normalized (lowercase)
+                if emails.iter().any(|e| e == &email_norm) {
                     allowed = true;
                 }
             }
@@ -375,9 +376,24 @@ pub async fn request_login(
             // Check Allowlist: Domains (only if not already allowed)
             if !allowed {
                 if let Some(domains) = &state.config.auth_allow_email_domains {
-                    let domain = payload.email.split('@').nth(1).unwrap_or("");
-                    if domains.iter().any(|d| d.eq_ignore_ascii_case(domain)) {
-                        allowed = true;
+                    // Robust domain extraction: split_once ensures we get everything after the first @
+                    // However, we want strict domain check.
+                    // If multiple @ exist, it's ambiguous. But standard says last part is domain.
+                    // Let's use split_once from the right or standard split.
+                    // But here, let's stick to a safe heuristic: split_once('@') gives (local, domain).
+                    // If domain contains another @, it might be weird but we check against allowlist.
+                    // Actually, `split_once` splits at the *first* occurrence.
+                    // `rsplit_once` splits at the *last*.
+                    // Standard email: local-part@domain. Domain can't contain @ (unless quoted local part, but we split once).
+                    // If we assume simple emails:
+                    // `user@domain.com` -> (user, domain.com)
+                    // `attacker@allowed.com@evil.com` -> (attacker, allowed.com@evil.com) -> won't match "allowed.com"
+                    // So `split_once` is safer than `nth(1)` which might pick `allowed.com` from `user@allowed.com@evil.com` if split creates 3 parts.
+                    if let Some((_, domain)) = email_norm.split_once('@') {
+                        // Config domains are already lowercase
+                        if domains.iter().any(|d| d == domain) {
+                            allowed = true;
+                        }
                     }
                 }
             }
@@ -390,12 +406,7 @@ pub async fn request_login(
                 public: AccountPublic {
                     id: new_id.clone(),
                     kind: "garnrolle".to_string(), // Default type
-                    title: payload
-                        .email
-                        .split('@')
-                        .next()
-                        .unwrap_or("User")
-                        .to_string(),
+                    title: email_norm.split('@').next().unwrap_or("User").to_string(),
                     summary: None,
                     public_pos: None,
                     visibility: Visibility::Private, // Safe default
@@ -404,7 +415,7 @@ pub async fn request_login(
                     tags: vec![],
                 },
                 role: Role::Gast,
-                email: Some(payload.email.clone()),
+                email: Some(email_norm.clone()),
             };
 
             {
@@ -415,7 +426,7 @@ pub async fn request_login(
                     .find(|acc| {
                         acc.email
                             .as_ref()
-                            .map(|e| e.eq_ignore_ascii_case(&payload.email))
+                            .map(|e| e == &email_norm)
                             .unwrap_or(false)
                     })
                     .map(|acc| acc.public.id.clone());
@@ -441,7 +452,8 @@ pub async fn request_login(
 
     if let Some(id) = account_id {
         // 3. Generate Token
-        let token = state.tokens.create(payload.email.clone());
+        // Use normalized email for token creation too
+        let token = state.tokens.create(email_norm.clone());
 
         // 4. "Send" Email (Log for now)
         // Ensure the base URL does not have a trailing slash for clean formatting
@@ -454,7 +466,7 @@ pub async fn request_login(
 
         tracing::info!(
             target: "email_outbox",
-            email = %payload.email,
+            email = %email_norm,
             account_id = %id,
             %link,
             "Magic Link Generated"
@@ -463,7 +475,8 @@ pub async fn request_login(
         tracing::info!(
             event = "login.requested_unknown",
             email_hash = %email_hash,
-            "Login requested for unknown email (policy denied)"
+            reason = "policy_denied",
+            "Login requested for unknown email"
         );
     }
 

@@ -830,3 +830,80 @@ async fn request_login_provisioning_enabled_domain_allowlist() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_domain_allowlist_rejects_multi_at_attack() -> Result<()> {
+    // Attack vector: attacker@allowed.com@evil.com
+    // Should NOT match "allowed.com"
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    state.config.auth_allow_email_domains = Some(vec!["allowed.com".to_string()]);
+
+    let app = app(state.clone());
+
+    let email = "attacker@allowed.com@evil.com";
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account NOT created
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .any(|acc| acc.email.as_deref() == Some(email));
+        assert!(
+            !found,
+            "Account should not be created for multi-@ attack email"
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn request_login_provisioning_email_normalization_works() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    // Config uses lowercase
+    state.config.auth_allow_emails = Some(vec!["allowed@example.com".to_string()]);
+
+    let app = app(state.clone());
+
+    // Input has whitespace and mixed case
+    let input_email = "  Allowed@EXAMPLE.com  ";
+    let normalized_email = "allowed@example.com";
+
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"email":"{}"}}"#,
+            input_email
+        )))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Verify account created with normalized email
+    {
+        let accounts = state.accounts.read().await;
+        let found = accounts
+            .values()
+            .find(|acc| acc.email.as_deref() == Some(normalized_email));
+        assert!(
+            found.is_some(),
+            "Account should be created with normalized email"
+        );
+    }
+
+    Ok(())
+}

@@ -117,17 +117,23 @@ impl AppConfig {
 
         // Entry Policy Overrides
         if let Ok(val) = env::var("AUTH_ALLOW_EMAILS") {
-            let val = val.trim();
-            if !val.is_empty() {
-                self.auth_allow_emails =
-                    Some(val.split(',').map(|s| s.trim().to_string()).collect());
+            let entries: Vec<String> = val
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !entries.is_empty() {
+                self.auth_allow_emails = Some(entries);
             }
         }
         if let Ok(val) = env::var("AUTH_ALLOW_EMAIL_DOMAINS") {
-            let val = val.trim();
-            if !val.is_empty() {
-                self.auth_allow_email_domains =
-                    Some(val.split(',').map(|s| s.trim().to_string()).collect());
+            let entries: Vec<String> = val
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !entries.is_empty() {
+                self.auth_allow_email_domains = Some(entries);
             }
         }
         if let Ok(val) = env::var("AUTH_AUTO_PROVISION") {
