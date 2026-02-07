@@ -181,12 +181,13 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
    > contain the CDN's IP, not the user's. This causes **all users** to share the same rate limit bucket.
 
    **Mitigation:**
-   - **Caddy:** If running behind a CDN/LB, you **must** configure `trusted_proxies` in `infra/caddy/Caddyfile.prod`
-     (global options) so Caddy resolves `{remote_host}` to the client IP for rate limiting.
+   - **Caddy:** If running behind a CDN/LB, you **must** configure `trusted_proxies` in the **global options block** at
+     the top of `infra/caddy/Caddyfile.prod` so Caddy resolves `{remote_host}` to the client IP for rate limiting.
 
      ```caddy
      {
-       # Example ONLY – required if running behind CDN/LB
+       # Example ONLY – do not add unless behind CDN/LB
+       # Replace <CDN_OR_LB_CIDRS> with actual CIDRs (e.g. 10.0.0.0/8)
        servers {
          trusted_proxies static <CDN_OR_LB_CIDRS>
        }
