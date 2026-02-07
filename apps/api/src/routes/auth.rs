@@ -501,11 +501,18 @@ pub async fn request_login(
                     );
                 }
             }
-        } else {
+        } else if !state.config.auth_log_magic_token {
+            // Only warn if dev logging is OFF (otherwise mailer=None is expected)
             tracing::warn!(
                 event = "login.mailer_missing",
                 account_id = %id,
                 "Mailer not configured; cannot send Magic Link"
+            );
+        } else {
+            tracing::debug!(
+                event = "login.mailer_missing_dev",
+                account_id = %id,
+                "Mailer not configured (dev log mode)"
             );
         }
 
@@ -517,13 +524,6 @@ pub async fn request_login(
                 account_id = %id,
                 %link,
                 "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
-            );
-        } else if !sent && state.mailer.is_none() {
-            // Should be unreachable due to check above, but safe fallback
-            tracing::warn!(
-                event = "login.delivery_failed_silent",
-                account_id = %id,
-                "Mailer missing and logging disabled; token generated but lost"
             );
         }
     } else {
