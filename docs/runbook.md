@@ -163,6 +163,48 @@ To protect the authentication endpoints from abuse, rate limiting is configured 
 > client IP, especially if behind a CDN like Cloudflare. Otherwise, you risk
 > rate-limiting the CDN itself.
 
+#### Check Client IP Visibility
+
+Before enforcing strict limits, verify that Caddy sees the correct client IP:
+
+1. **Check Access Logs:** Inspect Caddy's logs to confirm the remote IP matches the client, not the load balancer.
+
+   ```bash
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
+   # Optional: If you have jq installed, filter for IPs
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy | \
+     jq -r '.. | objects | select(.request) | (.request.remote_ip // .request.remote_addr)'
+   ```
+
+2. **Verify Proxy Visibility:**
+   > **Critical Warning:** If Caddy is behind a CDN (e.g., Cloudflare) or Load Balancer, `{remote_host}` will likely
+   > contain the CDN's IP, not the user's. This causes **all users** to share the same rate limit bucket.
+
+   **Mitigation:**
+   - **Caddy:** If running behind a CDN/LB, you **must** configure `trusted_proxies` in the **global options block** at
+     the top of `infra/caddy/Caddyfile.prod` so Caddy resolves `{remote_host}` to the client IP for rate limiting.
+
+     ```caddy
+     {
+       # Example ONLY – do not add unless behind CDN/LB
+       # Replace <CDN_OR_LB_CIDRS> with actual CIDRs (e.g. 10.0.0.0/8)
+       # Note: Merge into existing global options block if present (do not create a second one).
+       servers {
+         trusted_proxies static <CDN_OR_LB_CIDRS>
+       }
+     }
+     ```
+
+   - **App:** Separately, check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (audit logs).
+   - **Do not blindly trust headers** if Caddy is directly exposed to the internet alongside the CDN.
+
+3. **Practical Test (Device Isolation):**
+   - **Step A:** Connect Device A (e.g., WiFi) and trigger 10 requests -> Expect `429 Too Many Requests`.
+   - **Step B:** Connect Device B (e.g., Mobile Data) and trigger 1 request -> Expect `200 OK`.
+   - **Result:**
+     - If Device B gets `200 OK`: Rate limiting is correctly keyed by Client IP.
+     - If Device B gets `429`: Caddy sees the upstream Proxy IP. **Action required:** Fix `trusted_proxies`.
+
 #### Request Endpoint (`login_limit`)
 
 - **Rate:** 5 requests per minute (per IP)
@@ -196,6 +238,9 @@ rate_limit {
 To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
 with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
 the `429` status code.
+
+> **Note:** The verification loop must send a valid JSON body. A `400 Bad Request` or `422 Unprocessable Entity`
+> response indicates an invalid payload, not a failure of the rate limit.
 
 ```bash
 # Expect 5x 200, then 429
