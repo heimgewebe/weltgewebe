@@ -70,35 +70,36 @@ impl Mailer {
 mod tests {
     use super::*;
     use crate::config::AppConfig;
-    use crate::test_helpers::EnvGuard;
     use serial_test::serial;
-    use tempfile::NamedTempFile;
-
-    const YAML: &str = r#"fade_days: 7
-ron_days: 84
-anonymize_opt_in: true
-delegation_expire_days: 28
-"#;
 
     #[test]
     #[serial]
     fn mailer_fails_with_invalid_from_address() {
-        let file = NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), YAML).unwrap();
-
-        // Valid SMTP host/port to pass builder construction until From parsing
-        let _host = EnvGuard::set("SMTP_HOST", "127.0.0.1");
-        let _port = EnvGuard::set("SMTP_PORT", "1025");
-        let _user = EnvGuard::set("SMTP_USER", "user");
-        let _pass = EnvGuard::set("SMTP_PASS", "pass");
-
-        // Invalid From Address
-        let _from = EnvGuard::set("SMTP_FROM", "not-an-email");
-
-        let config = AppConfig::load_from_path(file.path()).unwrap();
+        // Construct AppConfig manually to avoid dependency on config validation logic
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: Some("127.0.0.1".to_string()),
+            smtp_port: Some(1025),
+            smtp_user: Some("user".to_string()),
+            smtp_pass: Some("pass".to_string()),
+            smtp_from: Some("not-an-email".to_string()),
+            auth_log_magic_token: false,
+        };
 
         // This should fail because "not-an-email" cannot be parsed into a Mailbox
-        // The Mailer::new implementation parses `from` immediately.
         let res = Mailer::new(&config);
         assert!(res.is_err());
         assert!(res
