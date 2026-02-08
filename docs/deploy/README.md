@@ -213,10 +213,12 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
    Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
 
 2. **Loopback Binding:**
-   Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN zu verhindern.
+   Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN
+   zu verhindern.
 
 3. **Shared Network (Upstreams):**
-   Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden, nicht über Host-Ports.
+   Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden,
+   nicht über Host-Ports.
 
 ### Einrichtung
 
