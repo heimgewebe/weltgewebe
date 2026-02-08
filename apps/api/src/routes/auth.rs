@@ -25,6 +25,14 @@ pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
 
+fn get_request_id(headers: &HeaderMap) -> String {
+    headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string()
+}
+
 fn build_session_cookie(value: String, max_age: Option<Duration>) -> Cookie<'static> {
     // Default to secure, but allow override via env for local dev (http)
     let secure_cookies = std::env::var("AUTH_COOKIE_SECURE")
@@ -311,6 +319,10 @@ pub async fn request_login(
     headers: HeaderMap,
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+    let client_ip = effective_client_ip(addr, &headers);
+    let proxy_trusted = is_trusted_peer(addr.ip());
+
     if !state.config.auth_public_login {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -322,7 +334,7 @@ pub async fn request_login(
 
     // 1. Validate email format (simple check)
     if !payload.email.contains('@') {
-        tracing::warn!("Invalid email format in login request");
+        tracing::warn!(%request_id, %client_ip, "Invalid email format in login request");
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
@@ -337,14 +349,26 @@ pub async fn request_login(
     let email_hash = &email_hash_full[..16];
 
     // 1b. Rate Limiting (IP + Email)
-    let client_ip = effective_client_ip(addr, &headers);
     if let Err(e) = state.rate_limiter.check(client_ip, email_hash) {
-        tracing::warn!(%client_ip, email_hash = %email_hash, error = %e, "Login request rate limited");
+        tracing::warn!(
+            event = "login.rate_limited",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %addr.ip(),
+            proxy_trusted = proxy_trusted,
+            email_hash = %email_hash,
+            error = %e,
+            "Login request rate limited"
+        );
         return StatusCode::TOO_MANY_REQUESTS.into_response();
     }
 
     tracing::info!(
         event = "login.requested",
+        request_id = %request_id,
+        client_ip = %client_ip,
+        remote_ip = %addr.ip(),
+        proxy_trusted = proxy_trusted,
         email_hash = %email_hash,
         "Login requested"
     );
@@ -370,6 +394,10 @@ pub async fn request_login(
         if disabled {
             tracing::info!(
                 event = "login.denied_disabled",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 email_hash = %email_hash,
                 account_id = %id,
                 "Login requested for disabled account"
@@ -449,6 +477,10 @@ pub async fn request_login(
                     accounts_map.insert(new_id.clone(), new_account);
                     tracing::info!(
                         event = "login.provisioned",
+                        request_id = %request_id,
+                        client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %new_id,
                         email_hash = %email_hash,
                         "Auto-provisioned new account"
@@ -469,6 +501,10 @@ pub async fn request_login(
         if !can_deliver && !can_log {
             tracing::error!(
                 event = "login.delivery_unavailable",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 email_hash = %email_hash,
                 account_id = %id,
                 "Public login enabled but no delivery path configured"
@@ -494,6 +530,10 @@ pub async fn request_login(
                 Ok(_) => {
                     tracing::info!(
                         event = "login.sent",
+                        request_id = %request_id,
+                        client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %id,
                         email_hash = %email_hash,
                         "Magic Link sent via email"
@@ -502,6 +542,10 @@ pub async fn request_login(
                 Err(e) => {
                     tracing::error!(
                         event = "login.send_failed",
+                        request_id = %request_id,
+                        client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %id,
                         email_hash = %email_hash,
                         error = %e,
@@ -513,12 +557,20 @@ pub async fn request_login(
             // Only warn if dev logging is OFF (otherwise mailer=None is expected)
             tracing::warn!(
                 event = "login.mailer_missing",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %id,
                 "Mailer not configured; cannot send Magic Link"
             );
         } else {
             tracing::debug!(
                 event = "login.mailer_missing_dev",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %id,
                 "Mailer not configured (dev log mode)"
             );
@@ -537,6 +589,10 @@ pub async fn request_login(
     } else {
         tracing::info!(
             event = "login.requested_unknown",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %addr.ip(),
+            proxy_trusted = proxy_trusted,
             email_hash = %email_hash,
             reason = "policy_denied",
             auto_provision_enabled = state.config.auth_auto_provision,
@@ -647,9 +703,15 @@ pub async fn consume_login_get(
 
 pub async fn consume_login_post(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     jar: CookieJar,
     Form(form): Form<ConsumeTokenForm>,
 ) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+    let client_ip = effective_client_ip(addr, &headers);
+    let proxy_trusted = is_trusted_peer(addr.ip());
+
     // 1. Check Nonce (and binding)
     // Cookie value format: "token_hash.nonce"
     let nonce_valid = jar
@@ -668,7 +730,15 @@ pub async fn consume_login_post(
         .unwrap_or(false);
 
     if !nonce_valid {
-        tracing::warn!("Login failed: Invalid or missing nonce");
+        tracing::warn!(
+            event = "login.failed",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %addr.ip(),
+            proxy_trusted = proxy_trusted,
+            reason = "invalid_nonce",
+            "Login failed: Invalid or missing nonce"
+        );
         return Redirect::to("/login?error=invalid_token").into_response();
     }
 
@@ -687,6 +757,10 @@ pub async fn consume_login_post(
             if acc.public.disabled {
                 tracing::warn!(
                     event = "login.failed_disabled",
+                    request_id = %request_id,
+                    client_ip = %client_ip,
+                    remote_ip = %addr.ip(),
+                    proxy_trusted = proxy_trusted,
                     account_id = %acc.public.id,
                     "Login consume failed: Account disabled"
                 );
@@ -713,6 +787,10 @@ pub async fn consume_login_post(
 
             tracing::info!(
                 event = "login.consumed",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %acc.public.id,
                 "Login successful"
             );
@@ -723,6 +801,10 @@ pub async fn consume_login_post(
 
     tracing::warn!(
         event = "login.failed",
+        request_id = %request_id,
+        client_ip = %client_ip,
+        remote_ip = %addr.ip(),
+        proxy_trusted = proxy_trusted,
         reason = "invalid_token",
         "Login failed"
     );

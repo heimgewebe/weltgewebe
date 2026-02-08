@@ -23,6 +23,8 @@ use sqlx::postgres::PgPoolOptions;
 use state::ApiState;
 use telemetry::{metrics_handler, BuildInfo, Metrics, MetricsLayer};
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::request_id::{MakeRequestUuid, SetRequestIdLayer};
 use tracing_subscriber::{fmt, EnvFilter};
 
 pub async fn run() -> anyhow::Result<()> {
@@ -108,7 +110,11 @@ pub async fn run() -> anyhow::Result<()> {
         .merge(meta_routes())
         .route("/metrics", get(metrics_handler))
         .with_state(state)
-        .layer(MetricsLayer::new(metrics));
+        .layer(
+            ServiceBuilder::new()
+                .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+                .layer(MetricsLayer::new(metrics)),
+        );
 
     let bind_addr: SocketAddr = env::var("API_BIND")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
