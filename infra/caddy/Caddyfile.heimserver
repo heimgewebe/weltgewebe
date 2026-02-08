@@ -1,0 +1,4 @@
+leitstand.lan {
+	reverse_proxy leitstand:3000
+	tls internal
+}

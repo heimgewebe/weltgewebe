@@ -90,7 +90,5 @@ weltgewebe.net {
 	}
 }
 
-leitstand.lan {
-	reverse_proxy leitstand:3000
-	tls internal
-}
+# Optional: Import heimserver specific configuration (e.g. internal upstreams)
+import /etc/caddy/heimserver/*.caddy

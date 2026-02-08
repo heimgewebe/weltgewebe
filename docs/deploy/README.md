@@ -251,8 +251,12 @@ ss -lntp | grep -E ":(80|443)"
 # Erwartet: 127.0.0.1:80, 127.0.0.1:443
 ```
 
-Prüfe den Upstream-Zugriff (vom Host aus, falls DNS konfiguriert, oder via curl-Resolve):
+Prüfe den Upstream-Zugriff (ohne DNS, via curl-Resolve):
 
 ```bash
-curl -k https://leitstand.lan/
+# Wenn CADDY_BIND=127.0.0.1 (Default Heimserver):
+curl -k --resolve leitstand.lan:443:127.0.0.1 https://leitstand.lan/
+
+# Hinweis: Falls CADDY_BIND auf eine andere IP (z.B. 192.168.x.x) gesetzt ist,
+# muss 127.0.0.1 im Befehl entsprechend ersetzt werden.
 ```
