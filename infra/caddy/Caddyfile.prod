@@ -2,6 +2,16 @@
 	order rate_limit before basicauth
 }
 
+:80 {
+	# Fix edge health check reachability (curl http://localhost/health/ready)
+	handle /health/ready {
+		reverse_proxy api:8080
+	}
+	handle {
+		respond 404
+	}
+}
+
 weltgewebe.net {
 	log {
 		output stdout
