@@ -254,7 +254,12 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
 
     // Should fail and redirect to login error
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
-    let location = res_post.headers().get("location").unwrap().to_str().unwrap();
+    let location = res_post
+        .headers()
+        .get("location")
+        .unwrap()
+        .to_str()
+        .unwrap();
     assert_eq!(location, "/login?error=account_disabled");
 
     Ok(())
