@@ -4,7 +4,7 @@ set -euo pipefail
 # -----------------------------
 # Configuration (sane defaults)
 # -----------------------------
-# (Note: Infra updates (Edge/Public Login/Trusted Proxy/Drift Fix) require Caddy build; ensure snapshot captures this context)
+# (Note: Infra updates (Edge/Public Login/Trusted Proxy/Drift Fix) require the pinned Caddy build (see infra/caddy/Dockerfile) and a strict upstream env; ensure snapshot captures this context)
 SNAPSHOT_MODE="${SNAPSHOT_MODE:-dry}"          # dry | live
 COMPOSE_FILE="${COMPOSE_FILE:-infra/compose/compose.prod.yml}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-compose}"
