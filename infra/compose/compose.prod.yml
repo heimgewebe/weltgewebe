@@ -61,8 +61,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     environment:
-      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL}
-      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST}
+      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set (e.g. https://<upstream>)}
+      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set (e.g. weltgewebe.net)}
     depends_on:
       api:
         condition: service_healthy
