@@ -557,12 +557,20 @@ pub async fn request_login(
             // Only warn if dev logging is OFF (otherwise mailer=None is expected)
             tracing::warn!(
                 event = "login.mailer_missing",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %id,
                 "Mailer not configured; cannot send Magic Link"
             );
         } else {
             tracing::debug!(
                 event = "login.mailer_missing_dev",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %id,
                 "Mailer not configured (dev log mode)"
             );
