@@ -15,6 +15,7 @@ use weltgewebe_api::{
     routes::api_router,
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
+    test_helpers::EnvGuard,
 };
 
 fn test_state(config: AppConfig) -> Result<ApiState> {
@@ -75,29 +76,17 @@ fn default_config() -> AppConfig {
     }
 }
 
-struct DeferEnvRemove(&'static str);
-impl Drop for DeferEnvRemove {
-    fn drop(&mut self) {
-        unsafe {
-            std::env::remove_var(self.0);
-        }
-    }
-}
-fn defer_env_remove(key: &'static str) -> DeferEnvRemove {
-    DeferEnvRemove(key)
-}
-
 #[tokio::test]
 #[serial]
 async fn rate_limit_respects_forwarded_header_when_trusted() -> Result<()> {
-    // 1. Setup: Trust localhost (127.0.0.1) as proxy
-    unsafe {
-        std::env::set_var("AUTH_TRUSTED_PROXIES", "127.0.0.1");
-    }
-    let _defer = defer_env_remove("AUTH_TRUSTED_PROXIES");
+    // 1. Setup: Trust localhost (127.0.0.1) as proxy via EnvGuard
+    // The application logic reads this from env, so we must set it there.
+    let _guard = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
     let mut config = default_config();
-    config.auth_trusted_proxies = Some("127.0.0.1".to_string());
+    // We do NOT set this manually in config, relying on the fact that
+    // effective_client_ip reads the environment variable (or config parser does).
+    // Assuming logic uses the static/OnceLock that reads ENV.
     config.auth_rl_ip_per_min = Some(2);
 
     let state = test_state(config)?;

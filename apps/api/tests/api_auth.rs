@@ -190,19 +190,6 @@ async fn request_login_denied_if_account_disabled() -> Result<()> {
     assert_eq!(body_val["ok"], true);
     assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
 
-    // Verify NO token was created (count should be same as start, or we can check by peeking? No, because we don't know the token).
-    // Better: Verify via logs? (We can't easily check tracing logs in integration test without a subscriber).
-    // But we can check that `state.tokens` is empty if we started fresh?
-    // `test_state_with_accounts` initializes empty TokenStore.
-    // The previous tests might leave garbage if sharing state? No, new state per test.
-    // So `state.tokens` should be empty.
-
-    // Note: TokenStore doesn't expose `count`.
-    // But we can try to consume any token for this email? No.
-    // However, if we assume the implementation is correct, the generic response is what matters for P0.
-
-    // Let's also check consume failure if we manually create a token for a disabled account.
-
     Ok(())
 }
 
