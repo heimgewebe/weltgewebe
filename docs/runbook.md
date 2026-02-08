@@ -187,22 +187,18 @@ gateway or Caddy's container IP. You must trust the entire Docker subnet. Only d
 container is the direct upstream of the app container in the same Docker network; otherwise trust only the real
 proxy IPs.
 
-1. **Find the Network Name:**
+1. **Find the Network Subnet:**
+
+   Run this command to inspect the default bridge network (usually `infra_default`) and extract the Subnet:
 
    ```bash
-   docker network ls
-   # Look for the network used by your stack, e.g., 'infra_default' or similar.
+   # Replace 'infra_default' if your network is named differently
+   docker network inspect infra_default --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+   # Output example: 172.18.0.0/16
    ```
 
-2. **Inspect the Network to find the Subnet:**
-
-   ```bash
-   docker network inspect <network_name> | grep Subnet
-   # Output example: "Subnet": "172.18.0.0/16"
-   ```
-
-3. **Configure `.env`:**
-   Add this CIDR to `AUTH_TRUSTED_PROXIES`.
+2. **Configure `.env`:**
+   Add this CIDR to `AUTH_TRUSTED_PROXIES` alongside localhost.
 
    ```bash
    AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
@@ -235,17 +231,15 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
    > contain the CDN's IP, not the user's. This causes **all users** to share the same rate limit bucket.
 
    **Mitigation:**
-   - **Caddy:** If running behind a CDN/LB, you **must** configure `trusted_proxies` in the **global options block** at
-     the top of `infra/caddy/Caddyfile.prod` so Caddy resolves `{remote_host}` to the client IP for rate limiting.
+   - **Caddy:** If running behind a CDN/LB, you **must** configure `trusted_proxies` in `infra/caddy/Caddyfile.prod`.
+     Uncomment and adjust the global options block at the top of the file:
 
      ```caddy
      {
-       # Example ONLY – do not add unless behind CDN/LB
-       # Replace <CDN_OR_LB_CIDRS> with actual CIDRs (e.g. 10.0.0.0/8)
-       # Note: Merge into existing global options block if present (do not create a second one).
-       servers {
-         trusted_proxies static <CDN_OR_LB_CIDRS>
-       }
+         # Uncomment and add your LB/CDN CIDRs here:
+         # servers {
+         #     trusted_proxies static 10.0.0.0/8 172.16.0.0/12 ...
+         # }
      }
      ```
 

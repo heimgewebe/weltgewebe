@@ -1,19 +1,13 @@
 {
 	order rate_limit before basicauth
-}
 
-:80 {
-	# Health must be reachable without Host/TLS (local/CI checks use localhost:80)
-	@health {
-		path /health/ready
-		method GET HEAD
-	}
-	handle @health {
-		reverse_proxy api:8080
-	}
-	handle {
-		respond 404
-	}
+	# If running behind a Load Balancer or CDN (e.g. Cloudflare), you MUST configure trusted_proxies
+	# so that Caddy can resolve the actual client IP for rate limiting.
+	# Without this, {remote_host} will be the LB IP, causing rate limits to block everyone.
+	#
+	# servers {
+	# 	trusted_proxies static 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7
+	# }
 }
 
 weltgewebe.net {

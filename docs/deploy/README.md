@@ -140,7 +140,7 @@ Der Snapshot ist eine **maschinelle Zustandsaufnahme**.
 
 ```bash
 cd /opt/weltgewebe
-SNAPSHOT_MODE=live bash scripts/wgx-deploy-snapshot.sh
+SNAPSHOT_MODE=live bash scripts/deploy-snapshot.sh
 ```
 
 - erfasst zusätzlich:

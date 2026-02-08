@@ -87,6 +87,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
                 visibility: Visibility::Public,
                 radius_m: 0,
                 ron_flag: false,
+                disabled: false,
                 tags: vec![],
             },
             role: Role::Gast,
@@ -105,6 +106,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
                 visibility: Visibility::Public,
                 radius_m: 0,
                 ron_flag: false,
+                disabled: false,
                 tags: vec![],
             },
             role: Role::Admin,
@@ -159,6 +161,99 @@ async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn request_login_denied_if_account_disabled() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Disable the account
+    {
+        let mut accounts = state.accounts.write().await;
+        if let Some(acc) = accounts.get_mut("u1") {
+            acc.public.disabled = true;
+        }
+    }
+
+    let app = app(state.clone());
+
+    let req = Request::post("/auth/login/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    // Should return generic success
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn consume_login_fails_if_account_disabled() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Disable the account
+    {
+        let mut accounts = state.accounts.write().await;
+        if let Some(acc) = accounts.get_mut("u1") {
+            acc.public.disabled = true;
+        }
+    }
+
+    // Create a valid token manually
+    let token = state.tokens.create("u1@example.com".to_string());
+    let app = app(state);
+
+    // 1. GET (Confirm Page) - This might still work because it only validates token existence, not account status?
+    // `consume_login_get` only calls `state.tokens.peek`. It doesn't look up the account.
+    // So GET will show the form. This is acceptable (leaks nothing sensitive).
+
+    let nonce_val = {
+        // Helper to get nonce without full request flow
+        // Or just do the GET request
+        let uri = format!("/auth/login/consume?token={}", token);
+        let req_get = Request::get(&uri).body(body::Body::empty())?;
+        let res_get = app.clone().oneshot(req_get).await?;
+        assert_eq!(res_get.status(), StatusCode::OK);
+        extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME).context("missing nonce")?
+    };
+
+    // Extract nonce from cookie (hash.nonce)
+    let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
+    let nonce = nonce.to_string();
+
+    // 2. POST (Consume)
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res_post = app.oneshot(req_post).await?;
+
+    // Should fail and redirect to login error
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    let location = res_post
+        .headers()
+        .get("location")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(location, "/login?error=account_disabled");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     unsafe {
         std::env::set_var("AUTH_DEV_LOGIN", "1");
@@ -175,6 +270,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         visibility: Visibility::Public,
         radius_m: 0,
         ron_flag: false,
+        disabled: false,
         tags: vec![],
     };
     account_map.insert(

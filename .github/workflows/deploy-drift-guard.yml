@@ -43,7 +43,7 @@ jobs:
 
           # Check if mitigation files changed
           MITIGATION_CHANGED=$(echo "$CHANGED_FILES" | \
-            grep -E '^(scripts/wgx-deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
+            grep -E '^(scripts/deploy-snapshot\.sh|\.github/workflows/deploy-snapshot\.yml|docs/deploy/)' || true)
 
           if [ -z "$MITIGATION_CHANGED" ]; then
             echo "::error::Deployment drift risk: infra changed without updating deploy snapshot or docs."
@@ -51,7 +51,7 @@ jobs:
             echo "$INFRA_CHANGED"
             echo ""
             echo "Please update one of the following to acknowledge the change:"
-            echo "- scripts/wgx-deploy-snapshot.sh"
+            echo "- scripts/deploy-snapshot.sh"
             echo "- .github/workflows/deploy-snapshot.yml"
             echo "- docs/deploy/**"
             exit 1

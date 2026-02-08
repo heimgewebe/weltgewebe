@@ -60,6 +60,8 @@ pub struct AccountPublic {
     pub visibility: Visibility,
     pub radius_m: u32,
     pub ron_flag: bool,
+    #[serde(default, skip_serializing)]
+    pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 }
@@ -192,6 +194,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
     let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+    let disabled = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let tags = v
         .get("tags")
@@ -226,6 +229,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         visibility,
         radius_m,
         ron_flag,
+        disabled,
         tags,
     })
 }

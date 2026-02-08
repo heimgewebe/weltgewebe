@@ -197,6 +197,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         visibility: Visibility::Public,
         radius_m: 0,
         ron_flag: false,
+        disabled: false,
         tags: vec![],
     };
     account_map.insert(
@@ -382,6 +383,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         visibility: Visibility::Public,
         radius_m: 0,
         ron_flag: false,
+        disabled: false,
         tags: vec![],
     };
     account_map.insert(

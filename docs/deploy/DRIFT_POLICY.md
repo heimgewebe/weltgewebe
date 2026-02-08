@@ -50,7 +50,7 @@ Unsere Tools setzen diese Taxonomie wie folgt um:
 | :--- | :--- | :--- |
 | **CI (Dry)** | `deploy-snapshot.yml` | Prüft Schema-Validität und `compose` Config-Hashbarkeit. Markiert Warnings. |
 | **Repo** | `deploy-drift-guard.yml` | Verhindert, dass Infra-Code (`infra/`) geändert wird, ohne dass Doku/Scripte mitziehen. |
-| **Live** | `wgx-deploy-snapshot.sh` | Erfasst den *Ist-Zustand* (Container, Ports, Volumes) für manuellen Abgleich. |
+| **Live** | `deploy-snapshot.sh` | Erfasst den *Ist-Zustand* (Container, Ports, Volumes) für manuellen Abgleich. |
 
 **Grundsatz:**
 > Drift ist kein technischer Fehler, sondern eine semantische Information.
