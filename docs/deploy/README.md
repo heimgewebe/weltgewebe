@@ -199,3 +199,64 @@ AUTH_TRUSTED_PROXIES=172.16.0.0/12,127.0.0.1
 - Wenn `AUTH_PUBLIC_LOGIN=1` gesetzt ist, **muss** `APP_BASE_URL` gesetzt sein.
   Andernfalls startet der API-Service nicht (Validierungsfehler beim Startup).
 - `APP_BASE_URL` wird verwendet, um korrekte Links in E-Mails/Logs zu generieren.
+
+---
+
+## 10. Heimserver-Policy
+
+Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem lokalen Netzwerk) gilt ein striktes **Gateway-Prinzip**.
+
+### Grundsätze
+
+1. **Gateway-Only Entry:**
+   Nur der Caddy-Container darf Ports auf dem Host veröffentlichen.
+   Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
+
+2. **Loopback Binding:**
+   Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN
+   zu verhindern.
+
+3. **Shared Network (Upstreams):**
+   Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden,
+   nicht über Host-Ports.
+
+### Einrichtung
+
+1. **Netzwerk erstellen:**
+
+   ```bash
+   docker network create heimnet
+   ```
+
+2. **Bind-Adresse setzen (Optional):**
+   Standardmäßig bindet Caddy jetzt sicher an `127.0.0.1`.
+   Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner `.env`-Datei, wenn du externen Zugriff benötigst.
+
+3. **Start mit Override:**
+   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden und die VHosts zu laden:
+
+   ```bash
+   docker compose \
+     -f infra/compose/compose.prod.yml \
+     -f infra/compose/compose.heimserver.override.yml \
+     up -d
+   ```
+
+### Verifikation
+
+Prüfe, ob nur lokale Ports offen sind:
+
+```bash
+ss -lntp | grep -E ":(80|443)"
+# Erwartet: 127.0.0.1:80, 127.0.0.1:443
+```
+
+Prüfe den Upstream-Zugriff (ohne DNS, via curl-Resolve):
+
+```bash
+# Wenn CADDY_BIND=127.0.0.1 (Default Heimserver):
+curl -k --resolve leitstand.lan:443:127.0.0.1 https://leitstand.lan/
+
+# Hinweis: Falls CADDY_BIND auf eine andere IP (z.B. 192.168.x.x) gesetzt ist,
+# muss 127.0.0.1 im Befehl entsprechend ersetzt werden.
+```

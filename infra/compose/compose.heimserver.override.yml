@@ -1,0 +1,12 @@
+---
+services:
+  caddy:
+    networks:
+      - default
+      - heimnet
+    volumes:
+      - ../caddy/Caddyfile.heimserver:/etc/caddy/heimserver/leitstand.caddy:ro
+
+networks:
+  heimnet:
+    external: true

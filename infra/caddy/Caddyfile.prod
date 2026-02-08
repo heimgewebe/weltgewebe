@@ -89,3 +89,6 @@ weltgewebe.net {
 		X-Content-Type-Options "nosniff"
 	}
 }
+
+# Optional: Import heimserver specific configuration (e.g. internal upstreams)
+import /etc/caddy/heimserver/*.caddy
