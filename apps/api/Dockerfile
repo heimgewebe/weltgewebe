@@ -16,6 +16,10 @@ RUN mkdir -p apps/api/src \
 # 2) Fetch dependencies (this caches the index and downloads)
 RUN cargo fetch --locked
 
+# Remove any stub targets so they can never affect the final build.
+# Real sources are brought in by the later `COPY . .`.
+RUN rm -f apps/api/src/lib.rs apps/api/src/main.rs || true
+
 # 3) Copy the rest of the workspace
 COPY . .
 
