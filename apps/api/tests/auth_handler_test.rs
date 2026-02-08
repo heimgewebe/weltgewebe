@@ -67,6 +67,7 @@ mod tests {
                     visibility: Visibility::Public,
                     radius_m: 0,
                     ron_flag: false,
+                    disabled: false,
                     tags: vec![],
                 },
                 role: Role::Gast,

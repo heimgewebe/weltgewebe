@@ -1,5 +1,13 @@
 {
 	order rate_limit before basicauth
+
+	# If running behind a Load Balancer or CDN (e.g. Cloudflare), you MUST configure trusted_proxies
+	# so that Caddy can resolve the actual client IP for rate limiting.
+	# Without this, {remote_host} will be the LB IP, causing rate limits to block everyone.
+	#
+	# servers {
+	# 	trusted_proxies static 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7
+	# }
 }
 
 weltgewebe.net {

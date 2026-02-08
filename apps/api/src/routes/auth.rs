@@ -353,7 +353,7 @@ pub async fn request_login(
     // We check existence first with a read lock.
     // If found, we proceed.
     // If not found, we check policy and potentially acquire a write lock to provision.
-    let existing_account_id = {
+    let existing_account_info = {
         let accounts_map = state.accounts.read().await;
         accounts_map
             .values()
@@ -363,10 +363,19 @@ pub async fn request_login(
                     .map(|e| e == &email_norm)
                     .unwrap_or(false)
             })
-            .map(|acc| acc.public.id.clone())
+            .map(|acc| (acc.public.id.clone(), acc.public.disabled))
     };
 
-    let account_id = if let Some(id) = existing_account_id {
+    let account_id = if let Some((id, disabled)) = existing_account_info {
+        if disabled {
+            tracing::info!(
+                event = "login.denied_disabled",
+                email_hash = %email_hash,
+                account_id = %id,
+                "Login requested for disabled account"
+            );
+            return (StatusCode::OK, Json(generic_response)).into_response();
+        }
         Some(id)
     } else {
         // Account not found. Check Entry Policy.
@@ -413,6 +422,7 @@ pub async fn request_login(
                     visibility: Visibility::Private, // Safe default
                     radius_m: 0,
                     ron_flag: false,
+                    disabled: false,
                     tags: vec![],
                 },
                 role: Role::Gast,
@@ -674,6 +684,15 @@ pub async fn consume_login_post(
         });
 
         if let Some(acc) = account {
+            if acc.public.disabled {
+                tracing::warn!(
+                    event = "login.failed_disabled",
+                    account_id = %acc.public.id,
+                    "Login consume failed: Account disabled"
+                );
+                return Redirect::to("/login?error=account_disabled").into_response();
+            }
+
             let session = state.sessions.create(acc.public.id.clone());
             let cookie = build_session_cookie(session.id, None);
 
