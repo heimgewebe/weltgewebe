@@ -208,37 +208,37 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
 
 ### Grundsätze
 
-1.  **Gateway-Only Entry:**
-    Nur der Caddy-Container darf Ports auf dem Host veröffentlichen.
-    Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
+1. **Gateway-Only Entry:**
+   Nur der Caddy-Container darf Ports auf dem Host veröffentlichen.
+   Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
 
-2.  **Loopback Binding:**
-    Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN zu verhindern.
+2. **Loopback Binding:**
+   Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN zu verhindern.
 
-3.  **Shared Network (Upstreams):**
-    Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden, nicht über Host-Ports.
+3. **Shared Network (Upstreams):**
+   Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden, nicht über Host-Ports.
 
 ### Einrichtung
 
-1.  **Netzwerk erstellen:**
+1. **Netzwerk erstellen:**
 
-    ```bash
-    docker network create heimnet
-    ```
+   ```bash
+   docker network create heimnet
+   ```
 
-2.  **Bind-Adresse setzen:**
-    Setze `CADDY_BIND=127.0.0.1` in deiner `.env`-Datei oder im Environment.
-    Ohne diese Variable lauscht Caddy auf `0.0.0.0` (Standard).
+2. **Bind-Adresse setzen:**
+   Setze `CADDY_BIND=127.0.0.1` in deiner `.env`-Datei oder im Environment.
+   Ohne diese Variable lauscht Caddy auf `0.0.0.0` (Standard).
 
-3.  **Start mit Override:**
-    Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden:
+3. **Start mit Override:**
+   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden:
 
-    ```bash
-    CADDY_BIND=127.0.0.1 docker compose \
-      -f infra/compose/compose.prod.yml \
-      -f infra/compose/compose.heimserver.override.yml \
-      up -d
-    ```
+   ```bash
+   CADDY_BIND=127.0.0.1 docker compose \
+     -f infra/compose/compose.prod.yml \
+     -f infra/compose/compose.heimserver.override.yml \
+     up -d
+   ```
 
 ### Verifikation
 
