@@ -10,20 +10,6 @@
 	# }
 }
 
-:80 {
-	# Health must be reachable without Host/TLS (local/CI checks use localhost:80)
-	@health {
-		path /health/ready
-		method GET HEAD
-	}
-	handle @health {
-		reverse_proxy api:8080
-	}
-	handle {
-		respond 404
-	}
-}
-
 weltgewebe.net {
 	log {
 		output stdout
