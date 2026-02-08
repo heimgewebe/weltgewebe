@@ -149,8 +149,7 @@ APP_BASE_URL=https://weltgewebe.net
 
 # Trusted proxies
 # CRITICAL: In production, set this to the actual IP/CIDR of your reverse proxy (e.g. Caddy).
-# If Caddy runs in the same Docker network, you must inspect the network to find the subnet.
-# Example: docker network inspect <project_name>_default | grep Subnet
+# See "How to Determine Trusted Proxies CIDR" below.
 AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
 
 # Rate Limiting (Application Level)
@@ -172,6 +171,42 @@ SMTP_FROM=noreply@weltgewebe.net
 # If true, the magic link token is logged to stdout. DO NOT ENABLE IN PROD.
 AUTH_LOG_MAGIC_TOKEN=0
 ```
+
+### How to Determine Trusted Proxies CIDR
+
+Correct configuration of trusted proxies is vital for security (IP rate limiting)
+and audit logs. There are two layers:
+
+1. **Caddy (Edge):** Needs to know the IP of the Load Balancer/CDN (e.g., Cloudflare) to extract the client IP.
+2. **App (Backend):** Needs to know the IP of Caddy (or the Docker network) to trust the headers sent by Caddy.
+
+#### Step-by-Step: Finding the Docker Network CIDR
+
+If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network
+gateway or Caddy's container IP. You must trust the entire Docker subnet. Only do this if your reverse proxy
+container is the direct upstream of the app container in the same Docker network; otherwise trust only the real
+proxy IPs.
+
+1. **Find the Network Name:**
+
+   ```bash
+   docker network ls
+   # Look for the network used by your stack, e.g., 'infra_default' or similar.
+   ```
+
+2. **Inspect the Network to find the Subnet:**
+
+   ```bash
+   docker network inspect <network_name> | grep Subnet
+   # Output example: "Subnet": "172.18.0.0/16"
+   ```
+
+3. **Configure `.env`:**
+   Add this CIDR to `AUTH_TRUSTED_PROXIES`.
+
+   ```bash
+   AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
+   ```
 
 ### Rate Limiting (Edge Defense)
 

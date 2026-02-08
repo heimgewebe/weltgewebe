@@ -51,6 +51,7 @@ impl Mailer {
     <p style="margin: 20px 0;">
         <a href="{}" style="background-color: #0070f3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Sign In</a>
     </p>
+    <p style="color: #666; font-size: 0.9em;">This link expires soon.</p>
     <p style="color: #666; font-size: 0.9em;">If you did not request this email, you can safely ignore it.</p>
 </body>
 </html>"#,
