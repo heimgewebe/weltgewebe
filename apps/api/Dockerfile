@@ -1,5 +1,5 @@
 # Use the same Rust version as defined in toolchain.versions.yml and compose.core.yml
-FROM rust:1.89.0-bullseye as builder
+FROM rust:1.89.0-bullseye AS builder
 
 WORKDIR /app
 
@@ -7,8 +7,18 @@ WORKDIR /app
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 
+# Cargo needs at least one target file for workspace members during `cargo fetch`.
+# Create minimal stubs; real sources are copied later via `COPY . .`.
+RUN mkdir -p apps/api/src \
+ && test -f apps/api/src/lib.rs  || printf '%s\n' '// stub for docker-layer caching' > apps/api/src/lib.rs \
+ && test -f apps/api/src/main.rs || printf '%s\n' 'fn main() {}' > apps/api/src/main.rs
+
 # 2) Fetch dependencies (this caches the index and downloads)
-RUN cargo fetch
+RUN cargo fetch --locked
+
+# Remove any stub targets so they can never affect the final build.
+# Real sources are brought in by the later `COPY . .`.
+RUN rm -f apps/api/src/lib.rs apps/api/src/main.rs || true
 
 # 3) Copy the rest of the workspace
 COPY . .
