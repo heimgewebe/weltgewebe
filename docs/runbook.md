@@ -177,30 +177,34 @@ AUTH_LOG_MAGIC_TOKEN=0
 Correct configuration of trusted proxies is vital for security (IP rate limiting)
 and audit logs. There are two layers:
 
-1.  **Caddy (Edge):** Needs to know the IP of the Load Balancer/CDN (e.g., Cloudflare) to extract the client IP.
-2.  **App (Backend):** Needs to know the IP of Caddy (or the Docker network) to trust the headers sent by Caddy.
+1. **Caddy (Edge):** Needs to know the IP of the Load Balancer/CDN (e.g., Cloudflare) to extract the client IP.
+2. **App (Backend):** Needs to know the IP of Caddy (or the Docker network) to trust the headers sent by Caddy.
 
 #### Step-by-Step: Finding the Docker Network CIDR
 
-If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network gateway or Caddy's container IP. You must trust the entire Docker subnet.
+If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network
+gateway or Caddy's container IP. You must trust the entire Docker subnet.
 
-1.  **Find the Network Name:**
-    ```bash
-    docker network ls
-    # Look for the network used by your stack, e.g., 'infra_default' or similar.
-    ```
+1. **Find the Network Name:**
 
-2.  **Inspect the Network to find the Subnet:**
-    ```bash
-    docker network inspect <network_name> | grep Subnet
-    # Output example: "Subnet": "172.18.0.0/16"
-    ```
+   ```bash
+   docker network ls
+   # Look for the network used by your stack, e.g., 'infra_default' or similar.
+   ```
 
-3.  **Configure `.env`:**
-    Add this CIDR to `AUTH_TRUSTED_PROXIES`.
-    ```bash
-    AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
-    ```
+2. **Inspect the Network to find the Subnet:**
+
+   ```bash
+   docker network inspect <network_name> | grep Subnet
+   # Output example: "Subnet": "172.18.0.0/16"
+   ```
+
+3. **Configure `.env`:**
+   Add this CIDR to `AUTH_TRUSTED_PROXIES`.
+
+   ```bash
+   AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
+   ```
 
 ### Rate Limiting (Edge Defense)
 
