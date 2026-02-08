@@ -396,6 +396,8 @@ pub async fn request_login(
                 event = "login.denied_disabled",
                 request_id = %request_id,
                 client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 email_hash = %email_hash,
                 account_id = %id,
                 "Login requested for disabled account"
@@ -477,6 +479,8 @@ pub async fn request_login(
                         event = "login.provisioned",
                         request_id = %request_id,
                         client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %new_id,
                         email_hash = %email_hash,
                         "Auto-provisioned new account"
@@ -499,6 +503,8 @@ pub async fn request_login(
                 event = "login.delivery_unavailable",
                 request_id = %request_id,
                 client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 email_hash = %email_hash,
                 account_id = %id,
                 "Public login enabled but no delivery path configured"
@@ -526,6 +532,8 @@ pub async fn request_login(
                         event = "login.sent",
                         request_id = %request_id,
                         client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %id,
                         email_hash = %email_hash,
                         "Magic Link sent via email"
@@ -536,6 +544,8 @@ pub async fn request_login(
                         event = "login.send_failed",
                         request_id = %request_id,
                         client_ip = %client_ip,
+                        remote_ip = %addr.ip(),
+                        proxy_trusted = proxy_trusted,
                         account_id = %id,
                         email_hash = %email_hash,
                         error = %e,
@@ -573,6 +583,8 @@ pub async fn request_login(
             event = "login.requested_unknown",
             request_id = %request_id,
             client_ip = %client_ip,
+            remote_ip = %addr.ip(),
+            proxy_trusted = proxy_trusted,
             email_hash = %email_hash,
             reason = "policy_denied",
             auto_provision_enabled = state.config.auth_auto_provision,
@@ -739,6 +751,8 @@ pub async fn consume_login_post(
                     event = "login.failed_disabled",
                     request_id = %request_id,
                     client_ip = %client_ip,
+                    remote_ip = %addr.ip(),
+                    proxy_trusted = proxy_trusted,
                     account_id = %acc.public.id,
                     "Login consume failed: Account disabled"
                 );
