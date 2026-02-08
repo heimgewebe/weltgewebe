@@ -6,7 +6,7 @@ Agenten im Weltgewebe existieren nicht, um zu steuern, zu bewerten oder zu entsc
 Sie existieren, um Commons handhabbar zu machen: durch Sichtbarkeit von Möglichkeiten, durch Verringerung von Reibung,
 durch Erleichterung freiwilliger Kooperation.
 
-⸻
+---
 
 ## Zweck
 
@@ -15,7 +15,7 @@ Sie machen Verbindungen, zeitliche Passungen und Nutzungsmöglichkeiten sichtbar
 aber unentdeckt bleiben.
 Sie schaffen keine Interessen – sie machen Anschlussfähigkeit lesbar.
 
-⸻
+---
 
 ## Rolle
 
@@ -23,7 +23,7 @@ Agenten sind dienend, nicht autoritativ.
 Sie sind Hinweisgeber, nicht Lenker.
 Sie sind Flüsterer, nicht Dirigenten.
 
-⸻
+---
 
 ## Grundprinzipien
 
@@ -45,7 +45,7 @@ Sie sind Flüsterer, nicht Dirigenten.
 6. **Transparenz**
    Was ein Agent tut, ist erklärbar; was er nicht darf, ist explizit.
 
-⸻
+---
 
 ## Kernaufgaben
 
@@ -61,7 +61,7 @@ Sie sind Flüsterer, nicht Dirigenten.
 - **Verdichtungen erkennen**
   Wiederholte Praxis als Keim gemeinschaftlicher Strukturen sichtbar machen, ohne Institutionalisierung auszulösen.
 
-⸻
+---
 
 ## Klare Verbote
 
@@ -73,7 +73,7 @@ Agenten dürfen niemals:
 - Handlungen erzwingen oder automatisieren,
 - verdeckte Profile bilden oder Ziele verfolgen.
 
-⸻
+---
 
 ## Verhältnis zum Gemeinwesen
 
@@ -81,7 +81,7 @@ Agenten sind kein Teil der Entscheidungsmacht.
 Sie sind Werkzeuge der Lesbarkeit für Menschen, die handeln.
 Das Gemeinwesen bleibt menschlich; Agenten bleiben Mittel.
 
-⸻
+---
 
 ## Das weltbewegende Versprechen
 
@@ -89,18 +89,18 @@ Wenn Möglichkeiten sichtbar werden, sinkt die Schwelle zur Kooperation.
 Wenn Reibung sinkt, wachsen Commons.
 Agenten tragen dazu bei, nicht mehr und nicht weniger.
 
-⸻
+---
 
 ## Verdichtete Essenz
 
 Agenten im Weltgewebe ermöglichen Commons, indem sie Verbindungen sichtbar machen und Koordination erleichtern –
 ohne zu lenken, zu bewerten oder zu erzwingen.
 
-⸻
+---
 
 ## Ungewissheitsursachenanalyse
 
 - **Unsicherheitsgrad:** ≈ 0,36
-- **Ursachen:** Reaktanz auf Hinweise möglich; Übervernetzung; kulturelle Unterschiede der Kooperationspraxis;
-  emergente Nutzung nicht prognostizierbar.
-- **Einordnung:** Produktiv und konstitutiv – Commons ohne Risiko sind Verwaltung.
+- **Ursachen:** Reaktanz auf Hinweise möglich; Übervernetzung;
+  kulturelle Unterschiede der Kooperationspraxis; emergente Nutzung nicht prognostizierbar.
+- **Bewertung:** Produktiv und konstitutiv – Commons ohne Risiko sind Verwaltung.
