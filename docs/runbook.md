@@ -300,3 +300,15 @@ for i in {1..10}; do \
     https://weltgewebe.net/api/auth/login/request; \
 done
 ```
+
+### Required Env for Caddy
+
+The production Caddy configuration (`infra/compose/compose.prod.yml`) enforces the presence of specific environment
+variables to prevent silent failures or misconfiguration loops. If these are missing, `docker compose config` (and
+deployment) will fail fast.
+
+- `WEB_UPSTREAM_URL`: The full URL of the upstream web application (e.g., `https://weltgewebe-web.pages.dev`).
+- `WEB_UPSTREAM_HOST`: The hostname of the upstream web application (e.g., `weltgewebe-web.pages.dev`), used
+  for `Host` header forwarding.
+
+Ensure these are set in your `.env` file or deployment secrets.
