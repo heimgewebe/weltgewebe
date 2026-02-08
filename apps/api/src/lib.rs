@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+pub mod mailer;
 pub mod middleware;
 pub mod routes;
 pub mod state;
@@ -53,6 +54,27 @@ pub async fn run() -> anyhow::Result<()> {
     metrics.set_nodes_cache_count(nodes_list.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_list));
 
+    let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
+    let mailer = match crate::mailer::Mailer::new(&app_config) {
+        Ok(mailer) => Some(Arc::new(mailer)),
+        Err(error) => {
+            // If Public Login is enabled AND Dev Logging is disabled, failure to init mailer is fatal.
+            // (We must not run in a state where users can request login but receive nothing)
+            if app_config.auth_public_login && !app_config.auth_log_magic_token {
+                return Err(anyhow!(
+                    "Public Login enabled without working mailer: {}",
+                    error
+                ));
+            }
+
+            // Otherwise (Dev mode or feature disabled), just warn.
+            if app_config.smtp_host.is_some() {
+                tracing::warn!(%error, "failed to initialize mailer; email sending will be disabled");
+            }
+            None
+        }
+    };
+
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -64,6 +86,8 @@ pub async fn run() -> anyhow::Result<()> {
         tokens,
         accounts,
         nodes,
+        rate_limiter,
+        mailer,
     };
 
     let app = Router::new()

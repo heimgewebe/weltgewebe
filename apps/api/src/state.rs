@@ -2,8 +2,9 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
-    auth::{session::SessionStore, tokens::TokenStore},
+    auth::{rate_limit::AuthRateLimiter, session::SessionStore, tokens::TokenStore},
     config::AppConfig,
+    mailer::Mailer,
     routes::{accounts::AccountInternal, nodes::Node},
     telemetry::Metrics,
 };
@@ -22,4 +23,6 @@ pub struct ApiState {
     pub tokens: TokenStore,
     pub accounts: Arc<RwLock<HashMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
+    pub rate_limiter: Arc<AuthRateLimiter>,
+    pub mailer: Option<Arc<Mailer>>,
 }

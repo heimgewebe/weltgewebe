@@ -307,6 +307,8 @@ pub async fn dev_login(
 
 pub async fn request_login(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
     if !state.config.auth_public_login {
@@ -333,6 +335,13 @@ pub async fn request_login(
     let email_hash_full = format!("{:x}", hasher.finalize());
     // Pseudonymized correlation (unsalted hash prefix); not to be understood as anonymization.
     let email_hash = &email_hash_full[..16];
+
+    // 1b. Rate Limiting (IP + Email)
+    let client_ip = effective_client_ip(addr, &headers);
+    if let Err(e) = state.rate_limiter.check(client_ip, email_hash) {
+        tracing::warn!(%client_ip, email_hash = %email_hash, error = %e, "Login request rate limited");
+        return StatusCode::TOO_MANY_REQUESTS.into_response();
+    }
 
     tracing::info!(
         event = "login.requested",
@@ -443,11 +452,25 @@ pub async fn request_login(
     };
 
     if let Some(id) = account_id {
-        // 3. Generate Token
+        // 3. Check Delivery Mechanism
+        let can_deliver = state.mailer.is_some();
+        let can_log = state.config.auth_log_magic_token;
+
+        if !can_deliver && !can_log {
+            tracing::error!(
+                event = "login.delivery_unavailable",
+                email_hash = %email_hash,
+                account_id = %id,
+                "Public login enabled but no delivery path configured"
+            );
+            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        }
+
+        // 4. Generate Token (only if deliverable)
         // Use normalized email for token creation too
         let token = state.tokens.create(email_norm.clone());
 
-        // 4. "Send" Email (Log for now)
+        // 5. Send/Log Email
         // Ensure the base URL does not have a trailing slash for clean formatting
         // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
         let base_url = state.config.app_base_url.as_deref().expect(
@@ -456,13 +479,51 @@ pub async fn request_login(
         let base_url = base_url.trim_end_matches('/');
         let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
 
-        tracing::info!(
-            target: "email_outbox",
-            email = %email_norm,
-            account_id = %id,
-            %link,
-            "Magic Link Generated"
-        );
+        if let Some(mailer) = &state.mailer {
+            match mailer.send_magic_link(&email_norm, &link).await {
+                Ok(_) => {
+                    tracing::info!(
+                        event = "login.sent",
+                        account_id = %id,
+                        email_hash = %email_hash,
+                        "Magic Link sent via email"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(
+                        event = "login.send_failed",
+                        account_id = %id,
+                        email_hash = %email_hash,
+                        error = %e,
+                        "Failed to send Magic Link email"
+                    );
+                }
+            }
+        } else if !state.config.auth_log_magic_token {
+            // Only warn if dev logging is OFF (otherwise mailer=None is expected)
+            tracing::warn!(
+                event = "login.mailer_missing",
+                account_id = %id,
+                "Mailer not configured; cannot send Magic Link"
+            );
+        } else {
+            tracing::debug!(
+                event = "login.mailer_missing_dev",
+                account_id = %id,
+                "Mailer not configured (dev log mode)"
+            );
+        }
+
+        // Dev/Ops Fallback: Log token if enabled
+        if state.config.auth_log_magic_token {
+            tracing::info!(
+                target: "email_outbox",
+                email_hash = %email_hash,
+                account_id = %id,
+                %link,
+                "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
+            );
+        }
     } else {
         tracing::info!(
             event = "login.requested_unknown",
