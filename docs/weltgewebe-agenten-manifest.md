@@ -103,4 +103,4 @@ ohne zu lenken, zu bewerten oder zu erzwingen.
 - **Unsicherheitsgrad:** ≈ 0,36
 - **Ursachen:** Reaktanz auf Hinweise möglich; Übervernetzung; kulturelle Unterschiede der Kooperationspraxis;
   emergente Nutzung nicht prognostizierbar.
-- **Bewertung:** Produktiv und konstitutiv – Commons ohne Risiko sind Verwaltung.
+- **Einordnung:** Produktiv und konstitutiv – Commons ohne Risiko sind Verwaltung.
