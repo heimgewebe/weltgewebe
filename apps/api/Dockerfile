@@ -1,11 +1,15 @@
 # Use the same Rust version as defined in toolchain.versions.yml and compose.core.yml
-FROM rust:1.89.0-bullseye as builder
+FROM rust:1.89.0-bullseye AS builder
 
 WORKDIR /app
 
 # 1) Copy manifests first to cache dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
+
+# Cargo determines targets by looking at src/ (unless explicitly declared).
+# For `cargo fetch` we need the workspace member to have its target files present.
+COPY apps/api/src/ apps/api/src/
 
 # 2) Fetch dependencies (this caches the index and downloads)
 RUN cargo fetch
