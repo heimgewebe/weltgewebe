@@ -60,7 +60,7 @@ pub struct AccountPublic {
     pub visibility: Visibility,
     pub radius_m: u32,
     pub ron_flag: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
