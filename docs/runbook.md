@@ -183,7 +183,9 @@ and audit logs. There are two layers:
 #### Step-by-Step: Finding the Docker Network CIDR
 
 If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network
-gateway or Caddy's container IP. You must trust the entire Docker subnet.
+gateway or Caddy's container IP. You must trust the entire Docker subnet. Only do this if your reverse proxy
+container is the direct upstream of the app container in the same Docker network; otherwise trust only the real
+proxy IPs.
 
 1. **Find the Network Name:**
 

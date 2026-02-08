@@ -51,13 +51,11 @@ impl AuthRateLimiter {
     pub fn check(&self, ip: IpAddr, email_hash: &str) -> Result<(), RateLimitError> {
         if let Some(limiter) = &self.ip_limiter_min {
             if limiter.check_key(&ip).is_err() {
-                tracing::debug!(event = "login.rate_limited", scope = "ip_min", %ip, "Rate limit exceeded (IP/min)");
                 return Err(RateLimitError::IpLimited);
             }
         }
         if let Some(limiter) = &self.ip_limiter_hour {
             if limiter.check_key(&ip).is_err() {
-                tracing::debug!(event = "login.rate_limited", scope = "ip_hour", %ip, "Rate limit exceeded (IP/hour)");
                 return Err(RateLimitError::IpLimited);
             }
         }
@@ -66,13 +64,11 @@ impl AuthRateLimiter {
 
         if let Some(limiter) = &self.email_limiter_min {
             if limiter.check_key(&email_hash_owned).is_err() {
-                tracing::debug!(event = "login.rate_limited", scope = "email_min", email_hash = %email_hash_owned, "Rate limit exceeded (Email)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
         if let Some(limiter) = &self.email_limiter_hour {
             if limiter.check_key(&email_hash_owned).is_err() {
-                tracing::debug!(event = "login.rate_limited", scope = "email_hour", email_hash = %email_hash_owned, "Rate limit exceeded (Email)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
