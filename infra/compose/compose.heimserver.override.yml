@@ -1,0 +1,9 @@
+services:
+  caddy:
+    networks:
+      - default
+      - heimnet
+
+networks:
+  heimnet:
+    external: true

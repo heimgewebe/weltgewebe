@@ -89,3 +89,8 @@ weltgewebe.net {
 		X-Content-Type-Options "nosniff"
 	}
 }
+
+leitstand.lan {
+	reverse_proxy leitstand:3000
+	tls internal
+}
