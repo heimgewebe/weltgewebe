@@ -228,15 +228,15 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
    docker network create heimnet
    ```
 
-2. **Bind-Adresse setzen:**
-   Setze `CADDY_BIND=127.0.0.1` in deiner `.env`-Datei oder im Environment.
-   Ohne diese Variable lauscht Caddy auf `0.0.0.0` (Standard).
+2. **Bind-Adresse setzen (Optional):**
+   Standardmäßig bindet Caddy jetzt sicher an `127.0.0.1`.
+   Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner `.env`-Datei, wenn du externen Zugriff benötigst.
 
 3. **Start mit Override:**
-   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden:
+   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden und die VHosts zu laden:
 
    ```bash
-   CADDY_BIND=127.0.0.1 docker compose \
+   docker compose \
      -f infra/compose/compose.prod.yml \
      -f infra/compose/compose.heimserver.override.yml \
      up -d
