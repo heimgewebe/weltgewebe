@@ -66,13 +66,13 @@ impl AuthRateLimiter {
 
         if let Some(limiter) = &self.email_limiter_min {
             if limiter.check_key(&email_key_owned).is_err() {
-                tracing::warn!(email_hash = %email_key_owned, scope = "min", "Rate limit exceeded (Email)");
+                tracing::warn!(email_key = %email_key_owned, scope = "min", "Rate limit exceeded (Email)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
         if let Some(limiter) = &self.email_limiter_hour {
             if limiter.check_key(&email_key_owned).is_err() {
-                tracing::warn!(email_hash = %email_key_owned, scope = "hour", "Rate limit exceeded (Email)");
+                tracing::warn!(email_key = %email_key_owned, scope = "hour", "Rate limit exceeded (Email)");
                 return Err(RateLimitError::EmailLimited);
             }
         }
