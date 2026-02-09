@@ -1,76 +1,21 @@
----
 services:
   api:
-    image: weltgewebe-api:${API_VERSION:-latest}
-    build:
-      context: ../..
-      dockerfile: apps/api/Dockerfile
-    restart: always
-    volumes:
-      - gewebe_fs_data:/data
+    image: weltgewebe-api:latest
     environment:
       API_BIND: 0.0.0.0:8080
-      GEWEBE_IN_DIR: /data
-      # Enable demo data seeding via env var (default: false).
-      # Set GEWEBE_SEED_DEMO=true in .env for development deployments.
-      GEWEBE_SEED_DEMO: ${GEWEBE_SEED_DEMO:-false}
-      DATABASE_URL: ${DATABASE_URL}
-      RUST_LOG: ${RUST_LOG:-info}
-      # Auth
-      AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
-      APP_BASE_URL: ${APP_BASE_URL:-}
-      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
-    depends_on:
-      db:
-        condition: service_healthy
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - >
-          wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1 ||
-          wget -qO- http://localhost:8080/health/live >/dev/null 2>&1 ||
-          exit 1
-      interval: 10s
-      timeout: 3s
-      retries: 10
-
+      NATS_URL: nats://nats:4222
+      DATABASE_URL: postgres://welt:welt@db:5432/welt
+    ports:
+    - 8081:8080
+    volumes:
+    - /opt/weltgewebe/policies:/app/policies:ro
   db:
     image: postgres:16
-    restart: always
-    volumes:
-      - pg_data_prod:/var/lib/postgresql/data
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-
-  caddy:
-    build:
-      context: ../caddy
-    restart: always
-    ports:
-      - "${CADDY_BIND:-127.0.0.1}:80:80"
-      - "${CADDY_BIND:-127.0.0.1}:443:443"
+      POSTGRES_USER: welt
+      POSTGRES_PASSWORD: welt
+      POSTGRES_DB: welt
     volumes:
-      - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      # Ensure import directory exists for robustness
-      - ../caddy/heimserver:/etc/caddy/heimserver:ro
-    environment:
-      WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set (e.g. https://weltgewebe-web.pages.dev)}
-      WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set (e.g. weltgewebe-web.pages.dev)}
-    depends_on:
-      api:
-        condition: service_healthy
-
+    - db_data:/var/lib/postgresql/data
 volumes:
-  pg_data_prod:
-  caddy_data:
-  caddy_config:
-  gewebe_fs_data:
+  db_data: null

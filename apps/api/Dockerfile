@@ -8,14 +8,15 @@ COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 
 # 2) Fetch dependencies (this caches the index and downloads)
-RUN cargo fetch
+COPY apps/api/src apps/api/src
+RUN cargo fetch --locked
 
 # 3) Copy the rest of the workspace
 COPY . .
 
 # 4) Build the API binary in release mode
 # Offline mode is not strictly necessary but ensures we use what we fetched
-RUN cargo build --release --bin weltgewebe-api
+RUN cargo build --release --manifest-path apps/api/Cargo.toml
 
 # Runner stage
 FROM debian:bullseye-slim
