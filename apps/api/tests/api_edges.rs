@@ -97,9 +97,7 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
     );
 
     let state = test_state().await?;
-    let app = Router::new()
-        .merge(api_router())
-        .with_state(state);
+    let app = Router::new().merge(api_router()).with_state(state);
 
     let res = app
         .clone()
