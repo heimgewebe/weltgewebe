@@ -4,44 +4,23 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
-## 2026-02-10 - compose.prod.yml auf stabilen Stand zurückgesetzt (Revert)
+## 2026-02-10 - compose.prod.yml auf stabilen Stand zurückgesetzt
 
-**Commit-Referenz:** f6e19c5 (revert: remove compose topology changes)
+**Commit-Referenz:** f6e19c5
 
 **Geänderte Dateien:**
-
 - `infra/compose/compose.prod.yml`
 - `policies/limits.yaml`
 - `apps/api/Dockerfile`
 
-**Beschreibung:**
+**Aktueller Stand:**
+- Caddy-Service als Gateway (Ports auf localhost)
+- DB-Credentials über Umgebungsvariablen
+- Keine NATS_URL (Service existiert nicht)
+- policies/limits.yaml mit Schema-konformen Limitwerten
+- Dockerfile mit optimierter Layer-Caching-Reihenfolge
 
-Die Änderungen aus Commit 5e94a21 an compose.prod.yml, policies/limits.yaml und Dockerfile wurden zurückgesetzt,
-um den PR auf die Caddy-Dokumentation zu fokussieren. Die compose-Änderungen führten zu mehreren Risiken/Nebenwirkungen:
-
-- Fehlender Caddy-Service (Gateway-Prinzip verletzt)
-- NATS_URL ohne NATS-Service gesetzt (Readiness-Checks schlugen fehl)
-- Hardcodierte DB-Credentials statt env-basiert
-- API auf 0.0.0.0:8081 exponiert (Sicherheitsrisiko)
-- policies/limits.yaml Semantik geändert (Schema-Bruch)
-
-**Wiederhergestellter Stand:**
-
-- Caddy-Service mit Gateway-Funktion (Ports auf localhost gebunden)
-- DB-Credentials über Umgebungsvariablen (${DATABASE_URL}, ${POSTGRES_PASSWORD})
-- Keine NATS_URL in Umgebung (Service existiert nicht)
-- policies/limits.yaml mit echten Limitwerten (max_nodes_jsonl_mb, max_edges_jsonl_mb)
-- Dockerfile mit korrekter Layer-Caching-Reihenfolge
-
-**Auswirkung auf Deployment:**
-
-- compose.prod.yml entspricht wieder dem bewährten Setup
-- Keine Auswirkung auf laufende Deployments (keine Breaking Changes)
-- compose.heimserver.override.yml bleibt kompatibel (referenziert Caddy-Service)
-
-**Risiko:**
-
-Niedrig. Revert auf bekannten funktionierenden Stand.
+**Risiko:** Niedrig. Stabiler, bewährter Stand.
 
 ---
 
