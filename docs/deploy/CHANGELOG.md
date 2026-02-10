@@ -6,7 +6,7 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ## 2026-02-10 - compose.prod.yml auf stabilen Stand zurückgesetzt
 
-**Commit-Referenz:** f6e19c5
+**Commit-Referenz:** f6e19c5 (revert: remove compose topology changes)
 
 **Geänderte Dateien:**
 
@@ -18,9 +18,19 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 - Caddy-Service als Gateway (Ports auf localhost)
 - DB-Credentials über Umgebungsvariablen
-- Keine NATS_URL (Service existiert nicht)
-- policies/limits.yaml mit Schema-konformen Limitwerten
-- Dockerfile mit optimierter Layer-Caching-Reihenfolge
+- Keine `NATS_URL` (Service existiert nicht)
+- `policies/limits.yaml` mit Schema-konformen Limitwerten
+- `Dockerfile` mit optimierter Layer-Caching-Reihenfolge
+
+**Hintergrund der Rücksetzung:**
+
+Die Änderungen aus Commit 5e94a21 wurden zurückgesetzt, um Risiken zu vermeiden:
+
+- Fehlender Caddy-Service (Gateway-Prinzip verletzt)
+- `NATS_URL` ohne NATS-Service gesetzt (Readiness-Checks schlugen fehl)
+- Hardcodierte DB-Credentials statt env-basiert
+- API auf `0.0.0.0:8081` exponiert (Sicherheitsrisiko)
+- `policies/limits.yaml` Semantik geändert (Schema-Bruch)
 
 **Risiko:** Niedrig. Stabiler, bewährter Stand.
 
