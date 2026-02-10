@@ -51,9 +51,9 @@ Plugin erfordert, das in der Standard-Caddy-Distribution nicht enthalten ist.
 
 **Syntax-Korrektur (dieser PR):**
 
-Die ursprüngliche Deaktivierung in der damaligen Änderung (Referenz oben) war syntaktisch unvollständig (nur die öffnende Zeile
-`rate_limit {` war auskommentiert, während die Subdirektiven aktiv blieben). Dies führte zu einem Parse-Fehler
-beim Caddy-Start. Die Syntax wurde vollständig korrigiert, indem der gesamte Block inkl. aller Subdirektiven
+Die ursprüngliche Deaktivierung in der damaligen Änderung (Referenz oben) war syntaktisch unvollständig (nur die
+öffnende Zeile `rate_limit {` war auskommentiert, während die Subdirektiven aktiv blieben). Dies führte zu einem
+Parse-Fehler beim Caddy-Start. Die Syntax wurde vollständig korrigiert, indem der gesamte Block inkl. aller Subdirektiven
 und schließender Klammer auskommentiert wurde.
 
 **Änderungen im Detail:**
