@@ -19,7 +19,7 @@ weltgewebe.net {
 	encode zstd gzip
 
 	# NOTE: rate_limit is disabled because it requires a non-standard Caddy plugin.
-	# Expected enforcement: upstream LB/WAF/firewall or host-level protections (e.g. fail2ban).
+	# Expected enforcement: upstream LB/WAF/firewall (preferred) or host-level protections (e.g. fail2ban on access logs).
 	# Risk: login endpoints are more susceptible to brute-force without compensating controls.
 # 	rate_limit {
 # 		zone login_limit {

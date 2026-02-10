@@ -6,7 +6,7 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ## 2026-02-10 - compose.prod.yml auf stabilen Stand zurückgesetzt
 
-**Commit-Referenz:** f6e19c5 (revert: remove compose topology changes)
+**Ursprung / Referenz:** f6e19c5 (revert: remove compose topology changes) – (Commit-Hash kann bei Squash abweichen)
 
 **Geänderte Dateien:**
 
@@ -38,7 +38,7 @@ Die Änderungen aus Commit 5e94a21 wurden zurückgesetzt, um Risiken zu vermeide
 
 ## 2026-02-10 - Caddy Rate-Limiting vollständig deaktiviert
 
-**Commit-Referenz:** 5e94a21 (ops: stabilize prod runtime)
+**Ursprung / Referenz:** 5e94a21 (ops: stabilize prod runtime) – (Commit-Hash kann bei Squash abweichen)
 
 **Geänderte Dateien:**
 
