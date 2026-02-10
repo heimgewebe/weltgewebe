@@ -25,25 +25,40 @@ if [[ -z "$bad_lines" ]]; then
   exit 0
 fi
 
-# Allow exactly these repo-relative mounts in compose.prod.yml:
-# - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
-# - ../caddy/heimserver:/etc/caddy/heimserver:ro
-# Pattern matches grep -n output format: line_number:content
-allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile:ro|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver:ro)$'
+# Determine if this is compose.prod.yml to apply specific allowlist
+base="$(basename "$COMPOSE_FILE")"
 
-# Filter out allowed patterns
-filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
+if [[ "$base" == "compose.prod.yml" ]]; then
+  # Allow exactly these repo-relative mounts in compose.prod.yml only:
+  # - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile(:ro)?
+  # - ../caddy/heimserver:/etc/caddy/heimserver(:ro)?
+  # Pattern matches grep -n output format: line_number:content
+  # Note: :ro is optional to allow flexibility in mount options
+  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)$'
+  
+  # Filter out allowed patterns
+  filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
+else
+  # For other compose files, no exceptions - all relative paths are forbidden
+  filtered="$bad_lines"
+fi
 
 if [[ -n "$filtered" ]]; then
   echo "ERROR: relative host volume paths are forbidden in $COMPOSE_FILE" >&2
   echo >&2
   echo "$filtered" >&2
   echo >&2
-  echo "Allowed exceptions:" >&2
-  echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" >&2
-  echo "  - ../caddy/heimserver:/etc/caddy/heimserver:ro" >&2
+  if [[ "$base" == "compose.prod.yml" ]]; then
+    echo "Allowed exceptions in compose.prod.yml:" >&2
+    echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile(:ro)?" >&2
+    echo "  - ../caddy/heimserver:/etc/caddy/heimserver(:ro)?" >&2
+  fi
   echo "Fix: use absolute host paths, e.g. /opt/weltgewebe/policies:/app/policies:ro" >&2
   exit 1
 fi
 
-echo "OK: no relative host volume paths in $COMPOSE_FILE"
+if [[ "$base" == "compose.prod.yml" ]]; then
+  echo "OK: only allowed relative mounts present in $COMPOSE_FILE"
+else
+  echo "OK: no relative host volume paths in $COMPOSE_FILE"
+fi
