@@ -24,7 +24,7 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 **Hintergrund der Rücksetzung:**
 
-Die Änderungen aus Commit 5e94a21 wurden zurückgesetzt, um Risiken zu vermeiden:
+Die Änderungen aus der damaligen Änderung (Referenz oben) wurden zurückgesetzt, um Risiken zu vermeiden:
 
 - Fehlender Caddy-Service (Gateway-Prinzip verletzt)
 - `NATS_URL` ohne NATS-Service gesetzt (Readiness-Checks schlugen fehl)
@@ -51,7 +51,7 @@ Plugin erfordert, das in der Standard-Caddy-Distribution nicht enthalten ist.
 
 **Syntax-Korrektur (dieser PR):**
 
-Die ursprüngliche Deaktivierung in Commit 5e94a21 war syntaktisch unvollständig (nur die öffnende Zeile
+Die ursprüngliche Deaktivierung in der damaligen Änderung (Referenz oben) war syntaktisch unvollständig (nur die öffnende Zeile
 `rate_limit {` war auskommentiert, während die Subdirektiven aktiv blieben). Dies führte zu einem Parse-Fehler
 beim Caddy-Start. Die Syntax wurde vollständig korrigiert, indem der gesamte Block inkl. aller Subdirektiven
 und schließender Klammer auskommentiert wurde.
