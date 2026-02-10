@@ -34,7 +34,8 @@ if [[ "$base" == "compose.prod.yml" ]]; then
   # - ../caddy/heimserver:/etc/caddy/heimserver(:ro)?
   # Pattern matches grep -n output format: line_number:content
   # Note: :ro is optional to allow flexibility in mount options
-  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)$'
+  # Trailing whitespace is allowed to handle comments and formatting variations
+  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)[[:space:]]*$'
   
   # Filter out allowed patterns
   filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
@@ -50,8 +51,11 @@ if [[ -n "$filtered" ]]; then
   echo >&2
   if [[ "$base" == "compose.prod.yml" ]]; then
     echo "Allowed exceptions in compose.prod.yml:" >&2
-    echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile(:ro)?" >&2
-    echo "  - ../caddy/heimserver:/etc/caddy/heimserver(:ro)?" >&2
+    echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile" >&2
+    echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" >&2
+    echo "  - ../caddy/heimserver:/etc/caddy/heimserver" >&2
+    echo "  - ../caddy/heimserver:/etc/caddy/heimserver:ro" >&2
+    echo "  (you may omit or include :ro as needed)" >&2
   fi
   echo "Fix: use absolute host paths, e.g. /opt/weltgewebe/policies:/app/policies:ro" >&2
   exit 1
