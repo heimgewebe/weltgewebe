@@ -9,11 +9,13 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 **Commit-Referenz:** f6e19c5
 
 **Geänderte Dateien:**
+
 - `infra/compose/compose.prod.yml`
 - `policies/limits.yaml`
 - `apps/api/Dockerfile`
 
 **Aktueller Stand:**
+
 - Caddy-Service als Gateway (Ports auf localhost)
 - DB-Credentials über Umgebungsvariablen
 - Keine NATS_URL (Service existiert nicht)
