@@ -19,12 +19,20 @@ bad_lines="$(
   | grep -nE '^[[:space:]]*-[[:space:]]*(\./|\.\./)[^:]*:[^:]+'
 )" || true
 
-if [[ -n "$bad_lines" ]]; then
-  echo "ERROR: relative host volume paths are forbidden in $COMPOSE_FILE"
-  echo
-  echo "$bad_lines"
-  echo
-  echo "Fix: use absolute host paths, e.g. /opt/weltgewebe/policies:/app/policies:ro"
+# Allowlist for legitimate relative mounts (repo-relative Caddy config)
+# These are intentional and safe in the deployment context
+allowed_re='(\.\./caddy/Caddyfile\.prod:|\.\./caddy/heimserver:)'
+
+# Filter out allowed patterns
+filtered="$(echo "$bad_lines" | grep -vE "$allowed_re" || true)"
+
+if [[ -n "$filtered" ]]; then
+  echo "ERROR: relative host volume paths are forbidden in $COMPOSE_FILE" >&2
+  echo >&2
+  echo "$filtered" >&2
+  echo >&2
+  echo "Allowed exceptions: ../caddy/Caddyfile.prod, ../caddy/heimserver" >&2
+  echo "Fix: use absolute host paths, e.g. /opt/weltgewebe/policies:/app/policies:ro" >&2
   exit 1
 fi
 
