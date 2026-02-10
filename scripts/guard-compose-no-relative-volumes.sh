@@ -20,22 +20,35 @@ bad_lines="$(
 )" || true
 
 if [[ -n "$bad_lines" ]]; then
-  # Allow known legitimate relative mounts in compose.prod.yml
+  # Allow known legitimate relative mounts ONLY in compose.prod.yml
   # These are explicitly allowed Caddy configuration mounts
-  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)$'
-  filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
+  base="$(basename "$COMPOSE_FILE")"
+  
+  if [[ "$base" == "compose.prod.yml" ]]; then
+    allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)$'
+    filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
+  else
+    # No allowlist for other compose files
+    filtered="$bad_lines"
+  fi
   
   if [[ -n "$filtered" ]]; then
     echo "ERROR: relative host volume paths are forbidden in $COMPOSE_FILE" >&2
     echo >&2
     echo "$filtered" >&2
     echo >&2
-    echo "Allowed exceptions (not shown above):" >&2
-    echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" >&2
-    echo "  - ../caddy/heimserver:/etc/caddy/heimserver:ro" >&2
-    echo >&2
+    if [[ "$base" == "compose.prod.yml" ]]; then
+      echo "Allowed exceptions in compose.prod.yml (not shown above):" >&2
+      echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" >&2
+      echo "  - ../caddy/heimserver:/etc/caddy/heimserver:ro" >&2
+      echo >&2
+    fi
     echo "Fix: use absolute host paths, e.g. /opt/weltgewebe/policies:/app/policies:ro" >&2
     exit 1
+  else
+    # All bad_lines were filtered out = only allowed exceptions present
+    echo "OK: only allowed exceptions present in $COMPOSE_FILE"
+    exit 0
   fi
 fi
 
