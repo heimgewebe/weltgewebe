@@ -19,7 +19,7 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
-fn test_state() -> Result<ApiState> {
+async fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
         commit: "test",
@@ -51,6 +51,9 @@ fn test_state() -> Result<ApiState> {
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
+    // Load edges from file (environment variable must be set before calling this)
+    let edges = weltgewebe_api::routes::edges::load_edges().await;
+
     Ok(ApiState {
         db_pool: None,
         db_pool_configured: false,
@@ -62,6 +65,7 @@ fn test_state() -> Result<ApiState> {
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(RwLock::new(HashMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+        edges: Arc::new(tokio::sync::RwLock::new(edges)),
         rate_limiter,
         mailer: None,
     })
@@ -75,22 +79,16 @@ fn write_lines(path: &PathBuf, lines: &[&str]) {
     fs::write(path, lines.join("\n")).unwrap();
 }
 
-fn app() -> Router {
-    Router::new()
-        .merge(api_router())
-        .with_state(test_state().unwrap())
-}
-
 #[tokio::test]
 #[serial]
 async fn edges_filter_src_dst() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
-    let edges = in_dir.join("demo.edges.jsonl");
+    let edges_path = in_dir.join("demo.edges.jsonl");
     let _env = set_gewebe_in_dir(&in_dir);
 
     write_lines(
-        &edges,
+        &edges_path,
         &[
             r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
             r#"{"id":"e2","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
@@ -98,7 +96,10 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
         ],
     );
 
-    let app = app();
+    let state = test_state().await?;
+    let app = Router::new()
+        .merge(api_router())
+        .with_state(state);
 
     let res = app
         .clone()

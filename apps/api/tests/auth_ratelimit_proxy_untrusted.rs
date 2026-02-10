@@ -38,6 +38,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(RwLock::new(HashMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+        edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
     })

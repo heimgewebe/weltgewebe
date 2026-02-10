@@ -56,6 +56,10 @@ pub async fn run() -> anyhow::Result<()> {
     metrics.set_nodes_cache_count(nodes_list.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_list));
 
+    let edges_list = routes::edges::load_edges().await;
+    metrics.set_edges_cache_count(edges_list.len() as i64);
+    let edges = Arc::new(tokio::sync::RwLock::new(edges_list));
+
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
     let mailer = match crate::mailer::Mailer::new(&app_config) {
         Ok(mailer) => Some(Arc::new(mailer)),
@@ -88,6 +92,7 @@ pub async fn run() -> anyhow::Result<()> {
         tokens,
         accounts,
         nodes,
+        edges,
         rate_limiter,
         mailer,
     };
