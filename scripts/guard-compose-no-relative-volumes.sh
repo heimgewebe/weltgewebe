@@ -21,7 +21,7 @@ bad_lines="$(
 
 # Allowlist for legitimate relative mounts (repo-relative Caddy config)
 # These are intentional and safe in the deployment context
-allowed_re='(../caddy/Caddyfile\.prod:|../caddy/heimserver:)'
+allowed_re='(\.\./caddy/Caddyfile\.prod:|\.\./caddy/heimserver:)'
 
 # Filter out allowed patterns
 filtered="$(echo "$bad_lines" | grep -vE "$allowed_re" || true)"
