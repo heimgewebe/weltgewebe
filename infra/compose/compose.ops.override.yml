@@ -1,3 +1,4 @@
+---
 services:
   api:
     # erzwingt, dass relative Pfade wie "policies/limits.yaml" unter /app auflösen
