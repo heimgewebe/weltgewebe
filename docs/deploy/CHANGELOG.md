@@ -17,7 +17,7 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 **Beschreibung:**
 
 Die Änderungen aus Commit 5e94a21 an compose.prod.yml, policies/limits.yaml und Dockerfile wurden zurückgesetzt,
-um den PR auf die Caddy-Dokumentation zu fokussieren. Die compose-Änderungen führten zu mehreren Problemen:
+um den PR auf die Caddy-Dokumentation zu fokussieren. Die compose-Änderungen führten zu mehreren Risiken/Nebenwirkungen:
 
 - Fehlender Caddy-Service (Gateway-Prinzip verletzt)
 - NATS_URL ohne NATS-Service gesetzt (Readiness-Checks schlugen fehl)
