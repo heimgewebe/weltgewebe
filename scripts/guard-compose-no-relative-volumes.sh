@@ -29,7 +29,7 @@ fi
 # - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
 # - ../caddy/heimserver:/etc/caddy/heimserver:ro
 # Pattern matches grep -n output format: line_number:content
-allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)$'
+allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile:ro|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver:ro)$'
 
 # Filter out allowed patterns
 filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
