@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
+
 echo "== guard: compose no relative volumes =="
-scripts/guard-compose-no-relative-volumes.sh infra/compose/compose.prod.yml
+"${REPO_ROOT}/scripts/guard-compose-no-relative-volumes.sh" \
+  "${REPO_ROOT}/infra/compose/compose.prod.yml"
