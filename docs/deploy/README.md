@@ -3,6 +3,11 @@
 Dieses Dokument beschreibt den **kanonischen Deployment-Stand** von Weltgewebe.
 Es ist normativ. Abweichungen davon gelten als Drift.
 
+**Weitere Dokumente:**
+
+- [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
+- [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift
+
 ---
 
 ## 1. Zweck

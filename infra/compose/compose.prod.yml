@@ -1,3 +1,4 @@
+---
 services:
   api:
     image: weltgewebe-api:latest
@@ -6,9 +7,9 @@ services:
       NATS_URL: nats://nats:4222
       DATABASE_URL: postgres://welt:welt@db:5432/welt
     ports:
-    - 8081:8080
+      - 8081:8080
     volumes:
-    - /opt/weltgewebe/policies:/app/policies:ro
+      - /opt/weltgewebe/policies:/app/policies:ro
   db:
     image: postgres:16
     environment:
@@ -16,6 +17,6 @@ services:
       POSTGRES_PASSWORD: welt
       POSTGRES_DB: welt
     volumes:
-    - db_data:/var/lib/postgresql/data
+      - db_data:/var/lib/postgresql/data
 volumes:
   db_data: null
