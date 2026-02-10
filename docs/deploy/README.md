@@ -46,6 +46,7 @@ Andere Kopien oder Exporte gelten als nicht autoritativ.
 - Weitere Compose-Dateien (nicht primär produktiv):
   - `compose.core.yml` – Basiskomponenten
   - `compose.observ.yml` – Observability / Zusatzdienste
+  - `compose.ops.override.yml` – Lokale Entwicklungs-/Ops-Umgebung (NATS + API-Port-Mapping für Debugging)
 
 ---
 
