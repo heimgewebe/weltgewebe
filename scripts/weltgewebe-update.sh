@@ -16,7 +16,7 @@ HEALTH_URL="${HEALTH_URL:-http://localhost/health/ready}"
 
 # Optional: if you have a snapshot script, set SNAPSHOT_SCRIPT to its path.
 # Keep naming "weltgewebe", not "wgx".
-SNAPSHOT_SCRIPT="${SNAPSHOT_SCRIPT:-scripts/weltgewebe-deploy-snapshot.sh}"
+SNAPSHOT_SCRIPT="${SNAPSHOT_SCRIPT:-scripts/deploy-snapshot.sh}"
 
 cd "$REPO_DIR"
 
@@ -35,7 +35,7 @@ echo "HEAD:   $HEAD_SHA"
 echo "TARGET: $TARGET_SHA"
 echo
 
-# 2) Enforce target state (critical)
+# 2) Align working tree to target (note: untracked files are not removed)
 if [[ "$HEAD_SHA" != "$TARGET_SHA" ]]; then
   echo "Updating working tree to $REMOTE/$BRANCH ..."
   git reset --hard "$REMOTE/$BRANCH"
@@ -62,7 +62,7 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" -p "$COMPOSE_PROJECT" p
 # 6) Health
 echo
 echo "Health: $HEALTH_URL"
-if curl -fsS "$HEALTH_URL" >/dev/null; then
+if curl -fsS --connect-timeout 2 --max-time 5 --retry 5 --retry-delay 1 "$HEALTH_URL" >/dev/null; then
   echo "Health OK"
 else
   echo "ERROR: Health check failed"

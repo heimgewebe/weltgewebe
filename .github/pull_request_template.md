@@ -15,7 +15,7 @@ Warum ist das nötig? Welche Symptome / Tickets / Logs?
 ## Compose / Deploy-Check (Pflicht bei infra/compose Änderungen)
 
 - [ ] `docker compose -f infra/compose/compose.prod.yml config` ist grün
-- [ ] Keine relativen host volume paths (Guard)
+- [ ] Keine neuen relativen host volume paths (Guard; bestehende Ausnahmen sind bekannt)
 - [ ] Health:
   - [ ] `/health/live` ok
   - [ ] `/health/ready` ok (alle checks true)
