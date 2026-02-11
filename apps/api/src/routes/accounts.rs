@@ -9,7 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
-    env, path::PathBuf,
+    env,
+    path::PathBuf,
 };
 use tokio::{
     fs::File,

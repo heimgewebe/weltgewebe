@@ -265,8 +265,7 @@ pub async fn list_dev_accounts(
         .iter()
         .map(|(id, acc)| {
             debug_assert_eq!(
-                id,
-                &acc.public.id,
+                id, &acc.public.id,
                 "accounts_map key must match acc.public.id for deterministic ordering"
             );
             DevAccount {
