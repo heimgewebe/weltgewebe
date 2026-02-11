@@ -261,18 +261,22 @@ pub async fn list_dev_accounts(
     check_dev_login_guard(&headers, addr)?;
 
     let accounts_map = state.accounts.read().await;
-    let mut accounts: Vec<DevAccount> = accounts_map
-        .values()
-        .map(|acc| DevAccount {
-            id: acc.public.id.clone(),
-            title: acc.public.title.clone(),
-            summary: acc.public.summary.clone(),
-            role: acc.role.clone(),
+    let accounts: Vec<DevAccount> = accounts_map
+        .iter()
+        .map(|(id, acc)| {
+            debug_assert_eq!(
+                id,
+                &acc.public.id,
+                "accounts_map key must match acc.public.id for deterministic ordering"
+            );
+            DevAccount {
+                id: id.clone(), // derive from key to preserve ordering guarantee
+                title: acc.public.title.clone(),
+                summary: acc.public.summary.clone(),
+                role: acc.role.clone(),
+            }
         })
         .collect();
-
-    // Sort by ID for deterministic order
-    accounts.sort_by(|a, b| a.id.cmp(&b.id));
 
     Ok(Json(accounts))
 }
@@ -474,7 +478,8 @@ pub async fn request_login(
                     // Another request provisioned it in the meantime
                     Some(id)
                 } else {
-                    accounts_map.insert(new_id.clone(), new_account);
+                    let id = new_account.public.id.clone();
+                    accounts_map.insert(id.clone(), new_account);
                     tracing::info!(
                         event = "login.provisioned",
                         request_id = %request_id,
