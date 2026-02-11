@@ -2,6 +2,7 @@ use std::path::Path;
 
 use weltgewebe_api::test_helpers::EnvGuard;
 
+#[allow(dead_code)]
 pub fn set_gewebe_in_dir(dir: &Path) -> EnvGuard {
     EnvGuard::set(
         "GEWEBE_IN_DIR",
