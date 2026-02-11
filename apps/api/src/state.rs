@@ -5,7 +5,7 @@ use crate::{
     auth::{rate_limit::AuthRateLimiter, session::SessionStore, tokens::TokenStore},
     config::AppConfig,
     mailer::Mailer,
-    routes::{accounts::AccountInternal, nodes::Node},
+    routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
     telemetry::Metrics,
 };
 use async_nats::Client as NatsClient;
@@ -23,6 +23,7 @@ pub struct ApiState {
     pub tokens: TokenStore,
     pub accounts: Arc<RwLock<HashMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
+    pub edges: Arc<RwLock<Vec<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
 }

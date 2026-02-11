@@ -43,6 +43,7 @@ struct MetricsInner {
     registry: Registry,
     pub http_requests_total: IntCounterVec,
     pub nodes_cache_count: IntGauge,
+    pub edges_cache_count: IntGauge,
 }
 
 impl Metrics {
@@ -57,10 +58,14 @@ impl Metrics {
         let nodes_count_opts = Opts::new("nodes_cache_count", "Number of nodes in memory cache");
         let nodes_cache_count = IntGauge::with_opts(nodes_count_opts)?;
 
+        let edges_count_opts = Opts::new("edges_cache_count", "Number of edges in memory cache");
+        let edges_cache_count = IntGauge::with_opts(edges_count_opts)?;
+
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
         registry.register(Box::new(build_info_metric.clone()))?;
         registry.register(Box::new(nodes_cache_count.clone()))?;
+        registry.register(Box::new(edges_cache_count.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -75,12 +80,17 @@ impl Metrics {
                 registry,
                 http_requests_total,
                 nodes_cache_count,
+                edges_cache_count,
             }),
         })
     }
 
     pub fn set_nodes_cache_count(&self, count: i64) {
         self.inner.nodes_cache_count.set(count);
+    }
+
+    pub fn set_edges_cache_count(&self, count: i64) {
+        self.inner.edges_cache_count.set(count);
     }
 
     pub fn http_requests_total(&self) -> &IntCounterVec {

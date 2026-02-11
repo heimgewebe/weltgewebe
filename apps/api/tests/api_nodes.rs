@@ -70,6 +70,7 @@ async fn test_state() -> Result<ApiState> {
         nodes: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::routes::nodes::load_nodes().await,
         )),
+        edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
     })
