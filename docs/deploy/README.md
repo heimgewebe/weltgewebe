@@ -123,7 +123,8 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 
 ### Performance & Limits
 
-- **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`). Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
+- **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
+  Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
 
 ---
 
