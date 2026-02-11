@@ -35,10 +35,19 @@ pub async fn load_edges() -> Vec<Edge> {
     let mut lines = BufReader::new(file).lines();
     let mut edges = Vec::new();
 
-    let max_edges = std::env::var("MAX_EDGES_CACHE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(500_000);
+    let max_edges = match std::env::var("MAX_EDGES_CACHE") {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    value = %val,
+                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
+                );
+                500_000
+            }
+        },
+        Err(_) => 500_000,
+    };
 
     while let Ok(Some(line)) = lines.next_line().await {
         if edges.len() >= max_edges {
