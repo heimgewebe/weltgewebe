@@ -297,10 +297,11 @@ pub async fn list_accounts(
 
     let accounts_map = state.accounts.read().await;
 
+    // BTreeMap iterates in ascending key order, so output is deterministic by account id.
     let accounts: Vec<AccountPublic> = accounts_map
-        .values()
+        .iter()
         .take(limit)
-        .map(|internal| internal.public.clone())
+        .map(|(_id, internal)| internal.public.clone())
         .collect();
 
     Ok(Json(accounts))

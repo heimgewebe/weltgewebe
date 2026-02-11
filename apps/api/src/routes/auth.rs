@@ -262,12 +262,19 @@ pub async fn list_dev_accounts(
 
     let accounts_map = state.accounts.read().await;
     let accounts: Vec<DevAccount> = accounts_map
-        .values()
-        .map(|acc| DevAccount {
-            id: acc.public.id.clone(),
-            title: acc.public.title.clone(),
-            summary: acc.public.summary.clone(),
-            role: acc.role.clone(),
+        .iter()
+        .map(|(id, acc)| {
+            debug_assert_eq!(
+                id,
+                &acc.public.id,
+                "accounts_map key must match acc.public.id for deterministic ordering"
+            );
+            DevAccount {
+                id: id.clone(), // derive from key to preserve ordering guarantee
+                title: acc.public.title.clone(),
+                summary: acc.public.summary.clone(),
+                role: acc.role.clone(),
+            }
         })
         .collect();
 
