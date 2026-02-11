@@ -200,14 +200,11 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(
-        "weber1".to_string(),
-        AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-        },
-    );
+    account_map.insert(account.public.id.clone(), AccountInternal {
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -386,14 +383,11 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(
-        "weber1".to_string(),
-        AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-        },
-    );
+    account_map.insert(account.public.id.clone(), AccountInternal {
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));

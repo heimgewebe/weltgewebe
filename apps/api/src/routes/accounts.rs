@@ -272,15 +272,12 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
             .map(|s| s.to_string());
 
         if let Some(public) = map_json_to_public_account(&v) {
-            let id = public.id.clone();
-            map.insert(
-                id,
-                AccountInternal {
-                    public,
-                    role,
-                    email,
-                },
-            );
+            let account = AccountInternal {
+                public,
+                role,
+                email,
+            };
+            map.insert(account.public.id.clone(), account);
         }
     }
     map

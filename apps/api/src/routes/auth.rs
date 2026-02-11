@@ -478,7 +478,8 @@ pub async fn request_login(
                     // Another request provisioned it in the meantime
                     Some(id)
                 } else {
-                    accounts_map.insert(new_id.clone(), new_account);
+                    let id = new_account.public.id.clone();
+                    accounts_map.insert(id.clone(), new_account);
                     tracing::info!(
                         event = "login.provisioned",
                         request_id = %request_id,

@@ -55,25 +55,23 @@ mod tests {
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
         let mut account_map = BTreeMap::new();
-        account_map.insert(
-            "u1".to_string(),
-            AccountInternal {
-                public: AccountPublic {
-                    id: "u1".to_string(),
-                    kind: "garnrolle".to_string(),
-                    title: "User".to_string(),
-                    summary: None,
-                    public_pos: None,
-                    visibility: Visibility::Public,
-                    radius_m: 0,
-                    ron_flag: false,
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: Some("u1@example.com".to_string()),
+        let account = AccountInternal {
+            public: AccountPublic {
+                id: "u1".to_string(),
+                kind: "garnrolle".to_string(),
+                title: "User".to_string(),
+                summary: None,
+                public_pos: None,
+                visibility: Visibility::Public,
+                radius_m: 0,
+                ron_flag: false,
+                disabled: false,
+                tags: vec![],
             },
-        );
+            role: Role::Gast,
+            email: Some("u1@example.com".to_string()),
+        };
+        account_map.insert(account.public.id.clone(), account);
 
         Ok(ApiState {
             db_pool: None,
