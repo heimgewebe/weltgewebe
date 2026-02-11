@@ -81,22 +81,25 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
     let ids = vec!["u2", "a1", "u1"];
 
     for id in ids {
-        accounts.insert(id.to_string(), AccountInternal {
-            public: AccountPublic {
-                id: id.to_string(),
-                kind: "garnrolle".to_string(),
-                title: format!("Title {}", id),
-                summary: None,
-                public_pos: None,
-                visibility: Visibility::Public,
-                radius_m: 0,
-                ron_flag: false,
-                disabled: false,
-                tags: vec![],
+        accounts.insert(
+            id.to_string(),
+            AccountInternal {
+                public: AccountPublic {
+                    id: id.to_string(),
+                    kind: "garnrolle".to_string(),
+                    title: format!("Title {}", id),
+                    summary: None,
+                    public_pos: None,
+                    visibility: Visibility::Public,
+                    radius_m: 0,
+                    ron_flag: false,
+                    disabled: false,
+                    tags: vec![],
+                },
+                role: Role::Gast,
+                email: None,
             },
-            role: Role::Gast,
-            email: None,
-        });
+        );
     }
 
     state.accounts = Arc::new(RwLock::new(accounts));
