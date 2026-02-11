@@ -200,7 +200,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(account.public.id.clone(), AccountInternal {
+    account_map.insert(account.id.clone(), AccountInternal {
         public: account,
         role: Role::Weber,
         email: Some("weber1@example.com".to_string()),
@@ -383,7 +383,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(account.public.id.clone(), AccountInternal {
+    account_map.insert(account.id.clone(), AccountInternal {
         public: account,
         role: Role::Weber,
         email: Some("weber1@example.com".to_string()),
