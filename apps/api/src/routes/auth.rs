@@ -261,7 +261,7 @@ pub async fn list_dev_accounts(
     check_dev_login_guard(&headers, addr)?;
 
     let accounts_map = state.accounts.read().await;
-    let mut accounts: Vec<DevAccount> = accounts_map
+    let accounts: Vec<DevAccount> = accounts_map
         .values()
         .map(|acc| DevAccount {
             id: acc.public.id.clone(),
@@ -270,9 +270,6 @@ pub async fn list_dev_accounts(
             role: acc.role.clone(),
         })
         .collect();
-
-    // Sort by ID for deterministic order
-    accounts.sort_by(|a, b| a.id.cmp(&b.id));
 
     Ok(Json(accounts))
 }

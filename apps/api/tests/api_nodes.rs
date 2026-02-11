@@ -9,7 +9,7 @@ mod helpers;
 
 use axum::middleware::from_fn_with_state;
 use helpers::set_gewebe_in_dir;
-use std::{collections::HashMap, fs, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -66,7 +66,7 @@ async fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(RwLock::new(HashMap::new())),
+        accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::routes::nodes::load_nodes().await,
         )),
@@ -187,7 +187,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let _env = set_gewebe_in_dir(&in_dir);
 
     // Setup Auth State with Account
-    let mut account_map = HashMap::new();
+    let mut account_map = BTreeMap::new();
     let account = AccountPublic {
         id: "weber1".to_string(),
         kind: "garnrolle".to_string(),
@@ -373,7 +373,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     );
 
     // Setup Auth State with Account
-    let mut account_map = HashMap::new();
+    let mut account_map = BTreeMap::new();
     let account = AccountPublic {
         id: "weber1".to_string(),
         kind: "garnrolle".to_string(),

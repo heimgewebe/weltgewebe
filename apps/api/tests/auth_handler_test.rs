@@ -8,7 +8,7 @@ mod tests {
         Router,
     };
     use serial_test::serial;
-    use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+    use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
     use tokio::sync::RwLock;
     use tower::ServiceExt;
     use weltgewebe_api::{
@@ -54,7 +54,7 @@ mod tests {
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
-        let mut account_map = HashMap::new();
+        let mut account_map = BTreeMap::new();
         account_map.insert(
             "u1".to_string(),
             AccountInternal {

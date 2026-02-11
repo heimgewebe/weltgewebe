@@ -7,7 +7,10 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{collections::HashMap, env, path::PathBuf};
+use std::{
+    collections::{BTreeMap, HashMap},
+    env, path::PathBuf,
+};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -234,8 +237,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
-pub async fn load_all_accounts() -> HashMap<String, AccountInternal> {
-    let mut map = HashMap::new();
+pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
+    let mut map = BTreeMap::new();
     let path = accounts_path();
 
     let file = match File::open(&path).await {
@@ -293,13 +296,10 @@ pub async fn list_accounts(
         .unwrap_or(100);
 
     let accounts_map = state.accounts.read().await;
-    let mut ids: Vec<_> = accounts_map.keys().collect();
-    ids.sort();
 
-    let accounts: Vec<AccountPublic> = ids
-        .into_iter()
+    let accounts: Vec<AccountPublic> = accounts_map
+        .values()
         .take(limit)
-        .filter_map(|id| accounts_map.get(id))
         .map(|internal| internal.public.clone())
         .collect();
 

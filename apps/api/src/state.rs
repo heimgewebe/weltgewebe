@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -21,7 +21,7 @@ pub struct ApiState {
     pub metrics: Metrics,
     pub sessions: SessionStore,
     pub tokens: TokenStore,
-    pub accounts: Arc<RwLock<HashMap<String, AccountInternal>>>,
+    pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
