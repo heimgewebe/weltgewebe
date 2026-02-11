@@ -20,6 +20,8 @@ pub struct Edge {
     pub edge_kind: String,
 }
 
+const MAX_PAGE_SIZE: usize = 1000;
+
 pub async fn load_edges() -> Vec<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
@@ -33,7 +35,21 @@ pub async fn load_edges() -> Vec<Edge> {
     let mut lines = BufReader::new(file).lines();
     let mut edges = Vec::new();
 
+    let max_edges = std::env::var("MAX_EDGES_CACHE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(500_000);
+
     while let Ok(Some(line)) = lines.next_line().await {
+        if edges.len() >= max_edges {
+            tracing::warn!(
+                ?path,
+                max_edges,
+                "Edges cache limit reached, truncating load"
+            );
+            break;
+        }
+
         let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(e) => {
@@ -64,7 +80,8 @@ pub async fn list_edges(
     let limit: usize = params
         .get("limit")
         .and_then(|s| s.parse().ok())
-        .unwrap_or(250);
+        .unwrap_or(250)
+        .min(MAX_PAGE_SIZE);
 
     let edges = state.edges.read().await;
 
