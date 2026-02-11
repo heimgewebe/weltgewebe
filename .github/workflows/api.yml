@@ -87,6 +87,6 @@ jobs:
         with:
           toolchain: "1.89.0"
       - name: Install cargo-audit
-        run: cargo install cargo-audit --force
+        run: cargo install cargo-audit --force --locked
       - name: cargo audit
         run: cargo audit
