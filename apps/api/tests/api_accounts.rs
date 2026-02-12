@@ -4,7 +4,6 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
-use serial_test::serial;
 mod helpers;
 
 use std::{collections::BTreeMap, sync::Arc};
@@ -71,7 +70,6 @@ async fn test_state() -> Result<ApiState> {
 }
 
 #[tokio::test]
-#[serial]
 async fn accounts_list_is_sorted_and_limited() -> Result<()> {
     let mut state = test_state().await?;
     let mut accounts = BTreeMap::new();
