@@ -197,7 +197,7 @@ YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
 ## Deployment (Heimserver)
 
-See: [docs/deploy/heimserver.integration.md](docs/deploy/heimserver.integration.md)
+See: `docs/deploy/heimserver.integration.md`
 
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 

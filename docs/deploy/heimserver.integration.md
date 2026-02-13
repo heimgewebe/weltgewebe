@@ -3,6 +3,7 @@
 ## 0. Zweck
 
 Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
+Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details liegen außerhalb des Repos.
 
 **Nicht enthalten:**
 
@@ -26,7 +27,8 @@ Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
 
 **Invarianten:**
 
-* Kein `.home`
+* Kein `.home` (als TLD)
+* Erlaubt: `home.arpa` (RFC 8375)
 * Kein `.lan`
 * Kein `weltgewebe.api`
 * Kein direkter Port-Zugriff

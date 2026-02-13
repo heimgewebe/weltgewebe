@@ -2,3 +2,8 @@ leitstand.heimgewebe.home.arpa {
 	reverse_proxy leitstand:3000
 	tls internal
 }
+
+api.heimgewebe.home.arpa {
+	reverse_proxy api:8080
+	tls internal
+}
