@@ -6,17 +6,17 @@ Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
 
 **Nicht enthalten:**
 
-*   Firewall-Details
-*   WireGuard-Details
-*   Router-Konfiguration
+* Firewall-Details
+* WireGuard-Details
+* Router-Konfiguration
 
 **Nur:**
 
-*   API-Entry-Point
-*   DNS
-*   Reverse Proxy
-*   TLS
-*   CORS
+* API-Entry-Point
+* DNS
+* Reverse Proxy
+* TLS
+* CORS
 
 ---
 
@@ -26,11 +26,11 @@ Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
 
 **Invarianten:**
 
-*   Kein `.home`
-*   Kein `.lan`
-*   Kein `weltgewebe.api`
-*   Kein direkter Port-Zugriff
-*   Kein http-only Betrieb
+* Kein `.home`
+* Kein `.lan`
+* Kein `weltgewebe.api`
+* Kein direkter Port-Zugriff
+* Kein http-only Betrieb
 
 ---
 
@@ -44,16 +44,16 @@ reverse_proxy api:8080
 
 **Upstream darf:**
 
-*   Nicht öffentlich gebunden sein
-*   Nur Container-intern erreichbar sein
+* Nicht öffentlich gebunden sein
+* Nur Container-intern erreichbar sein
 
 ---
 
 ## 3. TLS-Policy
 
-*   `tls internal`
-*   Interne CA
-*   Keine öffentliche ACME-Integration
+* `tls internal`
+* Interne CA
+* Keine öffentliche ACME-Integration
 
 ---
 
@@ -65,8 +65,8 @@ Falls CORS verwendet wird:
 
 `https://leitstand.heimgewebe.home.arpa`
 
-*   Kein Wildcard-`*`
-*   Keine parallelen Domains
+* Kein Wildcard-`*`
+* Keine parallelen Domains
 
 ---
 
@@ -74,10 +74,10 @@ Falls CORS verwendet wird:
 
 Die API erwartet:
 
-*   DNS-Auflösung über Pi-hole
-*   Kein Splitbrain
-*   Keine parallelen Domains
-*   Kein HTTP/3 ohne Dokumentation
+* DNS-Auflösung über Pi-hole
+* Kein Splitbrain
+* Keine parallelen Domains
+* Kein HTTP/3 ohne Dokumentation
 
 ---
 
