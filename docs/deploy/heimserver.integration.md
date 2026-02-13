@@ -31,7 +31,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 * Erlaubt: `home.arpa` (RFC 8375)
 * Kein `.lan`
 * Kein `weltgewebe.api`
-* Kein direkter Port-Zugriff
+* Kein direkter Port-Zugriff (Clients must not access :8080; only via https://...)
 * Kein http-only Betrieb
 
 ---
@@ -48,6 +48,7 @@ reverse_proxy api:8080
 
 * Nicht öffentlich gebunden sein
 * Nur Container-intern erreichbar sein
+* Host-Match erforderlich (sonst 404/Drift).
 
 ---
 

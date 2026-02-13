@@ -1,3 +1,5 @@
+# Heimserver-only snippet imported by the real edge Caddyfile; may be complemented by bind/redirect/global options.
+
 leitstand.heimgewebe.home.arpa {
 	reverse_proxy leitstand:3000
 	tls internal
