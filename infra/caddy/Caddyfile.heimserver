@@ -1,4 +1,4 @@
-leitstand.lan {
+leitstand.heimgewebe.home.arpa {
 	reverse_proxy leitstand:3000
 	tls internal
 }

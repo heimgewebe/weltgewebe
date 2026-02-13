@@ -195,6 +195,10 @@ dienen als Diskussionsgrundlage im Review.
 Docs-Only-CI aktiv mit den Checks Markdown-Lint, Link-Check,
 YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
+## Deployment (Heimserver)
+
+See: `docs/deploy/heimserver.integration.md`
+
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 
 - **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md)
