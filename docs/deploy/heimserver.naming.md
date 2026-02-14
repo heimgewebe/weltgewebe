@@ -26,11 +26,13 @@ Dieses Dokument definiert den normativen Contract für die Benennung von Dienste
 Die Zuordnung erfolgt strikt nach Semantik:
 
 ### Heimgewebe
+
 * `leitstand.heimgewebe.home.arpa`
 * `api.heimgewebe.home.arpa`
 * `heimgewebe.home.arpa` (optional)
 
 ### Weltgewebe
+
 * `weltgewebe.home.arpa` (optional)
 * `api.weltgewebe.home.arpa` (optional, nur sofern existent)
 
