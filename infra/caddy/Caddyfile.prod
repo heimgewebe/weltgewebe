@@ -107,7 +107,7 @@ http://api.heimgewebe.home.arpa {
 }
 
 leitstand.heimgewebe.home.arpa {
-	reverse_proxy deploy-leitstand-1:3000
+	reverse_proxy leitstand:3000
 	tls internal
 }
 
