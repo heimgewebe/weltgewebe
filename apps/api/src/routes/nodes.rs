@@ -68,6 +68,130 @@ struct IdOnly {
     id: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct LocationDto {
+    #[serde(deserialize_with = "deserialize_f64_or_string")]
+    lat: f64,
+    #[serde(deserialize_with = "deserialize_f64_or_string")]
+    lon: f64,
+}
+
+#[derive(Deserialize)]
+struct NodeDto {
+    id: String,
+    #[serde(default = "default_kind")]
+    kind: String,
+    #[serde(default = "default_title")]
+    title: String,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+    summary: Option<String>,
+    info: Option<String>,
+    #[serde(default)]
+    tags: Option<Value>,
+    location: LocationDto,
+}
+
+fn default_kind() -> String {
+    "Unknown".to_string()
+}
+
+fn default_title() -> String {
+    "Untitled".to_string()
+}
+
+fn deserialize_f64_or_string<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct F64OrStringVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for F64OrStringVisitor {
+        type Value = f64;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a float or a string containing a float")
+        }
+
+        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v as f64)
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v as f64)
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            v.parse::<f64>().map_err(serde::de::Error::custom)
+        }
+    }
+
+    deserializer.deserialize_any(F64OrStringVisitor)
+}
+
+impl TryFrom<NodeDto> for Node {
+    type Error = ();
+
+    fn try_from(dto: NodeDto) -> Result<Self, Self::Error> {
+        let default_timestamp = "1970-01-01T00:00:00Z";
+
+        let created_at = dto
+            .created_at
+            .as_deref()
+            .or(dto.updated_at.as_deref())
+            .unwrap_or(default_timestamp)
+            .to_string();
+        let updated_at = dto
+            .updated_at
+            .as_deref()
+            .or(dto.created_at.as_deref())
+            .unwrap_or(default_timestamp)
+            .to_string();
+
+        let tags = dto
+            .tags
+            .as_ref()
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Node {
+            id: dto.id,
+            kind: dto.kind,
+            title: dto.title,
+            created_at,
+            updated_at,
+            summary: dto.summary,
+            info: dto.info,
+            tags,
+            location: Location {
+                lat: dto.location.lat,
+                lon: dto.location.lon,
+            },
+        })
+    }
+}
+
 fn parse_bbox(s: &str) -> Option<BBox> {
     let parts: Vec<_> = s.split(',').collect();
     let (lng1, lat1, lng2, lat2) = match parts.as_slice() {
@@ -189,11 +313,11 @@ pub async fn load_nodes() -> Vec<Node> {
     let mut duplicates_count = 0;
 
     while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value = match serde_json::from_str(&line) {
+        let dto: NodeDto = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => continue,
         };
-        if let Some(node) = map_json_to_node(&v) {
+        if let Ok(node) = Node::try_from(dto) {
             if let Some(&idx) = id_map.get(&node.id) {
                 // Last-write-wins: Overwrite existing node
                 nodes[idx] = node;
