@@ -15,7 +15,7 @@ Dieses Dokument beschreibt die Integration der Weltgewebe-Services (z.B. API) in
 1. **Weltgewebe-Domains** (`*.weltgewebe.home.arpa`) verweisen ausschließlich auf Services dieses Repositories.
 2. **Keine Überschneidung:** Heimgewebe-Domains (`*.heimgewebe.home.arpa`) werden hier nicht definiert oder verwaltet.
 3. **Caddy:** Bindet strikt pro FQDN.
-4.  **.home.arpa** ist der kanonische TLD-Suffix (RFC 8375).
+4. **.home.arpa** ist der kanonische TLD-Suffix (RFC 8375).
 
 ## 4. Kanonische Domains
 
