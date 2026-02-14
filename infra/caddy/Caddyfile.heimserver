@@ -1,4 +1,4 @@
-# Heimserver-only snippet imported by the real edge Caddyfile; may be complemented by bind/redirect/global options.
+# Heimserver-only snippet. Integration logic resides in the external Heimserver repository (e.g. /opt/heimgewebe/edge/Caddyfile).
 
 leitstand.heimgewebe.home.arpa {
 	reverse_proxy leitstand:3000

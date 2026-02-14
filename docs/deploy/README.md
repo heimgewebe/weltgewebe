@@ -265,9 +265,6 @@ ss -lntp | grep -E ":(80|443)"
 Prüfe den Upstream-Zugriff (ohne DNS, via curl-Resolve):
 
 ```bash
-# Wenn CADDY_BIND=127.0.0.1 (Default Heimserver):
+# Zum lokalen Testen gegen den Host via --resolve (IP anpassen je nach Host-Binding, z.B. 127.0.0.1 oder LAN-IP):
 curl -k --resolve leitstand.heimgewebe.home.arpa:443:127.0.0.1 https://leitstand.heimgewebe.home.arpa/
-
-# Hinweis: Falls CADDY_BIND auf eine andere IP (z.B. 192.168.x.x) gesetzt ist,
-# muss 127.0.0.1 im Befehl entsprechend ersetzt werden.
 ```
