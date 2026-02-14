@@ -1,4 +1,4 @@
-# Heimserver Integration
+# Weltgewebe API – Heimserver Integration
 
 ## 0. Zweck
 
@@ -29,8 +29,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 **Invarianten:**
 
-* Kein `.home` (als TLD)
-* Erlaubt: `home.arpa` (RFC 8375)
+* Kein `.home` als TLD (erlaubt ist ausschließlich `.home.arpa`; RFC 8375).
 * Kein `.lan`
 * Kein `weltgewebe.api`
 * Kein direkter Port-Zugriff (Direct :8080 access is not part of the supported contract; use reverse proxy FQDN).
@@ -43,7 +42,10 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 Caddy leitet weiter an:
 
 ```caddy
-reverse_proxy api:8080
+api.heimgewebe.home.arpa {
+    reverse_proxy api:8080
+    tls internal
+}
 ```
 
 **Upstream darf:**
