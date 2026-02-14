@@ -1,51 +1,46 @@
 # Heimserver Naming Policy
 
-## These / Antithese / Synthese
+## 1. Zweck
 
-**These:**
-Deine Policy ist eindeutig: zwei getrennte Organismen, zwei getrennte Namensräume
-(\*.heimgewebe.home.arpa vs \*.weltgewebe.home.arpa).
-Alles, was leitstand.heimgewebe… in einem „weltgewebe“-Stack auftauchen lässt, ist Drift und erzeugt genau den
-TLS/DNS-Splitbrain, den du beschreibst.
+Vermeidung von Split-Brain-Situationen zwischen DNS, TLS und Container-Routing.
+Dieses Dokument definiert den normativen Contract für die Benennung von Diensten auf dem Heimserver.
 
-**Antithese:**
-Man kann argumentieren: „Ist doch egal, Hauptsache es läuft auf dem Heimserver.“
-Das stimmt nur kurzfristig; langfristig wird „egal“ zur Fehlerklasse („falsches Cert“, „falscher Host“,
-„falsches Repo“).
+## 2. Begriffe
 
-**Synthese:**
-Wir machen Bereinigung als Contract:
+* **Heimgewebe:** Organismus aus Repositories (lokale Dienste, keine Zwecke).
+* **Weltgewebe:** Kartenbasiertes Common-Interface (kein eigener Organismus).
 
-1. Heimgewebe-Domains nur für Heimgewebe-Services.
-2. Weltgewebe-Domains nur für Weltgewebe-Services.
-3. Caddy bindet strikt pro FQDN.
-4. DNS hat genau eine Quelle.
-5. Optionale Übergangsphase nur als expliziter Redirect/Alias — nie still.
+## 3. Normative Regeln
+
+1. **Heimgewebe-Domains** verweisen ausschließlich auf Heimgewebe-Services.
+2. **Weltgewebe-Domains** verweisen ausschließlich auf Weltgewebe-Services.
+3. **Caddy** bindet strikt pro FQDN (keine Wildcards, keine impliziten Defaults).
+4. **DNS** hat genau eine autoritative Quelle.
+5. **Optionale Übergangsphasen** erfolgen nur als expliziter Redirect/Alias — niemals stillschweigend.
+6. **.home vs .home.arpa:** `.home` ist als TLD nicht zulässig (da nicht reserviert). `.home.arpa` ist kanonisch (RFC 8375).
 
 ---
 
-## Klarstellung zur Altlast
+## 4. Kanonische Domains
 
-Mit „Altlast“ meinte ich: Der Pfad /opt/weltgewebe und Container-Namen wie weltgewebe-api können historisch/zufällig
-sein, ohne dass sie semantisch zu Heimgewebe gehören.
-Das ist eine typische Drift-Falle: Labels (Ordner/Service-Namen) erzeugen eine falsche Wirklichkeit im Kopf.
-Deine Policy zwingt jetzt die Korrektur: Semantik bestimmt Routing, nicht der Ordnername.
+Die Zuordnung erfolgt strikt nach Semantik:
 
----
+### Heimgewebe
+* `leitstand.heimgewebe.home.arpa`
+* `api.heimgewebe.home.arpa`
+* `heimgewebe.home.arpa` (optional)
 
-## Entscheidung
+### Weltgewebe
+* `weltgewebe.home.arpa` (optional)
+* `api.weltgewebe.home.arpa` (optional, nur sofern existent)
 
-Wir ziehen das hart auseinander:
-
-* **Heimgewebe:** `leitstand.heimgewebe.home.arpa`, `api.heimgewebe.home.arpa`, optional `heimgewebe.home.arpa`
-* **Weltgewebe:** analog `weltgewebe.home.arpa` als optionales Root, plus `api.weltgewebe.home.arpa` etc.
-  (nur wenn Weltgewebe überhaupt eine API hat)
-
-Keine Kreuzung, kein „shared“ Host.
+Keine Kreuzung der Namensräume. Kein „shared“ Host.
 
 ---
 
-## Doku-Korrektur: .home vs .home.arpa
+## 5. Drift-Falle: Label ≠ Semantik
 
-* „Kein .home als TLD“ (weil nicht reserviert)
-* „.home.arpa ist kanonisch“ (RFC 8375)
+Historische Pfade (z.B. `/opt/weltgewebe`) oder Container-Namen (z.B. `weltgewebe-api`) können irreführend sein und müssen
+nicht der semantischen Zugehörigkeit entsprechen.
+Die Policy erzwingt eine Korrektur: Die Semantik bestimmt das Routing, nicht der Ordner- oder Service-Name.
+Labels erzeugen oft eine falsche Wirklichkeit; dieser Contract gilt vorrangig.

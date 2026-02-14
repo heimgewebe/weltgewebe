@@ -107,11 +107,13 @@ http://api.heimgewebe.home.arpa {
 }
 
 leitstand.heimgewebe.home.arpa {
-	reverse_proxy leitstand:3000
+	# Upstream muss Compose-Service entsprechen (compose.prod.yml).
+	reverse_proxy deploy-leitstand-1:3000
 	tls internal
 }
 
 api.heimgewebe.home.arpa {
+	# Upstream muss Compose-Service entsprechen (compose.prod.yml).
 	reverse_proxy api:8080
 	tls internal
 }
