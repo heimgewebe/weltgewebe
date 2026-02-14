@@ -1,4 +1,4 @@
-# Heimserver-only snippet. Integration logic resides in the external Heimserver repository (e.g. /opt/heimgewebe/edge/Caddyfile).
+# Heimserver-only snippet (documentation/reference). Integration logic resides in the external Heimserver repository (e.g. /opt/heimgewebe/edge/Caddyfile).
 
 leitstand.heimgewebe.home.arpa {
 	reverse_proxy leitstand:3000
