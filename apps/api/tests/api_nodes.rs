@@ -446,6 +446,7 @@ async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
             r#"{"id": "n4", "kind": "Dirty Title", "title": true, "location": {"lat": 52.5, "lon": 13.4}}"#,
             r#"{"id": "n5", "kind": "Dirty Info", "title": "Dirty Info", "info": {"foo": "bar"}, "location": {"lat": 52.5, "lon": 13.4}}"#,
             r#"{"id": "n6", "title": "Dirty Tags", "tags": ["clean", 123, null, "also-clean"], "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{broken_json"#, // Malformed JSON line -> should be skipped
         ],
     )
     .await;

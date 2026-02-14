@@ -319,11 +319,15 @@ pub async fn load_nodes() -> Vec<Node> {
     // Temporary map to handle duplicates efficiently during load
     let mut id_map: HashMap<String, usize> = HashMap::new();
     let mut duplicates_count = 0;
+    let mut skipped_count = 0;
 
     while let Ok(Some(line)) = lines.next_line().await {
         let dto: NodeDto = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue,
+            Err(_) => {
+                skipped_count += 1;
+                continue;
+            }
         };
         let node: Node = dto.into();
         if let Some(&idx) = id_map.get(&node.id) {
@@ -342,9 +346,18 @@ pub async fn load_nodes() -> Vec<Node> {
         .map(|m| m.len())
         .unwrap_or(0);
 
+    if skipped_count > 0 {
+        tracing::warn!(
+            skipped_count,
+            ?path,
+            "Skipped nodes due to parse errors during load"
+        );
+    }
+
     tracing::info!(
         count = nodes.len(),
         duplicates_count,
+        skipped_count,
         load_ms,
         file_size_bytes,
         ?path,
