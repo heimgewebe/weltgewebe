@@ -79,25 +79,29 @@ struct LocationDto {
 #[derive(Deserialize)]
 struct NodeDto {
     id: String,
-    #[serde(default = "default_kind")]
-    kind: String,
-    #[serde(default = "default_title")]
-    title: String,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    kind: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    title: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     created_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     updated_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     summary: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     info: Option<String>,
     #[serde(default)]
     tags: Option<Value>,
     location: LocationDto,
 }
 
-fn default_kind() -> String {
-    "Unknown".to_string()
-}
-
-fn default_title() -> String {
-    "Untitled".to_string()
+fn deserialize_opt_string_loose<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    Ok(v.and_then(|x| x.as_str().map(|s| s.to_string())))
 }
 
 fn deserialize_f64_or_string<'de, D>(deserializer: D) -> Result<f64, D::Error>
@@ -145,10 +149,8 @@ where
     deserializer.deserialize_any(F64OrStringVisitor)
 }
 
-impl TryFrom<NodeDto> for Node {
-    type Error = ();
-
-    fn try_from(dto: NodeDto) -> Result<Self, Self::Error> {
+impl From<NodeDto> for Node {
+    fn from(dto: NodeDto) -> Self {
         let default_timestamp = "1970-01-01T00:00:00Z";
 
         let created_at = dto
@@ -175,10 +177,10 @@ impl TryFrom<NodeDto> for Node {
             })
             .unwrap_or_default();
 
-        Ok(Node {
+        Node {
             id: dto.id,
-            kind: dto.kind,
-            title: dto.title,
+            kind: dto.kind.unwrap_or_else(|| "Unknown".to_string()),
+            title: dto.title.unwrap_or_else(|| "Untitled".to_string()),
             created_at,
             updated_at,
             summary: dto.summary,
@@ -188,7 +190,7 @@ impl TryFrom<NodeDto> for Node {
                 lat: dto.location.lat,
                 lon: dto.location.lon,
             },
-        })
+        }
     }
 }
 
@@ -317,15 +319,14 @@ pub async fn load_nodes() -> Vec<Node> {
             Ok(v) => v,
             Err(_) => continue,
         };
-        if let Ok(node) = Node::try_from(dto) {
-            if let Some(&idx) = id_map.get(&node.id) {
-                // Last-write-wins: Overwrite existing node
-                nodes[idx] = node;
-                duplicates_count += 1;
-            } else {
-                id_map.insert(node.id.clone(), nodes.len());
-                nodes.push(node);
-            }
+        let node: Node = dto.into();
+        if let Some(&idx) = id_map.get(&node.id) {
+            // Last-write-wins: Overwrite existing node
+            nodes[idx] = node;
+            duplicates_count += 1;
+        } else {
+            id_map.insert(node.id.clone(), nodes.len());
+            nodes.push(node);
         }
     }
 
