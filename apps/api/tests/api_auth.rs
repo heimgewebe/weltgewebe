@@ -7,7 +7,7 @@ use axum::{
 };
 use serial_test::serial;
 use sha2::{Digest, Sha256};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -64,7 +64,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(RwLock::new(HashMap::new())),
+        accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
@@ -74,46 +74,43 @@ fn test_state() -> Result<ApiState> {
 
 fn test_state_with_accounts() -> Result<ApiState> {
     let mut state = test_state()?;
-    let mut account_map = HashMap::new();
+    let mut account_map = BTreeMap::new();
 
-    account_map.insert(
-        "u1".to_string(),
-        AccountInternal {
-            public: AccountPublic {
-                id: "u1".to_string(),
-                kind: "garnrolle".to_string(),
-                title: "User One".to_string(),
-                summary: Some("Summary 1".to_string()),
-                public_pos: None,
-                visibility: Visibility::Public,
-                radius_m: 0,
-                ron_flag: false,
-                disabled: false,
-                tags: vec![],
-            },
-            role: Role::Gast,
-            email: Some("u1@example.com".to_string()),
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User One".to_string(),
+            summary: Some("Summary 1".to_string()),
+            public_pos: None,
+            visibility: Visibility::Public,
+            radius_m: 0,
+            ron_flag: false,
+            disabled: false,
+            tags: vec![],
         },
-    );
-    account_map.insert(
-        "a1".to_string(),
-        AccountInternal {
-            public: AccountPublic {
-                id: "a1".to_string(),
-                kind: "garnrolle".to_string(),
-                title: "Admin One".to_string(),
-                summary: None,
-                public_pos: None,
-                visibility: Visibility::Public,
-                radius_m: 0,
-                ron_flag: false,
-                disabled: false,
-                tags: vec![],
-            },
-            role: Role::Admin,
-            email: Some("a1@example.com".to_string()),
+        role: Role::Gast,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "a1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Admin One".to_string(),
+            summary: None,
+            public_pos: None,
+            visibility: Visibility::Public,
+            radius_m: 0,
+            ron_flag: false,
+            disabled: false,
+            tags: vec![],
         },
-    );
+        role: Role::Admin,
+        email: Some("a1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
 
     state.accounts = Arc::new(RwLock::new(account_map));
     Ok(state)
@@ -261,27 +258,24 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
 
-    let mut account_map = HashMap::new();
-    let account = AccountPublic {
-        id: "u1".to_string(),
-        kind: "garnrolle".to_string(),
-        title: "User".to_string(),
-        summary: None,
-        public_pos: None,
-        visibility: Visibility::Public,
-        radius_m: 0,
-        ron_flag: false,
-        disabled: false,
-        tags: vec![],
-    };
-    account_map.insert(
-        "u1".to_string(),
-        AccountInternal {
-            public: account,
-            role: Role::Gast,
-            email: Some("u1@example.com".to_string()),
+    let mut account_map = BTreeMap::new();
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            visibility: Visibility::Public,
+            radius_m: 0,
+            ron_flag: false,
+            disabled: false,
+            tags: vec![],
         },
-    );
+        role: Role::Gast,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));

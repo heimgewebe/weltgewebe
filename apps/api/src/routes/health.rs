@@ -275,7 +275,7 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
-    use std::{collections::HashMap, sync::Arc};
+    use std::{collections::BTreeMap, sync::Arc};
     use tokio::sync::RwLock;
 
     fn test_state() -> Result<ApiState> {
@@ -319,7 +319,7 @@ mod tests {
             metrics,
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
-            accounts: Arc::new(RwLock::new(HashMap::new())),
+            accounts: Arc::new(RwLock::new(BTreeMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
             edges: Arc::new(RwLock::new(Vec::new())),
             rate_limiter,
