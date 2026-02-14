@@ -7,7 +7,7 @@ Dieses Dokument definiert den normativen Contract für die Benennung von Dienste
 
 ## 2. Begriffe
 
-* **Heimgewebe:** Organismus aus Repositories (lokale Dienste, keine Zwecke).
+* **Heimgewebe:** Organismus aus Repositories.
 * **Weltgewebe:** Kartenbasiertes Common-Interface (kein eigener Organismus).
 
 ## 3. Normative Regeln
@@ -27,7 +27,7 @@ Die Zuordnung erfolgt strikt nach Semantik:
 
 ### Heimgewebe
 
-* `leitstand.heimgewebe.home.arpa` (sofern provisioniert)
+* `leitstand.heimgewebe.home.arpa` (derzeit nicht provisioniert)
 * `api.heimgewebe.home.arpa`
 * `heimgewebe.home.arpa` (optional)
 

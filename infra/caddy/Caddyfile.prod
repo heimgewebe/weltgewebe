@@ -107,7 +107,7 @@ http://api.heimgewebe.home.arpa {
 }
 
 # leitstand.heimgewebe.home.arpa {
-# 	# NOTE: deaktiviert, da Upstream deploy-leitstand-1 nicht in compose.prod.yml existiert.
+# 	# NOTE: Currently not provisioned in compose.prod.yml
 # 	# reverse_proxy deploy-leitstand-1:3000
 # 	tls internal
 # }
