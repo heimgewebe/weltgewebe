@@ -445,6 +445,7 @@ async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
             r#"{"id": "n3", "kind": "Dirty Summary", "title": "Dirty Summary", "summary": ["oops"], "location": {"lat": 52.5, "lon": 13.4}}"#,
             r#"{"id": "n4", "kind": "Dirty Title", "title": true, "location": {"lat": 52.5, "lon": 13.4}}"#,
             r#"{"id": "n5", "kind": "Dirty Info", "title": "Dirty Info", "info": {"foo": "bar"}, "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n6", "title": "Dirty Tags", "tags": ["clean", 123, null, "also-clean"], "location": {"lat": 52.5, "lon": 13.4}}"#,
         ],
     )
     .await;
@@ -458,8 +459,8 @@ async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     let arr = v.as_array().context("must be array")?;
 
-    // Check that all 5 nodes loaded (robustness)
-    assert_eq!(arr.len(), 5);
+    // Check that all 6 nodes loaded (robustness)
+    assert_eq!(arr.len(), 6);
 
     // Helper to find node by id
     let find_node = |id: &str| arr.iter().find(|n| n["id"] == id).unwrap();
@@ -483,6 +484,13 @@ async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
     // n5: Info is object -> None (null)
     let n5 = find_node("n5");
     assert!(n5.get("info").is_none() || n5["info"].is_null());
+
+    // n6: Tags mixed -> ["clean", "also-clean"]
+    let n6 = find_node("n6");
+    let tags = n6["tags"].as_array().expect("tags must be array");
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0], "clean");
+    assert_eq!(tags[1], "also-clean");
 
     Ok(())
 }

@@ -91,8 +91,8 @@ struct NodeDto {
     summary: Option<String>,
     #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
     info: Option<String>,
-    #[serde(default)]
-    tags: Option<Value>,
+    #[serde(default, deserialize_with = "deserialize_tags_loose")]
+    tags: Vec<String>,
     location: LocationDto,
 }
 
@@ -102,6 +102,20 @@ where
 {
     let v = Option::<Value>::deserialize(deserializer)?;
     Ok(v.and_then(|x| x.as_str().map(|s| s.to_string())))
+}
+
+fn deserialize_tags_loose<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    match v {
+        Some(Value::Array(arr)) => Ok(arr
+            .into_iter()
+            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+            .collect()),
+        _ => Ok(Vec::new()),
+    }
 }
 
 fn deserialize_f64_or_string<'de, D>(deserializer: D) -> Result<f64, D::Error>
@@ -166,17 +180,6 @@ impl From<NodeDto> for Node {
             .unwrap_or(default_timestamp)
             .to_string();
 
-        let tags = dto
-            .tags
-            .as_ref()
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|x| x.as_str().map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-
         Node {
             id: dto.id,
             kind: dto.kind.unwrap_or_else(|| "Unknown".to_string()),
@@ -185,7 +188,7 @@ impl From<NodeDto> for Node {
             updated_at,
             summary: dto.summary,
             info: dto.info,
-            tags,
+            tags: dto.tags,
             location: Location {
                 lat: dto.location.lat,
                 lon: dto.location.lon,
