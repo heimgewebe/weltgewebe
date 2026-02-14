@@ -6,14 +6,11 @@
 Dieses Dokument beschreibt die Integration der API im Rahmen der aktuellen Entwicklungsphase auf dem Heimserver.
 Es definiert den Contract, nicht die endgültige Produktionsinfrastruktur.
 
-Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
+Beschreibt die referenzielle Integration der Weltgewebe-API auf dem Heimserver.
 Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details liegen außerhalb des Repos.
 
 **Nicht enthalten:**
 
-* Firewall-Details
-* WireGuard-Details
-* Router-Konfiguration
 * Enforcement (Firewall/WireGuard/Router) ist out of scope dieses Repos.
 
 **Nur:**
@@ -104,3 +101,11 @@ Die API erwartet:
 
 API ist kein Server.
 Sie ist ein hinter dem Proxy lebender Dienst mit exakt einem kanonischen Namen.
+
+---
+
+## 8. Contract Checks
+
+* HTTPS only + `tls internal`
+* FQDN Host-Match (404 bei falschem Host)
+* Kein direkter :8080 Zugriff (Proxy-FQDN ist der Contract)
