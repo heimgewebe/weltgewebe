@@ -76,6 +76,9 @@ struct LocationDto {
     lon: f64,
 }
 
+const DEFAULT_KIND: &str = "Unknown";
+const DEFAULT_TITLE: &str = "Untitled";
+
 #[derive(Deserialize)]
 struct NodeDto {
     id: String,
@@ -182,8 +185,8 @@ impl From<NodeDto> for Node {
 
         Node {
             id: dto.id,
-            kind: dto.kind.unwrap_or_else(|| "Unknown".to_string()),
-            title: dto.title.unwrap_or_else(|| "Untitled".to_string()),
+            kind: dto.kind.unwrap_or_else(|| DEFAULT_KIND.to_string()),
+            title: dto.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
             created_at,
             updated_at,
             summary: dto.summary,
@@ -239,12 +242,12 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
     let title = v
         .get("title")
         .and_then(|v| v.as_str())
-        .unwrap_or("Untitled")
+        .unwrap_or(DEFAULT_TITLE)
         .to_string();
     let kind = v
         .get("kind")
         .and_then(|v| v.as_str())
-        .unwrap_or("Unknown")
+        .unwrap_or(DEFAULT_KIND)
         .to_string();
     let created_at_raw = v.get("created_at").and_then(|v| v.as_str());
     let updated_at_raw = v.get("updated_at").and_then(|v| v.as_str());
