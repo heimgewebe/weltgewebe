@@ -8,7 +8,9 @@ Dieses Dokument beschreibt die Integration der Weltgewebe-Services (z.B. API) in
 ## 2. Repo-Rolle
 
 * **Public-Deployment:** Dieses Repository verwaltet das Deployment für öffentliche Endpunkte (z.B. `weltgewebe.net`).
-* **Heimserver-Integration:** Für interne Endpunkte (`*.home.arpa`) definiert dieses Repository lediglich den Contract (Referenz). Die Durchsetzung (Enforcement) und die eigentliche Konfiguration (Caddy Gateway, Pi-hole) liegen im externen Heimserver-Repository.
+* **Heimserver-Integration:** Für interne Endpunkte (`*.home.arpa`) definiert dieses Repository lediglich den Contract
+  (Referenz). Die Durchsetzung (Enforcement) und die eigentliche Konfiguration (Caddy Gateway, Pi-hole) liegen im
+  externen Heimserver-Repository.
 
 > **Hinweis:** Integration logic resides in the external Heimserver repository.
 
