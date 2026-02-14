@@ -27,7 +27,7 @@ Die Zuordnung erfolgt strikt nach Semantik:
 
 ### Heimgewebe
 
-* `leitstand.heimgewebe.home.arpa`
+* `leitstand.heimgewebe.home.arpa` (sofern provisioniert)
 * `api.heimgewebe.home.arpa`
 * `heimgewebe.home.arpa` (optional)
 
@@ -46,3 +46,4 @@ Historische Pfade (z.B. `/opt/weltgewebe`) oder Container-Namen (z.B. `weltgeweb
 nicht der semantischen Zugehörigkeit entsprechen.
 Die Policy erzwingt eine Korrektur: Die Semantik bestimmt das Routing, nicht der Ordner- oder Service-Name.
 Labels erzeugen oft eine falsche Wirklichkeit; dieser Contract gilt vorrangig.
+Wenn Label und Semantik kollidieren, sind Labels zu bereinigen (rename/alias), nicht Semantik umzudeuten.

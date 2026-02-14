@@ -106,14 +106,14 @@ http://api.heimgewebe.home.arpa {
 	redir https://api.heimgewebe.home.arpa{uri} 308
 }
 
-leitstand.heimgewebe.home.arpa {
-	# Upstream muss Compose-Service entsprechen (compose.prod.yml).
-	reverse_proxy deploy-leitstand-1:3000
-	tls internal
-}
+# leitstand.heimgewebe.home.arpa {
+# 	# NOTE: deaktiviert, da Upstream deploy-leitstand-1 nicht in compose.prod.yml existiert.
+# 	# reverse_proxy deploy-leitstand-1:3000
+# 	tls internal
+# }
 
 api.heimgewebe.home.arpa {
-	# Upstream muss Compose-Service entsprechen (compose.prod.yml).
+	# verified in infra/compose/compose.prod.yml: service=api port=8080
 	reverse_proxy api:8080
 	tls internal
 }
