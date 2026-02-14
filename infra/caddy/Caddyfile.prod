@@ -95,12 +95,3 @@ weltgewebe.net {
 
 # Optional: Import heimserver specific configuration (e.g. internal upstreams)
 import /etc/caddy/heimserver/*.caddy
-
-# --- Weltgewebe Internal Configuration ---
-
-api.weltgewebe.home.arpa {
-	# Internal access for Weltgewebe API
-	# verified in infra/compose/compose.prod.yml: service=api port=8080
-	reverse_proxy api:8080
-	tls internal
-}

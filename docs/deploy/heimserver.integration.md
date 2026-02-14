@@ -9,6 +9,8 @@ Es definiert den Contract, nicht die endgültige Produktionsinfrastruktur.
 Beschreibt die referenzielle Integration der Weltgewebe-API auf dem Heimserver.
 Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details liegen außerhalb des Repos.
 
+> **Hinweis:** Diese Repo-Seite definiert den Contract; Implementation liegt im Heimserver-Repo.
+
 **Nicht enthalten:**
 
 * Enforcement (Firewall/WireGuard/Router) ist out of scope dieses Repos.
