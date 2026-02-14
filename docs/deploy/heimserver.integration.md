@@ -48,6 +48,8 @@ api.heimgewebe.home.arpa {
 }
 ```
 
+> **Hinweis:** Der Upstream-Name (z.B. `api`) ist exemplarisch und folgt der jeweiligen Compose-Benennung.
+
 **Upstream darf:**
 
 * Nicht öffentlich gebunden sein

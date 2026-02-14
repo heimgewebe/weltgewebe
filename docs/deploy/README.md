@@ -265,6 +265,10 @@ ss -lntp | grep -E ":(80|443)"
 Prüfe den Upstream-Zugriff (ohne DNS, via curl-Resolve):
 
 ```bash
-# Zum lokalen Testen gegen den Host via --resolve (IP anpassen je nach Host-Binding, z.B. 127.0.0.1 oder LAN-IP):
-curl -k --resolve leitstand.heimgewebe.home.arpa:443:127.0.0.1 https://leitstand.heimgewebe.home.arpa/
+# Zum lokalen Testen gegen den Host via --resolve (IP anpassen je nach Host-Binding):
+curl -k --resolve leitstand.heimgewebe.home.arpa:443:<IP> https://leitstand.heimgewebe.home.arpa/
+
+# Beispiele für <IP>:
+# - Loopback: 127.0.0.1
+# - LAN: 192.168.x.x
 ```
