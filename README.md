@@ -199,6 +199,10 @@ YAML/JSON-Lint und Budget-Stub (ci/budget.json).
 
 See: `docs/deploy/heimserver.integration.md`
 
+> **Hinweis:** Das Deployment auf dem Heimserver ist Teil der aktuellen Entwicklungs- und Integrationsphase.
+> Es dient als Referenz-Implementierung des Integrations-Contracts.
+> Die langfristige Produktionsumgebung kann abweichen, der definierte Contract bleibt jedoch gültig.
+
 ## Gate-Fahrplan & Gate A – UX Click-Dummy
 
 - **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md)

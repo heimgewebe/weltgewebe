@@ -2,6 +2,10 @@
 
 ## 0. Zweck
 
+**Status:** Temporäre Integrationsumgebung.
+Dieses Dokument beschreibt die Integration der API im Rahmen der aktuellen Entwicklungsphase auf dem Heimserver.
+Es definiert den Contract, nicht die endgültige Produktionsinfrastruktur.
+
 Beschreibt die kanonische Integration der Weltgewebe-API auf dem Heimserver.
 Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details liegen außerhalb des Repos.
 
@@ -10,6 +14,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 * Firewall-Details
 * WireGuard-Details
 * Router-Konfiguration
+* Enforcement (Firewall/WireGuard/Router) ist out of scope dieses Repos.
 
 **Nur:**
 
@@ -31,7 +36,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 * Erlaubt: `home.arpa` (RFC 8375)
 * Kein `.lan`
 * Kein `weltgewebe.api`
-* Kein direkter Port-Zugriff (Clients must not access :8080; only via https://...)
+* Kein direkter Port-Zugriff (Direct :8080 access is not part of the supported contract; use reverse proxy FQDN).
 * Kein http-only Betrieb
 
 ---
