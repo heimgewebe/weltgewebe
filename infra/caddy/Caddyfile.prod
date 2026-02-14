@@ -96,23 +96,10 @@ weltgewebe.net {
 # Optional: Import heimserver specific configuration (e.g. internal upstreams)
 import /etc/caddy/heimserver/*.caddy
 
-# --- Heimgewebe Configuration (Strict Separation) ---
+# --- Weltgewebe Internal Configuration ---
 
-http://leitstand.heimgewebe.home.arpa {
-	redir https://leitstand.heimgewebe.home.arpa{uri} 308
-}
-
-http://api.heimgewebe.home.arpa {
-	redir https://api.heimgewebe.home.arpa{uri} 308
-}
-
-# leitstand.heimgewebe.home.arpa {
-# 	# NOTE: Currently not provisioned in compose.prod.yml
-# 	# reverse_proxy deploy-leitstand-1:3000
-# 	tls internal
-# }
-
-api.heimgewebe.home.arpa {
+api.weltgewebe.home.arpa {
+	# Internal access for Weltgewebe API
 	# verified in infra/compose/compose.prod.yml: service=api port=8080
 	reverse_proxy api:8080
 	tls internal
