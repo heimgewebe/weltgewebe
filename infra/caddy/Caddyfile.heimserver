@@ -1,14 +1,4 @@
-# Heimserver-only snippet (documentation/reference). Integration logic resides in the external Heimserver repository (e.g. /opt/heimgewebe/edge/Caddyfile).
-
-leitstand.heimgewebe.home.arpa {
-	reverse_proxy leitstand:3000
-	tls internal
-}
-
-api.heimgewebe.home.arpa {
-	reverse_proxy api:8080
-	tls internal
-}
+# Reference only, not deployed from this repo. Integration logic resides in the external Heimserver repository.
 
 # Reference for Weltgewebe API (internal access)
 api.weltgewebe.home.arpa {

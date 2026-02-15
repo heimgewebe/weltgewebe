@@ -9,7 +9,7 @@ Es definiert den Contract, nicht die endgültige Produktionsinfrastruktur.
 Beschreibt die referenzielle Integration der Weltgewebe-API auf dem Heimserver.
 Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details liegen außerhalb des Repos.
 
-> **Hinweis:** Diese Repo-Seite definiert den Contract; Implementation liegt im Heimserver-Repo.
+> **Hinweis:** Dieses Repo definiert nur den Contract; DNS/Caddy-Enforcement liegt im ops/heimserver Repo.
 
 **Nicht enthalten:**
 
@@ -27,7 +27,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 ## 1. Kanonischer API-Endpunkt
 
-`https://api.heimgewebe.home.arpa`
+`https://api.weltgewebe.home.arpa`
 
 **Invarianten:**
 
@@ -44,7 +44,7 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 Caddy leitet weiter an:
 
 ```caddy
-api.heimgewebe.home.arpa {
+api.weltgewebe.home.arpa {
     reverse_proxy api:8080
     tls internal
 }

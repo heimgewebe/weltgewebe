@@ -12,7 +12,7 @@ Dieses Dokument beschreibt die Integration der Weltgewebe-Services (z.B. API) in
   (Referenz). Die Durchsetzung (Enforcement) und die eigentliche Konfiguration (Caddy Gateway, Pi-hole) liegen im
   externen Heimserver-Repository.
 
-> **Hinweis:** Integration logic resides in the external Heimserver repository.
+> **Hinweis:** Die Integrationslogik liegt im externen Heimserver-Repository.
 
 ## 3. Abgrenzung
 
@@ -42,8 +42,8 @@ Dieses Dokument beschreibt die Integration der Weltgewebe-Services (z.B. API) in
 Die folgende Konfiguration dient als Referenz für das externe Heimserver-Repository (z.B. in `infra/pihole/optional/99-weltgewebe.conf`):
 
 ```conf
-# Optional: Enable only if Caddy is serving this domain on the gateway.
-# Replace <GATEWAY_IP> with the actual IP address of the Heimserver.
+# Optional: Nur aktivieren, wenn Caddy diese Domain auf dem Gateway bedient.
+# Ersetze <GATEWAY_IP> mit der tatsächlichen IP-Adresse des Heimservers.
 address=/api.weltgewebe.home.arpa/<GATEWAY_IP>
 ```
 
