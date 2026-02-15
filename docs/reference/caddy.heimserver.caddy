@@ -1,4 +1,4 @@
-# Reference only, not deployed from this repo. Integration logic resides in the external Heimserver repository.
+# Reference only; not deployed from this repo. Source of truth: ops/heimserver
 
 # Reference for Weltgewebe API (internal access)
 api.weltgewebe.home.arpa {

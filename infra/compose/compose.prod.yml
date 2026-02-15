@@ -60,8 +60,6 @@ services:
       - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-      # Ensure import directory exists for robustness
-      - ../caddy/heimserver:/etc/caddy/heimserver:ro
     environment:
       WEB_UPSTREAM_URL: ${WEB_UPSTREAM_URL:?WEB_UPSTREAM_URL must be set (e.g. https://weltgewebe-web.pages.dev)}
       WEB_UPSTREAM_HOST: ${WEB_UPSTREAM_HOST:?WEB_UPSTREAM_HOST must be set (e.g. weltgewebe-web.pages.dev)}
