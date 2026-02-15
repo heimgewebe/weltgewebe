@@ -1,5 +1,5 @@
 use std::{collections::BTreeMap, sync::Arc};
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     auth::{rate_limit::AuthRateLimiter, session::SessionStore, tokens::TokenStore},
@@ -23,6 +23,7 @@ pub struct ApiState {
     pub tokens: TokenStore,
     pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
+    pub nodes_persist: Arc<Mutex<()>>,
     pub edges: Arc<RwLock<Vec<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,

@@ -387,9 +387,9 @@ pub async fn patch_node(
 ) -> Result<Json<Node>, StatusCode> {
     // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
     let start_wait = std::time::Instant::now();
-    let mut nodes_guard = state.nodes.write().await;
+    let _persist_guard = state.nodes_persist.lock().await;
     let lock_contention_ms = start_wait.elapsed().as_millis();
-    let start_hold = std::time::Instant::now();
+    // let start_hold = std::time::Instant::now(); // Optimization: Removed unused variable
 
     let path = nodes_path();
     // Open source file for reading
@@ -523,6 +523,8 @@ pub async fn patch_node(
     let persist_ms = start_persist.elapsed().as_millis();
 
     // Update in-memory cache
+    let start_mem_lock = std::time::Instant::now();
+    let mut nodes_guard = state.nodes.write().await;
     if let Some(ref updated_node) = found_node {
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
             nodes_guard[idx] = updated_node.clone();
@@ -536,7 +538,7 @@ pub async fn patch_node(
         .metrics
         .set_nodes_cache_count(nodes_guard.len() as i64);
 
-    let lock_hold_ms = start_hold.elapsed().as_millis();
+    let lock_hold_ms = start_mem_lock.elapsed().as_millis();
     tracing::info!(
         persist_ms,
         lock_hold_ms,

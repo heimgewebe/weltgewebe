@@ -55,6 +55,7 @@ pub async fn run() -> anyhow::Result<()> {
     let nodes_list = routes::nodes::load_nodes().await;
     metrics.set_nodes_cache_count(nodes_list.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_list));
+    let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
 
     let edges_list = routes::edges::load_edges().await;
     metrics.set_edges_cache_count(edges_list.len() as i64);
@@ -92,6 +93,7 @@ pub async fn run() -> anyhow::Result<()> {
         tokens,
         accounts,
         nodes,
+        nodes_persist,
         edges,
         rate_limiter,
         mailer,
