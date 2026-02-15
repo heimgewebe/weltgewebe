@@ -2,7 +2,7 @@
 
 # Reference for Weltgewebe API (internal access)
 api.weltgewebe.home.arpa {
-	# Upstream verified in weltgewebe repo (compose.prod.yml): service=api port=8080
+	# Contract: Weltgewebe API upstream = service 'api' port 8080; enforcement in ops/heimserver
 	reverse_proxy api:8080
 	tls internal
 }
