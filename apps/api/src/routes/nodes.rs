@@ -348,6 +348,7 @@ pub async fn load_nodes() -> Vec<Node> {
 
     if skipped_count > 0 {
         tracing::warn!(
+            event = "nodes.load.skipped",
             skipped_count,
             ?path,
             "Skipped nodes due to parse errors during load"
