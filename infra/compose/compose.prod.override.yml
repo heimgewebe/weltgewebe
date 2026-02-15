@@ -1,0 +1,22 @@
+services:
+  api:
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      NATS_URL: nats://nats:4222
+      POLICY_LIMITS_PATH: /app/policies/limits.yaml
+    volumes:
+      - type: bind
+        source: /opt/weltgewebe/policies/limits.yaml
+        target: /app/policies/limits.yaml
+        read_only: true
+
+  nats:
+    image: nats:2.10
+    command: ["-js"]
+    restart: always
+    volumes:
+      - nats_js:/data
+
+volumes:
+  nats_js:

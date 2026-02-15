@@ -8,6 +8,10 @@ COPY Cargo.toml Cargo.lock ./
 COPY apps/api/Cargo.toml apps/api/Cargo.toml
 
 # 2) Fetch dependencies (this caches the index and downloads)
+
+# DUMMY_TARGET_FOR_CARGO_FETCH
+# Cargo erkennt Targets über src/main.rs|src/lib.rs. In dieser Stage sind ggf. nur Manifeste kopiert.
+RUN mkdir -p apps/api/src && printf '%s\n' 'fn main() {}' > apps/api/src/main.rs
 RUN cargo fetch
 
 # 3) Copy the rest of the workspace
