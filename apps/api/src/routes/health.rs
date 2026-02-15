@@ -321,6 +321,7 @@ mod tests {
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(RwLock::new(BTreeMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
+            nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(RwLock::new(Vec::new())),
             rate_limiter,
             mailer: None,
