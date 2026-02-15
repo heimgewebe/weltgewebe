@@ -424,3 +424,74 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    // We verify:
+    // n1: Clean
+    // n2: Kind is number -> Unknown
+    // n3: Summary is array -> None
+    // n4: Title is boolean -> Untitled
+    // n5: Info is object -> None
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[
+            r#"{"id": "n1", "kind": "Clean", "title": "Clean Node", "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n2", "kind": 123, "title": "Dirty Kind", "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n3", "kind": "Dirty Summary", "title": "Dirty Summary", "summary": ["oops"], "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n4", "kind": "Dirty Title", "title": true, "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n5", "kind": "Dirty Info", "title": "Dirty Info", "info": {"foo": "bar"}, "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{"id": "n6", "title": "Dirty Tags", "tags": ["clean", 123, null, "also-clean"], "location": {"lat": 52.5, "lon": 13.4}}"#,
+            r#"{broken_json"#, // Malformed JSON line -> should be skipped
+        ],
+    )
+    .await;
+
+    let res = app
+        .oneshot(Request::get("/nodes").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+
+    // Check that all 6 nodes loaded (robustness)
+    assert_eq!(arr.len(), 6);
+
+    // Helper to find node by id
+    let find_node = |id: &str| arr.iter().find(|n| n["id"] == id).unwrap();
+
+    // n1: Clean
+    let n1 = find_node("n1");
+    assert_eq!(n1["kind"], "Clean");
+
+    // n2: Kind is number -> Unknown
+    let n2 = find_node("n2");
+    assert_eq!(n2["kind"], "Unknown");
+
+    // n3: Summary is array -> None (null)
+    let n3 = find_node("n3");
+    assert!(n3.get("summary").is_none() || n3["summary"].is_null());
+
+    // n4: Title is boolean -> Untitled
+    let n4 = find_node("n4");
+    assert_eq!(n4["title"], "Untitled");
+
+    // n5: Info is object -> None (null)
+    let n5 = find_node("n5");
+    assert!(n5.get("info").is_none() || n5["info"].is_null());
+
+    // n6: Tags mixed -> ["clean", "also-clean"]
+    let n6 = find_node("n6");
+    let tags = n6["tags"].as_array().expect("tags must be array");
+    assert_eq!(tags.len(), 2);
+    assert_eq!(tags[0], "clean");
+    assert_eq!(tags[1], "also-clean");
+
+    Ok(())
+}

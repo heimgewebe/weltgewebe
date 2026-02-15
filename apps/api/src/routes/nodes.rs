@@ -68,6 +68,138 @@ struct IdOnly {
     id: Option<String>,
 }
 
+#[derive(Deserialize)]
+struct LocationDto {
+    #[serde(deserialize_with = "deserialize_f64_or_string")]
+    lat: f64,
+    #[serde(deserialize_with = "deserialize_f64_or_string")]
+    lon: f64,
+}
+
+const DEFAULT_KIND: &str = "Unknown";
+const DEFAULT_TITLE: &str = "Untitled";
+
+#[derive(Deserialize)]
+struct NodeDto {
+    id: String,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    kind: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    title: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    created_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    updated_at: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    summary: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_opt_string_loose")]
+    info: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_tags_loose")]
+    tags: Vec<String>,
+    location: LocationDto,
+}
+
+fn deserialize_opt_string_loose<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    Ok(v.and_then(|x| x.as_str().map(|s| s.to_string())))
+}
+
+fn deserialize_tags_loose<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let v = Option::<Value>::deserialize(deserializer)?;
+    match v {
+        Some(Value::Array(arr)) => Ok(arr
+            .into_iter()
+            .filter_map(|x| x.as_str().map(|s| s.to_string()))
+            .collect()),
+        _ => Ok(Vec::new()),
+    }
+}
+
+fn deserialize_f64_or_string<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct F64OrStringVisitor;
+
+    impl<'de> serde::de::Visitor<'de> for F64OrStringVisitor {
+        type Value = f64;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a float or a string containing a float")
+        }
+
+        fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v)
+        }
+
+        fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v as f64)
+        }
+
+        fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            Ok(v as f64)
+        }
+
+        fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+        where
+            E: serde::de::Error,
+        {
+            v.parse::<f64>().map_err(serde::de::Error::custom)
+        }
+    }
+
+    deserializer.deserialize_any(F64OrStringVisitor)
+}
+
+impl From<NodeDto> for Node {
+    fn from(dto: NodeDto) -> Self {
+        let default_timestamp = "1970-01-01T00:00:00Z";
+
+        let created_at = dto
+            .created_at
+            .as_deref()
+            .or(dto.updated_at.as_deref())
+            .unwrap_or(default_timestamp)
+            .to_string();
+        let updated_at = dto
+            .updated_at
+            .as_deref()
+            .or(dto.created_at.as_deref())
+            .unwrap_or(default_timestamp)
+            .to_string();
+
+        Node {
+            id: dto.id,
+            kind: dto.kind.unwrap_or_else(|| DEFAULT_KIND.to_string()),
+            title: dto.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
+            created_at,
+            updated_at,
+            summary: dto.summary,
+            info: dto.info,
+            tags: dto.tags,
+            location: Location {
+                lat: dto.location.lat,
+                lon: dto.location.lon,
+            },
+        }
+    }
+}
+
 fn parse_bbox(s: &str) -> Option<BBox> {
     let parts: Vec<_> = s.split(',').collect();
     let (lng1, lat1, lng2, lat2) = match parts.as_slice() {
@@ -110,12 +242,12 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
     let title = v
         .get("title")
         .and_then(|v| v.as_str())
-        .unwrap_or("Untitled")
+        .unwrap_or(DEFAULT_TITLE)
         .to_string();
     let kind = v
         .get("kind")
         .and_then(|v| v.as_str())
-        .unwrap_or("Unknown")
+        .unwrap_or(DEFAULT_KIND)
         .to_string();
     let created_at_raw = v.get("created_at").and_then(|v| v.as_str());
     let updated_at_raw = v.get("updated_at").and_then(|v| v.as_str());
@@ -187,21 +319,24 @@ pub async fn load_nodes() -> Vec<Node> {
     // Temporary map to handle duplicates efficiently during load
     let mut id_map: HashMap<String, usize> = HashMap::new();
     let mut duplicates_count = 0;
+    let mut skipped_count = 0;
 
     while let Ok(Some(line)) = lines.next_line().await {
-        let v: Value = match serde_json::from_str(&line) {
+        let dto: NodeDto = match serde_json::from_str(&line) {
             Ok(v) => v,
-            Err(_) => continue,
-        };
-        if let Some(node) = map_json_to_node(&v) {
-            if let Some(&idx) = id_map.get(&node.id) {
-                // Last-write-wins: Overwrite existing node
-                nodes[idx] = node;
-                duplicates_count += 1;
-            } else {
-                id_map.insert(node.id.clone(), nodes.len());
-                nodes.push(node);
+            Err(_) => {
+                skipped_count += 1;
+                continue;
             }
+        };
+        let node: Node = dto.into();
+        if let Some(&idx) = id_map.get(&node.id) {
+            // Last-write-wins: Overwrite existing node
+            nodes[idx] = node;
+            duplicates_count += 1;
+        } else {
+            id_map.insert(node.id.clone(), nodes.len());
+            nodes.push(node);
         }
     }
 
@@ -211,9 +346,19 @@ pub async fn load_nodes() -> Vec<Node> {
         .map(|m| m.len())
         .unwrap_or(0);
 
+    if skipped_count > 0 {
+        tracing::warn!(
+            event = "nodes.load.skipped",
+            skipped_count,
+            ?path,
+            "Skipped nodes due to parse errors during load"
+        );
+    }
+
     tracing::info!(
         count = nodes.len(),
         duplicates_count,
+        skipped_count,
         load_ms,
         file_size_bytes,
         ?path,
