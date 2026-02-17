@@ -5,11 +5,13 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       POLICY_LIMITS_PATH: /app/policies/limits.yaml
-      APP_BASE_URL: https://weltgewebe.pages.dev
+      APP_BASE_URL: https://weltgewebe.home.arpa
       AUTH_PUBLIC_LOGIN: '1'
       AUTH_LOG_MAGIC_TOKEN: '1'
       AUTH_AUTO_PROVISION: '1'
       AUTH_ALLOW_EMAILS: alexdermohr@gmail.com
+      WEB_UPSTREAM_HOST: weltgewebe.home.arpa
+      WEB_UPSTREAM_URL: https://weltgewebe.home.arpa
     volumes:
     - type: bind
       source: /opt/weltgewebe/policies/limits.yaml
