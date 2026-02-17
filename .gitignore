@@ -38,3 +38,7 @@ apps/web/.gewebe/in/
 
 # If you ever want to commit a specific log for docs/debug, negate it explicitly:
 # !docs/logs/example.log
+
+# local ops scratch
+infra/compose/*.bak.*
+infra/compose/compose.prod.nocaddy.override.yml
