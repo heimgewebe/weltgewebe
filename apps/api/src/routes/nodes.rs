@@ -385,11 +385,11 @@ pub async fn patch_node(
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, StatusCode> {
-    // Serialize PATCH commits (per-process): block node reads during file+cache commit to guarantee read-your-writes within this instance.
-    let start_wait = std::time::Instant::now();
-    let mut nodes_guard = state.nodes.write().await;
-    let lock_contention_ms = start_wait.elapsed().as_millis();
-    let start_hold = std::time::Instant::now();
+    // Serialize PATCH persistence (per-process): allow concurrent node reads during file I/O;
+    // only the brief in-memory cache write-lock blocks readers to guarantee read-your-writes in this instance.
+    let start_persist_wait = std::time::Instant::now();
+    let _persist_guard = state.nodes_persist.lock().await;
+    let persist_lock_wait_ms = start_persist_wait.elapsed().as_millis();
 
     let path = nodes_path();
     // Open source file for reading
@@ -523,6 +523,11 @@ pub async fn patch_node(
     let persist_ms = start_persist.elapsed().as_millis();
 
     // Update in-memory cache
+    let start_mem_wait = std::time::Instant::now();
+    let mut nodes_guard = state.nodes.write().await;
+    let mem_lock_wait_ms = start_mem_wait.elapsed().as_millis();
+    let start_mem_hold = std::time::Instant::now();
+
     if let Some(ref updated_node) = found_node {
         if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
             nodes_guard[idx] = updated_node.clone();
@@ -536,11 +541,15 @@ pub async fn patch_node(
         .metrics
         .set_nodes_cache_count(nodes_guard.len() as i64);
 
-    let lock_hold_ms = start_hold.elapsed().as_millis();
+    let mem_lock_hold_ms = start_mem_hold.elapsed().as_millis();
+    // Explicitly drop lock before logging to avoid holding it during tracing
+    drop(nodes_guard);
+
     tracing::info!(
         persist_ms,
-        lock_hold_ms,
-        lock_contention_ms,
+        persist_lock_wait_ms,
+        mem_lock_wait_ms,
+        mem_lock_hold_ms,
         node_id = %id,
         node_found = found_node.is_some(),
         "Node patch finished"
