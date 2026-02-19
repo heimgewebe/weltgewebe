@@ -542,7 +542,7 @@ pub async fn patch_node(
         .set_nodes_cache_count(nodes_guard.len() as i64);
 
     let mem_lock_hold_ms = start_mem_hold.elapsed().as_millis();
-    // Explicitly drop lock to minimize hold time
+    // Explicitly drop lock before logging to avoid holding it during tracing
     drop(nodes_guard);
 
     tracing::info!(
