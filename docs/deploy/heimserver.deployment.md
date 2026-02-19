@@ -78,5 +78,6 @@ Fix: `docker network connect weltgewebe_default edge-caddy` oder Compose Netz ex
 
 Ursache: ein anderes Caddy (edge) belegt 80/443.
 Lösung:
+
 - Entweder Service skalieren: `--scale caddy=0`
 - Oder Ports im Stack deaktivieren: `ports: []` in `docker-compose.override.yml` definieren.
