@@ -39,13 +39,21 @@ impl Mailer {
             AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
                 .context("failed to init SMTP relay (STARTTLS, port 587)")
         } else {
-            Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host))
+            Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(
+                host,
+            ))
         }?;
 
         builder = builder.port(port).credentials(creds);
         let transport = builder.build();
 
-        Ok(Self { transport, from, host: host.to_string(), port, user: user.to_string() })
+        Ok(Self {
+            transport,
+            from,
+            host: host.to_string(),
+            port,
+            user: user.to_string(),
+        })
     }
 
     pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
@@ -71,13 +79,12 @@ impl Mailer {
             ))
             .context("failed to build email")?;
 
-        self.transport
-            .send(email)
-            .await
-            .with_context(|| format!(
-  "smtp send failed (host={:?} port={:?} user={:?} from={:?})",
-  self.host, self.port, self.user, self.from
-))?;
+        self.transport.send(email).await.with_context(|| {
+            format!(
+                "smtp send failed (host={:?} port={:?} user={:?} from={:?})",
+                self.host, self.port, self.user, self.from
+            )
+        })?;
         Ok(())
     }
 }
