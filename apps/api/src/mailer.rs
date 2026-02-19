@@ -29,23 +29,26 @@ impl Mailer {
             anyhow::bail!("invalid from address: {}", from);
         }
         // SMTP transport:
-        // - 587: STARTTLS (typisch, u.a. IONOS)
         // - 465: Implicit TLS
-        // - sonst: nur für lokale Relays wie 1025 ohne TLS
-        let mut builder = if port == 465 {
+        // - 587: STARTTLS (typisch, u.a. IONOS)
+        // - sonst: nur für lokale Relays wie 1025 ohne TLS, keine Credentials
+        let transport = if port == 465 {
             AsyncSmtpTransport::<Tokio1Executor>::relay(host)
-                .context("failed to init SMTP relay (implicit TLS, port 465)")
+                .context("failed to init SMTP relay (implicit TLS, port 465)")?
+                .port(port)
+                .credentials(creds)
+                .build()
         } else if port == 587 {
             AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
-                .context("failed to init SMTP relay (STARTTLS, port 587)")
+                .context("failed to init SMTP relay (STARTTLS, port 587)")?
+                .port(port)
+                .credentials(creds)
+                .build()
         } else {
-            Ok(AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(
-                host,
-            ))
-        }?;
-
-        builder = builder.port(port).credentials(creds);
-        let transport = builder.build();
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
+                .port(port)
+                .build()
+        };
 
         Ok(Self {
             transport,
