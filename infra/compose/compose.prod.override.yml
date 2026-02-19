@@ -26,7 +26,7 @@ services:
     volumes:
       - nats_js:/data
   caddy:
-    environment: null
+    environment: {}
     ports: []
 volumes:
   nats_js: null
