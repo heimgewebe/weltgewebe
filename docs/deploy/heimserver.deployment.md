@@ -3,10 +3,11 @@
 ## Architektur (Ist)
 
 - Weltgewebe-Stack läuft als Docker Compose Projekt `weltgewebe`:
-  - Services: `db` (Postgres 16), `api`, `nats` (JetStream), optional `caddy` (im Stack meist aus)
+  - Services: `db` (Postgres 16), `api`, `nats` (JetStream), optional `caddy` (im Stack meist aus oder `--scale caddy=0`)
 - Edge-Gateway läuft separat als Compose Projekt `edge`:
-  - Container: `edge-caddy`
+  - Container: `edge-caddy` (bindet Ports 80/443)
   - Edge-Caddy ist mit `weltgewebe_default` verbunden (wichtig für DNS/Reverse Proxy)
+  - Der `weltgewebe-caddy` im Stack ist optional und wird typischerweise nicht gestartet, da `edge-caddy` die Ports belegt.
 
 ## DNS / Hosts
 
@@ -76,4 +77,6 @@ Fix: `docker network connect weltgewebe_default edge-caddy` oder Compose Netz ex
 ### Port 80 already in use beim weltgewebe-caddy
 
 Ursache: ein anderes Caddy (edge) belegt 80/443.
-Fix: im weltgewebe stack `caddy` nicht publishen oder `--scale caddy=0`.
+Lösung:
+- Entweder Service skalieren: `--scale caddy=0`
+- Oder Ports im Stack deaktivieren: `ports: []` in `docker-compose.override.yml` definieren.
