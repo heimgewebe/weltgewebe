@@ -1,0 +1,9 @@
+services:
+  api:
+    environment:
+      RUST_LOG: weltgewebe_api=debug,email_outbox=debug,lettre=debug
+      SMTP_HOST: ${SMTP_HOST:?SMTP_HOST missing}
+      SMTP_PORT: ${SMTP_PORT:?SMTP_PORT missing}
+      SMTP_USER: ${SMTP_USER:?SMTP_USER missing}
+      SMTP_PASS: ${SMTP_PASS:?SMTP_PASS missing}
+      SMTP_FROM: ${SMTP_FROM:?SMTP_FROM missing}

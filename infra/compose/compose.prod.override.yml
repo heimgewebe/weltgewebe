@@ -25,8 +25,7 @@ services:
     volumes:
     - nats_js:/data
   caddy:
-    environment:
-      WEB_UPSTREAM_HOST: weltgewebe.pages.dev
-      WEB_UPSTREAM_URL: https://weltgewebe.pages.dev
+    environment: null
+    ports: []
 volumes:
   nats_js: null

@@ -553,6 +553,8 @@ pub async fn request_login(
                         account_id = %id,
                         email_hash = %email_hash,
                         error = %e,
+                        error_dbg = ?e,
+                         error_chain = %format!("{:#}", e),
                         "Failed to send Magic Link email"
                     );
                 }
