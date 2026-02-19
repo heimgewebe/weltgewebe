@@ -42,3 +42,6 @@ apps/web/.gewebe/in/
 # local ops scratch
 infra/compose/*.bak.*
 infra/compose/compose.prod.nocaddy.override.yml
+
+# Backup artifacts
+*.bak.*
