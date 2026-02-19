@@ -8,6 +8,9 @@ use lettre::{
 #[derive(Debug)]
 pub struct Mailer {
     transport: AsyncSmtpTransport<Tokio1Executor>,
+    host: String,
+    port: u16,
+    user: String,
     from: String,
 }
 
@@ -25,15 +28,35 @@ impl Mailer {
         if from.parse::<lettre::message::Mailbox>().is_err() {
             anyhow::bail!("invalid from address: {}", from);
         }
+        // SMTP transport:
+        // - 465: Implicit TLS
+        // - 587: STARTTLS (typisch, u.a. IONOS)
+        // - sonst: nur für lokale Relays wie 1025 ohne TLS, keine Credentials
+        let transport = if port == 465 {
+            AsyncSmtpTransport::<Tokio1Executor>::relay(host)
+                .context("failed to init SMTP relay (implicit TLS, port 465)")?
+                .port(port)
+                .credentials(creds)
+                .build()
+        } else if port == 587 {
+            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                .context("failed to init SMTP relay (STARTTLS, port 587)")?
+                .port(port)
+                .credentials(creds)
+                .build()
+        } else {
+            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
+                .port(port)
+                .build()
+        };
 
-        // Use relay builder
-        let transport = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
-            .context("failed to build SMTP relay")?
-            .port(port)
-            .credentials(creds)
-            .build();
-
-        Ok(Self { transport, from })
+        Ok(Self {
+            transport,
+            from,
+            host: host.to_string(),
+            port,
+            user: user.to_string(),
+        })
     }
 
     pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
@@ -59,10 +82,12 @@ impl Mailer {
             ))
             .context("failed to build email")?;
 
-        self.transport
-            .send(email)
-            .await
-            .context("failed to send email")?;
+        self.transport.send(email).await.with_context(|| {
+            format!(
+                "smtp send failed (host={:?} port={:?} user={:?} from={:?})",
+                self.host, self.port, self.user, self.from
+            )
+        })?;
         Ok(())
     }
 }

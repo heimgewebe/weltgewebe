@@ -4,6 +4,28 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-02-19 - compose.prod.override.yml: `environment: null` → `environment: {}` (caddy)
+
+**Ursprung / Referenz:** PR #746 (chore: remove bak artifacts, fix compose environment null)
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.override.yml`
+
+**Beschreibung:**
+
+Der `caddy`-Service-Block in `compose.prod.override.yml` verwendete `environment: null`, was kein gültiger
+Docker-Compose-Wert ist (erwartet wird eine Map oder Liste). Dies wurde durch `environment: {}` (leere Map) ersetzt,
+was semantisch äquivalent ist (keine Umgebungsvariablen für caddy), aber syntaktisch korrekt.
+
+**Auswirkung auf Deployment:**
+
+Keine funktionalen Änderungen. `docker compose config` läuft ohne Parser-Fehler durch.
+
+**Risiko:** Keine.
+
+---
+
 ## 2026-02-10 - compose.prod.yml auf stabilen Stand zurückgesetzt
 
 **Ursprung / Referenz:** f6e19c5 (revert: remove compose topology changes) – (Commit-Hash kann bei Squash abweichen)
