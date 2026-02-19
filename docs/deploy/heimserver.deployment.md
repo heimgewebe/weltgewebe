@@ -35,19 +35,27 @@
 
 ## Healthchecks
 
+Die Edge-CA (Caddy „tls internal") muss einmalig exportiert werden:
+
+```sh
+docker exec edge-caddy cat /data/caddy/pki/authorities/local/root.crt \
+  > /opt/heimgewebe/edge/edge-ca.crt
+```
+
 - API lokal:
   - `curl -fsS http://127.0.0.1:8081/health/ready`
 - API via edge:
-  - `curl -kfsS https://api.weltgewebe.home.arpa/health/ready`
+  - `curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS https://api.weltgewebe.home.arpa/health/ready`
 - Alias via edge:
-  - `curl -kfsS https://weltgewebe.home.arpa/api/health/ready`
+  - `curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS https://weltgewebe.home.arpa/api/health/ready`
 
 ## Login (Magic Link)
 
 - Request:
 
   ```sh
-  curl -kfsS -X POST https://weltgewebe.home.arpa/api/auth/login/request \
+  curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS \
+    -X POST https://weltgewebe.home.arpa/api/auth/login/request \
     -H 'content-type: application/json' -d '{"email":"..."}'
   ```
 
