@@ -63,15 +63,25 @@ docker exec edge-caddy cat /data/caddy/pki/authorities/local/root.crt \
 
 ### Public Magic-Link Login (Option C)
 
+Supported with strict rate limits (mandatory):
+
 - `AUTH_PUBLIC_LOGIN=1`
 - `AUTH_AUTO_PROVISION=1`
 - `AUTH_ALLOW_EMAILS` leer
+- `AUTH_LOG_MAGIC_TOKEN=0` (Security mandatory)
 
-Konsequenz:
+**Required Rate Limits (Environment Variables):**
+
+- `AUTH_RL_IP_PER_MIN=5`
+- `AUTH_RL_IP_PER_HOUR=30`
+- `AUTH_RL_EMAIL_PER_MIN=2`
+- `AUTH_RL_EMAIL_PER_HOUR=10`
+
+**Konsequenz:**
 
 - Jeder kann Magic-Link anfordern.
 - Abuse-Risiko steigt.
-- Rate-Limit + Monitoring verpflichtend.
+- Start bricht ab, wenn Rate-Limits fehlen.
 
 **Risiken:**
 
@@ -79,9 +89,6 @@ Konsequenz:
 - Token-Flood
 - Enumeration über Timing
 - Mail-Kostensteigerung
-
-TODO: `AUTH_LOG_MAGIC_TOKEN` ist in Prod aktuell aktiviert (`'1'`). Dies stellt ein Sicherheitsrisiko dar (Tokens in
-Logs) und sollte deaktiviert werden, sobald Mailer-Versand stabil ist.
 
 ## Troubleshooting
 

@@ -16,8 +16,8 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 ### Added
 
 - Public Magic-Link Login aktiviert (Option C)
-- Allowlist deaktiviert
-- Sicherheitsrisiken dokumentiert
+- Allowlist deaktiviert (erfordert strikte Rate-Limits im Environment)
+- Rate-Limits und Token-Log-Deaktivierung für Prod-Start mandatory gemacht
 
 ### Risiko
 
