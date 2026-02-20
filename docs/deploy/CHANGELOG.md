@@ -22,7 +22,7 @@ was semantisch äquivalent ist (keine Umgebungsvariablen für caddy), aber synta
 
 Keine funktionalen Änderungen. `docker compose config` läuft ohne Parser-Fehler durch.
 
-**Risiko:** Keine.
+**Risiko:** Niedrig.
 
 ---
 
