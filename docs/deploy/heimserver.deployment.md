@@ -61,6 +61,27 @@ docker exec edge-caddy cat /data/caddy/pki/authorities/local/root.crt \
 
 - Token-Link erscheint in API logs nur wenn `AUTH_LOG_MAGIC_TOKEN=true` (Debug).
 
+### Public Magic-Link Login (Option C)
+
+- `AUTH_PUBLIC_LOGIN=1`
+- `AUTH_AUTO_PROVISION=1`
+- `AUTH_ALLOW_EMAILS` leer
+
+Konsequenz:
+
+- Jeder kann Magic-Link anfordern.
+- Abuse-Risiko steigt.
+- Rate-Limit + Monitoring verpflichtend.
+
+**Risiken:**
+
+- Spam-Missbrauch
+- Token-Flood
+- Enumeration über Timing
+- Mail-Kostensteigerung
+
+TODO: `AUTH_LOG_MAGIC_TOKEN` ist in Prod aktuell aktiviert (`'1'`). Dies stellt ein Sicherheitsrisiko dar (Tokens in Logs) und sollte deaktiviert werden, sobald Mailer-Versand stabil ist.
+
 ## Troubleshooting
 
 ### 308 Redirect bei /api

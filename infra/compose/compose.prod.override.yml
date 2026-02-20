@@ -10,7 +10,7 @@ services:
       AUTH_PUBLIC_LOGIN: '1'
       AUTH_LOG_MAGIC_TOKEN: '1'
       AUTH_AUTO_PROVISION: '1'
-      AUTH_ALLOW_EMAILS: alexdermohr@gmail.com
+      AUTH_ALLOW_EMAILS: ""
       WEB_UPSTREAM_HOST: weltgewebe.home.arpa
       WEB_UPSTREAM_URL: https://weltgewebe.home.arpa
     volumes:
