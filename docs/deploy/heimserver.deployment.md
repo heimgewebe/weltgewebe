@@ -86,7 +86,7 @@ Lösung:
   ```sh
   docker compose --env-file /opt/weltgewebe/.env -p weltgewebe \
     -f infra/compose/compose.prod.yml -f infra/compose/compose.prod.override.yml \
-    up -d --build --scale caddy=0
+    up -d --build --scale caddy=0 --remove-orphans
   ```
 
 - Oder Ports im Stack deaktivieren: `ports: []` in `infra/compose/compose.prod.override.yml` definieren.
