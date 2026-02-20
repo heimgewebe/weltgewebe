@@ -80,7 +80,8 @@ Konsequenz:
 - Enumeration über Timing
 - Mail-Kostensteigerung
 
-TODO: `AUTH_LOG_MAGIC_TOKEN` ist in Prod aktuell aktiviert (`'1'`). Dies stellt ein Sicherheitsrisiko dar (Tokens in Logs) und sollte deaktiviert werden, sobald Mailer-Versand stabil ist.
+TODO: `AUTH_LOG_MAGIC_TOKEN` ist in Prod aktuell aktiviert (`'1'`). Dies stellt ein Sicherheitsrisiko dar (Tokens in
+Logs) und sollte deaktiviert werden, sobald Mailer-Versand stabil ist.
 
 ## Troubleshooting
 
