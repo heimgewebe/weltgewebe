@@ -83,6 +83,7 @@ Supported with strict rate limits (mandatory):
 **Konsequenz:**
 
 - Jeder kann Magic-Link anfordern.
+- Unbekannte Emails werden automatisch provisioniert (Auto-Provision).
 - Abuse-Risiko steigt.
 - Start bricht ab, wenn Rate-Limits fehlen.
 

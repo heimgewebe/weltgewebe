@@ -316,6 +316,175 @@ pub async fn dev_login(
     (jar.add(cookie), StatusCode::OK).into_response()
 }
 
+async fn provision_account(
+    state: &ApiState,
+    email_norm: &str,
+    request_id: &str,
+    client_ip: IpAddr,
+    remote_ip: IpAddr,
+    proxy_trusted: bool,
+    email_hash: &str,
+) -> Option<String> {
+    let new_id = Uuid::new_v4().to_string();
+    let new_account = AccountInternal {
+        public: AccountPublic {
+            id: new_id.clone(),
+            kind: "garnrolle".to_string(), // Default type
+            title: email_norm.split('@').next().unwrap_or("User").to_string(),
+            summary: None,
+            public_pos: None,
+            visibility: Visibility::Private, // Safe default
+            radius_m: 0,
+            ron_flag: false,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: Some(email_norm.to_string()),
+    };
+
+    {
+        let mut accounts_map = state.accounts.write().await;
+        // Double-checked locking to avoid race condition
+        let collision_id = accounts_map
+            .values()
+            .find(|acc| {
+                acc.email
+                    .as_ref()
+                    .map(|e| e == email_norm)
+                    .unwrap_or(false)
+            })
+            .map(|acc| acc.public.id.clone());
+
+        if let Some(id) = collision_id {
+            // Another request provisioned it in the meantime
+            Some(id)
+        } else {
+            let id = new_account.public.id.clone();
+            accounts_map.insert(id.clone(), new_account);
+            tracing::info!(
+                event = "login.provisioned",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %remote_ip,
+                proxy_trusted = proxy_trusted,
+                account_id = %new_id,
+                email_hash = %email_hash,
+                "Auto-provisioned new account"
+            );
+            Some(new_id)
+        }
+    }
+}
+
+async fn process_magic_link_delivery(
+    state: &ApiState,
+    account_id: &str,
+    email_norm: &str,
+    request_id: &str,
+    client_ip: IpAddr,
+    remote_ip: IpAddr,
+    proxy_trusted: bool,
+    email_hash: &str,
+) -> Result<(), StatusCode> {
+    // 3. Check Delivery Mechanism
+    let can_deliver = state.mailer.is_some();
+    let can_log = state.config.auth_log_magic_token;
+
+    if !can_deliver && !can_log {
+        tracing::error!(
+            event = "login.delivery_unavailable",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %remote_ip,
+            proxy_trusted = proxy_trusted,
+            email_hash = %email_hash,
+            account_id = %account_id,
+            "Public login enabled but no delivery path configured"
+        );
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    // 4. Generate Token (only if deliverable)
+    // Use normalized email for token creation too
+    let token = state.tokens.create(email_norm.to_string());
+
+    // 5. Send/Log Email
+    // Ensure the base URL does not have a trailing slash for clean formatting
+    // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
+    let base_url = state.config.app_base_url.as_deref().expect(
+        "APP_BASE_URL must be set when AUTH_PUBLIC_LOGIN is enabled (validated at startup)",
+    );
+    let base_url = base_url.trim_end_matches('/');
+    let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
+
+    if let Some(mailer) = &state.mailer {
+        match mailer.send_magic_link(email_norm, &link).await {
+            Ok(_) => {
+                tracing::info!(
+                    event = "login.sent",
+                    request_id = %request_id,
+                    client_ip = %client_ip,
+                    remote_ip = %remote_ip,
+                    proxy_trusted = proxy_trusted,
+                    account_id = %account_id,
+                    email_hash = %email_hash,
+                    "Magic Link sent via email"
+                );
+            }
+            Err(e) => {
+                tracing::error!(
+                    event = "login.send_failed",
+                    request_id = %request_id,
+                    client_ip = %client_ip,
+                    remote_ip = %remote_ip,
+                    proxy_trusted = proxy_trusted,
+                    account_id = %account_id,
+                    email_hash = %email_hash,
+                    error = %e,
+                    error_dbg = ?e,
+                    error_chain = %format!("{:#}", e),
+                    "Failed to send Magic Link email"
+                );
+            }
+        }
+    } else if !state.config.auth_log_magic_token {
+        // Only warn if dev logging is OFF (otherwise mailer=None is expected)
+        tracing::warn!(
+            event = "login.mailer_missing",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %remote_ip,
+            proxy_trusted = proxy_trusted,
+            account_id = %account_id,
+            "Mailer not configured; cannot send Magic Link"
+        );
+    } else {
+        tracing::debug!(
+            event = "login.mailer_missing_dev",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            remote_ip = %remote_ip,
+            proxy_trusted = proxy_trusted,
+            account_id = %account_id,
+            "Mailer not configured (dev log mode)"
+        );
+    }
+
+    // Dev/Ops Fallback: Log token if enabled
+    if state.config.auth_log_magic_token {
+        tracing::info!(
+            target: "email_outbox",
+            email_hash = %email_hash,
+            account_id = %account_id,
+            %link,
+            "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
+        );
+    }
+
+    Ok(())
+}
+
 pub async fn request_login(
     State(state): State<ApiState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -442,154 +611,72 @@ pub async fn request_login(
 
         if allowed {
             // Provision new account
-            let new_id = Uuid::new_v4().to_string();
-            let new_account = AccountInternal {
-                public: AccountPublic {
-                    id: new_id.clone(),
-                    kind: "garnrolle".to_string(), // Default type
-                    title: email_norm.split('@').next().unwrap_or("User").to_string(),
-                    summary: None,
-                    public_pos: None,
-                    visibility: Visibility::Private, // Safe default
-                    radius_m: 0,
-                    ron_flag: false,
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: Some(email_norm.clone()),
-            };
-
-            {
-                let mut accounts_map = state.accounts.write().await;
-                // Double-checked locking to avoid race condition
-                let collision_id = accounts_map
-                    .values()
-                    .find(|acc| {
-                        acc.email
-                            .as_ref()
-                            .map(|e| e == &email_norm)
-                            .unwrap_or(false)
-                    })
-                    .map(|acc| acc.public.id.clone());
-
-                if let Some(id) = collision_id {
-                    // Another request provisioned it in the meantime
-                    Some(id)
-                } else {
-                    let id = new_account.public.id.clone();
-                    accounts_map.insert(id.clone(), new_account);
-                    tracing::info!(
-                        event = "login.provisioned",
-                        request_id = %request_id,
-                        client_ip = %client_ip,
-                        remote_ip = %addr.ip(),
-                        proxy_trusted = proxy_trusted,
-                        account_id = %new_id,
-                        email_hash = %email_hash,
-                        "Auto-provisioned new account"
-                    );
-                    Some(new_id)
-                }
-            }
+            provision_account(
+                &state,
+                &email_norm,
+                &request_id,
+                client_ip,
+                addr.ip(),
+                proxy_trusted,
+                email_hash,
+            )
+            .await
         } else {
             None
         }
     };
 
     if let Some(id) = account_id {
-        // 3. Check Delivery Mechanism
-        let can_deliver = state.mailer.is_some();
-        let can_log = state.config.auth_log_magic_token;
-
-        if !can_deliver && !can_log {
-            tracing::error!(
-                event = "login.delivery_unavailable",
-                request_id = %request_id,
-                client_ip = %client_ip,
-                remote_ip = %addr.ip(),
-                proxy_trusted = proxy_trusted,
-                email_hash = %email_hash,
-                account_id = %id,
-                "Public login enabled but no delivery path configured"
-            );
-            return StatusCode::SERVICE_UNAVAILABLE.into_response();
+        if let Err(status) = process_magic_link_delivery(
+            &state,
+            &id,
+            &email_norm,
+            &request_id,
+            client_ip,
+            addr.ip(),
+            proxy_trusted,
+            email_hash,
+        )
+        .await
+        {
+            return status.into_response();
         }
-
-        // 4. Generate Token (only if deliverable)
-        // Use normalized email for token creation too
-        let token = state.tokens.create(email_norm.clone());
-
-        // 5. Send/Log Email
-        // Ensure the base URL does not have a trailing slash for clean formatting
-        // We expect APP_BASE_URL to be present because `AppConfig::validate` enforces it when `auth_public_login` is true.
-        let base_url = state.config.app_base_url.as_deref().expect(
-            "APP_BASE_URL must be set when AUTH_PUBLIC_LOGIN is enabled (validated at startup)",
-        );
-        let base_url = base_url.trim_end_matches('/');
-        let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
-
-        if let Some(mailer) = &state.mailer {
-            match mailer.send_magic_link(&email_norm, &link).await {
-                Ok(_) => {
-                    tracing::info!(
-                        event = "login.sent",
-                        request_id = %request_id,
-                        client_ip = %client_ip,
-                        remote_ip = %addr.ip(),
-                        proxy_trusted = proxy_trusted,
-                        account_id = %id,
-                        email_hash = %email_hash,
-                        "Magic Link sent via email"
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        event = "login.send_failed",
-                        request_id = %request_id,
-                        client_ip = %client_ip,
-                        remote_ip = %addr.ip(),
-                        proxy_trusted = proxy_trusted,
-                        account_id = %id,
-                        email_hash = %email_hash,
-                        error = %e,
-                        error_dbg = ?e,
-                        error_chain = %format!("{:#}", e),
-                        "Failed to send Magic Link email"
-                    );
-                }
+    } else if state.config.is_open_registration() {
+        if let Some(id) = provision_account(
+            &state,
+            &email_norm,
+            &request_id,
+            client_ip,
+            addr.ip(),
+            proxy_trusted,
+            email_hash,
+        )
+        .await
+        {
+            if let Err(status) = process_magic_link_delivery(
+                &state,
+                &id,
+                &email_norm,
+                &request_id,
+                client_ip,
+                addr.ip(),
+                proxy_trusted,
+                email_hash,
+            )
+            .await
+            {
+                return status.into_response();
             }
-        } else if !state.config.auth_log_magic_token {
-            // Only warn if dev logging is OFF (otherwise mailer=None is expected)
-            tracing::warn!(
-                event = "login.mailer_missing",
-                request_id = %request_id,
-                client_ip = %client_ip,
-                remote_ip = %addr.ip(),
-                proxy_trusted = proxy_trusted,
-                account_id = %id,
-                "Mailer not configured; cannot send Magic Link"
-            );
-        } else {
-            tracing::debug!(
-                event = "login.mailer_missing_dev",
-                request_id = %request_id,
-                client_ip = %client_ip,
-                remote_ip = %addr.ip(),
-                proxy_trusted = proxy_trusted,
-                account_id = %id,
-                "Mailer not configured (dev log mode)"
-            );
-        }
 
-        // Dev/Ops Fallback: Log token if enabled
-        if state.config.auth_log_magic_token {
             tracing::info!(
-                target: "email_outbox",
-                email_hash = %email_hash,
+                event = "login.requested_auto_provision",
+                request_id = %request_id,
+                client_ip = %client_ip,
+                remote_ip = %addr.ip(),
+                proxy_trusted = proxy_trusted,
                 account_id = %id,
-                %link,
-                "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
+                email_hash = %email_hash,
+                "Auto-provisioned account and sent Magic Link"
             );
         }
     } else {
