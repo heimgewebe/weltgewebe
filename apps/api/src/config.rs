@@ -303,7 +303,9 @@ impl AppConfig {
             let dev_logging = self.auth_log_magic_token;
 
             if dev_logging {
-                tracing::warn!("SECURITY WARNING: AUTH_LOG_MAGIC_TOKEN is enabled. Do not use in production.");
+                tracing::warn!(
+                    "SECURITY WARNING: AUTH_LOG_MAGIC_TOKEN is enabled. Do not use in production."
+                );
             }
 
             if !smtp_valid && !dev_logging {
