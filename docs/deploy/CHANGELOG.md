@@ -4,6 +4,28 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-02-20 - Public Magic-Link Login aktiviert (Option C)
+
+**Ursprung / Referenz:** (feat/auth-public-magic-link)
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.override.yml`
+- `docs/deploy/heimserver.deployment.md`
+
+### Added
+
+- Public Magic-Link Login aktiviert (Option C)
+- Allowlist deaktiviert (erfordert strikte Rate-Limits im Environment)
+- Rate-Limits für Open Registration mandatory gemacht (Code-Enforcement)
+- Token-Log-Deaktivierung für Prod stark empfohlen (Warnung im Log)
+
+### Risiko
+
+Mittel bis hoch (öffentlicher Login-Endpunkt)
+
+---
+
 ## 2026-02-19 - compose.prod.override.yml: `environment: null` → `environment: {}` (caddy)
 
 **Ursprung / Referenz:** PR #746 (chore: remove bak artifacts, fix compose environment null)

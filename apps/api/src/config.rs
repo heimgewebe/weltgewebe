@@ -228,6 +228,8 @@ impl AppConfig {
     }
 
     fn normalize(mut self) -> Self {
+        // Ensure empty vectors are treated as None to prevent empty allowlists
+        // from being interpreted as "allowlist present but empty" (which is unsafe).
         if let Some(emails) = self.auth_allow_emails {
             let normalized: Vec<String> = emails
                 .into_iter()
@@ -275,7 +277,20 @@ impl AppConfig {
                 .unwrap_or(false);
 
             if !has_email_allowlist && !has_domain_allowlist {
-                anyhow::bail!("AUTH_AUTO_PROVISION is enabled but no allowlist is configured. Set AUTH_ALLOW_EMAILS or AUTH_ALLOW_EMAIL_DOMAINS to prevent open registration spam.");
+                // Open Registration Mode (Option C)
+                // Require all rate limits to be set and > 0
+                let rl_ok = self.auth_rl_ip_per_min.unwrap_or(0) > 0
+                    && self.auth_rl_ip_per_hour.unwrap_or(0) > 0
+                    && self.auth_rl_email_per_min.unwrap_or(0) > 0
+                    && self.auth_rl_email_per_hour.unwrap_or(0) > 0;
+
+                if !rl_ok {
+                    anyhow::bail!("AUTH_AUTO_PROVISION is enabled without allowlist, but strict rate limits are missing. Configure AUTH_RL_* variables > 0 to proceed.");
+                } else {
+                    tracing::info!("Starting with Open Registration (No Allowlist) and Strict Rate Limits active.");
+                }
+            } else {
+                tracing::info!("Starting with Allowlist-restricted Registration.");
             }
         }
 
@@ -288,6 +303,12 @@ impl AppConfig {
 
             // Check if dev logging fallback is enabled
             let dev_logging = self.auth_log_magic_token;
+
+            if dev_logging {
+                tracing::warn!(
+                    "SECURITY WARNING: AUTH_LOG_MAGIC_TOKEN is enabled. Do not use in production."
+                );
+            }
 
             if !smtp_valid && !dev_logging {
                 anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but no delivery mechanism is configured. Configure SMTP_* or set AUTH_LOG_MAGIC_TOKEN=1 for dev.");
@@ -336,6 +357,33 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn allowlist_is_ignored_if_empty_string() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Case 1: Empty string -> Should fail without rate limits
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("strict rate limits are missing"));
+
+        // Case 2: Comma only -> Should fail without rate limits
+        let _emails_comma = EnvGuard::set("AUTH_ALLOW_EMAILS", ",,");
+        let res2 = AppConfig::load_from_path(file.path());
+        assert!(res2.is_err());
 
         Ok(())
     }
@@ -470,7 +518,29 @@ delegation_expire_days: 28
 
     #[test]
     #[serial]
-    fn validation_fails_if_auto_provision_enabled_without_allowlist() -> Result<()> {
+    fn validation_fails_if_auto_provision_enabled_without_allowlist_and_no_limits() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        // Ensure rate limits are missing or zero
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("strict rate limits are missing"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_if_auto_provision_without_allowlist_and_strict_limits() -> Result<()> {
         let file = NamedTempFile::new()?;
         std::fs::write(file.path(), YAML)?;
 
@@ -478,12 +548,16 @@ delegation_expire_days: 28
         let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
         let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
 
-        let res = AppConfig::load_from_path(file.path());
-        assert!(res.is_err());
-        assert!(res
-            .unwrap_err()
-            .to_string()
-            .contains("AUTH_AUTO_PROVISION is enabled but no allowlist is configured"));
+        // Set mandatory rate limits
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
+        let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert!(cfg.auth_allow_emails.is_none());
+        assert!(cfg.auth_allow_email_domains.is_none());
 
         Ok(())
     }
