@@ -3,11 +3,13 @@
 ## Architektur (Ist)
 
 - Weltgewebe-Stack läuft als Docker Compose Projekt `weltgewebe`:
-  - Services: `db` (Postgres 16), `api`, `nats` (JetStream), optional Service `caddy` (Container typischerweise `weltgewebe-caddy-1`, im Stack meist aus oder `--scale caddy=0`)
+  - Services: `db` (Postgres 16), `api`, `nats` (JetStream), optional Service `caddy`
+    (Container typischerweise `weltgewebe-caddy-1`, im Stack meist aus oder `--scale caddy=0`)
 - Edge-Gateway läuft separat als Compose Projekt `edge`:
   - Container: `edge-caddy` (bindet Ports 80/443)
   - Edge-Caddy ist mit `weltgewebe_default` verbunden (wichtig für DNS/Reverse Proxy)
-  - Der Service `caddy` (Container typischerweise `weltgewebe-caddy-1`) im Stack ist optional und wird typischerweise nicht gestartet, da `edge-caddy` die Ports belegt.
+  - Der Service `caddy` (Container typischerweise `weltgewebe-caddy-1`) im Stack ist optional und wird typischerweise
+    nicht gestartet, da `edge-caddy` die Ports belegt.
 
 ## DNS / Hosts
 
