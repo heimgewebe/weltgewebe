@@ -316,14 +316,19 @@ pub async fn dev_login(
     (jar.add(cookie), StatusCode::OK).into_response()
 }
 
-async fn provision_account(
-    state: &ApiState,
-    email_norm: &str,
-    request_id: &str,
+// Bundle context parameters to avoid "too many arguments" lint
+struct ProvisionContext<'a> {
+    request_id: &'a str,
     client_ip: IpAddr,
     remote_ip: IpAddr,
     proxy_trusted: bool,
-    email_hash: &str,
+    email_hash: &'a str,
+}
+
+async fn provision_account(
+    state: &ApiState,
+    email_norm: &str,
+    ctx: &ProvisionContext<'_>,
 ) -> Option<String> {
     let new_id = Uuid::new_v4().to_string();
     let new_account = AccountInternal {
@@ -359,12 +364,12 @@ async fn provision_account(
             accounts_map.insert(id.clone(), new_account);
             tracing::info!(
                 event = "login.provisioned",
-                request_id = %request_id,
-                client_ip = %client_ip,
-                remote_ip = %remote_ip,
-                proxy_trusted = proxy_trusted,
+                request_id = %ctx.request_id,
+                client_ip = %ctx.client_ip,
+                remote_ip = %ctx.remote_ip,
+                proxy_trusted = ctx.proxy_trusted,
                 account_id = %new_id,
-                email_hash = %email_hash,
+                email_hash = %ctx.email_hash,
                 "Auto-provisioned new account"
             );
             Some(new_id)
@@ -376,11 +381,7 @@ async fn process_magic_link_delivery(
     state: &ApiState,
     account_id: &str,
     email_norm: &str,
-    request_id: &str,
-    client_ip: IpAddr,
-    remote_ip: IpAddr,
-    proxy_trusted: bool,
-    email_hash: &str,
+    ctx: &ProvisionContext<'_>,
 ) -> Result<(), StatusCode> {
     // 3. Check Delivery Mechanism
     let can_deliver = state.mailer.is_some();
@@ -389,11 +390,11 @@ async fn process_magic_link_delivery(
     if !can_deliver && !can_log {
         tracing::error!(
             event = "login.delivery_unavailable",
-            request_id = %request_id,
-            client_ip = %client_ip,
-            remote_ip = %remote_ip,
-            proxy_trusted = proxy_trusted,
-            email_hash = %email_hash,
+            request_id = %ctx.request_id,
+            client_ip = %ctx.client_ip,
+            remote_ip = %ctx.remote_ip,
+            proxy_trusted = ctx.proxy_trusted,
+            email_hash = %ctx.email_hash,
             account_id = %account_id,
             "Public login enabled but no delivery path configured"
         );
@@ -418,24 +419,24 @@ async fn process_magic_link_delivery(
             Ok(_) => {
                 tracing::info!(
                     event = "login.sent",
-                    request_id = %request_id,
-                    client_ip = %client_ip,
-                    remote_ip = %remote_ip,
-                    proxy_trusted = proxy_trusted,
+                    request_id = %ctx.request_id,
+                    client_ip = %ctx.client_ip,
+                    remote_ip = %ctx.remote_ip,
+                    proxy_trusted = ctx.proxy_trusted,
                     account_id = %account_id,
-                    email_hash = %email_hash,
+                    email_hash = %ctx.email_hash,
                     "Magic Link sent via email"
                 );
             }
             Err(e) => {
                 tracing::error!(
                     event = "login.send_failed",
-                    request_id = %request_id,
-                    client_ip = %client_ip,
-                    remote_ip = %remote_ip,
-                    proxy_trusted = proxy_trusted,
+                    request_id = %ctx.request_id,
+                    client_ip = %ctx.client_ip,
+                    remote_ip = %ctx.remote_ip,
+                    proxy_trusted = ctx.proxy_trusted,
                     account_id = %account_id,
-                    email_hash = %email_hash,
+                    email_hash = %ctx.email_hash,
                     error = %e,
                     error_dbg = ?e,
                     error_chain = %format!("{:#}", e),
@@ -447,20 +448,20 @@ async fn process_magic_link_delivery(
         // Only warn if dev logging is OFF (otherwise mailer=None is expected)
         tracing::warn!(
             event = "login.mailer_missing",
-            request_id = %request_id,
-            client_ip = %client_ip,
-            remote_ip = %remote_ip,
-            proxy_trusted = proxy_trusted,
+            request_id = %ctx.request_id,
+            client_ip = %ctx.client_ip,
+            remote_ip = %ctx.remote_ip,
+            proxy_trusted = ctx.proxy_trusted,
             account_id = %account_id,
             "Mailer not configured; cannot send Magic Link"
         );
     } else {
         tracing::debug!(
             event = "login.mailer_missing_dev",
-            request_id = %request_id,
-            client_ip = %client_ip,
-            remote_ip = %remote_ip,
-            proxy_trusted = proxy_trusted,
+            request_id = %ctx.request_id,
+            client_ip = %ctx.client_ip,
+            remote_ip = %ctx.remote_ip,
+            proxy_trusted = ctx.proxy_trusted,
             account_id = %account_id,
             "Mailer not configured (dev log mode)"
         );
@@ -470,7 +471,7 @@ async fn process_magic_link_delivery(
     if state.config.auth_log_magic_token {
         tracing::info!(
             target: "email_outbox",
-            email_hash = %email_hash,
+            email_hash = %ctx.email_hash,
             account_id = %account_id,
             %link,
             "Magic Link Generated (LOGGED due to AUTH_LOG_MAGIC_TOKEN=true)"
@@ -557,6 +558,15 @@ pub async fn request_login(
             .map(|acc| (acc.public.id.clone(), acc.public.disabled))
     };
 
+    // Prepare context for helpers
+    let ctx = ProvisionContext {
+        request_id: &request_id,
+        client_ip,
+        remote_ip: addr.ip(),
+        proxy_trusted,
+        email_hash,
+    };
+
     let account_id = if let Some((id, disabled)) = existing_account_info {
         if disabled {
             tracing::info!(
@@ -606,60 +616,19 @@ pub async fn request_login(
 
         if allowed {
             // Provision new account
-            provision_account(
-                &state,
-                &email_norm,
-                &request_id,
-                client_ip,
-                addr.ip(),
-                proxy_trusted,
-                email_hash,
-            )
-            .await
+            provision_account(&state, &email_norm, &ctx).await
         } else {
             None
         }
     };
 
     if let Some(id) = account_id {
-        if let Err(status) = process_magic_link_delivery(
-            &state,
-            &id,
-            &email_norm,
-            &request_id,
-            client_ip,
-            addr.ip(),
-            proxy_trusted,
-            email_hash,
-        )
-        .await
-        {
+        if let Err(status) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
             return status.into_response();
         }
     } else if state.config.is_open_registration() {
-        if let Some(id) = provision_account(
-            &state,
-            &email_norm,
-            &request_id,
-            client_ip,
-            addr.ip(),
-            proxy_trusted,
-            email_hash,
-        )
-        .await
-        {
-            if let Err(status) = process_magic_link_delivery(
-                &state,
-                &id,
-                &email_norm,
-                &request_id,
-                client_ip,
-                addr.ip(),
-                proxy_trusted,
-                email_hash,
-            )
-            .await
-            {
+        if let Some(id) = provision_account(&state, &email_norm, &ctx).await {
+            if let Err(status) = process_magic_link_delivery(&state, &id, &email_norm, &ctx).await {
                 return status.into_response();
             }
 
