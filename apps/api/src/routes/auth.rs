@@ -348,12 +348,7 @@ async fn provision_account(
         // Double-checked locking to avoid race condition
         let collision_id = accounts_map
             .values()
-            .find(|acc| {
-                acc.email
-                    .as_ref()
-                    .map(|e| e == email_norm)
-                    .unwrap_or(false)
-            })
+            .find(|acc| acc.email.as_ref().map(|e| e == email_norm).unwrap_or(false))
             .map(|acc| acc.public.id.clone());
 
         if let Some(id) = collision_id {

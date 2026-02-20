@@ -40,9 +40,9 @@ fn test_state_open_reg() -> Result<ApiState> {
         app_base_url: Some("http://localhost".to_string()),
         auth_trusted_proxies: None,
 
-        auth_allow_emails: None, // Essential for Option C
+        auth_allow_emails: None,        // Essential for Option C
         auth_allow_email_domains: None, // Essential for Option C
-        auth_auto_provision: true, // Essential for Option C
+        auth_auto_provision: true,      // Essential for Option C
 
         // Mandatory Rate Limits for Option C
         auth_rl_ip_per_min: Some(100),
@@ -115,7 +115,10 @@ async fn test_open_registration_flow_auto_provisions_unknown_email() -> Result<(
             .values()
             .any(|acc| acc.email.as_deref() == Some(email));
 
-        assert!(found, "Account should be auto-provisioned for unknown email in Open Registration mode");
+        assert!(
+            found,
+            "Account should be auto-provisioned for unknown email in Open Registration mode"
+        );
     }
 
     Ok(())
