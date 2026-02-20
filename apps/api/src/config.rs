@@ -228,6 +228,8 @@ impl AppConfig {
     }
 
     fn normalize(mut self) -> Self {
+        // Ensure empty vectors are treated as None to prevent empty allowlists
+        // from being interpreted as "allowlist present but empty" (which is unsafe).
         if let Some(emails) = self.auth_allow_emails {
             let normalized: Vec<String> = emails
                 .into_iter()
@@ -355,6 +357,33 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn allowlist_is_ignored_if_empty_string() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Case 1: Empty string -> Should fail without rate limits
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("strict rate limits are missing"));
+
+        // Case 2: Comma only -> Should fail without rate limits
+        let _emails_comma = EnvGuard::set("AUTH_ALLOW_EMAILS", ",,");
+        let res2 = AppConfig::load_from_path(file.path());
+        assert!(res2.is_err());
 
         Ok(())
     }

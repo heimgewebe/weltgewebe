@@ -67,8 +67,8 @@ Supported with strict rate limits (mandatory):
 
 - `AUTH_PUBLIC_LOGIN=1`
 - `AUTH_AUTO_PROVISION=1`
-- `AUTH_ALLOW_EMAILS` leer
-- `AUTH_LOG_MAGIC_TOKEN=0` (Security mandatory)
+- `AUTH_ALLOW_EMAILS` unset or empty (triggers Open Registration mode)
+- `AUTH_LOG_MAGIC_TOKEN=0` (Security mandatory for Production)
 
 **Required Rate Limits (Environment Variables):**
 

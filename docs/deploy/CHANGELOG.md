@@ -17,7 +17,8 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 - Public Magic-Link Login aktiviert (Option C)
 - Allowlist deaktiviert (erfordert strikte Rate-Limits im Environment)
-- Rate-Limits und Token-Log-Deaktivierung für Prod-Start mandatory gemacht
+- Rate-Limits für Open Registration mandatory gemacht (Code-Enforcement)
+- Token-Log-Deaktivierung für Prod stark empfohlen (Warnung im Log)
 
 ### Risiko
 
