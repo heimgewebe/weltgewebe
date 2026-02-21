@@ -4,6 +4,24 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-02-21 - Fix: SMTP Env Injection via `env_file`
+
+**Ursprung / Referenz:** Fix für AUTH_PUBLIC_LOGIN (Deployment-Drift)
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.override.yml`
+
+**Beschreibung:**
+
+Um sicherzustellen, dass SMTP-Variablen (und andere Secrets) zuverlässig im `weltgewebe-api`-Container ankommen,
+wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzugefügt.
+Dies korrigiert das Problem, dass `AUTH_PUBLIC_LOGIN=1` fehlschlug, weil der Mailer keine Konfiguration im Runtime-Environment fand.
+
+**Risiko:** Niedrig (Deployment-Korrektur).
+
+---
+
 ## 2026-02-20 - Option C vollständig implementiert (Auto-Provision im Auth-Flow)
 
 **Ursprung / Referenz:** (feat/auth-open-registration)
