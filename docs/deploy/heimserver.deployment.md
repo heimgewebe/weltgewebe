@@ -27,18 +27,20 @@
 
 - Stack (via Script, empfohlen):
 
-  Installieren (Symlink): `ln -s /opt/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
+  Installieren (Symlink): `ln -s /path/to/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
 
   ```sh
-  # Default (ohne Caddy, nur interne API):
+  # Default (Offline-first, ohne Git, ohne Caddy):
   weltgewebe-up
+
+  # Mit Update (git fetch + pull --ff-only):
+  weltgewebe-up --pull
 
   # Optional: mit Caddy (wenn Ports frei):
   weltgewebe-up --with-caddy
-
-  # Mit Pull (git pull --ff-only):
-  weltgewebe-up --pull
   ```
+
+  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung, da es keine Git-Befehle ausführt.
 
 - Stack (Manuell):
 

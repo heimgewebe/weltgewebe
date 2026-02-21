@@ -4,27 +4,33 @@ set -euo pipefail
 # -----------------------------
 # Weltgewebe Up (Deploy) Script
 # -----------------------------
-# Replaces manual docker compose invocations with a safe, idempotent, and optional-caddy-aware wrapper.
+# Robust, idempotent, and optional-caddy-aware deployment wrapper.
 #
 # Usage:
 #   weltgewebe-up [--with-caddy] [--pull]
 #
 # Logic:
-#   1. Git Fetch + Optional Pull (--ff-only)
-#   2. Preflight (docker compose config)
+#   1. Optional Git Fetch + Pull (--pull)
+#   2. Preflight (Env check, Docker Compose Config)
 #   3. Service Detection (is 'caddy' defined?)
 #   4. Deploy (docker compose up -d ...)
 #      - Default: --scale caddy=0
-#      - With --with-caddy: try enabling caddy, fallback to scale=0 on failure
-#   5. Health Check
+#      - With --with-caddy: try enabling caddy, fallback to scale=0 on specific bind errors
+#   5. Health Check (auto-detect port)
 
 REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
-# Strict file set as requested
-COMPOSE_FILES=("-f" "infra/compose/compose.prod.yml" "-f" "infra/compose/compose.prod.override.yml")
+REMOTE="${REMOTE:-origin}"
 
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8081/health/ready}"
+# Base Compose File (always required)
+COMPOSE_FILES=("-f" "infra/compose/compose.prod.yml")
+
+# Override File (optional but recommended)
+OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
+
+# Default Health URL (fallback)
+HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 
 # Arguments
 WITH_CADDY=0
@@ -54,7 +60,6 @@ if [[ -d "$REPO_DIR" ]]; then
   cd "$REPO_DIR"
 else
   echo "WARNING: REPO_DIR '$REPO_DIR' not found. Assuming current directory."
-  # If current directory doesn't look like repo root, fail
   if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
      echo "ERROR: Could not find infra/compose/compose.prod.yml in current directory."
      exit 1
@@ -65,75 +70,107 @@ echo "== Weltgewebe Up =="
 echo "Repo:    $(pwd)"
 echo "Project: $COMPOSE_PROJECT"
 echo "Env:     $ENV_FILE"
-echo
 
-# 1. Git
-echo ">> Git Fetch..."
-git fetch origin
-if [[ "$DO_PULL" == "1" ]]; then
-  echo ">> Git Pull (fast-forward)..."
-  if git pull --ff-only; then
-    echo "Git pull successful."
-  else
-    echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
-    exit 1
-  fi
+# 1. Environment Check
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo
+  echo "ERROR: ENV_FILE not found: $ENV_FILE"
+  echo "Please create it (e.g. from .env.example) or set ENV_FILE=/path/to/.env"
+  exit 2
 fi
 
-# 2. Preflight (Config Check)
-echo
-echo ">> Preflight: docker compose config"
-# We need to construct the base compose command args
+# 2. Git (Optional)
+if [[ "$DO_PULL" == "1" ]]; then
+  echo
+  echo ">> Git Fetch..."
+  git fetch "$REMOTE" --prune
+  echo ">> Git Pull (fast-forward)..."
+  if ! git pull --ff-only; then
+    echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
+    echo "       (git status, git stash, or reset might be needed)"
+    exit 1
+  fi
+else
+  echo
+  echo ">> Git: Skipped (offline mode). Use --pull to update."
+fi
+
+# 3. Compose File Setup
+if [[ -f "$OVERRIDE_FILE" ]]; then
+  COMPOSE_FILES+=("-f" "$OVERRIDE_FILE")
+else
+  echo "NOTE: Override file '$OVERRIDE_FILE' not found. Using base compose only."
+fi
+
 BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
 
+# 4. Preflight (Config Check)
+echo
+echo ">> Preflight: docker compose config"
 if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
   echo "ERROR: Docker Compose config failed. Aborting deploy."
   exit 1
 fi
 echo "OK"
 
-# 3. Optional Service Detection
+# 5. Service Plan & Caddy Logic
 HAS_CADDY=0
 if docker compose "${BASE_ARGS[@]}" config --services | grep -qFx "caddy"; then
   HAS_CADDY=1
 fi
 
-echo
-echo ">> Service Plan:"
 SCALE_ARGS=()
 ENABLE_CADDY=0
 
+echo
+echo ">> Service Plan:"
 if [[ "$HAS_CADDY" == "1" ]]; then
   if [[ "$WITH_CADDY" == "1" ]]; then
     echo " - caddy: ENABLED (explicit request)"
     ENABLE_CADDY=1
-    # No scale args means default scale (usually 1)
   else
-    echo " - caddy: DISABLED (default, via --scale caddy=0)"
+    echo " - caddy: DISABLED (default)"
     SCALE_ARGS=("--scale" "caddy=0")
   fi
 else
-  echo " - caddy: NOT FOUND in compose config (skipping logic)"
+  echo " - caddy: NOT FOUND (skipping logic)"
   if [[ "$WITH_CADDY" == "1" ]]; then
      echo "WARNING: --with-caddy requested but service 'caddy' not found."
   fi
 fi
 
-# 4. Deploy
+# 6. Deploy
 echo
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--build" "--remove-orphans")
 
 if [[ "$ENABLE_CADDY" == "1" ]]; then
-  # Try with Caddy enabled
+  # Try with Caddy enabled, capturing stderr
   echo "Running: ${CMD_BASE[*]}"
-  if ! "${CMD_BASE[@]}"; then
-     echo
-     echo "WARNING: Deployment with Caddy failed (possibly port conflict)."
-     echo "Retrying without Caddy (--scale caddy=0)..."
-     CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
-     echo "Running: ${CMD_RETRY[*]}"
-     "${CMD_RETRY[@]}"
+
+  ERR_FILE=$(mktemp)
+  if ! "${CMD_BASE[@]}" 2> "$ERR_FILE"; then
+     ERR_CONTENT=$(cat "$ERR_FILE")
+     # Check for bind errors (port conflict)
+     if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
+        echo
+        echo "WARNING: Port conflict detected (Caddy could not bind ports)."
+        echo "Retrying without Caddy (--scale caddy=0)..."
+        CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
+        echo "Running: ${CMD_RETRY[*]}"
+        "${CMD_RETRY[@]}"
+     else
+        # Other error: fail hard
+        echo
+        echo "ERROR: Deployment failed."
+        echo "$ERR_CONTENT"
+        rm -f "$ERR_FILE"
+        exit 1
+     fi
+  else
+     # Success, but maybe warnings? Print them if needed, or just suppress.
+     # For now, let's just proceed.
+     rm -f "$ERR_FILE"
   fi
 else
   # Caddy disabled or not present
@@ -142,27 +179,40 @@ else
   "${CMD[@]}"
 fi
 
-# 5. Proof / Health
+# 7. Port Detection & Health Check
 echo
 echo ">> Status:"
 docker compose "${BASE_ARGS[@]}" ps
 
 echo
-echo ">> Health Check ($HEALTH_URL):"
-# Retry loop for health check
+echo ">> Health Check:"
+
+# Try to detect mapped port
+API_PORT=""
+if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api 8080 2>/dev/null); then
+  # Format is usually 0.0.0.0:PORT or ::1:PORT
+  API_PORT=$(echo "$RAW_PORT" | sed 's/.*://' | head -n1)
+fi
+
+if [[ -n "$API_PORT" ]]; then
+  HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
+  echo "Detected API port: $API_PORT -> $HEALTH_URL"
+else
+  HEALTH_URL="$HEALTH_URL_DEFAULT"
+  echo "Could not detect API port. Using default: $HEALTH_URL"
+fi
+
+# Retry loop
 MAX_RETRIES=12
 SLEEP_SEC=5
 
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  # Use curl -f to fail on HTTP errors (4xx/5xx)
-  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+  if response=$(curl -fsS "$HEALTH_URL" 2>/dev/null); then
     echo "Health OK"
-    # Pretty print if jq is available
     if command -v jq >/dev/null; then
-      curl -fsS "$HEALTH_URL" | jq .
+      echo "$response" | jq .
     else
-      curl -fsS "$HEALTH_URL"
-      echo # Newline
+      echo "$response"
     fi
     exit 0
   fi
@@ -171,4 +221,6 @@ for ((i=1;i<=MAX_RETRIES;i++)); do
 done
 
 echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
+echo "URL: $HEALTH_URL"
+echo "Tip: Check 'docker compose ps' or set HEALTH_URL manually."
 exit 1
