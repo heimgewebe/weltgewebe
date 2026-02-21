@@ -25,12 +25,27 @@
 
 ## Standard-Kommandos
 
-- Stack:
+- Stack (via Script, empfohlen):
+
+  Installieren (Symlink): `ln -s /opt/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
+
+  ```sh
+  # Default (ohne Caddy, nur interne API):
+  weltgewebe-up
+
+  # Optional: mit Caddy (wenn Ports frei):
+  weltgewebe-up --with-caddy
+
+  # Mit Pull (git pull --ff-only):
+  weltgewebe-up --pull
+  ```
+
+- Stack (Manuell):
 
   ```sh
   docker compose --env-file /opt/weltgewebe/.env -p weltgewebe \
     -f infra/compose/compose.prod.yml -f infra/compose/compose.prod.override.yml \
-    up -d --build
+    up -d --build --scale caddy=0
   ```
 
 - Edge:

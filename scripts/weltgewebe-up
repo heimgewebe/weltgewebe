@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# -----------------------------
+# Weltgewebe Up (Deploy) Script
+# -----------------------------
+# Replaces manual docker compose invocations with a safe, idempotent, and optional-caddy-aware wrapper.
+#
+# Usage:
+#   weltgewebe-up [--with-caddy] [--pull]
+#
+# Logic:
+#   1. Git Fetch + Optional Pull (--ff-only)
+#   2. Preflight (docker compose config)
+#   3. Service Detection (is 'caddy' defined?)
+#   4. Deploy (docker compose up -d ...)
+#      - Default: --scale caddy=0
+#      - With --with-caddy: try enabling caddy, fallback to scale=0 on failure
+#   5. Health Check
+
+REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
+ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
+# Strict file set as requested
+COMPOSE_FILES=("-f" "infra/compose/compose.prod.yml" "-f" "infra/compose/compose.prod.override.yml")
+
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8081/health/ready}"
+
+# Arguments
+WITH_CADDY=0
+DO_PULL=0
+
+usage() {
+  echo "Usage: $0 [--with-caddy] [--pull]"
+  echo
+  echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
+  echo "  --pull         Perform 'git pull --ff-only' before deploying"
+  echo
+  exit 1
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case $1 in
+    --with-caddy) WITH_CADDY=1 ;;
+    --pull) DO_PULL=1 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown parameter passed: $1"; usage ;;
+  esac
+  shift
+done
+
+# Ensure we are in the repo directory
+if [[ -d "$REPO_DIR" ]]; then
+  cd "$REPO_DIR"
+else
+  echo "WARNING: REPO_DIR '$REPO_DIR' not found. Assuming current directory."
+  # If current directory doesn't look like repo root, fail
+  if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
+     echo "ERROR: Could not find infra/compose/compose.prod.yml in current directory."
+     exit 1
+  fi
+fi
+
+echo "== Weltgewebe Up =="
+echo "Repo:    $(pwd)"
+echo "Project: $COMPOSE_PROJECT"
+echo "Env:     $ENV_FILE"
+echo
+
+# 1. Git
+echo ">> Git Fetch..."
+git fetch origin
+if [[ "$DO_PULL" == "1" ]]; then
+  echo ">> Git Pull (fast-forward)..."
+  if git pull --ff-only; then
+    echo "Git pull successful."
+  else
+    echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
+    exit 1
+  fi
+fi
+
+# 2. Preflight (Config Check)
+echo
+echo ">> Preflight: docker compose config"
+# We need to construct the base compose command args
+BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
+
+if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
+  echo "ERROR: Docker Compose config failed. Aborting deploy."
+  exit 1
+fi
+echo "OK"
+
+# 3. Optional Service Detection
+HAS_CADDY=0
+if docker compose "${BASE_ARGS[@]}" config --services | grep -qFx "caddy"; then
+  HAS_CADDY=1
+fi
+
+echo
+echo ">> Service Plan:"
+SCALE_ARGS=()
+ENABLE_CADDY=0
+
+if [[ "$HAS_CADDY" == "1" ]]; then
+  if [[ "$WITH_CADDY" == "1" ]]; then
+    echo " - caddy: ENABLED (explicit request)"
+    ENABLE_CADDY=1
+    # No scale args means default scale (usually 1)
+  else
+    echo " - caddy: DISABLED (default, via --scale caddy=0)"
+    SCALE_ARGS=("--scale" "caddy=0")
+  fi
+else
+  echo " - caddy: NOT FOUND in compose config (skipping logic)"
+  if [[ "$WITH_CADDY" == "1" ]]; then
+     echo "WARNING: --with-caddy requested but service 'caddy' not found."
+  fi
+fi
+
+# 4. Deploy
+echo
+echo ">> Deploying..."
+CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--build" "--remove-orphans")
+
+if [[ "$ENABLE_CADDY" == "1" ]]; then
+  # Try with Caddy enabled
+  echo "Running: ${CMD_BASE[*]}"
+  if ! "${CMD_BASE[@]}"; then
+     echo
+     echo "WARNING: Deployment with Caddy failed (possibly port conflict)."
+     echo "Retrying without Caddy (--scale caddy=0)..."
+     CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
+     echo "Running: ${CMD_RETRY[*]}"
+     "${CMD_RETRY[@]}"
+  fi
+else
+  # Caddy disabled or not present
+  CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
+  echo "Running: ${CMD[*]}"
+  "${CMD[@]}"
+fi
+
+# 5. Proof / Health
+echo
+echo ">> Status:"
+docker compose "${BASE_ARGS[@]}" ps
+
+echo
+echo ">> Health Check ($HEALTH_URL):"
+# Retry loop for health check
+MAX_RETRIES=12
+SLEEP_SEC=5
+
+for ((i=1;i<=MAX_RETRIES;i++)); do
+  # Use curl -f to fail on HTTP errors (4xx/5xx)
+  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+    echo "Health OK"
+    # Pretty print if jq is available
+    if command -v jq >/dev/null; then
+      curl -fsS "$HEALTH_URL" | jq .
+    else
+      curl -fsS "$HEALTH_URL"
+      echo # Newline
+    fi
+    exit 0
+  fi
+  echo "Waiting for health... ($i/$MAX_RETRIES)"
+  sleep "$SLEEP_SEC"
+done
+
+echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
+exit 1
