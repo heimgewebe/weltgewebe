@@ -25,12 +25,33 @@
 
 ## Standard-Kommandos
 
-- Stack:
+- Stack (via Script, empfohlen):
+
+  Installieren (Symlink): `ln -s /path/to/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
+
+  ```sh
+  # Default (Offline-first, ohne Git, ohne Caddy):
+  weltgewebe-up
+
+  # Mit Update (git fetch + pull --ff-only):
+  weltgewebe-up --pull
+
+  # Optional: mit Caddy (wenn Ports frei):
+  weltgewebe-up --with-caddy
+  ```
+
+  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung,
+  da es keine Git-Befehle ausführt.
+
+  Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
+  `REPO_DIR=/pfad ENV_FILE=/pfad/.env weltgewebe-up`
+
+- Stack (Manuell):
 
   ```sh
   docker compose --env-file /opt/weltgewebe/.env -p weltgewebe \
     -f infra/compose/compose.prod.yml -f infra/compose/compose.prod.override.yml \
-    up -d --build
+    up -d --build --scale caddy=0
   ```
 
 - Edge:
