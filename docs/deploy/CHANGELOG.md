@@ -4,6 +4,25 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-02-20 - Option C vollständig implementiert (Auto-Provision im Auth-Flow)
+
+**Ursprung / Referenz:** (feat/auth-open-registration)
+
+**Geänderte Dateien:**
+
+- `apps/api/src/config.rs`
+- `apps/api/src/routes/auth.rs`
+
+**Beschreibung:**
+
+Option C war bisher nur im Config-Layer aktiv. Unknown emails wurden weiterhin mit `policy_denied` behandelt.
+Jetzt wird Auto-Provision + Magic-Link-Versand im Auth-Flow durchgeführt, wenn `is_open_registration()` true ist.
+Damit entspricht Runtime-Verhalten der Konfigurationsvalidierung.
+
+**Risiko:** Mittel–Hoch (öffentlicher Login-Endpunkt).
+
+---
+
 ## 2026-02-20 - Public Magic-Link Login aktiviert (Option C)
 
 **Ursprung / Referenz:** (feat/auth-public-magic-link)

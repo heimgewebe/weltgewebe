@@ -259,6 +259,17 @@ impl AppConfig {
         self
     }
 
+    pub fn is_open_registration(&self) -> bool {
+        self.auth_public_login
+            && self.auth_auto_provision
+            && self.auth_allow_emails.is_none()
+            && self.auth_allow_email_domains.is_none()
+            && self.auth_rl_ip_per_min.unwrap_or(0) > 0
+            && self.auth_rl_ip_per_hour.unwrap_or(0) > 0
+            && self.auth_rl_email_per_min.unwrap_or(0) > 0
+            && self.auth_rl_email_per_hour.unwrap_or(0) > 0
+    }
+
     fn validate(self) -> Result<Self> {
         if self.auth_public_login && self.app_base_url.is_none() {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
@@ -665,6 +676,44 @@ delegation_expire_days: 28
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.auth_public_login);
         assert!(cfg.auth_log_magic_token);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn is_open_registration_logic_is_correct() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Default: False
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.is_open_registration());
+
+        // Enable all requirements
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _base = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
+        let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.is_open_registration());
+
+        // Add Allowlist -> False
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "foo@bar.com");
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.is_open_registration());
+        let _emails_unset = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+
+        // Missing Rate Limit -> False (and actually validation would fail, but let's check method behavior on constructed struct if possible or via validation error)
+        let _rl_missing = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+        // Validation fails so we can't get a cfg object via load_from_path
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
 
         Ok(())
     }
