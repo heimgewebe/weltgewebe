@@ -17,8 +17,7 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 Um sicherzustellen, dass SMTP-Variablen (und andere Secrets) zuverlässig im `weltgewebe-api`-Container ankommen,
 wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzugefügt.
 
-Hintergrund: Docker Compose `--env-file` wirkt primär auf die Interpolation im YAML, injiziert aber nicht automatisch
-alle Variablen in das Container-Environment. Die explizite `env_file`-Direktive erzwingt dies.
+Hintergrund: In diesem Deploy kamen SMTP_* trotz `--env-file` nicht im Container an; `env_file` erzwingt die Injektion.
 Annahme: Der Pfad `/opt/weltgewebe/.env` ist eine bewusste Heimserver-Layout-Abhängigkeit.
 Override: `WELTGEWEBE_ENV_FILE` kann den Pfad überschreiben.
 
