@@ -40,7 +40,8 @@
   weltgewebe-up --with-caddy
   ```
 
-  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung, da es keine Git-Befehle ausführt.
+  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung,
+  da es keine Git-Befehle ausführt.
 
 - Stack (Manuell):
 
