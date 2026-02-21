@@ -393,7 +393,6 @@ jobs:
             --exclude-path 'dist'
             --exclude-path '.git'
             --cache
-            --max-cache-age 1d
             '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
