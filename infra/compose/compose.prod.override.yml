@@ -1,6 +1,12 @@
 ---
 services:
   api:
+    # Deliberate Heimserver layout assumption: .env must exist at this absolute path.
+    # This injects all variables from the host's .env into the container runtime.
+    # Override via WELTGEWEBE_ENV_FILE for non-standard deployments.
+    # Note: WELTGEWEBE_ENV_FILE must be set for both Compose interpolation (CLI) and env_file (Runtime).
+    env_file:
+      - ${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}
     ports:
       - 127.0.0.1:8081:8080
     environment:

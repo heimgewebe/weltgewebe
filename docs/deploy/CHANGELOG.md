@@ -4,6 +4,32 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-02-21 - Fix: SMTP Env Injection via `env_file`
+
+**Ursprung / Referenz:** Fix für AUTH_PUBLIC_LOGIN (Deployment-Drift)
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.override.yml`
+
+**Beschreibung:**
+
+Um sicherzustellen, dass SMTP-Variablen (und andere Secrets) zuverlässig im `weltgewebe-api`-Container ankommen,
+wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzugefügt.
+
+Hintergrund: `docker compose --env-file` stellt Variablen primär für die Interpolation im Compose-File bereit.
+Ohne explizites Mapping im `environment`-Block landen diese nicht automatisch im Container-Runtime-Environment.
+Die Ergänzung von `env_file:` im Service stellt sicher, dass alle Variablen aus der Datei in den Container injiziert werden.
+Annahme: Der Pfad `/opt/weltgewebe/.env` ist eine bewusste Heimserver-Layout-Abhängigkeit.
+Override: `WELTGEWEBE_ENV_FILE` kann den Pfad überschreiben.
+
+Zusätzlich wurde im CI-Workflow das ungültige Argument `--max-cache-age` für den `lychee` Link-Checker entfernt,
+um Build-Fehler zu beheben.
+
+**Risiko:** Niedrig (Deployment-Korrektur).
+
+---
+
 ## 2026-02-20 - Option C vollständig implementiert (Auto-Provision im Auth-Flow)
 
 **Ursprung / Referenz:** (feat/auth-open-registration)
