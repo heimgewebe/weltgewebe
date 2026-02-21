@@ -44,6 +44,7 @@
   da es keine Git-Befehle ausführt.
 
   Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
+  `REPO_DIR=/pfad ENV_FILE=/pfad/.env weltgewebe-up`
 
 - Stack (Manuell):
 

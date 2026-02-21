@@ -66,13 +66,6 @@ else
   fi
 fi
 
-# Cleanup Trap for temporary files
-ERR_FILE=$(mktemp)
-cleanup() {
-  rm -f "$ERR_FILE"
-}
-trap cleanup EXIT
-
 echo "== Weltgewebe Up =="
 echo "Repo:    $(pwd)"
 echo "Project: $COMPOSE_PROJECT"
@@ -92,7 +85,14 @@ if [[ "$DO_PULL" == "1" ]]; then
   echo ">> Git Fetch..."
   git fetch "$REMOTE" --prune
   echo ">> Git Pull (fast-forward)..."
-  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+
+  # Check for detached HEAD
+  if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
+    echo "ERROR: Detached HEAD detected. Cannot pull safely."
+    echo "       Please checkout a branch (e.g. 'main') or deploy without --pull."
+    exit 1
+  fi
+
   if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
     echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
     echo "       (git status, git stash, or reset might be needed)"
@@ -156,8 +156,11 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
   # Try with Caddy enabled, capturing stderr
   echo "Running: ${CMD_BASE[*]}"
 
+  ERR_FILE=$(mktemp)
   if ! "${CMD_BASE[@]}" 2> "$ERR_FILE"; then
      ERR_CONTENT=$(cat "$ERR_FILE")
+     rm -f "$ERR_FILE" # Cleanup immediately
+
      # Check for bind errors (port conflict)
      if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
         echo
@@ -174,8 +177,8 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         exit 1
      fi
   else
-     # Success, but maybe warnings? Print them if needed, or just suppress.
-     # For now, let's just proceed.
+     # Success
+     rm -f "$ERR_FILE"
      :
   fi
 else
