@@ -16,7 +16,8 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 Um sicherzustellen, dass SMTP-Variablen (und andere Secrets) zuverlässig im `weltgewebe-api`-Container ankommen,
 wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzugefügt.
-Dies korrigiert das Problem, dass `AUTH_PUBLIC_LOGIN=1` fehlschlug, weil der Mailer keine Konfiguration im Runtime-Environment fand.
+Dies korrigiert das Problem, dass `AUTH_PUBLIC_LOGIN=1` fehlschlug, weil der Mailer keine Konfiguration im
+Runtime-Environment fand.
 
 **Risiko:** Niedrig (Deployment-Korrektur).
 
