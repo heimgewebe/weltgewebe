@@ -43,6 +43,8 @@
   **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung,
   da es keine Git-Befehle ausführt.
 
+  Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
+
 - Stack (Manuell):
 
   ```sh
