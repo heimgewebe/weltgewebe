@@ -36,17 +36,18 @@ impl Mailer {
             AsyncSmtpTransport::<Tokio1Executor>::relay(host)
                 .context("failed to init SMTP relay (implicit TLS, port 465)")?
                 .port(port)
-                .credentials(creds)
+                .credentials(creds.clone())
                 .build()
         } else if port == 587 {
             AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
                 .context("failed to init SMTP relay (STARTTLS, port 587)")?
                 .port(port)
-                .credentials(creds)
+                .credentials(creds.clone())
                 .build()
         } else {
             AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
                 .port(port)
+                .credentials(creds)
                 .build()
         };
 

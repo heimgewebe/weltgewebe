@@ -1,5 +1,9 @@
 ---
 services:
+  api:
+    environment:
+      GEWEBE_SEED_DEMO: "true"
+
   caddy:
     networks:
       - default
