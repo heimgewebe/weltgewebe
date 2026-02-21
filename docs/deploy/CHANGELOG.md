@@ -16,8 +16,13 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 Um sicherzustellen, dass SMTP-Variablen (und andere Secrets) zuverlässig im `weltgewebe-api`-Container ankommen,
 wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzugefügt.
-Dies korrigiert das Problem, dass `AUTH_PUBLIC_LOGIN=1` fehlschlug, weil der Mailer keine Konfiguration im
-Runtime-Environment fand.
+
+Hintergrund: Docker Compose `--env-file` wirkt primär auf die Interpolation im YAML, injiziert aber nicht automatisch
+alle Variablen in das Container-Environment. Die explizite `env_file`-Direktive erzwingt dies.
+Annahme: Der Pfad `/opt/weltgewebe/.env` ist eine bewusste Heimserver-Layout-Abhängigkeit.
+
+Zusätzlich wurde im CI-Workflow das ungültige Argument `--max-cache-age` für den `lychee` Link-Checker entfernt,
+um Build-Fehler zu beheben.
 
 **Risiko:** Niedrig (Deployment-Korrektur).
 

@@ -1,6 +1,8 @@
 ---
 services:
   api:
+    # Deliberate Heimserver layout assumption: .env must exist at this absolute path.
+    # This injects all variables from the host's .env into the container runtime.
     env_file:
       - /opt/weltgewebe/.env
     ports:
