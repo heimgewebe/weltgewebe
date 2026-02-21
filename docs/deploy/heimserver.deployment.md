@@ -24,6 +24,8 @@
 - `/opt/weltgewebe/.env` (wird via `--env-file` genutzt)
 - ENV-Path override: `export WELTGEWEBE_ENV_FILE=/pfad/zur/.env`
   - Beispiel: `docker compose --env-file "$WELTGEWEBE_ENV_FILE" ... up -d --build`
+  - Hinweis: `--env-file` (CLI) ist für die Compose-Interpolation nötig, `WELTGEWEBE_ENV_FILE` (Env Var) für die
+    Injektion in den Container via `env_file:` im Override.
 
 ## Standard-Kommandos
 
