@@ -22,6 +22,7 @@
 ## Env / Secrets
 
 - `/opt/weltgewebe/.env` (wird via `--env-file` genutzt)
+- ENV-Path override: `export WELTGEWEBE_ENV_FILE=/pfad/zur/.env`
 
 ## Standard-Kommandos
 

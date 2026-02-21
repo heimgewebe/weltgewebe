@@ -20,6 +20,7 @@ wurde dem Service `api` die Direktive `env_file: - /opt/weltgewebe/.env` hinzuge
 Hintergrund: Docker Compose `--env-file` wirkt primär auf die Interpolation im YAML, injiziert aber nicht automatisch
 alle Variablen in das Container-Environment. Die explizite `env_file`-Direktive erzwingt dies.
 Annahme: Der Pfad `/opt/weltgewebe/.env` ist eine bewusste Heimserver-Layout-Abhängigkeit.
+Override: `WELTGEWEBE_ENV_FILE` kann den Pfad überschreiben.
 
 Zusätzlich wurde im CI-Workflow das ungültige Argument `--max-cache-age` für den `lychee` Link-Checker entfernt,
 um Build-Fehler zu beheben.
