@@ -121,4 +121,5 @@ Sie ist ein hinter dem Proxy lebender Dienst mit exakt einem kanonischen Namen.
 ## 9. Data Seeding (Heimserver)
 
 Die Heimserver-Umgebung aktiviert explizit `GEWEBE_SEED_DEMO=true`.
-Dies stellt sicher, dass für Integrationstests und manuelle Prüfung definierte Test-Entitäten (z.B. Garnrolle, Knoten) vorhanden sind.
+Dies stellt sicher, dass für Integrationstests und manuelle Prüfung definierte Test-Entitäten
+(z.B. Garnrolle, Knoten) vorhanden sind.
