@@ -82,6 +82,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 2
 fi
 
+# Ensure compose interpolation and container env_file injection stay aligned.
+# infra/compose/compose.prod.override.yml uses ${WELTGEWEBE_ENV_FILE} to inject the file.
+export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
+
 # 2. Git (Optional)
 if [[ "$DO_PULL" == "1" ]]; then
   echo
@@ -224,7 +228,8 @@ MAX_RETRIES=10
 SLEEP_SEC=5
 
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  if response=$(curl -fsS "$HEALTH_URL" 2>/dev/null); then
+  # Bounded check: 2s connect timeout, 5s max total time.
+  if response=$(curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" 2>/dev/null); then
     echo "Health OK"
     if command -v jq >/dev/null; then
       echo "$response" | jq . || echo "$response"
