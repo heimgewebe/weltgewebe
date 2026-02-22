@@ -102,13 +102,14 @@ if [[ "$DO_PULL" == "1" ]]; then
   # Check for detached HEAD
   if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
     echo "ERROR: Detached HEAD detected. Cannot pull safely."
-    echo "       Please checkout a branch (e.g. 'main') or deploy without --pull."
+    echo "       Please checkout a branch (e.g. 'main') or deploy with --no-pull."
     exit 1
   fi
 
   if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
     echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
     echo "       (git status, git stash, or reset might be needed)"
+    echo "       To skip updates (offline deploy), use: $0 --no-pull"
     exit 1
   fi
 else
