@@ -56,6 +56,24 @@
   Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
   `REPO_DIR=/pfad ENV_FILE=/pfad/.env weltgewebe-up`
 
+- Ops-Drift zurückführen (weltgewebe-pr):
+
+  Lokale Änderungen auf dem Heimserver (Drift) können als PR zurückgeführt werden.
+  Das Skript `scripts/weltgewebe-pr` erkennt Änderungen, erstellt einen Branch und öffnet einen PR (GitHub CLI empfohlen).
+
+  ```sh
+  # Plan-Modus (Dry-Run, zeigt was passieren würde):
+  scripts/weltgewebe-pr --plan
+
+  # Standard: Branch + Commit + Push + PR erstellen:
+  scripts/weltgewebe-pr --title "ops: fix caddy config"
+
+  # Als Draft-PR:
+  scripts/weltgewebe-pr --draft
+  ```
+
+  **Sicherheit:** `.env` und Secrets werden automatisch blockiert. Nur Pfade in der Allowlist (`docs/`, `infra/`, etc.) werden gestaged.
+
 - Stack (Manuell):
 
   ```sh
