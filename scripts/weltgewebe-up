@@ -7,7 +7,7 @@ set -euo pipefail
 # Robust, idempotent, and optional-caddy-aware deployment wrapper.
 #
 # Usage:
-#   weltgewebe-up [--with-caddy] [--pull]
+#   weltgewebe-up [--with-caddy] [--pull] [--no-build]
 #
 # Logic:
 #   1. Optional Git Fetch + Pull (--pull)
@@ -17,6 +17,7 @@ set -euo pipefail
 #      - Default: --scale caddy=0
 #      - With --with-caddy: try enabling caddy, fallback to scale=0 on specific bind errors
 #   5. Health Check (auto-detect port)
+#   6. Snapshot (if script available)
 
 REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
@@ -24,9 +25,8 @@ COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 
 # Base Compose File (always required)
-COMPOSE_FILES=("-f" "infra/compose/compose.prod.yml")
-
-# Override File (optional but recommended)
+# Note: These paths are relative to REPO_DIR
+BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
 OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
 
 # Default Health URL (fallback)
@@ -35,12 +35,14 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 # Arguments
 WITH_CADDY=0
 DO_PULL=0
+DO_BUILD=1
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--pull]"
+  echo "Usage: $0 [--with-caddy] [--pull] [--no-build]"
   echo
   echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
   echo "  --pull         Perform 'git pull --ff-only' before deploying"
+  echo "  --no-build     Skip build step (default: build)"
   echo
   exit 1
 }
@@ -49,6 +51,7 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
     --pull) DO_PULL=1 ;;
+    --no-build) DO_BUILD=0 ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -60,8 +63,8 @@ if [[ -d "$REPO_DIR" ]]; then
   cd "$REPO_DIR"
 else
   echo "WARNING: REPO_DIR '$REPO_DIR' not found. Assuming current directory."
-  if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
-     echo "ERROR: Could not find infra/compose/compose.prod.yml in current directory."
+  if [[ ! -f "$BASE_COMPOSE_FILE" ]]; then
+     echo "ERROR: Could not find $BASE_COMPOSE_FILE in current directory."
      exit 1
   fi
 fi
@@ -78,6 +81,10 @@ if [[ ! -f "$ENV_FILE" ]]; then
   echo "Please create it (e.g. from .env.example) or set ENV_FILE=/path/to/.env"
   exit 2
 fi
+
+# Ensure compose interpolation and container env_file injection stay aligned.
+# infra/compose/compose.prod.override.yml uses ${WELTGEWEBE_ENV_FILE} to inject the file.
+export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # 2. Git (Optional)
 if [[ "$DO_PULL" == "1" ]]; then
@@ -104,6 +111,7 @@ else
 fi
 
 # 3. Compose File Setup
+COMPOSE_FILES=("-f" "$BASE_COMPOSE_FILE")
 if [[ -f "$OVERRIDE_FILE" ]]; then
   COMPOSE_FILES+=("-f" "$OVERRIDE_FILE")
 else
@@ -150,7 +158,11 @@ fi
 # 6. Deploy
 echo
 echo ">> Deploying..."
-CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--build" "--remove-orphans")
+CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
+
+if [[ "$DO_BUILD" == "1" ]]; then
+    CMD_BASE+=("--build")
+fi
 
 if [[ "$ENABLE_CADDY" == "1" ]]; then
   # Try with Caddy enabled, capturing stderr
@@ -211,25 +223,51 @@ else
   echo "Could not detect API port. Using default: $HEALTH_URL"
 fi
 
-# Retry loop
-MAX_RETRIES=12
+# Retry loop (max 10 attempts as requested)
+MAX_RETRIES=10
 SLEEP_SEC=5
 
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  if response=$(curl -fsS "$HEALTH_URL" 2>/dev/null); then
+  # Bounded check: 2s connect timeout, 5s max total time.
+  if response=$(curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" 2>/dev/null); then
     echo "Health OK"
     if command -v jq >/dev/null; then
-      echo "$response" | jq .
+      echo "$response" | jq . || echo "$response"
     else
       echo "$response"
     fi
-    exit 0
+    HEALTH_OK=1
+    break
   fi
   echo "Waiting for health... ($i/$MAX_RETRIES)"
   sleep "$SLEEP_SEC"
 done
 
-echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
-echo "URL: $HEALTH_URL"
-echo "Tip: Check 'docker compose ps' or set HEALTH_URL manually."
-exit 1
+if [[ "${HEALTH_OK:-0}" != "1" ]]; then
+    echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
+    echo "URL: $HEALTH_URL"
+    echo "Tip: Check 'docker compose ps' or set HEALTH_URL manually."
+    exit 1
+fi
+
+# 8. Snapshot
+SNAPSHOT_SCRIPT="scripts/deploy-snapshot.sh"
+if [[ -x "$SNAPSHOT_SCRIPT" ]]; then
+  echo
+  echo ">> Snapshot:"
+  # Export necessary variables for the snapshot script
+  # Construct COMPOSE_ARGS string from BASE_ARGS
+  # BASE_ARGS contains --env-file X -p Y -f Z ...
+  # This works fine if no spaces in paths, which is standard here.
+  export COMPOSE_ARGS="${BASE_ARGS[*]}"
+  export COMPOSE_FILE="$BASE_COMPOSE_FILE"
+  export COMPOSE_PROJECT="$COMPOSE_PROJECT"
+  export SNAPSHOT_MODE="live"
+
+  bash "$SNAPSHOT_SCRIPT"
+else
+  echo "No executable snapshot script found at $SNAPSHOT_SCRIPT (skipping)"
+fi
+
+echo
+echo "Done."
