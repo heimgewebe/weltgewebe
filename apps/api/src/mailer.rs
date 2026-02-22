@@ -31,13 +31,21 @@ impl Mailer {
         let (user, pass) = match auth_policy.as_str() {
             "off" => (None, None),
             "on" => {
-                let u = config.smtp_user.as_deref().context("SMTP_USER missing (SMTP_AUTH=on)")?;
-                let p = config.smtp_pass.as_deref().context("SMTP_PASS missing (SMTP_AUTH=on)")?;
+                let u = config
+                    .smtp_user
+                    .as_deref()
+                    .context("SMTP_USER missing (SMTP_AUTH=on)")?;
+                let p = config
+                    .smtp_pass
+                    .as_deref()
+                    .context("SMTP_PASS missing (SMTP_AUTH=on)")?;
                 (Some(u), Some(p))
             }
             _ => {
                 // auto
-                if let (Some(u), Some(p)) = (config.smtp_user.as_deref(), config.smtp_pass.as_deref()) {
+                if let (Some(u), Some(p)) =
+                    (config.smtp_user.as_deref(), config.smtp_pass.as_deref())
+                {
                     (Some(u), Some(p))
                 } else {
                     (None, None)
@@ -76,8 +84,8 @@ impl Mailer {
             }
             builder.build()
         } else {
-            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
-                .port(port);
+            let mut builder =
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
             if let Some(c) = creds {
                 builder = builder.credentials(c);
             }
