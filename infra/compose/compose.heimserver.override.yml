@@ -9,7 +9,8 @@ services:
       - default
       - heimnet
     volumes:
-      - ../caddy/Caddyfile.heimserver:/etc/caddy/heimserver/leitstand.caddy:ro
+      # Use the reference Caddyfile as the main config when running in Heimserver mode.
+      - ../../docs/reference/caddy.heimserver.caddy:/etc/caddy/Caddyfile:ro
 
 networks:
   heimnet:
