@@ -136,7 +136,7 @@ else
         BASE_SHA="${BASE_SHA:-HEAD^}"
 
         if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
-            CHANGED=$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)
+            CHANGED="$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)"
         else
             CHANGED=""
             # If baseline missing (e.g. shallow clone or initial commit), force build
@@ -146,16 +146,19 @@ else
 
         if [[ -n "$CHANGED" ]]; then
             # Count lines using wc -l (robust)
-            CHANGE_COUNT=$(echo "$CHANGED" | wc -l | tr -d ' ')
+            CHANGE_COUNT="$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')"
 
             # Debug: show changed files if needed (or just count)
             # echo "   Changed files: $CHANGE_COUNT"
 
             # Filter relevant paths:
-            if echo "$CHANGED" | grep -Eq '^(apps/api/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore)'; then
+            # - apps/api/ (source)
+            # - configs/ (embedded via include_str!)
+            # - Cargo.*, Dockerfile, .dockerignore (build context)
+            if printf '%s\n' "$CHANGED" | grep -Eq '^(apps/api/|configs/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore)'; then
                 AUTO_BUILD=1
                 REASON="auto-detect: API source/config changed ($CHANGE_COUNT files)"
-            elif echo "$CHANGED" | grep -Eq '^(infra/compose/)'; then
+            elif printf '%s\n' "$CHANGED" | grep -Eq '^(infra/compose/)'; then
                 AUTO_BUILD=1
                 REASON="auto-detect: infra/compose changed -> conservative build"
             else
