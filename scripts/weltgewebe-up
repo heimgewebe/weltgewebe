@@ -89,9 +89,13 @@ fi
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # 2. Git (Optional)
+PRE_PULL_HEAD=""
 if [[ "$DO_PULL" == "1" ]]; then
   echo
   echo ">> Git Fetch..."
+  # Capture HEAD before pulling to use as baseline
+  PRE_PULL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+
   git fetch "$REMOTE" --prune
   echo ">> Git Pull (fast-forward)..."
 
@@ -132,8 +136,15 @@ else
 
     # Check if git is available and we have history to compare
     if command -v git >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
-        # Default baseline: HEAD^ (parent commit)
-        BASE_SHA="${BASE_SHA:-HEAD^}"
+        # Determine baseline:
+        # 1. If user provided BASE_SHA, use it.
+        # 2. If we pulled and have a pre-pull HEAD, use that.
+        # 3. Default: HEAD^ (parent commit)
+        if [[ -n "${PRE_PULL_HEAD:-}" ]]; then
+             BASE_SHA="${BASE_SHA:-$PRE_PULL_HEAD}"
+        else
+             BASE_SHA="${BASE_SHA:-HEAD^}"
+        fi
 
         if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
             CHANGED="$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)"
