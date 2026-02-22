@@ -59,7 +59,8 @@
 - Ops-Drift zurückführen (weltgewebe-pr):
 
   Lokale Änderungen auf dem Heimserver (Drift) können als PR zurückgeführt werden.
-  Das Skript `scripts/weltgewebe-pr` erkennt Änderungen, erstellt einen Branch und öffnet einen PR (GitHub CLI empfohlen).
+  Das Skript `scripts/weltgewebe-pr` erkennt Änderungen, erstellt einen Branch und öffnet einen PR
+  (GitHub CLI empfohlen).
 
   ```sh
   # Plan-Modus (Dry-Run, zeigt was passieren würde):
@@ -72,7 +73,8 @@
   scripts/weltgewebe-pr --draft
   ```
 
-  **Sicherheit:** `.env` und Secrets werden automatisch blockiert. Nur Pfade in der Allowlist (`docs/`, `infra/`, etc.) werden gestaged.
+  **Sicherheit:** `.env` und Secrets werden automatisch blockiert.
+  Nur Pfade in der Allowlist (`docs/`, `infra/`, etc.) werden gestaged.
 
 - Stack (Manuell):
 
