@@ -9,7 +9,13 @@ services:
       - default
       - heimnet
     volumes:
-      # Use the reference Caddyfile as the main config when running in Heimserver mode.
+      # Preserve persistent state from base compose (CA/certs/config state)
+      # Explicitly listed here to ensure stability across Compose versions
+      - caddy_data:/data
+      - caddy_config:/config
+
+      # Heimserver-mode: use reference config as primary Caddyfile
+      # This replaces the mount from compose.prod.yml (target path match)
       - ../../docs/reference/caddy.heimserver.caddy:/etc/caddy/Caddyfile:ro
 
 networks:
