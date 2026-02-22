@@ -129,7 +129,8 @@ Dies stellt sicher, dass für Integrationstests und manuelle Prüfung definierte
 ## 10. SMTP Authentication Policy
 
 Der API-Mailer unterstützt eine explizite Steuerung der SMTP-Authentifizierung via `SMTP_AUTH`.
-Dies verhindert Authentifizierungsfehler bei lokalen Relays (z.B. auf Port 1025), wenn Credentials konfiguriert, aber nicht gewünscht sind.
+Dies verhindert Authentifizierungsfehler bei lokalen Relays (z.B. auf Port 1025), wenn Credentials konfiguriert,
+aber nicht gewünscht sind.
 
 * `auto` (Default): Nutzt Credentials (`SMTP_USER`/`SMTP_PASS`), wenn diese vorhanden sind.
 * `on`: Erzwingt Authentifizierung; Fehler, wenn Credentials fehlen.
