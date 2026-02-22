@@ -33,7 +33,11 @@
 
 - Stack (via Script, empfohlen):
 
-  Installieren (Symlink): `ln -s /path/to/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
+  Installieren (Symlink): `sudo ln -sf /opt/weltgewebe/scripts/weltgewebe-up /usr/local/bin/weltgewebe-up`
+
+  Das Skript nutzt standardmäßig:
+  - `REPO_DIR=/opt/weltgewebe`
+  - `ENV_FILE=/opt/weltgewebe/.env`
 
   ```sh
   # Default (Offline-first, ohne Git, ohne Caddy):
