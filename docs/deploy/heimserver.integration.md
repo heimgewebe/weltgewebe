@@ -123,3 +123,14 @@ Sie ist ein hinter dem Proxy lebender Dienst mit exakt einem kanonischen Namen.
 Die Heimserver-Umgebung aktiviert explizit `GEWEBE_SEED_DEMO=true`.
 Dies stellt sicher, dass für Integrationstests und manuelle Prüfung definierte Test-Entitäten
 (z.B. Garnrolle, Knoten) vorhanden sind.
+
+---
+
+## 10. SMTP Authentication Policy
+
+Der API-Mailer unterstützt eine explizite Steuerung der SMTP-Authentifizierung via `SMTP_AUTH`.
+Dies verhindert Authentifizierungsfehler bei lokalen Relays (z.B. auf Port 1025), wenn Credentials konfiguriert, aber nicht gewünscht sind.
+
+* `auto` (Default): Nutzt Credentials (`SMTP_USER`/`SMTP_PASS`), wenn diese vorhanden sind.
+* `on`: Erzwingt Authentifizierung; Fehler, wenn Credentials fehlen.
+* `off`: Ignoriert Credentials, auch wenn diese gesetzt sind (nützlich für lokale Dev-Relays).

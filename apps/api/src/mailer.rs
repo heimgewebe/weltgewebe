@@ -10,7 +10,7 @@ pub struct Mailer {
     transport: AsyncSmtpTransport<Tokio1Executor>,
     host: String,
     port: u16,
-    user: String,
+    user: Option<String>,
     from: String,
 }
 
@@ -18,11 +18,38 @@ impl Mailer {
     pub fn new(config: &AppConfig) -> Result<Self> {
         let host = config.smtp_host.as_deref().context("SMTP_HOST missing")?;
         let port = config.smtp_port.unwrap_or(587);
-        let user = config.smtp_user.as_deref().context("SMTP_USER missing")?;
-        let pass = config.smtp_pass.as_deref().context("SMTP_PASS missing")?;
         let from = config.smtp_from.clone().context("SMTP_FROM missing")?;
 
-        let creds = Credentials::new(user.to_string(), pass.to_string());
+        // Determine Auth Policy
+        // auto: use creds if present
+        // on: require creds
+        // off: ignore creds
+        let auth_policy = std::env::var("SMTP_AUTH")
+            .unwrap_or_else(|_| "auto".to_string())
+            .to_lowercase();
+
+        let (user, pass) = match auth_policy.as_str() {
+            "off" => (None, None),
+            "on" => {
+                let u = config.smtp_user.as_deref().context("SMTP_USER missing (SMTP_AUTH=on)")?;
+                let p = config.smtp_pass.as_deref().context("SMTP_PASS missing (SMTP_AUTH=on)")?;
+                (Some(u), Some(p))
+            }
+            _ => {
+                // auto
+                if let (Some(u), Some(p)) = (config.smtp_user.as_deref(), config.smtp_pass.as_deref()) {
+                    (Some(u), Some(p))
+                } else {
+                    (None, None)
+                }
+            }
+        };
+
+        let creds = if let (Some(u), Some(p)) = (user, pass) {
+            Some(Credentials::new(u.to_string(), p.to_string()))
+        } else {
+            None
+        };
 
         // Validate from address format early
         if from.parse::<lettre::message::Mailbox>().is_err() {
@@ -31,24 +58,30 @@ impl Mailer {
         // SMTP transport:
         // - 465: Implicit TLS
         // - 587: STARTTLS (typisch, u.a. IONOS)
-        // - sonst: nur für lokale Relays wie 1025 ohne TLS, keine Credentials
+        // - sonst: nur für lokale Relays wie 1025 ohne TLS
         let transport = if port == 465 {
-            AsyncSmtpTransport::<Tokio1Executor>::relay(host)
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
                 .context("failed to init SMTP relay (implicit TLS, port 465)")?
-                .port(port)
-                .credentials(creds.clone())
-                .build()
+                .port(port);
+            if let Some(c) = creds {
+                builder = builder.credentials(c);
+            }
+            builder.build()
         } else if port == 587 {
-            AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
                 .context("failed to init SMTP relay (STARTTLS, port 587)")?
-                .port(port)
-                .credentials(creds.clone())
-                .build()
+                .port(port);
+            if let Some(c) = creds {
+                builder = builder.credentials(c);
+            }
+            builder.build()
         } else {
-            AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
-                .port(port)
-                .credentials(creds)
-                .build()
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host)
+                .port(port);
+            if let Some(c) = creds {
+                builder = builder.credentials(c);
+            }
+            builder.build()
         };
 
         Ok(Self {
@@ -56,7 +89,7 @@ impl Mailer {
             from,
             host: host.to_string(),
             port,
-            user: user.to_string(),
+            user: user.map(|s| s.to_string()),
         })
     }
 

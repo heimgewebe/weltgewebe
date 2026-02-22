@@ -307,10 +307,9 @@ impl AppConfig {
 
         if self.auth_public_login {
             // Check for valid SMTP configuration
-            let smtp_valid = self.smtp_host.is_some()
-                && self.smtp_user.is_some()
-                && self.smtp_pass.is_some()
-                && self.smtp_from.is_some();
+            // Note: smtp_user/pass might be missing if SMTP_AUTH=off or auto (with no creds)
+            // Mailer::new handles strict checks if SMTP_AUTH=on.
+            let smtp_valid = self.smtp_host.is_some() && self.smtp_from.is_some();
 
             // Check if dev logging fallback is enabled
             let dev_logging = self.auth_log_magic_token;
