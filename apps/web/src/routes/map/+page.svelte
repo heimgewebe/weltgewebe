@@ -125,6 +125,7 @@
                  element.title = item.title;
                  element.setAttribute('aria-label', item.title);
              }
+             element.dataset.testid = `marker-${item.type || 'node'}-${item.id}`;
         } else {
             // Create new
             const element = document.createElement('button');
