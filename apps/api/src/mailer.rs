@@ -71,16 +71,16 @@ impl Mailer {
             let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
                 .context("failed to init SMTP relay (implicit TLS, port 465)")?
                 .port(port);
-            if let Some(c) = creds {
-                builder = builder.credentials(c);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
             }
             builder.build()
         } else if port == 587 {
             let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
                 .context("failed to init SMTP relay (STARTTLS, port 587)")?
                 .port(port);
-            if let Some(c) = creds {
-                builder = builder.credentials(c);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
             }
             builder.build()
         } else {
