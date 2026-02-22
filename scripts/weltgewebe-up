@@ -259,7 +259,7 @@ if [[ -x "$SNAPSHOT_SCRIPT" ]]; then
   export COMPOSE_PROJECT="$COMPOSE_PROJECT"
   export SNAPSHOT_MODE="live"
 
-  "$SNAPSHOT_SCRIPT"
+  bash "$SNAPSHOT_SCRIPT"
 else
   echo "No executable snapshot script found at $SNAPSHOT_SCRIPT (skipping)"
 fi

@@ -26,8 +26,10 @@ collect_compose_config() {
   if have docker && docker compose version >/dev/null 2>&1; then
     set +e
     if [[ -n "${COMPOSE_ARGS:-}" ]]; then
-      # Use provided args (splitting by space via shell expansion)
-      out="$(docker compose $COMPOSE_ARGS config 2>&1)"
+      # Robustly parse args into an array (handles spaces/globbing better than unquoted expansion)
+      local -a args=()
+      read -r -a args <<<"${COMPOSE_ARGS}"
+      out="$(docker compose "${args[@]}" config 2>&1)"
     else
       out="$(docker compose -f "$COMPOSE_FILE" config 2>&1)"
     fi
