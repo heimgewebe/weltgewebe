@@ -309,6 +309,7 @@ impl AppConfig {
             // Check for valid SMTP configuration
             // Note: smtp_user/pass might be missing if SMTP_AUTH=off or auto (with no creds)
             // Mailer::new handles strict checks if SMTP_AUTH=on.
+            // Here we check for delivery mechanism presence (HOST+FROM).
             let smtp_valid = self.smtp_host.is_some() && self.smtp_from.is_some();
 
             // Check if dev logging fallback is enabled

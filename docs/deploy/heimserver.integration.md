@@ -135,3 +135,6 @@ aber nicht gewünscht sind.
 * `auto` (Default): Nutzt Credentials (`SMTP_USER`/`SMTP_PASS`), wenn diese vorhanden sind.
 * `on`: Erzwingt Authentifizierung; Fehler, wenn Credentials fehlen.
 * `off`: Ignoriert Credentials, auch wenn diese gesetzt sind (nützlich für lokale Dev-Relays).
+
+**Beispiel (Mailpit/Mailhog):**
+`SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_AUTH=off`
