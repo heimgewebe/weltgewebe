@@ -309,9 +309,10 @@
       const lat = item.lat;
       const lon = item.lon;
       if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+        const currentZoom = map?.getZoom() ?? 14;
         map?.flyTo({
           center: [lon, lat],
-          zoom: Math.max(map.getZoom(), 14),
+          zoom: Math.max(currentZoom, 14),
           speed: 0.8,
           curve: 1
         });
