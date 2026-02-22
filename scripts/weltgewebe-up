@@ -131,30 +131,44 @@ else
     REASON="auto-detect (fallback: build)"
 
     # Check if git is available and we have history to compare
-    if command -v git >/dev/null 2>&1 && \
-       git rev-parse --verify HEAD >/dev/null 2>&1 && \
-       git rev-parse --verify HEAD@{1} >/dev/null 2>&1; then
+    if command -v git >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
+        # Default baseline: HEAD^ (parent commit)
+        BASE_SHA="${BASE_SHA:-HEAD^}"
 
-        # Check for changes in relevant paths
-        CHANGED=$(git diff --name-only HEAD@{1}..HEAD 2>/dev/null || true)
-
-        if [[ -z "$CHANGED" ]]; then
-            AUTO_BUILD=0
-            REASON="auto-detect: no changes in HEAD@{1}..HEAD"
+        if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
+            CHANGED=$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)
         else
-            CHANGE_COUNT=$(echo "$CHANGED" | grep -c . || true)
+            CHANGED=""
+            # If baseline missing (e.g. shallow clone or initial commit), force build
+            REASON="auto-detect: baseline $BASE_SHA unavailable"
+            AUTO_BUILD=1
+        fi
+
+        if [[ -n "$CHANGED" ]]; then
+            # Count lines using wc -l (robust)
+            CHANGE_COUNT=$(echo "$CHANGED" | wc -l | tr -d ' ')
+
+            # Debug: show changed files if needed (or just count)
+            # echo "   Changed files: $CHANGE_COUNT"
+
             # Filter relevant paths:
-            # apps/api/, Cargo.toml, Cargo.lock, Dockerfile (root), .dockerignore, infra/compose/
-            if echo "$CHANGED" | grep -Eq '^(apps/api/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore|infra/compose/)'; then
+            if echo "$CHANGED" | grep -Eq '^(apps/api/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore)'; then
                 AUTO_BUILD=1
-                REASON="auto-detect: relevant changes found"
+                REASON="auto-detect: API source/config changed ($CHANGE_COUNT files)"
+            elif echo "$CHANGED" | grep -Eq '^(infra/compose/)'; then
+                AUTO_BUILD=1
+                REASON="auto-detect: infra/compose changed -> conservative build"
             else
                 AUTO_BUILD=0
-                REASON="auto-detect: changes found ($CHANGE_COUNT), but not relevant to API build"
+                REASON="auto-detect: irrelevant changes only ($CHANGE_COUNT files)"
             fi
+        elif [[ "$REASON" == "auto-detect (fallback: build)" ]]; then
+             # If we had a valid baseline and empty diff (and didn't set REASON yet)
+             AUTO_BUILD=0
+             REASON="auto-detect: no changes vs $BASE_SHA"
         fi
     else
-        REASON="auto-detect: git history unavailable or check failed"
+        REASON="auto-detect: git unavailable"
     fi
     DO_BUILD=$AUTO_BUILD
 fi
