@@ -41,7 +41,7 @@ usage() {
   echo "  --no-push          Skip push (only local branch/commit)"
   echo "  --title \"...\"      PR title (default: ops(heimserver): sync local drift)"
   echo "  --base branch      Base branch (default: auto-detect)"
-  echo "  --allow \"path...\"  Override allowlist (dangerous)"
+  echo "  --allow \"path...\"  Override allowlist (dangerous, space-separated)"
   echo "  --include-artifacts Allow staging artifacts/ folder"
   echo
   echo "Default behavior: Creates branch, commits allowed drift, pushes, and opens a PR."
@@ -71,7 +71,7 @@ cd "$REPO_DIR"
 if [[ "$MODE" != "plan" ]]; then
     ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
     # Restore original branch on exit/error
-    trap 'echo ">> Cleaning up: returning to $ORIG_REF..."; git checkout -q "$ORIG_REF" 2>/dev/null || true' EXIT
+    trap 'echo ">> Cleaning up..."; if git checkout -q "$ORIG_REF" 2>/dev/null; then echo ">> Returned to $ORIG_REF."; else echo ">> WARNING: Could not return to $ORIG_REF. You are on $(git rev-parse --abbrev-ref HEAD)."; fi' EXIT
 fi
 
 # 1. Drift Detection
@@ -276,5 +276,5 @@ rm -f "$BODY_TEMP"
 # Or maybe print a message saying "Returned to $ORIG_REF. To see changes: git checkout $BRANCH_NAME"
 
 echo
-echo "Done. Returned to $ORIG_REF."
+echo "Done."
 echo "To inspect the created branch: git checkout $BRANCH_NAME"

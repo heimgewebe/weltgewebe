@@ -74,7 +74,7 @@
   ```
 
   **Sicherheit:** `.env` und Secrets werden automatisch blockiert.
-  Nur Pfade in der Allowlist (`docs/`, `infra/`, etc.) werden gestaged.
+  Nur Pfade in der Allowlist (`docs/`, `scripts/`, `infra/`, `configs/`, `.github/`) werden gestaged.
 
 - Stack (Manuell):
 
