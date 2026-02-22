@@ -75,7 +75,9 @@ jobs:
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-playwright-
 
       - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
@@ -84,6 +86,9 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
         run: pnpm test:setup
+
+      - name: Debug Playwright cache path (temporary)
+        run: ls -la ~/.cache/ms-playwright || true
 
       - name: Test (CI)
         run: pnpm test:ci
