@@ -86,8 +86,8 @@ impl Mailer {
         } else {
             let mut builder =
                 AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
-            if let Some(c) = creds {
-                builder = builder.credentials(c);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
             }
             builder.build()
         };
