@@ -115,6 +115,7 @@
 
             // Update position if changed
             const { marker, element } = existing;
+            element.dataset.id = item.id;
             const lngLat = marker.getLngLat();
             if (Math.abs(lngLat.lng - item.lon) > 0.000001 || Math.abs(lngLat.lat - item.lat) > 0.000001) {
                 marker.setLngLat([item.lon, item.lat]);
