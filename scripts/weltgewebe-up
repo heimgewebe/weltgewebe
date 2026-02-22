@@ -155,7 +155,14 @@ else
             AUTO_BUILD=1
         fi
 
-        if [[ -n "$CHANGED" ]]; then
+        # If pulled and no changes (PRE_PULL_HEAD == HEAD), the diff will be empty.
+        # CHANGED is already empty in that case.
+        # We can detect this specific case for better transparency.
+        CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+        if [[ -n "${PRE_PULL_HEAD:-}" ]] && [[ "$PRE_PULL_HEAD" == "$CURRENT_HEAD" ]]; then
+             REASON="auto-detect: pull had no changes"
+             AUTO_BUILD=0
+        elif [[ -n "$CHANGED" ]]; then
             # Count lines using wc -l (robust)
             CHANGE_COUNT="$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')"
 
