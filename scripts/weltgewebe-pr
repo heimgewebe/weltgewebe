@@ -10,7 +10,7 @@ set -euo pipefail
 #   weltgewebe-pr [--plan] [--draft] [--no-pr] [--no-push] [--title "..."]
 #
 # Logic:
-#   1. Detect drift (git status --porcelain)
+#   1. Detect drift (git status --porcelain -z)
 #   2. Apply strict allowlist (docs/ scripts/ infra/ configs/ .github/)
 #   3. Guard against secrets (.env, *.key, etc.)
 #   4. Default: Create Branch -> Commit -> Push -> Create PR
@@ -68,16 +68,19 @@ done
 
 cd "$REPO_DIR"
 
+# Capture original ref for cleanup
+if [[ "$MODE" != "plan" ]]; then
+    ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
+    # Restore original branch on exit/error
+    trap 'echo ">> Cleaning up: returning to $ORIG_REF..."; git checkout -q "$ORIG_REF" 2>/dev/null || true' EXIT
+fi
+
 # 1. Drift Detection
 echo ">> Checking for drift..."
 if [[ -z "$(git status --porcelain)" ]]; then
   echo "No drift detected (working tree clean)."
   exit 0
 fi
-
-# 2. Determine Candidates
-DRIFT_FILES=$(git status --porcelain | sed 's/^...//') # Remove status code
-CANDIDATES=""
 
 # Build Allowlist Pattern
 if [[ -n "$CUSTOM_ALLOW" ]]; then
@@ -132,24 +135,53 @@ is_secret() {
 STAGED_FILES=()
 IGNORED_FILES=()
 
-# Process file list line by line
-while IFS= read -r file; do
-  # Strip quotes if present
-  file="${file%\"}"
-  file="${file#\"}"
+# Process file list line by line (null-delimited)
+# git status --porcelain -z outputs: XY PATH\0 (or XY PATH1\0PATH2\0 for renames)
+# We need to handle this carefully.
+# Simplified approach: Use `git status --porcelain` but handle spaces via read loop (fragile for renames)
+# Robust approach: Use -z and read fully.
 
-  if is_secret "$file"; then
-      echo "CRITICAL ERROR: Secret-like file detected in drift: $file"
-      echo "Aborting strictly to prevent leak."
-      exit 1
-  fi
+while IFS= read -r -d '' entry; do
+    # entry format: "XY PATH" or "XY PATH1" then "PATH2" (for renames)
+    # The first 3 chars are status.
+    status="${entry:0:2}"
+    file="${entry:3}"
 
-  if is_allowed "$file"; then
-      STAGED_FILES+=("$file")
-  else
-      IGNORED_FILES+=("$file")
-  fi
-done <<< "$DRIFT_FILES"
+    # Handle renames (R -> next entry is target path)
+    if [[ "$status" == R* ]]; then
+        # For renames, the next read will be the target path (without status prefix)
+        # But `git status -z` puts the target path immediately after the NUL.
+        # Wait, `git status -z` format is complex for renames.
+        # "R  ORIG\0TARGET\0"
+        # We need to consume the next entry if it's a rename target?
+        # Let's simplify: treat renames as delete+add for allowlist purposes?
+        # Actually, standard `git status --porcelain` (without -z) puts quotes around paths with spaces.
+        # `git status --porcelain -z` does NOT quote.
+
+        # NOTE: Handling renames in bash with -z is tricky because read -d '' consumes one null-term string.
+        # If it's a rename, the *next* null-term string is the target path.
+        # We must read it.
+        IFS= read -r -d '' target_path
+        file="$target_path"
+    fi
+
+    if [ -z "$file" ]; then
+        continue
+    fi
+
+    if is_secret "$file"; then
+        echo "CRITICAL ERROR: Secret-like file detected in drift: $file"
+        echo "Aborting strictly to prevent leak."
+        exit 1
+    fi
+
+    if is_allowed "$file"; then
+        STAGED_FILES+=("$file")
+    else
+        IGNORED_FILES+=("$file")
+    fi
+done < <(git status --porcelain -z)
+
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
     echo "Drift detected but no files match the allowlist."
@@ -171,9 +203,17 @@ if [[ "$MODE" == "plan" ]]; then
     echo
     echo ">> Plan Mode (Dry Run):"
     echo "   Would create branch: ops/heimserver-drift-YYYYMMDD-HHMM"
-    echo "   Would commit and push to: $REMOTE"
+    echo "   Would commit candidates."
+    if [[ "$PUSH" == "1" ]]; then
+        echo "   Would push to: $REMOTE"
+    else
+        echo "   Would NOT push (--no-push)."
+    fi
+
     if [[ "$CREATE_PR" == "1" ]]; then
         echo "   Would create PR via 'gh pr create'"
+    else
+        echo "   Would NOT create PR (--no-pr or implicit)."
     fi
     exit 0
 fi
@@ -209,13 +249,16 @@ for f in "${STAGED_FILES[@]}"; do
 done
 
 # Commit
+# Use temp file for body to be safe
 COMMIT_BODY="Sync drift from $HOSTNAME at $TIMESTAMP
 
 Files:
 $(printf ' - %s\n' "${STAGED_FILES[@]}")
 "
+BODY_TEMP=$(mktemp)
+echo "$COMMIT_BODY" > "$BODY_TEMP"
 
-git commit -m "$PR_TITLE" -m "$COMMIT_BODY"
+git commit -m "$PR_TITLE" -F "$BODY_TEMP"
 
 if [[ "$PUSH" == "1" ]]; then
     echo ">> Pushing to $REMOTE..."
@@ -224,7 +267,7 @@ if [[ "$PUSH" == "1" ]]; then
     if [[ "$CREATE_PR" == "1" ]]; then
         echo ">> Creating PR..."
         if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-            PR_CMD=("gh" "pr" "create" "--base" "$BASE_BRANCH" "--title" "$PR_TITLE" "--body" "$COMMIT_BODY")
+            PR_CMD=("gh" "pr" "create" "--base" "$BASE_BRANCH" "--title" "$PR_TITLE" "--body-file" "$BODY_TEMP")
             if [[ "$DRAFT_PR" == "1" ]]; then
                 PR_CMD+=("--draft")
             fi
@@ -232,7 +275,7 @@ if [[ "$PUSH" == "1" ]]; then
         else
             echo "NOTE: 'gh' CLI not available or not authenticated."
             echo "To create PR manually, visit your repo or run:"
-            echo "  gh pr create --base $BASE_BRANCH --head $BRANCH_NAME --title \"$PR_TITLE\" --body \"...\""
+            echo "  gh pr create --base $BASE_BRANCH --head $BRANCH_NAME --title \"$PR_TITLE\" --body-file ..."
         fi
     else
         echo "PR creation skipped (--no-pr)."
@@ -241,4 +284,15 @@ else
     echo "Push skipped (--no-push). Changes are committed in branch '$BRANCH_NAME'."
 fi
 
-echo "Done."
+# Cleanup
+rm -f "$BODY_TEMP"
+
+# If we succeeded, we might want to stay on the branch?
+# The trap will restore original ref.
+# This ensures "non-invasive" behavior for Ops (server stays on deploy target).
+# If the user WANTS to stay on the PR branch, they should pull/checkout explicitly later?
+# Or maybe print a message saying "Returned to $ORIG_REF. To see changes: git checkout $BRANCH_NAME"
+
+echo
+echo "Done. Returned to $ORIG_REF."
+echo "To inspect the created branch: git checkout $BRANCH_NAME"
