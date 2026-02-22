@@ -35,14 +35,15 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 # Arguments
 WITH_CADDY=0
 DO_PULL=0
-DO_BUILD=1
+BUILD_MODE="auto" # Default: auto-detect
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--pull] [--no-build]"
+  echo "Usage: $0 [--with-caddy] [--pull] [--no-build] [--force-build]"
   echo
   echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
   echo "  --pull         Perform 'git pull --ff-only' before deploying"
-  echo "  --no-build     Skip build step (default: build)"
+  echo "  --no-build     Skip build step (force skip)"
+  echo "  --force-build  Force build step (bypass auto-detect)"
   echo
   exit 1
 }
@@ -51,7 +52,8 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
     --pull) DO_PULL=1 ;;
-    --no-build) DO_BUILD=0 ;;
+    --no-build) BUILD_MODE="no" ;;
+    --force-build) BUILD_MODE="force" ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -87,9 +89,13 @@ fi
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # 2. Git (Optional)
+PRE_PULL_HEAD=""
 if [[ "$DO_PULL" == "1" ]]; then
   echo
   echo ">> Git Fetch..."
+  # Capture HEAD before pulling to use as baseline
+  PRE_PULL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+
   git fetch "$REMOTE" --prune
   echo ">> Git Pull (fast-forward)..."
 
@@ -109,6 +115,88 @@ else
   echo
   echo ">> Git: Skipped (offline mode). Use --pull to update."
 fi
+
+# Determine Build Necessity
+echo
+echo ">> Build Decision:"
+
+DO_BUILD=1 # Default safe fallback
+REASON="unknown"
+
+if [[ "$BUILD_MODE" == "force" ]]; then
+    DO_BUILD=1
+    REASON="forced by --force-build"
+elif [[ "$BUILD_MODE" == "no" ]]; then
+    DO_BUILD=0
+    REASON="skipped by --no-build"
+else
+    # Auto-detect
+    AUTO_BUILD=1
+    REASON="auto-detect (fallback: build)"
+
+    # Check if git is available and we have history to compare
+    if command -v git >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
+        # Determine baseline:
+        # 1. If user provided BASE_SHA, use it.
+        # 2. If we pulled and have a pre-pull HEAD, use that.
+        # 3. Default: HEAD^ (parent commit)
+        if [[ -n "${PRE_PULL_HEAD:-}" ]]; then
+             BASE_SHA="${BASE_SHA:-$PRE_PULL_HEAD}"
+        else
+             BASE_SHA="${BASE_SHA:-HEAD^}"
+        fi
+
+        if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
+            CHANGED="$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)"
+        else
+            CHANGED=""
+            # If baseline missing (e.g. shallow clone or initial commit), force build
+            REASON="auto-detect: baseline $BASE_SHA unavailable"
+            AUTO_BUILD=1
+        fi
+
+        # If pulled and no changes (PRE_PULL_HEAD == HEAD), the diff will be empty.
+        # CHANGED is already empty in that case.
+        # We can detect this specific case for better transparency.
+        CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
+        if [[ -n "${PRE_PULL_HEAD:-}" ]] && [[ "$PRE_PULL_HEAD" == "$CURRENT_HEAD" ]]; then
+             REASON="auto-detect: pull had no changes"
+             AUTO_BUILD=0
+        elif [[ -n "$CHANGED" ]]; then
+            # Count lines using wc -l (robust)
+            CHANGE_COUNT="$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')"
+
+            # Debug: show changed files if needed (or just count)
+            # echo "   Changed files: $CHANGE_COUNT"
+
+            # Filter relevant paths:
+            # - apps/api/ (source)
+            # - configs/ (embedded via include_str!)
+            # - Cargo.*, Dockerfile, .dockerignore (build context)
+            if printf '%s\n' "$CHANGED" | grep -Eq '^(apps/api/|configs/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore)'; then
+                AUTO_BUILD=1
+                REASON="auto-detect: API source/config changed ($CHANGE_COUNT files)"
+            elif printf '%s\n' "$CHANGED" | grep -Eq '^(infra/compose/)'; then
+                AUTO_BUILD=1
+                REASON="auto-detect: infra/compose changed -> conservative build"
+            else
+                AUTO_BUILD=0
+                REASON="auto-detect: irrelevant changes only ($CHANGE_COUNT files)"
+            fi
+        elif [[ "$REASON" == "auto-detect (fallback: build)" ]]; then
+             # If we had a valid baseline and empty diff (and didn't set REASON yet)
+             AUTO_BUILD=0
+             REASON="auto-detect: no changes vs $BASE_SHA"
+        fi
+    else
+        REASON="auto-detect: git unavailable"
+    fi
+    DO_BUILD=$AUTO_BUILD
+fi
+
+echo "   Mode:   $BUILD_MODE"
+echo "   Reason: $REASON"
+echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
 
 # 3. Compose File Setup
 COMPOSE_FILES=("-f" "$BASE_COMPOSE_FILE")
