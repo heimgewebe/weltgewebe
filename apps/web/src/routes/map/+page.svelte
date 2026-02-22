@@ -110,8 +110,12 @@
 
         // Check if we need to update or create
         if (existing) {
+             // Update item data to prevent stale data in delegated events
+             existing.item = item;
+
              // Update position if changed
              const { marker, element } = existing;
+             element.dataset.id = item.id;
              const lngLat = marker.getLngLat();
              if (Math.abs(lngLat.lng - item.lon) > 0.000001 || Math.abs(lngLat.lat - item.lat) > 0.000001) {
                  marker.setLngLat([item.lon, item.lat]);
