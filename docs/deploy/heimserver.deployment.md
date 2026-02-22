@@ -40,17 +40,17 @@
   - `ENV_FILE=/opt/weltgewebe/.env`
 
   ```sh
-  # Default (Offline-first, ohne Git, ohne Caddy):
+  # Default (Update git fetch + pull --ff-only, ohne Caddy):
   weltgewebe-up
 
-  # Mit Update (git fetch + pull --ff-only):
-  weltgewebe-up --pull
+  # Offline Recovery (ohne Git):
+  weltgewebe-up --no-pull
 
   # Optional: mit Caddy (wenn Ports frei):
   weltgewebe-up --with-caddy
   ```
 
-  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung,
+  **Offline Recovery:** `weltgewebe-up --no-pull` funktioniert auch ohne Internetverbindung,
   da es keine Git-Befehle ausführt.
 
   Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
