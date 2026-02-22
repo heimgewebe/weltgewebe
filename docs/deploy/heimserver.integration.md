@@ -41,7 +41,8 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 ## 2. Reverse-Proxy-Vertrag
 
-Caddy leitet weiter an:
+Der Reverse-Proxy (Caddy) verwendet im lokalen Betrieb (Override) direkt die dokumentierte Referenzkonfiguration.
+Die Konfiguration ist in `docs/reference/caddy.heimserver.caddy` definiert und wird in den Container gemountet.
 
 ```caddy
 api.weltgewebe.home.arpa {
