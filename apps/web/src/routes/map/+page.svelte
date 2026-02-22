@@ -68,7 +68,7 @@
   let lastFocusedElement: HTMLElement | null = null;
 
   // Optimization: Track active markers to allow updating instead of rebuilding
-  const activeMarkers = new Map<string, { marker: Marker, element: HTMLElement, cleanup: () => void }>();
+  const activeMarkers = new Map<string, { marker: Marker, element: HTMLElement, item: RenderableMapPoint, cleanup: () => void }>();
 
   // UI Mapping Helper
   function getMarkerCategory(type: string | undefined): string {
@@ -127,6 +127,9 @@
             element.type = 'button';
             element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
 
+            // Identifying data for event delegation
+            element.dataset.id = item.id;
+
             // Robust testing selector based on domain semantics (and unique ID for stability)
             element.dataset.testid = `marker-${item.type || 'node'}-${item.id}`;
 
@@ -137,23 +140,6 @@
 
             element.setAttribute('aria-label', item.title);
             element.title = item.title;
-
-            const handleClick = async (e: Event) => {
-                lastFocusedElement = e.currentTarget as HTMLElement;
-                $selection = { type: markerCategory as 'node'|'account', id: item.id, data: item };
-
-                const lat = item.lat;
-                const lon = item.lon;
-                if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
-                map?.flyTo({
-                    center: [lon, lat],
-                    zoom: Math.max(map.getZoom(), 14),
-                    speed: 0.8,
-                    curve: 1
-                });
-                }
-            };
-            element.addEventListener('click', handleClick);
 
             const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
                 .setLngLat([item.lon, item.lat])
@@ -166,8 +152,8 @@
             activeMarkers.set(item.id, {
                 marker,
                 element,
+                item,
                 cleanup: () => {
-                    element.removeEventListener('click', handleClick);
                     marker.remove();
                 }
             });
@@ -298,12 +284,42 @@
   }
 
   onMount(() => {
+    const handleMarkerClick = (e: Event) => {
+      const target = e.target as HTMLElement;
+      const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
+      if (!markerBtn) return;
+
+      const id = markerBtn.dataset.id;
+      if (!id) return;
+
+      const entry = activeMarkers.get(id);
+      if (!entry) return;
+
+      const { item } = entry;
+      const markerCategory = getMarkerCategory(item.type);
+
+      lastFocusedElement = markerBtn;
+      $selection = { type: markerCategory as 'node' | 'account', id: item.id, data: item };
+
+      const lat = item.lat;
+      const lon = item.lon;
+      if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+        map?.flyTo({
+          center: [lon, lat],
+          zoom: Math.max(map.getZoom(), 14),
+          speed: 0.8,
+          curve: 1
+        });
+      }
+    };
+
     (async () => {
       const maplibregl = await import('maplibre-gl');
       const container = mapContainer;
       if (!container) {
         return;
       }
+      container.addEventListener('click', handleMarkerClick);
       map = new maplibregl.Map({
         container,
         style: 'https://demotiles.maplibre.org/style.json',
@@ -336,6 +352,7 @@
 
     return () => {
       if (map && typeof map.remove === 'function') map.remove();
+      mapContainer?.removeEventListener('click', handleMarkerClick);
       activeMarkers.forEach(({ cleanup }) => cleanup());
       activeMarkers.clear();
     };
