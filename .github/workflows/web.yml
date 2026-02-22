@@ -64,6 +64,21 @@ jobs:
       - name: Build
         run: CI=true pnpm build
 
+      - name: Get Playwright version
+        shell: bash
+        run: |
+          PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | awk '{print $2}')
+          echo "PLAYWRIGHT_VERSION=$PLAYWRIGHT_VERSION" >> $GITHUB_ENV
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-playwright-
+
       - name: "Playwright: setup browsers (CI)"
         # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
         # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
@@ -71,6 +86,10 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
         run: pnpm test:setup
+
+      - name: Debug Playwright cache path (temporary)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: ls -la ~/.cache/ms-playwright || true
 
       - name: Test (CI)
         run: pnpm test:ci
