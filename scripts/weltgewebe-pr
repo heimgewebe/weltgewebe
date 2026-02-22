@@ -24,7 +24,6 @@ CREATE_PR=1
 PUSH=1
 DRAFT_PR=0
 PR_TITLE=""
-BODY_FILE=""
 BASE_BRANCH=""
 REMOTE="origin"
 INCLUDE_ARTIFACTS=0
@@ -82,13 +81,6 @@ if [[ -z "$(git status --porcelain)" ]]; then
   exit 0
 fi
 
-# Build Allowlist Pattern
-if [[ -n "$CUSTOM_ALLOW" ]]; then
-    ALLOW_PATTERNS="$CUSTOM_ALLOW"
-else
-    ALLOW_PATTERNS="$ALLOWLIST_DEFAULT" # Fallback if empty, but we use logic below
-fi
-
 is_allowed() {
   local file="$1"
   local allowed=1 # 1=false (bash)
@@ -119,14 +111,18 @@ is_allowed() {
 is_secret() {
   local file="$1"
   # Hard Blocklist (Secrets)
-  if [[ "$file" == *".env"* ]] || \
+  # Check for specific filenames to avoid false positives (e.g. envy.md)
+  # Matches: .env, .env.*, *.key, *.pem, *.p12, *.kdbx, id_rsa, *.age, secrets.*
+
+  if [[ "$file" == ".env" ]] || [[ "$file" == */.env ]] || \
+     [[ "$file" == ".env."* ]] || [[ "$file" == */.env.* ]] || \
      [[ "$file" == *".key" ]] || \
      [[ "$file" == *".pem" ]] || \
      [[ "$file" == *".p12" ]] || \
      [[ "$file" == *".kdbx" ]] || \
      [[ "$file" == *"id_rsa"* ]] || \
      [[ "$file" == *".age" ]] || \
-     [[ "$file" == *"secrets"* ]]; then
+     [[ "$file" == *"secrets."* ]]; then
      return 0 # True (is secret)
   fi
   return 1 # False
@@ -137,8 +133,6 @@ IGNORED_FILES=()
 
 # Process file list line by line (null-delimited)
 # git status --porcelain -z outputs: XY PATH\0 (or XY PATH1\0PATH2\0 for renames)
-# We need to handle this carefully.
-# Simplified approach: Use `git status --porcelain` but handle spaces via read loop (fragile for renames)
 # Robust approach: Use -z and read fully.
 
 while IFS= read -r -d '' entry; do
@@ -150,17 +144,6 @@ while IFS= read -r -d '' entry; do
     # Handle renames (R -> next entry is target path)
     if [[ "$status" == R* ]]; then
         # For renames, the next read will be the target path (without status prefix)
-        # But `git status -z` puts the target path immediately after the NUL.
-        # Wait, `git status -z` format is complex for renames.
-        # "R  ORIG\0TARGET\0"
-        # We need to consume the next entry if it's a rename target?
-        # Let's simplify: treat renames as delete+add for allowlist purposes?
-        # Actually, standard `git status --porcelain` (without -z) puts quotes around paths with spaces.
-        # `git status --porcelain -z` does NOT quote.
-
-        # NOTE: Handling renames in bash with -z is tricky because read -d '' consumes one null-term string.
-        # If it's a rename, the *next* null-term string is the target path.
-        # We must read it.
         IFS= read -r -d '' target_path
         file="$target_path"
     fi
@@ -244,9 +227,8 @@ echo "   Branch: $BRANCH_NAME"
 git checkout -b "$BRANCH_NAME"
 
 # Stage Files
-for f in "${STAGED_FILES[@]}"; do
-    git add "$f"
-done
+# Use git add -A -- for robustness with deletions/renames/spaces
+git add -A -- "${STAGED_FILES[@]}"
 
 # Commit
 # Use temp file for body to be safe
