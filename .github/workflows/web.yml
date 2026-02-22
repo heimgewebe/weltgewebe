@@ -88,6 +88,7 @@ jobs:
         run: pnpm test:setup
 
       - name: Debug Playwright cache path (temporary)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: ls -la ~/.cache/ms-playwright || true
 
       - name: Test (CI)
