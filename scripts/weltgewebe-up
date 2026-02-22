@@ -35,14 +35,15 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 # Arguments
 WITH_CADDY=0
 DO_PULL=0
-DO_BUILD=1
+BUILD_MODE="auto" # Default: auto-detect
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--pull] [--no-build]"
+  echo "Usage: $0 [--with-caddy] [--pull] [--no-build] [--force-build]"
   echo
   echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
   echo "  --pull         Perform 'git pull --ff-only' before deploying"
-  echo "  --no-build     Skip build step (default: build)"
+  echo "  --no-build     Skip build step (force skip)"
+  echo "  --force-build  Force build step (bypass auto-detect)"
   echo
   exit 1
 }
@@ -51,7 +52,8 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
     --pull) DO_PULL=1 ;;
-    --no-build) DO_BUILD=0 ;;
+    --no-build) BUILD_MODE="no" ;;
+    --force-build) BUILD_MODE="force" ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -109,6 +111,57 @@ else
   echo
   echo ">> Git: Skipped (offline mode). Use --pull to update."
 fi
+
+# Determine Build Necessity
+echo
+echo ">> Build Decision:"
+
+DO_BUILD=1 # Default safe fallback
+REASON="unknown"
+
+if [[ "$BUILD_MODE" == "force" ]]; then
+    DO_BUILD=1
+    REASON="forced by --force-build"
+elif [[ "$BUILD_MODE" == "no" ]]; then
+    DO_BUILD=0
+    REASON="skipped by --no-build"
+else
+    # Auto-detect
+    AUTO_BUILD=1
+    REASON="auto-detect (fallback: build)"
+
+    # Check if git is available and we have history to compare
+    if command -v git >/dev/null 2>&1 && \
+       git rev-parse --verify HEAD >/dev/null 2>&1 && \
+       git rev-parse --verify HEAD@{1} >/dev/null 2>&1; then
+
+        # Check for changes in relevant paths
+        CHANGED=$(git diff --name-only HEAD@{1}..HEAD 2>/dev/null || true)
+
+        if [[ -z "$CHANGED" ]]; then
+            AUTO_BUILD=0
+            REASON="auto-detect: no changes in HEAD@{1}..HEAD"
+        else
+            CHANGE_COUNT=$(echo "$CHANGED" | grep -c . || true)
+            # Filter relevant paths:
+            # apps/api/, Cargo.toml, Cargo.lock, Dockerfile (root), .dockerignore, infra/compose/
+            if echo "$CHANGED" | grep -Eq '^(apps/api/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore|infra/compose/)'; then
+                AUTO_BUILD=1
+                REASON="auto-detect: relevant changes found"
+            else
+                AUTO_BUILD=0
+                REASON="auto-detect: changes found ($CHANGE_COUNT), but not relevant to API build"
+            fi
+        fi
+    else
+        REASON="auto-detect: git history unavailable or check failed"
+    fi
+    DO_BUILD=$AUTO_BUILD
+fi
+
+echo "   Mode:   $BUILD_MODE"
+echo "   Reason: $REASON"
+echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
 
 # 3. Compose File Setup
 COMPOSE_FILES=("-f" "$BASE_COMPOSE_FILE")
