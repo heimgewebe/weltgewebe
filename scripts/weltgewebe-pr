@@ -70,6 +70,12 @@ cd "$REPO_DIR"
 cleanup() {
     local orig_ref="$ORIG_REF"
     echo ">> Cleaning up..."
+
+    # Cleanup temp file if it exists (robust check)
+    if [[ -n "${BODY_TEMP:-}" ]] && [[ -f "$BODY_TEMP" ]]; then
+        rm -f "$BODY_TEMP" 2>/dev/null || true
+    fi
+
     if git checkout -q "$orig_ref" 2>/dev/null; then
         echo ">> Returned to $orig_ref."
     else
@@ -180,6 +186,27 @@ done < <(git status --porcelain -z)
 
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
+    # Check if artifacts are being tracked despite ignore rules (guardrail)
+    if git ls-files --error-unmatch artifacts/ >/dev/null 2>&1; then
+        echo "ERROR: artifacts/ directory is tracked in git index."
+        echo "       Please remove it from tracking: git rm -r --cached artifacts/"
+        exit 1
+    fi
+
+    # Check if only artifacts/ are in IGNORED_FILES
+    only_artifacts=1
+    for f in "${IGNORED_FILES[@]}"; do
+        if [[ "$f" != "artifacts/"* ]]; then
+            only_artifacts=0
+            break
+        fi
+    done
+
+    if [[ "$only_artifacts" -eq 1 ]] && [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
+        echo "Only drift is artifacts/ (ignored). Nothing to PR."
+        exit 0
+    fi
+
     echo "Drift detected but no files match the allowlist."
     echo "Ignored files:"
     printf ' - %s\n' "${IGNORED_FILES[@]}"
@@ -251,9 +278,19 @@ Files:
 $(printf ' - %s\n' "${STAGED_FILES[@]}")
 "
 BODY_TEMP=$(mktemp)
-echo "$COMMIT_BODY" > "$BODY_TEMP"
+# Append temp file cleanup to existing trap logic (which handles branch restore)
+# We redefine the cleanup function to include file removal
+old_cleanup=$(declare -f cleanup)
+eval "${old_cleanup/\{/\{ rm -f \"\$BODY_TEMP\" 2>/dev/null || true; }"
 
-git commit -m "$PR_TITLE" -F "$BODY_TEMP"
+# Construct final message: Title + Blank + Body
+{
+  echo "$PR_TITLE"
+  echo ""
+  echo "$COMMIT_BODY"
+} > "$BODY_TEMP"
+
+git commit -F "$BODY_TEMP"
 
 if [[ "$PUSH" == "1" ]]; then
     echo ">> Pushing to $REMOTE..."
