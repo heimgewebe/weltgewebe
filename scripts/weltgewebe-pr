@@ -181,7 +181,7 @@ done < <(git status --porcelain -z)
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
     # Check if only artifacts/ are in IGNORED_FILES
-    local only_artifacts=1
+    only_artifacts=1
     for f in "${IGNORED_FILES[@]}"; do
         if [[ "$f" != "artifacts/"* ]]; then
             only_artifacts=0
@@ -189,10 +189,10 @@ if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
         fi
     done
 
-    if [[ "$only_artifacts" == "1" ]] && [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
-         echo "Only drift is artifacts/ (deploy snapshot). This is expected."
-         echo "Recommendation: keep artifacts/ gitignored."
-         exit 0
+    if [[ "$only_artifacts" -eq 1 ]] && [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
+        echo "Only drift is artifacts/ (deploy snapshot). This is expected."
+        echo "Recommendation: keep artifacts/ gitignored."
+        exit 0
     fi
 
     echo "Drift detected but no files match the allowlist."
