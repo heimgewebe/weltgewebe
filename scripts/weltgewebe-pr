@@ -67,11 +67,24 @@ done
 
 cd "$REPO_DIR"
 
+cleanup() {
+    local orig_ref="$ORIG_REF"
+    echo ">> Cleaning up..."
+    if git checkout -q "$orig_ref" 2>/dev/null; then
+        echo ">> Returned to $orig_ref."
+    else
+        local current_ref
+        current_ref="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo unknown)"
+        echo ">> WARNING: Could not return to $orig_ref. You are on $current_ref."
+    fi
+    return 0
+}
+
 # Capture original ref for cleanup
 if [[ "$MODE" != "plan" ]]; then
     ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
     # Restore original branch on exit/error
-    trap 'echo ">> Cleaning up..."; if git checkout -q "$ORIG_REF" 2>/dev/null; then echo ">> Returned to $ORIG_REF."; else echo ">> WARNING: Could not return to $ORIG_REF. You are on $(git rev-parse --abbrev-ref HEAD)."; fi' EXIT
+    trap 'cleanup || true' EXIT
 fi
 
 # 1. Drift Detection
