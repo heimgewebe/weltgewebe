@@ -40,21 +40,41 @@
   - `ENV_FILE=/opt/weltgewebe/.env`
 
   ```sh
-  # Default (Offline-first, ohne Git, ohne Caddy):
+  # Default (Update git fetch + pull --ff-only, ohne Caddy):
   weltgewebe-up
 
-  # Mit Update (git fetch + pull --ff-only):
-  weltgewebe-up --pull
+  # Offline Recovery (ohne Git):
+  weltgewebe-up --no-pull
 
   # Optional: mit Caddy (wenn Ports frei):
   weltgewebe-up --with-caddy
   ```
 
-  **Offline Recovery:** `weltgewebe-up` ohne `--pull` funktioniert auch ohne Internetverbindung,
+  **Offline Recovery:** `weltgewebe-up --no-pull` funktioniert auch ohne Internetverbindung,
   da es keine Git-Befehle ausführt.
 
   Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
   `REPO_DIR=/pfad ENV_FILE=/pfad/.env weltgewebe-up`
+
+- Ops-Drift zurückführen (weltgewebe-pr):
+
+  Lokale Änderungen auf dem Heimserver (Drift) können als PR zurückgeführt werden.
+  Das Skript `scripts/weltgewebe-pr` erkennt Änderungen, erstellt einen Branch und öffnet einen PR
+  (GitHub CLI empfohlen).
+
+  ```sh
+  # Plan-Modus (Dry-Run, zeigt was passieren würde):
+  scripts/weltgewebe-pr --plan
+
+  # Standard: Branch + Commit + Push + PR erstellen:
+  scripts/weltgewebe-pr --title "ops: fix caddy config"
+
+  # Als Draft-PR:
+  scripts/weltgewebe-pr --draft
+  ```
+
+  **Sicherheit:** `.env` und Secrets werden automatisch blockiert.
+  Nur Pfade in der Allowlist (`docs/`, `scripts/`, `infra/`, `configs/`, `.github/`) werden gestaged.
 
 - Stack (Manuell):
 

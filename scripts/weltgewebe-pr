@@ -1,0 +1,293 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# -----------------------------
+# Weltgewebe Drift-to-PR Tool
+# -----------------------------
+# Safely stages local changes (drift) and creates a PR.
+#
+# Usage:
+#   weltgewebe-pr [--plan] [--draft] [--no-pr] [--no-push] [--title "..."]
+#
+# Logic:
+#   1. Detect drift (git status --porcelain -z)
+#   2. Apply strict allowlist (docs/ scripts/ infra/ configs/ .github/)
+#   3. Guard against secrets (.env, *.key, etc.)
+#   4. Default: Create Branch -> Commit -> Push -> Create PR
+#   5. --plan: Read-only preview (what would happen?)
+
+REPO_DIR="${REPO_DIR:-$(pwd)}"
+
+# Flags
+MODE="apply"      # apply (default) or plan
+CREATE_PR=1
+PUSH=1
+DRAFT_PR=0
+PR_TITLE=""
+BASE_BRANCH=""
+REMOTE="origin"
+INCLUDE_ARTIFACTS=0
+CUSTOM_ALLOW=""
+
+# Default Allowlist (strict)
+ALLOWLIST_DEFAULT="docs/ scripts/ infra/ configs/ .github/"
+
+usage() {
+  echo "Usage: $0 [--plan] [--draft] [--no-pr] [--no-push] [--title \"...\"] [--allow \"...\"]"
+  echo
+  echo "  --plan             Dry-run: show what would happen (no changes)"
+  echo "  --draft            Create PR as draft"
+  echo "  --no-pr            Skip PR creation (only branch/commit/push)"
+  echo "  --no-push          Skip push (only local branch/commit)"
+  echo "  --title \"...\"      PR title (default: ops(heimserver): sync local drift)"
+  echo "  --base branch      Base branch (default: auto-detect)"
+  echo "  --allow \"path...\"  Override allowlist (dangerous, space-separated)"
+  echo "  --include-artifacts Allow staging artifacts/ folder"
+  echo
+  echo "Default behavior: Creates branch, commits allowed drift, pushes, and opens a PR."
+  exit 1
+}
+
+while [[ "$#" -gt 0 ]]; do
+  case $1 in
+    --plan) MODE="plan" ;;
+    --draft) DRAFT_PR=1 ;;
+    --no-pr) CREATE_PR=0 ;;
+    --no-push) PUSH=0; CREATE_PR=0 ;; # Implicitly no PR if no push
+    --title) PR_TITLE="$2"; shift ;;
+    --base) BASE_BRANCH="$2"; shift ;;
+    --remote) REMOTE="$2"; shift ;;
+    --allow) CUSTOM_ALLOW="$2"; shift ;;
+    --include-artifacts) INCLUDE_ARTIFACTS=1 ;;
+    -h|--help) usage ;;
+    *) echo "Unknown parameter: $1"; usage ;;
+  esac
+  shift
+done
+
+cd "$REPO_DIR"
+
+cleanup() {
+    local orig_ref="$ORIG_REF"
+    echo ">> Cleaning up..."
+    if git checkout -q "$orig_ref" 2>/dev/null; then
+        echo ">> Returned to $orig_ref."
+    else
+        local current_ref
+        current_ref="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD 2>/dev/null || echo unknown)"
+        echo ">> WARNING: Could not return to $orig_ref. You are on $current_ref."
+    fi
+    return 0
+}
+
+# Capture original ref for cleanup
+if [[ "$MODE" != "plan" ]]; then
+    ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
+    # Restore original branch on exit/error
+    trap 'cleanup || true' EXIT
+fi
+
+# 1. Drift Detection
+echo ">> Checking for drift..."
+if [[ -z "$(git status --porcelain)" ]]; then
+  echo "No drift detected (working tree clean)."
+  exit 0
+fi
+
+is_allowed() {
+  local file="$1"
+  local allowed=1 # 1=false (bash)
+
+  # Explicit Allowlist Logic
+  local patterns
+  if [[ -n "$CUSTOM_ALLOW" ]]; then
+      patterns=($CUSTOM_ALLOW)
+  else
+      patterns=($ALLOWLIST_DEFAULT)
+  fi
+
+  for p in "${patterns[@]}"; do
+      if [[ "$file" == "$p"* ]]; then
+          allowed=0
+          break
+      fi
+  done
+
+  # Artifacts logic
+  if [[ "$INCLUDE_ARTIFACTS" == "1" ]] && [[ "$file" == "artifacts/"* ]]; then
+      allowed=0
+  fi
+
+  return $allowed
+}
+
+is_secret() {
+  local file="$1"
+  # Hard Blocklist (Secrets)
+  # Check for specific filenames to avoid false positives (e.g. envy.md)
+  # Matches: .env, .env.*, *.key, *.pem, *.p12, *.kdbx, id_rsa, *.age, secrets.*
+
+  if [[ "$file" == ".env" ]] || [[ "$file" == */.env ]] || \
+     [[ "$file" == ".env."* ]] || [[ "$file" == */.env.* ]] || \
+     [[ "$file" == *".key" ]] || \
+     [[ "$file" == *".pem" ]] || \
+     [[ "$file" == *".p12" ]] || \
+     [[ "$file" == *".kdbx" ]] || \
+     [[ "$file" == *"id_rsa"* ]] || \
+     [[ "$file" == *".age" ]] || \
+     [[ "$file" == *"secrets."* ]]; then
+     return 0 # True (is secret)
+  fi
+  return 1 # False
+}
+
+STAGED_FILES=()
+IGNORED_FILES=()
+
+# Process file list line by line (null-delimited)
+# git status --porcelain -z outputs: XY PATH\0 (or XY PATH1\0PATH2\0 for renames)
+# Robust approach: Use -z and read fully.
+
+while IFS= read -r -d '' entry; do
+    # entry format: "XY PATH" or "XY PATH1" then "PATH2" (for renames)
+    # The first 3 chars are status.
+    status="${entry:0:2}"
+    file="${entry:3}"
+
+    # Handle renames (R -> next entry is target path)
+    if [[ "$status" == R* ]]; then
+        # For renames, the next read will be the target path (without status prefix)
+        IFS= read -r -d '' target_path
+        file="$target_path"
+    fi
+
+    if [ -z "$file" ]; then
+        continue
+    fi
+
+    if is_secret "$file"; then
+        echo "CRITICAL ERROR: Secret-like file detected in drift: $file"
+        echo "Aborting strictly to prevent leak."
+        exit 1
+    fi
+
+    if is_allowed "$file"; then
+        STAGED_FILES+=("$file")
+    else
+        IGNORED_FILES+=("$file")
+    fi
+done < <(git status --porcelain -z)
+
+
+if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
+    echo "Drift detected but no files match the allowlist."
+    echo "Ignored files:"
+    printf ' - %s\n' "${IGNORED_FILES[@]}"
+    exit 0
+fi
+
+echo ">> Staging Candidates (${#STAGED_FILES[@]} files):"
+printf ' + %s\n' "${STAGED_FILES[@]}"
+
+if [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
+    echo ">> Ignored (${#IGNORED_FILES[@]} files):"
+    printf ' . %s\n' "${IGNORED_FILES[@]}"
+fi
+
+# Plan Mode Exit
+if [[ "$MODE" == "plan" ]]; then
+    echo
+    echo ">> Plan Mode (Dry Run):"
+    echo "   Would create branch: ops/heimserver-drift-YYYYMMDD-HHMM"
+    echo "   Would commit candidates."
+    if [[ "$PUSH" == "1" ]]; then
+        echo "   Would push to: $REMOTE"
+    else
+        echo "   Would NOT push (--no-push)."
+    fi
+
+    if [[ "$CREATE_PR" == "1" ]]; then
+        echo "   Would create PR via 'gh pr create'"
+    else
+        echo "   Would NOT create PR (--no-pr or implicit)."
+    fi
+    exit 0
+fi
+
+# 3. Execution (Apply)
+echo
+echo ">> Executing..."
+
+TIMESTAMP=$(date +"%Y%m%d-%H%M")
+BRANCH_NAME="ops/heimserver-drift-$TIMESTAMP"
+HOSTNAME=$(hostname -s)
+
+if [[ -z "$PR_TITLE" ]]; then
+    PR_TITLE="ops($HOSTNAME): sync local drift"
+fi
+
+# Base Branch detection
+if [[ -z "$BASE_BRANCH" ]]; then
+    # Try to find default branch from remote, fallback to main
+    BASE_BRANCH=$(git remote show "$REMOTE" 2>/dev/null | grep 'HEAD branch' | cut -d' ' -f5) || true
+    BASE_BRANCH="${BASE_BRANCH:-main}"
+fi
+
+echo "   Base: $BASE_BRANCH"
+echo "   Branch: $BRANCH_NAME"
+
+# Create Branch
+git checkout -b "$BRANCH_NAME"
+
+# Stage Files
+# Use git add -A -- for robustness with deletions/renames/spaces
+git add -A -- "${STAGED_FILES[@]}"
+
+# Commit
+# Use temp file for body to be safe
+COMMIT_BODY="Sync drift from $HOSTNAME at $TIMESTAMP
+
+Files:
+$(printf ' - %s\n' "${STAGED_FILES[@]}")
+"
+BODY_TEMP=$(mktemp)
+echo "$COMMIT_BODY" > "$BODY_TEMP"
+
+git commit -m "$PR_TITLE" -F "$BODY_TEMP"
+
+if [[ "$PUSH" == "1" ]]; then
+    echo ">> Pushing to $REMOTE..."
+    git push -u "$REMOTE" "$BRANCH_NAME"
+
+    if [[ "$CREATE_PR" == "1" ]]; then
+        echo ">> Creating PR..."
+        if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+            PR_CMD=("gh" "pr" "create" "--base" "$BASE_BRANCH" "--title" "$PR_TITLE" "--body-file" "$BODY_TEMP")
+            if [[ "$DRAFT_PR" == "1" ]]; then
+                PR_CMD+=("--draft")
+            fi
+            "${PR_CMD[@]}"
+        else
+            echo "NOTE: 'gh' CLI not available or not authenticated."
+            echo "To create PR manually, visit your repo or run:"
+            echo "  gh pr create --base $BASE_BRANCH --head $BRANCH_NAME --title \"$PR_TITLE\" --body-file ..."
+        fi
+    else
+        echo "PR creation skipped (--no-pr)."
+    fi
+else
+    echo "Push skipped (--no-push). Changes are committed in branch '$BRANCH_NAME'."
+fi
+
+# Cleanup
+rm -f "$BODY_TEMP"
+
+# If we succeeded, we might want to stay on the branch?
+# The trap will restore original ref.
+# This ensures "non-invasive" behavior for Ops (server stays on deploy target).
+# If the user WANTS to stay on the PR branch, they should pull/checkout explicitly later?
+# Or maybe print a message saying "Returned to $ORIG_REF. To see changes: git checkout $BRANCH_NAME"
+
+echo
+echo "Done."
+echo "To inspect the created branch: git checkout $BRANCH_NAME"

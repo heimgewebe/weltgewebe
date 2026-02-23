@@ -7,10 +7,10 @@ set -euo pipefail
 # Robust, idempotent, and optional-caddy-aware deployment wrapper.
 #
 # Usage:
-#   weltgewebe-up [--with-caddy] [--pull] [--no-build]
+#   weltgewebe-up [--with-caddy] [--no-pull] [--no-build]
 #
 # Logic:
-#   1. Optional Git Fetch + Pull (--pull)
+#   1. Git Fetch + Pull (Default, disable with --no-pull)
 #   2. Preflight (Env check, Docker Compose Config)
 #   3. Service Detection (is 'caddy' defined?)
 #   4. Deploy (docker compose up -d ...)
@@ -34,14 +34,14 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 
 # Arguments
 WITH_CADDY=0
-DO_PULL=0
+DO_PULL=1   # Default: pull before deploy
 BUILD_MODE="auto" # Default: auto-detect
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--pull] [--no-build] [--force-build]"
+  echo "Usage: $0 [--with-caddy] [--no-pull] [--no-build] [--force-build]"
   echo
   echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
-  echo "  --pull         Perform 'git pull --ff-only' before deploying"
+  echo "  --no-pull      Skip git fetch/pull (offline deploy)"
   echo "  --no-build     Skip build step (force skip)"
   echo "  --force-build  Force build step (bypass auto-detect)"
   echo
@@ -51,7 +51,7 @@ usage() {
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
-    --pull) DO_PULL=1 ;;
+    --no-pull) DO_PULL=0 ;;
     --no-build) BUILD_MODE="no" ;;
     --force-build) BUILD_MODE="force" ;;
     -h|--help) usage ;;
@@ -96,24 +96,29 @@ if [[ "$DO_PULL" == "1" ]]; then
   # Capture HEAD before pulling to use as baseline
   PRE_PULL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
 
-  git fetch "$REMOTE" --prune
+  if ! git fetch "$REMOTE" --prune; then
+    echo "ERROR: Git fetch failed. Please check network/remote."
+    echo "       To skip updates (offline deploy), use: $0 --no-pull"
+    exit 1
+  fi
   echo ">> Git Pull (fast-forward)..."
 
   # Check for detached HEAD
   if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
     echo "ERROR: Detached HEAD detected. Cannot pull safely."
-    echo "       Please checkout a branch (e.g. 'main') or deploy without --pull."
+    echo "       Please checkout a branch (e.g. 'main') or deploy with --no-pull."
     exit 1
   fi
 
   if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
     echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
     echo "       (git status, git stash, or reset might be needed)"
+    echo "       To skip updates (offline deploy), use: $0 --no-pull"
     exit 1
   fi
 else
   echo
-  echo ">> Git: Skipped (offline mode). Use --pull to update."
+  echo ">> Git: Skipped (--no-pull)"
 fi
 
 # Determine Build Necessity
