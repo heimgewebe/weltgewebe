@@ -190,7 +190,7 @@ if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
     done
 
     if [[ "$only_artifacts" -eq 1 ]] && [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
-        echo "Only drift is artifacts/ (deploy snapshot). This is expected."
+        echo "Only drift is artifacts/* (deploy snapshots). This is expected."
         echo "Recommendation: keep artifacts/ gitignored."
         exit 0
     fi
@@ -260,17 +260,21 @@ git add -A -- "${STAGED_FILES[@]}"
 
 # Commit
 # Use temp file for body to be safe
-BODY_TEMP=$(mktemp)
+COMMIT_BODY="Sync drift from $HOSTNAME at $TIMESTAMP
 
-# Subject
-echo "$PR_TITLE" > "$BODY_TEMP"
-# Blank line
-echo >> "$BODY_TEMP"
-# Body
-echo "Sync drift from $HOSTNAME at $TIMESTAMP" >> "$BODY_TEMP"
-echo >> "$BODY_TEMP"
-echo "Files:" >> "$BODY_TEMP"
-printf ' - %s\n' "${STAGED_FILES[@]}" >> "$BODY_TEMP"
+Files:
+$(printf ' - %s\n' "${STAGED_FILES[@]}")
+"
+BODY_TEMP=$(mktemp)
+# Ensure cleanup of temp file even on exit
+trap 'rm -f "$BODY_TEMP" 2>/dev/null || true' EXIT
+
+# Construct final message: Title + Blank + Body
+{
+  echo "$PR_TITLE"
+  echo ""
+  echo "$COMMIT_BODY"
+} > "$BODY_TEMP"
 
 git commit -F "$BODY_TEMP"
 
