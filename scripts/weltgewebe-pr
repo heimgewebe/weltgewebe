@@ -186,6 +186,13 @@ done < <(git status --porcelain -z)
 
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
+    # Check if artifacts are being tracked despite ignore rules (guardrail)
+    if git ls-files --error-unmatch artifacts/ >/dev/null 2>&1; then
+        echo "ERROR: artifacts/ directory is tracked in git index."
+        echo "       Please remove it from tracking: git rm -r --cached artifacts/"
+        exit 1
+    fi
+
     # Check if only artifacts/ are in IGNORED_FILES
     only_artifacts=1
     for f in "${IGNORED_FILES[@]}"; do
@@ -196,8 +203,7 @@ if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
     done
 
     if [[ "$only_artifacts" -eq 1 ]] && [[ ${#IGNORED_FILES[@]} -gt 0 ]]; then
-        echo "Only drift is artifacts/* (deploy snapshots). This is expected."
-        echo "Recommendation: keep artifacts/ gitignored."
+        echo "Only drift is artifacts/ (ignored). Nothing to PR."
         exit 0
     fi
 
@@ -272,6 +278,10 @@ Files:
 $(printf ' - %s\n' "${STAGED_FILES[@]}")
 "
 BODY_TEMP=$(mktemp)
+# Append temp file cleanup to existing trap logic (which handles branch restore)
+# We redefine the cleanup function to include file removal
+old_cleanup=$(declare -f cleanup)
+eval "${old_cleanup/\{/\{ rm -f \"\$BODY_TEMP\" 2>/dev/null || true; }"
 
 # Construct final message: Title + Blank + Body
 {
@@ -306,7 +316,7 @@ else
     echo "Push skipped (--no-push). Changes are committed in branch '$BRANCH_NAME'."
 fi
 
-# Cleanup handled by trap, but explicit remove doesn't hurt
+# Cleanup
 rm -f "$BODY_TEMP"
 
 # If we succeeded, we might want to stay on the branch?
