@@ -260,15 +260,17 @@ git add -A -- "${STAGED_FILES[@]}"
 
 # Commit
 # Use temp file for body to be safe
-COMMIT_BODY="$PR_TITLE
-
-Sync drift from $HOSTNAME at $TIMESTAMP
-
-Files:
-$(printf ' - %s\n' "${STAGED_FILES[@]}")
-"
 BODY_TEMP=$(mktemp)
-echo "$COMMIT_BODY" > "$BODY_TEMP"
+
+# Subject
+echo "$PR_TITLE" > "$BODY_TEMP"
+# Blank line
+echo >> "$BODY_TEMP"
+# Body
+echo "Sync drift from $HOSTNAME at $TIMESTAMP" >> "$BODY_TEMP"
+echo >> "$BODY_TEMP"
+echo "Files:" >> "$BODY_TEMP"
+printf ' - %s\n' "${STAGED_FILES[@]}" >> "$BODY_TEMP"
 
 git commit -F "$BODY_TEMP"
 
