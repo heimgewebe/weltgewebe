@@ -7,17 +7,7 @@ set -euo pipefail
 # Robust, idempotent, and optional-caddy-aware deployment wrapper.
 #
 # Usage:
-#   weltgewebe-up [--with-caddy] [--no-pull] [--no-build]
-#
-# Logic:
-#   1. Git Fetch + Pull (Default, disable with --no-pull)
-#   2. Preflight (Env check, Docker Compose Config)
-#   3. Service Detection (is 'caddy' defined?)
-#   4. Deploy (docker compose up -d ...)
-#      - Default: --scale caddy=0
-#      - With --with-caddy: try enabling caddy, fallback to scale=0 on specific bind errors
-#   5. Health Check (auto-detect port)
-#   6. Snapshot (if script available)
+#   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no]
 
 REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
@@ -25,7 +15,6 @@ COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
 
 # Base Compose File (always required)
-# Note: These paths are relative to REPO_DIR
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
 OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
 
@@ -34,16 +23,17 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 
 # Arguments
 WITH_CADDY=0
-DO_PULL=1   # Default: pull before deploy
-BUILD_MODE="auto" # Default: auto-detect
+DO_PULL=1
+BUILD_MODE="auto"
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--no-pull] [--no-build] [--force-build]"
+  echo "Usage: $0 [--with-caddy] [--no-pull] [--build-mode auto|force|no] [--no-build] [--force-build]"
   echo
-  echo "  --with-caddy   Start the 'caddy' service (default: disabled/scale=0)"
-  echo "  --no-pull      Skip git fetch/pull (offline deploy)"
-  echo "  --no-build     Skip build step (force skip)"
-  echo "  --force-build  Force build step (bypass auto-detect)"
+  echo "  --with-caddy       Start the 'caddy' service (default: disabled/scale=0)"
+  echo "  --no-pull          Skip git fetch/pull (offline deploy)"
+  echo "  --build-mode MODE  Set build mode: auto (default), force, no"
+  echo "  --no-build         Alias for --build-mode no"
+  echo "  --force-build      Alias for --build-mode force"
   echo
   exit 1
 }
@@ -52,6 +42,7 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
     --no-pull) DO_PULL=0 ;;
+    --build-mode) BUILD_MODE="$2"; shift ;;
     --no-build) BUILD_MODE="no" ;;
     --force-build) BUILD_MODE="force" ;;
     -h|--help) usage ;;
@@ -65,11 +56,16 @@ if [[ -d "$REPO_DIR" ]]; then
   cd "$REPO_DIR"
 else
   echo "WARNING: REPO_DIR '$REPO_DIR' not found. Assuming current directory."
+  REPO_DIR="$(pwd)"
   if [[ ! -f "$BASE_COMPOSE_FILE" ]]; then
      echo "ERROR: Could not find $BASE_COMPOSE_FILE in current directory."
      exit 1
   fi
 fi
+
+# Ensure .ops directory exists
+mkdir -p "${REPO_DIR}/.ops"
+STATE_FILE="${REPO_DIR}/.ops/weltgewebe-up.state"
 
 echo "== Weltgewebe Up =="
 echo "Repo:    $(pwd)"
@@ -84,143 +80,93 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 2
 fi
 
-# Ensure compose interpolation and container env_file injection stay aligned.
-# infra/compose/compose.prod.override.yml uses ${WELTGEWEBE_ENV_FILE} to inject the file.
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
-# 2. Git (Optional)
-PRE_PULL_HEAD=""
-if [[ "$DO_PULL" == "1" ]]; then
-  echo
-  echo ">> Git Fetch..."
-  # Capture HEAD before pulling to use as baseline
-  PRE_PULL_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
-
-  if ! git fetch "$REMOTE" --prune; then
-    echo "ERROR: Git fetch failed. Please check network/remote."
-    echo "       To skip updates (offline deploy), use: $0 --no-pull"
-    exit 1
-  fi
-  echo ">> Git Pull (fast-forward)..."
-
-  # Check for detached HEAD
-  if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
-    echo "ERROR: Detached HEAD detected. Cannot pull safely."
-    echo "       Please checkout a branch (e.g. 'main') or deploy with --no-pull."
-    exit 1
-  fi
-
-  if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
-    echo "ERROR: Git pull failed (fast-forward only). Please resolve manually."
-    echo "       (git status, git stash, or reset might be needed)"
-    echo "       To skip updates (offline deploy), use: $0 --no-pull"
-    exit 1
-  fi
-else
-  echo
-  echo ">> Git: Skipped (--no-pull)"
-fi
-
-# Determine Build Necessity
+# 2. Preflight: Docker Compose Config (Strict)
 echo
-echo ">> Build Decision:"
-
-DO_BUILD=1 # Default safe fallback
-REASON="unknown"
-
-if [[ "$BUILD_MODE" == "force" ]]; then
-    DO_BUILD=1
-    REASON="forced by --force-build"
-elif [[ "$BUILD_MODE" == "no" ]]; then
-    DO_BUILD=0
-    REASON="skipped by --no-build"
-else
-    # Auto-detect
-    AUTO_BUILD=1
-    REASON="auto-detect (fallback: build)"
-
-    # Check if git is available and we have history to compare
-    if command -v git >/dev/null 2>&1 && git rev-parse --verify HEAD >/dev/null 2>&1; then
-        # Determine baseline:
-        # 1. If user provided BASE_SHA, use it.
-        # 2. If we pulled and have a pre-pull HEAD, use that.
-        # 3. Default: HEAD^ (parent commit)
-        if [[ -n "${PRE_PULL_HEAD:-}" ]]; then
-             BASE_SHA="${BASE_SHA:-$PRE_PULL_HEAD}"
-        else
-             BASE_SHA="${BASE_SHA:-HEAD^}"
-        fi
-
-        if git rev-parse --verify "$BASE_SHA" >/dev/null 2>&1; then
-            CHANGED="$(git diff --name-only "$BASE_SHA"..HEAD 2>/dev/null || true)"
-        else
-            CHANGED=""
-            # If baseline missing (e.g. shallow clone or initial commit), force build
-            REASON="auto-detect: baseline $BASE_SHA unavailable"
-            AUTO_BUILD=1
-        fi
-
-        # If pulled and no changes (PRE_PULL_HEAD == HEAD), the diff will be empty.
-        # CHANGED is already empty in that case.
-        # We can detect this specific case for better transparency.
-        CURRENT_HEAD="$(git rev-parse HEAD 2>/dev/null || true)"
-        if [[ -n "${PRE_PULL_HEAD:-}" ]] && [[ "$PRE_PULL_HEAD" == "$CURRENT_HEAD" ]]; then
-             REASON="auto-detect: pull had no changes"
-             AUTO_BUILD=0
-        elif [[ -n "$CHANGED" ]]; then
-            # Count lines using wc -l (robust)
-            CHANGE_COUNT="$(printf '%s\n' "$CHANGED" | wc -l | tr -d ' ')"
-
-            # Debug: show changed files if needed (or just count)
-            # echo "   Changed files: $CHANGE_COUNT"
-
-            # Filter relevant paths:
-            # - apps/api/ (source)
-            # - configs/ (embedded via include_str!)
-            # - Cargo.*, Dockerfile, .dockerignore (build context)
-            if printf '%s\n' "$CHANGED" | grep -Eq '^(apps/api/|configs/|Cargo\.toml|Cargo\.lock|Dockerfile|\.dockerignore)'; then
-                AUTO_BUILD=1
-                REASON="auto-detect: API source/config changed ($CHANGE_COUNT files)"
-            elif printf '%s\n' "$CHANGED" | grep -Eq '^(infra/compose/)'; then
-                AUTO_BUILD=1
-                REASON="auto-detect: infra/compose changed -> conservative build"
-            else
-                AUTO_BUILD=0
-                REASON="auto-detect: irrelevant changes only ($CHANGE_COUNT files)"
-            fi
-        elif [[ "$REASON" == "auto-detect (fallback: build)" ]]; then
-             # If we had a valid baseline and empty diff (and didn't set REASON yet)
-             AUTO_BUILD=0
-             REASON="auto-detect: no changes vs $BASE_SHA"
-        fi
-    else
-        REASON="auto-detect: git unavailable"
-    fi
-    DO_BUILD=$AUTO_BUILD
-fi
-
-echo "   Mode:   $BUILD_MODE"
-echo "   Reason: $REASON"
-echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
-
-# 3. Compose File Setup
+echo ">> Preflight: Checking docker compose config..."
 COMPOSE_FILES=("-f" "$BASE_COMPOSE_FILE")
 if [[ -f "$OVERRIDE_FILE" ]]; then
   COMPOSE_FILES+=("-f" "$OVERRIDE_FILE")
 else
   echo "NOTE: Override file '$OVERRIDE_FILE' not found. Using base compose only."
 fi
-
 BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
 
-# 4. Preflight (Config Check)
-echo
-echo ">> Preflight: docker compose config"
 if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
-  echo "ERROR: Docker Compose config failed. Aborting deploy."
+  echo "ERROR: Docker Compose config failed. Please fix your configuration."
   exit 1
 fi
 echo "OK"
+
+# 3. Git Operations
+if [[ "$DO_PULL" == "1" ]]; then
+  echo
+  echo ">> Git Fetch..."
+
+  if ! git fetch "$REMOTE" --prune; then
+    echo "ERROR: Git fetch failed."
+    echo "       Check network or use: $0 --no-pull"
+    exit 1
+  fi
+
+  # Check for detached HEAD
+  if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
+    echo "WARNING: Detached HEAD detected. Fetch done, but skipping pull."
+    echo "         To update, checkout a branch (e.g. 'main')."
+  else
+    echo ">> Git Pull (fast-forward)..."
+    if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
+        echo "ERROR: Git pull failed (fast-forward only)."
+        echo "       Please resolve manually or use: $0 --no-pull"
+        exit 1
+    fi
+  fi
+else
+  echo
+  echo ">> Git: Skipped (--no-pull)"
+fi
+
+# 4. Build Decision
+echo
+echo ">> Build Decision:"
+
+DO_BUILD=1
+REASON="unknown"
+
+# Get Current HEAD
+CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+
+if [[ "$BUILD_MODE" == "force" ]]; then
+    DO_BUILD=1
+    REASON="Forced by --build-mode force"
+elif [[ "$BUILD_MODE" == "no" ]]; then
+    DO_BUILD=0
+    REASON="Skipped by --build-mode no"
+else
+    # Auto Mode
+    if [[ "$CURRENT_HEAD" == "unknown" ]]; then
+        DO_BUILD=1
+        REASON="Auto: Git HEAD unknown"
+    elif [[ ! -f "$STATE_FILE" ]]; then
+        DO_BUILD=1
+        REASON="Auto: No previous deployment state found"
+    else
+        LAST_DEPLOYED_SHA=$(cat "$STATE_FILE")
+        if [[ "$CURRENT_HEAD" != "$LAST_DEPLOYED_SHA" ]]; then
+            DO_BUILD=1
+            REASON="Auto: HEAD changed ($LAST_DEPLOYED_SHA -> $CURRENT_HEAD)"
+        else
+            DO_BUILD=0
+            REASON="Auto: HEAD unchanged ($CURRENT_HEAD)"
+        fi
+    fi
+fi
+
+echo "   Mode:   $BUILD_MODE"
+echo "   Reason: $REASON"
+echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
+
 
 # 5. Service Plan & Caddy Logic
 HAS_CADDY=0
@@ -242,7 +188,7 @@ if [[ "$HAS_CADDY" == "1" ]]; then
     SCALE_ARGS=("--scale" "caddy=0")
   fi
 else
-  echo " - caddy: NOT FOUND (skipping logic)"
+  echo " - caddy: NOT FOUND"
   if [[ "$WITH_CADDY" == "1" ]]; then
      echo "WARNING: --with-caddy requested but service 'caddy' not found."
   fi
@@ -258,13 +204,13 @@ if [[ "$DO_BUILD" == "1" ]]; then
 fi
 
 if [[ "$ENABLE_CADDY" == "1" ]]; then
-  # Try with Caddy enabled, capturing stderr
+  # Try with Caddy enabled
   echo "Running: ${CMD_BASE[*]}"
 
   ERR_FILE=$(mktemp)
   if ! "${CMD_BASE[@]}" 2> "$ERR_FILE"; then
      ERR_CONTENT=$(cat "$ERR_FILE")
-     rm -f "$ERR_FILE" # Cleanup immediately
+     rm -f "$ERR_FILE"
 
      # Check for bind errors (port conflict)
      if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
@@ -275,16 +221,13 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         echo "Running: ${CMD_RETRY[*]}"
         "${CMD_RETRY[@]}"
      else
-        # Other error: fail hard
         echo
         echo "ERROR: Deployment failed."
         echo "$ERR_CONTENT"
         exit 1
      fi
   else
-     # Success
      rm -f "$ERR_FILE"
-     :
   fi
 else
   # Caddy disabled or not present
@@ -293,7 +236,13 @@ else
   "${CMD[@]}"
 fi
 
-# 7. Port Detection & Health Check
+# 7. Update State (Post-Deploy)
+if [[ "$CURRENT_HEAD" != "unknown" ]]; then
+    echo "$CURRENT_HEAD" > "$STATE_FILE"
+    echo ">> State updated: $CURRENT_HEAD"
+fi
+
+# 8. Health Check
 echo
 echo ">> Status:"
 docker compose "${BASE_ARGS[@]}" ps
@@ -304,7 +253,6 @@ echo ">> Health Check:"
 # Try to detect mapped port
 API_PORT=""
 if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api 8080 2>/dev/null); then
-  # Format is usually 0.0.0.0:PORT or ::1:PORT. We take the last part after colon.
   API_PORT=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
 fi
 
@@ -316,12 +264,12 @@ else
   echo "Could not detect API port. Using default: $HEALTH_URL"
 fi
 
-# Retry loop (max 10 attempts as requested)
+# Retry loop
 MAX_RETRIES=10
 SLEEP_SEC=5
+HEALTH_OK=0
 
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  # Bounded check: 2s connect timeout, 5s max total time.
   if response=$(curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" 2>/dev/null); then
     echo "Health OK"
     if command -v jq >/dev/null; then
@@ -336,22 +284,18 @@ for ((i=1;i<=MAX_RETRIES;i++)); do
   sleep "$SLEEP_SEC"
 done
 
-if [[ "${HEALTH_OK:-0}" != "1" ]]; then
+if [[ "$HEALTH_OK" != "1" ]]; then
     echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
     echo "URL: $HEALTH_URL"
     echo "Tip: Check 'docker compose ps' or set HEALTH_URL manually."
     exit 1
 fi
 
-# 8. Snapshot
+# 9. Snapshot
 SNAPSHOT_SCRIPT="scripts/deploy-snapshot.sh"
 if [[ -x "$SNAPSHOT_SCRIPT" ]]; then
   echo
   echo ">> Snapshot:"
-  # Export necessary variables for the snapshot script
-  # Construct COMPOSE_ARGS string from BASE_ARGS
-  # BASE_ARGS contains --env-file X -p Y -f Z ...
-  # This works fine if no spaces in paths, which is standard here.
   export COMPOSE_ARGS="${BASE_ARGS[*]}"
   export COMPOSE_FILE="$BASE_COMPOSE_FILE"
   export COMPOSE_PROJECT="$COMPOSE_PROJECT"
