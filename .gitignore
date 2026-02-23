@@ -45,5 +45,4 @@ infra/compose/compose.prod.nocaddy.override.yml
 
 # Backup artifacts
 *.bak.*
-*.bak.*
 artifacts/
