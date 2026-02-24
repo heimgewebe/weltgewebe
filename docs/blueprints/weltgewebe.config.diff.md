@@ -13,8 +13,10 @@ services:
     image: caddy:2.8-alpine
     restart: unless-stopped
     volumes:
-      - ../../apps/web/build:/srv
-      # Optional: Caddyfile for web container if needed
+      # Option A (Canonical): CI Artifacts are synced to host
+      - /opt/weltgewebe/apps/web/build:/srv
+      # Option B (Dev): Bind-mount source build
+      # - ../../apps/web/build:/srv
     networks:
       - default
 ```
@@ -43,20 +45,26 @@ RUN pnpm build
 ## 3. Caddy Routing (Gateway)
 
 Update the main Gateway Caddy to proxy to the local web container instead of Cloudflare.
+Establish correct layers (Host-Debug vs User-Entry).
 
-**File:** `infra/caddy/Caddyfile`
+**File:** `infra/caddy/Caddyfile` (Reference)
 
 ```caddy
-:8081 {
-  # ...
-
+# User-Entry (Heimnetz)
+weltgewebe.home.arpa {
   # API Proxy (Internal Service Name: api, Port: 8080)
   handle_path /api/* {
     reverse_proxy api:8080
   }
 
   # Serve local UI (Web container, Port: 80 for Caddy image)
+  # Alternative: reverse_proxy https://weltgewebe.pages.dev (Fallback)
   reverse_proxy web:80
+}
+
+# Host-Debug (Localhost only)
+:8081 {
+  reverse_proxy api:8080
 }
 ```
 

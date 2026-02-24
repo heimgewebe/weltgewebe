@@ -17,18 +17,25 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 
 ### 1. Routing-Invarianten
 
-- `https://weltgewebe.home.arpa/` → **Lokales Frontend** (Container `weltgewebe-web` oder statisch via Caddy).
-  Kein Cloudflare-Proxy.
-- `https://weltgewebe.home.arpa/api/*` → **Lokales API** (Service: `api:8080`).
-- `https://api.weltgewebe.home.arpa/*` → **Lokales API** (Alias via Caddy-Referenz).
-- `weltgewebe.pages.dev` → Nur Public Mirror, keine Heim-Login-Funktionalität.
+- **User Entry:** `https://weltgewebe.home.arpa/`
+  → Lokales Frontend (Container `weltgewebe-web` oder statisch via Caddy). Kein Cloudflare-Proxy.
+- **User API:** `https://weltgewebe.home.arpa/api/*`
+  → Lokales API (Service: `api:8080`).
+- **Host Debug:** `http://127.0.0.1:8081`
+  → Host-Mapped Port (nur für lokale Diagnose, nicht für User-Traffic).
+- **Public Mirror:** `weltgewebe.pages.dev`
+  → Nur statisches Schaufenster, keine Heim-Login-Funktionalität.
 
 ### 2. Identity & Auth API
 
 Die Identität wird heimisch verwaltet.
 
-- **Auth-Endpunkte:** Müssen explizit exposed sein.
-  *Hinweis: Existenz im Binary zu prüfen (Code enthält Routen, aber Deployment-Status offen).*
+- **Status:** **ZIEL / BLUEPRINT** (Aktuell: 404 Not Found / 405 Not Allowed).
+- **Diagnose:** `curl -I https://weltgewebe.home.arpa/api/auth/login/request`
+  *Erwartung:* 404 (Route fehlt noch) oder 405 (Cloudflare intercept).
+  *Ziel:* 200 OK oder 429 (Rate Limit).
+
+- **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.
   - `POST /api/auth/login/request` (Magic Link anfordern)
   - `GET/POST /api/auth/login/consume` (Magic Link einlösen)
   - `POST /api/auth/logout`
@@ -57,7 +64,7 @@ Aktueller Status:
 
 - **Phase 0:** UI lokal (Heim-first), Routing weg von Cloudflare. File-backed Persistence.
 - **Phase 1:** Frontend API Base Decision (relative Pfade validieren).
-- **Phase 2:** Auth API & Sessions (MVP).
+- **Phase 2:** Auth API & Sessions (MVP). Implementierung/Freischaltung der Routen.
 - **Phase 3:** Migration zu Postgres für Accounts und Sessions.
 
 ## Sicherheitsnotizen

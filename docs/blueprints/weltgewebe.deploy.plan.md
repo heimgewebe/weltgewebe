@@ -30,11 +30,12 @@ Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
 
 ### Phase 2: Auth Endpoints & Session Management
 
-**Status:** _Aktiv (MVP)_
+**Status:** _Aktiv (MVP)_ / **Route-Status:** _Noch 404/405 (Deployment erforderlich)_
 
-- API Endpunkte (`/auth/login/*`) existieren bereits im Code (siehe `apps/api/src/routes/auth.rs`).
+- API Endpunkte (`/auth/login/*`) existieren bereits im Code (siehe `apps/api/src/routes/auth.rs`),
+  sind aber deployed noch nicht aktiv/erreichbar (404/405).
 - Sicherstellen, dass Caddy `/api/*` korrekt an Backend (`api:8080`) weiterreicht.
-- Testen des Magic-Link Flows (SMTP oder Log).
+- Diagnose: Routen müssen 200/429 liefern, nicht 404.
 
 ### Phase 3: Persistenz-Migration (Postgres)
 
@@ -53,6 +54,7 @@ Nach Deployment von Phase 0 sind folgende Checks durchzuführen:
 ```bash
 curl -I https://weltgewebe.home.arpa/
 # Erwartet: 200 OK (und Server: Caddy, NICHT cloudflare)
+# Falls 'cf-ray' Header vorhanden ist, kommt es noch von Cloudflare!
 ```
 
 ### 2. API Routing (Health)
@@ -69,12 +71,12 @@ curl https://weltgewebe.home.arpa/api/health/ready
 curl -X POST https://weltgewebe.home.arpa/api/auth/login/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
-# Erwartet: 200 OK (Request accepted) oder 429 (Rate Limit).
-# KEIN 404 (Route missing) und KEIN 405 (Cloudflare block).
+# Erwartet (ZIEL): 200 OK (Request accepted) oder 429 (Rate Limit).
+# IST (derzeit): 404 (Route not found) oder 405 (Cloudflare).
 ```
 
 ## Stop-Kriterien (Rollback)
 
 - UI nicht erreichbar (502/504).
-- API liefert 404 auf `/api/*`.
-- Auth liefert 405 (Cloudflare Intercept).
+- API liefert 404 auf `/api/*` (außer Auth, das ist bekannt).
+- Cloudflare interceptet weiterhin Requests (Check `cf-ray`).
