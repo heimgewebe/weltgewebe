@@ -75,6 +75,8 @@ curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
 
 # IST (derzeit): 404 Not Found
 #   (Server: Caddy ohne Cloudflare-Header -> Proxy OK, aber Backend-Route fehlt)
+#   Hinweis: Andere API-Routen wie /api/health/ready, /api/nodes, /api/accounts
+#   liefern bereits 200 -> Proxy/Upstream ist korrekt; fehlend sind spezifisch die Auth-Routen.
 
 # ZIEL (Blueprint): 200 OK (Request accepted) oder 429 (Rate Limit).
 ```
