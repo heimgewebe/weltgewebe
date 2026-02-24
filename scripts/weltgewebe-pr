@@ -91,8 +91,8 @@ fi
 
 # 1. Drift Detection
 echo ">> Checking for drift..."
-# Use porcelain v1 -z for robust parsing
-if [[ -z "$(git status --porcelain=v1 -z)" ]]; then
+# Use standard porcelain for the check (command substitution drops null bytes)
+if [[ -z "$(git status --porcelain)" ]]; then
   echo "No drift detected (working tree clean)."
   exit 0
 fi
