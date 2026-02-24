@@ -86,12 +86,13 @@ cleanup() {
 if [[ "$MODE" != "plan" ]]; then
     ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
     # Restore original branch on exit/error
-    trap 'ret=$?; cleanup; exit $ret' EXIT
+    trap cleanup EXIT
 fi
 
 # 1. Drift Detection
 echo ">> Checking for drift..."
-if [[ -z "$(git status --porcelain)" ]]; then
+# Use porcelain v1 -z for robust parsing
+if [[ -z "$(git status --porcelain=v1 -z)" ]]; then
   echo "No drift detected (working tree clean)."
   exit 0
 fi
@@ -159,9 +160,16 @@ while IFS= read -r -d '' entry; do
     # Handle rename/copy (R or C)
     # Status is typically "R " or "C "
     if [[ "$status" == R* ]] || [[ "$status" == C* ]]; then
-        # The 'path' we got is actually the OLD path
-        # Read next token for NEW path
+        # Minimalist approach: Treat renames as-is (best effort).
+        # We assume the next token is the new path, but without explicit parsing logic
+        # to avoid fragility, we just read it to consume the token from the stream.
+        # This means the 'path' variable (old path) is used for allowlist checks.
+        # If the old path is allowed, it might stage the old path (deletion) but miss the new one?
+        # WAIT. Git status -z output for R is: R  OLD\0NEW\0
+        # If we read OLD into 'path', we MUST consume NEW or the next iteration will read NEW as status+path.
+
         IFS= read -r -d '' new_path
+        # Use NEW path for logic (usually what we want to track)
         file="$new_path"
     else
         file="$path"
