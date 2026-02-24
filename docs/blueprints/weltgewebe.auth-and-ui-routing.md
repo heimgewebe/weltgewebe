@@ -36,6 +36,7 @@ Die Identität wird heimisch verwaltet.
     (Header `server: cloudflare`).
   - **404 Not Found:** Symptom für `/api/auth/*` Pfade, wenn der Reverse-Proxy korrekt ist
     (Header `server: Caddy`), aber die Route im Backend fehlt.
+    *Hinweis: Proxy/Upstream kann mit `/api/health/ready` (200 OK) gegengeprüft werden; betroffen sind spezifisch die Auth-Routen.*
   - **Zielzustand:** POST `/api/auth/login/request` liefert **200 OK** oder **429 Too Many Requests**.
 
 - **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.

@@ -12,6 +12,7 @@ Add a `web` service to serve the static frontend locally.
 Simplest approach: Edge-Caddy serves static files directly via bind-mount.
 No extra container needed.
 
+- **Status:** **Default for Phase 0.** Choose this for speed and simplicity (MVP).
 - **Tradeoff:** Requires host filesystem access to build artifacts. Less isolation.
 
 ```yaml
@@ -25,6 +26,7 @@ services:
 
 More isolated: Dedicated container for serving static files.
 
+- **Status:** Alternative. Choose this if strict service isolation is prioritized over speed.
 - **Tradeoff:** Cleaner separation of concerns, but introduces another service/network hop.
 
 ```yaml
