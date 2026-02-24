@@ -62,9 +62,7 @@ cd "$REPO_DIR"
 
 # Cleanup function (trap)
 cleanup() {
-    local exit_code=$?
-    echo ">> Cleaning up..."
-
+    # NO EXIT HERE - just cleanup
     # Cleanup temp file
     if [[ -n "${BODY_TEMP:-}" ]] && [[ -f "$BODY_TEMP" ]]; then
         rm -f "$BODY_TEMP" 2>/dev/null || true
@@ -76,19 +74,19 @@ cleanup() {
 
     if [[ -n "${ORIG_REF:-}" ]] && [[ "$current_head" != "$ORIG_REF" ]]; then
         if git checkout -q "$ORIG_REF" 2>/dev/null; then
-             echo ">> Returned to $ORIG_REF."
+             # Silent return or minimal logging
+             :
         else
              echo ">> WARNING: Could not return to $ORIG_REF. You are on $current_head."
         fi
     fi
-    exit "$exit_code"
 }
 
 # Capture original ref for cleanup
 if [[ "$MODE" != "plan" ]]; then
     ORIG_REF=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || git rev-parse HEAD)
     # Restore original branch on exit/error
-    trap cleanup EXIT
+    trap 'ret=$?; cleanup; exit $ret' EXIT
 fi
 
 # 1. Drift Detection
@@ -152,17 +150,17 @@ IGNORED_FILES=()
 # Process file list line by line (null-delimited)
 while IFS= read -r -d '' entry; do
     # entry format: "XY PATH" or "XY PATH1" then "PATH2" (for renames)
-    # The first 3 chars are status (XY + space).
 
     if [[ -z "$entry" ]]; then continue; fi
 
     status="${entry:0:2}"
     path="${entry:3}"
 
-    # Handle rename/copy
+    # Handle rename/copy (R or C)
+    # Status is typically "R " or "C "
     if [[ "$status" == R* ]] || [[ "$status" == C* ]]; then
-        # The 'path' we got is actually the NEW path (Wait, git status -z for rename is OLD\0NEW\0)
-        # So 'path' is OLD. We need NEW.
+        # The 'path' we got is actually the OLD path
+        # Read next token for NEW path
         IFS= read -r -d '' new_path
         file="$new_path"
     else
@@ -193,7 +191,7 @@ if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
     done
 
     if [[ ${#IGNORED_FILES[@]} -gt 0 ]] && [[ "$only_artifacts" -eq 1 ]]; then
-        echo "Only drift is artifacts/*. Expected."
+        echo "Only artifacts drift (ignored). Nothing to PR."
         exit 0
     fi
 
