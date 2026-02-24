@@ -83,10 +83,11 @@ curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
 
 ```bash
 # Request auf Login-Seite (sollte im Ziel lokal sein, aktuell Pages)
-curl -i -X POST https://weltgewebe.home.arpa/login
+curl -isS -X POST https://weltgewebe.home.arpa/login | sed -n '1,25p'
 
-# IST (Cloudflare): 405 Method Not Allowed + Header 'server: cloudflare'
-# ZIEL (Lokal): 405 (Static File Server allow GET only) + Server: Caddy
+# IST (Cloudflare): Header enthält `server: cloudflare` (oft zusätzlich `cf-ray:`).
+# ZIEL (Lokal): Header enthält `server: Caddy` und KEIN `cf-ray:`.
+# Hinweis: Statuscode kann lokal 200/404/405 sein (abhängig von SPA fallback).
 ```
 
 ## Stop-Kriterien (Rollback)

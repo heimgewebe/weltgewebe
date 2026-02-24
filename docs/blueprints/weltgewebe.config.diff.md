@@ -76,9 +76,11 @@ weltgewebe.home.arpa {
 
   # Serve local UI
   # Option A (Direct):
-  root * /srv/weltgewebe-web
-  try_files {path} /index.html
-  file_server
+  handle {
+    root * /srv/weltgewebe-web
+    try_files {path} /index.html
+    file_server
+  }
 
   # Option B (Container):
   # reverse_proxy web:80
