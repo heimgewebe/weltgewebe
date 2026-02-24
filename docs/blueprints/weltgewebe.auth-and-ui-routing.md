@@ -32,13 +32,15 @@ Die Identität wird heimisch verwaltet.
 
 - **Status:** **ZIEL / BLUEPRINT**
 - **Fehlerbilder (Diagnose):**
-  - **405 Method Not Allowed:** Typisches Symptom für Non-API Pfade (`/login`, `/_dev/auth`),
-    die noch bei Cloudflare/Pages landen.
-  - **404 Not Found:** Typisches Symptom für `/api/auth/*` Pfade, wenn der Reverse-Proxy korrekt ist,
-    aber die Route im Backend fehlt (oder nicht freigeschaltet ist).
+  - **405 Method Not Allowed:** Symptom für Non-API Pfade (`/login`), die noch bei Cloudflare/Pages landen
+    (Header `server: cloudflare`).
+  - **404 Not Found:** Symptom für `/api/auth/*` Pfade, wenn der Reverse-Proxy korrekt ist
+    (Header `server: Caddy`), aber die Route im Backend fehlt.
   - **Zielzustand:** POST `/api/auth/login/request` liefert **200 OK** oder **429 Too Many Requests**.
 
 - **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.
+  *Hinweis: Exakte Auth-Routen im Backend sind gegen `apps/api/src/routes/auth.rs` zu verifizieren (rg),*
+  *bevor UI implementiert wird.*
   - `POST /api/auth/login/request` (Magic Link anfordern)
   - `GET/POST /api/auth/login/consume` (Magic Link einlösen)
   - `POST /api/auth/logout`

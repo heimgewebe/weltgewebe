@@ -12,6 +12,8 @@ Add a `web` service to serve the static frontend locally.
 Simplest approach: Edge-Caddy serves static files directly via bind-mount.
 No extra container needed.
 
+- **Tradeoff:** Requires host filesystem access to build artifacts. Less isolation.
+
 ```yaml
 services:
   edge-caddy:
@@ -22,6 +24,8 @@ services:
 ### Option B: Separate Web Container
 
 More isolated: Dedicated container for serving static files.
+
+- **Tradeoff:** Cleaner separation of concerns, but introduces another service/network hop.
 
 ```yaml
 services:
@@ -73,8 +77,8 @@ weltgewebe.home.arpa {
   # Serve local UI
   # Option A (Direct):
   root * /srv/weltgewebe-web
-  file_server
   try_files {path} /index.html
+  file_server
 
   # Option B (Container):
   # reverse_proxy web:80

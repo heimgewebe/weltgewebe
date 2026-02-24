@@ -65,7 +65,7 @@ curl -fsS https://weltgewebe.home.arpa/api/health/ready
 # Bestätigt: Caddy -> API Verbindung steht.
 ```
 
-### 3. Auth Routen-Beweis
+### 3. Auth Routen-Beweis (Backend)
 
 ```bash
 # Request Magic Link
@@ -73,10 +73,20 @@ curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 
-# IST (derzeit): 404 Not Found (Route fehlt im Backend)
-#   oder 405 Method Not Allowed (Route ist non-API und landet bei Cloudflare/UI)
+# IST (derzeit): 404 Not Found
+#   (Server: Caddy ohne Cloudflare-Header -> Proxy OK, aber Backend-Route fehlt)
 
 # ZIEL (Blueprint): 200 OK (Request accepted) oder 429 (Rate Limit).
+```
+
+### 4. Cloudflare-Indikator (Non-API)
+
+```bash
+# Request auf Login-Seite (sollte im Ziel lokal sein, aktuell Pages)
+curl -i -X POST https://weltgewebe.home.arpa/login
+
+# IST (Cloudflare): 405 Method Not Allowed + Header 'server: cloudflare'
+# ZIEL (Lokal): 405 (Static File Server allow GET only) + Server: Caddy
 ```
 
 ## Stop-Kriterien (Rollback)
