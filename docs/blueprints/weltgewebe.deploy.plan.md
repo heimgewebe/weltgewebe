@@ -10,33 +10,30 @@ Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
 
 1. **Frontend Build:**
    - Erstelle lokalen Build (`pnpm build`) für `apps/web`.
-   - Das Ergebnis (statische Assets) wird im Heimserver verfügbar gemacht.
+   - Da `adapter-static` verwendet wird, entstehen statische Assets.
 
 2. **Containerisierung (Optional):**
-   - Ein dedizierter `weltgewebe-web` Service (Nginx oder Caddy) serviert die Assets.
+   - Ein dedizierter `weltgewebe-web` Service (z.B. Caddy-Container mit statischem HTML) serviert die Assets.
    - Alternativ: Einbindung als Volume im existierenden Caddy (`infra/caddy`).
 
-3. **Config Injection:**
-   - Beim Start des Web-Containers wird `env.js` generiert/kopiert,
-     das `PUBLIC_GEWEBE_API_BASE` auf `/api` setzt.
-
-4. **Routing-Umstellung:**
-   - Caddy (lokal oder Edge) routet `weltgewebe.home.arpa` auf den lokalen Web-Service
+3. **Routing-Umstellung:**
+   - Caddy (lokal oder Edge) routet `weltgewebe.home.arpa` auf den lokalen Web-Service (z.B. `web:80` oder Volume)
      statt auf Cloudflare.
 
-### Phase 1: API Manifest & Discovery
+### Phase 1: Frontend API Base Decision
 
 **Status:** _Optional für MVP_
 
-- Bereitstellung von `/api/meta` oder `/api/openapi.json` zur Laufzeit-Verifikation der Routen.
-- Frontend kann beim Start API-Version prüfen.
+- Validierung: Das Frontend nutzt relative API-Aufrufe (`/api/...`).
+- Falls absolute URLs nötig sind, werden diese zur Build-Time (`PUBLIC_GEWEBE_API_BASE`) gesetzt.
+  Runtime-Injection (`env.js`) wird vermieden (da `adapter-static`).
 
 ### Phase 2: Auth Endpoints & Session Management
 
 **Status:** _Aktiv (MVP)_
 
-- API Endpunkte (`/auth/login/*`) existieren bereits im Code.
-- Sicherstellen, dass Caddy `/api/*` korrekt an Backend weiterreicht (Prefix-Handling beachten).
+- API Endpunkte (`/auth/login/*`) existieren bereits im Code (siehe `apps/api/src/routes/auth.rs`).
+- Sicherstellen, dass Caddy `/api/*` korrekt an Backend (`api:8080`) weiterreicht.
 - Testen des Magic-Link Flows (SMTP oder Log).
 
 ### Phase 3: Persistenz-Migration (Postgres)
@@ -58,30 +55,22 @@ curl -I https://weltgewebe.home.arpa/
 # Erwartet: 200 OK (und Server: Caddy, NICHT cloudflare)
 ```
 
-### 2. Config Injection
+### 2. API Routing (Health)
 
 ```bash
-curl https://weltgewebe.home.arpa/_app/env.js
-# Erwartet: window.env = { PUBLIC_GEWEBE_API_BASE: "/api", ... }
-```
-
-(Pfad kann variieren je nach Implementierung)
-
-### 3. API Routing
-
-```bash
-curl https://weltgewebe.home.arpa/api/health
+curl https://weltgewebe.home.arpa/api/health/ready
 # Erwartet: 200 OK (JSON)
 ```
 
-### 4. Auth Flow (Smoke Test)
+### 3. Auth Flow (Smoke Test)
 
 ```bash
 # Request Magic Link
 curl -X POST https://weltgewebe.home.arpa/api/auth/login/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
-# Erwartet: 200 OK oder 429 (Rate Limit) oder 403 (Allowlist), aber KEIN 404/405.
+# Erwartet: 200 OK (Request accepted) oder 429 (Rate Limit).
+# KEIN 404 (Route missing) und KEIN 405 (Cloudflare block).
 ```
 
 ## Stop-Kriterien (Rollback)

@@ -19,7 +19,7 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 
 - `https://weltgewebe.home.arpa/` → **Lokales Frontend** (Container `weltgewebe-web` oder statisch via Caddy).
   Kein Cloudflare-Proxy.
-- `https://weltgewebe.home.arpa/api/*` → **Lokales API** (`weltgewebe-api-1:8080`).
+- `https://weltgewebe.home.arpa/api/*` → **Lokales API** (Service: `api:8080`).
 - `https://api.weltgewebe.home.arpa/*` → **Lokales API** (Alias via Caddy-Referenz).
 - `weltgewebe.pages.dev` → Nur Public Mirror, keine Heim-Login-Funktionalität.
 
@@ -28,6 +28,7 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 Die Identität wird heimisch verwaltet.
 
 - **Auth-Endpunkte:** Müssen explizit exposed sein.
+  *Hinweis: Existenz im Binary zu prüfen (Code enthält Routen, aber Deployment-Status offen).*
   - `POST /api/auth/login/request` (Magic Link anfordern)
   - `GET/POST /api/auth/login/consume` (Magic Link einlösen)
   - `POST /api/auth/logout`
@@ -40,9 +41,9 @@ Die Identität wird heimisch verwaltet.
 
 Das Frontend darf keine fix codierte API-URL haben.
 
-- **Invariant:** `env.js` (oder Äquivalent) muss im lokalen Deployment vorhanden sein
-  und `PUBLIC_GEWEBE_API_BASE="/api"` setzen.
-- Dies garantiert Same-Origin-Requests und vermeidet CORS-Probleme im Heimnetz.
+- **Invariant:** Da `adapter-static` verwendet wird (belegt), sind `PUBLIC_` Variablen Build-time.
+- **Strategie:** Das Frontend nutzt relative Pfade (`/api/...`).
+  Dies garantiert Same-Origin-Requests und vermeidet CORS-Probleme im Heimnetz, ohne Runtime-Injection (`env.js`) zu erzwingen.
 
 ### 4. Daten-Persistenz
 
@@ -52,10 +53,12 @@ Aktueller Status:
 - **Nodes/Edges:** File-backed (`nodes.jsonl`).
 - **Postgres:** Vorhanden, aber leer (keine Tabellen, keine Migrationen).
 
-**Entscheidung:**
+**Phasen-Plan:**
 
-- **Phase 0 (Jetzt):** Beibehaltung File-backed für MVP. Auth nutzt In-Memory Sessions.
-- **Phase 1 (Zukunft):** Migration zu Postgres für Accounts und Sessions, um Persistenz über Neustarts zu sichern.
+- **Phase 0:** UI lokal (Heim-first), Routing weg von Cloudflare. File-backed Persistence.
+- **Phase 1:** Frontend API Base Decision (relative Pfade validieren).
+- **Phase 2:** Auth API & Sessions (MVP).
+- **Phase 3:** Migration zu Postgres für Accounts und Sessions.
 
 ## Sicherheitsnotizen
 
