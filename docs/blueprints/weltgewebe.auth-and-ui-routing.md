@@ -34,6 +34,7 @@ Die Identität wird heimisch verwaltet.
 - **Diagnose:** `curl -I https://weltgewebe.home.arpa/api/auth/login/request`
   *Erwartung:* 404 (Route fehlt noch) oder 405 (Cloudflare intercept).
   *Ziel:* 200 OK oder 429 (Rate Limit).
+- **Beleg:** Exakte Routen müssen im Binary vorhanden sein (Prüfung via `rg` oder `strings`).
 
 - **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.
   - `POST /api/auth/login/request` (Magic Link anfordern)
