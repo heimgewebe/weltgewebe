@@ -160,16 +160,10 @@ while IFS= read -r -d '' entry; do
     # Handle rename/copy (R or C)
     # Status is typically "R " or "C "
     if [[ "$status" == R* ]] || [[ "$status" == C* ]]; then
-        # Minimalist approach: Treat renames as-is (best effort).
-        # We assume the next token is the new path, but without explicit parsing logic
-        # to avoid fragility, we just read it to consume the token from the stream.
-        # This means the 'path' variable (old path) is used for allowlist checks.
-        # If the old path is allowed, it might stage the old path (deletion) but miss the new one?
-        # WAIT. Git status -z output for R is: R  OLD\0NEW\0
-        # If we read OLD into 'path', we MUST consume NEW or the next iteration will read NEW as status+path.
-
+        # Rename/copy entries in porcelain v1 -z are: "R  OLD\0NEW\0" (or "C  OLD\0NEW\0")
+        # We read the first token (OLD) as 'path' and MUST consume the next token (NEW),
+        # then use NEW for allowlist/secret checks and staging decisions.
         IFS= read -r -d '' new_path
-        # Use NEW path for logic (usually what we want to track)
         file="$new_path"
     else
         file="$path"
