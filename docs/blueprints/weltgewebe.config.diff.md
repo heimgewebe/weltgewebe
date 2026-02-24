@@ -7,16 +7,29 @@ Add a `web` service to serve the static frontend locally.
 
 **File:** `infra/compose/compose.prod.yml` (or similar)
 
+### Option A: Direct Static Serving (Recommended)
+
+Simplest approach: Edge-Caddy serves static files directly via bind-mount.
+No extra container needed.
+
+```yaml
+services:
+  edge-caddy:
+    volumes:
+      - /opt/weltgewebe/apps/web/build:/srv/weltgewebe-web:ro
+```
+
+### Option B: Separate Web Container
+
+More isolated: Dedicated container for serving static files.
+
 ```yaml
 services:
   web:
     image: caddy:2.8-alpine
     restart: unless-stopped
     volumes:
-      # Option A (Canonical): CI Artifacts are synced to host
       - /opt/weltgewebe/apps/web/build:/srv
-      # Option B (Dev): Bind-mount source build
-      # - ../../apps/web/build:/srv
     networks:
       - default
 ```
@@ -57,9 +70,14 @@ weltgewebe.home.arpa {
     reverse_proxy api:8080
   }
 
-  # Serve local UI (Web container, Port: 80 for Caddy image)
-  # Alternative: reverse_proxy https://weltgewebe.pages.dev (Fallback)
-  reverse_proxy web:80
+  # Serve local UI
+  # Option A (Direct):
+  root * /srv/weltgewebe-web
+  file_server
+  try_files {path} /index.html
+
+  # Option B (Container):
+  # reverse_proxy web:80
 }
 
 # Host-Debug (Localhost only)

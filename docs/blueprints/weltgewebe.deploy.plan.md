@@ -57,22 +57,26 @@ curl -I https://weltgewebe.home.arpa/
 # Falls 'cf-ray' Header vorhanden ist, kommt es noch von Cloudflare!
 ```
 
-### 2. API Routing (Health)
+### 2. API Proxy-Beweis
 
 ```bash
-curl https://weltgewebe.home.arpa/api/health/ready
+curl -fsS https://weltgewebe.home.arpa/api/health/ready
 # Erwartet: 200 OK (JSON)
+# Bestätigt: Caddy -> API Verbindung steht.
 ```
 
-### 3. Auth Flow (Smoke Test)
+### 3. Auth Routen-Beweis
 
 ```bash
 # Request Magic Link
-curl -X POST https://weltgewebe.home.arpa/api/auth/login/request \
+curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
-# Erwartet (ZIEL): 200 OK (Request accepted) oder 429 (Rate Limit).
-# IST (derzeit): 404 (Route not found) oder 405 (Cloudflare).
+
+# IST (derzeit): 404 Not Found (Route fehlt im Backend)
+#   oder 405 Method Not Allowed (Route ist non-API und landet bei Cloudflare/UI)
+
+# ZIEL (Blueprint): 200 OK (Request accepted) oder 429 (Rate Limit).
 ```
 
 ## Stop-Kriterien (Rollback)

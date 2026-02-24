@@ -22,7 +22,7 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 - **User API:** `https://weltgewebe.home.arpa/api/*`
   → Lokales API (Service: `api:8080`).
 - **Host Debug:** `http://127.0.0.1:8081`
-  → Host-Mapped Port (nur für lokale Diagnose, nicht für User-Traffic).
+  → Host-Mapped Port (nur für lokale Diagnose, nicht für User-Traffic oder Browser).
 - **Public Mirror:** `weltgewebe.pages.dev`
   → Nur statisches Schaufenster, keine Heim-Login-Funktionalität.
 
@@ -30,11 +30,13 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 
 Die Identität wird heimisch verwaltet.
 
-- **Status:** **ZIEL / BLUEPRINT** (Aktuell: 404 Not Found / 405 Not Allowed).
-- **Diagnose:** `curl -I https://weltgewebe.home.arpa/api/auth/login/request`
-  *Erwartung:* 404 (Route fehlt noch) oder 405 (Cloudflare intercept).
-  *Ziel:* 200 OK oder 429 (Rate Limit).
-- **Beleg:** Exakte Routen müssen im Binary vorhanden sein (Prüfung via `rg` oder `strings`).
+- **Status:** **ZIEL / BLUEPRINT**
+- **Fehlerbilder (Diagnose):**
+  - **405 Method Not Allowed:** Typisches Symptom für Non-API Pfade (`/login`, `/_dev/auth`),
+    die noch bei Cloudflare/Pages landen.
+  - **404 Not Found:** Typisches Symptom für `/api/auth/*` Pfade, wenn der Reverse-Proxy korrekt ist,
+    aber die Route im Backend fehlt (oder nicht freigeschaltet ist).
+  - **Zielzustand:** POST `/api/auth/login/request` liefert **200 OK** oder **429 Too Many Requests**.
 
 - **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.
   - `POST /api/auth/login/request` (Magic Link anfordern)
