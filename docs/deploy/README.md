@@ -56,6 +56,12 @@ erkannt wird, das dieselben Konfigurationsdateien nutzt.
 
 Dies verhindert Drift und Port-Kollisionen.
 
+**Optionen:**
+
+- `--purge-compose-leaks`: Entfernt automatisch erkannte Zombie-Container, statt nur abzubrechen.
+- `--build-web`: Erzwingt einen Frontend-Build (erfordert `pnpm`).
+- `--no-build-web`: Unterdrückt den Auto-Build des Frontends (warnt nur).
+
 - Weitere Compose-Dateien (nicht primär produktiv):
   - `compose.core.yml` – Basiskomponenten
   - `compose.observ.yml` – Observability / Zusatzdienste

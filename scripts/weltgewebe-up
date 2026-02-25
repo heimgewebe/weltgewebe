@@ -25,15 +25,23 @@ HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
 WITH_CADDY=0
 DO_PULL=1
 BUILD_MODE="auto"
+PURGE_ZOMBIES=0
+BUILD_WEB="auto"
 
 usage() {
-  echo "Usage: $0 [--with-caddy] [--no-pull] [--build-mode auto|force|no] [--no-build] [--force-build]"
+  echo "Usage: $0 [options]"
   echo
-  echo "  --with-caddy       Start the 'caddy' service (default: disabled/scale=0)"
-  echo "  --no-pull          Skip git fetch/pull (offline deploy)"
-  echo "  --build-mode MODE  Set build mode: auto (default), force, no"
-  echo "  --no-build         Alias for --build-mode no"
-  echo "  --force-build      Alias for --build-mode force"
+  echo "Options:"
+  echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
+  echo "  --no-pull               Skip git fetch/pull (offline deploy)"
+  echo "  --build-mode MODE       Set build mode: auto (default), force, no"
+  echo "  --no-build              Alias for --build-mode no"
+  echo "  --force-build           Alias for --build-mode force"
+  echo
+  echo "Safety & Frontend:"
+  echo "  --purge-compose-leaks   Automatically remove detected 'zombie' containers (from wrong project)"
+  echo "  --build-web             Force frontend build"
+  echo "  --no-build-web          Skip frontend build (warn only)"
   echo
   exit 1
 }
@@ -58,6 +66,9 @@ while [[ "$#" -gt 0 ]]; do
        ;;
     --no-build) BUILD_MODE="no" ;;
     --force-build) BUILD_MODE="force" ;;
+    --purge-compose-leaks) PURGE_ZOMBIES=1 ;;
+    --build-web) BUILD_WEB="force" ;;
+    --no-build-web) BUILD_WEB="no" ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -78,24 +89,56 @@ fi
 
 # Normalize REPO_DIR to absolute path
 REPO_DIR="$(pwd)"
+
+# Validation: Project Name
+if [[ ! "$COMPOSE_PROJECT" =~ ^[a-z0-9_-]+$ ]]; then
+  echo "ERROR: Invalid COMPOSE_PROJECT '$COMPOSE_PROJECT'. Must match [a-z0-9_-]."
+  exit 1
+fi
+if [[ "$COMPOSE_PROJECT" == "compose" ]]; then
+  echo "ERROR: COMPOSE_PROJECT cannot be 'compose'. This is the known drift signature."
+  exit 1
+fi
+
 export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
 
 # Guard: no foreign compose project using our config
-# We check for containers using our config files but NOT our project name.
+# We specifically look for projects that are NOT ours but use our config files.
+# AND/OR containers labeled explicitly as project 'compose'.
+# The previous grep check was: grep "$REPO_DIR/infra/compose" | grep -v " $COMPOSE_PROJECT "
 ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.config_files"}}' \
   | grep "$REPO_DIR/infra/compose" \
   | grep -v " $COMPOSE_PROJECT " || true)
 
-if [[ -n "$ZOMBIES" ]]; then
-  echo
-  echo "ERROR: Detected foreign compose project using weltgewebe config:"
-  echo "$ZOMBIES"
-  echo
-  echo "Resolve with:"
-  echo "  docker ps -a | grep compose-"
-  echo "  docker rm -f <container>"
-  echo
-  exit 3
+# Also explicitly catch generic "compose" project even if config path differs (e.g. via symlink or manual invocation)
+ZOMBIES_GENERIC=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}' \
+  | grep " compose$" || true)
+
+if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
+  ALL_ZOMBIES=$(echo -e "$ZOMBIES\n$ZOMBIES_GENERIC" | sort | uniq | grep .)
+
+  if [[ -n "$ALL_ZOMBIES" ]]; then
+    if [[ "$PURGE_ZOMBIES" == "1" ]]; then
+       echo
+       echo "WARNING: Detected zombie containers. Purging as requested..."
+       # Extract container names (column 1)
+       CONTAINERS=$(echo "$ALL_ZOMBIES" | awk '{print $1}')
+       # shellcheck disable=SC2086
+       docker rm -f $CONTAINERS
+       echo "Purged."
+    else
+       echo
+       echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose'):"
+       echo "$ALL_ZOMBIES"
+       echo
+       echo "This causes port collisions and drift."
+       echo "Resolve with:"
+       echo "  docker rm -f <container_names>"
+       echo "Or run with --purge-compose-leaks to auto-clean."
+       echo
+       exit 3
+    fi
+  fi
 fi
 
 # Ensure .ops directory exists
@@ -235,17 +278,52 @@ else
   fi
 fi
 
-# 6. Deploy
+# 6. Frontend Build (Optional/Heuristic)
 if [[ -d "apps/web" ]]; then
-  if [[ ! -f "apps/web/build/index.html" ]]; then
-    echo
-    echo "WARNING: Frontend build artifact not found:"
-    echo "apps/web/build/index.html"
-    echo
-    echo "Run frontend build before deploy."
+  NEEDS_WEB_BUILD=0
+  WEB_MSG="OK"
+
+  if [[ "$BUILD_WEB" == "force" ]]; then
+     NEEDS_WEB_BUILD=1
+     WEB_MSG="Forced"
+  elif [[ "$BUILD_WEB" == "no" ]]; then
+     NEEDS_WEB_BUILD=0
+     WEB_MSG="Skipped (explicit)"
+  else
+     # Auto
+     if [[ ! -f "apps/web/build/index.html" ]]; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: Artifact missing"
+     fi
+  fi
+
+  if [[ "$NEEDS_WEB_BUILD" == "1" ]]; then
+     echo
+     echo ">> Frontend Build ($WEB_MSG)"
+
+     if command -v pnpm >/dev/null; then
+         # Check node_modules
+         if [[ ! -d "apps/web/node_modules" ]]; then
+             echo "   Installing dependencies..."
+             pnpm -C apps/web install --frozen-lockfile
+         fi
+         echo "   Building..."
+         pnpm -C apps/web build
+     else
+         echo "WARNING: Frontend build required but 'pnpm' not found."
+         echo "         UI may be stale or broken."
+         if [[ "$BUILD_WEB" == "force" ]]; then
+             echo "ERROR: --build-web requested but pnpm missing."
+             exit 1
+         fi
+     fi
+  elif [[ "$BUILD_WEB" == "no" && ! -f "apps/web/build/index.html" ]]; then
+      echo
+      echo "WARNING: Frontend artifact missing and build disabled."
   fi
 fi
 
+# 7. Deploy
 echo
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
