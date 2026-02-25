@@ -45,8 +45,16 @@ Andere Kopien oder Exporte gelten als nicht autoritativ.
 - **Compose-Projektname:**
 
   ```text
-  compose
+  weltgewebe
   ```
+
+### Project Identity Enforcement & Zombie Guard
+
+Das Deployment-Script `weltgewebe-up` erzwingt den Projektnamen `weltgewebe`.
+Es verhindert aktiv den Start, wenn ein paralleles "Zombie"-Projekt (z. B. mit Namen `compose` oder `infra`)
+erkannt wird, das dieselben Konfigurationsdateien nutzt.
+
+Dies verhindert Drift und Port-Kollisionen.
 
 - Weitere Compose-Dateien (nicht primär produktiv):
   - `compose.core.yml` – Basiskomponenten
@@ -93,10 +101,10 @@ Docker Compose verwendet automatisch ein Prefix:
 
 | Logisch | Compose-Name |
 | ------- | ------------ |
-| pg_data_prod | compose_pg_data_prod |
-| gewebe_fs_data | compose_gewebe_fs_data |
-| caddy_data | compose_caddy_data |
-| caddy_config | compose_caddy_config |
+| pg_data_prod | weltgewebe_pg_data_prod |
+| gewebe_fs_data | weltgewebe_gewebe_fs_data |
+| caddy_data | weltgewebe_caddy_data |
+| caddy_config | weltgewebe_caddy_config |
 
 Snapshots speichern **beide Namen**, um Verwechslungen zu vermeiden.
 Sollten weitere Volumes live existieren (z. B. Legacy-Volumes), werden diese im Live-Snapshot ebenfalls mit Prefix erkannt.

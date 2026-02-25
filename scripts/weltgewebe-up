@@ -76,6 +76,28 @@ else
   fi
 fi
 
+# Normalize REPO_DIR to absolute path
+REPO_DIR="$(pwd)"
+export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+
+# Guard: no foreign compose project using our config
+# We check for containers using our config files but NOT our project name.
+ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.config_files"}}' \
+  | grep "$REPO_DIR/infra/compose" \
+  | grep -v " $COMPOSE_PROJECT " || true)
+
+if [[ -n "$ZOMBIES" ]]; then
+  echo
+  echo "ERROR: Detected foreign compose project using weltgewebe config:"
+  echo "$ZOMBIES"
+  echo
+  echo "Resolve with:"
+  echo "  docker ps -a | grep compose-"
+  echo "  docker rm -f <container>"
+  echo
+  exit 3
+fi
+
 # Ensure .ops directory exists
 mkdir -p "${REPO_DIR}/.ops"
 STATE_FILE="${REPO_DIR}/.ops/weltgewebe-up.state"
@@ -133,7 +155,7 @@ if [[ -f "$OVERRIDE_FILE" ]]; then
 else
   echo "NOTE: Override file '$OVERRIDE_FILE' not found. Using base compose only."
 fi
-BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
+BASE_ARGS=("--project-directory" "$REPO_DIR" "--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
 
 if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
   echo "ERROR: Docker Compose config failed. Please fix your configuration."
@@ -214,6 +236,16 @@ else
 fi
 
 # 6. Deploy
+if [[ -d "apps/web" ]]; then
+  if [[ ! -f "apps/web/build/index.html" ]]; then
+    echo
+    echo "WARNING: Frontend build artifact not found:"
+    echo "apps/web/build/index.html"
+    echo
+    echo "Run frontend build before deploy."
+  fi
+fi
+
 echo
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
