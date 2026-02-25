@@ -1,4 +1,3 @@
-
 weltgewebe.home.arpa {
   # Deterministic internal TLS for home environment
   tls internal
