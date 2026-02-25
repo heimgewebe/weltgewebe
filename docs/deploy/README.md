@@ -60,6 +60,7 @@ Dies verhindert Drift und Port-Kollisionen.
 Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config-Pfad auf.
 
 **Remediation:**
+
 1. Manuell: `docker compose -p <fremd_projekt> down`
 2. Automatisch: Script mit `--purge-compose-leaks` starten (führt `docker rm -f` aus).
 
