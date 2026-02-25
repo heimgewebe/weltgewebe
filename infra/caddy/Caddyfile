@@ -1,28 +1,16 @@
-{
-  auto_https off
-  servers :8081 {
-    protocol {
-      experimental_http3
-    }
-    logs {
-      level INFO
-    }
+weltgewebe.home.arpa {
+
+  handle_path /api/* {
+    reverse_proxy api:8080
+  }
+
+  handle {
+    root * /srv/weltgewebe-web
+    try_files {path} /index.html
+    file_server
   }
 }
 
 :8081 {
-  encode zstd gzip
-  # Strippt /api Prefix, damit /api/health -> /health an der API ankommt
-  handle_path /api/* {
-    reverse_proxy api:8080
-  }
-  reverse_proxy /* web:5173
-  header {
-    # Dev-CSP: HMR/WebSocket & Dev-Assets erlauben; bei Bedarf später härten
-    # Für externe Tiles ggf. ergänzen, z.B.:
-    #   img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org;
-    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https://demotiles.maplibre.org; img-src 'self' data: blob: https://demotiles.maplibre.org; worker-src 'self' blob:; object-src 'none';"
-    X-Frame-Options "DENY"
-    Referrer-Policy "no-referrer"
-  }
+  reverse_proxy api:8080
 }

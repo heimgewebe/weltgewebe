@@ -56,8 +56,10 @@ services:
     ports:
       - "${CADDY_BIND:-127.0.0.1}:80:80"
       - "${CADDY_BIND:-127.0.0.1}:443:443"
+      - "8081:8081"
     volumes:
-      - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../apps/web/build:/srv/weltgewebe-web:ro
       - caddy_data:/data
       - caddy_config:/config
     environment:
