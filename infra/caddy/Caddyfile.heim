@@ -1,0 +1,26 @@
+weltgewebe.home.arpa {
+  # Deterministic internal TLS for home environment
+  tls internal
+
+  handle_path /api/* {
+    reverse_proxy api:8080
+  }
+
+  handle {
+    root * /srv/weltgewebe-web
+    try_files {path} /index.html
+    file_server
+  }
+
+  header {
+    # Security headers (Heim-first specific)
+    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://demotiles.maplibre.org; img-src 'self' data: blob: https://demotiles.maplibre.org; worker-src 'self' blob:; object-src 'none';"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+  }
+}
+
+# Health Check Interface (Loopback Only)
+127.0.0.1:8081 {
+  reverse_proxy api:8080
+}
