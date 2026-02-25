@@ -56,9 +56,16 @@ erkannt wird, das dieselben Konfigurationsdateien nutzt.
 
 Dies verhindert Drift und Port-Kollisionen.
 
+**Diagnose:**
+Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config-Pfad auf.
+
+**Remediation:**
+1. Manuell: `docker compose -p <fremd_projekt> down`
+2. Automatisch: Script mit `--purge-compose-leaks` starten (führt `docker rm -f` aus).
+
 **Optionen:**
 
-- `--purge-compose-leaks`: Entfernt automatisch erkannte Zombie-Container, statt nur abzubrechen.
+- `--purge-compose-leaks`: Entfernt automatisch erkannte Zombie-Container.
 - `--build-web`: Erzwingt einen Frontend-Build (erfordert `pnpm`).
 - `--no-build-web`: Unterdrückt den Auto-Build des Frontends (warnt nur).
 

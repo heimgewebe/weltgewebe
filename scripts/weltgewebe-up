@@ -105,10 +105,10 @@ export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
 # Guard: no foreign compose project using our config
 # We specifically look for projects that are NOT ours but use our config files.
 # AND/OR containers labeled explicitly as project 'compose'.
-# The previous grep check was: grep "$REPO_DIR/infra/compose" | grep -v " $COMPOSE_PROJECT "
+# Use grep -F to handle paths robustly.
 ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}} {{.Label "com.docker.compose.project.config_files"}}' \
-  | grep "$REPO_DIR/infra/compose" \
-  | grep -v " $COMPOSE_PROJECT " || true)
+  | grep -F -- "$REPO_DIR/infra/compose" \
+  | awk -v expected="$COMPOSE_PROJECT" '$2 != expected {print}' || true)
 
 # Also explicitly catch generic "compose" project even if config path differs (e.g. via symlink or manual invocation)
 ZOMBIES_GENERIC=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}' \
@@ -128,13 +128,17 @@ if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
        echo "Purged."
     else
        echo
-       echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose'):"
+       echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose')."
+       echo "  Repo dir:              $REPO_DIR"
+       echo "  Expected project name: $COMPOSE_PROJECT"
+       echo
+       echo "Offending containers (name project config_files):"
        echo "$ALL_ZOMBIES"
        echo
        echo "This causes port collisions and drift."
-       echo "Resolve with:"
-       echo "  docker rm -f <container_names>"
-       echo "Or run with --purge-compose-leaks to auto-clean."
+       echo "Resolve: identify foreign project (column 2), then run:"
+       echo "  docker compose -p <foreign_project> down"
+       echo "  (Or run with --purge-compose-leaks to auto-clean via 'docker rm -f')"
        echo
        exit 3
     fi
