@@ -50,7 +50,7 @@ Andere Kopien oder Exporte gelten als nicht autoritativ.
 
 ### Project Identity Enforcement & Zombie Guard
 
-Das Deployment-Script `weltgewebe-up` erzwingt den Projektnamen `weltgewebe`.
+Das Deployment-Script `weltgewebe-up` setzt standardmäßig den Projektnamen `weltgewebe` und empfiehlt dessen Verwendung.
 Es verhindert aktiv den Start, wenn ein paralleles "Zombie"-Projekt (z. B. mit Namen `compose` oder `infra`)
 erkannt wird, das dieselben Konfigurationsdateien nutzt.
 
