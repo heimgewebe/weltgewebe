@@ -13,8 +13,10 @@ This document acknowledges the deployment changes introduced for the "Heim-first
 
 ## Purpose
 
-These changes enable the `weltgewebe.home.arpa` domain to be the authoritative source for the UI in the local network, removing the dependency on Cloudflare Pages for local access.
+These changes enable the `weltgewebe.home.arpa` domain to be the authoritative source for the UI in the local network,
+removing the dependency on Cloudflare Pages for local access.
 
 ## Verification
 
-The deployment drift check requires documentation updates when infrastructure changes. This file serves as that acknowledgement.
+The deployment drift check requires documentation updates when infrastructure changes. This file serves as that
+acknowledgement.
