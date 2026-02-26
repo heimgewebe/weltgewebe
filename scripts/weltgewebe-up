@@ -429,7 +429,13 @@ else
   echo "WARNING: 'getent' check failed. Retrying via docker inspect..."
   # Try to find the alias in the NetworkSettings. Inspect output is JSON.
   # We grep for the alias in the Networks section.
-  if docker compose "${BASE_ARGS[@]}" ps -q api | xargs docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' 2>/dev/null | grep -q "weltgewebe-api"; then
+  API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+  if [[ -z "$API_CID" ]]; then
+      echo "ERROR: Container 'api' not found."
+      exit 1
+  fi
+
+  if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qE '(^|[^a-zA-Z0-9_-])weltgewebe-api([^a-zA-Z0-9_-]|$)'; then
       echo "OK (via inspect)"
   else
       echo "ERROR: DNS alias weltgewebe-api not resolvable inside container network."
