@@ -432,7 +432,7 @@ if [[ -z "$API_CID" ]]; then
 fi
 
 ALIAS_FOUND=0
-if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qE '(^|[^a-zA-Z0-9_-])weltgewebe-api([^a-zA-Z0-9_-]|$)'; then
+if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qw 'weltgewebe-api'; then
     ALIAS_FOUND=1
 fi
 
