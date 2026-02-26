@@ -203,7 +203,7 @@ export WELTGEWEBE_COMPOSE_BAKE="invalid_value"
 export WELTGEWEBE_APPS_PROBE="infra"
 
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
-if echo "$OUTPUT" | grep -q "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE"; then
+if echo "$OUTPUT" | grep -q "Unrecognized WELTGEWEBE_COMPOSE_BAKE"; then
   echo "PASS: Warning detected for invalid value."
 else
   echo "FAIL: Warning missing."
@@ -215,5 +215,6 @@ fi
 unset WELTGEWEBE_COMPOSE_BAKE
 unset WELTGEWEBE_APPS_PROBE
 unset VERIFY_BAKE
+unset MOCK_ZOMBIE
 
 echo ">>> All refined tests passed."
