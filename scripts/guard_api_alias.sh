@@ -45,7 +45,19 @@ else
     ERR_FILE="${TMPDIR:-/tmp}/guard_api_alias.$$"
     : > "$ERR_FILE"
 fi
-trap 'rm -f "$ERR_FILE"' EXIT
+
+# Capture existing EXIT trap to avoid overwriting it
+PREV_TRAP="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT$/\1/")"
+
+cleanup_err_file() {
+    rm -f "$ERR_FILE"
+}
+
+if [[ -n "${PREV_TRAP:-}" ]]; then
+    trap 'cleanup_err_file; eval "$PREV_TRAP"' EXIT
+else
+    trap 'cleanup_err_file' EXIT
+fi
 
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
     docker compose "${COMPOSE_ARGS[@]}" \
