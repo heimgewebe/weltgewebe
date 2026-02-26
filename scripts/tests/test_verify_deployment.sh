@@ -8,6 +8,8 @@ set -euo pipefail
 # Ensure we are in the repo root
 cd "$(dirname "$0")/../.."
 
+trap 'rm -rf mock_bin test.env' EXIT
+
 # 0. Setup Mocks
 mkdir -p mock_bin
 
@@ -88,25 +90,27 @@ echo ">>> Test 2: Zombie Guard (Fail Logic)"
 export MOCK_ZOMBIE=1
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Detected foreign compose project using weltgewebe config"; then
-   if echo "$OUTPUT" | grep -q "Repo dir:"; then
-      if echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
-         echo "PASS: Detailed error message found."
-      else
-         echo "FAIL: Remediation hint missing."
-         echo "$OUTPUT"
-         exit 1
-      fi
-   else
-      echo "FAIL: Repo dir info missing."
-      echo "$OUTPUT"
-      exit 1
-   fi
-else
+if ! echo "$OUTPUT" | grep -q "ERROR: Detected foreign compose project"; then
    echo "FAIL: Zombie detection failed or exit code wrong."
    echo "$OUTPUT"
    exit 1
 fi
+if ! echo "$OUTPUT" | grep -q "Repo dir:"; then
+   echo "FAIL: Repo dir info missing."
+   echo "$OUTPUT"
+   exit 1
+fi
+if ! echo "$OUTPUT" | grep -q "Expected project name:"; then
+   echo "FAIL: Expected project name missing."
+   echo "$OUTPUT"
+   exit 1
+fi
+if ! echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
+   echo "FAIL: Remediation hint missing."
+   echo "$OUTPUT"
+   exit 1
+fi
+echo "PASS: Detailed error message found."
 
 # 3. Test Zombie Guard (Purge)
 echo ">>> Test 3: Zombie Guard (Purge)"
@@ -119,8 +123,5 @@ else
   echo "$OUTPUT"
   exit 1
 fi
-
-# Cleanup
-rm -rf mock_bin test.env
 
 echo ">>> All refined tests passed."
