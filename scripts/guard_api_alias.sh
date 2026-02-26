@@ -7,11 +7,19 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Check if docker and docker compose command are available
 if ! command -v docker >/dev/null 2>&1; then
+    if [[ "${GUARD_STRICT:-0}" == "1" ]]; then
+        echo "ERROR: Docker not found, but GUARD_STRICT=1. Aborting."
+        exit 1
+    fi
     echo "NOTE: Docker not found. Guard skipped."
     exit 0
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
+    if [[ "${GUARD_STRICT:-0}" == "1" ]]; then
+        echo "ERROR: Docker Compose not found, but GUARD_STRICT=1. Aborting."
+        exit 1
+    fi
     echo "NOTE: Docker Compose not found or not working. Guard skipped."
     exit 0
 fi
