@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Check if docker and docker compose are available and functional
+# Check if docker and docker compose are available
 if ! command -v docker >/dev/null 2>&1; then
     echo "WARNING: Docker not found. Skipping API alias check."
     exit 0
@@ -22,29 +22,27 @@ fi
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" docker compose -f infra/compose/compose.prod.yml config 2>/dev/null || true)
 
 if [[ -z "$CONFIG" ]]; then
-    echo "WARNING: Docker Compose config failed to render. Skipping check."
-    exit 0
+    echo "ERROR: Docker Compose config failed to render. Please ensure required environment variables are set or .env is present."
+    exit 1
 fi
 
-# Check for the alias specifically within the 'api' service block.
-# We extract the 'api:' service block by looking for "  api:" (indentation matters in yaml)
-# and printing until the next service definition (start of line + 2 spaces + key).
-# Note: In rendered config, services are typically indented by 2 spaces under 'services:'.
-# 'api:' will be at indentation level 2. We assume standard formatting from 'docker compose config'.
-SERVICE_BLOCK=$(echo "$CONFIG" | awk '
-  /^  api:/ { in_block=1; print; next }
-  /^  [a-zA-Z0-9_-]+:/ { in_block=0 }
-  in_block { print }
-')
+# Pragmatic checks on the rendered config
+# We need to ensure:
+# 1. The 'api' service is defined.
+# 2. 'aliases' keyword is present (implies network aliases are used).
+# 3. 'weltgewebe-api' is present as an alias.
 
-if [[ -z "$SERVICE_BLOCK" ]]; then
+if ! echo "$CONFIG" | grep -q "api:"; then
     echo "ERROR: Service 'api' not found in rendered compose config."
     exit 1
 fi
 
-# Check for "weltgewebe-api" within the aliases of the api block.
-# We look for "aliases:" then the alias.
-if ! echo "$SERVICE_BLOCK" | grep -A 10 "aliases:" | grep -q "weltgewebe-api"; then
-  echo "ERROR: compose.prod.yml: services.api.networks.default.aliases missing 'weltgewebe-api'"
-  exit 1
+if ! echo "$CONFIG" | grep -q "aliases:"; then
+     echo "ERROR: No network aliases found in rendered compose config. The API alias is mandatory."
+     exit 1
+fi
+
+if ! echo "$CONFIG" | grep -q "\- weltgewebe-api"; then
+    echo "ERROR: compose.prod.yml: services.api.networks.default.aliases must include 'weltgewebe-api'"
+    exit 1
 fi

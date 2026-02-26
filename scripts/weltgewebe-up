@@ -438,10 +438,16 @@ else
   if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qE '(^|[^a-zA-Z0-9_-])weltgewebe-api([^a-zA-Z0-9_-]|$)'; then
       echo "OK (via inspect)"
   else
-      echo "ERROR: DNS alias weltgewebe-api not resolvable inside container network."
-      echo "       Also not found in container metadata (docker inspect)."
-      echo "Ensure network alias is configured."
-      exit 1
+      if [[ "$WITH_CADDY" == "1" ]]; then
+          echo "ERROR: DNS alias weltgewebe-api not resolvable inside container network."
+          echo "       Also not found in container metadata (docker inspect)."
+          echo "Ensure network alias is configured."
+          exit 1
+      else
+          echo "WARNING: DNS alias weltgewebe-api not verified."
+          echo "         This is required for Caddy integration, but Caddy is disabled."
+          echo "         Continuing..."
+      fi
   fi
 fi
 
