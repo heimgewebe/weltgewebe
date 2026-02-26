@@ -36,7 +36,8 @@ elif [[ "$1" == "rm" ]]; then
         exit 0
     fi
 elif [[ "$1" == "inspect" ]]; then
-    if [[ "$ARGS" == *".Aliases"* ]]; then
+    # Return dummy alias if requesting format with Aliases
+    if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
     fi
     exit 0

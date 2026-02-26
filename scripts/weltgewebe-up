@@ -90,6 +90,9 @@ fi
 # Normalize REPO_DIR to absolute path
 REPO_DIR="$(pwd)"
 
+# Ensure we are anchored in the repo root for all subsequent operations
+cd "$REPO_DIR"
+
 # Validation: Project Name
 if [[ ! "$COMPOSE_PROJECT" =~ ^[a-z0-9_-]+$ ]]; then
   echo "ERROR: Invalid COMPOSE_PROJECT '$COMPOSE_PROJECT'. Must match [a-z0-9_-]."
