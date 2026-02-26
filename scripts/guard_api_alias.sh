@@ -10,6 +10,7 @@ fi
 # Ensure we are operating relative to the repo root
 # This script is expected to be in scripts/
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_DIR"
 
 # Check if docker and docker compose command are available
 if ! command -v docker >/dev/null 2>&1; then
@@ -36,7 +37,7 @@ fi
 
 # Prepare rendering arguments
 # If a .env file exists in the repo root, use it. This helps with variable substitution.
-COMPOSE_ARGS=("--project-directory" "$REPO_DIR")
+COMPOSE_ARGS=()
 if [[ -f "$REPO_DIR/.env" ]]; then
     COMPOSE_ARGS+=("--env-file" "$REPO_DIR/.env")
 fi
