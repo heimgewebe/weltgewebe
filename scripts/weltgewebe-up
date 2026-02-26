@@ -124,6 +124,7 @@ if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
        echo "WARNING: Detected zombie containers. Purging as requested..."
        # Extract container names (column 1)
        CONTAINERS=$(echo "$ALL_ZOMBIES" | awk '{print $1}')
+       echo "Purging containers: $CONTAINERS"
        # shellcheck disable=SC2086
        docker rm -f $CONTAINERS
        echo "Purged."
