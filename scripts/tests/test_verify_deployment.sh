@@ -8,6 +8,12 @@ set -euo pipefail
 # Ensure we are in the repo root
 cd "$(dirname "$0")/../.."
 
+# Cleanup Trap
+cleanup() {
+  rm -rf mock_bin test.env
+}
+trap cleanup EXIT
+
 # 0. Setup Mocks
 mkdir -p mock_bin
 
@@ -88,22 +94,19 @@ echo ">>> Test 2: Zombie Guard (Fail Logic)"
 export MOCK_ZOMBIE=1
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Detected foreign compose project using weltgewebe config"; then
-   if echo "$OUTPUT" | grep -q "Repo dir:"; then
-      if echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
-         echo "PASS: Detailed error message found."
-      else
-         echo "FAIL: Remediation hint missing."
-         echo "$OUTPUT"
-         exit 1
-      fi
+# Robust assertions: Check for key markers instead of exact full string
+if echo "$OUTPUT" | grep -q "ERROR: Detected foreign compose project"; then
+   if echo "$OUTPUT" | grep -q "Repo dir:" && \
+      echo "$OUTPUT" | grep -q "Expected project name:" && \
+      echo "$OUTPUT" | grep -q "docker compose -p <foreign_project> down"; then
+         echo "PASS: Detailed error message found (robust check)."
    else
-      echo "FAIL: Repo dir info missing."
+      echo "FAIL: Missing remediation hints or context info."
       echo "$OUTPUT"
       exit 1
    fi
 else
-   echo "FAIL: Zombie detection failed or exit code wrong."
+   echo "FAIL: Zombie detection failed or error message mismatch."
    echo "$OUTPUT"
    exit 1
 fi
@@ -119,8 +122,5 @@ else
   echo "$OUTPUT"
   exit 1
 fi
-
-# Cleanup
-rm -rf mock_bin test.env
 
 echo ">>> All refined tests passed."
