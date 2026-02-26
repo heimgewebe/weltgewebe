@@ -56,7 +56,8 @@ echo ">>> Test 1: Successful config rendering (should cleanup)"
 # Check for leaked files (pattern guard_api_alias.* or tmp.* depending on mktemp)
 # Since we control TMPDIR, any file created there by mktemp should be gone.
 # We ignore the bin directory and FAIL_CONFIG marker.
-LEAK_COUNT=$(find "$TEMP_DIR" -maxdepth 1 -type f -name "tmp.*" -o -name "guard_api_alias.*" | wc -l)
+# Note: Parentheses are escaped for shell safety and grouping the OR condition.
+LEAK_COUNT=$(find "$TEMP_DIR" -maxdepth 1 -type f \( -name "tmp.*" -o -name "guard_api_alias.*" \) | wc -l)
 
 if [[ "$LEAK_COUNT" -ne 0 ]]; then
   echo "FAIL: Temporary files leaked after success run."
@@ -71,7 +72,7 @@ touch "$TEMP_DIR/FAIL_CONFIG"
 # Script should exit 1, so we allow failure
 "$SCRIPT_TO_TEST" >/dev/null 2>&1 || true
 
-LEAK_COUNT=$(find "$TEMP_DIR" -maxdepth 1 -type f -name "tmp.*" -o -name "guard_api_alias.*" | wc -l)
+LEAK_COUNT=$(find "$TEMP_DIR" -maxdepth 1 -type f \( -name "tmp.*" -o -name "guard_api_alias.*" \) | wc -l)
 
 if [[ "$LEAK_COUNT" -ne 0 ]]; then
   echo "FAIL: Temporary files leaked after failure run."
