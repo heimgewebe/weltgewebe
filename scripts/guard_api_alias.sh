@@ -31,7 +31,12 @@ fi
 # We provide dummy values for known required environment variables to ensure config rendering succeeds
 # even if .env is missing or partial.
 # Capture stderr for better diagnostics on failure.
-ERR_FILE=$(mktemp)
+if command -v mktemp >/dev/null 2>&1; then
+    ERR_FILE="$(mktemp)"
+else
+    ERR_FILE="${TMPDIR:-/tmp}/guard_api_alias.$$"
+    : > "$ERR_FILE"
+fi
 trap 'rm -f "$ERR_FILE"' EXIT
 
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
@@ -41,7 +46,7 @@ CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
 if [[ -z "$CONFIG" ]]; then
     echo "ERROR: Docker Compose config failed to render. Please ensure required environment variables are set or .env is present."
     echo "Diagnostic output (stderr):"
-    head -n 20 "$ERR_FILE"
+    head -n 20 "$ERR_FILE" 2>/dev/null || true
     exit 1
 fi
 
