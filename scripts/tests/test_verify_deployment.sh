@@ -137,12 +137,14 @@ fi
 
 # 4. Test Bake Auto-Disable (Missing /apps)
 echo ">>> Test 4: Bake Auto-Disable (Missing /apps)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export WELTGEWEBE_COMPOSE_BAKE="auto"
 export MOCK_ZOMBIE=0
 export VERIFY_BAKE=1
 # Use probe override to simulate missing directory
 export WELTGEWEBE_APPS_PROBE="./missing_apps_mock"
-unset COMPOSE_BAKE
-unset COMPOSE_BAKE_VALUE
 
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
@@ -155,10 +157,13 @@ fi
 
 # 5. Test Bake Preserved (Existing /apps)
 echo ">>> Test 5: Bake Preserved (Existing /apps)"
-# Point probe to existing repo dir (we know infra exists)
-export WELTGEWEBE_APPS_PROBE="infra"
+# Clean environment
 unset COMPOSE_BAKE
 unset COMPOSE_BAKE_VALUE
+export WELTGEWEBE_COMPOSE_BAKE="auto"
+export VERIFY_BAKE=1
+# Point probe to existing repo dir (we know infra exists)
+export WELTGEWEBE_APPS_PROBE="infra"
 
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=<unset>"; then
@@ -171,11 +176,13 @@ fi
 
 # 6. Test Bake Override
 echo ">>> Test 6: Bake Override (Explicit 0)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export VERIFY_BAKE=1
 export WELTGEWEBE_COMPOSE_BAKE=0
 # Probe should not matter here, but let's point to existing
 export WELTGEWEBE_APPS_PROBE="infra"
-unset COMPOSE_BAKE
-unset COMPOSE_BAKE_VALUE
 
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
@@ -185,6 +192,28 @@ else
   echo "$OUTPUT"
   exit 1
 fi
+
+# 7. Test Bake Override Invalid
+echo ">>> Test 7: Bake Override Invalid (Warning)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export VERIFY_BAKE=1
+export WELTGEWEBE_COMPOSE_BAKE="invalid_value"
+export WELTGEWEBE_APPS_PROBE="infra"
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -q "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value"; then
+  echo "PASS: Warning detected for invalid value."
+else
+  echo "FAIL: Warning missing."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+# Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
+unset WELTGEWEBE_APPS_PROBE
+unset VERIFY_BAKE
 
 echo ">>> All refined tests passed."

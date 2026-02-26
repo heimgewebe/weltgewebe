@@ -118,19 +118,28 @@ COMPOSE_BAKE_VALUE=""
 WELTGEWEBE_APPS_PROBE="${WELTGEWEBE_APPS_PROBE:-/apps}"
 
 if [[ -z "${COMPOSE_BAKE:-}" ]]; then
-    if [[ "$WELTGEWEBE_COMPOSE_BAKE" == "auto" ]]; then
-        # Heuristic: If the root /apps directory is missing, we assume a sparse/production environment
-        # where buildx bake might fail due to missing context.
-        if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
+    # Normalize input to lowercase for robust matching
+    BAKE_MODE_NORMALIZED="${WELTGEWEBE_COMPOSE_BAKE,,}"
+
+    case "$BAKE_MODE_NORMALIZED" in
+        auto)
+            # Heuristic: If the root /apps directory is missing, we assume a sparse/production environment
+            # where buildx bake might fail due to missing context.
+            if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
+                COMPOSE_BAKE_VALUE="0"
+                echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)."
+            fi
+            ;;
+        0|false|off|no)
             COMPOSE_BAKE_VALUE="0"
-            echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)."
-        fi
-    else
-        case "$WELTGEWEBE_COMPOSE_BAKE" in
-            0|false|off|no) COMPOSE_BAKE_VALUE="0" ;;
-            1|true|on|yes)  COMPOSE_BAKE_VALUE="1" ;;
-        esac
-    fi
+            ;;
+        1|true|on|yes)
+            COMPOSE_BAKE_VALUE="1"
+            ;;
+        *)
+            echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE'. Ignoring."
+            ;;
+    esac
 
     if [[ -n "$COMPOSE_BAKE_VALUE" ]]; then
         export COMPOSE_BAKE="$COMPOSE_BAKE_VALUE"
