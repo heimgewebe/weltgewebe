@@ -46,19 +46,6 @@ else
     : > "$ERR_FILE"
 fi
 
-# Capture existing EXIT trap to avoid overwriting it
-PREV_TRAP="$(trap -p EXIT | sed -E "s/^trap -- '(.*)' EXIT$/\1/")"
-
-cleanup_err_file() {
-    rm -f "$ERR_FILE"
-}
-
-if [[ -n "${PREV_TRAP:-}" ]]; then
-    trap 'cleanup_err_file; eval "$PREV_TRAP"' EXIT
-else
-    trap 'cleanup_err_file' EXIT
-fi
-
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
     docker compose "${COMPOSE_ARGS[@]}" \
     -f "$REPO_DIR/infra/compose/compose.prod.yml" config 2> "$ERR_FILE" || true)
@@ -67,8 +54,10 @@ if [[ -z "$CONFIG" ]]; then
     echo "ERROR: Docker Compose config failed to render. Please ensure required environment variables are set or .env is present."
     echo "Diagnostic output (stderr):"
     head -n 20 "$ERR_FILE" 2>/dev/null || true
+    rm -f "$ERR_FILE"
     exit 1
 fi
+rm -f "$ERR_FILE"
 
 # Precise check: Extract only the 'api' service block.
 # We implement a strict state machine to avoid false positives:
