@@ -87,8 +87,11 @@ else
   fi
 fi
 
-# Normalize REPO_DIR to absolute path
-REPO_DIR="$(pwd)"
+# Determine REPO_DIR from script location (robust against CWD)
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Ensure we are anchored in the repo root for all subsequent operations
+cd "$REPO_DIR"
 
 # Validation: Project Name
 if [[ ! "$COMPOSE_PROJECT" =~ ^[a-z0-9_-]+$ ]]; then
@@ -164,6 +167,11 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 2
 fi
 
+# Normalize ENV_FILE to absolute path
+if [[ "$ENV_FILE" != /* ]]; then
+  ENV_FILE="${REPO_DIR}/${ENV_FILE}"
+fi
+
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # 2. Git Operations (Prioritized if PULL enabled)
@@ -204,7 +212,7 @@ if [[ -f "$OVERRIDE_FILE" ]]; then
 else
   echo "NOTE: Override file '$OVERRIDE_FILE' not found. Using base compose only."
 fi
-BASE_ARGS=("--project-directory" "$REPO_DIR" "--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
+BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
 
 if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
   echo "ERROR: Docker Compose config failed. Please fix your configuration."

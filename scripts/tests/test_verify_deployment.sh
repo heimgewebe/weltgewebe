@@ -35,6 +35,12 @@ elif [[ "$1" == "rm" ]]; then
         echo "Mocked remove: $ARGS"
         exit 0
     fi
+elif [[ "$1" == "inspect" ]]; then
+    # Return dummy alias if requesting format with Aliases
+    if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
+        echo "weltgewebe-api"
+    fi
+    exit 0
 elif [[ "$1" == "compose" ]]; then
   if [[ "$ARGS" == *" config"* ]]; then
      echo "services: {}"
