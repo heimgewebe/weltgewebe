@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Guard scripts are executable, not meant to be sourced.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "ERROR: scripts/guard_api_alias.sh must not be sourced. Run it as an executable."
+  return 2 2>/dev/null || exit 2
+fi
+
 # Ensure we are operating relative to the repo root
 # This script is expected to be in scripts/
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -45,7 +51,6 @@ else
     ERR_FILE="${TMPDIR:-/tmp}/guard_api_alias.$$"
     : > "$ERR_FILE"
 fi
-trap 'rm -f "$ERR_FILE"' EXIT
 
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
     docker compose "${COMPOSE_ARGS[@]}" \
@@ -55,8 +60,10 @@ if [[ -z "$CONFIG" ]]; then
     echo "ERROR: Docker Compose config failed to render. Please ensure required environment variables are set or .env is present."
     echo "Diagnostic output (stderr):"
     head -n 20 "$ERR_FILE" 2>/dev/null || true
+    rm -f "$ERR_FILE"
     exit 1
 fi
+rm -f "$ERR_FILE"
 
 # Precise check: Extract only the 'api' service block.
 # We implement a strict state machine to avoid false positives:
