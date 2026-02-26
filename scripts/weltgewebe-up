@@ -451,6 +451,8 @@ if [[ "$ALIAS_FOUND" == "1" ]]; then
 else
     echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
     echo "       This violates the integration contract."
+    echo "       Found aliases:"
+    docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null || echo "       (docker inspect failed)"
     echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
 
     # Contract is strict. Fail unless explicitly opted out.

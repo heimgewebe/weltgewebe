@@ -27,29 +27,40 @@ if [[ -z "$CONFIG" ]]; then
 fi
 
 # Precise check: Extract only the 'api' service block.
-# We assume standard 2-space indentation for services under 'services:'.
-# Logic:
-# 1. Start capturing when we see '  api:' at the start of a line (with 2 spaces).
-# 2. Stop capturing when we see another key at indentation level 2 (start of line + 2 spaces + key).
-# 3. Print the captured lines.
+# We implement a strict state machine to avoid false positives:
+# 1. Wait for 'services:' top-level key.
+# 2. Inside services, wait for '  api:' (indentation level 2).
+# 3. Capture lines until the next service key at the same indentation level.
 SERVICE_BLOCK=$(echo "$CONFIG" | awk '
-  /^  api:/ { in_block=1; print; next }
-  /^  [a-zA-Z0-9_-]+:/ { in_block=0 }
-  in_block { print }
+  /^services:/ { in_services=1; next }
+  in_services && /^  api:/ { in_api=1; print; next }
+  in_services && in_api && /^  [a-zA-Z0-9_-]+:/ { in_api=0; exit }
+  in_services && in_api { print }
 ')
 
 if [[ -z "$SERVICE_BLOCK" ]]; then
     echo "ERROR: Service 'api' not found in rendered compose config."
+    # Dump config snippet for debugging if verbose
+    # echo "$CONFIG" | head -n 20
     exit 1
 fi
 
 # Check for "aliases:" and "weltgewebe-api" within the api block.
+FAIL=0
 if ! echo "$SERVICE_BLOCK" | grep -q "aliases:"; then
      echo "ERROR: No 'aliases' section found for service 'api'. The alias is mandatory."
-     exit 1
+     FAIL=1
 fi
 
 if ! echo "$SERVICE_BLOCK" | grep -q "\- weltgewebe-api"; then
     echo "ERROR: compose.prod.yml: services.api.networks.default.aliases must include 'weltgewebe-api'"
+    FAIL=1
+fi
+
+if [[ "$FAIL" == "1" ]]; then
+    echo
+    echo "--- Extracted API Service Block ---"
+    echo "$SERVICE_BLOCK"
+    echo "-----------------------------------"
     exit 1
 fi
