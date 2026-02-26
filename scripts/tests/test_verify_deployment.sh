@@ -22,10 +22,10 @@ cat << 'EOF' > mock_bin/docker
 #!/bin/bash
 ARGS="$*"
 if [[ "$1" == "ps" ]]; then
-  if [[ "$MOCK_ZOMBIE" == "1" ]]; then
+  if [[ "${MOCK_ZOMBIE:-}" == "1" ]]; then
     # Return zombie with config path matching current repo
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
-  elif [[ "$MOCK_ZOMBIE" == "GENERIC" ]]; then
+  elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
   else
     echo ""
