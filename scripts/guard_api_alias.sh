@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Guard scripts are executable, not meant to be sourced.
+if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
+  echo "ERROR: scripts/guard_api_alias.sh must not be sourced. Run it as an executable."
+  return 2 2>/dev/null || exit 2
+fi
+
 # Ensure we are operating relative to the repo root
 # This script is expected to be in scripts/
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
