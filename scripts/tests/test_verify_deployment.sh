@@ -10,13 +10,6 @@ cd "$(dirname "$0")/../.."
 
 # Cleanup Trap
 cleanup() {
-  if [[ -d "apps_mock" ]]; then
-      # Safety: If we moved apps to apps_mock, restore it.
-      # If apps exists (e.g. test failed after creating partial state),
-      # we prioritize the backup.
-      rm -rf apps
-      mv apps_mock apps
-  fi
   rm -rf mock_bin test.env
 }
 trap cleanup EXIT
@@ -144,55 +137,54 @@ fi
 
 # 4. Test Bake Auto-Disable (Missing /apps)
 echo ">>> Test 4: Bake Auto-Disable (Missing /apps)"
-# Ensure /apps does not exist (rename temporarily if needed, though CI usually clean)
-if [[ -d "apps" ]]; then
-  mv apps apps_mock
-fi
 export MOCK_ZOMBIE=0
 export VERIFY_BAKE=1
+# Use probe override to simulate missing directory
+export WELTGEWEBE_APPS_PROBE="./missing_apps_mock"
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
-  echo "PASS: COMPOSE_BAKE=0 set when apps missing."
+  echo "PASS: COMPOSE_BAKE=0 set when apps probe fails."
 else
   echo "FAIL: COMPOSE_BAKE=0 not detected."
   echo "$OUTPUT"
-  if [[ -d "apps_mock" ]]; then mv apps_mock apps; fi
   exit 1
 fi
 
 # 5. Test Bake Preserved (Existing /apps)
 echo ">>> Test 5: Bake Preserved (Existing /apps)"
-mkdir -p apps
+# Point probe to existing repo dir (we know infra exists)
+export WELTGEWEBE_APPS_PROBE="infra"
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=<unset>"; then
-  echo "PASS: COMPOSE_BAKE preserved (unset) when apps exists."
+  echo "PASS: COMPOSE_BAKE preserved (unset) when apps probe succeeds."
 else
   echo "FAIL: COMPOSE_BAKE forced unexpectedly."
   echo "$OUTPUT"
-  rm -rf apps
-  if [[ -d "apps_mock" ]]; then mv apps_mock apps; fi
   exit 1
 fi
-rm -rf apps
 
 # 6. Test Bake Override
 echo ">>> Test 6: Bake Override (Explicit 0)"
-mkdir -p apps
 export WELTGEWEBE_COMPOSE_BAKE=0
+# Probe should not matter here, but let's point to existing
+export WELTGEWEBE_APPS_PROBE="infra"
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
   echo "PASS: Explicit WELTGEWEBE_COMPOSE_BAKE=0 honored."
 else
   echo "FAIL: Override ignored."
   echo "$OUTPUT"
-  rm -rf apps
-  if [[ -d "apps_mock" ]]; then mv apps_mock apps; fi
   exit 1
 fi
-rm -rf apps
 unset WELTGEWEBE_COMPOSE_BAKE
-
-# Restore apps if moved
-if [[ -d "apps_mock" ]]; then mv apps_mock apps; fi
 
 echo ">>> All refined tests passed."
