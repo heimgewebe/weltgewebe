@@ -26,23 +26,30 @@ if [[ -z "$CONFIG" ]]; then
     exit 1
 fi
 
-# Pragmatic checks on the rendered config
-# We need to ensure:
-# 1. The 'api' service is defined.
-# 2. 'aliases' keyword is present (implies network aliases are used).
-# 3. 'weltgewebe-api' is present as an alias.
+# Precise check: Extract only the 'api' service block.
+# We assume standard 2-space indentation for services under 'services:'.
+# Logic:
+# 1. Start capturing when we see '  api:' at the start of a line (with 2 spaces).
+# 2. Stop capturing when we see another key at indentation level 2 (start of line + 2 spaces + key).
+# 3. Print the captured lines.
+SERVICE_BLOCK=$(echo "$CONFIG" | awk '
+  /^  api:/ { in_block=1; print; next }
+  /^  [a-zA-Z0-9_-]+:/ { in_block=0 }
+  in_block { print }
+')
 
-if ! echo "$CONFIG" | grep -q "api:"; then
+if [[ -z "$SERVICE_BLOCK" ]]; then
     echo "ERROR: Service 'api' not found in rendered compose config."
     exit 1
 fi
 
-if ! echo "$CONFIG" | grep -q "aliases:"; then
-     echo "ERROR: No network aliases found in rendered compose config. The API alias is mandatory."
+# Check for "aliases:" and "weltgewebe-api" within the api block.
+if ! echo "$SERVICE_BLOCK" | grep -q "aliases:"; then
+     echo "ERROR: No 'aliases' section found for service 'api'. The alias is mandatory."
      exit 1
 fi
 
-if ! echo "$CONFIG" | grep -q "\- weltgewebe-api"; then
+if ! echo "$SERVICE_BLOCK" | grep -q "\- weltgewebe-api"; then
     echo "ERROR: compose.prod.yml: services.api.networks.default.aliases must include 'weltgewebe-api'"
     exit 1
 fi

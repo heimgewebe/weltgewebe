@@ -422,33 +422,43 @@ fi
 
 echo
 echo ">> Checking API DNS alias..."
-if docker compose "${BASE_ARGS[@]}" exec -T api getent hosts weltgewebe-api >/dev/null 2>&1; then
-  echo "OK (via getent)"
-else
-  # Fallback: Check container metadata directly (if getent/container shell is missing or fails)
-  echo "WARNING: 'getent' check failed. Retrying via docker inspect..."
-  # Try to find the alias in the NetworkSettings. Inspect output is JSON.
-  # We grep for the alias in the Networks section.
-  API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
-  if [[ -z "$API_CID" ]]; then
-      echo "ERROR: Container 'api' not found."
-      exit 1
-  fi
 
-  if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qE '(^|[^a-zA-Z0-9_-])weltgewebe-api([^a-zA-Z0-9_-]|$)'; then
-      echo "OK (via inspect)"
-  else
-      if [[ "$WITH_CADDY" == "1" ]]; then
-          echo "ERROR: DNS alias weltgewebe-api not resolvable inside container network."
-          echo "       Also not found in container metadata (docker inspect)."
-          echo "Ensure network alias is configured."
-          exit 1
-      else
-          echo "WARNING: DNS alias weltgewebe-api not verified."
-          echo "         This is required for Caddy integration, but Caddy is disabled."
-          echo "         Continuing..."
-      fi
-  fi
+# 1. Primary check: Inspect container metadata (Ground Truth)
+# This works regardless of container OS (glibc/musl) or installed tools.
+API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+if [[ -z "$API_CID" ]]; then
+    echo "ERROR: Container 'api' not found."
+    exit 1
+fi
+
+ALIAS_FOUND=0
+if docker inspect --format '{{range .NetworkSettings.Networks}}{{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null | grep -qE '(^|[^a-zA-Z0-9_-])weltgewebe-api([^a-zA-Z0-9_-]|$)'; then
+    ALIAS_FOUND=1
+fi
+
+if [[ "$ALIAS_FOUND" == "1" ]]; then
+    echo "OK (via docker inspect)"
+
+    # 2. Secondary check: Resolution inside container (Integration Test)
+    # Only run if getent is available.
+    if docker compose "${BASE_ARGS[@]}" exec -T api sh -c 'command -v getent >/dev/null 2>&1' >/dev/null 2>&1; then
+        if docker compose "${BASE_ARGS[@]}" exec -T api getent hosts weltgewebe-api >/dev/null 2>&1; then
+            echo "   (Resolution verified via getent)"
+        else
+            echo "WARNING: Alias configured, but 'getent hosts' failed inside container."
+        fi
+    fi
+else
+    echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
+    echo "       This violates the integration contract."
+    echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
+
+    # Contract is strict. Fail unless explicitly opted out.
+    if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
+        echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
+    else
+        exit 1
+    fi
 fi
 
 # 8. Update State (Post-Health)
