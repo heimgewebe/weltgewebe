@@ -33,6 +33,10 @@ services:
       interval: 10s
       timeout: 3s
       retries: 10
+    networks:
+      default:
+        aliases:
+          - weltgewebe-api
 
   db:
     image: postgres:16

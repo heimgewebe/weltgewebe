@@ -140,3 +140,11 @@ aber nicht gewünscht sind.
 
 **Beispiel (Mailpit/Mailhog):**
 `SMTP_HOST=mailpit`, `SMTP_PORT=1025`, `SMTP_AUTH=off`
+
+---
+
+## 11. Interne DNS-Identität
+
+Invariante: Der interne Docker-DNS-Name `weltgewebe-api` MUSS stabil auflösbar sein.
+Edge Caddy und andere Dienste hängen davon ab.
+Service-Suffixe wie `weltgewebe-api-1` sind nicht zulässig als Routing-Ziel.
