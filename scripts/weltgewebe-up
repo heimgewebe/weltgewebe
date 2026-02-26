@@ -137,7 +137,7 @@ if [[ -z "${COMPOSE_BAKE:-}" ]]; then
             COMPOSE_BAKE_VALUE="1"
             ;;
         *)
-            echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE'. Ignoring."
+            echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE'. Ignoring." >&2
             ;;
     esac
 
