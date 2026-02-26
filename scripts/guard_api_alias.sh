@@ -7,12 +7,12 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Check if docker and docker compose command are available
 if ! command -v docker >/dev/null 2>&1; then
-    echo "WARNING: Docker not found. Skipping API alias check."
+    echo "NOTE: Docker not found. Guard skipped."
     exit 0
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
-    echo "WARNING: Docker Compose not found or not working. Skipping API alias check."
+    echo "NOTE: Docker Compose not found or not working. Guard skipped."
     exit 0
 fi
 
@@ -57,7 +57,7 @@ if ! echo "$SERVICE_BLOCK" | grep -q "aliases:"; then
      FAIL=1
 fi
 
-if ! echo "$SERVICE_BLOCK" | grep -q "\- weltgewebe-api"; then
+if ! echo "$SERVICE_BLOCK" | grep -qw "weltgewebe-api"; then
     echo "ERROR: compose.prod.yml: services.api.networks.default.aliases must include 'weltgewebe-api'"
     FAIL=1
 fi
