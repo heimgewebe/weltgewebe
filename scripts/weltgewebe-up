@@ -166,7 +166,7 @@ fi
 
 # Normalize ENV_FILE to absolute path
 if [[ "$ENV_FILE" != /* ]]; then
-  ENV_FILE="$(pwd)/$ENV_FILE"
+  ENV_FILE="${REPO_DIR}/${ENV_FILE}"
 fi
 
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"

@@ -36,7 +36,9 @@ elif [[ "$1" == "rm" ]]; then
         exit 0
     fi
 elif [[ "$1" == "inspect" ]]; then
-    echo "weltgewebe-api"
+    if [[ "$ARGS" == *".Aliases"* ]]; then
+        echo "weltgewebe-api"
+    fi
     exit 0
 elif [[ "$1" == "compose" ]]; then
   if [[ "$ARGS" == *" config"* ]]; then
