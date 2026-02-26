@@ -149,3 +149,4 @@ Invariante: Der interne Docker-DNS-Name `weltgewebe-api` MUSS stabil auflösbar 
 Edge Caddy und andere Dienste hängen davon ab.
 Service-Suffixe wie `weltgewebe-api-1` sind nicht zulässig als Routing-Ziel.
 Diese Invariante wird durch Guard + weltgewebe-up verifiziert.
+In Ausnahmefällen kann die Verifikation im Deploy per ALLOW_UNSTABLE_API_DNS=1 übersteuert werden (nicht empfohlen).

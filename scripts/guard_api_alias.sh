@@ -20,10 +20,18 @@ fi
 # 'docker compose config' should work statically without a daemon in most modern versions.
 # If it fails, we catch the error below.
 
+# Prepare rendering arguments
+# If a .env file exists in the repo root, use it. This helps with variable substitution.
+COMPOSE_ARGS=("--project-directory" "$REPO_DIR")
+if [[ -f "$REPO_DIR/.env" ]]; then
+    COMPOSE_ARGS+=("--env-file" "$REPO_DIR/.env")
+fi
+
 # Render the compose config
-# We provide dummy values for required environment variables to ensure config rendering succeeds.
+# We provide dummy values for known required environment variables to ensure config rendering succeeds
+# even if .env is missing or partial.
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
-    docker compose --project-directory "$REPO_DIR" \
+    docker compose "${COMPOSE_ARGS[@]}" \
     -f "$REPO_DIR/infra/compose/compose.prod.yml" config 2>/dev/null || true)
 
 if [[ -z "$CONFIG" ]]; then
