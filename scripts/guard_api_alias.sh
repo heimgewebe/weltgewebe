@@ -30,12 +30,18 @@ fi
 # Render the compose config
 # We provide dummy values for known required environment variables to ensure config rendering succeeds
 # even if .env is missing or partial.
+# Capture stderr for better diagnostics on failure.
+ERR_FILE=$(mktemp)
+trap 'rm -f "$ERR_FILE"' EXIT
+
 CONFIG=$(WEB_UPSTREAM_URL="dummy" WEB_UPSTREAM_HOST="dummy" \
     docker compose "${COMPOSE_ARGS[@]}" \
-    -f "$REPO_DIR/infra/compose/compose.prod.yml" config 2>/dev/null || true)
+    -f "$REPO_DIR/infra/compose/compose.prod.yml" config 2> "$ERR_FILE" || true)
 
 if [[ -z "$CONFIG" ]]; then
     echo "ERROR: Docker Compose config failed to render. Please ensure required environment variables are set or .env is present."
+    echo "Diagnostic output (stderr):"
+    head -n 20 "$ERR_FILE"
     exit 1
 fi
 
