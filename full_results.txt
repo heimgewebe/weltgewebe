@@ -1,0 +1,19 @@
+>>> Test 1: Project Validation (fail case)
+PASS: COMPOSE_PROJECT=compose rejected.
+>>> Test 2: Zombie Guard (Fail Logic)
+PASS: Detailed error message found (robust check).
+>>> Test 3: Zombie Guard (Purge)
+PASS: Purge triggered.
+>>> Test 4: Bake Auto-Disable (Missing /apps)
+PASS: COMPOSE_BAKE=0 set when apps probe fails.
+>>> Test 5: Bake Preserved (Existing /apps)
+PASS: COMPOSE_BAKE preserved (unset) when apps probe succeeds.
+>>> Test 6: Bake Override (Explicit 0)
+PASS: Explicit WELTGEWEBE_COMPOSE_BAKE=0 honored.
+>>> Test 7: Bake Override Invalid (Warning)
+PASS: Warning detected for invalid value.
+>>> Test 8: REPO_DIR Auto-Detection
+PASS: Auto-detection worked and selected current directory.
+>>> Test 9: REPO_DIR Strictness (Invalid Path)
+PASS: Strict check rejected invalid REPO_DIR.
+>>> Test 11: Health - Internal Fallback (Docker Native)

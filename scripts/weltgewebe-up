@@ -146,7 +146,7 @@ fi
 # If the script is installed to /usr/local/bin and we fallback incorrectly, we might try to write to /usr/local/.ops
 # Check both standard system paths and potentially dangerous ones
 case "$FOUND_REPO" in
-    /usr|/usr/*|/bin|/sbin|/etc|/var)
+    /usr|/usr/*|/bin|/sbin|/etc|/etc/*|/var|/var/*)
         echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
         echo "       This prevents accidental system modification." >&2
         echo "       Please set REPO_DIR explicitly to your repository path." >&2
@@ -500,7 +500,6 @@ echo ">> Health Check:"
 # 3. Docker Native Health (Default Fallback)
 
 CHOSEN_STRATEGY="none"
-HEALTH_CHECK_CMD=""
 
 # Internal configuration defaults
 API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
@@ -551,6 +550,15 @@ check_health() {
             echo "Container 'api' not found."
             return 1
         fi
+
+        # Explicitly check if HEALTHCHECK is defined
+        HEALTH_DEFINED=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null || echo "no")
+        if [[ "$HEALTH_DEFINED" != "yes" ]]; then
+            echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
+            return 1
+        fi
+
         STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null || echo "unknown")
         if [[ "$STATUS" == "healthy" ]]; then
             return 0
