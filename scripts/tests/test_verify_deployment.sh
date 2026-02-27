@@ -457,7 +457,13 @@ export MOCK_HEALTH_EXISTS="0" # Explicitly disable health check existence
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"; then
-    echo "PASS: Detected missing HEALTHCHECK."
+    if echo "$OUTPUT" | grep -q "Waiting for health..."; then
+        echo "FAIL: Script did not fail fast (retried despite missing healthcheck)."
+        echo "$OUTPUT"
+        exit 1
+    else
+        echo "PASS: Detected missing HEALTHCHECK and failed fast (no retries)."
+    fi
 else
     echo "FAIL: Did not detect missing HEALTHCHECK."
     echo "$OUTPUT"

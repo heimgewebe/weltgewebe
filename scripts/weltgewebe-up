@@ -556,7 +556,7 @@ check_health() {
         if [[ "$HEALTH_DEFINED" != "yes" ]]; then
             echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
             echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
-            return 1
+            return 2
         fi
 
         STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null || echo "unknown")
@@ -577,11 +577,20 @@ check_health() {
 }
 
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  if check_health; then
+  set +e
+  check_health
+  HEALTH_RET=$?
+  set -e
+
+  if [[ "$HEALTH_RET" == "0" ]]; then
     echo "Health OK ($CHOSEN_STRATEGY)"
     HEALTH_OK=1
     break
+  elif [[ "$HEALTH_RET" == "2" ]]; then
+    # Fatal error (e.g. missing healthcheck), abort immediately
+    break
   fi
+
   echo "Waiting for health... ($i/$MAX_RETRIES)"
   sleep "$SLEEP_SEC"
 done
