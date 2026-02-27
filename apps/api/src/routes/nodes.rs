@@ -3,6 +3,7 @@ use crate::utils::nodes_path;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
+    response::{IntoResponse, Response},
     Json,
 };
 use serde::{Deserialize, Deserializer, Serialize};
@@ -563,7 +564,7 @@ pub async fn patch_node(
 pub async fn list_nodes(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<Node>>, StatusCode> {
+) -> Result<Response, StatusCode> {
     let bbox = match params.get("bbox") {
         Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
@@ -575,7 +576,7 @@ pub async fn list_nodes(
 
     let nodes = state.nodes.read().await;
 
-    let out: Vec<Node> = nodes
+    let out: Vec<&Node> = nodes
         .iter()
         .filter(|node| {
             if let Some(bb) = &bbox {
@@ -585,8 +586,7 @@ pub async fn list_nodes(
             }
         })
         .take(limit)
-        .cloned()
         .collect();
 
-    Ok(Json(out))
+    Ok(Json(out).into_response())
 }
