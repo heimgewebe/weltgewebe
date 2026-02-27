@@ -144,12 +144,15 @@ fi
 
 # Safety Guard: Prevent System Paths
 # If the script is installed to /usr/local/bin and we fallback incorrectly, we might try to write to /usr/local/.ops
-if [[ "$FOUND_REPO" == "/usr/local" || "$FOUND_REPO" == "/usr" || "$FOUND_REPO" == "/usr/bin" ]]; then
-    echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
-    echo "       This prevents accidental system modification." >&2
-    echo "       Please set REPO_DIR explicitly to your repository path." >&2
-    exit 1
-fi
+# Check both standard system paths and potentially dangerous ones
+case "$FOUND_REPO" in
+    /usr|/usr/*|/bin|/sbin|/etc|/etc/*|/var|/var/*)
+        echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
+        echo "       This prevents accidental system modification." >&2
+        echo "       Please set REPO_DIR explicitly to your repository path." >&2
+        exit 1
+        ;;
+esac
 
 REPO_DIR="$FOUND_REPO"
 export REPO_DIR
@@ -252,9 +255,11 @@ if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
   fi
 fi
 
-# Ensure .ops directory exists
-mkdir -p "${REPO_DIR}/.ops"
-STATE_FILE="${REPO_DIR}/.ops/weltgewebe-up.state"
+# Ensure State Directory exists
+# Default: .ops in REPO_DIR
+WELTGEWEBE_STATE_DIR="${WELTGEWEBE_STATE_DIR:-$REPO_DIR/.ops}"
+mkdir -p "${WELTGEWEBE_STATE_DIR}"
+STATE_FILE="${WELTGEWEBE_STATE_DIR}/weltgewebe-up.state"
 
 echo "== Weltgewebe Up =="
 echo "Repo:    $(pwd)"
@@ -489,33 +494,91 @@ docker compose "${BASE_ARGS[@]}" ps
 echo
 echo ">> Health Check:"
 
-# Try to detect mapped port
-API_PORT=""
-if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api 8080 2>/dev/null); then
-  API_PORT=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
+# Strategy Decision:
+# 1. Explicit HEALTH_URL (override)
+# 2. Host Port Mapping (if available)
+# 3. Docker Native Health (Default Fallback)
+
+CHOSEN_STRATEGY="none"
+
+# Internal configuration defaults
+API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
+
+# Strategy 1: Explicit HEALTH_URL
+if [[ -n "${HEALTH_URL:-}" ]]; then
+  CHOSEN_STRATEGY="ENV:HEALTH_URL"
+  echo "Using explicit health URL: $HEALTH_URL"
 fi
 
-if [[ -n "$API_PORT" ]]; then
-  HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
-  echo "Detected API port: $API_PORT -> $HEALTH_URL"
-else
-  HEALTH_URL="$HEALTH_URL_DEFAULT"
-  echo "Could not detect API port. Using default: $HEALTH_URL"
+# Strategy 2: Host Port Mapping
+if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
+    API_PORT=""
+    if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
+        # Parse port. If output is "0.0.0.0:0", we get "0", which is invalid.
+        PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
+        if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
+            API_PORT="$PORT_CANDIDATE"
+        else
+            echo "No published API port detected (port=0/empty)."
+        fi
+    fi
+
+    if [[ -n "$API_PORT" ]]; then
+        HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
+        CHOSEN_STRATEGY="Host Port Mapping"
+        echo "Using Host Port Mapping: $HEALTH_URL"
+    fi
 fi
 
-# Retry loop
+# Strategy 3: Docker Native Health (Default)
+if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
+    CHOSEN_STRATEGY="Docker Native Health"
+    echo "Using Docker Native Health (inspect)"
+fi
+
+# Execution
+echo "Health strategy selected: $CHOSEN_STRATEGY"
+
 MAX_RETRIES=10
 SLEEP_SEC=5
 HEALTH_OK=0
 
-for ((i=1;i<=MAX_RETRIES;i++)); do
-  if response=$(curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" 2>/dev/null); then
-    echo "Health OK"
-    if command -v jq >/dev/null; then
-      echo "$response" | jq . || echo "$response"
+check_health() {
+    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
+        API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+        if [[ -z "$API_CID" ]]; then
+            echo "Container 'api' not found."
+            return 1
+        fi
+
+        # Explicitly check if HEALTHCHECK is defined
+        HEALTH_DEFINED=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null || echo "no")
+        if [[ "$HEALTH_DEFINED" != "yes" ]]; then
+            echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
+            return 1
+        fi
+
+        STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null || echo "unknown")
+        if [[ "$STATUS" == "healthy" ]]; then
+            return 0
+        else
+            echo "  Status: $STATUS"
+            return 1
+        fi
     else
-      echo "$response"
+        # Standard URL check from host
+        if curl -fsS --connect-timeout 2 --max-time 5 "$HEALTH_URL" >/dev/null 2>&1; then
+             return 0
+        else
+             return 1
+        fi
     fi
+}
+
+for ((i=1;i<=MAX_RETRIES;i++)); do
+  if check_health; then
+    echo "Health OK ($CHOSEN_STRATEGY)"
     HEALTH_OK=1
     break
   fi
@@ -525,8 +588,15 @@ done
 
 if [[ "$HEALTH_OK" != "1" ]]; then
     echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
-    echo "URL: $HEALTH_URL"
-    echo "Tip: Check 'docker compose ps' or set HEALTH_URL manually."
+    echo "Strategy: $CHOSEN_STRATEGY"
+    [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
+
+    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
+        echo "Docker Health Log (last 3 entries):"
+        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+    fi
+
+    echo "Tip: Check 'docker compose ps' and logs."
     exit 1
 fi
 
@@ -575,6 +645,8 @@ fi
 
 # 8. Update State (Post-Health)
 if [[ "$CURRENT_HEAD" != "unknown" ]]; then
+    # Ensure directory exists just in case (e.g. if custom path changed during run)
+    mkdir -p "$(dirname "$STATE_FILE")"
     echo "$CURRENT_HEAD" > "$STATE_FILE"
     echo ">> State updated: $CURRENT_HEAD"
 fi

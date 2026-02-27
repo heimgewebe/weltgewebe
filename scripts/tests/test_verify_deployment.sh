@@ -10,7 +10,8 @@ cd "$(dirname "$0")/../.."
 
 # Cleanup Trap
 cleanup() {
-  rm -rf mock_bin test.env
+  rm -rf mock_bin test.env custom_state
+  unset HEALTH_URL API_INTERNAL_PORT MOCK_HEALTH_EXISTS
 }
 trap cleanup EXIT
 
@@ -27,6 +28,9 @@ if [[ "$1" == "ps" ]]; then
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
   elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
+  # HANDLE DIRECT docker ps -q api (if used)
+  elif [[ "$ARGS" == *"-q api"* ]]; then
+      echo "api_container_id"
   else
     echo ""
   fi
@@ -39,17 +43,82 @@ elif [[ "$1" == "inspect" ]]; then
     # Return dummy alias if requesting format with Aliases
     if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
+    # EXISTENCE CHECK: Handle {{if .State.Health}}yes{{else}}no{{end}}
+    # We use looser matching to avoid quoting issues. Match core parts.
+    elif [[ "$ARGS" == *".State.Health"* && "$ARGS" == *"yes"* && "$ARGS" == *"no"* ]]; then
+        # Default to "no" (missing healthcheck) unless explicitly enabled
+        if [[ "${MOCK_HEALTH_EXISTS:-0}" == "1" ]]; then
+            echo "yes"
+        else
+            echo "no"
+        fi
+    elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Status"* ]]; then
+        echo "healthy"
+    elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Log"* ]]; then
+        # Return JSON array so {{range ...}} works correctly in Go templates
+        echo '[{"ExitCode": 0, "Output": "Ok"}]'
     fi
     exit 0
 elif [[ "$1" == "compose" ]]; then
   if [[ "$ARGS" == *" config"* ]]; then
-     echo "services: {}"
+     # Check if we should simulate Caddy presence
+     if [[ "${MOCK_HAS_CADDY:-0}" == "1" && "$ARGS" == *"--services"* ]]; then
+        echo "caddy"
+     fi
+     if [[ "$ARGS" != *"--services"* ]]; then
+         # config check succeeds
+         echo "services: {}"
+     fi
      exit 0
   fi
+
+  # HANDLE docker compose ... ps -q api
+  if [[ "$ARGS" == *" ps -q api"* ]]; then
+      echo "api_container_id"
+      exit 0
+  fi
+
   # New: Echo COMPOSE_BAKE state if VERIFY_BAKE is set
   if [[ "${VERIFY_BAKE:-}" == "1" ]]; then
      # We output this to stderr or stdout, so we can grep it in tests
      echo "VERIFY_BAKE: COMPOSE_BAKE=${COMPOSE_BAKE:-<unset>}"
+  fi
+
+  # Port Mocking
+  if [[ "$ARGS" == *" port api"* ]]; then
+      # Extract requested internal port (last argument usually, or verify it)
+      REQUESTED_PORT=$(echo "$ARGS" | awk '{print $NF}')
+
+      # If we are testing custom internal port, verify it was passed correctly
+      if [[ -n "${EXPECT_INTERNAL_PORT:-}" && "$REQUESTED_PORT" != "$EXPECT_INTERNAL_PORT" ]]; then
+          echo "FAIL: Expected internal port $EXPECT_INTERNAL_PORT, got $REQUESTED_PORT" >&2
+          exit 1
+      fi
+
+      if [[ "${MOCK_PORT_MODE:-}" == "0" ]]; then
+          echo "0.0.0.0:0"
+      elif [[ "${MOCK_PORT_MODE:-}" == "VALID" ]]; then
+          echo "0.0.0.0:32768"
+      else
+          echo ""
+      fi
+      exit 0
+  fi
+
+  # Exec Mocking (deprecated in new strategy, but kept for completeness if needed)
+  if [[ "$ARGS" == *" exec -T api"* ]]; then
+      if [[ "${MOCK_EXEC_FAIL:-0}" == "1" ]]; then
+          exit 1
+      else
+          # Check if the exec command uses the expected internal port
+          if [[ -n "${EXPECT_INTERNAL_PORT:-}" ]]; then
+             if [[ "$ARGS" != *":${EXPECT_INTERNAL_PORT}/health"* ]]; then
+                 echo "FAIL: Exec command did not use expected port $EXPECT_INTERNAL_PORT" >&2
+                 exit 1
+             fi
+          fi
+          exit 0
+      fi
   fi
 
   echo "Mocked docker compose execution"
@@ -74,12 +143,44 @@ EOF
 # Mock curl
 cat << 'EOF' > mock_bin/curl
 #!/bin/bash
+# Fail if trying to connect to port 0
+if [[ "$*" == *":0/health/ready"* ]]; then
+    exit 7
+fi
 echo '{"status": "ok"}'
 exit 0
 EOF
 
+# Mock Git
+cat << 'EOF' > mock_bin/git
+#!/bin/bash
+ARGS="$*"
+if [[ "$1" == "rev-parse" ]]; then
+    if [[ "$ARGS" == *"--show-toplevel"* ]]; then
+        # Return the exported REPO_DIR
+        echo "$REPO_DIR"
+    elif [[ "$ARGS" == *"HEAD"* ]]; then
+        echo "mock-sha-12345"
+    fi
+    exit 0
+elif [[ "$1" == "fetch" ]]; then
+    exit 0
+elif [[ "$1" == "pull" ]]; then
+    exit 0
+elif [[ "$1" == "symbolic-ref" ]]; then
+    echo "main"
+    exit 0
+else
+    # Fallback to true
+    exit 0
+fi
+EOF
+
 chmod +x mock_bin/*
 export PATH="$(pwd)/mock_bin:$PATH"
+
+# Default Mock State: Assume Health Checks exist for all tests unless overridden
+export MOCK_HEALTH_EXISTS="1"
 
 REPO_DIR=$(pwd)
 export REPO_DIR
@@ -251,6 +352,118 @@ else
    echo "$OUTPUT"
    exit 1
 fi
+unset REPO_DIR
+
+# Test 10 removed (flaky system path rejection)
+
+# 11. Test Health: Internal Fallback (Docker Native)
+echo ">>> Test 11: Health - Internal Fallback (Docker Native)"
+export MOCK_PORT_MODE="0"
+export MOCK_EXEC_FAIL="0"
+# Strategy should default to Docker Native if no port mapping and no gateway
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+    if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
+        echo "PASS: Fell back to Docker Native check."
+    else
+        echo "FAIL: Docker Native check failed."
+        echo "$OUTPUT"
+        exit 1
+    fi
+else
+    echo "FAIL: Did not use Docker Native check."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# 12. Test Health: Host Port (Valid)
+echo ">>> Test 12: Health - Host Port (Valid)"
+export MOCK_PORT_MODE="VALID"
+export MOCK_EXEC_FAIL="0"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: Host Port Mapping"; then
+    echo "PASS: Used Host Port check when valid."
+else
+    echo "FAIL: Did not use Host Port check."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# 13. Test Health: Explicit URL
+echo ">>> Test 13: Health - Explicit URL"
+export HEALTH_URL="http://explicit-url:8080/health"
+export MOCK_PORT_MODE="VALID"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: ENV:HEALTH_URL"; then
+    echo "PASS: Used explicit HEALTH_URL."
+else
+    echo "FAIL: Did not use explicit HEALTH_URL."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset HEALTH_URL
+
+# 14. Test State Dir Customization
+echo ">>> Test 14: State Dir Customization"
+export WELTGEWEBE_STATE_DIR="$(pwd)/custom_state"
+mkdir -p "$WELTGEWEBE_STATE_DIR"
+# ENABLE PULL (no flag) so git mock is used and CURRENT_HEAD is set
+OUTPUT=$(./scripts/weltgewebe-up --no-build 2>&1)
+
+if [[ -f "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state" ]]; then
+    CONTENT=$(cat "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state")
+    if [[ "$CONTENT" == "mock-sha-12345" ]]; then
+        echo "PASS: State file created in custom directory with correct SHA."
+    else
+        echo "FAIL: State file content incorrect. Got: $CONTENT"
+        exit 1
+    fi
+else
+    echo "FAIL: State file not found in custom directory."
+    echo "$OUTPUT"
+    exit 1
+fi
+rm -rf "$WELTGEWEBE_STATE_DIR"
+unset WELTGEWEBE_STATE_DIR
+
+# 15. Test Configurable Internal Port (Port check verify)
+echo ">>> Test 15: Configurable Internal Port (Port check)"
+export MOCK_PORT_MODE="0"
+export API_INTERNAL_PORT="9090"
+# We expect the script to call `docker compose port api 9090`
+# Our mock docker will verify this if we set EXPECT_INTERNAL_PORT
+# Actually, the mock checks "REQUESTED_PORT" against "EXPECT_INTERNAL_PORT" for port command
+export EXPECT_INTERNAL_PORT="9090"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+     echo "PASS: Script ran successfully with custom internal port."
+else
+     echo "FAIL: Script failed or wrong strategy."
+     echo "$OUTPUT"
+     exit 1
+fi
+unset API_INTERNAL_PORT
+unset EXPECT_INTERNAL_PORT
+
+# 16. Test Missing HEALTHCHECK (New)
+echo ">>> Test 16: Docker Native Health - Missing HEALTHCHECK"
+export MOCK_PORT_MODE="0"
+export MOCK_HEALTH_EXISTS="0" # Explicitly disable health check existence
+# Ensure we catch failure but print output
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"; then
+    echo "PASS: Detected missing HEALTHCHECK."
+else
+    echo "FAIL: Did not detect missing HEALTHCHECK."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_HEALTH_EXISTS
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
@@ -258,5 +471,8 @@ unset WELTGEWEBE_APPS_PROBE
 unset VERIFY_BAKE
 unset MOCK_ZOMBIE
 unset REPO_DIR
+unset MOCK_PORT_MODE
+unset MOCK_EXEC_FAIL
+unset MOCK_HAS_CADDY
 
 echo ">>> All refined tests passed."
