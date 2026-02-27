@@ -496,39 +496,25 @@ echo ">> Health Check:"
 
 # Strategy Decision:
 # 1. Explicit HEALTH_URL (override)
-# 2. Gateway/Caddy (if enabled)
-# 3. Internal Container Check (if no port mapping)
-# 4. Host Port Mapping (if available)
+# 2. Host Port Mapping (if available)
+# 3. Gateway (Explicit Only - e.g. 9081)
+# 4. Docker Native Health (Default Fallback)
 
 CHOSEN_STRATEGY="none"
 HEALTH_CHECK_CMD=""
 
 # Internal configuration defaults
-GATEWAY_HEALTH_URL="${GATEWAY_HEALTH_URL:-http://127.0.0.1:8081/health/ready}"
 API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
+# Gateway Port Governance: 8081 is Pi-hole. Recommended is 9081.
+WELTGEWEBE_GATEWAY_PORT="${WELTGEWEBE_GATEWAY_PORT:-}"
 
-# Strategy 1: Explicit
+# Strategy 1: Explicit HEALTH_URL
 if [[ -n "${HEALTH_URL:-}" ]]; then
   CHOSEN_STRATEGY="ENV:HEALTH_URL"
   echo "Using explicit health URL: $HEALTH_URL"
 fi
 
-# Strategy 2: Gateway (Caddy)
-if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
-  # If Caddy is effectively enabled (service exists AND --scale != 0)
-  # We know caddy service exists if HAS_CADDY=1.
-  # If WITH_CADDY=0, we scale it to 0. So only check if WITH_CADDY=1 or strict production.
-  # But actually, Caddy runs on 8081 internally for health.
-  if [[ "$HAS_CADDY" == "1" && "$WITH_CADDY" == "1" ]]; then
-      # Check if port 8081 is bound (usually it is bound to 127.0.0.1:8081 by default in compose)
-      # We assume the default contract: http://127.0.0.1:8081/health/ready or GATEWAY_HEALTH_URL
-      HEALTH_URL="$GATEWAY_HEALTH_URL"
-      CHOSEN_STRATEGY="Gateway (Caddy)"
-      echo "Using Gateway Health (Caddy): $HEALTH_URL"
-  fi
-fi
-
-# Strategy 3 & 4: Determine API Port or Internal Check
+# Strategy 2: Host Port Mapping
 if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
     API_PORT=""
     if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
@@ -536,19 +522,34 @@ if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
         PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
         if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
             API_PORT="$PORT_CANDIDATE"
+        else
+            echo "No published API port detected (port=0/empty)."
         fi
     fi
 
     if [[ -n "$API_PORT" ]]; then
-        # Strategy 4: Host Port
         HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
-        CHOSEN_STRATEGY="Host Port"
+        CHOSEN_STRATEGY="Host Port Mapping"
         echo "Using Host Port Mapping: $HEALTH_URL"
-    else
-        # Strategy 3: Internal Check
-        CHOSEN_STRATEGY="Internal Container"
-        echo "No host port detected (or Port 0). Using internal container check."
     fi
+fi
+
+# Strategy 3: Gateway (Explicit Only)
+if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
+    if [[ -n "$WELTGEWEBE_GATEWAY_PORT" ]]; then
+        if [[ "$WELTGEWEBE_GATEWAY_PORT" == "8081" ]]; then
+            echo "WARNING: Port 8081 is usually reserved for Pi-hole. Recommended gateway port is 9081." >&2
+        fi
+        HEALTH_URL="http://127.0.0.1:${WELTGEWEBE_GATEWAY_PORT}/health/ready"
+        CHOSEN_STRATEGY="Gateway (Explicit)"
+        echo "Using Gateway Health (Explicit): $HEALTH_URL"
+    fi
+fi
+
+# Strategy 4: Docker Native Health (Default)
+if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
+    CHOSEN_STRATEGY="Docker Native Health"
+    echo "Using Docker Native Health (inspect)"
 fi
 
 # Execution
@@ -559,23 +560,18 @@ SLEEP_SEC=5
 HEALTH_OK=0
 
 check_health() {
-    if [[ "$CHOSEN_STRATEGY" == "Internal Container" ]]; then
-        # Try curl, then wget inside container
-        # We use a subshell to suppress command not found errors from the check logic itself
-        # Note: We use the configured internal port here.
-        if docker compose "${BASE_ARGS[@]}" exec -T api sh -c "
-            if command -v curl >/dev/null; then
-               curl -fsS http://localhost:${API_INTERNAL_PORT}/health/ready
-            elif command -v wget >/dev/null; then
-               wget -qO- http://localhost:${API_INTERNAL_PORT}/health/ready
-            else
-               echo 'ERROR: Neither curl nor wget found in container.' >&2
-               exit 127
-            fi
-        " >/dev/null 2>&1; then
-             return 0
+    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
+        API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+        if [[ -z "$API_CID" ]]; then
+            echo "Container 'api' not found."
+            return 1
+        fi
+        STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null || echo "unknown")
+        if [[ "$STATUS" == "healthy" ]]; then
+            return 0
         else
-             return 1
+            echo "  Status: $STATUS"
+            return 1
         fi
     else
         # Standard URL check from host
@@ -601,6 +597,12 @@ if [[ "$HEALTH_OK" != "1" ]]; then
     echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
     echo "Strategy: $CHOSEN_STRATEGY"
     [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
+
+    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
+        echo "Docker Health Log (last 3 entries):"
+        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+    fi
+
     echo "Tip: Check 'docker compose ps' and logs."
     exit 1
 fi

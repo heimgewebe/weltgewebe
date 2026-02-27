@@ -27,6 +27,8 @@ if [[ "$1" == "ps" ]]; then
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
   elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
+  elif [[ "$ARGS" == *"-q api"* ]]; then
+      echo "api_container_id"
   else
     echo ""
   fi
@@ -39,6 +41,10 @@ elif [[ "$1" == "inspect" ]]; then
     # Return dummy alias if requesting format with Aliases
     if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
+    elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Status"* ]]; then
+        echo "healthy"
+    elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Log"* ]]; then
+        echo "[{\"Output\": \"Ok\"}]"
     fi
     exit 0
 elif [[ "$1" == "compose" ]]; then
@@ -81,7 +87,7 @@ elif [[ "$1" == "compose" ]]; then
       exit 0
   fi
 
-  # Exec Mocking
+  # Exec Mocking (deprecated in new strategy, but kept for completeness if needed)
   if [[ "$ARGS" == *" exec -T api"* ]]; then
       if [[ "${MOCK_EXEC_FAIL:-0}" == "1" ]]; then
           exit 1
@@ -347,16 +353,17 @@ else
 fi
 unset REPO_DIR
 
-# 11. Test Health: Internal Fallback (Port 0)
-echo ">>> Test 11: Health - Internal Fallback (Port 0)"
+# 11. Test Health: Internal Fallback (Docker Native)
+echo ">>> Test 11: Health - Internal Fallback (Docker Native)"
 export MOCK_PORT_MODE="0"
 export MOCK_EXEC_FAIL="0"
+# Strategy should default to Docker Native if no port mapping and no gateway
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Internal Container"; then
-    echo "PASS: Fell back to Internal Container check on Port 0."
+if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+    echo "PASS: Fell back to Docker Native check."
 else
-    echo "FAIL: Did not use Internal Container check."
+    echo "FAIL: Did not use Docker Native check."
     echo "$OUTPUT"
     exit 1
 fi
@@ -367,7 +374,7 @@ export MOCK_PORT_MODE="VALID"
 export MOCK_EXEC_FAIL="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Host Port"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: Host Port Mapping"; then
     echo "PASS: Used Host Port check when valid."
 else
     echo "FAIL: Did not use Host Port check."
@@ -375,20 +382,26 @@ else
     exit 1
 fi
 
-# 13. Test Health: Gateway (Caddy)
-echo ">>> Test 13: Health - Gateway (Caddy)"
+# 13. Test Health: Gateway (Explicit)
+echo ">>> Test 13: Health - Gateway (Explicit)"
 export MOCK_PORT_MODE="0"
-export MOCK_HAS_CADDY="1"
-# We need to enable caddy in script
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --with-caddy 2>&1)
+export WELTGEWEBE_GATEWAY_PORT="9081"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Gateway (Caddy)"; then
-    echo "PASS: Used Gateway check when Caddy enabled."
+if echo "$OUTPUT" | grep -q "Health strategy selected: Gateway (Explicit)"; then
+    if echo "$OUTPUT" | grep -q "http://127.0.0.1:9081/health/ready"; then
+        echo "PASS: Used Gateway check with correct port."
+    else
+        echo "FAIL: Incorrect gateway URL used."
+        echo "$OUTPUT"
+        exit 1
+    fi
 else
     echo "FAIL: Did not use Gateway check."
     echo "$OUTPUT"
     exit 1
 fi
+unset WELTGEWEBE_GATEWAY_PORT
 
 # 14. Test Health: Explicit URL
 echo ">>> Test 14: Health - Explicit URL"
@@ -428,37 +441,37 @@ fi
 rm -rf "$WELTGEWEBE_STATE_DIR"
 unset WELTGEWEBE_STATE_DIR
 
-# 16. Test Configurable Gateway URL
-echo ">>> Test 16: Configurable Gateway URL"
-export MOCK_HAS_CADDY="1"
+# 16. Test Gateway Warning (Port 8081)
+echo ">>> Test 16: Gateway Warning (Port 8081)"
+export WELTGEWEBE_GATEWAY_PORT="8081"
 export MOCK_PORT_MODE="0"
-export GATEWAY_HEALTH_URL="http://custom-gateway:9999/health"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --with-caddy 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Using Gateway Health (Caddy): http://custom-gateway:9999/health"; then
-    echo "PASS: Used custom Gateway URL."
+if echo "$OUTPUT" | grep -q "WARNING: Port 8081 is usually reserved for Pi-hole"; then
+    echo "PASS: Warning detected for port 8081."
 else
-    echo "FAIL: Did not use custom Gateway URL."
+    echo "FAIL: Warning missing for port 8081."
     echo "$OUTPUT"
     exit 1
 fi
-unset GATEWAY_HEALTH_URL
+unset WELTGEWEBE_GATEWAY_PORT
 
-# 17. Test Configurable Internal Port
-echo ">>> Test 17: Configurable Internal Port"
-export MOCK_HAS_CADDY="0"
+# 17. Test Configurable Internal Port (Port check verify)
+echo ">>> Test 17: Configurable Internal Port (Port check)"
 export MOCK_PORT_MODE="0"
 export API_INTERNAL_PORT="9090"
-export EXPECT_INTERNAL_PORT="9090" # Used by mock docker to verify arguments
+# We expect the script to call `docker compose port api 9090`
+# Our mock docker will verify this if we set EXPECT_INTERNAL_PORT (though currently only for port check if needed)
+# Actually, the mock checks "REQUESTED_PORT" against "EXPECT_INTERNAL_PORT" for port command
+export EXPECT_INTERNAL_PORT="9090"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Internal Container"; then
-    # The mock docker verifies the port usage inside the exec call
-    echo "PASS: Used custom Internal Port in fallback strategy."
+if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+     echo "PASS: Script ran successfully with custom internal port."
 else
-    echo "FAIL: Did not use Internal Container strategy."
-    echo "$OUTPUT"
-    exit 1
+     echo "FAIL: Script failed or wrong strategy."
+     echo "$OUTPUT"
+     exit 1
 fi
 unset API_INTERNAL_PORT
 unset EXPECT_INTERNAL_PORT
