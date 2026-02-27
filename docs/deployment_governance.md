@@ -1,7 +1,6 @@
 # Deployment Governance: Port Ownership
 
-To ensure stable operation on home servers (e.g., Raspberry Pi) alongside other services, `weltgewebe-up` enforces
-strict port ownership rules.
+To ensure stable operation on home servers alongside other services, `weltgewebe-up` enforces strict port ownership rules.
 
 ## Reserved Ports
 

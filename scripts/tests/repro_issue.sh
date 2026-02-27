@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # ------------------------------------------------------------------
-# Reproduction Test for Issue: "Detected API port: 0"
+# Regression Test for Issue: "Detected API port: 0"
+# Verifies that port 0 is NOT used and fallback to Docker Health occurs.
 # ------------------------------------------------------------------
 
 # Ensure we are in the repo root
@@ -22,25 +23,33 @@ cat << 'EOF' > mock_bin_repro/docker
 #!/bin/bash
 ARGS="$*"
 
+if [[ "$1" == "ps" ]]; then
+    # Return dummy API container ID
+    echo "api_cid_12345"
+    exit 0
+elif [[ "$1" == "inspect" ]]; then
+    # Mock Docker Health Status
+    if [[ "$ARGS" == *".State.Health.Status"* ]]; then
+        echo "healthy"
+    elif [[ "$ARGS" == *".State.Health.Log"* ]]; then
+        echo "[]"
+    # Mock Network Aliases check (needed to pass the final check)
+    elif [[ "$ARGS" == *".NetworkSettings.Networks"* ]]; then
+        echo "weltgewebe-api"
+    fi
+    exit 0
+fi
+
 if [[ "$1" == "compose" ]]; then
   if [[ "$ARGS" == *" config"* ]]; then
      echo "services: {}"
      exit 0
   fi
 
-  if [[ "$ARGS" == *" port api 8080"* ]]; then
-     # SIMULATE THE BUG: Return 0.0.0.0:0 or empty depending on how docker behaves
-     # The issue description says "Detected API port: 0", which implies the output
-     # of `docker compose port` was parsed to 0.
-     # Typically `docker compose port` returns nothing if not mapped, or 0.0.0.0:0 if explicitly mapped to random/0.
-     # Let's simulate returning 0.0.0.0:0 to match the "Port 0" symptom.
+  if [[ "$ARGS" == *" port api"* ]]; then
+     # SIMULATE THE SCENARIO: Port 0 returned (unpublished)
      echo "0.0.0.0:0"
      exit 0
-  fi
-
-  if [[ "$ARGS" == *" ps"* ]]; then
-      echo "api"
-      exit 0
   fi
 
   # Mock up -d
@@ -57,15 +66,25 @@ echo ""
 exit 0
 EOF
 
-# Mock curl (always fails on port 0)
+# Mock curl (fail on port 0)
 cat << 'EOF' > mock_bin_repro/curl
 #!/bin/bash
-# If the URL contains port 0, fail
+# If the URL contains port 0, fail hard to catch regression
 if [[ "$*" == *":0/health/ready"* ]]; then
     echo "curl: (7) Failed to connect to 127.0.0.1 port 0: Connection refused" >&2
     exit 7
 fi
 echo '{"status": "ok"}'
+exit 0
+EOF
+
+# Mock git (needed for state file logic)
+cat << 'EOF' > mock_bin_repro/git
+#!/bin/bash
+if [[ "$1" == "rev-parse" && "$2" == "HEAD" ]]; then
+    echo "mock-commit-hash"
+    exit 0
+fi
 exit 0
 EOF
 
@@ -80,22 +99,37 @@ echo "WEB_UPSTREAM_URL=https://example.com" > "$ENV_FILE"
 echo "WEB_UPSTREAM_HOST=example.com" >> "$ENV_FILE"
 
 # Run weltgewebe-up
-echo ">>> Running reproduction test..."
-# We expect failure because curl to port 0 will fail
+echo ">>> Running regression test..."
+
+# We expect SUCCESS now (fix applied)
+# Disable git pull via flag, but allow our mock git to run for HEAD detection if needed (though --no-pull skips it usually, let's see)
 if ./scripts/weltgewebe-up --no-pull --no-build > output.log 2>&1; then
-    echo "FAIL: Script succeeded unexpectedly."
+    echo "PASS: Script succeeded (Exit 0)."
+else
+    echo "FAIL: Script failed unexpectedly."
     cat output.log
     exit 1
-else
-    echo "Script failed as expected (exit code $?)."
 fi
 
 echo ">>> Analyze Output:"
 cat output.log
 
+# Assertions
 if grep -q "Detected API port: 0" output.log; then
-    echo "REPRODUCTION SUCCESS: Found 'Detected API port: 0' in output."
-else
-    echo "REPRODUCTION FAILED: Did not find 'Detected API port: 0'."
+    echo "FAIL: Regression detected - Found 'Detected API port: 0'."
     exit 1
 fi
+
+if grep -q "Health strategy selected: Docker Native Health" output.log; then
+    echo "PASS: Correct strategy selected (Docker Native Health)."
+else
+    echo "FAIL: Wrong strategy selected."
+    exit 1
+fi
+
+if grep -q "curl: (7)" output.log; then
+    echo "FAIL: Regression detected - Tried to curl port 0."
+    exit 1
+fi
+
+echo "REGRESSION TEST PASSED."

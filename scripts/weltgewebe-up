@@ -600,7 +600,10 @@ if [[ "$HEALTH_OK" != "1" ]]; then
 
     if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
         echo "Docker Health Log (last 3 entries):"
-        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+        # Use Go templates for robust log extraction (ExitCode + Output)
+        # We iterate over the logs and print the last few entries
+        # If 'sub' function is not available, we print all and tail them safely via shell
+        docker inspect --format '{{range .State.Health.Log}}{{println .ExitCode .Output}}{{end}}' "$API_CID" 2>/dev/null | tail -n 3 || echo "(No logs available)"
     fi
 
     echo "Tip: Check 'docker compose ps' and logs."
