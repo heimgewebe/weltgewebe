@@ -7,8 +7,8 @@ To ensure stable operation on home servers alongside other services, `weltgewebe
 | Port | Owner | Description |
 | :--- | :--- | :--- |
 | **8081** | **Pi-hole (FTL)** | Strictly reserved. Weltgewebe must NOT use this port. |
-| **9081** | **Weltgewebe Gateway** | Optional. Recommended port for local gateway access if enabled. |
 | **8080** | **Weltgewebe API** | Internal container port. Default unpublished. |
+| **80/443** | **Edge (Caddy)** | Reverse Proxy handling public traffic and TLS. |
 
 ## Health Check Strategy
 
@@ -19,10 +19,7 @@ To ensure stable operation on home servers alongside other services, `weltgewebe
 2. **Host Port Mapping:**
    * Used if the API container has a valid, non-zero port published to the host.
    * Example: `127.0.0.1:32768` -> `8080/tcp`.
-3. **Gateway (Explicit Only):**
-   * Used only if `WELTGEWEBE_GATEWAY_PORT` is set (e.g., `9081`).
-   * **Warning:** Setting this to `8081` triggers a warning.
-4. **Docker Native Health (Default):**
+3. **Docker Native Health (Default):**
    * Fallback. Uses `docker inspect` to check the container's internal health status.
    * Does not require `curl` or `wget` inside the container.
 
@@ -30,6 +27,5 @@ To ensure stable operation on home servers alongside other services, `weltgewebe
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `WELTGEWEBE_GATEWAY_PORT` | *(unset)* | Set to enable gateway health check (e.g., `9081`). |
 | `API_INTERNAL_PORT` | `8080` | Internal port of the API service (if modified). |
 | `HEALTH_URL` | *(unset)* | Full URL to force a specific health check endpoint. |

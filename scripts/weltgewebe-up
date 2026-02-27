@@ -497,16 +497,13 @@ echo ">> Health Check:"
 # Strategy Decision:
 # 1. Explicit HEALTH_URL (override)
 # 2. Host Port Mapping (if available)
-# 3. Gateway (Explicit Only - e.g. 9081)
-# 4. Docker Native Health (Default Fallback)
+# 3. Docker Native Health (Default Fallback)
 
 CHOSEN_STRATEGY="none"
 HEALTH_CHECK_CMD=""
 
 # Internal configuration defaults
 API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
-# Gateway Port Governance: 8081 is Pi-hole. Recommended is 9081.
-WELTGEWEBE_GATEWAY_PORT="${WELTGEWEBE_GATEWAY_PORT:-}"
 
 # Strategy 1: Explicit HEALTH_URL
 if [[ -n "${HEALTH_URL:-}" ]]; then
@@ -534,19 +531,7 @@ if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
     fi
 fi
 
-# Strategy 3: Gateway (Explicit Only)
-if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
-    if [[ -n "$WELTGEWEBE_GATEWAY_PORT" ]]; then
-        if [[ "$WELTGEWEBE_GATEWAY_PORT" == "8081" ]]; then
-            echo "WARNING: Port 8081 is usually reserved for Pi-hole. Recommended gateway port is 9081." >&2
-        fi
-        HEALTH_URL="http://127.0.0.1:${WELTGEWEBE_GATEWAY_PORT}/health/ready"
-        CHOSEN_STRATEGY="Gateway (Explicit)"
-        echo "Using Gateway Health (Explicit): $HEALTH_URL"
-    fi
-fi
-
-# Strategy 4: Docker Native Health (Default)
+# Strategy 3: Docker Native Health (Default)
 if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
     CHOSEN_STRATEGY="Docker Native Health"
     echo "Using Docker Native Health (inspect)"
@@ -600,10 +585,7 @@ if [[ "$HEALTH_OK" != "1" ]]; then
 
     if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
         echo "Docker Health Log (last 3 entries):"
-        # Use Go templates for robust log extraction (ExitCode + Output)
-        # We iterate over the logs and print the last few entries
-        # If 'sub' function is not available, we print all and tail them safely via shell
-        docker inspect --format '{{range .State.Health.Log}}{{println .ExitCode .Output}}{{end}}' "$API_CID" 2>/dev/null | tail -n 3 || echo "(No logs available)"
+        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
     fi
 
     echo "Tip: Check 'docker compose ps' and logs."

@@ -11,6 +11,7 @@ cd "$(dirname "$0")/../.."
 # Cleanup Trap
 cleanup() {
   rm -rf mock_bin test.env custom_state
+  unset HEALTH_URL API_INTERNAL_PORT
 }
 trap cleanup EXIT
 
@@ -382,29 +383,8 @@ else
     exit 1
 fi
 
-# 13. Test Health: Gateway (Explicit)
-echo ">>> Test 13: Health - Gateway (Explicit)"
-export MOCK_PORT_MODE="0"
-export WELTGEWEBE_GATEWAY_PORT="9081"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
-
-if echo "$OUTPUT" | grep -q "Health strategy selected: Gateway (Explicit)"; then
-    if echo "$OUTPUT" | grep -q "http://127.0.0.1:9081/health/ready"; then
-        echo "PASS: Used Gateway check with correct port."
-    else
-        echo "FAIL: Incorrect gateway URL used."
-        echo "$OUTPUT"
-        exit 1
-    fi
-else
-    echo "FAIL: Did not use Gateway check."
-    echo "$OUTPUT"
-    exit 1
-fi
-unset WELTGEWEBE_GATEWAY_PORT
-
-# 14. Test Health: Explicit URL
-echo ">>> Test 14: Health - Explicit URL"
+# 13. Test Health: Explicit URL
+echo ">>> Test 13: Health - Explicit URL"
 export HEALTH_URL="http://explicit-url:8080/health"
 export MOCK_PORT_MODE="VALID"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
@@ -418,8 +398,8 @@ else
 fi
 unset HEALTH_URL
 
-# 15. Test State Dir Customization
-echo ">>> Test 15: State Dir Customization"
+# 14. Test State Dir Customization
+echo ">>> Test 14: State Dir Customization"
 export WELTGEWEBE_STATE_DIR="$(pwd)/custom_state"
 mkdir -p "$WELTGEWEBE_STATE_DIR"
 # ENABLE PULL (no flag) so git mock is used and CURRENT_HEAD is set
@@ -441,23 +421,8 @@ fi
 rm -rf "$WELTGEWEBE_STATE_DIR"
 unset WELTGEWEBE_STATE_DIR
 
-# 16. Test Gateway Warning (Port 8081)
-echo ">>> Test 16: Gateway Warning (Port 8081)"
-export WELTGEWEBE_GATEWAY_PORT="8081"
-export MOCK_PORT_MODE="0"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
-
-if echo "$OUTPUT" | grep -q "WARNING: Port 8081 is usually reserved for Pi-hole"; then
-    echo "PASS: Warning detected for port 8081."
-else
-    echo "FAIL: Warning missing for port 8081."
-    echo "$OUTPUT"
-    exit 1
-fi
-unset WELTGEWEBE_GATEWAY_PORT
-
-# 17. Test Configurable Internal Port (Port check verify)
-echo ">>> Test 17: Configurable Internal Port (Port check)"
+# 15. Test Configurable Internal Port (Port check verify)
+echo ">>> Test 15: Configurable Internal Port (Port check)"
 export MOCK_PORT_MODE="0"
 export API_INTERNAL_PORT="9090"
 # We expect the script to call `docker compose port api 9090`
