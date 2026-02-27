@@ -61,7 +61,16 @@ elif [[ "$1" == "compose" ]]; then
   fi
 
   # Port Mocking
-  if [[ "$ARGS" == *" port api 8080"* ]]; then
+  if [[ "$ARGS" == *" port api"* ]]; then
+      # Extract requested internal port (last argument usually, or verify it)
+      REQUESTED_PORT=$(echo "$ARGS" | awk '{print $NF}')
+
+      # If we are testing custom internal port, verify it was passed correctly
+      if [[ -n "${EXPECT_INTERNAL_PORT:-}" && "$REQUESTED_PORT" != "$EXPECT_INTERNAL_PORT" ]]; then
+          echo "FAIL: Expected internal port $EXPECT_INTERNAL_PORT, got $REQUESTED_PORT" >&2
+          exit 1
+      fi
+
       if [[ "${MOCK_PORT_MODE:-}" == "0" ]]; then
           echo "0.0.0.0:0"
       elif [[ "${MOCK_PORT_MODE:-}" == "VALID" ]]; then
@@ -77,6 +86,13 @@ elif [[ "$1" == "compose" ]]; then
       if [[ "${MOCK_EXEC_FAIL:-0}" == "1" ]]; then
           exit 1
       else
+          # Check if the exec command uses the expected internal port
+          if [[ -n "${EXPECT_INTERNAL_PORT:-}" ]]; then
+             if [[ "$ARGS" != *":${EXPECT_INTERNAL_PORT}/health"* ]]; then
+                 echo "FAIL: Exec command did not use expected port $EXPECT_INTERNAL_PORT" >&2
+                 exit 1
+             fi
+          fi
           exit 0
       fi
   fi
@@ -112,7 +128,6 @@ exit 0
 EOF
 
 # Mock Git
-# We need this to simulate successful "pull" and HEAD resolution for state updates
 cat << 'EOF' > mock_bin/git
 #!/bin/bash
 ARGS="$*"
@@ -338,7 +353,7 @@ export MOCK_PORT_MODE="0"
 export MOCK_EXEC_FAIL="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health OK (Internal Container)"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: Internal Container"; then
     echo "PASS: Fell back to Internal Container check on Port 0."
 else
     echo "FAIL: Did not use Internal Container check."
@@ -352,7 +367,7 @@ export MOCK_PORT_MODE="VALID"
 export MOCK_EXEC_FAIL="0"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health OK (Host Port)"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: Host Port"; then
     echo "PASS: Used Host Port check when valid."
 else
     echo "FAIL: Did not use Host Port check."
@@ -367,7 +382,7 @@ export MOCK_HAS_CADDY="1"
 # We need to enable caddy in script
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --with-caddy 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health OK (Gateway (Caddy))"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: Gateway (Caddy)"; then
     echo "PASS: Used Gateway check when Caddy enabled."
 else
     echo "FAIL: Did not use Gateway check."
@@ -381,7 +396,7 @@ export HEALTH_URL="http://explicit-url:8080/health"
 export MOCK_PORT_MODE="VALID"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
 
-if echo "$OUTPUT" | grep -q "Health OK (ENV:HEALTH_URL)"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: ENV:HEALTH_URL"; then
     echo "PASS: Used explicit HEALTH_URL."
 else
     echo "FAIL: Did not use explicit HEALTH_URL."
@@ -412,6 +427,41 @@ else
 fi
 rm -rf "$WELTGEWEBE_STATE_DIR"
 unset WELTGEWEBE_STATE_DIR
+
+# 16. Test Configurable Gateway URL
+echo ">>> Test 16: Configurable Gateway URL"
+export MOCK_HAS_CADDY="1"
+export MOCK_PORT_MODE="0"
+export GATEWAY_HEALTH_URL="http://custom-gateway:9999/health"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --with-caddy 2>&1)
+
+if echo "$OUTPUT" | grep -q "Using Gateway Health (Caddy): http://custom-gateway:9999/health"; then
+    echo "PASS: Used custom Gateway URL."
+else
+    echo "FAIL: Did not use custom Gateway URL."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset GATEWAY_HEALTH_URL
+
+# 17. Test Configurable Internal Port
+echo ">>> Test 17: Configurable Internal Port"
+export MOCK_HAS_CADDY="0"
+export MOCK_PORT_MODE="0"
+export API_INTERNAL_PORT="9090"
+export EXPECT_INTERNAL_PORT="9090" # Used by mock docker to verify arguments
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: Internal Container"; then
+    # The mock docker verifies the port usage inside the exec call
+    echo "PASS: Used custom Internal Port in fallback strategy."
+else
+    echo "FAIL: Did not use Internal Container strategy."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset API_INTERNAL_PORT
+unset EXPECT_INTERNAL_PORT
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE

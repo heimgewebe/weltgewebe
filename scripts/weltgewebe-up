@@ -503,6 +503,10 @@ echo ">> Health Check:"
 CHOSEN_STRATEGY="none"
 HEALTH_CHECK_CMD=""
 
+# Internal configuration defaults
+GATEWAY_HEALTH_URL="${GATEWAY_HEALTH_URL:-http://127.0.0.1:8081/health/ready}"
+API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
+
 # Strategy 1: Explicit
 if [[ -n "${HEALTH_URL:-}" ]]; then
   CHOSEN_STRATEGY="ENV:HEALTH_URL"
@@ -517,8 +521,8 @@ if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
   # But actually, Caddy runs on 8081 internally for health.
   if [[ "$HAS_CADDY" == "1" && "$WITH_CADDY" == "1" ]]; then
       # Check if port 8081 is bound (usually it is bound to 127.0.0.1:8081 by default in compose)
-      # We assume the default contract: http://127.0.0.1:8081/health/ready
-      HEALTH_URL="http://127.0.0.1:8081/health/ready"
+      # We assume the default contract: http://127.0.0.1:8081/health/ready or GATEWAY_HEALTH_URL
+      HEALTH_URL="$GATEWAY_HEALTH_URL"
       CHOSEN_STRATEGY="Gateway (Caddy)"
       echo "Using Gateway Health (Caddy): $HEALTH_URL"
   fi
@@ -527,7 +531,7 @@ fi
 # Strategy 3 & 4: Determine API Port or Internal Check
 if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
     API_PORT=""
-    if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api 8080 2>/dev/null); then
+    if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
         # Parse port. If output is "0.0.0.0:0", we get "0", which is invalid.
         PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
         if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
@@ -548,6 +552,8 @@ if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
 fi
 
 # Execution
+echo "Health strategy selected: $CHOSEN_STRATEGY"
+
 MAX_RETRIES=10
 SLEEP_SEC=5
 HEALTH_OK=0
@@ -556,16 +562,17 @@ check_health() {
     if [[ "$CHOSEN_STRATEGY" == "Internal Container" ]]; then
         # Try curl, then wget inside container
         # We use a subshell to suppress command not found errors from the check logic itself
-        if docker compose "${BASE_ARGS[@]}" exec -T api sh -c '
+        # Note: We use the configured internal port here.
+        if docker compose "${BASE_ARGS[@]}" exec -T api sh -c "
             if command -v curl >/dev/null; then
-               curl -fsS http://localhost:8080/health/ready
+               curl -fsS http://localhost:${API_INTERNAL_PORT}/health/ready
             elif command -v wget >/dev/null; then
-               wget -qO- http://localhost:8080/health/ready
+               wget -qO- http://localhost:${API_INTERNAL_PORT}/health/ready
             else
-               echo "ERROR: Neither curl nor wget found in container." >&2
+               echo 'ERROR: Neither curl nor wget found in container.' >&2
                exit 127
             fi
-        ' >/dev/null 2>&1; then
+        " >/dev/null 2>&1; then
              return 0
         else
              return 1
