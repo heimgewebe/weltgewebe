@@ -46,6 +46,12 @@ elif [[ "$1" == "compose" ]]; then
      echo "services: {}"
      exit 0
   fi
+  # New: Echo COMPOSE_BAKE state if VERIFY_BAKE is set
+  if [[ "${VERIFY_BAKE:-}" == "1" ]]; then
+     # We output this to stderr or stdout, so we can grep it in tests
+     echo "VERIFY_BAKE: COMPOSE_BAKE=${COMPOSE_BAKE:-<unset>}"
+  fi
+
   echo "Mocked docker compose execution"
   exit 0
 else
@@ -128,5 +134,87 @@ else
   echo "$OUTPUT"
   exit 1
 fi
+
+# 4. Test Bake Auto-Disable (Missing /apps)
+echo ">>> Test 4: Bake Auto-Disable (Missing /apps)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export WELTGEWEBE_COMPOSE_BAKE="auto"
+export MOCK_ZOMBIE=0
+export VERIFY_BAKE=1
+# Use probe override to simulate missing directory
+export WELTGEWEBE_APPS_PROBE="./missing_apps_mock"
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
+  echo "PASS: COMPOSE_BAKE=0 set when apps probe fails."
+else
+  echo "FAIL: COMPOSE_BAKE=0 not detected."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+# 5. Test Bake Preserved (Existing /apps)
+echo ">>> Test 5: Bake Preserved (Existing /apps)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export WELTGEWEBE_COMPOSE_BAKE="auto"
+export VERIFY_BAKE=1
+# Point probe to existing repo dir (we know infra exists)
+export WELTGEWEBE_APPS_PROBE="infra"
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=<unset>"; then
+  echo "PASS: COMPOSE_BAKE preserved (unset) when apps probe succeeds."
+else
+  echo "FAIL: COMPOSE_BAKE forced unexpectedly."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+# 6. Test Bake Override
+echo ">>> Test 6: Bake Override (Explicit 0)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export VERIFY_BAKE=1
+export WELTGEWEBE_COMPOSE_BAKE=0
+# Probe should not matter here, but let's point to existing
+export WELTGEWEBE_APPS_PROBE="infra"
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
+  echo "PASS: Explicit WELTGEWEBE_COMPOSE_BAKE=0 honored."
+else
+  echo "FAIL: Override ignored."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+# 7. Test Bake Override Invalid
+echo ">>> Test 7: Bake Override Invalid (Warning)"
+# Clean environment
+unset COMPOSE_BAKE
+unset COMPOSE_BAKE_VALUE
+export VERIFY_BAKE=1
+export WELTGEWEBE_COMPOSE_BAKE="invalid_value"
+export WELTGEWEBE_APPS_PROBE="infra"
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -q "Unrecognized WELTGEWEBE_COMPOSE_BAKE"; then
+  echo "PASS: Warning detected for invalid value."
+else
+  echo "FAIL: Warning missing."
+  echo "$OUTPUT"
+  exit 1
+fi
+
+# Final Cleanup
+unset WELTGEWEBE_COMPOSE_BAKE
+unset WELTGEWEBE_APPS_PROBE
+unset VERIFY_BAKE
+unset MOCK_ZOMBIE
 
 echo ">>> All refined tests passed."

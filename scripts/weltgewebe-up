@@ -13,6 +13,7 @@ REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
+WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
 
 # Base Compose File (always required)
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
@@ -104,6 +105,46 @@ if [[ "$COMPOSE_PROJECT" == "compose" ]]; then
 fi
 
 export COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT"
+
+# --- Bake Configuration ---
+# If running in 'auto' mode and /apps is missing, we disable bake to prevent
+# "resolve : lstat /apps: no such file or directory" errors in environments
+# where the repository is sparse or modified (e.g. Heimserver production).
+
+COMPOSE_BAKE_VALUE=""
+# Allow overriding the probe path for testing/mocking
+# We default to checking '/apps' because the failure mode "lstat /apps: no such file"
+# specifically refers to the root path, not the repo path.
+WELTGEWEBE_APPS_PROBE="${WELTGEWEBE_APPS_PROBE:-/apps}"
+
+if [[ -z "${COMPOSE_BAKE:-}" ]]; then
+    # Normalize input to lowercase for robust matching
+    BAKE_MODE_NORMALIZED="${WELTGEWEBE_COMPOSE_BAKE,,}"
+
+    case "$BAKE_MODE_NORMALIZED" in
+        auto)
+            # Heuristic: If the root /apps directory is missing, we assume a sparse/production environment
+            # where buildx bake might fail due to missing context.
+            if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
+                COMPOSE_BAKE_VALUE="0"
+                echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)."
+            fi
+            ;;
+        0|false|off|no)
+            COMPOSE_BAKE_VALUE="0"
+            ;;
+        1|true|on|yes)
+            COMPOSE_BAKE_VALUE="1"
+            ;;
+        *)
+            echo "WARNING: Unrecognized WELTGEWEBE_COMPOSE_BAKE value '$WELTGEWEBE_COMPOSE_BAKE' (expected: auto|0/1|true/false|on/off|yes/no). Ignoring." >&2
+            ;;
+    esac
+
+    if [[ -n "$COMPOSE_BAKE_VALUE" ]]; then
+        export COMPOSE_BAKE="$COMPOSE_BAKE_VALUE"
+    fi
+fi
 
 # Guard: no foreign compose project using our config
 # We specifically look for projects that are NOT ours but use our config files.
