@@ -94,16 +94,7 @@ if [[ -n "${REPO_DIR:-}" ]]; then
 else
   # Auto-Detection Logic
 
-  # 2. Standard Path (/opt/weltgewebe)
-  # Only check if we are NOT already in a repo context (to prefer local dev)
-  if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
-      # Weak preference: only if CWD is not a valid repo
-      if [[ ! -f "./${BASE_COMPOSE_FILE}" ]]; then
-          FOUND_REPO="/opt/weltgewebe"
-      fi
-  fi
-
-  # 3. Git Root (if inside a git repo)
+  # 2. Git Root (if inside a git repo - Strongest Context)
   if [[ -z "$FOUND_REPO" ]]; then
       if git rev-parse --show-toplevel >/dev/null 2>&1; then
           GIT_ROOT="$(git rev-parse --show-toplevel)"
@@ -113,7 +104,14 @@ else
       fi
   fi
 
-  # 4. Symlink / Script Location Resolution
+  # 3. Current Working Directory (Local Context)
+  if [[ -z "$FOUND_REPO" ]]; then
+      if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
+          FOUND_REPO="$(pwd)"
+      fi
+  fi
+
+  # 4. Symlink / Script Location Resolution (Physical Context)
   if [[ -z "$FOUND_REPO" ]]; then
       SCRIPT_SOURCE="${BASH_SOURCE[0]}"
       while [ -h "$SCRIPT_SOURCE" ]; do
@@ -129,10 +127,10 @@ else
       fi
   fi
 
-  # 5. Fallback: Current Working Directory
+  # 5. Standard Path (/opt/weltgewebe - System Fallback)
   if [[ -z "$FOUND_REPO" ]]; then
-      if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
-          FOUND_REPO="$(pwd)"
+      if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
+          FOUND_REPO="/opt/weltgewebe"
       fi
   fi
 fi

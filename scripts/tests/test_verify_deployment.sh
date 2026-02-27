@@ -213,7 +213,9 @@ fi
 
 # 8. Test REPO_DIR Auto-Detection (Unset)
 echo ">>> Test 8: REPO_DIR Auto-Detection"
-unset REPO_DIR
+# Harden tests against host environment
+unset REPO_DIR COMPOSE_BAKE WELTGEWEBE_COMPOSE_BAKE WELTGEWEBE_APPS_PROBE VERIFY_BAKE
+
 # We rely on CWD/Git fallback since we are in repo root (managed by test setup cd)
 # Ensure we are in a path that has the config file
 if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
