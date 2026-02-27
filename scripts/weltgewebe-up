@@ -82,53 +82,59 @@ done
 
 FOUND_REPO=""
 
-# 1. Environment Variable (Explicit)
+# 1. Environment Variable (Explicit - Strict)
 if [[ -n "${REPO_DIR:-}" ]]; then
   if [[ -f "${REPO_DIR}/${BASE_COMPOSE_FILE}" ]]; then
      FOUND_REPO="$REPO_DIR"
   else
-     echo "WARNING: REPO_DIR set to '$REPO_DIR' but config '$BASE_COMPOSE_FILE' not found there." >&2
+     echo "ERROR: REPO_DIR explicitly set to '$REPO_DIR' but config '$BASE_COMPOSE_FILE' not found." >&2
+     echo "       Refusing fallback to prevent deploying from wrong location." >&2
+     exit 1
   fi
-fi
+else
+  # Auto-Detection Logic
 
-# 2. Standard Path (/opt/weltgewebe)
-if [[ -z "$FOUND_REPO" ]]; then
-    if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
-        FOUND_REPO="/opt/weltgewebe"
-    fi
-fi
+  # 2. Standard Path (/opt/weltgewebe)
+  # Only check if we are NOT already in a repo context (to prefer local dev)
+  if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
+      # Weak preference: only if CWD is not a valid repo
+      if [[ ! -f "./${BASE_COMPOSE_FILE}" ]]; then
+          FOUND_REPO="/opt/weltgewebe"
+      fi
+  fi
 
-# 3. Git Root (if inside a git repo)
-if [[ -z "$FOUND_REPO" ]]; then
-    if git rev-parse --show-toplevel >/dev/null 2>&1; then
-        GIT_ROOT="$(git rev-parse --show-toplevel)"
-        if [[ -f "${GIT_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
-            FOUND_REPO="$GIT_ROOT"
-        fi
-    fi
-fi
+  # 3. Git Root (if inside a git repo)
+  if [[ -z "$FOUND_REPO" ]]; then
+      if git rev-parse --show-toplevel >/dev/null 2>&1; then
+          GIT_ROOT="$(git rev-parse --show-toplevel)"
+          if [[ -f "${GIT_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+              FOUND_REPO="$GIT_ROOT"
+          fi
+      fi
+  fi
 
-# 4. Symlink / Script Location Resolution
-if [[ -z "$FOUND_REPO" ]]; then
-    SCRIPT_SOURCE="${BASH_SOURCE[0]}"
-    while [ -h "$SCRIPT_SOURCE" ]; do
+  # 4. Symlink / Script Location Resolution
+  if [[ -z "$FOUND_REPO" ]]; then
+      SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+      while [ -h "$SCRIPT_SOURCE" ]; do
+        SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
+        SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+        [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
+      done
       SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
-      SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
-      [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
-    done
-    SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
-    # Assuming script is in scripts/weltgewebe-up, repo root is parent
-    POTENTIAL_ROOT="$(dirname "$SCRIPT_DIR")"
-    if [[ -f "${POTENTIAL_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
-        FOUND_REPO="$POTENTIAL_ROOT"
-    fi
-fi
+      # Assuming script is in scripts/weltgewebe-up, repo root is parent
+      POTENTIAL_ROOT="$(dirname "$SCRIPT_DIR")"
+      if [[ -f "${POTENTIAL_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+          FOUND_REPO="$POTENTIAL_ROOT"
+      fi
+  fi
 
-# 5. Fallback: Current Working Directory
-if [[ -z "$FOUND_REPO" ]]; then
-    if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
-        FOUND_REPO="$(pwd)"
-    fi
+  # 5. Fallback: Current Working Directory
+  if [[ -z "$FOUND_REPO" ]]; then
+      if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
+          FOUND_REPO="$(pwd)"
+      fi
+  fi
 fi
 
 # Verification & Safety

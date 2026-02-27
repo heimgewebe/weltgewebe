@@ -214,19 +214,40 @@ fi
 # 8. Test REPO_DIR Auto-Detection (Unset)
 echo ">>> Test 8: REPO_DIR Auto-Detection"
 unset REPO_DIR
-# We rely on CWD fallback since we are in repo root (managed by test setup cd)
+# We rely on CWD/Git fallback since we are in repo root (managed by test setup cd)
 # Ensure we are in a path that has the config file
 if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
     echo "FAIL: Test setup error - config file not found in CWD."
     exit 1
 fi
 
-# We expect success (exit 0) and correct execution
-if ./scripts/weltgewebe-up --no-pull --no-build >/dev/null 2>&1; then
-    echo "PASS: Auto-detection worked (script ran successfully)."
+# We expect success (exit 0) and validation that correct repo was picked
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+if echo "$OUTPUT" | grep -qF "Repo:    $(pwd)"; then
+    echo "PASS: Auto-detection worked and selected current directory."
 else
-    echo "FAIL: Auto-detection failed."
+    echo "FAIL: Auto-detection failed or selected wrong repo."
+    echo "$OUTPUT"
     exit 1
+fi
+
+# 9. Test REPO_DIR Strictness (Invalid Path)
+echo ">>> Test 9: REPO_DIR Strictness (Invalid Path)"
+export REPO_DIR="/invalid/path/to/repo"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "ERROR: REPO_DIR explicitly set"; then
+   if echo "$OUTPUT" | grep -q "Refusing fallback"; then
+      echo "PASS: Strict check rejected invalid REPO_DIR."
+   else
+      echo "FAIL: Error message missing 'Refusing fallback'."
+      echo "$OUTPUT"
+      exit 1
+   fi
+else
+   echo "FAIL: Script did not fail on invalid REPO_DIR."
+   echo "$OUTPUT"
+   exit 1
 fi
 
 # Final Cleanup
