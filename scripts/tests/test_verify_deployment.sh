@@ -10,7 +10,7 @@ cd "$(dirname "$0")/../.."
 
 # Cleanup Trap
 cleanup() {
-  rm -rf mock_bin test.env
+  rm -rf mock_bin test.env custom_state
 }
 trap cleanup EXIT
 
@@ -43,13 +43,42 @@ elif [[ "$1" == "inspect" ]]; then
     exit 0
 elif [[ "$1" == "compose" ]]; then
   if [[ "$ARGS" == *" config"* ]]; then
-     echo "services: {}"
+     # Check if we should simulate Caddy presence
+     if [[ "${MOCK_HAS_CADDY:-0}" == "1" && "$ARGS" == *"--services"* ]]; then
+        echo "caddy"
+     fi
+     if [[ "$ARGS" != *"--services"* ]]; then
+         # config check succeeds
+         echo "services: {}"
+     fi
      exit 0
   fi
+
   # New: Echo COMPOSE_BAKE state if VERIFY_BAKE is set
   if [[ "${VERIFY_BAKE:-}" == "1" ]]; then
      # We output this to stderr or stdout, so we can grep it in tests
      echo "VERIFY_BAKE: COMPOSE_BAKE=${COMPOSE_BAKE:-<unset>}"
+  fi
+
+  # Port Mocking
+  if [[ "$ARGS" == *" port api 8080"* ]]; then
+      if [[ "${MOCK_PORT_MODE:-}" == "0" ]]; then
+          echo "0.0.0.0:0"
+      elif [[ "${MOCK_PORT_MODE:-}" == "VALID" ]]; then
+          echo "0.0.0.0:32768"
+      else
+          echo ""
+      fi
+      exit 0
+  fi
+
+  # Exec Mocking
+  if [[ "$ARGS" == *" exec -T api"* ]]; then
+      if [[ "${MOCK_EXEC_FAIL:-0}" == "1" ]]; then
+          exit 1
+      else
+          exit 0
+      fi
   fi
 
   echo "Mocked docker compose execution"
@@ -74,8 +103,38 @@ EOF
 # Mock curl
 cat << 'EOF' > mock_bin/curl
 #!/bin/bash
+# Fail if trying to connect to port 0
+if [[ "$*" == *":0/health/ready"* ]]; then
+    exit 7
+fi
 echo '{"status": "ok"}'
 exit 0
+EOF
+
+# Mock Git
+# We need this to simulate successful "pull" and HEAD resolution for state updates
+cat << 'EOF' > mock_bin/git
+#!/bin/bash
+ARGS="$*"
+if [[ "$1" == "rev-parse" ]]; then
+    if [[ "$ARGS" == *"--show-toplevel"* ]]; then
+        # Return the exported REPO_DIR
+        echo "$REPO_DIR"
+    elif [[ "$ARGS" == *"HEAD"* ]]; then
+        echo "mock-sha-12345"
+    fi
+    exit 0
+elif [[ "$1" == "fetch" ]]; then
+    exit 0
+elif [[ "$1" == "pull" ]]; then
+    exit 0
+elif [[ "$1" == "symbolic-ref" ]]; then
+    echo "main"
+    exit 0
+else
+    # Fallback to true
+    exit 0
+fi
 EOF
 
 chmod +x mock_bin/*
@@ -252,11 +311,116 @@ else
    exit 1
 fi
 
+# 10. Test REPO_DIR System Path Rejection
+echo ">>> Test 10: REPO_DIR System Path Rejection"
+export REPO_DIR="/usr"
+# Create fake file to bypass first check
+touch /usr/infra/compose/compose.prod.yml 2>/dev/null || true
+# We can't really test this easily without root, but let's try assuming the script checks string value
+# Actually the script checks file existence first, so if we can't write to /usr, it fails early.
+# We will skip this test if we can't write to /usr (likely).
+if [[ -w "/usr" ]]; then
+   OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+   if echo "$OUTPUT" | grep -q "ERROR: Resolved REPO_DIR is system path"; then
+        echo "PASS: System path rejected."
+   else
+        echo "FAIL: System path NOT rejected."
+        exit 1
+   fi
+else
+   echo "SKIP: Cannot write to /usr to test system path rejection."
+fi
+unset REPO_DIR
+
+# 11. Test Health: Internal Fallback (Port 0)
+echo ">>> Test 11: Health - Internal Fallback (Port 0)"
+export MOCK_PORT_MODE="0"
+export MOCK_EXEC_FAIL="0"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health OK (Internal Container)"; then
+    echo "PASS: Fell back to Internal Container check on Port 0."
+else
+    echo "FAIL: Did not use Internal Container check."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# 12. Test Health: Host Port (Valid)
+echo ">>> Test 12: Health - Host Port (Valid)"
+export MOCK_PORT_MODE="VALID"
+export MOCK_EXEC_FAIL="0"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health OK (Host Port)"; then
+    echo "PASS: Used Host Port check when valid."
+else
+    echo "FAIL: Did not use Host Port check."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# 13. Test Health: Gateway (Caddy)
+echo ">>> Test 13: Health - Gateway (Caddy)"
+export MOCK_PORT_MODE="0"
+export MOCK_HAS_CADDY="1"
+# We need to enable caddy in script
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --with-caddy 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health OK (Gateway (Caddy))"; then
+    echo "PASS: Used Gateway check when Caddy enabled."
+else
+    echo "FAIL: Did not use Gateway check."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# 14. Test Health: Explicit URL
+echo ">>> Test 14: Health - Explicit URL"
+export HEALTH_URL="http://explicit-url:8080/health"
+export MOCK_PORT_MODE="VALID"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+
+if echo "$OUTPUT" | grep -q "Health OK (ENV:HEALTH_URL)"; then
+    echo "PASS: Used explicit HEALTH_URL."
+else
+    echo "FAIL: Did not use explicit HEALTH_URL."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset HEALTH_URL
+
+# 15. Test State Dir Customization
+echo ">>> Test 15: State Dir Customization"
+export WELTGEWEBE_STATE_DIR="$(pwd)/custom_state"
+mkdir -p "$WELTGEWEBE_STATE_DIR"
+# ENABLE PULL (no flag) so git mock is used and CURRENT_HEAD is set
+OUTPUT=$(./scripts/weltgewebe-up --no-build 2>&1)
+
+if [[ -f "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state" ]]; then
+    CONTENT=$(cat "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state")
+    if [[ "$CONTENT" == "mock-sha-12345" ]]; then
+        echo "PASS: State file created in custom directory with correct SHA."
+    else
+        echo "FAIL: State file content incorrect. Got: $CONTENT"
+        exit 1
+    fi
+else
+    echo "FAIL: State file not found in custom directory."
+    echo "$OUTPUT"
+    exit 1
+fi
+rm -rf "$WELTGEWEBE_STATE_DIR"
+unset WELTGEWEBE_STATE_DIR
+
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
 unset WELTGEWEBE_APPS_PROBE
 unset VERIFY_BAKE
 unset MOCK_ZOMBIE
 unset REPO_DIR
+unset MOCK_PORT_MODE
+unset MOCK_EXEC_FAIL
+unset MOCK_HAS_CADDY
 
 echo ">>> All refined tests passed."
