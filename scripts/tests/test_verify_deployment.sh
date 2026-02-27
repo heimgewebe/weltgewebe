@@ -28,6 +28,7 @@ if [[ "$1" == "ps" ]]; then
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
   elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
+  # HANDLE DIRECT docker ps -q api (if used)
   elif [[ "$ARGS" == *"-q api"* ]]; then
       echo "api_container_id"
   else
@@ -45,7 +46,8 @@ elif [[ "$1" == "inspect" ]]; then
     elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Status"* ]]; then
         echo "healthy"
     elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Log"* ]]; then
-        echo "[{\"Output\": \"Ok\"}]"
+        # This simulates the Go template output we expect (ExitCode Output)
+        echo "0 Ok"
     fi
     exit 0
 elif [[ "$1" == "compose" ]]; then
@@ -59,6 +61,12 @@ elif [[ "$1" == "compose" ]]; then
          echo "services: {}"
      fi
      exit 0
+  fi
+
+  # HANDLE docker compose ... ps -q api
+  if [[ "$ARGS" == *" ps -q api"* ]]; then
+      echo "api_container_id"
+      exit 0
   fi
 
   # New: Echo COMPOSE_BAKE state if VERIFY_BAKE is set
