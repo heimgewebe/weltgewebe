@@ -9,7 +9,7 @@ set -euo pipefail
 # Usage:
 #   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no]
 
-REPO_DIR="${REPO_DIR:-/opt/weltgewebe}"
+# REPO_DIR defaults are handled in resolution logic below
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
 COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
 REMOTE="${REMOTE:-origin}"
@@ -76,22 +76,79 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-# Ensure we are in the repo directory
-if [[ -d "$REPO_DIR" ]]; then
-  cd "$REPO_DIR"
-else
-  echo "WARNING: REPO_DIR '$REPO_DIR' not found. Assuming current directory."
-  REPO_DIR="$(pwd)"
-  if [[ ! -f "$BASE_COMPOSE_FILE" ]]; then
-     echo "ERROR: Could not find $BASE_COMPOSE_FILE in current directory."
-     exit 1
+# --- REPO_DIR Resolution ---
+# We must find the actual repository root.
+# Priority: ENV -> /opt -> Git Root -> Symlink -> CWD
+
+FOUND_REPO=""
+
+# 1. Environment Variable (Explicit)
+if [[ -n "${REPO_DIR:-}" ]]; then
+  if [[ -f "${REPO_DIR}/${BASE_COMPOSE_FILE}" ]]; then
+     FOUND_REPO="$REPO_DIR"
+  else
+     echo "WARNING: REPO_DIR set to '$REPO_DIR' but config '$BASE_COMPOSE_FILE' not found there." >&2
   fi
 fi
 
-# Determine REPO_DIR from script location (robust against CWD)
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 2. Standard Path (/opt/weltgewebe)
+if [[ -z "$FOUND_REPO" ]]; then
+    if [[ -f "/opt/weltgewebe/${BASE_COMPOSE_FILE}" ]]; then
+        FOUND_REPO="/opt/weltgewebe"
+    fi
+fi
 
-# Ensure we are anchored in the repo root for all subsequent operations
+# 3. Git Root (if inside a git repo)
+if [[ -z "$FOUND_REPO" ]]; then
+    if git rev-parse --show-toplevel >/dev/null 2>&1; then
+        GIT_ROOT="$(git rev-parse --show-toplevel)"
+        if [[ -f "${GIT_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+            FOUND_REPO="$GIT_ROOT"
+        fi
+    fi
+fi
+
+# 4. Symlink / Script Location Resolution
+if [[ -z "$FOUND_REPO" ]]; then
+    SCRIPT_SOURCE="${BASH_SOURCE[0]}"
+    while [ -h "$SCRIPT_SOURCE" ]; do
+      SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
+      SCRIPT_SOURCE="$(readlink "$SCRIPT_SOURCE")"
+      [[ $SCRIPT_SOURCE != /* ]] && SCRIPT_SOURCE="$SCRIPT_DIR/$SCRIPT_SOURCE"
+    done
+    SCRIPT_DIR="$( cd -P "$( dirname "$SCRIPT_SOURCE" )" >/dev/null 2>&1 && pwd )"
+    # Assuming script is in scripts/weltgewebe-up, repo root is parent
+    POTENTIAL_ROOT="$(dirname "$SCRIPT_DIR")"
+    if [[ -f "${POTENTIAL_ROOT}/${BASE_COMPOSE_FILE}" ]]; then
+        FOUND_REPO="$POTENTIAL_ROOT"
+    fi
+fi
+
+# 5. Fallback: Current Working Directory
+if [[ -z "$FOUND_REPO" ]]; then
+    if [[ -f "./${BASE_COMPOSE_FILE}" ]]; then
+        FOUND_REPO="$(pwd)"
+    fi
+fi
+
+# Verification & Safety
+if [[ -z "$FOUND_REPO" ]]; then
+    echo "ERROR: Could not locate repository root containing $BASE_COMPOSE_FILE." >&2
+    echo "       Please run from repo root, install to /opt/weltgewebe, or set REPO_DIR." >&2
+    exit 1
+fi
+
+# Safety Guard: Prevent System Paths
+# If the script is installed to /usr/local/bin and we fallback incorrectly, we might try to write to /usr/local/.ops
+if [[ "$FOUND_REPO" == "/usr/local" || "$FOUND_REPO" == "/usr" || "$FOUND_REPO" == "/usr/bin" ]]; then
+    echo "ERROR: Resolved REPO_DIR is system path: $FOUND_REPO" >&2
+    echo "       This prevents accidental system modification." >&2
+    echo "       Please set REPO_DIR explicitly to your repository path." >&2
+    exit 1
+fi
+
+REPO_DIR="$FOUND_REPO"
+export REPO_DIR
 cd "$REPO_DIR"
 
 # Validation: Project Name
@@ -127,7 +184,7 @@ if [[ -z "${COMPOSE_BAKE:-}" ]]; then
             # where buildx bake might fail due to missing context.
             if [[ ! -d "$WELTGEWEBE_APPS_PROBE" ]]; then
                 COMPOSE_BAKE_VALUE="0"
-                echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)."
+                echo "NOTE: Apps directory '$WELTGEWEBE_APPS_PROBE' missing. Disabling COMPOSE_BAKE (auto)." >&2
             fi
             ;;
         0|false|off|no)

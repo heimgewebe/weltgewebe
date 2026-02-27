@@ -211,10 +211,29 @@ else
   exit 1
 fi
 
+# 8. Test REPO_DIR Auto-Detection (Unset)
+echo ">>> Test 8: REPO_DIR Auto-Detection"
+unset REPO_DIR
+# We rely on CWD fallback since we are in repo root (managed by test setup cd)
+# Ensure we are in a path that has the config file
+if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
+    echo "FAIL: Test setup error - config file not found in CWD."
+    exit 1
+fi
+
+# We expect success (exit 0) and correct execution
+if ./scripts/weltgewebe-up --no-pull --no-build >/dev/null 2>&1; then
+    echo "PASS: Auto-detection worked (script ran successfully)."
+else
+    echo "FAIL: Auto-detection failed."
+    exit 1
+fi
+
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
 unset WELTGEWEBE_APPS_PROBE
 unset VERIFY_BAKE
 unset MOCK_ZOMBIE
+unset REPO_DIR
 
 echo ">>> All refined tests passed."
