@@ -11,7 +11,9 @@ cd "$(dirname "$0")/../.."
 # Cleanup Trap
 cleanup() {
   rm -rf mock_bin test.env custom_state
-  rm -f "${MOCK_PORT_CALLS_FILE:-}"
+  if [[ -n "${MOCK_PORT_CALLS_FILE:-}" ]]; then
+      rm -f "$MOCK_PORT_CALLS_FILE"
+  fi
   unset HEALTH_URL API_INTERNAL_PORT MOCK_HEALTH_EXISTS MOCK_PORT_CALLS_FILE
 }
 trap cleanup EXIT
@@ -501,6 +503,10 @@ if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"
         exit 1
     elif echo "$OUTPUT" | grep -q "Health check failed after"; then
         echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
+        echo "$OUTPUT"
+        exit 1
+    elif ! echo "$OUTPUT" | grep -q "ERROR: Docker HEALTHCHECK not defined for container 'api'."; then
+        echo "FAIL: Did not find exact expected ERROR message."
         echo "$OUTPUT"
         exit 1
     else
