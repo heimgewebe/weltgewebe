@@ -495,7 +495,7 @@ export MOCK_INSPECT_FAIL="1" # Explicitly fail inspect
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "docker inspect failed while checking health metadata"; then
-    if echo "$OUTPUT" | grep -q "Waiting for health..."; then
+    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
         echo "PASS: Detected inspect failure and retried correctly."
     else
         echo "FAIL: Detected inspect failure but did not retry."
