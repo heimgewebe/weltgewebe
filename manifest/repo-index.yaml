@@ -1,0 +1,19 @@
+zones:
+  norm:
+    path: architecture/
+    canonical_docs:
+      - overview.md
+      - security.md
+  reality:
+    path: runtime/
+    canonical_docs:
+      - README.md
+  runbooks:
+    path: runbooks/
+    canonical_docs:
+      - README.md
+
+checks:
+  - scripts/docmeta/check_repo_index_consistency.py
+  - scripts/docmeta/check_doc_review_age.py
+  - scripts/docmeta/generate_system_map.py
