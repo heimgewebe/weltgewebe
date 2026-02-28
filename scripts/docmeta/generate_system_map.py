@@ -1,7 +1,7 @@
 import os
 import sys
 
-from docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter
 
 def main():
     repo_index = parse_repo_index()

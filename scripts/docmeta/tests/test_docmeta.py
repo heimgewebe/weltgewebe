@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from docmeta import parse_frontmatter
+from scripts.docmeta.docmeta import parse_frontmatter
 
 class TestDocMetaParser(unittest.TestCase):
     def test_parse_frontmatter_crlf_eof(self):

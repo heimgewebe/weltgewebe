@@ -2,7 +2,7 @@ import os
 import sys
 import datetime
 
-from docmeta import REPO_ROOT, parse_review_policy, parse_repo_index, parse_frontmatter
+from scripts.docmeta.docmeta import REPO_ROOT, parse_review_policy, parse_repo_index, parse_frontmatter
 
 def main():
     policy = parse_review_policy()

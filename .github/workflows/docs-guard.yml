@@ -34,23 +34,15 @@ jobs:
           python-version: '3.12'
 
       - name: Run Tests
-        env:
-          PYTHONPATH: scripts/docmeta
         run: python3 -m unittest discover scripts/docmeta/tests/
 
       - name: Repo Index Consistency
-        env:
-          PYTHONPATH: scripts/docmeta
-        run: python3 scripts/docmeta/check_repo_index_consistency.py
+        run: python3 -m scripts.docmeta.check_repo_index_consistency
 
       - name: Review Age Check
-        env:
-          PYTHONPATH: scripts/docmeta
-        run: python3 scripts/docmeta/check_doc_review_age.py
+        run: python3 -m scripts.docmeta.check_doc_review_age
 
       - name: Ensure SYSTEM_MAP up to date
-        env:
-          PYTHONPATH: scripts/docmeta
         run: |
-          python3 scripts/docmeta/generate_system_map.py
+          python3 -m scripts.docmeta.generate_system_map
           git diff --exit-code SYSTEM_MAP.md
