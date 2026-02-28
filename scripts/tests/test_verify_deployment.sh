@@ -475,7 +475,7 @@ export API_INTERNAL_PORT="9090"
 export EXPECT_INTERNAL_PORT="9090"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Using Host Port Mapping" || echo "$OUTPUT" | grep -q "Health strategy selected: Host Port Mapping"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health" && echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
      echo "PASS: Script ran successfully with custom internal port."
 else
      echo "FAIL: Script failed or wrong strategy."

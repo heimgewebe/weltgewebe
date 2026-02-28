@@ -12,16 +12,17 @@ To ensure stable operation on home servers alongside other services, `weltgewebe
 
 ## Health Check Strategy
 
-`weltgewebe-up` uses a decoupled strategy to robustly determine service health without making assumptions about host ports:
+`weltgewebe-up` prioritizes Docker Native Health first; otherwise, it falls back to HTTP Health via explicit `HEALTH_URL` or host port mapping to determine service health without making assumptions about host environments:
 
-1. **Docker Native Health (Default):**
-   * Priority. Uses `docker inspect` to check if a `HEALTHCHECK` is defined and validates its internal health status.
+1. **Docker Native Health (Priority):**
+   * Default. Uses `docker inspect` to check if a `HEALTHCHECK` is defined and validates its internal health status.
    * Prevents erroneous port probing and false alarms.
-2. **ENV:HEALTH_URL:**
-   * Used if a native check doesn't exist and `HEALTH_URL` is set in the environment.
-3. **Host Port Mapping:**
-   * Used as the final HTTP fallback if the API container has a valid, non-zero port published to the host.
-   * Example: `127.0.0.1:32768` -> `8080/tcp`.
+
+2. **HTTP Health (Fallback):**
+   * **Explicit URL (`HEALTH_URL`):**
+     Used if a native check doesn't exist and `HEALTH_URL` is set in the environment.
+   * **Host Port Mapping:**
+     Used as the final HTTP fallback if the API container has a valid, non-zero port published to the host. Example: `127.0.0.1:32768` -> `8080/tcp`.
 
 ## Configuration
 
