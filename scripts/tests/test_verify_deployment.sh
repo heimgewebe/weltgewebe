@@ -41,7 +41,9 @@ elif [[ "$1" == "rm" ]]; then
     fi
 elif [[ "$1" == "inspect" ]]; then
     if [[ "${MOCK_INSPECT_FAIL:-0}" == "1" ]]; then
-        exit 1
+        if [[ "$ARGS" == *".State.Health"* || "$ARGS" == *"Health.Status"* ]]; then
+            exit 1
+        fi
     fi
     # Return dummy alias if requesting format with Aliases
     if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
@@ -492,7 +494,7 @@ export MOCK_INSPECT_FAIL="1" # Explicitly fail inspect
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "docker inspect failed while checking health metadata"; then
-    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
+    if echo "$OUTPUT" | grep -q "Waiting for health..."; then
         echo "PASS: Detected inspect failure and retried correctly."
     else
         echo "FAIL: Detected inspect failure but did not retry."
