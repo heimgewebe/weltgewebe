@@ -553,8 +553,8 @@ check_health() {
 
         # Explicitly check if HEALTHCHECK is defined
         HEALTH_DEFINED_RAW=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null)
-        rc=$?
-        if [[ $rc -ne 0 ]]; then
+        rc_health_defined=$?
+        if [[ $rc_health_defined -ne 0 ]]; then
             echo "  ERROR: docker inspect failed while checking health metadata for container 'api'."
             echo "         Docker may be restarting or unavailable. Retrying..."
             return 1
@@ -567,8 +567,8 @@ check_health() {
         fi
 
         STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null)
-        rc=$?
-        if [[ $rc -ne 0 || -z "$STATUS" ]]; then
+        rc_status=$?
+        if [[ $rc_status -ne 0 || -z "$STATUS" ]]; then
             echo "  Status: unknown (docker inspect failed)"
             return 1
         fi
@@ -623,8 +623,12 @@ if [[ "$HEALTH_OK" != "1" ]]; then
     [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
 
     if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
-        echo "Docker Health Log (last 3 entries):"
-        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+        if [[ -n "${API_CID:-}" ]]; then
+            echo "Docker Health Log (last 3 entries):"
+            docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+        else
+            echo "Container 'api' not found, skipping log."
+        fi
     fi
 
     echo "Tip: Check 'docker compose ps' and logs."
