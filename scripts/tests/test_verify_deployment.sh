@@ -31,7 +31,11 @@ if [[ "$1" == "ps" ]]; then
       echo "zombie-generic compose"
   # HANDLE DIRECT docker ps -q api (if used)
   elif [[ "$ARGS" == *"-q api"* ]]; then
-      echo "api_container_id"
+      if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
+          echo ""
+      else
+          echo "api_container_id"
+      fi
   else
     echo ""
   fi
@@ -82,7 +86,11 @@ elif [[ "$1" == "compose" ]]; then
 
   # HANDLE docker compose ... ps -q api
   if [[ "$ARGS" == *" ps -q api"* ]]; then
-      echo "api_container_id"
+      if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
+          echo ""
+      else
+          echo "api_container_id"
+      fi
       exit 0
   fi
 
@@ -458,8 +466,8 @@ unset WELTGEWEBE_STATE_DIR
 
 # 15. Test Configurable Internal Port (Port check verify)
 echo ">>> Test 15: Configurable Internal Port (Port check)"
-export MOCK_PORT_MODE="0"
-export MOCK_HEALTH_EXISTS="1"
+export MOCK_PORT_MODE="VALID"
+export MOCK_HEALTH_EXISTS="0"
 export API_INTERNAL_PORT="9090"
 # We expect the script to call `docker compose port api 9090`
 # Our mock docker will verify this if we set EXPECT_INTERNAL_PORT
@@ -467,7 +475,7 @@ export API_INTERNAL_PORT="9090"
 export EXPECT_INTERNAL_PORT="9090"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+if echo "$OUTPUT" | grep -q "Using Host Port Mapping" || echo "$OUTPUT" | grep -q "Health strategy selected: Host Port Mapping"; then
      echo "PASS: Script ran successfully with custom internal port."
 else
      echo "FAIL: Script failed or wrong strategy."
@@ -601,6 +609,25 @@ else
 fi
 unset MOCK_HEALTH_EXISTS
 unset MOCK_PORT_MODE
+
+# 19. Test Missing Container Logic
+echo ">>> Test 19: Missing Container Logic"
+export MOCK_MISSING_API="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "ERROR: Container 'api' not found."; then
+    if echo "$OUTPUT" | grep -q "HEALTHCHECK not defined"; then
+        echo "FAIL: Emitted 'missing healthcheck' despite missing container."
+        echo "$OUTPUT"
+        exit 1
+    fi
+    echo "PASS: Detected missing container before checking strategy."
+else
+    echo "FAIL: Did not detect missing container correctly."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_MISSING_API
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE

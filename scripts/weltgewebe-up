@@ -497,18 +497,22 @@ echo ">> Health Check:"
 # Strategy Decision:
 
 API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+if [[ -z "${API_CID:-}" ]]; then
+    echo "ERROR: Container 'api' not found."
+    echo "Tip: Run 'docker compose ps' and ensure the stack is up."
+    exit 1
+fi
+
 HAS_DOCKER_HEALTH="no"
 DOCKER_INSPECT_FAILED="no"
 
-if [[ -n "$API_CID" ]]; then
-    FIRST_CID=$(echo "$API_CID" | head -n 1)
-    set +e
-    HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null)
-    rc=$?
-    set -e
-    if [[ $rc -ne 0 ]]; then
-        DOCKER_INSPECT_FAILED="yes"
-    fi
+FIRST_CID=$(echo "$API_CID" | head -n 1)
+set +e
+HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null)
+rc=$?
+set -e
+if [[ $rc -ne 0 ]]; then
+    DOCKER_INSPECT_FAILED="yes"
 fi
 
 if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
