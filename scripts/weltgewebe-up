@@ -495,45 +495,54 @@ echo
 echo ">> Health Check:"
 
 # Strategy Decision:
-# 1. Explicit HEALTH_URL (override)
-# 2. Host Port Mapping (if available)
-# 3. Docker Native Health (Default Fallback)
 
-CHOSEN_STRATEGY="none"
+API_CID=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+HAS_DOCKER_HEALTH="no"
+DOCKER_INSPECT_FAILED="no"
 
-# Internal configuration defaults
-API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
-
-# Strategy 1: Explicit HEALTH_URL
-if [[ -n "${HEALTH_URL:-}" ]]; then
-  CHOSEN_STRATEGY="ENV:HEALTH_URL"
-  echo "Using explicit health URL: $HEALTH_URL"
-fi
-
-# Strategy 2: Host Port Mapping
-if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
-    API_PORT=""
-    if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
-        # Parse port. If output is "0.0.0.0:0", we get "0", which is invalid.
-        PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
-        if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
-            API_PORT="$PORT_CANDIDATE"
-        else
-            echo "No published API port detected (port=0/empty)."
-        fi
-    fi
-
-    if [[ -n "$API_PORT" ]]; then
-        HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
-        CHOSEN_STRATEGY="Host Port Mapping"
-        echo "Using Host Port Mapping: $HEALTH_URL"
+if [[ -n "$API_CID" ]]; then
+    FIRST_CID=$(echo "$API_CID" | head -n 1)
+    set +e
+    HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null)
+    rc=$?
+    set -e
+    if [[ $rc -ne 0 ]]; then
+        DOCKER_INSPECT_FAILED="yes"
     fi
 fi
 
-# Strategy 3: Docker Native Health (Default)
-if [[ "$CHOSEN_STRATEGY" == "none" ]]; then
+if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
+    echo "WARN: docker inspect failed during health strategy probe; falling back to HTTP Health"
+fi
+
+if [[ "$HAS_DOCKER_HEALTH" == "yes" && "$DOCKER_INSPECT_FAILED" == "no" ]]; then
     CHOSEN_STRATEGY="Docker Native Health"
     echo "Using Docker Native Health (inspect)"
+else
+    CHOSEN_STRATEGY="HTTP Health"
+
+    if [[ -n "${HEALTH_URL:-}" ]]; then
+        echo "Using explicit health URL: $HEALTH_URL"
+    else
+        API_INTERNAL_PORT="${API_INTERNAL_PORT:-8080}"
+        API_PORT=""
+        if RAW_PORT=$(docker compose "${BASE_ARGS[@]}" port api "${API_INTERNAL_PORT}" 2>/dev/null); then
+            PORT_CANDIDATE=$(echo "$RAW_PORT" | awk -F: '{print $NF}' | head -n1)
+            if [[ "$PORT_CANDIDATE" != "0" && -n "$PORT_CANDIDATE" ]]; then
+                API_PORT="$PORT_CANDIDATE"
+            fi
+        fi
+
+        if [[ -n "$API_PORT" ]]; then
+            HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
+            echo "Using Host Port Mapping: $HEALTH_URL"
+        else
+            echo "ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            echo "No published host port detected. Set HEALTH_URL explicitly."
+            echo "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."
+            exit 1
+        fi
+    fi
 fi
 
 # Execution
