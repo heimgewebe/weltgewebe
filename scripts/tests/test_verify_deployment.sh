@@ -506,7 +506,7 @@ if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"
         echo "$OUTPUT"
         exit 1
     elif ! echo "$OUTPUT" | grep -Fq "Docker HEALTHCHECK not defined for container 'api'"; then
-        echo "FAIL: Did not find exact expected ERROR message."
+        echo "FAIL: Did not find expected HEALTHCHECK-missing message substring."
         echo "$OUTPUT"
         exit 1
     else
