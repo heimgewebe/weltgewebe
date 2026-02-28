@@ -11,7 +11,8 @@ cd "$(dirname "$0")/../.."
 # Cleanup Trap
 cleanup() {
   rm -rf mock_bin test.env custom_state
-  unset HEALTH_URL API_INTERNAL_PORT MOCK_HEALTH_EXISTS
+  rm -f "${MOCK_PORT_CALLS_FILE:-}"
+  unset HEALTH_URL API_INTERNAL_PORT MOCK_HEALTH_EXISTS MOCK_PORT_CALLS_FILE
 }
 trap cleanup EXIT
 
@@ -30,7 +31,11 @@ if [[ "$1" == "ps" ]]; then
       echo "zombie-generic compose"
   # HANDLE DIRECT docker ps -q api (if used)
   elif [[ "$ARGS" == *"-q api"* ]]; then
-      echo "api_container_id"
+      if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
+          echo ""
+      else
+          echo "api_container_id"
+      fi
   else
     echo ""
   fi
@@ -41,17 +46,15 @@ elif [[ "$1" == "rm" ]]; then
     fi
 elif [[ "$1" == "inspect" ]]; then
     ARGS="$*"
-    if [[ "${MOCK_INSPECT_FAIL:-0}" == "1" ]]; then
-        if [[ "$ARGS" == *".State.Health"* || "$ARGS" == *"Health.Status"* ]]; then
-            exit 1
-        fi
-    fi
     # Return dummy alias if requesting format with Aliases
     if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
     # EXISTENCE CHECK: Handle {{if .State.Health}}yes{{else}}no{{end}}
     # We use looser matching to avoid quoting issues. Match core parts.
     elif [[ "$ARGS" == *".State.Health"* && "$ARGS" == *"yes"* && "$ARGS" == *"no"* ]]; then
+        if [[ "${MOCK_INSPECT_FAIL_STRATEGY:-0}" == "1" ]]; then
+            exit 1
+        fi
         # Default to "no" (missing healthcheck) unless explicitly enabled
         if [[ "${MOCK_HEALTH_EXISTS:-0}" == "1" ]]; then
             echo "yes"
@@ -59,6 +62,9 @@ elif [[ "$1" == "inspect" ]]; then
             echo "no"
         fi
     elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Status"* ]]; then
+        if [[ "${MOCK_INSPECT_FAIL_STATUS:-0}" == "1" || "${MOCK_INSPECT_FAIL:-0}" == "1" ]]; then
+            exit 1
+        fi
         echo "healthy"
     elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Health.Log"* ]]; then
         # Return JSON array so {{range ...}} works correctly in Go templates
@@ -80,7 +86,11 @@ elif [[ "$1" == "compose" ]]; then
 
   # HANDLE docker compose ... ps -q api
   if [[ "$ARGS" == *" ps -q api"* ]]; then
-      echo "api_container_id"
+      if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
+          echo ""
+      else
+          echo "api_container_id"
+      fi
       exit 0
   fi
 
@@ -92,6 +102,9 @@ elif [[ "$1" == "compose" ]]; then
 
   # Port Mocking
   if [[ "$ARGS" == *" port api"* ]]; then
+      if [[ -n "${MOCK_PORT_CALLS_FILE:-}" ]]; then
+          echo "port_api" >> "$MOCK_PORT_CALLS_FILE"
+      fi
       # Extract requested internal port (last argument usually, or verify it)
       REQUESTED_PORT=$(echo "$ARGS" | awk '{print $NF}')
 
@@ -387,30 +400,46 @@ fi
 echo ">>> Test 12: Health - Host Port (Valid)"
 export MOCK_PORT_MODE="VALID"
 export MOCK_EXEC_FAIL="0"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+export MOCK_HEALTH_EXISTS="0"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Host Port Mapping"; then
-    echo "PASS: Used Host Port check when valid."
+if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health"; then
+    if echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
+        echo "PASS: Used Host Port check when valid."
+    else
+        echo "FAIL: Did not output Host Port mapping."
+        echo "$OUTPUT"
+        exit 1
+    fi
 else
-    echo "FAIL: Did not use Host Port check."
+    echo "FAIL: Did not use HTTP Health check."
     echo "$OUTPUT"
     exit 1
 fi
+unset MOCK_HEALTH_EXISTS
 
 # 13. Test Health: Explicit URL
 echo ">>> Test 13: Health - Explicit URL"
 export HEALTH_URL="http://explicit-url:8080/health"
 export MOCK_PORT_MODE="VALID"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+export MOCK_HEALTH_EXISTS="0"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: ENV:HEALTH_URL"; then
-    echo "PASS: Used explicit HEALTH_URL."
+if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health"; then
+    if echo "$OUTPUT" | grep -q "Using explicit health URL: http://explicit-url:8080/health"; then
+        echo "PASS: Used explicit HEALTH_URL."
+    else
+        echo "FAIL: Did not use explicit HEALTH_URL."
+        echo "$OUTPUT"
+        exit 1
+    fi
 else
-    echo "FAIL: Did not use explicit HEALTH_URL."
+    echo "FAIL: Did not use HTTP Health check."
     echo "$OUTPUT"
     exit 1
 fi
 unset HEALTH_URL
+unset MOCK_HEALTH_EXISTS
 
 # 14. Test State Dir Customization
 echo ">>> Test 14: State Dir Customization"
@@ -437,7 +466,8 @@ unset WELTGEWEBE_STATE_DIR
 
 # 15. Test Configurable Internal Port (Port check verify)
 echo ">>> Test 15: Configurable Internal Port (Port check)"
-export MOCK_PORT_MODE="0"
+export MOCK_PORT_MODE="VALID"
+export MOCK_HEALTH_EXISTS="0"
 export API_INTERNAL_PORT="9090"
 # We expect the script to call `docker compose port api 9090`
 # Our mock docker will verify this if we set EXPECT_INTERNAL_PORT
@@ -445,7 +475,7 @@ export API_INTERNAL_PORT="9090"
 export EXPECT_INTERNAL_PORT="9090"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health" && echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
      echo "PASS: Script ran successfully with custom internal port."
 else
      echo "FAIL: Script failed or wrong strategy."
@@ -454,6 +484,7 @@ else
 fi
 unset API_INTERNAL_PORT
 unset EXPECT_INTERNAL_PORT
+unset MOCK_HEALTH_EXISTS
 
 # 16. Test Missing HEALTHCHECK (New)
 echo ">>> Test 16: Docker Native Health - Missing HEALTHCHECK"
@@ -472,12 +503,8 @@ if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"
         echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
         echo "$OUTPUT"
         exit 1
-    elif echo "$OUTPUT" | grep -q "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."; then
-        echo "PASS: Detected missing HEALTHCHECK, failed fast, and printed correct summary."
     else
-        echo "FAIL: Did not find the expected FATAL missing healthcheck summary."
-        echo "$OUTPUT"
-        exit 1
+        echo "PASS: Detected missing HEALTHCHECK, failed fast, and printed correct summary."
     fi
 else
     echo "FAIL: Did not detect missing HEALTHCHECK."
@@ -487,27 +514,116 @@ fi
 unset MOCK_HEALTH_EXISTS
 unset MOCK_INSPECT_FAIL
 
-# 17. Test Inspect Fail (Retryable)
-echo ">>> Test 17: Docker Native Health - Inspect Fails"
-export MOCK_PORT_MODE="0"
-export MOCK_INSPECT_FAIL="1" # Explicitly fail inspect
-# Ensure we catch failure but print output
+# 17a. Test Strategy Inspect Fails (Fallback to HTTP)
+echo ">>> Test 17a: Strategy Inspect Fails (Fallback to HTTP)"
+export MOCK_PORT_MODE="VALID"
+export MOCK_INSPECT_FAIL_STRATEGY="1"
+export MOCK_HEALTH_EXISTS="0"
+unset HEALTH_URL
+export MOCK_PORT_CALLS_FILE="$(pwd)/.mock_port_calls"
+rm -f "$MOCK_PORT_CALLS_FILE"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
-if echo "$OUTPUT" | grep -q "docker inspect failed while checking health metadata"; then
-    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
-        echo "PASS: Detected inspect failure and retried correctly."
+if ! echo "$OUTPUT" | grep -q "WARN: docker inspect failed during health strategy probe; falling back to HTTP Health"; then
+    echo "FAIL: Missing expected warning message for strategy inspect fail."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: HTTP Health" && echo "$OUTPUT" | grep -q "Using Host Port Mapping"; then
+    if echo "$OUTPUT" | grep -q "Health OK"; then
+        if [ ! -s "$MOCK_PORT_CALLS_FILE" ]; then
+            echo "FAIL: Strategy fell back to HTTP Health but no port probe occurred."
+            exit 1
+        fi
+        echo "PASS: Detected strategy inspect failure and fell back correctly."
     else
-        echo "FAIL: Detected inspect failure but did not retry."
+        echo "FAIL: Detected strategy inspect failure but did not attempt fallback."
         echo "$OUTPUT"
         exit 1
     fi
 else
-    echo "FAIL: Did not detect inspect failure."
+    echo "FAIL: Did not fallback to HTTP Health / Host Port Mapping on strategy inspect failure."
     echo "$OUTPUT"
     exit 1
 fi
-unset MOCK_INSPECT_FAIL
+unset MOCK_INSPECT_FAIL_STRATEGY
+unset MOCK_HEALTH_EXISTS
+
+# 17b. Test Docker Native Status Inspect Fails (Retryable)
+echo ">>> Test 17b: Docker Native Status Inspect Fails (Retryable)"
+export MOCK_PORT_MODE="0"
+export MOCK_HEALTH_EXISTS="1"
+export MOCK_INSPECT_FAIL_STATUS="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "docker inspect failed"; then
+    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
+        if echo "$OUTPUT" | grep -q "Health check aborted: missing Docker HEALTHCHECK"; then
+            echo "FAIL: Failed fast instead of retrying."
+            echo "$OUTPUT"
+            exit 1
+        fi
+        echo "PASS: Detected status inspect failure and retried correctly."
+    else
+        echo "FAIL: Detected status inspect failure but did not retry."
+        echo "$OUTPUT"
+        exit 1
+    fi
+else
+    echo "FAIL: Did not detect status inspect failure."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_INSPECT_FAIL_STATUS
+unset MOCK_HEALTH_EXISTS
+
+# 18. Test Docker Native Exists and No Port
+echo ">>> Test 18: Docker HEALTHCHECK exists AND no published host port"
+export MOCK_HEALTH_EXISTS="1"
+export MOCK_PORT_MODE="0"
+rm -f "$MOCK_PORT_CALLS_FILE"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "Health strategy selected: Docker Native Health"; then
+    if [ -s "$MOCK_PORT_CALLS_FILE" ]; then
+        echo "FAIL: Attempted port mapping detection despite having a Docker native strategy."
+        echo "$OUTPUT"
+        exit 1
+    fi
+    if echo "$OUTPUT" | grep -q "Health OK (Docker Native Health)"; then
+        echo "PASS: Ignored missing port correctly with Docker Native Health Check."
+    else
+        echo "FAIL: Did not succeed with Docker Native Health."
+        echo "$OUTPUT"
+        exit 1
+    fi
+else
+    echo "FAIL: Did not use Docker Native Health Check strategy."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_HEALTH_EXISTS
+unset MOCK_PORT_MODE
+
+# 19. Test Missing Container Logic
+echo ">>> Test 19: Missing Container Logic"
+export MOCK_MISSING_API="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "ERROR: Container 'api' not found."; then
+    if echo "$OUTPUT" | grep -q "HEALTHCHECK not defined"; then
+        echo "FAIL: Emitted 'missing healthcheck' despite missing container."
+        echo "$OUTPUT"
+        exit 1
+    fi
+    echo "PASS: Detected missing container before checking strategy."
+else
+    echo "FAIL: Did not detect missing container correctly."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_MISSING_API
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
