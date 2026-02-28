@@ -1,6 +1,7 @@
+---
 name: Docs Guard
 
-on:
+"on":
   push:
     branches:
       - main
