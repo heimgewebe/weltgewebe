@@ -507,12 +507,10 @@ HAS_DOCKER_HEALTH="no"
 DOCKER_INSPECT_FAILED="no"
 
 FIRST_CID=$(echo "$API_CID" | head -n 1)
-set +e
-HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null)
-rc=$?
-set -e
-if [[ $rc -ne 0 ]]; then
+
+if ! HAS_DOCKER_HEALTH=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$FIRST_CID" 2>/dev/null); then
     DOCKER_INSPECT_FAILED="yes"
+    HAS_DOCKER_HEALTH="no"
 fi
 
 if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
@@ -541,9 +539,12 @@ else
             HEALTH_URL="http://127.0.0.1:${API_PORT}/health/ready"
             echo "Using Host Port Mapping: $HEALTH_URL"
         else
-            echo "ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            if [[ "$DOCKER_INSPECT_FAILED" == "yes" ]]; then
+                echo "ERROR: docker inspect failed; cannot determine Docker health."
+            else
+                echo "ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            fi
             echo "No published host port detected. Set HEALTH_URL explicitly."
-            echo "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."
             exit 1
         fi
     fi
