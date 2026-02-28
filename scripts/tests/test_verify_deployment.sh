@@ -505,7 +505,7 @@ if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"
         echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
         echo "$OUTPUT"
         exit 1
-    elif ! echo "$OUTPUT" | grep -q "ERROR: Docker HEALTHCHECK not defined for container 'api'."; then
+    elif ! echo "$OUTPUT" | grep -Fq "Docker HEALTHCHECK not defined for container 'api'"; then
         echo "FAIL: Did not find exact expected ERROR message."
         echo "$OUTPUT"
         exit 1
