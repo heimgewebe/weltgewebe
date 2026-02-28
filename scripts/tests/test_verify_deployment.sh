@@ -40,6 +40,12 @@ elif [[ "$1" == "rm" ]]; then
         exit 0
     fi
 elif [[ "$1" == "inspect" ]]; then
+    ARGS="$*"
+    if [[ "${MOCK_INSPECT_FAIL:-0}" == "1" ]]; then
+        if [[ "$ARGS" == *".State.Health"* || "$ARGS" == *"Health.Status"* ]]; then
+            exit 1
+        fi
+    fi
     # Return dummy alias if requesting format with Aliases
     if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
@@ -453,17 +459,55 @@ unset EXPECT_INTERNAL_PORT
 echo ">>> Test 16: Docker Native Health - Missing HEALTHCHECK"
 export MOCK_PORT_MODE="0"
 export MOCK_HEALTH_EXISTS="0" # Explicitly disable health check existence
+export MOCK_INSPECT_FAIL="0"  # Ensure inspect succeeds so it's a true missing check
 # Ensure we catch failure but print output
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 
 if echo "$OUTPUT" | grep -q "Docker HEALTHCHECK not defined for container 'api'"; then
-    echo "PASS: Detected missing HEALTHCHECK."
+    if echo "$OUTPUT" | grep -q "Waiting for health..."; then
+        echo "FAIL: Script did not fail fast (retried despite missing healthcheck)."
+        echo "$OUTPUT"
+        exit 1
+    elif echo "$OUTPUT" | grep -q "Health check failed after"; then
+        echo "FAIL: Script printed misleading 'failed after X seconds' summary despite fail fast."
+        echo "$OUTPUT"
+        exit 1
+    elif echo "$OUTPUT" | grep -q "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."; then
+        echo "PASS: Detected missing HEALTHCHECK, failed fast, and printed correct summary."
+    else
+        echo "FAIL: Did not find the expected FATAL missing healthcheck summary."
+        echo "$OUTPUT"
+        exit 1
+    fi
 else
     echo "FAIL: Did not detect missing HEALTHCHECK."
     echo "$OUTPUT"
     exit 1
 fi
 unset MOCK_HEALTH_EXISTS
+unset MOCK_INSPECT_FAIL
+
+# 17. Test Inspect Fail (Retryable)
+echo ">>> Test 17: Docker Native Health - Inspect Fails"
+export MOCK_PORT_MODE="0"
+export MOCK_INSPECT_FAIL="1" # Explicitly fail inspect
+# Ensure we catch failure but print output
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+if echo "$OUTPUT" | grep -q "docker inspect failed while checking health metadata"; then
+    if echo "$OUTPUT" | grep -q "Waiting for health... (1/10)"; then
+        echo "PASS: Detected inspect failure and retried correctly."
+    else
+        echo "FAIL: Detected inspect failure but did not retry."
+        echo "$OUTPUT"
+        exit 1
+    fi
+else
+    echo "FAIL: Did not detect inspect failure."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_INSPECT_FAIL
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE

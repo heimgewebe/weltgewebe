@@ -552,14 +552,27 @@ check_health() {
         fi
 
         # Explicitly check if HEALTHCHECK is defined
-        HEALTH_DEFINED=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null || echo "no")
-        if [[ "$HEALTH_DEFINED" != "yes" ]]; then
-            echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
-            echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
+        HEALTH_DEFINED_RAW=$(docker inspect --format '{{if .State.Health}}yes{{else}}no{{end}}' "$API_CID" 2>/dev/null)
+        rc_health_defined=$?
+        if [[ $rc_health_defined -ne 0 ]]; then
+            echo "  ERROR: docker inspect failed while checking health metadata for container 'api'."
+            echo "         Docker may be restarting or unavailable. Retrying..."
             return 1
         fi
 
-        STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null || echo "unknown")
+        if [[ "$HEALTH_DEFINED_RAW" != "yes" ]]; then
+            echo "  ERROR: Docker HEALTHCHECK not defined for container 'api'."
+            echo "         Please define HEALTHCHECK in Dockerfile or set HEALTH_URL."
+            return 2
+        fi
+
+        STATUS=$(docker inspect --format '{{.State.Health.Status}}' "$API_CID" 2>/dev/null)
+        rc_status=$?
+        if [[ $rc_status -ne 0 || -z "$STATUS" ]]; then
+            echo "  Status: unknown (docker inspect failed)"
+            return 1
+        fi
+
         if [[ "$STATUS" == "healthy" ]]; then
             return 0
         else
@@ -576,24 +589,46 @@ check_health() {
     fi
 }
 
+FATAL_REASON=""
+
 for ((i=1;i<=MAX_RETRIES;i++)); do
-  if check_health; then
+  set +e
+  check_health
+  HEALTH_RET=$?
+  set -e
+
+  if [[ "$HEALTH_RET" == "0" ]]; then
     echo "Health OK ($CHOSEN_STRATEGY)"
     HEALTH_OK=1
     break
+  elif [[ "$HEALTH_RET" == "2" ]]; then
+    # Fatal error (e.g. missing healthcheck), abort immediately
+    FATAL_REASON="missing_healthcheck"
+    break
   fi
+
   echo "Waiting for health... ($i/$MAX_RETRIES)"
   sleep "$SLEEP_SEC"
 done
 
 if [[ "$HEALTH_OK" != "1" ]]; then
+    if [[ "$FATAL_REASON" == "missing_healthcheck" ]]; then
+        echo "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."
+        echo "Tip: Add HEALTHCHECK or set HEALTH_URL."
+        exit 1
+    fi
+
     echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
     echo "Strategy: $CHOSEN_STRATEGY"
     [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
 
     if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
-        echo "Docker Health Log (last 3 entries):"
-        docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+        if [[ -n "${API_CID:-}" ]]; then
+            echo "Docker Health Log (last 3 entries):"
+            docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
+        else
+            echo "Container 'api' not found, skipping log."
+        fi
     fi
 
     echo "Tip: Check 'docker compose ps' and logs."
