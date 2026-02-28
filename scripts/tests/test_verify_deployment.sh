@@ -40,6 +40,7 @@ elif [[ "$1" == "rm" ]]; then
         exit 0
     fi
 elif [[ "$1" == "inspect" ]]; then
+    ARGS="$*"
     if [[ "${MOCK_INSPECT_FAIL:-0}" == "1" ]]; then
         if [[ "$ARGS" == *".State.Health"* || "$ARGS" == *"Health.Status"* ]]; then
             exit 1
