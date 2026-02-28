@@ -1,6 +1,8 @@
 import os
 import re
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
         return None
@@ -8,13 +10,18 @@ def parse_frontmatter(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    match = re.match(r'^---\n(.*?)\n---\n', content, re.DOTALL)
+    # Robust matching of YAML Frontmatter allowing CRLF, ending at EOF, with spacing
+    match = re.match(r'^---\r?\n(.*?)(?:\r?\n---\r?\n|\r?\n---$)', content, re.DOTALL)
     if not match:
         return None
 
     frontmatter_text = match.group(1)
     data = {}
-    for line in frontmatter_text.split('\n'):
+    for line in frontmatter_text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+
         if ':' in line:
             key, val = line.split(':', 1)
             key = key.strip()
@@ -24,7 +31,10 @@ def parse_frontmatter(file_path):
             data[key] = val
     return data
 
-def parse_repo_index(manifest_path):
+def parse_repo_index(manifest_path=None):
+    if not manifest_path:
+        manifest_path = os.path.join(REPO_ROOT, "manifest", "repo-index.yaml")
+
     if not os.path.exists(manifest_path):
         return None
 
@@ -39,7 +49,7 @@ def parse_repo_index(manifest_path):
 
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
+        if not stripped or stripped.startswith('#') or stripped == '---':
             continue
 
         if line.startswith('zones:'):
@@ -71,7 +81,10 @@ def parse_repo_index(manifest_path):
 
     return data
 
-def parse_review_policy(policy_path):
+def parse_review_policy(policy_path=None):
+    if not policy_path:
+        policy_path = os.path.join(REPO_ROOT, "manifest", "review-policy.yaml")
+
     if not os.path.exists(policy_path):
         return None
 
@@ -81,9 +94,15 @@ def parse_review_policy(policy_path):
     data = {}
     for line in lines:
         stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
+        if not stripped or stripped.startswith('#') or stripped == '---':
             continue
         if ':' in line:
             key, val = line.split(':', 1)
             data[key.strip()] = val.strip()
+
+    if 'strict_manifest' in data:
+        data['strict_manifest'] = data['strict_manifest'].lower() == 'true'
+    else:
+        data['strict_manifest'] = False
+
     return data

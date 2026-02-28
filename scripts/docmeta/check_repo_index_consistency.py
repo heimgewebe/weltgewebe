@@ -1,124 +1,81 @@
 import os
 import sys
 
-def parse_repo_index(manifest_path):
-    if not os.path.exists(manifest_path):
-        return None
-
-    with open(manifest_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    data = {'zones': {}, 'checks': []}
-    current_zone = None
-    in_zones = False
-    in_checks = False
-    in_canonical_docs = False
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
-            continue
-
-        if line.startswith('zones:'):
-            in_zones = True
-            in_checks = False
-            continue
-        elif line.startswith('checks:'):
-            in_checks = True
-            in_zones = False
-            continue
-
-        if in_zones:
-            if line.startswith('  ') and not line.startswith('    '):
-                current_zone = stripped.rstrip(':')
-                data['zones'][current_zone] = {'path': '', 'canonical_docs': []}
-                in_canonical_docs = False
-            elif line.startswith('    path:'):
-                data['zones'][current_zone]['path'] = line.split('path:')[1].strip()
-            elif line.startswith('    canonical_docs:'):
-                in_canonical_docs = True
-            elif in_canonical_docs and line.startswith('      - '):
-                doc = line.split('- ')[1].strip()
-                data['zones'][current_zone]['canonical_docs'].append(doc)
-
-        elif in_checks:
-            if line.startswith('  - '):
-                check = line.split('- ')[1].strip()
-                data['checks'].append(check)
-
-    return data
-
-def parse_frontmatter(file_path):
-    import re
-    if not os.path.exists(file_path):
-        return None
-
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    match = re.match(r'^---\n(.*?)\n---\n', content, re.DOTALL)
-    if not match:
-        return None
-
-    frontmatter_text = match.group(1)
-    data = {}
-    for line in frontmatter_text.split('\n'):
-        if ':' in line:
-            key, val = line.split(':', 1)
-            key = key.strip()
-            val = val.strip()
-            if val.startswith('[') and val.endswith(']'):
-                val = [item.strip() for item in val[1:-1].split(',') if item.strip()]
-            data[key] = val
-    return data
+from docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
 
 def main():
-    manifest_path = 'manifest/repo-index.yaml'
-    repo_index = parse_repo_index(manifest_path)
+    repo_index = parse_repo_index()
+    policy = parse_review_policy()
 
     if not repo_index:
-        print(f"Error: Manifest '{manifest_path}' does not exist.")
+        print("Error: Manifest does not exist or could not be parsed.")
         sys.exit(1)
 
+    strict_mode = policy.get('strict_manifest', False) if policy else False
+
     errors = []
+    warnings = []
     doc_ids = set()
     dependencies = {}
 
-    for zone_name, zone_data in repo_index.get('zones', {}).items():
-        zone_path = zone_data.get('path')
-        if not zone_path or not os.path.exists(zone_path):
-            errors.append(f"Zone path '{zone_path}' for zone '{zone_name}' does not exist.")
+    zones = repo_index.get('zones', {})
+
+    if not zones:
+        errors.append("Manifest 'zones' is missing or empty.")
+
+    if strict_mode and not zones:
+        errors.append("Strict Mode: empty zones not allowed.")
+
+    for zone_name, zone_data in zones.items():
+        rel_zone_path = zone_data.get('path')
+        if not rel_zone_path:
+            errors.append(f"Zone '{zone_name}' is missing 'path'.")
             continue
 
-        for doc_file in zone_data.get('canonical_docs', []):
+        zone_path = os.path.join(REPO_ROOT, rel_zone_path)
+        if not os.path.exists(zone_path):
+            errors.append(f"Zone path '{rel_zone_path}' for zone '{zone_name}' does not exist.")
+            continue
+
+        canonical_docs = zone_data.get('canonical_docs', [])
+        if strict_mode and not canonical_docs:
+            errors.append(f"Strict Mode: Zone '{zone_name}' has no canonical_docs.")
+
+        for doc_file in canonical_docs:
             file_path = os.path.join(zone_path, doc_file)
+            rel_file_path = os.path.join(rel_zone_path, doc_file)
+
             if not os.path.exists(file_path):
-                errors.append(f"Canonical doc '{file_path}' does not exist.")
+                errors.append(f"Canonical doc '{rel_file_path}' does not exist.")
                 continue
 
             frontmatter = parse_frontmatter(file_path)
             if not frontmatter:
-                errors.append(f"Frontmatter missing or invalid in '{file_path}'.")
+                errors.append(f"Frontmatter missing or invalid in '{rel_file_path}'.")
                 continue
 
             doc_id = frontmatter.get('id')
             if not doc_id:
-                errors.append(f"Missing 'id' in frontmatter of '{file_path}'.")
+                errors.append(f"Missing 'id' in frontmatter of '{rel_file_path}'.")
             elif doc_id in doc_ids:
-                errors.append(f"Duplicate id '{doc_id}' found in '{file_path}'.")
+                errors.append(f"Duplicate id '{doc_id}' found in '{rel_file_path}'.")
             else:
                 doc_ids.add(doc_id)
 
             if frontmatter.get('status') != 'canonical':
-                errors.append(f"Status is not 'canonical' in '{file_path}'.")
+                errors.append(f"Status is not 'canonical' in '{rel_file_path}'.")
 
             role = frontmatter.get('role')
             if role not in ('norm', 'reality', 'runbooks', 'action'):
-                errors.append(f"Invalid role '{role}' in '{file_path}'. Must be norm|reality|runbooks|action.")
+                errors.append(f"Invalid role '{role}' in '{rel_file_path}'. Must be norm|reality|runbooks|action.")
 
             depends_on = frontmatter.get('depends_on', [])
-            if isinstance(depends_on, str) and depends_on.startswith('[') and depends_on.endswith(']'):
-                depends_on = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
+            if isinstance(depends_on, str):
+                if depends_on.startswith('[') and depends_on.endswith(']'):
+                    depends_on = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
+                else:
+                    depends_on = [depends_on.strip()] if depends_on.strip() else []
+
             if not isinstance(depends_on, list):
                 depends_on = []
 
@@ -154,15 +111,23 @@ def main():
                 break
 
     for check in repo_index.get('checks', []):
-        if not os.path.exists(check):
+        check_path = os.path.join(REPO_ROOT, check)
+        if not os.path.exists(check_path):
             errors.append(f"Check script '{check}' does not exist.")
 
+    if warnings:
+        print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
+        for warning in warnings:
+            print(f"- {warning}", file=sys.stderr)
+
     if errors:
+        print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)
         for error in errors:
-            print(f"Error: {error}", file=sys.stderr)
+            print(f"- {error}", file=sys.stderr)
+        print("\nRepo index consistency check failed.", file=sys.stderr)
         sys.exit(1)
 
-    print("Repo index consistency check passed.")
+    print(f"Repo index consistency check passed (0 errors, {len(warnings)} warnings).")
 
 if __name__ == '__main__':
     main()

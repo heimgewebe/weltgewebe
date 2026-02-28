@@ -1,13 +1,12 @@
 import os
 import sys
 
-from docmeta import parse_repo_index, parse_frontmatter
+from docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter
 
 def main():
-    manifest_path = 'manifest/repo-index.yaml'
-    repo_index = parse_repo_index(manifest_path)
+    repo_index = parse_repo_index()
     if not repo_index:
-        print(f"Error: Could not parse {manifest_path}", file=sys.stderr)
+        print("Error: Could not parse repo-index.yaml", file=sys.stderr)
         sys.exit(1)
 
     output = ["# SYSTEM_MAP\n"]
@@ -17,27 +16,37 @@ def main():
 
         rows = []
         for doc_file in sorted(zone_data.get('canonical_docs', [])):
-            file_path = os.path.join(zone_data.get('path', ''), doc_file)
-            frontmatter = parse_frontmatter(file_path)
+            rel_zone_path = zone_data.get('path', '')
+            rel_file_path = os.path.join(rel_zone_path, doc_file)
+            file_path = os.path.join(REPO_ROOT, rel_file_path)
 
+            frontmatter = parse_frontmatter(file_path)
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
                 status = frontmatter.get('status', '')
                 last_reviewed = frontmatter.get('last_reviewed', '')
                 depends_on = frontmatter.get('depends_on', [])
-                if isinstance(depends_on, str) and depends_on.startswith('[') and depends_on.endswith(']'):
-                    depends_on_list = [d.strip() for d in depends_on[1:-1].split(',')]
-                    depends_on_str = ', '.join(depends_on_list)
+                if isinstance(depends_on, str):
+                    if depends_on.startswith('[') and depends_on.endswith(']'):
+                        depends_on_list = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
+                        depends_on_str = ', '.join(depends_on_list)
+                    else:
+                        depends_on_str = depends_on.strip()
                 elif isinstance(depends_on, list):
                     depends_on_str = ', '.join(depends_on)
                 else:
-                    depends_on_str = depends_on
+                    depends_on_str = str(depends_on)
+
+                # Make the file path a markdown link
+                file_link = f"[{rel_file_path}]({rel_file_path})"
             else:
-                doc_id = ""
-                status = ""
-                last_reviewed = ""
-                depends_on_str = ""
-            rows.append([doc_id, file_path, status, last_reviewed, depends_on_str])
+                doc_id = "_Missing_"
+                status = "_Missing_"
+                last_reviewed = "_Missing_"
+                depends_on_str = "_Missing_"
+                file_link = f"[{rel_file_path}]({rel_file_path})"
+
+            rows.append([doc_id, file_link, status, last_reviewed, depends_on_str])
 
         headers = ["ID", "File", "Status", "Last Reviewed", "Depends On"]
         col_widths = [len(h) for h in headers]
@@ -62,7 +71,15 @@ def main():
 
         output.append("")
 
-    with open('SYSTEM_MAP.md', 'w', encoding='utf-8') as f:
+    output.append("## Automated Checks\n")
+    checks = repo_index.get('checks', [])
+    if checks:
+        for check in sorted(checks):
+            output.append(f"- [{check}]({check})")
+        output.append("")
+
+    out_path = os.path.join(REPO_ROOT, 'SYSTEM_MAP.md')
+    with open(out_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(output))
 
 if __name__ == '__main__':

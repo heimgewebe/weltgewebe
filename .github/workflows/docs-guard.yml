@@ -15,6 +15,13 @@ name: Docs Guard
       - 'scripts/docmeta/**'
       - 'SYSTEM_MAP.md'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-guard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   docmeta-checks:
     runs-on: ubuntu-latest
@@ -24,15 +31,26 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+
+      - name: Run Tests
+        env:
+          PYTHONPATH: scripts/docmeta
+        run: python3 -m unittest discover scripts/docmeta/tests/
 
       - name: Repo Index Consistency
+        env:
+          PYTHONPATH: scripts/docmeta
         run: python3 scripts/docmeta/check_repo_index_consistency.py
 
       - name: Review Age Check
+        env:
+          PYTHONPATH: scripts/docmeta
         run: python3 scripts/docmeta/check_doc_review_age.py
 
       - name: Ensure SYSTEM_MAP up to date
+        env:
+          PYTHONPATH: scripts/docmeta
         run: |
           python3 scripts/docmeta/generate_system_map.py
           git diff --exit-code SYSTEM_MAP.md

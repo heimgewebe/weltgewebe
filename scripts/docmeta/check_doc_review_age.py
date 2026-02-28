@@ -1,123 +1,50 @@
 import os
 import sys
 import datetime
-import re
 
-def parse_review_policy(policy_path):
-    if not os.path.exists(policy_path):
-        return None
-
-    with open(policy_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    data = {}
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
-            continue
-        if ':' in line:
-            key, val = line.split(':', 1)
-            data[key.strip()] = val.strip()
-    return data
-
-def parse_repo_index(manifest_path):
-    if not os.path.exists(manifest_path):
-        return None
-
-    with open(manifest_path, 'r', encoding='utf-8') as f:
-        lines = f.readlines()
-
-    data = {'zones': {}, 'checks': []}
-    current_zone = None
-    in_zones = False
-    in_checks = False
-    in_canonical_docs = False
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
-            continue
-
-        if line.startswith('zones:'):
-            in_zones = True
-            in_checks = False
-            continue
-        elif line.startswith('checks:'):
-            in_checks = True
-            in_zones = False
-            continue
-
-        if in_zones:
-            if line.startswith('  ') and not line.startswith('    '):
-                current_zone = stripped.rstrip(':')
-                data['zones'][current_zone] = {'path': '', 'canonical_docs': []}
-                in_canonical_docs = False
-            elif line.startswith('    path:'):
-                data['zones'][current_zone]['path'] = line.split('path:')[1].strip()
-            elif line.startswith('    canonical_docs:'):
-                in_canonical_docs = True
-            elif in_canonical_docs and line.startswith('      - '):
-                doc = line.split('- ')[1].strip()
-                data['zones'][current_zone]['canonical_docs'].append(doc)
-
-        elif in_checks:
-            if line.startswith('  - '):
-                check = line.split('- ')[1].strip()
-                data['checks'].append(check)
-
-    return data
-
-def parse_frontmatter(file_path):
-    if not os.path.exists(file_path):
-        return None
-
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-
-    match = re.match(r'^---\n(.*?)\n---\n', content, re.DOTALL)
-    if not match:
-        return None
-
-    frontmatter_text = match.group(1)
-    data = {}
-    for line in frontmatter_text.split('\n'):
-        if ':' in line:
-            key, val = line.split(':', 1)
-            key = key.strip()
-            val = val.strip()
-            if val.startswith('[') and val.endswith(']'):
-                val = [item.strip() for item in val[1:-1].split(',') if item.strip()]
-            data[key] = val
-    return data
+from docmeta import REPO_ROOT, parse_review_policy, parse_repo_index, parse_frontmatter
 
 def main():
-    policy_path = 'manifest/review-policy.yaml'
-    policy = parse_review_policy(policy_path)
+    policy = parse_review_policy()
 
     if not policy:
-        print(f"Error: Could not parse {policy_path}", file=sys.stderr)
+        print("Error: Could not parse review-policy.yaml", file=sys.stderr)
         sys.exit(1)
 
-    default_cycle_days = int(policy.get('default_review_cycle_days', 90))
+    try:
+        default_cycle_days = int(policy.get('default_review_cycle_days', 90))
+        if default_cycle_days <= 0:
+            raise ValueError
+    except ValueError:
+        print("Error: Invalid default_review_cycle_days in policy. Must be positive int.", file=sys.stderr)
+        sys.exit(1)
+
     mode = policy.get('mode', 'warn').lower()
+    if mode not in ['warn', 'fail']:
+        print("Error: Invalid mode in policy. Must be 'warn' or 'fail'.", file=sys.stderr)
+        sys.exit(1)
 
-    manifest_path = 'manifest/repo-index.yaml'
-    repo_index = parse_repo_index(manifest_path)
-
+    repo_index = parse_repo_index()
     if not repo_index:
-        print(f"Error: Manifest '{manifest_path}' does not exist.")
+        print("Error: Manifest does not exist or could not be parsed.")
         sys.exit(1)
 
     errors = []
     warnings = []
 
     for zone_name, zone_data in repo_index.get('zones', {}).items():
-        zone_path = zone_data.get('path')
-        if not zone_path or not os.path.exists(zone_path):
+        rel_zone_path = zone_data.get('path')
+        if not rel_zone_path:
+            continue
+
+        zone_path = os.path.join(REPO_ROOT, rel_zone_path)
+        if not os.path.exists(zone_path):
             continue
 
         for doc_file in zone_data.get('canonical_docs', []):
             file_path = os.path.join(zone_path, doc_file)
+            rel_file_path = os.path.join(rel_zone_path, doc_file)
+
             if not os.path.exists(file_path):
                 continue
 
@@ -127,7 +54,11 @@ def main():
 
             last_reviewed_str = frontmatter.get('last_reviewed')
             if not last_reviewed_str:
-                warnings.append(f"Missing 'last_reviewed' in '{file_path}'.")
+                msg = f"Missing 'last_reviewed' in '{rel_file_path}'."
+                if mode == 'fail':
+                    errors.append(msg)
+                else:
+                    warnings.append(msg)
                 continue
 
             try:
@@ -136,24 +67,27 @@ def main():
                 delta = today - last_reviewed_date
 
                 if delta.days > default_cycle_days:
-                    msg = f"Document '{file_path}' review age ({delta.days} days) exceeds default review cycle ({default_cycle_days} days)."
+                    msg = f"Document '{rel_file_path}' review age ({delta.days} days) exceeds default review cycle ({default_cycle_days} days)."
                     if mode == 'fail':
                         errors.append(msg)
                     else:
                         warnings.append(msg)
             except ValueError:
-                errors.append(f"Invalid 'last_reviewed' format '{last_reviewed_str}' in '{file_path}'. Must be YYYY-MM-DD.")
+                errors.append(f"Invalid 'last_reviewed' format '{last_reviewed_str}' in '{rel_file_path}'. Must be YYYY-MM-DD.")
 
     if warnings:
+        print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
         for warning in warnings:
-            print(f"Warning: {warning}", file=sys.stderr)
+            print(f"- {warning}", file=sys.stderr)
 
     if errors:
+        print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)
         for error in errors:
-            print(f"Error: {error}", file=sys.stderr)
+            print(f"- {error}", file=sys.stderr)
+        print("\nDoc review age check failed.", file=sys.stderr)
         sys.exit(1)
 
-    print("Doc review age check passed.")
+    print(f"Doc review age check passed (0 errors, {len(warnings)} warnings).")
 
 if __name__ == '__main__':
     main()
