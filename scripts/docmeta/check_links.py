@@ -45,7 +45,8 @@ def main():
                     if end_idx != -1:
                         url = link_content[1:end_idx]
                     else:
-                        url = link_content[1:].split()[0] # fallback if malformed
+                        errors.append(f"Malformed link in '{rel_file_path}': missing '>' in '{link_content}'")
+                        continue
                 else:
                     url = link_content.split()[0]
 

@@ -44,7 +44,8 @@ def main():
     # Reconstruct the file content
     old_fm_block = match.group(0)
     # the replacement logic must carefully preserve trailing/leading things of old_fm_block
-    new_fm_block = old_fm_block.replace(frontmatter, '\n'.join(new_frontmatter))
+    line_ending = '\r\n' if '\r\n' in old_fm_block else '\n'
+    new_fm_block = old_fm_block.replace(frontmatter, line_ending.join(new_frontmatter))
 
     new_content = content.replace(old_fm_block, new_fm_block, 1)
 
