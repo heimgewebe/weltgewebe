@@ -2,10 +2,11 @@
 
 ## Zone: norm
 
-| ID       | File                                                 | Status    | Last Reviewed | Depends On |
-|----------|------------------------------------------------------|-----------|---------------|------------|
-| overview | [architecture/overview.md](architecture/overview.md) | canonical | 2026-02-28    |            |
-| security | [architecture/security.md](architecture/security.md) | canonical | 2026-02-28    |            |
+| ID             | File                                                             | Status    | Last Reviewed | Depends On |
+|----------------|------------------------------------------------------------------|-----------|---------------|------------|
+| docmeta.schema | [architecture/docmeta.schema.md](architecture/docmeta.schema.md) | canonical | 2026-02-28    |            |
+| overview       | [architecture/overview.md](architecture/overview.md)             | canonical | 2026-02-28    |            |
+| security       | [architecture/security.md](architecture/security.md)             | canonical | 2026-02-28    |            |
 
 ## Zone: reality
 
