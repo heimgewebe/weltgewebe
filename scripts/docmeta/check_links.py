@@ -48,6 +48,9 @@ def main():
                         errors.append(f"Malformed link in '{rel_file_path}': missing '>' in '{link_content}'")
                         continue
                 else:
+                    # Markdown links with titles are supported (e.g., [text](url "title")).
+                    # If the actual URL contains spaces, it must be written using the <...> syntax.
+                    # Otherwise, splitting by whitespace correctly extracts the URL and drops the title.
                     url = link_content.split()[0]
 
                 # Skip external links
