@@ -10,6 +10,9 @@
       "type": "string",
       "enum": ["norm", "reality", "runbooks", "action"]
     },
+    "organ": {
+      "type": "string"
+    },
     "status": {
       "type": "string",
       "enum": ["canonical"]
