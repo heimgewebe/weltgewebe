@@ -4,7 +4,10 @@ role: norm
 status: canonical
 last_reviewed: 2026-02-28
 depends_on: []
-verifies_with: []
+verifies_with:
+  - scripts/docmeta/check_repo_index_consistency.py
+  - scripts/docmeta/check_doc_review_age.py
+  - scripts/docmeta/generate_system_map.py
 ---
 
 # Docmeta Schema
