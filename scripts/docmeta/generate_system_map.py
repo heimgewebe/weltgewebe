@@ -27,7 +27,8 @@ def main():
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
                 status = frontmatter.get('status', '')
-                last_reviewed = frontmatter.get('last_reviewed', '')
+                last_reviewed_str = frontmatter.get('last_reviewed', '')
+
                 depends_on = frontmatter.get('depends_on', [])
                 if isinstance(depends_on, str):
                     if depends_on.startswith('[') and depends_on.endswith(']'):
@@ -40,27 +41,48 @@ def main():
                 else:
                     depends_on_str = str(depends_on)
 
-                # Make the file path a markdown link
-                file_link = f"[{rel_file_path}]({rel_file_path})"
+                verifies_with = frontmatter.get('verifies_with', [])
+                if isinstance(verifies_with, str):
+                    if verifies_with.startswith('[') and verifies_with.endswith(']'):
+                        vw_list = [v.strip() for v in verifies_with[1:-1].split(',') if v.strip()]
+                    else:
+                        vw_list = [verifies_with.strip()] if verifies_with.strip() else []
+                elif isinstance(verifies_with, list):
+                    vw_list = verifies_with
+                else:
+                    vw_list = []
+
+                # Check for missing scripts
+                vw_display = []
+                for vw in vw_list:
+                    vw_path = os.path.join(REPO_ROOT, vw)
+                    if not os.path.exists(vw_path):
+                        vw_display.append(f"{vw} 🔴(Missing)")
+                    else:
+                        vw_display.append(vw)
+                verifies_with_str = ', '.join(vw_display)
+
+                file_link = rel_file_path
             else:
                 doc_id = "_Missing_"
                 status = "_Missing_"
-                last_reviewed = "_Missing_"
+                last_reviewed_str = "_Missing_"
                 depends_on_str = "_Missing_"
-                file_link = f"[{rel_file_path}]({rel_file_path})"
+                verifies_with_str = "_Missing_"
+                file_link = rel_file_path
 
-            rows.append([doc_id, file_link, status, last_reviewed, depends_on_str])
+            rows.append([doc_id, file_link, status, last_reviewed_str, depends_on_str, verifies_with_str])
 
-        headers = ["ID", "File", "Status", "Last Reviewed", "Depends On"]
+        headers = ["ID", "File", "Status", "Last Reviewed", "Depends On", "Verifies With"]
 
-        header_row = "| " + " | ".join(headers) + " |"
+        header_row = "|" + "|".join(headers) + "|"
         output.append(header_row)
 
         sep_row = "|" + "|".join(["---" for _ in headers]) + "|"
         output.append(sep_row)
 
         for row in rows:
-            data_row = "| " + " | ".join(row) + " |"
+            data_row = "|" + "|".join(row) + "|"
             output.append(data_row)
 
         output.append("")
@@ -69,7 +91,8 @@ def main():
     checks = repo_index.get('checks', [])
     if checks:
         for check in sorted(checks):
-            output.append(f"- [{check}]({check})")
+            # Strip markdown link syntax to avoid diff noise
+            output.append(f"- {check}")
         output.append("")
 
     out_path = os.path.join(REPO_ROOT, 'SYSTEM_MAP.md')
