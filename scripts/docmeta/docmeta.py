@@ -47,9 +47,6 @@ def parse_frontmatter(file_path):
             key = key.strip()
             val = val.strip()
 
-            # Reset current key
-            current_key = key
-
             if val.startswith('[') and val.endswith(']'):
                 items = [item.strip() for item in val[1:-1].split(',') if item.strip()]
                 # Handle quoted strings in inline lists
@@ -57,11 +54,19 @@ def parse_frontmatter(file_path):
                     if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
                         items[i] = item[1:-1]
                 val = items
+                current_key = None # Completed inline list
             elif val == '' and key in ['depends_on', 'verifies_with']:
                 # Initialize empty list for potential block list parsing on valid fields
                 val = []
+                current_key = key # Track to append items
+            elif val == '':
+                # Explicitly unset tracking for unknown empty fields
+                current_key = None
             elif (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
                 val = val[1:-1]
+                current_key = None # Scalar completed
+            else:
+                current_key = None # Scalar completed
 
             data[key] = val
 

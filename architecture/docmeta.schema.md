@@ -14,6 +14,10 @@ verifies_with:
 
 Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonischen Entry-Docs.
 
+> **Hinweis:** Das Frontmatter wird bewusst durch einen eingeschränkten, deterministischen
+> Mini-Parser gelesen. Strukturierte YAML-Blocklisten werden ausdrücklich nur für die
+> Felder `depends_on` und `verifies_with` garantiert.
+
 * **id**: Eindeutiger Identifier des Dokuments.
 * **role**: Rolle des Dokuments (norm | reality | runbooks | action).
 * **organ**: (Optional) Architektonisches Ownership-Feld für maschinelles Routing
