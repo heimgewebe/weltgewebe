@@ -13,8 +13,8 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    default_cycle_days = int(policy.get('default_review_cycle_days', 90))
-    mode = str(policy.get('mode', 'warn')).lower()
+    default_cycle_days = policy['default_review_cycle_days']
+    mode = policy['mode']
 
     errors = []
     warnings = []

@@ -46,6 +46,42 @@ class TestDocMetaStrictParsers(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def test_strict_manifest_missing_canonical_docs_fails(self):
+        content = "---\nzones:\n  norm:\n    path: architecture/\nchecks:\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            with self.assertRaisesRegex(ValueError, "Strict Mode: Zone 'norm' has no canonical_docs."):
+                parse_repo_index(manifest_path=temp_path, strict_manifest=True)
+        finally:
+            os.remove(temp_path)
+
+    def test_review_policy_missing_mode(self):
+        content = "---\ndefault_review_cycle_days: 90\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            with self.assertRaisesRegex(ValueError, "Missing required key 'mode'"):
+                parse_review_policy(policy_path=temp_path)
+        finally:
+            os.remove(temp_path)
+
+    def test_review_policy_missing_cycle_days(self):
+        content = "---\nmode: warn\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            with self.assertRaisesRegex(ValueError, "Missing required key 'default_review_cycle_days'"):
+                parse_review_policy(policy_path=temp_path)
+        finally:
+            os.remove(temp_path)
+
     def test_review_policy_invalid_days(self):
         content = "---\ndefault_review_cycle_days: x\nmode: warn\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:

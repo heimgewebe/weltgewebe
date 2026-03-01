@@ -161,18 +161,22 @@ def parse_review_policy(policy_path=None, strict_manifest=False):
             raise ValueError(f"Line {line_num}: Unknown key '{key}' in review policy (strict_manifest=True).")
 
     # Validation
-    if 'default_review_cycle_days' in data:
-        try:
-            val = int(data['default_review_cycle_days'])
-            if val <= 0:
-                raise ValueError
-        except ValueError:
-            raise ValueError(f"Invalid default_review_cycle_days: '{data['default_review_cycle_days']}'. Must be a positive integer.")
+    if 'default_review_cycle_days' not in data:
+        raise ValueError("Missing required key 'default_review_cycle_days' in review policy.")
+    try:
+        val = int(data['default_review_cycle_days'])
+        if val <= 0:
+            raise ValueError
+        data['default_review_cycle_days'] = val
+    except ValueError:
+        raise ValueError(f"Invalid default_review_cycle_days: '{data['default_review_cycle_days']}'. Must be a positive integer.")
 
-    if 'mode' in data:
-        mode = data['mode'].lower()
-        if mode not in ['warn', 'fail']:
-            raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn' or 'fail'.")
+    if 'mode' not in data:
+        raise ValueError("Missing required key 'mode' in review policy.")
+    mode = data['mode'].lower()
+    if mode not in ['warn', 'fail']:
+        raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn' or 'fail'.")
+    data['mode'] = mode
 
     if 'strict_manifest' in data:
         val = data['strict_manifest'].lower()
