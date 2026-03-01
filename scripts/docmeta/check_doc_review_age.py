@@ -13,8 +13,12 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    default_cycle_days = policy['default_review_cycle_days']
-    mode = policy['mode']
+    try:
+        default_cycle_days = policy['default_review_cycle_days']
+        mode = policy['mode']
+    except KeyError as e:
+        print(f"Error: review policy missing required key {e} (parser contract violation).", file=sys.stderr)
+        sys.exit(1)
 
     errors = []
     warnings = []
