@@ -31,12 +31,12 @@ def parse_frontmatter(file_path):
             data[key] = val
     return data
 
-def parse_repo_index(manifest_path=None):
+def parse_repo_index(manifest_path=None, strict_manifest=False):
     if not manifest_path:
-        manifest_path = os.path.join(REPO_ROOT, "manifest", "repo-index.yaml")
+        manifest_path = os.environ.get("REPO_INDEX_PATH", os.path.join(REPO_ROOT, "manifest", "repo-index.yaml"))
 
     if not os.path.exists(manifest_path):
-        return None
+        raise ValueError(f"Repo index file not found: {manifest_path}")
 
     with open(manifest_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
@@ -46,62 +46,143 @@ def parse_repo_index(manifest_path=None):
     in_zones = False
     in_checks = False
     in_canonical_docs = False
+    has_zones_key = False
 
-    for line in lines:
+    # Track hierarchy implicitly via state to validate indentation.
+    for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
         if not stripped or stripped.startswith('#') or stripped == '---':
             continue
 
-        if line.startswith('zones:'):
-            in_zones = True
-            in_checks = False
-            continue
-        elif line.startswith('checks:'):
-            in_checks = True
-            in_zones = False
+        indent = len(line) - len(line.lstrip())
+
+        # Validate that no unhandled text exists at indent 0
+        if indent == 0:
+            if ':' not in stripped:
+                raise ValueError(f"Line {line_num}: Expected key-value or key: at root level. Found: '{stripped}'")
+            key = stripped.split(':')[0].strip()
+
+            if key == 'zones':
+                in_zones = True
+                in_checks = False
+                has_zones_key = True
+            elif key == 'checks':
+                in_checks = True
+                in_zones = False
+            else:
+                if strict_manifest:
+                    raise ValueError(f"Line {line_num}: Unknown key at root level '{key}' (strict_manifest=True).")
+                in_zones = False
+                in_checks = False
             continue
 
+        if ':' not in stripped and not stripped.startswith('-'):
+            raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon or list indicator: '{stripped}'")
+
         if in_zones:
-            if line.startswith('  ') and not line.startswith('    '):
+            if indent == 2:
+                if not stripped.endswith(':'):
+                    raise ValueError(f"Line {line_num}: Expected zone key ending with colon, found: '{stripped}'")
                 current_zone = stripped.rstrip(':')
                 data['zones'][current_zone] = {'path': '', 'canonical_docs': []}
                 in_canonical_docs = False
-            elif line.startswith('    path:'):
-                data['zones'][current_zone]['path'] = line.split('path:')[1].strip()
-            elif line.startswith('    canonical_docs:'):
-                in_canonical_docs = True
-            elif in_canonical_docs and line.startswith('      - '):
-                doc = line.split('- ')[1].strip()
+            elif indent == 4 and current_zone:
+                key = stripped.split(':')[0].strip()
+                if key == 'path':
+                    data['zones'][current_zone]['path'] = stripped.split(':', 1)[1].strip()
+                    in_canonical_docs = False
+                elif key == 'canonical_docs':
+                    in_canonical_docs = True
+                else:
+                    in_canonical_docs = False
+                    if strict_manifest:
+                        raise ValueError(f"Line {line_num}: Unknown key in zone '{current_zone}': '{key}' (strict_manifest=True).")
+            elif indent == 6 and in_canonical_docs:
+                if not stripped.startswith('- '):
+                    raise ValueError(f"Line {line_num}: Expected list item for canonical_docs, found: '{stripped}'")
+                doc = stripped.split('-', 1)[1].strip()
                 data['zones'][current_zone]['canonical_docs'].append(doc)
+            else:
+                raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in zones.")
 
         elif in_checks:
-            if line.startswith('  - '):
-                check = line.split('- ')[1].strip()
+            if indent == 2:
+                if not stripped.startswith('- '):
+                    raise ValueError(f"Line {line_num}: Expected list item for checks, found: '{stripped}'")
+                check = stripped.split('-', 1)[1].strip()
                 data['checks'].append(check)
+            else:
+                raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in checks.")
+
+    if not has_zones_key:
+        raise ValueError("Missing required key 'zones' in repo-index.")
+
+    if strict_manifest:
+        if not data['zones']:
+            raise ValueError("The 'zones' section cannot be empty when strict_manifest=True.")
+        for z_name, z_data in data['zones'].items():
+            if not z_data.get('canonical_docs'):
+                raise ValueError(f"Strict Mode: Zone '{z_name}' has no canonical_docs.")
 
     return data
 
-def parse_review_policy(policy_path=None):
+def parse_review_policy(policy_path=None, strict_manifest=False):
     if not policy_path:
-        policy_path = os.path.join(REPO_ROOT, "manifest", "review-policy.yaml")
+        policy_path = os.environ.get("REVIEW_POLICY_PATH", os.path.join(REPO_ROOT, "manifest", "review-policy.yaml"))
 
     if not os.path.exists(policy_path):
-        return None
+        raise ValueError(f"Review policy file not found: {policy_path}")
 
     with open(policy_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
     data = {}
-    for line in lines:
+    known_keys = {'default_review_cycle_days', 'mode', 'strict_manifest'}
+
+    for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
         if not stripped or stripped.startswith('#') or stripped == '---':
             continue
-        if ':' in line:
-            key, val = line.split(':', 1)
-            data[key.strip()] = val.strip()
+
+        if ':' not in line:
+            raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon: '{stripped}'")
+
+        key, val = line.split(':', 1)
+        key = key.strip()
+        val = val.strip()
+
+        # Unquote if necessary
+        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            val = val[1:-1]
+
+        data[key] = val
+
+        if strict_manifest and key not in known_keys:
+            raise ValueError(f"Line {line_num}: Unknown key '{key}' in review policy (strict_manifest=True).")
+
+    # Validation
+    if 'default_review_cycle_days' not in data:
+        raise ValueError("Missing required key 'default_review_cycle_days' in review policy.")
+    try:
+        val = int(data['default_review_cycle_days'])
+        if val <= 0:
+            raise ValueError
+        data['default_review_cycle_days'] = val
+    except ValueError:
+        raise ValueError(f"Invalid default_review_cycle_days: '{data['default_review_cycle_days']}'. Must be a positive integer.")
+
+    if 'mode' not in data:
+        raise ValueError("Missing required key 'mode' in review policy.")
+    mode = data['mode'].lower()
+    if mode not in ['warn', 'fail']:
+        raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn' or 'fail'.")
+    data['mode'] = mode
 
     if 'strict_manifest' in data:
-        data['strict_manifest'] = data['strict_manifest'].lower() == 'true'
+        val = data['strict_manifest'].lower()
+        if val not in ['true', 'false']:
+            raise ValueError(f"Invalid strict_manifest: '{data['strict_manifest']}'. Must be true or false.")
+        data['strict_manifest'] = (val == 'true')
     else:
         data['strict_manifest'] = False
 

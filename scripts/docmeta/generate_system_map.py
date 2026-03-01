@@ -1,12 +1,15 @@
 import os
 import sys
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
 
 def main():
-    repo_index = parse_repo_index()
-    if not repo_index:
-        print("Error: Could not parse repo-index.yaml", file=sys.stderr)
+    try:
+        policy = parse_review_policy()
+        strict_mode = policy.get('strict_manifest', False)
+        repo_index = parse_repo_index(strict_manifest=strict_mode)
+    except ValueError as e:
+        print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
     output = ["# SYSTEM_MAP\n"]
@@ -49,24 +52,15 @@ def main():
             rows.append([doc_id, file_link, status, last_reviewed, depends_on_str])
 
         headers = ["ID", "File", "Status", "Last Reviewed", "Depends On"]
-        col_widths = [len(h) for h in headers]
 
-        for row in rows:
-            for i, col in enumerate(row):
-                if len(col) > col_widths[i]:
-                    col_widths[i] = len(col)
-
-        def pad(text, width):
-            return text + " " * (width - len(text))
-
-        header_row = "| " + " | ".join([pad(h, w) for h, w in zip(headers, col_widths)]) + " |"
+        header_row = "| " + " | ".join(headers) + " |"
         output.append(header_row)
 
-        sep_row = "|" + "|".join(["-" * (w + 2) for w in col_widths]) + "|"
+        sep_row = "|" + "|".join(["---" for _ in headers]) + "|"
         output.append(sep_row)
 
         for row in rows:
-            data_row = "| " + " | ".join([pad(c, w) for c, w in zip(row, col_widths)]) + " |"
+            data_row = "| " + " | ".join(row) + " |"
             output.append(data_row)
 
         output.append("")
