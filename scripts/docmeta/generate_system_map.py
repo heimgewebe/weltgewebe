@@ -1,6 +1,5 @@
 import os
 import sys
-import datetime
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
 
@@ -13,16 +12,7 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        default_cycle_days = policy['default_review_cycle_days']
-        policy_mode = policy['mode']
-    except KeyError as e:
-        print(f"Error: review policy missing required key {e}", file=sys.stderr)
-        sys.exit(1)
-
     output = ["# SYSTEM_MAP\n"]
-
-    today = datetime.date.today()
 
     for zone_name, zone_data in sorted(repo_index.get('zones', {}).items()):
         output.append(f"## Zone: {zone_name}\n")
@@ -37,22 +27,7 @@ def main():
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
                 status = frontmatter.get('status', '')
-                last_reviewed = frontmatter.get('last_reviewed', '')
-
-                # Freshness
-                freshness = "🟢"
-                if last_reviewed:
-                    try:
-                        lr_date = datetime.datetime.strptime(last_reviewed, "%Y-%m-%d").date()
-                        delta = today - lr_date
-                        if delta.days > default_cycle_days:
-                            freshness = "🔴" if policy_mode == "fail" else "🟡"
-                    except ValueError:
-                        freshness = "❓"
-                else:
-                    freshness = "❓"
-
-                last_reviewed_str = f"{last_reviewed} {freshness}".strip()
+                last_reviewed_str = frontmatter.get('last_reviewed', '')
 
                 depends_on = frontmatter.get('depends_on', [])
                 if isinstance(depends_on, str):

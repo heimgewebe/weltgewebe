@@ -65,7 +65,6 @@ def main():
         sys.exit(1)
 
     errors = []
-    warnings = []
 
     zones = repo_index.get('zones', {})
 
@@ -107,11 +106,6 @@ def main():
             for err in validation_errors:
                 errors.append(f"Schema violation in '{rel_file_path}': {err}")
 
-    if warnings:
-        print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
-        for warning in warnings:
-            print(f"- {warning}", file=sys.stderr)
-
     if errors:
         print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)
         for error in errors:
@@ -119,7 +113,7 @@ def main():
         print("\nDocmeta schema validation failed.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Docmeta schema validation passed (0 errors, {len(warnings)} warnings).")
+    print("Docmeta schema validation passed (0 errors).")
 
 if __name__ == '__main__':
     main()

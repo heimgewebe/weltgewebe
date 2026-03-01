@@ -14,7 +14,6 @@ def main():
         sys.exit(1)
 
     errors = []
-    warnings = []
 
     zones = repo_index.get('zones', {})
 
@@ -37,8 +36,19 @@ def main():
             # Ignoring image links ![text](url)
             links = re.findall(r'(?<!\!)\[.*?\]\((.*?)\)', content)
 
-            for url in links:
-                url = url.strip()
+            for link_content in links:
+                link_content = link_content.strip()
+
+                # Extract URL from link_content handling optional titles and <url> syntax
+                if link_content.startswith('<'):
+                    end_idx = link_content.find('>')
+                    if end_idx != -1:
+                        url = link_content[1:end_idx]
+                    else:
+                        url = link_content[1:].split()[0] # fallback if malformed
+                else:
+                    url = link_content.split()[0]
+
                 # Skip external links
                 if url.startswith(('http://', 'https://', 'mailto:', 'tel:')):
                     continue
@@ -57,11 +67,6 @@ def main():
                 if not os.path.exists(target_path):
                     errors.append(f"Broken link in '{rel_file_path}': Target '{file_url}' does not exist.")
 
-    if warnings:
-        print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
-        for warning in warnings:
-            print(f"- {warning}", file=sys.stderr)
-
     if errors:
         print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)
         for error in errors:
@@ -69,7 +74,7 @@ def main():
         print("\nDoc link check failed.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Doc link check passed (0 errors, {len(warnings)} warnings).")
+    print("Doc link check passed (0 errors).")
 
 if __name__ == '__main__':
     main()
