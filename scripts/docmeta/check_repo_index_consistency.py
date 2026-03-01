@@ -56,6 +56,10 @@ def main():
             if frontmatter.get('status') != 'canonical':
                 errors.append(f"Status is not 'canonical' in '{rel_file_path}'.")
 
+            owner = frontmatter.get('owner')
+            if not owner or not str(owner).strip():
+                errors.append(f"Missing or empty 'owner' in frontmatter of '{rel_file_path}'.")
+
             role = frontmatter.get('role')
             if role not in ('norm', 'reality', 'runbooks', 'action'):
                 errors.append(f"Invalid role '{role}' in '{rel_file_path}'. Must be norm|reality|runbooks|action.")
