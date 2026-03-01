@@ -77,7 +77,7 @@ def parse_repo_index(manifest_path=None, strict_manifest=False):
             continue
 
         if ':' not in stripped and not stripped.startswith('-'):
-             raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon or list indicator: '{stripped}'")
+            raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon or list indicator: '{stripped}'")
 
         if in_zones:
             if indent == 2:
@@ -90,18 +90,20 @@ def parse_repo_index(manifest_path=None, strict_manifest=False):
                 key = stripped.split(':')[0].strip()
                 if key == 'path':
                     data['zones'][current_zone]['path'] = stripped.split(':', 1)[1].strip()
+                    in_canonical_docs = False
                 elif key == 'canonical_docs':
                     in_canonical_docs = True
                 else:
+                    in_canonical_docs = False
                     if strict_manifest:
-                         raise ValueError(f"Line {line_num}: Unknown key in zone '{current_zone}': '{key}' (strict_manifest=True).")
+                        raise ValueError(f"Line {line_num}: Unknown key in zone '{current_zone}': '{key}' (strict_manifest=True).")
             elif indent == 6 and in_canonical_docs:
                 if not stripped.startswith('- '):
-                     raise ValueError(f"Line {line_num}: Expected list item for canonical_docs, found: '{stripped}'")
+                    raise ValueError(f"Line {line_num}: Expected list item for canonical_docs, found: '{stripped}'")
                 doc = stripped.split('-', 1)[1].strip()
                 data['zones'][current_zone]['canonical_docs'].append(doc)
             else:
-                 raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in zones.")
+                raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in zones.")
 
         elif in_checks:
             if indent == 2:
@@ -113,10 +115,14 @@ def parse_repo_index(manifest_path=None, strict_manifest=False):
                 raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in checks.")
 
     if not has_zones_key:
-         raise ValueError("Missing required key 'zones' in repo-index.")
+        raise ValueError("Missing required key 'zones' in repo-index.")
 
-    if strict_manifest and not data['zones']:
-         raise ValueError("The 'zones' section cannot be empty when strict_manifest=True.")
+    if strict_manifest:
+        if not data['zones']:
+            raise ValueError("The 'zones' section cannot be empty when strict_manifest=True.")
+        for z_name, z_data in data['zones'].items():
+            if not z_data.get('canonical_docs'):
+                raise ValueError(f"Strict Mode: Zone '{z_name}' has no canonical_docs.")
 
     return data
 
@@ -171,17 +177,9 @@ def parse_review_policy(policy_path=None, strict_manifest=False):
     if 'strict_manifest' in data:
         val = data['strict_manifest'].lower()
         if val not in ['true', 'false']:
-             raise ValueError(f"Invalid strict_manifest: '{data['strict_manifest']}'. Must be true or false.")
+            raise ValueError(f"Invalid strict_manifest: '{data['strict_manifest']}'. Must be true or false.")
         data['strict_manifest'] = (val == 'true')
     else:
         data['strict_manifest'] = False
-
-    # Force the passed strict_manifest argument to apply to parsing.
-    # The actual file parsing already occurred, but if strict_manifest is True externally,
-    # we enforce it again on the parsed data just in case.
-    if strict_manifest:
-         for k in data.keys():
-              if k not in known_keys:
-                  raise ValueError(f"Unknown key '{k}' in review policy (strict_manifest=True).")
 
     return data

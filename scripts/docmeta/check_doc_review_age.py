@@ -14,7 +14,7 @@ def main():
         sys.exit(1)
 
     default_cycle_days = int(policy.get('default_review_cycle_days', 90))
-    mode = policy.get('mode', 'warn')
+    mode = str(policy.get('mode', 'warn')).lower()
 
     errors = []
     warnings = []
