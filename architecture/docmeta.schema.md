@@ -16,7 +16,8 @@ Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonisch
 
 * **id**: Eindeutiger Identifier des Dokuments.
 * **role**: Rolle des Dokuments (norm | reality | runbooks | action).
-* **organ**: (Optional) Architektonisches Ownership-Feld für maschinelles Routing (z.B. governance, runtime, contracts, docmeta, deploy).
+* **organ**: (Optional) Architektonisches Ownership-Feld für maschinelles Routing
+  (z.B. governance, runtime, contracts, docmeta, deploy).
 * **status**: Status (canonical).
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **depends_on**: Liste von Dokumenten-IDs, von denen dieses Dokument abhängt.
