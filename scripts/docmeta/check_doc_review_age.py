@@ -5,29 +5,16 @@ import datetime
 from scripts.docmeta.docmeta import REPO_ROOT, parse_review_policy, parse_repo_index, parse_frontmatter
 
 def main():
-    policy = parse_review_policy()
-
-    if not policy:
-        print("Error: Could not parse review-policy.yaml", file=sys.stderr)
-        sys.exit(1)
-
     try:
-        default_cycle_days = int(policy.get('default_review_cycle_days', 90))
-        if default_cycle_days <= 0:
-            raise ValueError
-    except ValueError:
-        print("Error: Invalid default_review_cycle_days in policy. Must be positive int.", file=sys.stderr)
+        policy = parse_review_policy()
+        strict_mode = policy.get('strict_manifest', False)
+        repo_index = parse_repo_index(strict_manifest=strict_mode)
+    except ValueError as e:
+        print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    mode = policy.get('mode', 'warn').lower()
-    if mode not in ['warn', 'fail']:
-        print("Error: Invalid mode in policy. Must be 'warn' or 'fail'.", file=sys.stderr)
-        sys.exit(1)
-
-    repo_index = parse_repo_index()
-    if not repo_index:
-        print("Error: Manifest does not exist or could not be parsed.")
-        sys.exit(1)
+    default_cycle_days = int(policy.get('default_review_cycle_days', 90))
+    mode = policy.get('mode', 'warn')
 
     errors = []
     warnings = []

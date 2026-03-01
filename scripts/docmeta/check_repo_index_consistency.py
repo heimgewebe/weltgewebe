@@ -4,14 +4,13 @@ import sys
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
 
 def main():
-    repo_index = parse_repo_index()
-    policy = parse_review_policy()
-
-    if not repo_index:
-        print("Error: Manifest does not exist or could not be parsed.")
+    try:
+        policy = parse_review_policy()
+        strict_mode = policy.get('strict_manifest', False)
+        repo_index = parse_repo_index(strict_manifest=strict_mode)
+    except ValueError as e:
+        print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
-
-    strict_mode = policy.get('strict_manifest', False) if policy else False
 
     errors = []
     warnings = []
@@ -19,12 +18,6 @@ def main():
     dependencies = {}
 
     zones = repo_index.get('zones', {})
-
-    if not zones:
-        errors.append("Manifest 'zones' is missing or empty.")
-
-    if strict_mode and not zones:
-        errors.append("Strict Mode: empty zones not allowed.")
 
     for zone_name, zone_data in zones.items():
         rel_zone_path = zone_data.get('path')
@@ -38,8 +31,6 @@ def main():
             continue
 
         canonical_docs = zone_data.get('canonical_docs', [])
-        if strict_mode and not canonical_docs:
-            errors.append(f"Strict Mode: Zone '{zone_name}' has no canonical_docs.")
 
         for doc_file in canonical_docs:
             file_path = os.path.join(zone_path, doc_file)
