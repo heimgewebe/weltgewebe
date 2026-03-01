@@ -56,6 +56,32 @@ class TestDocMetaParser(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def test_parse_frontmatter_empty_organ_and_unknown_block_list(self):
+        content = "---\n" \
+                  "id: test-robustness\n" \
+                  "organ:\n" \
+                  "tags:\n" \
+                  "  - architecture\n" \
+                  "  - draft\n" \
+                  "verifies_with:\n" \
+                  "  - scripts/verify.py\n" \
+                  "---\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            data = parse_frontmatter(temp_path)
+            self.assertIsNotNone(data)
+            self.assertEqual(data.get('id'), 'test-robustness')
+            # 'organ' missing value should be parsed as empty string
+            self.assertEqual(data.get('organ'), '')
+            # 'tags' blocklist shouldn't be parsed since it's not whitelisted
+            self.assertEqual(data.get('tags'), '')
+            self.assertEqual(data.get('verifies_with'), ['scripts/verify.py'])
+        finally:
+            os.remove(temp_path)
+
     def test_parse_frontmatter_inline_list(self):
         content = "---\n" \
                   "id: test-inline\n" \

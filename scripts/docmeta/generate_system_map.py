@@ -61,7 +61,7 @@ def main():
                         vw_display.append(f"{vw} 🔴(Missing)")
                     else:
                         vw_display.append(vw)
-                verifies_with_str = ', '.join(vw_display)
+                verifies_with_str = ', '.join(sorted(vw_display))
 
                 file_link = rel_file_path
             else:

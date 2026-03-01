@@ -4,7 +4,7 @@
 
 |ID|File|Organ|Status|Last Reviewed|Depends On|Verifies With|
 |---|---|---|---|---|---|---|
-|docmeta.schema|architecture/docmeta.schema.md||canonical|2026-02-28||scripts/docmeta/check_repo_index_consistency.py, scripts/docmeta/check_doc_review_age.py, scripts/docmeta/generate_system_map.py|
+|docmeta.schema|architecture/docmeta.schema.md||canonical|2026-02-28||scripts/docmeta/check_doc_review_age.py, scripts/docmeta/check_repo_index_consistency.py, scripts/docmeta/generate_system_map.py|
 |overview|architecture/overview.md||canonical|2026-02-28|||
 |security|architecture/security.md||canonical|2026-02-28|||
 
