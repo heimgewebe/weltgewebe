@@ -1,91 +1,56 @@
-# Blueprint: Replace personal ownership with architectural ownership model
+# Blueprint: Docmeta System Evolution
 
-## Ziel
+## B1) Doc Ownership / Governance
 
-Die bestehende Blaupause zum Thema `owner` / `CODEOWNERS` soll überarbeitet werden.
+- Frontmatter-Feld `organ`: einführen (Architektur-Semantik, z. B. governance, runtime, deploy).
+- *Hinweis:* Personale Ownership und `CODEOWNERS` werden im Solo-Setup nicht genutzt und
+  explizit ausgesetzt. Die Steuerung erfolgt ausschließlich über Architektur-Semantik (`organ`).
 
-Grundannahme:
-Das Repository wird primär solo betrieben. Personale Ownership und `CODEOWNERS` sind daher nicht zielführend.
+## B2) Graph-Intelligenz / Review-Impact
 
-Stattdessen soll ein architektonisch sinnvolles Ownership-Modell definiert werden,
-das maschinell auswertbar ist und die Selbstorganisation des Repos stärkt.
+- `depends_on` als Graph auswerten.
+- "Review impact" ausgeben: Bei Änderung von Doc A → markiere abhängige Docs als
+  `needs_review` (oder generiere einen Report).
 
-Wichtig:
+## B3) Review-Workflow Komfort
 
-- Kein reines Entfernen.
-- Konzeptionell sauber neu denken.
-- Nur implementieren, wenn es maschinellen Mehrwert erzeugt.
+- Skript `scripts/docmeta/touch_last_reviewed.py` (manuell aufrufbar) zum Setzen oder
+  Aktualisieren des Feldes `last_reviewed`.
 
----
+## B4) Link-Checker
 
-## 1. Entferne personale Ownership aus der Blaupause
+- Interne Markdown-Links in canonical Docs prüfen (existierende Ziele, Anker optional).
 
-Personale Ownership wird aus dem System entfernt. Dies bedeutet konkret:
+## B5) Schema/Contract (hart, aber sauber)
 
-- Keine Annahmen wie „Team“, „Person“, „Verantwortlicher“.
-- `CODEOWNERS` wird nicht in die priorisierte Planung aufgenommen.
-- **Begründung:** Governance ohne verteilte Verantwortung ist formale Redundanz.
-  Im Solo-Setup führt personale Ownership lediglich zu Governance-Ballast ohne funktionalen Wert.
+- `contracts/docmeta.schema.json` definieren.
+- Validation per JSON-Schema einführen (ggf. separiert, wenn Abhängigkeiten wie PyYAML
+  oder jsonschema eingeführt werden).
+  *Achtung:* Python Tooling für das Repository muss nach Möglichkeit dependency-free
+  bleiben (gemäß bestehender Speicher-Richtlinien).
 
----
+## B6) DX / Tooling
 
-## 2. Ersetze Owner durch Architektur-Semantik
+- `make docs-guard` (oder äquivalent) als Single-Source-of-Truth für CI/lokale Checks hinzufügen.
+- WGX-Hook: `wgx guard docs` bzw. Forwarder-Integration (Heimgewebe-Style).
 
-Stattdessen wird ein neues, rein optionales Frontmatter-Feld eingeführt:
+## B7) SYSTEM_MAP Erweiterungen
 
-`organ`
-
-Beispiele für Ausprägungen von `organ`:
-
-- `organ: governance`
-- `organ: runtime`
-- `organ: contracts`
-- `organ: docmeta`
-- `organ: deploy`
-
-**Wichtig:**
-
-- Das Feld ist strikt optional.
-- Es wird nur eingeführt, da es auch maschinell genutzt wird.
+- `verifies_with` in der `SYSTEM_MAP.md` ausgeben.
+- "Freshness"-Ampel nach Policy (warn/fail, basierend auf den Tagen seit dem letzten Review).
+- "Missing scripts"-Ampel (Checks, die in `verifies_with` referenziert sind, aber im
+  Dateisystem fehlen).
 
 ---
 
-## 3. Maschinelle Nutzung definieren
+## C) Optionaler Extra-PR (Integrationstests & Strictness)
 
-Das neue Feld `organ` generiert sofortigen maschinellen Mehrwert:
+*Hinweis: Nur implementieren, wenn Integrationstests zwingend erforderlich sind.*
 
-- `generate_system_map.py` wertet `organ` aus und nimmt es als strukturelles Feld in die
-  System Map auf, was die Gruppierung von Dokumenten nach funktionaler Systemintelligenz ermöglicht.
-
-Da diese Nutzung implementiert ist, ist das Feld zulässig.
-
----
-
-## 4. CODEOWNERS explizit zurückstellen
-
-- `CODEOWNERS` wird nicht implementiert.
-- GitHub Review-Routing ist aktuell nicht Teil des Zielsystems.
-- **Ausnahmefall:** Sollte das Repository kollaborativ werden, wird `CODEOWNERS` neu evaluiert.
-  Bis dahin bleibt es ausgesetzt.
-
----
-
-## 5. Strukturelle Einordnung der Blaupause
-
-Diese Blaupause stellt sicher, dass:
-
-- Klar zwischen sozialer Governance (nicht benötigt im Solo-Repo) und Architektur-Semantik unterschieden wird.
-- Ownership als System-Navigation definiert wird, nicht als Verantwortlichkeit.
-- Das neue Modell nahtlos in die bestehende Phasenstruktur und CI-Härte (`Docs-Guard`) integrierbar ist.
-
----
-
-## Risiko-/Nutzenanalyse
-
-- **Risiko:** Zusätzliches Pflegefeld in Metadaten.
-- **Nutzen:** Strukturierte Impact-Cluster, System-Heatmap, und eine Architekturintelligenz,
-  die Systeme miteinander sprechen lässt.
-
-**Metakriterium:** Dieser PR darf das System nicht schwerer machen. Er macht es klarer und
-intelligenter. Ownership ist sinnvoll, wenn jemand anderes da ist. Architektur-Semantik ist
-sinnvoll, wenn Systeme miteinander sprechen. Hier sprechen Systeme – nicht Menschen.
+- Env-Overrides: `REPO_INDEX_PATH`, `REVIEW_POLICY_PATH` bereitstellen, um echte
+  Integrationstests hermetisch zu ermöglichen.
+- Strict-Manifest: Unbekannte Keys im Manifest/Frontmatter führen zum Abbruch (fail-closed).
+- End-to-end Test: `mode=fail` + fehlendes `last_reviewed` → Exit 1.
+- `manifest/review-policy.yaml`: Die Strictness-Policy (`strict_manifest`) dokumentieren.
+- `generate_system_map`: Spaltenbreiten/Width-Calc kosmetisch anpassen: Link-Texte strippen
+  und Diff-Noise minimieren (kein dynamisches Padding in Markdown-Tabellen).
