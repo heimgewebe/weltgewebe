@@ -27,6 +27,7 @@ def main():
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
                 status = frontmatter.get('status', '')
+                organ = frontmatter.get('organ', '')
                 last_reviewed_str = frontmatter.get('last_reviewed', '')
 
                 depends_on = frontmatter.get('depends_on', [])
@@ -60,20 +61,21 @@ def main():
                         vw_display.append(f"{vw} 🔴(Missing)")
                     else:
                         vw_display.append(vw)
-                verifies_with_str = ', '.join(vw_display)
+                verifies_with_str = ', '.join(sorted(vw_display))
 
                 file_link = rel_file_path
             else:
                 doc_id = "_Missing_"
                 status = "_Missing_"
+                organ = "_Missing_"
                 last_reviewed_str = "_Missing_"
                 depends_on_str = "_Missing_"
                 verifies_with_str = "_Missing_"
                 file_link = rel_file_path
 
-            rows.append([doc_id, file_link, status, last_reviewed_str, depends_on_str, verifies_with_str])
+            rows.append([doc_id, file_link, organ, status, last_reviewed_str, depends_on_str, verifies_with_str])
 
-        headers = ["ID", "File", "Status", "Last Reviewed", "Depends On", "Verifies With"]
+        headers = ["ID", "File", "Organ", "Status", "Last Reviewed", "Depends On", "Verifies With"]
 
         header_row = "|" + "|".join(headers) + "|"
         output.append(header_row)

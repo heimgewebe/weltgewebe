@@ -17,18 +17,59 @@ def parse_frontmatter(file_path):
 
     frontmatter_text = match.group(1)
     data = {}
+    current_key = None
+
     for line in frontmatter_text.splitlines():
-        line = line.strip()
-        if not line or line.startswith('#'):
+        # Keep original indentation to identify block lists
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith('#'):
+            continue
+
+        if line.startswith(' ') and stripped_line.startswith('- ') and current_key:
+            if current_key in ['depends_on', 'verifies_with']:
+                # It's a block list item
+                val = stripped_line[2:].strip()
+                # Handle quoted strings in lists
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                if isinstance(data[current_key], list):
+                    data[current_key].append(val)
+                else:
+                    # Convert existing string to list and append
+                    if data[current_key]:
+                        data[current_key] = [data[current_key], val]
+                    else:
+                        data[current_key] = [val]
             continue
 
         if ':' in line:
             key, val = line.split(':', 1)
             key = key.strip()
             val = val.strip()
+
             if val.startswith('[') and val.endswith(']'):
-                val = [item.strip() for item in val[1:-1].split(',') if item.strip()]
+                items = [item.strip() for item in val[1:-1].split(',') if item.strip()]
+                # Handle quoted strings in inline lists
+                for i, item in enumerate(items):
+                    if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
+                        items[i] = item[1:-1]
+                val = items
+                current_key = None # Completed inline list
+            elif val == '' and key in ['depends_on', 'verifies_with']:
+                # Initialize empty list for potential block list parsing on valid fields
+                val = []
+                current_key = key # Track to append items
+            elif val == '':
+                # Explicitly unset tracking for unknown empty fields
+                current_key = None
+            elif (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                val = val[1:-1]
+                current_key = None # Scalar completed
+            else:
+                current_key = None # Scalar completed
+
             data[key] = val
+
     return data
 
 def parse_repo_index(manifest_path=None, strict_manifest=False):

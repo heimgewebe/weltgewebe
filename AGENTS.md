@@ -19,7 +19,8 @@ CI-tauglich sind – statt nur „so ungefähr“ zu passen.
 
 1. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
 
-- Erfolgsmeldungen nur bei tatsächlichem Erfolg: console.log('Frontend performance budget matches expected thresholds') oder
+- Erfolgsmeldungen nur bei tatsächlichem Erfolg:
+  `console.log('Frontend performance budget matches expected thresholds')` oder
   ähnliche Erfolgsmeldungen dürfen nur ausgeführt werden, wenn vorher kein Fehler geworfen wurde.
 - Wenn du throw verwendest, achte darauf, dass die Logik so strukturiert ist, dass bei Fehlern kein „Alles ok“ im CI-Log
   erscheint.
