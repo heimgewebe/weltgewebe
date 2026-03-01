@@ -1,0 +1,48 @@
+---
+name: Docs Guard
+
+"on":
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    paths:
+      - 'manifest/**'
+      - 'architecture/**'
+      - 'runtime/**'
+      - 'runbooks/**'
+      - 'scripts/docmeta/**'
+      - 'SYSTEM_MAP.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docmeta-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Tests
+        run: python3 -m unittest discover scripts/docmeta/tests/
+
+      - name: Repo Index Consistency
+        run: python3 -m scripts.docmeta.check_repo_index_consistency
+
+      - name: Review Age Check
+        run: python3 -m scripts.docmeta.check_doc_review_age
+
+      - name: Ensure SYSTEM_MAP up to date
+        run: |
+          python3 -m scripts.docmeta.generate_system_map
+          git diff --exit-code SYSTEM_MAP.md
