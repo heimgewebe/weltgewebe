@@ -11,7 +11,9 @@
       "enum": ["norm", "reality", "runbooks", "action"]
     },
     "organ": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9-]+$"
     },
     "status": {
       "type": "string",
