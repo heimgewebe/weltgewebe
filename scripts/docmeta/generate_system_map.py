@@ -87,7 +87,6 @@ def main():
                         vw_display.append(vw)
                 verifies_with_str = ', '.join(vw_display)
 
-                # Make the file path a markdown link (we remove this for diff-noise minimieren? Wait, prompt says: generate_system_map: Spaltenbreiten/Width-Calc kosmetisch: Link-Text strippen, Diff-Noise minimieren. We can just use the path as text, not markdown link, to avoid formatting noise). Let's use rel_file_path directly.
                 file_link = rel_file_path
             else:
                 doc_id = "_Missing_"
@@ -117,7 +116,7 @@ def main():
     checks = repo_index.get('checks', [])
     if checks:
         for check in sorted(checks):
-            # Same here, strip markdown link syntax to avoid diff noise
+            # Strip markdown link syntax to avoid diff noise
             output.append(f"- {check}")
         output.append("")
 

@@ -34,8 +34,7 @@ def main():
                 content = f.read()
 
             # Naive Markdown link parser: [text](url)
-            # Ignoring image links ![text](url) could be done by a negative lookbehind, but re module doesn't support variable-width lookbehind easily if not simple.
-            # We'll just match `[...](...)` and exclude `![...](...)`.
+            # Ignoring image links ![text](url)
             links = re.findall(r'(?<!\!)\[.*?\]\((.*?)\)', content)
 
             for url in links:
