@@ -123,6 +123,7 @@ def main():
     md_path = os.path.join(artifacts_dir, "impact.md")
 
     report_data = {
+        "missing_ids": missing_ids,
         "cycles": cycles,
         "impacts": impact_data
     }
@@ -132,6 +133,16 @@ def main():
 
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write("# Dependency Graph & Impact Report\n\n")
+
+        f.write("## Missing IDs\n\n")
+        if missing_ids:
+            f.write("Graph unvollständig. The following documents are missing an `id`:\n\n")
+            for mid in missing_ids:
+                f.write(f"- `{mid}`\n")
+            f.write("\n")
+        else:
+            f.write("No missing ids.\n\n")
+
         if cycles:
             f.write("## ⚠️ Cycles Detected\n\n")
             for cycle in cycles:
