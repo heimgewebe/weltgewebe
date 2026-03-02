@@ -1,12 +1,13 @@
 import os
 import sys
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
 
 def main():
     try:
         policy = parse_review_policy()
         strict_mode = policy.get('strict_manifest', False)
+        mode = policy.get('mode', 'warn')
         repo_index = parse_repo_index(strict_manifest=strict_mode)
     except ValueError as e:
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
@@ -61,25 +62,8 @@ def main():
             if role not in ('norm', 'reality', 'runbooks', 'action'):
                 errors.append(f"Invalid role '{role}' in '{rel_file_path}'. Must be norm|reality|runbooks|action.")
 
-            depends_on = frontmatter.get('depends_on', [])
-            if isinstance(depends_on, str):
-                if depends_on.startswith('[') and depends_on.endswith(']'):
-                    depends_on = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
-                else:
-                    depends_on = [depends_on.strip()] if depends_on.strip() else []
-
-            if not isinstance(depends_on, list):
-                depends_on = []
-
-            verifies_with = frontmatter.get('verifies_with', [])
-            if isinstance(verifies_with, str):
-                if verifies_with.startswith('[') and verifies_with.endswith(']'):
-                    verifies_with = [d.strip() for d in verifies_with[1:-1].split(',') if d.strip()]
-                else:
-                    verifies_with = [verifies_with.strip()] if verifies_with.strip() else []
-
-            if not isinstance(verifies_with, list):
-                verifies_with = []
+            depends_on = normalize_list_field(frontmatter.get('depends_on', []))
+            verifies_with = normalize_list_field(frontmatter.get('verifies_with', []))
 
             if doc_id:
                 dependencies[doc_id] = depends_on
@@ -98,7 +82,11 @@ def main():
             script_path = os.path.join(REPO_ROOT, script)
             if not os.path.exists(script_path):
                 missing_for_doc.append(script)
-                errors.append(f"Verification script '{script}' defined in '{doc_id}' does not exist.")
+                msg = f"Verification script '{script}' defined in '{doc_id}' does not exist."
+                if mode in ['strict', 'fail-closed']:
+                    errors.append(msg)
+                else:
+                    warnings.append(msg)
 
         missing_scripts_report[doc_id] = {
             "all_scripts": scripts,

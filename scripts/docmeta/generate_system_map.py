@@ -3,7 +3,7 @@ import sys
 import datetime
 import json
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
 
 def main():
     try:
@@ -64,41 +64,25 @@ def main():
                 else:
                     freshness_status = "missing"
 
-                depends_on = frontmatter.get('depends_on', [])
-                if isinstance(depends_on, str):
-                    if depends_on.startswith('[') and depends_on.endswith(']'):
-                        depends_on_list = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
-                        depends_on_str = ', '.join(depends_on_list)
-                    else:
-                        depends_on_str = depends_on.strip()
-                elif isinstance(depends_on, list):
-                    depends_on_str = ', '.join(depends_on)
-                else:
-                    depends_on_str = str(depends_on)
+                depends_on_list = normalize_list_field(frontmatter.get('depends_on', []))
+                depends_on_str = ', '.join(depends_on_list)
 
-                verifies_with = frontmatter.get('verifies_with', [])
-                if isinstance(verifies_with, str):
-                    if verifies_with.startswith('[') and verifies_with.endswith(']'):
-                        vw_list = [v.strip() for v in verifies_with[1:-1].split(',') if v.strip()]
-                    else:
-                        vw_list = [verifies_with.strip()] if verifies_with.strip() else []
-                elif isinstance(verifies_with, list):
-                    vw_list = verifies_with
-                else:
-                    vw_list = []
+                vw_list = normalize_list_field(frontmatter.get('verifies_with', []))
 
                 # Check for missing scripts
                 vw_display = []
                 missing_scripts = []
-                for vw in vw_list:
+                # Keep sorted order for determinism
+                for vw in sorted(vw_list):
                     vw_path = os.path.join(REPO_ROOT, vw)
                     if not os.path.exists(vw_path):
-                        missing_scripts.append(f"{vw}")
+                        missing_scripts.append(vw)
+                        vw_display.append(f"{vw} 🔴(Missing)")
                     else:
                         vw_display.append(vw)
 
-                verifies_with_str = ', '.join(sorted(vw_display))
-                missing_scripts_str = ', '.join(sorted(missing_scripts))
+                verifies_with_str = ', '.join(vw_display)
+                missing_scripts_str = ', '.join(missing_scripts)
 
                 file_link = rel_file_path
             else:

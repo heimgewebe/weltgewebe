@@ -23,32 +23,34 @@ def main():
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Find the frontmatter
-    match = re.match(r'^(---\r?\n.*?)(?:\r?\n---\r?\n|\r?\n---$)', content, re.DOTALL)
+    # Use exact same robust frontmatter match as parse_frontmatter
+    match = re.match(r'^(---\r?\n)(.*?)(?:\r?\n---\r?\n|\r?\n---$)', content, re.DOTALL)
     if not match:
         print(f"Error: No valid frontmatter found in '{file_path}'.", file=sys.stderr)
         sys.exit(1)
 
-    frontmatter_text = match.group(1)
-    end_marker_match = re.search(r'(\r?\n---\r?\n|\r?\n---$)', content[len(frontmatter_text):])
-    end_marker = end_marker_match.group(1) if end_marker_match else "\n---\n"
+    start_marker = match.group(1)
+    frontmatter_text = match.group(2)
+    end_marker = content[match.end(2):match.end()]
 
-    body = content[len(frontmatter_text) + len(end_marker):]
+    body = content[match.end():]
 
     today_str = datetime.date.today().strftime("%Y-%m-%d")
 
-    # Replace last_reviewed using regex preserving original line endings
-    if re.search(r'^last_reviewed:.*$', frontmatter_text, re.MULTILINE):
-        new_frontmatter = re.sub(
-            r'^(last_reviewed:).*$',
-            f'\\g<1> {today_str}',
-            frontmatter_text,
-            flags=re.MULTILINE
-        )
-    else:
-        new_frontmatter = frontmatter_text + f"\nlast_reviewed: {today_str}"
+    # Check if last_reviewed exists
+    if not re.search(r'^last_reviewed:\s*.*$', frontmatter_text, re.MULTILINE):
+        print(f"Error: 'last_reviewed' field not found in frontmatter of '{file_path}'.", file=sys.stderr)
+        sys.exit(1)
 
-    new_content = new_frontmatter + end_marker + body
+    # Replace last_reviewed using regex
+    new_frontmatter = re.sub(
+        r'^(last_reviewed:)\s*.*$',
+        f'\\g<1> {today_str}',
+        frontmatter_text,
+        flags=re.MULTILINE
+    )
+
+    new_content = start_marker + new_frontmatter + end_marker + body
 
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(new_content)

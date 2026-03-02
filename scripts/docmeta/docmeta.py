@@ -3,6 +3,21 @@ import re
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+def normalize_list_field(value):
+    """
+    Normalizes a frontmatter list field (like depends_on or verifies_with)
+    which could be a string, a stringified list, a list, or None,
+    and returns a clean list of strings.
+    """
+    if isinstance(value, str):
+        if value.startswith('[') and value.endswith(']'):
+            return [v.strip() for v in value[1:-1].split(',') if v.strip()]
+        else:
+            return [value.strip()] if value.strip() else []
+    elif isinstance(value, list):
+        return value
+    return []
+
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
         return None

@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
 
 def main():
     try:
@@ -44,12 +44,7 @@ def main():
                 id_to_file[doc_id] = rel_file_path
                 file_to_id[rel_file_path] = doc_id
 
-            depends_on = frontmatter.get('depends_on', [])
-            if isinstance(depends_on, str):
-                if depends_on.startswith('[') and depends_on.endswith(']'):
-                    depends_on = [d.strip() for d in depends_on[1:-1].split(',') if d.strip()]
-                else:
-                    depends_on = [depends_on.strip()] if depends_on.strip() else []
+            depends_on = normalize_list_field(frontmatter.get('depends_on', []))
 
             forward_deps[doc_id] = depends_on
 
