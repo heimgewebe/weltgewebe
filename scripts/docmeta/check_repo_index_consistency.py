@@ -144,6 +144,9 @@ def main():
         else:
             f.write("All canonical documents have an `id`.\n")
 
+    if missing_ids_report:
+        print(f"Missing IDs: {len(missing_ids_report)} (see artifacts/docmeta/id_report.md)", file=sys.stderr)
+
     if warnings:
         print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
         for warning in warnings:
