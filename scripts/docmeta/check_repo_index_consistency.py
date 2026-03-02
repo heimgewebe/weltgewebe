@@ -13,11 +13,13 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
+    import json
     errors = []
     warnings = []
     doc_ids = set()
     dependencies = {}
     verifications = {}
+    missing_ids_report = []
 
     zones = repo_index.get('zones', {})
 
@@ -49,7 +51,11 @@ def main():
 
             doc_id = frontmatter.get('id')
             if not doc_id:
-                errors.append(f"Missing 'id' in frontmatter of '{rel_file_path}'.")
+                missing_ids_report.append(rel_file_path)
+                if mode in ['strict', 'fail-closed']:
+                    errors.append(f"Missing 'id' in frontmatter of '{rel_file_path}'.")
+                else:
+                    warnings.append(f"Missing 'id' in frontmatter of '{rel_file_path}'.")
             elif doc_id in doc_ids:
                 errors.append(f"Duplicate id '{doc_id}' found in '{rel_file_path}'.")
             else:
@@ -121,6 +127,22 @@ def main():
                         scripts_output.append(f"`{script}` ✅")
 
             f.write(f"| {doc_id} | {'<br>'.join(scripts_output)} |\n")
+
+    id_report_json_path = os.path.join(artifacts_dir, "id_report.json")
+    id_report_md_path = os.path.join(artifacts_dir, "id_report.md")
+
+    with open(id_report_json_path, 'w', encoding='utf-8') as f:
+        json.dump({"missing_ids": sorted(missing_ids_report)}, f, indent=2)
+        f.write("\n")
+
+    with open(id_report_md_path, 'w', encoding='utf-8') as f:
+        f.write("# Missing IDs Report\n\n")
+        if missing_ids_report:
+            f.write("The following canonical documents are missing an `id` in their frontmatter:\n\n")
+            for rel_file_path in sorted(missing_ids_report):
+                f.write(f"- `{rel_file_path}`\n")
+        else:
+            f.write("All canonical documents have an `id`.\n")
 
     if warnings:
         print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)

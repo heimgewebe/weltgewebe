@@ -41,7 +41,11 @@ def main():
 
             doc_id = frontmatter.get('id')
             if not doc_id:
-                continue
+                if mode in ['strict', 'fail-closed']:
+                    print(f"Error: Missing 'id' in frontmatter of '{rel_file_path}'.", file=sys.stderr)
+                    sys.exit(1)
+                else:
+                    continue
 
             id_to_file[doc_id] = rel_file_path
             file_to_id[rel_file_path] = doc_id
@@ -127,7 +131,7 @@ def main():
         if cycles:
             f.write("## ⚠️ Cycles Detected\n\n")
             for cycle in cycles:
-                f.write(f"- {' -> '.join(cycle)}\n")
+                f.write(f"- {' -> '.join([str(x) for x in cycle])}\n")
             f.write("\n")
         else:
             f.write("## Cycles\n\nNo cycles detected.\n\n")
