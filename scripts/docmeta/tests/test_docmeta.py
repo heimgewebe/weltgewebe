@@ -162,6 +162,17 @@ class TestDocMetaStrictParsers(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def test_review_policy_fail_days_must_exceed_warn_days(self):
+        content = "---\nwarn_days: 90\nfail_days: 90\nmode: warn\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            with self.assertRaisesRegex(ValueError, "fail_days.*must be greater than warn_days"):
+                parse_review_policy(policy_path=temp_path)
+        finally:
+            os.remove(temp_path)
+
     def test_repo_index_excessive_whitespace(self):
         content = """
 # some comments

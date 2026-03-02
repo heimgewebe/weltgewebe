@@ -237,6 +237,9 @@ def parse_review_policy(policy_path=None, strict_manifest=False):
     except ValueError:
         raise ValueError(f"Invalid fail_days: '{data['fail_days']}'. Must be a positive integer.")
 
+    if data['fail_days'] <= data['warn_days']:
+        raise ValueError(f"Invalid review policy: fail_days ({data['fail_days']}) must be greater than warn_days ({data['warn_days']}).")
+
     if 'mode' not in data:
         raise ValueError("Missing required key 'mode' in review policy.")
     mode = data['mode'].lower()

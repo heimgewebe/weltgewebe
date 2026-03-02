@@ -3,8 +3,6 @@ import sys
 import re
 import datetime
 
-from scripts.docmeta.docmeta import REPO_ROOT
-
 def main():
     if len(sys.argv) < 2:
         print("Usage: python3 -m scripts.docmeta.touch_last_reviewed <file_path>", file=sys.stderr)

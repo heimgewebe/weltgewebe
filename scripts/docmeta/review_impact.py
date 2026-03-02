@@ -40,9 +40,11 @@ def main():
                 continue
 
             doc_id = frontmatter.get('id')
-            if doc_id:
-                id_to_file[doc_id] = rel_file_path
-                file_to_id[rel_file_path] = doc_id
+            if not doc_id:
+                continue
+
+            id_to_file[doc_id] = rel_file_path
+            file_to_id[rel_file_path] = doc_id
 
             depends_on = normalize_list_field(frontmatter.get('depends_on', []))
 

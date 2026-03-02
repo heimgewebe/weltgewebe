@@ -1,7 +1,6 @@
 import os
 import sys
 import datetime
-import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
 
