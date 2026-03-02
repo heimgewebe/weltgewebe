@@ -1,31 +1,23 @@
 import os
 import sys
+import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 -m scripts.docmeta.review_impact <modified_file_path>", file=sys.stderr)
-        sys.exit(1)
-
-    modified_file = sys.argv[1]
-    # Normalize to relative path to REPO_ROOT if it's absolute
-    if os.path.isabs(modified_file):
-        try:
-            modified_file = os.path.relpath(modified_file, REPO_ROOT)
-        except ValueError:
-            pass
-
     try:
         policy = parse_review_policy()
         strict_mode = policy.get('strict_manifest', False)
+        mode = policy.get('mode', 'warn')
         repo_index = parse_repo_index(strict_manifest=strict_mode)
     except ValueError as e:
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Build dependency graph: id -> list of dependent docs (file paths)
-    dependencies = {}
+    # Build dependency graph: id -> list of dependencies (edges from a doc to what it depends on)
+    # Also reverse graph: id -> list of dependent docs (edges from a doc to docs that depend on it)
+    dependencies = {} # id -> list of dependent docs (file paths)
+    forward_deps = {} # id -> list of ids it depends on
     id_to_file = {}
     file_to_id = {}
 
@@ -59,41 +51,109 @@ def main():
                 else:
                     depends_on = [depends_on.strip()] if depends_on.strip() else []
 
+            forward_deps[doc_id] = depends_on
+
             for dep in depends_on:
                 if dep not in dependencies:
                     dependencies[dep] = []
                 dependencies[dep].append(rel_file_path)
 
-    if modified_file not in file_to_id:
-        print(f"Warning: '{modified_file}' is not a canonical doc or has no valid ID.")
-        sys.exit(0)
+    # Check for cycles
+    def find_cycles():
+        cycles = []
+        visited = set()
+        recursion_stack = []
 
-    modified_id = file_to_id[modified_file]
+        def dfs(node):
+            visited.add(node)
+            recursion_stack.append(node)
 
-    # BFS to find all transitive dependents
-    visited = set()
-    queue = [modified_id]
+            for neighbor in forward_deps.get(node, []):
+                if neighbor not in visited:
+                    dfs(neighbor)
+                elif neighbor in recursion_stack:
+                    idx = recursion_stack.index(neighbor)
+                    cycle = recursion_stack[idx:] + [neighbor]
+                    cycles.append(cycle)
 
-    impacted_files = set()
+            recursion_stack.pop()
 
-    while queue:
-        current_id = queue.pop(0)
-        if current_id in visited:
-            continue
-        visited.add(current_id)
+        for node in forward_deps:
+            if node not in visited:
+                dfs(node)
 
-        dependents = dependencies.get(current_id, [])
-        for dep_file in dependents:
-            impacted_files.add(dep_file)
-            if dep_file in file_to_id:
-                queue.append(file_to_id[dep_file])
+        return cycles
 
-    if not impacted_files:
-        print(f"No canonical docs depend on '{modified_file}'.")
-    else:
-        print(f"Review Impact for '{modified_file}':")
-        for f in sorted(list(impacted_files)):
-            print(f"- {f} (needs_review)")
+    cycles = find_cycles()
+
+    # Calculate transitive impact for all documents
+    impact_data = {}
+    for doc_id, filepath in id_to_file.items():
+        visited = set()
+        queue = [doc_id]
+        impacted_files = set()
+
+        while queue:
+            current_id = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            dependents = dependencies.get(current_id, [])
+            for dep_file in dependents:
+                impacted_files.add(dep_file)
+                if dep_file in file_to_id:
+                    queue.append(file_to_id[dep_file])
+
+        impact_data[doc_id] = {
+            "file": filepath,
+            "transitive_impacts": sorted(list(impacted_files))
+        }
+
+    # Save artifacts
+    artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")
+    os.makedirs(artifacts_dir, exist_ok=True)
+
+    json_path = os.path.join(artifacts_dir, "impact.json")
+    md_path = os.path.join(artifacts_dir, "impact.md")
+
+    report_data = {
+        "cycles": cycles,
+        "impacts": impact_data
+    }
+
+    with open(json_path, 'w', encoding='utf-8') as f:
+        json.dump(report_data, f, indent=2)
+
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write("# Dependency Graph & Impact Report\n\n")
+        if cycles:
+            f.write("## ⚠️ Cycles Detected\n\n")
+            for cycle in cycles:
+                f.write(f"- {' -> '.join(cycle)}\n")
+            f.write("\n")
+        else:
+            f.write("## Cycles\n\nNo cycles detected.\n\n")
+
+        f.write("## Transitive Impact\n\n")
+        for doc_id in sorted(impact_data.keys()):
+            info = impact_data[doc_id]
+            f.write(f"### {doc_id} (`{info['file']}`)\n\n")
+            if info["transitive_impacts"]:
+                for imp in info["transitive_impacts"]:
+                    f.write(f"- {imp}\n")
+            else:
+                f.write("No dependents.\n")
+            f.write("\n")
+
+    # Cycle enforcement policy
+    if cycles:
+        print(f"Warning: {len(cycles)} cycle(s) detected in the dependency graph.", file=sys.stderr)
+        if mode in ['strict', 'fail-closed']:
+            print("Mode is strict/fail-closed. Failing build.", file=sys.stderr)
+            sys.exit(1)
+
+    print("Review impact generation completed successfully.")
 
 if __name__ == '__main__':
     main()

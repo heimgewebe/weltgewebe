@@ -13,7 +13,10 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
+    import json
+
     errors = []
+    link_report = {}
 
     zones = repo_index.get('zones', {})
 
@@ -28,6 +31,11 @@ def main():
 
             if not os.path.exists(file_path):
                 continue
+
+            link_report[rel_file_path] = {
+                "total_links": 0,
+                "broken_links": []
+            }
 
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
@@ -68,8 +76,35 @@ def main():
 
                 target_path = os.path.abspath(os.path.join(os.path.dirname(file_path), file_url))
 
+                link_report[rel_file_path]["total_links"] += 1
+
                 if not os.path.exists(target_path):
                     errors.append(f"Broken link in '{rel_file_path}': Target '{file_url}' does not exist.")
+                    link_report[rel_file_path]["broken_links"].append(file_url)
+
+    # Save artifacts
+    artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")
+    os.makedirs(artifacts_dir, exist_ok=True)
+
+    with open(os.path.join(artifacts_dir, "link_report.json"), 'w', encoding='utf-8') as f:
+        json.dump(link_report, f, indent=2)
+
+    with open(os.path.join(artifacts_dir, "link_report.md"), 'w', encoding='utf-8') as f:
+        f.write("# Internal Link Report\n\n")
+        f.write("| Document | Total Internal Links | Broken Links |\n")
+        f.write("|---|---|---|\n")
+
+        for doc_path in sorted(link_report.keys()):
+            info = link_report[doc_path]
+            broken_links_output = []
+
+            if not info["broken_links"]:
+                broken_links_output.append("_None_")
+            else:
+                for link in info["broken_links"]:
+                    broken_links_output.append(f"`{link}` 🔴")
+
+            f.write(f"| `{doc_path}` | {info['total_links']} | {'<br>'.join(broken_links_output)} |\n")
 
     if errors:
         print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)

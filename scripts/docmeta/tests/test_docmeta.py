@@ -127,7 +127,7 @@ class TestDocMetaStrictParsers(unittest.TestCase):
             os.remove(temp_path)
 
     def test_review_policy_missing_mode(self):
-        content = "---\ndefault_review_cycle_days: 90\n"
+        content = "---\nwarn_days: 90\nfail_days: 180\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
             f.write(content)
             temp_path = f.name
@@ -139,25 +139,25 @@ class TestDocMetaStrictParsers(unittest.TestCase):
             os.remove(temp_path)
 
     def test_review_policy_missing_cycle_days(self):
-        content = "---\nmode: warn\n"
+        content = "---\nmode: warn\nfail_days: 180\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
             f.write(content)
             temp_path = f.name
 
         try:
-            with self.assertRaisesRegex(ValueError, "Missing required key 'default_review_cycle_days'"):
+            with self.assertRaisesRegex(ValueError, "Missing required key 'warn_days'"):
                 parse_review_policy(policy_path=temp_path)
         finally:
             os.remove(temp_path)
 
     def test_review_policy_invalid_days(self):
-        content = "---\ndefault_review_cycle_days: x\nmode: warn\n"
+        content = "---\nwarn_days: x\nfail_days: 180\nmode: warn\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
             f.write(content)
             temp_path = f.name
 
         try:
-            with self.assertRaisesRegex(ValueError, "Invalid default_review_cycle_days.*Must be a positive integer."):
+            with self.assertRaisesRegex(ValueError, "Invalid warn_days.*Must be a positive integer."):
                 parse_review_policy(policy_path=temp_path, strict_manifest=True)
         finally:
             os.remove(temp_path)
@@ -213,7 +213,7 @@ checks:
             os.remove(temp_path)
 
     def test_review_policy_unknown_key_strict_fail(self):
-        content = "---\ndefault_review_cycle_days: 90\nmode: warn\nstrict_manifest: true\nunknown_key: val\n"
+        content = "---\nwarn_days: 90\nfail_days: 180\nmode: warn\nstrict_manifest: true\nunknown_key: val\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
             f.write(content)
             temp_path = f.name
