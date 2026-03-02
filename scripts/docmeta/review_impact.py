@@ -83,6 +83,8 @@ def main():
 
         return cycles
 
+    missing_ids = sorted(list(set(missing_ids)))
+
     if missing_ids and mode in ['strict', 'fail-closed']:
         print(f"Error: {len(missing_ids)} document(s) missing 'id' in frontmatter:", file=sys.stderr)
         for mid in missing_ids:
@@ -121,8 +123,6 @@ def main():
 
     json_path = os.path.join(artifacts_dir, "impact.json")
     md_path = os.path.join(artifacts_dir, "impact.md")
-
-    missing_ids = sorted(list(set(missing_ids)))
 
     report_data = {
         "missing_ids": missing_ids,
