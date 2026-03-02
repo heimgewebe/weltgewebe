@@ -3,6 +3,21 @@ import re
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
+def normalize_list_field(value):
+    """
+    Normalizes a frontmatter list field (like depends_on or verifies_with)
+    which could be a string, a stringified list, a list, or None,
+    and returns a clean list of strings.
+    """
+    if isinstance(value, str):
+        if value.startswith('[') and value.endswith(']'):
+            return [v.strip() for v in value[1:-1].split(',') if v.strip()]
+        else:
+            return [value.strip()] if value.strip() else []
+    elif isinstance(value, list):
+        return value
+    return []
+
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
         return None
@@ -178,7 +193,7 @@ def parse_review_policy(policy_path=None, strict_manifest=False):
         lines = f.readlines()
 
     data = {}
-    known_keys = {'default_review_cycle_days', 'mode', 'strict_manifest'}
+    known_keys = {'warn_days', 'fail_days', 'mode', 'strict_manifest'}
 
     for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -202,21 +217,34 @@ def parse_review_policy(policy_path=None, strict_manifest=False):
             raise ValueError(f"Line {line_num}: Unknown key '{key}' in review policy (strict_manifest=True).")
 
     # Validation
-    if 'default_review_cycle_days' not in data:
-        raise ValueError("Missing required key 'default_review_cycle_days' in review policy.")
+    if 'warn_days' not in data:
+        raise ValueError("Missing required key 'warn_days' in review policy.")
     try:
-        val = int(data['default_review_cycle_days'])
+        val = int(data['warn_days'])
         if val <= 0:
             raise ValueError
-        data['default_review_cycle_days'] = val
+        data['warn_days'] = val
     except ValueError:
-        raise ValueError(f"Invalid default_review_cycle_days: '{data['default_review_cycle_days']}'. Must be a positive integer.")
+        raise ValueError(f"Invalid warn_days: '{data['warn_days']}'. Must be a positive integer.")
+
+    if 'fail_days' not in data:
+        raise ValueError("Missing required key 'fail_days' in review policy.")
+    try:
+        val = int(data['fail_days'])
+        if val <= 0:
+            raise ValueError
+        data['fail_days'] = val
+    except ValueError:
+        raise ValueError(f"Invalid fail_days: '{data['fail_days']}'. Must be a positive integer.")
+
+    if data['fail_days'] <= data['warn_days']:
+        raise ValueError(f"Invalid review policy: fail_days ({data['fail_days']}) must be greater than warn_days ({data['warn_days']}).")
 
     if 'mode' not in data:
         raise ValueError("Missing required key 'mode' in review policy.")
     mode = data['mode'].lower()
-    if mode not in ['warn', 'fail']:
-        raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn' or 'fail'.")
+    if mode not in ['warn', 'strict', 'fail-closed']:
+        raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn', 'strict', or 'fail-closed'.")
     data['mode'] = mode
 
     if 'strict_manifest' in data:

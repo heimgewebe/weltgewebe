@@ -8,7 +8,12 @@
     },
     "role": {
       "type": "string",
-      "enum": ["norm", "reality", "runbooks", "action"]
+      "enum": [
+        "norm",
+        "reality",
+        "runbooks",
+        "action"
+      ]
     },
     "organ": {
       "type": "string",
@@ -17,7 +22,9 @@
     },
     "status": {
       "type": "string",
-      "enum": ["canonical"]
+      "enum": [
+        "canonical"
+      ]
     },
     "last_reviewed": {
       "type": "string",
@@ -40,9 +47,7 @@
     "id",
     "role",
     "status",
-    "last_reviewed",
-    "depends_on",
-    "verifies_with"
+    "last_reviewed"
   ],
   "additionalProperties": false
 }

@@ -3,7 +3,7 @@ id: docmeta.schema
 role: norm
 organ: docmeta
 status: canonical
-last_reviewed: 2026-02-28
+last_reviewed: 2026-03-02
 depends_on: []
 verifies_with:
   - scripts/docmeta/check_repo_index_consistency.py

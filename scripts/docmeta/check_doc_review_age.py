@@ -13,8 +13,11 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
+    import json
+
     try:
-        default_cycle_days = policy['default_review_cycle_days']
+        warn_days = policy['warn_days']
+        fail_days = policy['fail_days']
         mode = policy['mode']
     except KeyError as e:
         print(f"Error: review policy missing required key {e} (parser contract violation).", file=sys.stderr)
@@ -22,6 +25,7 @@ def main():
 
     errors = []
     warnings = []
+    freshness_report = {}
 
     for zone_name, zone_data in repo_index.get('zones', {}).items():
         rel_zone_path = zone_data.get('path')
@@ -43,28 +47,73 @@ def main():
             if not frontmatter:
                 continue
 
+            doc_id = frontmatter.get('id', rel_file_path)
             last_reviewed_str = frontmatter.get('last_reviewed')
+
+            status = 'unknown'
+            days_since_review = -1
+
             if not last_reviewed_str:
                 msg = f"Missing 'last_reviewed' in '{rel_file_path}'."
-                if mode == 'fail':
+                status = 'missing'
+                if mode in ['strict', 'fail-closed']:
                     errors.append(msg)
                 else:
                     warnings.append(msg)
-                continue
+            else:
+                try:
+                    last_reviewed_date = datetime.datetime.strptime(last_reviewed_str, "%Y-%m-%d").date()
+                    today = datetime.date.today()
+                    delta = today - last_reviewed_date
+                    days_since_review = delta.days
 
-            try:
-                last_reviewed_date = datetime.datetime.strptime(last_reviewed_str, "%Y-%m-%d").date()
-                today = datetime.date.today()
-                delta = today - last_reviewed_date
-
-                if delta.days > default_cycle_days:
-                    msg = f"Document '{rel_file_path}' review age ({delta.days} days) exceeds default review cycle ({default_cycle_days} days)."
-                    if mode == 'fail':
-                        errors.append(msg)
-                    else:
+                    if days_since_review > fail_days:
+                        status = 'fail'
+                        msg = f"Document '{rel_file_path}' review age ({days_since_review} days) exceeds fail limit ({fail_days} days)."
+                        if mode in ['strict', 'fail-closed']:
+                            errors.append(msg)
+                        else:
+                            warnings.append(msg)
+                    elif days_since_review > warn_days:
+                        status = 'warn'
+                        msg = f"Document '{rel_file_path}' review age ({days_since_review} days) exceeds warn limit ({warn_days} days)."
                         warnings.append(msg)
-            except ValueError:
-                errors.append(f"Invalid 'last_reviewed' format '{last_reviewed_str}' in '{rel_file_path}'. Must be YYYY-MM-DD.")
+                    else:
+                        status = 'pass'
+                except ValueError:
+                    status = 'invalid'
+                    errors.append(f"Invalid 'last_reviewed' format '{last_reviewed_str}' in '{rel_file_path}'. Must be YYYY-MM-DD.")
+
+            freshness_report[doc_id] = {
+                "file": rel_file_path,
+                "last_reviewed": last_reviewed_str,
+                "days_since_review": days_since_review,
+                "status": status
+            }
+
+    # Save artifacts
+    artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")
+    os.makedirs(artifacts_dir, exist_ok=True)
+
+    with open(os.path.join(artifacts_dir, "freshness.json"), 'w', encoding='utf-8') as f:
+        json.dump(freshness_report, f, indent=2)
+
+    with open(os.path.join(artifacts_dir, "freshness.md"), 'w', encoding='utf-8') as f:
+        f.write("# Freshness Report\n\n")
+        f.write("| ID | File | Last Reviewed | Age (Days) | Status |\n")
+        f.write("|---|---|---|---|---|\n")
+
+        for doc_id in sorted(freshness_report.keys()):
+            info = freshness_report[doc_id]
+            status_icon = "✅"
+            if info["status"] == "warn":
+                status_icon = "⚠️"
+            elif info["status"] == "fail":
+                status_icon = "❌"
+            elif info["status"] in ["missing", "invalid"]:
+                status_icon = "❓"
+
+            f.write(f"| {doc_id} | `{info['file']}` | {info['last_reviewed']} | {info['days_since_review']} | {status_icon} {info['status']} |\n")
 
     if warnings:
         print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
