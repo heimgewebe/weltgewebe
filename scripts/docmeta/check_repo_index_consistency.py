@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
 
@@ -13,7 +14,6 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    import json
     errors = []
     warnings = []
     doc_ids = set()
