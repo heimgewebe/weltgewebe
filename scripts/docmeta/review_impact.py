@@ -122,6 +122,8 @@ def main():
     json_path = os.path.join(artifacts_dir, "impact.json")
     md_path = os.path.join(artifacts_dir, "impact.md")
 
+    missing_ids = sorted(list(set(missing_ids)))
+
     report_data = {
         "missing_ids": missing_ids,
         "cycles": cycles,
@@ -136,7 +138,7 @@ def main():
 
         f.write("## Missing IDs\n\n")
         if missing_ids:
-            f.write("Graph unvollständig. The following documents are missing an `id`:\n\n")
+            f.write("Graph incomplete. The following documents are missing an `id`:\n\n")
             for mid in missing_ids:
                 f.write(f"- `{mid}`\n")
             f.write("\n")
