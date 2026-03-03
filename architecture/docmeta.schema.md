@@ -17,7 +17,7 @@ Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonisch
 
 > **Hinweis:** Das Frontmatter wird bewusst durch einen eingeschränkten, deterministischen
 > Mini-Parser gelesen. Strukturierte YAML-Blocklisten werden ausdrücklich nur für die
-> Felder `depends_on` und `verifies_with` garantiert.
+> Felder `depends_on`, `verifies_with` und `audit_gaps` garantiert.
 
 * **id**: Eindeutiger Identifier des Dokuments.
 * **role**: Rolle des Dokuments (norm | reality | runbooks | action).
@@ -27,3 +27,4 @@ Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonisch
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **depends_on**: Liste von Dokumenten-IDs, von denen dieses Dokument abhängt.
 * **verifies_with**: Liste von Checks/Scripts, die dieses Dokument verifizieren.
+* **audit_gaps**: Liste von bekannten Lücken, offenen Fragen oder technischen Schulden (optional).

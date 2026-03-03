@@ -95,19 +95,19 @@ Ziel: Repo zeigt täglich: "wo brennt's", ohne manuelle Suche.
 
 Artefakte unter `artifacts/docmeta/` pflegen:
 
-- [ ] `freshness.{json,md}`
-- [ ] `link_report.{json,md}`
-- [ ] `impact.{json,md}`
-- [ ] `docs.index.json`
-- [ ] `SYSTEM_MAP.md` (via `scripts/docmeta/generate_system_map.py`)
+- [x] `freshness.{json,md}`
+- [x] `link_report.{json,md}`
+- [x] `impact.{json,md}`
+- [x] `docs.index.json`
+- [x] `SYSTEM_MAP.md` (via `scripts/docmeta/generate_system_map.py`)
 
 ### 3.2 "Known debt" als first-class
 
 Neues Artefakt generieren:
 
-- [ ] `artifacts/docmeta/audit_gaps.json` + `artifacts/docmeta/audit_gaps.md` erstellen via neuem Skript `scripts/docmeta/generate_audit_gaps.py`.
-- [ ] Quelle: Das Frontmatter-Feld `audit_gaps:` als Block-Liste in `scripts/docmeta/docmeta.py` zulassen.
-- [ ] Einträge in `Makefile` unter `docs-guard` aufnehmen.
+- [x] `artifacts/docmeta/audit_gaps.json` + `artifacts/docmeta/audit_gaps.md` erstellen via neuem Skript `scripts/docmeta/generate_audit_gaps.py`.
+- [x] Quelle: Das Frontmatter-Feld `audit_gaps:` als Block-Liste in `scripts/docmeta/docmeta.py` zulassen.
+- [x] Einträge in `Makefile` unter `docs-guard` aufnehmen.
 
 ## Phase 4: Guard-Semantik sauber (warn/strict/fail-closed)
 
