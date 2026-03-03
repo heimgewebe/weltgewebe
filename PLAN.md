@@ -1,18 +1,25 @@
-# Plan: Repo zu “selbstorganisierender Dokument-Engine” machen
+# Plan: Repo zu "selbstorganisierender Dokument-Engine" machen
+
+> **Hinweis:** Dieser Plan dient als strukturierte Blaupause und "North Star"-Dokument
+> zur schrittweisen Umsetzung einer selbsterhaltenden Dokumentationsarchitektur.
+
+## Prinzipien (Querschnitt)
+
+- **Determinismus:** Alle generierten Artefakte (`docs.index.json`, `impact.md`, `SYSTEM_MAP.md`) müssen
+  bei jedem Lauf identisch ausfallen (stable sort, keine Timestamp-Fluktuation).
+- **Abhängigkeitsfrei:** Werkzeuge in `scripts/docmeta/` nutzen ausschließlich die Python Standardbibliothek.
 
 ## Phase 0: Diagnose-Gate (ohne Patch-Rausch)
 
 Ziel: Ist-Zustand belegen, ohne Annahmen.
 
-Checks (2–5):
+Checks (2-5):
 
 - [ ] `make docs-guard` lokal/CI laufen lassen und Artefakte sichern (`artifacts/docmeta/*`).
-- [ ] Zähle: wie viele kanonische Docs,
-  wie viele ohne `id`, wie viele ohne `last_reviewed`,
-  wie viele mit `depends_on`/`verifies_with`.
-- [ ] Linkreport: broken internal links, Anzahl total links.
-- [ ] Impactreport: cycles? missing ids? transitive impacts plausibel?
-- [ ] `SYSTEM_MAP`: deterministisch (zweimal laufen lassen, git diff muss leer bleiben).
+- [ ] Zähle: wie viele kanonische Docs, wie viele ohne `id`, wie viele ohne `last_reviewed`, wie viele mit `depends_on`/`verifies_with`.
+- [ ] Linkreport prüfen: broken internal links, Anzahl total links in `artifacts/docmeta/link_report.json`.
+- [ ] Impactreport prüfen: cycles? missing ids? transitive impacts plausibel in `artifacts/docmeta/impact.json`.
+- [ ] `SYSTEM_MAP.md`: deterministisch (zweimal laufen lassen, `git diff --exit-code SYSTEM_MAP.md` muss leer bleiben).
 - [ ] Stop-Kriterium: Artefakte stabil + deterministisch; sonst erst Determinismus fixen, bevor Struktur ausgebaut wird.
 
 ## Phase 1: Kanonisches Docmeta-Minimum (Contract-first)
@@ -21,12 +28,12 @@ Ziel: Jeder kanonische Doc ist gleichartig parsbar.
 
 ### 1.1 Frontmatter-Standard (Minimalset)
 
-Für alle kanonischen Docs verpflichtend:
+Für alle kanonischen Docs in `manifest/repo-index.yaml` verpflichtend:
 
 - [ ] `id` (string, unique, stabil)
-- [ ] `role` (enum)
-- [ ] `organ` (string/enum falls du willst)
-- [ ] `status` (enum, aktuell nur canonical ok)
+- [ ] `role` (enum: norm, reality, runbooks, action)
+- [ ] `organ` (string, optionales Ownership)
+- [ ] `status` (enum: canonical)
 - [ ] `last_reviewed` (YYYY-MM-DD)
 
 Optional aber strukturiert:
@@ -36,121 +43,95 @@ Optional aber strukturiert:
 
 ### 1.2 Schema anpassen
 
-Dein `contracts/docmeta.schema.json` sollte die Realität widerspiegeln:
+Das Schema `contracts/docmeta.schema.json` anpassen:
 
-- [ ] Entweder: `depends_on`/`verifies_with` sind required (auch wenn leer)
-- [ ] Oder: optional, aber dann muss jeder Exporter/Report robust damit umgehen
-- [ ] Empfehlung: required + default `[]` erzwingen. Das reduziert Sonderfälle.
+- [ ] `depends_on` und `verifies_with` in die `required` Liste aufnehmen (auch wenn das Array leer ist `[]`).
+- [ ] Verifikation via `python3 -m scripts.docmeta.validate_schema`.
 
 ### 1.3 Normalisierung erzwingen
 
-- [ ] `normalize_list_field()` ist ok, aber: nur als Kompatibilitätsschicht.
-  Langfristig: Frontmatter schreibt echte YAML-Listen, keine stringified lists.
-
-Nutzenklasse: deterministische Maschinenlesbarkeit.
-Risiko: mittleres PR-Rauschen, wenn viele Dateien angepasst werden.
+- [ ] `normalize_list_field()` in `scripts/docmeta/docmeta.py` als Kompatibilitätsschicht erhalten.
+- [ ] Langfristig: Frontmatter schreibt echte YAML-Listen in allen `.md` Dateien.
 
 ## Phase 2: Self-linking durch IDs (nicht durch Pfade)
 
-Ziel: Links überleben Umbenennungen.
+Ziel: Links überleben Dateiumbenennungen und Verschiebungen.
 
 ### 2.1 ID-Link-Konvention
 
 Definiere eine interne Linkform:
 
-- [ ] `doc:<id>` als kanonischer “Link”
-- [ ] Renderer/Checker löst `doc:<id>` → Pfad via docs index (JSON)
+- [ ] `doc:<id>` als kanonischer "Link" innerhalb von Markdown Dateien.
+- [ ] Renderer/Checker löst `doc:<id>` zu Dateipfaden auf.
 
 ### 2.2 Autogenerierter Docs Index
 
-Du hast `artifacts/docmeta/docs.index.json`. Mach daraus bewusst:
+Das Artefakt `artifacts/docmeta/docs.index.json` ausbauen via `scripts/docmeta/export_docs_index.py`:
 
-- [ ] deterministisch
-- [ ] stable sort
-- [ ] enthält `id`, `path`, `role`, `organ`, `depends_on`, `verifies_with`, `freshness_status`
+- [ ] Enthält die Map: `id`, `path`, `role`, `organ`, `depends_on`, `verifies_with`, `last_reviewed`.
 
 ### 2.3 Link-Checker erweitern
 
-`check_links.py` soll zusätzlich:
+Das Skript `scripts/docmeta/check_links.py` anpassen:
 
-- [ ] `doc:<id>` Links prüfen (existiert ID?)
-- [ ] optional auto-suggest: “meintest du doc:xyz?” (Levenshtein nur wenn wirklich nötig; sonst lassen)
+- [ ] Lädt `artifacts/docmeta/docs.index.json` ein.
+- [ ] Prüft alle `doc:<id>` Links: Existiert die referenzierte ID im Index? Falls nicht, als `broken_link` markieren.
 
-Nutzen: Umbenennen/Verschieben wird billig.
-Risiko: gering; neue Syntax muss dokumentiert werden.
+## Phase 3: Selbstorganisation via Artefakte (Reports)
 
-## Phase 3: Selbstorganisation via Artefakte (Reports als Steuerungsinstrument)
+Ziel: Repo zeigt täglich: "wo brennt's", ohne manuelle Suche.
 
-Ziel: Repo zeigt dir täglich: “wo brennt’s”, ohne dass du suchst.
+### 3.1 Standard-Artefaktset ausbauen
 
-### 3.1 Standard-Artefaktset unter `artifacts/docmeta/`
-
-Beibehalten/ausbauen:
+Artefakte unter `artifacts/docmeta/` pflegen:
 
 - [ ] `freshness.{json,md}`
 - [ ] `link_report.{json,md}`
-- [ ] `verification_report.{json,md}` (aktuell md; JSON ergänzen)
 - [ ] `impact.{json,md}`
 - [ ] `docs.index.json`
-- [ ] `system_map.md` (oder `SYSTEM_MAP.md` generiert)
+- [ ] `SYSTEM_MAP.md` (via `scripts/docmeta/generate_system_map.py`)
 
-### 3.2 “Known debt” als first-class
+### 3.2 "Known debt" als first-class
 
-Neues Artefakt:
+Neues Artefakt generieren:
 
-- [ ] `audit_gaps.json` + `audit_gaps.md`
-
-Einträge: `{id, topic, severity, evidence, next_check}`
-
-- [ ] Quelle: entweder Frontmatter-Feld `audit_gaps:` oder separate `audit_gaps.yaml`
-
-Das ist die “Schuldenliste”, die CI sichtbar macht, ohne sofort zu blockieren.
-
-Nutzen: Priorisierung, klare nächste Schritte.
-Risiko: gering.
+- [ ] `artifacts/docmeta/audit_gaps.json` + `artifacts/docmeta/audit_gaps.md` erstellen via neuem Skript `scripts/docmeta/generate_audit_gaps.py`.
+- [ ] Quelle: Das Frontmatter-Feld `audit_gaps:` als Block-Liste in `scripts/docmeta/docmeta.py` zulassen.
+- [ ] Einträge in `Makefile` unter `docs-guard` aufnehmen.
 
 ## Phase 4: Guard-Semantik sauber (warn/strict/fail-closed)
 
-Ziel: Policy ist verständlich und wirkt wie ein Schalthebel, nicht wie eine Wundertüte.
+Ziel: Policy (in `manifest/review-policy.yaml`) ist verständlich und wirkt wie ein Schalthebel.
 
 ### 4.1 Policy-Invarianten
 
-- [ ] `warn_days < fail_days` (du hast das bereits als Copilot-Punkt; ich würde es dringend enforced lassen)
+- [ ] `warn_days < fail_days` in `scripts/docmeta/docmeta.py` enforced lassen.
 
-Mode-Semantik:
+Mode-Semantik anwenden in `check_links.py` und `review_impact.py`:
 
-- [ ] `warn`: niemals exit 1 wegen Doku-Qualität, nur warnen (außer Parser-/Schema-Verstoß)
-- [ ] `strict`: exit 1 bei “echten Fehlern” (missing id, invalid date, missing verify scripts, cycles)
-- [ ] `fail-closed`: wie strict + ggf. zusätzliche “keine Unknowns” Regeln
+- [ ] `warn` Mode: Niemals `exit 1` wegen fehlenden IDs oder broken Links, nur `stderr` Warnungen.
+- [ ] `strict` / `fail-closed` Mode: `exit 1` bei "echten Fehlern" (missing id, cycles, broken doc-links).
 
-### 4.2 “Unknowns” definieren
+### 4.2 Fehler vs. Unknowns definieren
 
-Was ist ein Fehler vs Unknown?
+- [ ] Fehlend/invalid in kanonischen Docs (z.B. missing `id`) = Fehler in strict.
+- [ ] Broken internal `doc:<id>` Links = Fehler in strict.
 
-- [ ] Fehlend/invalid in kanonischen Docs = Fehler in strict/fail-closed
-- [ ] Broken internal file links = Fehler in strict/fail-closed
-- [ ] Missing verifies_with scripts = Warn oder Fehler je nach mode (du hast es so angelegt; gut)
+## Phase 5: Repo-Information als navigierbares System
 
-Nutzen: weniger Streit, weniger Überraschung.
-Risiko: wenn zu hart, blockierst du dich selbst.
+Ziel: Contributor versteht das System in 5 Minuten.
 
-## Phase 5: Repo-Information als navigierbares System (Leitstand-light)
+### 5.1 "Start Here" Links
 
-Ziel: Ein neuer Contributor (oder du in 3 Monaten) versteht das System in 5 Minuten.
+- [ ] `README.md` oben mit 5 expliziten Links versehen (Constitution, System Map, Runtime, Operations, Architecture Overview).
+- [ ] `SYSTEM_MAP.md` bleibt diff-guarded via `Makefile`.
 
-### 5.1 “Start Here” + Map
+## Definition of Done (DoD)
 
-- [ ] `README.md` oben: 5 Links (constitution, system map, runtime, operations, naming/network)
-- [ ] `SYSTEM_MAP.md` bleibt autogen und diff-guarded
-
-### 5.2 Rollen/Organe als Taxonomie
-
-Zwingend konsistent:
-
-- [ ] `role` ist Zone (norm/reality/runbooks/action)
-- [ ] `organ` ist Zuständigkeit (runtime/governance/docmeta/edge/...)
-
-### 5.3 Suchbarkeit
-
-- [ ] optional: `tags` (liste)
-- [ ] Synonyme/Glossar: nur wenn du wirklich suchbasiert arbeitest
+- [ ] `make docs-guard` läuft fehlerfrei und deterministisch.
+- [ ] Alle kanonischen Dokumente (`manifest/repo-index.yaml`) haben verpflichtend eine `id`,
+  `depends_on` und `verifies_with`.
+- [ ] Der `doc:<id>` Resolver in `check_links.py` greift und funktioniert.
+- [ ] Bei `mode: strict` (in `manifest/review-policy.yaml`) führt ein fehlender Link oder
+  eine fehlende ID sofort zu `exit 1`.
+- [ ] Keine funktionalen Änderungen an Frontend/Backend Code in dieser Phase (nur Docs & CI-Guards).
