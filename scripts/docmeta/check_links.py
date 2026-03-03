@@ -18,6 +18,17 @@ def main():
     errors = []
     link_report = {}
 
+    # Load docs index for doc:<id> resolution
+    docs_index_path = os.path.join(REPO_ROOT, "artifacts", "docmeta", "docs.index.json")
+    valid_doc_ids = set()
+    if os.path.exists(docs_index_path):
+        with open(docs_index_path, 'r', encoding='utf-8') as f:
+            docs_data = json.load(f)
+            for doc in docs_data.get('docs', []):
+                doc_id = doc.get('id')
+                if doc_id:
+                    valid_doc_ids.add(doc_id)
+
     zones = repo_index.get('zones', {})
 
     for zone_name, zone_data in zones.items():
@@ -74,13 +85,19 @@ def main():
                 if not file_url:
                     continue
 
-                target_path = os.path.abspath(os.path.join(os.path.dirname(file_path), file_url))
-
                 link_report[rel_file_path]["total_links"] += 1
 
-                if not os.path.exists(target_path):
-                    errors.append(f"Broken link in '{rel_file_path}': Target '{file_url}' does not exist.")
-                    link_report[rel_file_path]["broken_links"].append(file_url)
+                if file_url.startswith('doc:'):
+                    target_id = file_url[4:]
+                    if target_id not in valid_doc_ids:
+                        errors.append(f"Broken link in '{rel_file_path}': Canonical ID '{target_id}' does not exist.")
+                        link_report[rel_file_path]["broken_links"].append(file_url)
+                else:
+                    target_path = os.path.abspath(os.path.join(os.path.dirname(file_path), file_url))
+
+                    if not os.path.exists(target_path):
+                        errors.append(f"Broken link in '{rel_file_path}': Target '{file_url}' does not exist.")
+                        link_report[rel_file_path]["broken_links"].append(file_url)
 
     # Save artifacts
     artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")

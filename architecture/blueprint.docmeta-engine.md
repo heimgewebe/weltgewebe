@@ -25,12 +25,12 @@ Ziel: Ist-Zustand belegen, ohne Annahmen.
 
 Checks (2-5):
 
-- [ ] `make docs-guard` lokal/CI laufen lassen und Artefakte sichern (`artifacts/docmeta/*`).
-- [ ] Zähle: wie viele kanonische Docs, wie viele ohne `id`, wie viele ohne `last_reviewed`, wie viele mit `depends_on`/`verifies_with`.
-- [ ] Linkreport prüfen: broken internal links, Anzahl total links in `artifacts/docmeta/link_report.json`.
-- [ ] Impactreport prüfen: cycles? missing ids? transitive impacts plausibel in `artifacts/docmeta/impact.json`.
-- [ ] `SYSTEM_MAP.md`: deterministisch (zweimal laufen lassen, `git diff --exit-code SYSTEM_MAP.md` muss leer bleiben).
-- [ ] Stop-Kriterium: Artefakte stabil + deterministisch; sonst erst Determinismus fixen, bevor Struktur ausgebaut wird.
+- [x] `make docs-guard` lokal/CI laufen lassen und Artefakte sichern (`artifacts/docmeta/*`).
+- [x] Zähle: wie viele kanonische Docs, wie viele ohne `id`, wie viele ohne `last_reviewed`, wie viele mit `depends_on`/`verifies_with`.
+- [x] Linkreport prüfen: broken internal links, Anzahl total links in `artifacts/docmeta/link_report.json`.
+- [x] Impactreport prüfen: cycles? missing ids? transitive impacts plausibel in `artifacts/docmeta/impact.json`.
+- [x] `SYSTEM_MAP.md`: deterministisch (zweimal laufen lassen, `git diff --exit-code SYSTEM_MAP.md` muss leer bleiben).
+- [x] Stop-Kriterium: Artefakte stabil + deterministisch; sonst erst Determinismus fixen, bevor Struktur ausgebaut wird.
 
 ## Phase 1: Kanonisches Docmeta-Minimum (Contract-first)
 
@@ -40,28 +40,28 @@ Ziel: Jeder kanonische Doc ist gleichartig parsbar.
 
 Für alle kanonischen Docs in `manifest/repo-index.yaml` verpflichtend:
 
-- [ ] `id` (string, unique, stabil)
-- [ ] `role` (enum: norm, reality, runbooks, action)
-- [ ] `organ` (string, optionales Ownership)
-- [ ] `status` (enum: canonical)
-- [ ] `last_reviewed` (YYYY-MM-DD)
+- [x] `id` (string, unique, stabil)
+- [x] `role` (enum: norm, reality, runbooks, action)
+- [x] `organ` (string, optionales Ownership)
+- [x] `status` (enum: canonical)
+- [x] `last_reviewed` (YYYY-MM-DD)
 
 Optional aber strukturiert:
 
-- [ ] `depends_on` (list)
-- [ ] `verifies_with` (list)
+- [x] `depends_on` (list)
+- [x] `verifies_with` (list)
 
 ### 1.2 Schema anpassen
 
 Das Schema `contracts/docmeta.schema.json` anpassen:
 
-- [ ] `depends_on` und `verifies_with` in die `required` Liste aufnehmen (auch wenn das Array leer ist `[]`).
-- [ ] Verifikation via `python3 -m scripts.docmeta.validate_schema`.
+- [x] `depends_on` und `verifies_with` in die `required` Liste aufnehmen (auch wenn das Array leer ist `[]`).
+- [x] Verifikation via `python3 -m scripts.docmeta.validate_schema`.
 
 ### 1.3 Normalisierung erzwingen
 
-- [ ] `normalize_list_field()` in `scripts/docmeta/docmeta.py` als Kompatibilitätsschicht erhalten.
-- [ ] Langfristig: Frontmatter schreibt echte YAML-Listen in allen `.md` Dateien.
+- [x] `normalize_list_field()` in `scripts/docmeta/docmeta.py` als Kompatibilitätsschicht erhalten.
+- [x] Langfristig: Frontmatter schreibt echte YAML-Listen in allen `.md` Dateien.
 
 ## Phase 2: Self-linking durch IDs (nicht durch Pfade)
 
@@ -71,21 +71,21 @@ Ziel: Links überleben Dateiumbenennungen und Verschiebungen.
 
 Definiere eine interne Linkform:
 
-- [ ] `doc:<id>` als kanonischer "Link" innerhalb von Markdown Dateien.
-- [ ] Renderer/Checker löst `doc:<id>` zu Dateipfaden auf.
+- [x] `doc:<id>` als kanonischer "Link" innerhalb von Markdown Dateien.
+- [x] Renderer/Checker löst `doc:<id>` zu Dateipfaden auf.
 
 ### 2.2 Autogenerierter Docs Index
 
 Das Artefakt `artifacts/docmeta/docs.index.json` ausbauen via `scripts/docmeta/export_docs_index.py`:
 
-- [ ] Enthält die Map: `id`, `path`, `role`, `organ`, `depends_on`, `verifies_with`, `last_reviewed`.
+- [x] Enthält die Map: `id`, `path`, `role`, `organ`, `depends_on`, `verifies_with`, `last_reviewed`.
 
 ### 2.3 Link-Checker erweitern
 
 Das Skript `scripts/docmeta/check_links.py` anpassen:
 
-- [ ] Lädt `artifacts/docmeta/docs.index.json` ein.
-- [ ] Prüft alle `doc:<id>` Links: Existiert die referenzierte ID im Index? Falls nicht, als `broken_link` markieren.
+- [x] Lädt `artifacts/docmeta/docs.index.json` ein.
+- [x] Prüft alle `doc:<id>` Links: Existiert die referenzierte ID im Index? Falls nicht, als `broken_link` markieren.
 
 ## Phase 3: Selbstorganisation via Artefakte (Reports)
 
@@ -115,7 +115,7 @@ Ziel: Policy (in `manifest/review-policy.yaml`) ist verständlich und wirkt wie 
 
 ### 4.1 Policy-Invarianten
 
-- [ ] `warn_days < fail_days` in `scripts/docmeta/docmeta.py` enforced lassen.
+- [x] `warn_days < fail_days` in `scripts/docmeta/docmeta.py` enforced lassen.
 
 Mode-Semantik anwenden in `check_links.py` und `review_impact.py`:
 
