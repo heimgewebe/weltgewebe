@@ -18,6 +18,7 @@ Checks (2–5):
 Ziel: Jeder kanonische Doc ist gleichartig parsbar.
 
 ### 1.1 Frontmatter-Standard (Minimalset)
+
 Für alle kanonischen Docs verpflichtend:
 
 - [ ] `id` (string, unique, stabil)
@@ -32,6 +33,7 @@ Optional aber strukturiert:
 - [ ] `verifies_with` (list)
 
 ### 1.2 Schema anpassen
+
 Dein `contracts/docmeta.schema.json` sollte die Realität widerspiegeln:
 
 - [ ] Entweder: `depends_on`/`verifies_with` sind required (auch wenn leer)
@@ -40,7 +42,8 @@ Dein `contracts/docmeta.schema.json` sollte die Realität widerspiegeln:
 
 ### 1.3 Normalisierung erzwingen
 
-- [ ] `normalize_list_field()` ist ok, aber: nur als Kompatibilitätsschicht. Langfristig: Frontmatter schreibt echte YAML-Listen, keine stringified lists.
+- [ ] `normalize_list_field()` ist ok, aber: nur als Kompatibilitätsschicht.
+  Langfristig: Frontmatter schreibt echte YAML-Listen, keine stringified lists.
 
 Nutzenklasse: deterministische Maschinenlesbarkeit.
 Risiko: mittleres PR-Rauschen, wenn viele Dateien angepasst werden.
@@ -50,12 +53,14 @@ Risiko: mittleres PR-Rauschen, wenn viele Dateien angepasst werden.
 Ziel: Links überleben Umbenennungen.
 
 ### 2.1 ID-Link-Konvention
+
 Definiere eine interne Linkform:
 
 - [ ] `doc:<id>` als kanonischer “Link”
 - [ ] Renderer/Checker löst `doc:<id>` → Pfad via docs index (JSON)
 
 ### 2.2 Autogenerierter Docs Index
+
 Du hast `artifacts/docmeta/docs.index.json`. Mach daraus bewusst:
 
 - [ ] deterministisch
@@ -63,6 +68,7 @@ Du hast `artifacts/docmeta/docs.index.json`. Mach daraus bewusst:
 - [ ] enthält `id`, `path`, `role`, `organ`, `depends_on`, `verifies_with`, `freshness_status`
 
 ### 2.3 Link-Checker erweitern
+
 `check_links.py` soll zusätzlich:
 
 - [ ] `doc:<id>` Links prüfen (existiert ID?)
@@ -76,6 +82,7 @@ Risiko: gering; neue Syntax muss dokumentiert werden.
 Ziel: Repo zeigt dir täglich: “wo brennt’s”, ohne dass du suchst.
 
 ### 3.1 Standard-Artefaktset unter `artifacts/docmeta/`
+
 Beibehalten/ausbauen:
 
 - [ ] `freshness.{json,md}`
@@ -86,6 +93,7 @@ Beibehalten/ausbauen:
 - [ ] `system_map.md` (oder `SYSTEM_MAP.md` generiert)
 
 ### 3.2 “Known debt” als first-class
+
 Neues Artefakt:
 
 - [ ] `audit_gaps.json` + `audit_gaps.md`
@@ -114,6 +122,7 @@ Mode-Semantik:
 - [ ] `fail-closed`: wie strict + ggf. zusätzliche “keine Unknowns” Regeln
 
 ### 4.2 “Unknowns” definieren
+
 Was ist ein Fehler vs Unknown?
 
 - [ ] Fehlend/invalid in kanonischen Docs = Fehler in strict/fail-closed
@@ -133,6 +142,7 @@ Ziel: Ein neuer Contributor (oder du in 3 Monaten) versteht das System in 5 Minu
 - [ ] `SYSTEM_MAP.md` bleibt autogen und diff-guarded
 
 ### 5.2 Rollen/Organe als Taxonomie
+
 Zwingend konsistent:
 
 - [ ] `role` ist Zone (norm/reality/runbooks/action)
