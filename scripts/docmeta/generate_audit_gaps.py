@@ -39,6 +39,8 @@ def main():
             gaps = normalize_list_field(frontmatter.get('audit_gaps', []))
 
             if gaps:
+                if doc_id in audit_gaps and audit_gaps[doc_id]["file"] != rel_file_path:
+                    print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{audit_gaps[doc_id]['file']}'. Overwriting previous entries.", file=sys.stderr)
                 audit_gaps[doc_id] = {
                     "file": rel_file_path,
                     "gaps": gaps
@@ -59,10 +61,12 @@ def main():
     }
 
     with open(json_path, 'w', encoding='utf-8') as f:
-        json.dump(report_data, f, indent=2)
+        json.dump(report_data, f, indent=2, sort_keys=True, ensure_ascii=False)
+        f.write("\n")
 
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write("# Audit Gaps Report\n\n")
+        f.write("> **Note:** This report only aggregates known debt from canonical documents.\n\n")
         f.write(f"**Total Gaps:** {total_gaps} across {len(audit_gaps)} documents.\n\n")
 
         if audit_gaps:
@@ -74,7 +78,7 @@ def main():
                     f.write(f"- [ ] {gap}\n")
                 f.write("\n")
         else:
-            f.write("No audit gaps found.\n")
+            f.write("No audit gaps found.\n\n")
 
     print(f"Audit gaps generation completed ({total_gaps} gaps found).")
 
