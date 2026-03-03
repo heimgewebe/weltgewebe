@@ -7,6 +7,7 @@ docs-guard:
 	python3 -m scripts.docmeta.check_doc_review_age
 	python3 -m scripts.docmeta.review_impact
 	python3 -m scripts.docmeta.export_docs_index
+	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
 	python3 -m scripts.docmeta.generate_system_map
 	git diff --exit-code SYSTEM_MAP.md
