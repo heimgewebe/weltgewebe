@@ -18,13 +18,14 @@ def main():
 
     zones = repo_index.get('zones', {})
 
-    for zone_data in zones.values():
+    for zone_name in sorted(zones.keys()):
+        zone_data = zones[zone_name]
         rel_zone_path = zone_data.get('path', '')
         zone_path = os.path.join(REPO_ROOT, rel_zone_path)
         canonical_docs = zone_data.get('canonical_docs', [])
 
-        for doc_file in canonical_docs:
-            rel_file_path = os.path.join(rel_zone_path, doc_file)
+        for doc_file in sorted(canonical_docs):
+            rel_file_path = os.path.normpath(os.path.join(rel_zone_path, doc_file))
             file_path = os.path.join(zone_path, doc_file)
 
             if not os.path.exists(file_path):
@@ -69,7 +70,8 @@ def main():
 
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write("# Audit Gaps Report\n\n")
-        f.write("> **Note:** This report only aggregates known debt from canonical documents.\n\n")
+        f.write("> **Note:** This report only aggregates known debt from canonical documents.\n")
+        f.write("> Duplicate document IDs: last processed file wins; a warning is emitted during generation.\n\n")
         f.write(f"**Total Gaps:** {total_gaps} across {len(audit_gaps)} documents.\n\n")
 
         if audit_gaps:
