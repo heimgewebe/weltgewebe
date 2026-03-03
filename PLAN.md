@@ -7,7 +7,9 @@ Ziel: Ist-Zustand belegen, ohne Annahmen.
 Checks (2–5):
 
 - [ ] `make docs-guard` lokal/CI laufen lassen und Artefakte sichern (`artifacts/docmeta/*`).
-- [ ] Zähle: wie viele kanonische Docs, wie viele ohne `id`, wie viele ohne `last_reviewed`, wie viele mit `depends_on`/`verifies_with`.
+- [ ] Zähle: wie viele kanonische Docs,
+  wie viele ohne `id`, wie viele ohne `last_reviewed`,
+  wie viele mit `depends_on`/`verifies_with`.
 - [ ] Linkreport: broken internal links, Anzahl total links.
 - [ ] Impactreport: cycles? missing ids? transitive impacts plausibel?
 - [ ] `SYSTEM_MAP`: deterministisch (zweimal laufen lassen, git diff muss leer bleiben).
