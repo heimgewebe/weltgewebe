@@ -47,7 +47,9 @@
     "id",
     "role",
     "status",
-    "last_reviewed"
+    "last_reviewed",
+    "depends_on",
+    "verifies_with"
   ],
   "additionalProperties": false
 }
