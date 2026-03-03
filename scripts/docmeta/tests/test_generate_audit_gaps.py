@@ -4,8 +4,8 @@ import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
-import sys
 import io
+from contextlib import redirect_stdout, redirect_stderr
 
 from scripts.docmeta.generate_audit_gaps import main
 
@@ -61,15 +61,10 @@ class TestGenerateAuditGaps(unittest.TestCase):
         # Redirect stdout and stderr
         captured_output = io.StringIO()
         captured_error = io.StringIO()
-        sys.stdout = captured_output
-        sys.stderr = captured_error
 
-        try:
+        with redirect_stdout(captured_output), redirect_stderr(captured_error):
             with patch('scripts.docmeta.generate_audit_gaps.REPO_ROOT', self.temp_dir):
                 main()
-        finally:
-            sys.stdout = sys.__stdout__
-            sys.stderr = sys.__stderr__
 
         # Assert output JSON
         json_path = os.path.join(self.temp_dir, "artifacts", "docmeta", "audit_gaps.json")
