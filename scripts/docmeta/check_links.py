@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_review_policy
 
@@ -13,8 +14,6 @@ def main():
     except ValueError as e:
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
-
-    import json
 
     errors = []
     warnings = []
@@ -76,7 +75,7 @@ def main():
                     if end_idx != -1:
                         url = link_content[1:end_idx]
                     else:
-                        # Malformed syntax is a strict error, independent of mode semantics
+                        # Syntax error is always a strict error, regardless of mode.
                         errors.append(f"Malformed link in '{rel_file_path}': missing '>' in '{link_content}'")
                         continue
                 else:

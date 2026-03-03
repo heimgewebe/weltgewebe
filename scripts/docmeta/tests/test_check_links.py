@@ -25,7 +25,6 @@ class TestCheckLinks(unittest.TestCase):
 
     def run_check_links(self, doc_content, index_content=None, mode='strict'):
         import scripts.docmeta.check_links as cl
-        import scripts.docmeta.docmeta as dm
         from unittest.mock import patch
 
         with open(self.doc_path, 'w') as f:
