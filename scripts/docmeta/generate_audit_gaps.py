@@ -39,8 +39,11 @@ def main():
             gaps = normalize_list_field(frontmatter.get('audit_gaps', []))
 
             if gaps:
-                if doc_id in audit_gaps and audit_gaps[doc_id]["file"] != rel_file_path:
-                    print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{audit_gaps[doc_id]['file']}'. Overwriting previous entries.", file=sys.stderr)
+                if doc_id in audit_gaps:
+                    if audit_gaps[doc_id]["file"] != rel_file_path:
+                        print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{audit_gaps[doc_id]['file']}'. Overwriting previous entries.", file=sys.stderr)
+                    # Subtract the previous count to maintain an accurate total
+                    total_gaps -= len(audit_gaps[doc_id]["gaps"])
                 audit_gaps[doc_id] = {
                     "file": rel_file_path,
                     "gaps": gaps

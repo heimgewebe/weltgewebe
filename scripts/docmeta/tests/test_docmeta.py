@@ -41,6 +41,9 @@ class TestDocMetaParser(unittest.TestCase):
                   "  - scripts/a.py\n" \
                   "  - scripts/b.py\n" \
                   "depends_on: []\n" \
+                  "audit_gaps:\n" \
+                  "  - first known debt\n" \
+                  "  - second known debt\n" \
                   "---\n"
         with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
             f.write(content)
@@ -53,6 +56,7 @@ class TestDocMetaParser(unittest.TestCase):
             self.assertEqual(data.get('organ'), 'governance')
             self.assertEqual(data.get('verifies_with'), ['scripts/a.py', 'scripts/b.py'])
             self.assertEqual(data.get('depends_on'), [])
+            self.assertEqual(data.get('audit_gaps'), ['first known debt', 'second known debt'])
         finally:
             os.remove(temp_path)
 
