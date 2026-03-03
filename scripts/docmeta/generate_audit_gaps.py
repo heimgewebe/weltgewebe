@@ -15,6 +15,7 @@ def main():
 
     audit_gaps = {}
     total_gaps = 0
+    seen_ids = {}
 
     zones = repo_index.get('zones', {})
 
@@ -37,19 +38,27 @@ def main():
 
             doc_id = frontmatter.get('id', rel_file_path)
 
+            if doc_id in seen_ids:
+                print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{seen_ids[doc_id]}'. Overwriting previous entries.", file=sys.stderr)
+
+            seen_ids[doc_id] = rel_file_path
+
             gaps = normalize_list_field(frontmatter.get('audit_gaps', []))
 
-            if gaps:
+            if not gaps:
                 if doc_id in audit_gaps:
-                    if audit_gaps[doc_id]["file"] != rel_file_path:
-                        print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{audit_gaps[doc_id]['file']}'. Overwriting previous entries.", file=sys.stderr)
-                    # Subtract the previous count to maintain an accurate total
                     total_gaps -= len(audit_gaps[doc_id]["gaps"])
-                audit_gaps[doc_id] = {
-                    "file": rel_file_path,
-                    "gaps": gaps
-                }
-                total_gaps += len(gaps)
+                    del audit_gaps[doc_id]
+                continue
+
+            if doc_id in audit_gaps:
+                total_gaps -= len(audit_gaps[doc_id]["gaps"])
+
+            audit_gaps[doc_id] = {
+                "file": rel_file_path,
+                "gaps": gaps
+            }
+            total_gaps += len(gaps)
 
     # Save artifacts
     artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")
