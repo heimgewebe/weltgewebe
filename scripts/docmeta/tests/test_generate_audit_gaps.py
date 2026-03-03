@@ -54,14 +54,7 @@ class TestGenerateAuditGaps(unittest.TestCase):
 
     @patch('scripts.docmeta.generate_audit_gaps.parse_review_policy')
     @patch('scripts.docmeta.generate_audit_gaps.parse_repo_index')
-    @patch('scripts.docmeta.generate_audit_gaps.REPO_ROOT')
-    def test_generate_audit_gaps(self, mock_repo_root, mock_parse_repo_index, mock_parse_review_policy):
-        mock_repo_root.return_value = self.temp_dir
-        # Mock module-level REPO_ROOT reference specifically for the os.path.join inside generate_audit_gaps
-        scripts_mod = sys.modules['scripts.docmeta.generate_audit_gaps']
-        original_repo_root = scripts_mod.REPO_ROOT
-        scripts_mod.REPO_ROOT = self.temp_dir
-
+    def test_generate_audit_gaps(self, mock_parse_repo_index, mock_parse_review_policy):
         mock_parse_review_policy.return_value = {"mode": "warn", "strict_manifest": False}
         mock_parse_repo_index.return_value = self.repo_index
 
@@ -72,11 +65,11 @@ class TestGenerateAuditGaps(unittest.TestCase):
         sys.stderr = captured_error
 
         try:
-            main()
+            with patch('scripts.docmeta.generate_audit_gaps.REPO_ROOT', self.temp_dir):
+                main()
         finally:
             sys.stdout = sys.__stdout__
             sys.stderr = sys.__stderr__
-            scripts_mod.REPO_ROOT = original_repo_root
 
         # Assert output JSON
         json_path = os.path.join(self.temp_dir, "artifacts", "docmeta", "audit_gaps.json")
