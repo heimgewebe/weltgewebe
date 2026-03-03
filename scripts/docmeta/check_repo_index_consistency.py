@@ -131,21 +131,23 @@ def main():
     id_report_json_path = os.path.join(artifacts_dir, "id_report.json")
     id_report_md_path = os.path.join(artifacts_dir, "id_report.md")
 
+    missing_ids = sorted(list(set(missing_ids_report)))
+
     with open(id_report_json_path, 'w', encoding='utf-8') as f:
-        json.dump({"missing_ids": sorted(missing_ids_report)}, f, indent=2)
+        json.dump({"missing_ids": missing_ids}, f, indent=2)
         f.write("\n")
 
     with open(id_report_md_path, 'w', encoding='utf-8') as f:
         f.write("# Missing IDs Report\n\n")
-        if missing_ids_report:
+        if missing_ids:
             f.write("The following canonical documents are missing an `id` in their frontmatter:\n\n")
-            for rel_file_path in sorted(missing_ids_report):
+            for rel_file_path in missing_ids:
                 f.write(f"- `{rel_file_path}`\n")
         else:
             f.write("All canonical documents have an `id`.\n")
 
-    if missing_ids_report:
-        print(f"Missing IDs: {len(missing_ids_report)} (see artifacts/docmeta/id_report.md)", file=sys.stderr)
+    if missing_ids:
+        print(f"Missing IDs: {len(missing_ids)} (see artifacts/docmeta/id_report.md)", file=sys.stderr)
 
     if warnings:
         print(f"\n--- Warnings ({len(warnings)}) ---", file=sys.stderr)
