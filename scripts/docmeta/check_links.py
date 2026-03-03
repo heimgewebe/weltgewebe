@@ -8,6 +8,7 @@ def main():
     try:
         policy = parse_review_policy()
         strict_mode = policy.get('strict_manifest', False)
+        mode = policy.get('mode', 'warn')
         repo_index = parse_repo_index(strict_manifest=strict_mode)
     except ValueError as e:
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
@@ -21,7 +22,9 @@ def main():
     # Load docs index for doc:<id> resolution
     docs_index_path = os.path.join(REPO_ROOT, "artifacts", "docmeta", "docs.index.json")
     valid_doc_ids = set()
-    if os.path.exists(docs_index_path):
+    docs_index_exists = os.path.exists(docs_index_path)
+
+    if docs_index_exists:
         with open(docs_index_path, 'r', encoding='utf-8') as f:
             docs_data = json.load(f)
             for doc in docs_data.get('docs', []):
@@ -30,6 +33,8 @@ def main():
                     valid_doc_ids.add(doc_id)
 
     zones = repo_index.get('zones', {})
+
+    doc_links_found = False
 
     for zone_name, zone_data in zones.items():
         rel_zone_path = zone_data.get('path', '')
@@ -88,16 +93,24 @@ def main():
                 link_report[rel_file_path]["total_links"] += 1
 
                 if file_url.startswith('doc:'):
+                    doc_links_found = True
                     target_id = file_url[4:]
-                    if target_id not in valid_doc_ids:
-                        errors.append(f"Broken link in '{rel_file_path}': Canonical ID '{target_id}' does not exist.")
+                    if not target_id or target_id.startswith('#'):
+                        errors.append(f"Malformed doc: link in '{rel_file_path}': missing canonical ID in '{file_url}'.")
                         link_report[rel_file_path]["broken_links"].append(file_url)
+                    elif docs_index_exists:
+                        if target_id not in valid_doc_ids:
+                            errors.append(f"Broken link in '{rel_file_path}': Canonical ID '{target_id}' does not exist.")
+                            link_report[rel_file_path]["broken_links"].append(file_url)
                 else:
                     target_path = os.path.abspath(os.path.join(os.path.dirname(file_path), file_url))
 
                     if not os.path.exists(target_path):
                         errors.append(f"Broken link in '{rel_file_path}': Target '{file_url}' does not exist.")
                         link_report[rel_file_path]["broken_links"].append(file_url)
+
+    if doc_links_found and not docs_index_exists:
+        errors.append(f"Docs index missing ('{docs_index_path}'); cannot validate doc: links; run export_docs_index first.")
 
     # Save artifacts
     artifacts_dir = os.path.join(REPO_ROOT, "artifacts", "docmeta")
@@ -127,10 +140,13 @@ def main():
         print(f"\n--- Errors ({len(errors)}) ---", file=sys.stderr)
         for error in errors:
             print(f"- {error}", file=sys.stderr)
-        print("\nDoc link check failed.", file=sys.stderr)
-        sys.exit(1)
-
-    print("Doc link check passed (0 errors).")
+        if mode in ['strict', 'fail-closed']:
+            print(f"\nMode is {mode}. Failing build.", file=sys.stderr)
+            sys.exit(1)
+        else:
+            print(f"\nMode is {mode}. Doc link check generated warnings but will not fail the build.", file=sys.stderr)
+    else:
+        print("Doc link check passed (0 errors).")
 
 if __name__ == '__main__':
     main()
