@@ -1,3 +1,13 @@
+---
+id: blueprint.docmeta-engine
+role: norm
+organ: governance
+status: canonical
+last_reviewed: 2026-03-03
+depends_on: []
+verifies_with: []
+---
+
 # Plan: Repo zu "selbstorganisierender Dokument-Engine" machen
 
 > **Hinweis:** Dieser Plan dient als strukturierte Blaupause und "North Star"-Dokument
