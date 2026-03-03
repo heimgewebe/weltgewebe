@@ -3,34 +3,12 @@ import unittest
 import tempfile
 import json
 import shutil
-import subprocess
-import sys
 
 class TestCheckLinks(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.repo_root = os.path.join(self.temp_dir, 'repo')
         os.makedirs(self.repo_root)
-
-        # Create mock repo index
-        self.repo_index_path = os.path.join(self.repo_root, 'manifest', 'repo-index.yaml')
-        os.makedirs(os.path.dirname(self.repo_index_path))
-        with open(self.repo_index_path, 'w') as f:
-            f.write("""
-zones:
-  norm:
-    path: architecture
-    canonical_docs:
-      - test_doc.md
-            """)
-
-        # Create mock policy
-        self.policy_path = os.path.join(self.repo_root, 'manifest', 'review-policy.yaml')
-        with open(self.policy_path, 'w') as f:
-            f.write("""
-mode: strict
-strict_manifest: false
-            """)
 
         # Create architecture directory
         self.arch_dir = os.path.join(self.repo_root, 'architecture')
@@ -41,18 +19,6 @@ strict_manifest: false
         # Create artifacts dir
         self.artifacts_dir = os.path.join(self.repo_root, 'artifacts', 'docmeta')
         os.makedirs(self.artifacts_dir)
-
-        # Set environment variables for the scripts
-        self.env = os.environ.copy()
-        self.env['REPO_DIR'] = self.repo_root
-
-        # In check_links.py, REPO_ROOT is resolved relative to __file__.
-        # So we can't just run check_links.py as a script easily unless we patch it or pass an env var.
-        # But wait, REPO_ROOT in docmeta.py is anchored to its location.
-        # Since this test might run from the real repo root, let's just test via a subprocess running check_links
-        # by overriding the constants, OR we patch docmeta.py's parsing functions.
-        # The easiest way is to mock the Python functions directly.
-        pass
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
@@ -135,6 +101,24 @@ strict_manifest: false
         exit_code, out, err = self.run_check_links("This is a [link](doc:some.id)", index_content=None, mode='strict')
         self.assertEqual(exit_code, 1)
         self.assertIn("Docs index missing", err)
+
+    def test_doc_link_fragment(self):
+        """5. doc:known.id#sec mit Index -> pass"""
+        index = {"docs": [{"id": "known.id"}]}
+        exit_code, out, err = self.run_check_links("This is a [link](doc:known.id#sec)", index_content=index, mode='strict')
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("Broken link", err)
+        self.assertNotIn("Errors", err)
+
+    def test_file_link_fragment(self):
+        """6. architecture/overview.md#sec -> prüft Datei-Existenz ohne Fragment"""
+        # Create the file it points to
+        with open(os.path.join(self.arch_dir, 'overview.md'), 'w') as f:
+            f.write("content")
+
+        exit_code, out, err = self.run_check_links("This is a [link](overview.md#sec)", index_content=None, mode='strict')
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("Broken link", err)
 
 if __name__ == '__main__':
     unittest.main()
