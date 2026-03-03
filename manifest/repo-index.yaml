@@ -6,6 +6,7 @@ zones:
       - overview.md
       - security.md
       - docmeta.schema.md
+      - blueprint.docmeta-engine.md
   reality:
     path: runtime/
     canonical_docs:
