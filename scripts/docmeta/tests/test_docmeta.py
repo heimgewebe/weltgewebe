@@ -168,7 +168,7 @@ class TestDocMetaStrictParsers(unittest.TestCase):
             f.write(content)
             temp_path = f.name
         try:
-            with self.assertRaisesRegex(ValueError, "fail_days.*must be greater than warn_days"):
+            with self.assertRaisesRegex(ValueError, r"fail_days.*must be greater than warn_days"):
                 parse_review_policy(policy_path=temp_path)
         finally:
             os.remove(temp_path)

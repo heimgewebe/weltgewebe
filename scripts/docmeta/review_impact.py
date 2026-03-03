@@ -20,6 +20,7 @@ def main():
     forward_deps = {} # id -> list of ids it depends on
     id_to_file = {}
     file_to_id = {}
+    missing_ids = []
 
     zones = repo_index.get('zones', {})
 
@@ -41,6 +42,7 @@ def main():
 
             doc_id = frontmatter.get('id')
             if not doc_id:
+                missing_ids.append(rel_file_path)
                 continue
 
             id_to_file[doc_id] = rel_file_path
@@ -81,6 +83,14 @@ def main():
 
         return cycles
 
+    missing_ids = sorted(list(set(missing_ids)))
+
+    if missing_ids and mode in ['strict', 'fail-closed']:
+        print(f"Error: {len(missing_ids)} document(s) missing 'id' in frontmatter:", file=sys.stderr)
+        for mid in missing_ids:
+            print(f"- {mid}", file=sys.stderr)
+        sys.exit(1)
+
     cycles = find_cycles()
 
     # Calculate transitive impact for all documents
@@ -115,6 +125,7 @@ def main():
     md_path = os.path.join(artifacts_dir, "impact.md")
 
     report_data = {
+        "missing_ids": missing_ids,
         "cycles": cycles,
         "impacts": impact_data
     }
@@ -124,10 +135,20 @@ def main():
 
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write("# Dependency Graph & Impact Report\n\n")
+
+        f.write("## Missing IDs\n\n")
+        if missing_ids:
+            f.write("Graph incomplete. The following documents are missing an `id`:\n\n")
+            for mid in missing_ids:
+                f.write(f"- `{mid}`\n")
+            f.write("\n")
+        else:
+            f.write("No missing ids.\n\n")
+
         if cycles:
             f.write("## ⚠️ Cycles Detected\n\n")
             for cycle in cycles:
-                f.write(f"- {' -> '.join(cycle)}\n")
+                f.write(f"- {' -> '.join([str(x) for x in cycle])}\n")
             f.write("\n")
         else:
             f.write("## Cycles\n\nNo cycles detected.\n\n")
