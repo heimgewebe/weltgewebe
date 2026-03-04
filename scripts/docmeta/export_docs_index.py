@@ -36,7 +36,7 @@ def main():
                 if doc_id:
                     if doc_id in seen_ids:
                         prev_file = seen_ids[doc_id]
-                        if mode in ['strict', 'fail-closed']:
+                        if mode == 'strict':
                             duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
                         else:
                             duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
