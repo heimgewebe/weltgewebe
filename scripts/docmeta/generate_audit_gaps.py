@@ -27,7 +27,7 @@ def main():
 
         for doc_file in sorted(canonical_docs):
             rel_file_path = os.path.normpath(os.path.join(rel_zone_path, doc_file))
-            file_path = os.path.join(zone_path, doc_file)
+            file_path = os.path.normpath(os.path.join(zone_path, doc_file))
 
             if not os.path.exists(file_path):
                 continue
