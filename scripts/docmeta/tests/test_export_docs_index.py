@@ -65,7 +65,7 @@ class TestExportDocsIndex(unittest.TestCase):
         err_out = captured_error.getvalue()
         self.assertIn("Warning: Duplicate ID 'doc-1'", err_out)
         self.assertIn("'architecture/doc1.md' and 'architecture/doc3.md'", err_out)
-        self.assertIn("Overwriting.", err_out)
+        self.assertNotIn("Overwriting.", err_out)
 
     @patch('scripts.docmeta.export_docs_index.parse_review_policy')
     @patch('scripts.docmeta.export_docs_index.parse_repo_index')

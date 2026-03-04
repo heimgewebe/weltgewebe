@@ -39,7 +39,7 @@ def main():
                         if mode in ['strict', 'fail-closed']:
                             duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
                         else:
-                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'. Overwriting.")
+                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
                     seen_ids[doc_id] = rel_file_path
 
                 status = frontmatter.get('status', '')
