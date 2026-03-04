@@ -71,7 +71,12 @@ class TestExportDocsIndex(unittest.TestCase):
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        docs = data.get("docs", [])
+        docs = data.get("docs") if isinstance(data, dict) else data
+        if docs is None:
+            docs = []
+
+        self.assertIsInstance(docs, list)
+
         doc_1_entries = [d for d in docs if d.get("id") == "doc-1"]
         self.assertEqual(len(doc_1_entries), 1)
         self.assertEqual(doc_1_entries[0].get("path"), "architecture/doc3.md")

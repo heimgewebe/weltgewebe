@@ -37,7 +37,7 @@ def main():
                 if doc_id:
                     if doc_id in seen_ids:
                         prev_file = seen_ids[doc_id]
-                        if mode == 'strict':
+                        if mode in ('strict', 'fail-closed'):
                             duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
                         else:
                             duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'. Overwriting.")
@@ -76,8 +76,8 @@ def main():
 
     docs = list(docs_by_id.values()) + docs_without_id
 
-    # Stable sort by id
-    docs.sort(key=lambda x: x['id'])
+    # Stable sort by id, putting empty/None ids at the end
+    docs.sort(key=lambda x: (x.get('id') in (None, ''), x.get('id', '')))
 
     output_data = {
         "docs": docs
