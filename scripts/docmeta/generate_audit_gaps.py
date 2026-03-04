@@ -38,12 +38,18 @@ def main():
 
             doc_id = frontmatter.get('id', rel_file_path)
 
+            gaps = normalize_list_field(frontmatter.get('audit_gaps', []))
+
             if doc_id in seen_ids:
-                print(f"Warning: Duplicate ID '{doc_id}' found in '{rel_file_path}' and '{seen_ids[doc_id]}'. Overwriting previous entries.", file=sys.stderr)
+                prev_file = seen_ids[doc_id]
+                msg = f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'."
+                if gaps:
+                    msg += " Overwriting previous entries."
+                elif doc_id in audit_gaps:
+                    msg += " Clearing previous audit_gaps entry."
+                print(msg, file=sys.stderr)
 
             seen_ids[doc_id] = rel_file_path
-
-            gaps = normalize_list_field(frontmatter.get('audit_gaps', []))
 
             if not gaps:
                 if doc_id in audit_gaps:

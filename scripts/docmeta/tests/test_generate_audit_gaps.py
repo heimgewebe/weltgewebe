@@ -49,23 +49,11 @@ class TestGenerateAuditGaps(unittest.TestCase):
                     "  - overriding gap\n"
                     "---\n")
 
-        # Doc 4: Duplicate ID with NO gaps (should clear previous)
-        with open(os.path.join(self.temp_dir, "architecture", "doc4.md"), 'w', encoding='utf-8') as f:
-            f.write("---\n"
-                    "id: doc-no-gaps-override\n"
-                    "---\n")
-
-        with open(os.path.join(self.temp_dir, "architecture", "doc5.md"), 'w', encoding='utf-8') as f:
-            f.write("---\n"
-                    "id: doc-no-gaps-override\n"
-                    "audit_gaps:\n"
-                    "  - some gap\n"
-                    "---\n")
-
-        with open(os.path.join(self.temp_dir, "architecture", "doc6.md"), 'w', encoding='utf-8') as f:
-            f.write("---\n"
-                    "id: doc-no-gaps-override\n"
-                    "---\n")
+    def _write_doc(self, relpath, content):
+        full_path = os.path.normpath(os.path.join(self.temp_dir, relpath))
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(content)
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
@@ -100,13 +88,16 @@ class TestGenerateAuditGaps(unittest.TestCase):
 
         # Assert duplicate ID warning was printed to stderr
         err_out = captured_error.getvalue()
-        self.assertIn("Warning: Duplicate ID 'doc-1' found", err_out)
-        self.assertIn("Overwriting previous entries", err_out)
+        self.assertIn("Warning: Duplicate ID 'doc-1' found in 'architecture/doc1.md' and 'architecture/doc3.md'. Overwriting previous entries.", err_out)
 
     @patch('scripts.docmeta.generate_audit_gaps.parse_review_policy')
     @patch('scripts.docmeta.generate_audit_gaps.parse_repo_index')
     def test_generate_audit_gaps_clear_ghost_gaps(self, mock_parse_repo_index, mock_parse_review_policy):
         mock_parse_review_policy.return_value = {"mode": "warn", "strict_manifest": False}
+
+        self._write_doc("architecture/doc4.md", "---\nid: doc-no-gaps-override\n---\n")
+        self._write_doc("architecture/doc5.md", "---\nid: doc-no-gaps-override\naudit_gaps:\n  - some gap\n---\n")
+        self._write_doc("architecture/doc6.md", "---\nid: doc-no-gaps-override\n---\n")
 
         # Adjust canonical docs for this test
         repo_index_ghost = {
@@ -141,7 +132,8 @@ class TestGenerateAuditGaps(unittest.TestCase):
 
         # Assert duplicate ID warning was printed to stderr
         err_out = captured_error.getvalue()
-        self.assertIn("Warning: Duplicate ID 'doc-no-gaps-override' found", err_out)
+        self.assertIn("Warning: Duplicate ID 'doc-no-gaps-override' found in 'architecture/doc4.md' and 'architecture/doc5.md'. Overwriting previous entries.", err_out)
+        self.assertIn("Warning: Duplicate ID 'doc-no-gaps-override' found in 'architecture/doc5.md' and 'architecture/doc6.md'. Clearing previous audit_gaps entry.", err_out)
 
 if __name__ == '__main__':
     unittest.main()
