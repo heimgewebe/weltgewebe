@@ -41,6 +41,12 @@
       "items": {
         "type": "string"
       }
+    },
+    "audit_gaps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
