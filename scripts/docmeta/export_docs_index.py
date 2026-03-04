@@ -13,7 +13,8 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    docs = []
+    docs_by_id = {}
+    docs_without_id = []
     seen_ids = {}
     duplicate_errors = []
     duplicate_warnings = []
@@ -39,7 +40,7 @@ def main():
                         if mode == 'strict':
                             duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
                         else:
-                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
+                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'. Overwriting.")
                     seen_ids[doc_id] = rel_file_path
 
                 status = frontmatter.get('status', '')
@@ -60,7 +61,10 @@ def main():
                     "verifies_with": verifies_with,
                     "path": rel_file_path
                 }
-                docs.append(doc_entry)
+                if doc_id:
+                    docs_by_id[doc_id] = doc_entry
+                else:
+                    docs_without_id.append(doc_entry)
 
     for warning in sorted(duplicate_warnings):
         print(warning, file=sys.stderr)
@@ -69,6 +73,8 @@ def main():
         for error in sorted(duplicate_errors):
             print(error, file=sys.stderr)
         sys.exit(1)
+
+    docs = list(docs_by_id.values()) + docs_without_id
 
     # Stable sort by id
     docs.sort(key=lambda x: x['id'])

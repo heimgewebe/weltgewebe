@@ -65,7 +65,16 @@ class TestExportDocsIndex(unittest.TestCase):
         err_out = captured_error.getvalue()
         self.assertIn("Warning: Duplicate ID 'doc-1'", err_out)
         self.assertIn("'architecture/doc1.md' and 'architecture/doc3.md'", err_out)
-        self.assertNotIn("Overwriting.", err_out)
+        self.assertIn("Overwriting.", err_out)
+
+        # Assert JSON deduplicated the ID
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        docs = data.get("docs", [])
+        doc_1_entries = [d for d in docs if d.get("id") == "doc-1"]
+        self.assertEqual(len(doc_1_entries), 1)
+        self.assertEqual(doc_1_entries[0].get("path"), "architecture/doc3.md")
 
     @patch('scripts.docmeta.export_docs_index.parse_review_policy')
     @patch('scripts.docmeta.export_docs_index.parse_repo_index')
