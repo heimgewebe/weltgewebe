@@ -13,17 +13,36 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    docs = []
+    docs_by_id = {}
+    docs_without_id = []
+    seen_ids = {}
+    duplicate_errors = []
+    duplicate_warnings = []
+
+    mode = policy.get('mode', 'warn')
 
     for zone_name, zone_data in sorted(repo_index.get('zones', {}).items()):
-        for doc_file in zone_data.get('canonical_docs', []):
+        for doc_file in sorted(zone_data.get('canonical_docs', [])):
             rel_zone_path = zone_data.get('path', '')
-            rel_file_path = os.path.join(rel_zone_path, doc_file)
-            file_path = os.path.join(REPO_ROOT, rel_file_path)
+            rel_file_path = os.path.normpath(os.path.join(rel_zone_path, doc_file))
+            file_path = os.path.normpath(os.path.join(REPO_ROOT, rel_file_path))
+
+            if not os.path.exists(file_path):
+                continue
 
             frontmatter = parse_frontmatter(file_path)
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
+
+                if doc_id:
+                    if doc_id in seen_ids:
+                        prev_file = seen_ids[doc_id]
+                        if mode in ('strict', 'fail-closed'):
+                            duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
+                        else:
+                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'. Overwriting docs.index entry (last wins).")
+                    seen_ids[doc_id] = rel_file_path
+
                 status = frontmatter.get('status', '')
                 organ = frontmatter.get('organ', '')
                 role = frontmatter.get('role', '')
@@ -42,10 +61,23 @@ def main():
                     "verifies_with": verifies_with,
                     "path": rel_file_path
                 }
-                docs.append(doc_entry)
+                if doc_id:
+                    docs_by_id[doc_id] = doc_entry
+                else:
+                    docs_without_id.append(doc_entry)
 
-    # Stable sort by id
-    docs.sort(key=lambda x: x['id'])
+    for warning in sorted(duplicate_warnings):
+        print(warning, file=sys.stderr)
+
+    if duplicate_errors:
+        for error in sorted(duplicate_errors):
+            print(error, file=sys.stderr)
+        sys.exit(1)
+
+    docs = list(docs_by_id.values()) + docs_without_id
+
+    # Stable sort by id, putting empty/None ids at the end
+    docs.sort(key=lambda x: (x.get('id') in (None, ''), x.get('id', '')))
 
     output_data = {
         "docs": docs
