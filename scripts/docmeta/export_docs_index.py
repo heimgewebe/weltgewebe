@@ -14,16 +14,34 @@ def main():
         sys.exit(1)
 
     docs = []
+    seen_ids = {}
+    duplicate_errors = []
+    duplicate_warnings = []
+
+    mode = policy.get('mode', 'warn')
 
     for zone_name, zone_data in sorted(repo_index.get('zones', {}).items()):
-        for doc_file in zone_data.get('canonical_docs', []):
+        for doc_file in sorted(zone_data.get('canonical_docs', [])):
             rel_zone_path = zone_data.get('path', '')
-            rel_file_path = os.path.join(rel_zone_path, doc_file)
-            file_path = os.path.join(REPO_ROOT, rel_file_path)
+            rel_file_path = os.path.normpath(os.path.join(rel_zone_path, doc_file))
+            file_path = os.path.normpath(os.path.join(REPO_ROOT, rel_file_path))
+
+            if not os.path.exists(file_path):
+                continue
 
             frontmatter = parse_frontmatter(file_path)
             if frontmatter:
                 doc_id = frontmatter.get('id', '')
+
+                if doc_id:
+                    if doc_id in seen_ids:
+                        prev_file = seen_ids[doc_id]
+                        if mode in ['strict', 'fail-closed']:
+                            duplicate_errors.append(f"Error: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'.")
+                        else:
+                            duplicate_warnings.append(f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'. Overwriting.")
+                    seen_ids[doc_id] = rel_file_path
+
                 status = frontmatter.get('status', '')
                 organ = frontmatter.get('organ', '')
                 role = frontmatter.get('role', '')
@@ -43,6 +61,14 @@ def main():
                     "path": rel_file_path
                 }
                 docs.append(doc_entry)
+
+    for warning in sorted(duplicate_warnings):
+        print(warning, file=sys.stderr)
+
+    if duplicate_errors:
+        for error in sorted(duplicate_errors):
+            print(error, file=sys.stderr)
+        sys.exit(1)
 
     # Stable sort by id
     docs.sort(key=lambda x: x['id'])

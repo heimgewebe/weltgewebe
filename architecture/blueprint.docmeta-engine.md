@@ -125,6 +125,7 @@ Mode-Semantik anwenden in `check_links.py` und `review_impact.py`:
 ### 4.2 Fehler vs. Unknowns definieren
 
 - [ ] Fehlend/invalid in kanonischen Docs (z.B. missing `id`) = Fehler in strict.
+- [x] Duplicate Doc-IDs in kanonischen Docs systemweit = Fehler in strict.
 - [ ] Broken internal `doc:<id>` Links = Fehler in strict.
 
 ## Phase 5: Repo-Information als navigierbares System
