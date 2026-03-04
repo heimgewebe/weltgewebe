@@ -1,3 +1,11 @@
+"""
+Aggregates 'audit_gaps' from canonical documents.
+
+Determinism: Zones and documents are processed in sorted order.
+Duplicate IDs: "Last processed file wins". A warning is emitted to stderr.
+Outputs: artifacts/docmeta/audit_gaps.{json,md}
+"""
+
 import os
 import sys
 import json
@@ -44,7 +52,10 @@ def main():
                 prev_file = seen_ids[doc_id]
                 msg = f"Warning: Duplicate ID '{doc_id}' found in '{prev_file}' and '{rel_file_path}'."
                 if gaps:
-                    msg += " Overwriting previous entries."
+                    if doc_id in audit_gaps:
+                        msg += " Overwriting previous audit_gaps entry."
+                    else:
+                        msg += " Recording audit_gaps from later file."
                 elif doc_id in audit_gaps:
                     msg += " Clearing previous audit_gaps entry."
                 print(msg, file=sys.stderr)

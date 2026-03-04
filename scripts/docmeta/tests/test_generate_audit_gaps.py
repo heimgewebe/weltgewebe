@@ -90,7 +90,7 @@ class TestGenerateAuditGaps(unittest.TestCase):
         err_out = captured_error.getvalue()
         self.assertIn("Warning: Duplicate ID 'doc-1'", err_out)
         self.assertIn("'architecture/doc1.md' and 'architecture/doc3.md'", err_out)
-        self.assertIn("Overwriting previous entries.", err_out)
+        self.assertIn("Overwriting previous audit_gaps entry.", err_out)
 
     @patch('scripts.docmeta.generate_audit_gaps.parse_review_policy')
     @patch('scripts.docmeta.generate_audit_gaps.parse_repo_index')
@@ -138,7 +138,7 @@ class TestGenerateAuditGaps(unittest.TestCase):
         # Check first duplicate warning (doc4 -> doc5, adding gaps)
         self.assertIn("Warning: Duplicate ID 'doc-no-gaps-override'", err_out)
         self.assertIn("'architecture/doc4.md' and 'architecture/doc5.md'", err_out)
-        self.assertIn("Overwriting previous entries.", err_out)
+        self.assertIn("Recording audit_gaps from later file.", err_out)
 
         # Check second duplicate warning (doc5 -> doc6, clearing gaps)
         self.assertIn("'architecture/doc5.md' and 'architecture/doc6.md'", err_out)
