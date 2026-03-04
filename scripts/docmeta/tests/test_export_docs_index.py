@@ -65,7 +65,7 @@ class TestExportDocsIndex(unittest.TestCase):
         err_out = captured_error.getvalue()
         self.assertIn("Warning: Duplicate ID 'doc-1'", err_out)
         self.assertIn("'architecture/doc1.md' and 'architecture/doc3.md'", err_out)
-        self.assertIn("Overwriting.", err_out)
+        self.assertIn("Overwriting docs.index entry (last wins).", err_out)
 
         # Assert JSON deduplicated the ID
         with open(json_path, 'r', encoding='utf-8') as f:
@@ -76,6 +76,7 @@ class TestExportDocsIndex(unittest.TestCase):
             docs = []
 
         self.assertIsInstance(docs, list)
+        self.assertEqual(len(docs), 2)
 
         doc_1_entries = [d for d in docs if d.get("id") == "doc-1"]
         self.assertEqual(len(doc_1_entries), 1)
