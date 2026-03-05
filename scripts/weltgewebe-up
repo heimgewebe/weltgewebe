@@ -451,7 +451,7 @@ echo ">> Preflight: Validating runtime contract..."
 if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
   export ROOT="$REPO_DIR"
 
-  if [[ "$BUILD_WEB" == "no" || "$ENABLE_CADDY" == "0" ]]; then
+  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
     export REQUIRE_WEB_BUILD=0
   else
     export REQUIRE_WEB_BUILD=1

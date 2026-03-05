@@ -15,7 +15,11 @@ trap cleanup EXIT
 # Helper to create valid state
 setup_valid() {
   mkdir -p "$ROOT/policies" "$ROOT/apps/web/build/_app"
-  echo "---" > "$ROOT/policies/limits.yaml"
+  cat > "$ROOT/policies/limits.yaml" <<'YAML'
+---
+max_nodes_jsonl_mb: 10
+max_edges_jsonl_mb: 10
+YAML
   echo "html" > "$ROOT/apps/web/build/index.html"
 }
 
@@ -59,7 +63,11 @@ fi
 export REQUIRE_WEB_BUILD=0
 cleanup; ROOT="$(mktemp -d)"
 mkdir -p "$ROOT/policies"
-echo "---" > "$ROOT/policies/limits.yaml"
+cat > "$ROOT/policies/limits.yaml" <<'YAML'
+---
+max_nodes_jsonl_mb: 10
+max_edges_jsonl_mb: 10
+YAML
 if ! bash "$PREFLIGHT_SCRIPT" >/dev/null; then
   echo "FAIL: API-only deploy should pass without frontend artifacts"
   exit 1
