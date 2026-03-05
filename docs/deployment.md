@@ -33,5 +33,4 @@ Therefore the served `Content-Security-Policy` must allow that inline script, ei
 - `script-src 'unsafe-inline'` (pragmatic), or
 - a nonce/hash-based CSP (preferred hardening, follow-up work).
 
-The preflight `scripts/preflight/csp_contract.sh` fails deploys early if an inline script is present
-but the CSP forbids it (to prevent a whitepage).
+The static preflight `scripts/preflight/csp_contract_static.sh` parses the Caddyfile and the compiled `index.html` to fail deploys early if an inline script is present but the CSP forbids it. This prevents a whitepage without relying on a running server.
