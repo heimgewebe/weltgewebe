@@ -14,11 +14,16 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 **Beschreibung:**
 
-Die Content-Security-Policy (CSP) in Caddy wurde angepasst, um SvelteKit's Inline-Bootstrap-Script zu erlauben. Der Direktive `script-src` wurde `'unsafe-inline'` hinzugefügt, da andernfalls das Svelte-Frontend mit einer leeren Seite (Whitepage) blockiert wurde.
+Die Content-Security-Policy (CSP) in Caddy wurde angepasst, um SvelteKit's Inline-Bootstrap-Script zu
+erlauben. Der Direktive `script-src` wurde `'unsafe-inline'` hinzugefügt, da andernfalls das
+Svelte-Frontend mit einer leeren Seite (Whitepage) blockiert wurde.
 
-Ein Preflight-Guard (`csp_contract.sh`) wurde ebenfalls dem Deployment hinzugefügt, um sicherzustellen, dass Inline-Scripts zukünftig nicht versehentlich wieder durch die CSP blockiert werden.
+Ein Preflight-Guard (`csp_contract.sh`) wurde ebenfalls dem Deployment hinzugefügt, um sicherzustellen, dass
+Inline-Scripts zukünftig nicht versehentlich wieder durch die CSP blockiert werden.
 
-**Risiko:** Mittel. Die CSP ist weniger streng (`'unsafe-inline'`), was XSS-Risiken potenziell erhöht, jedoch im aktuellen Kontext (Heimnetz, funktionierendes UI priorisiert) als pragmatische Lösung akzeptiert wurde. Hardening via Nonce/Hash sollte später folgen.
+**Risiko:** Mittel. Die CSP ist weniger streng (`'unsafe-inline'`), was XSS-Risiken potenziell erhöht, jedoch
+im aktuellen Kontext (Heimnetz, funktionierendes UI priorisiert) als pragmatische Lösung akzeptiert wurde.
+Hardening via Nonce/Hash sollte später folgen.
 
 ---
 
