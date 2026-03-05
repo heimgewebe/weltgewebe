@@ -469,13 +469,18 @@ echo ">> Preflight: Validating static CSP contract..."
 if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   export ROOT="$REPO_DIR"
 
-  # Determine the source Caddyfile logically connected to the deployment
-  # If the user has a Caddyfile in the repo root (like Heimserver setup), use that.
-  # Otherwise, fallback to the infrastructure config.
-  if [[ -f "$REPO_DIR/Caddyfile" ]]; then
-    export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
+  # Target Caddyfile detection and sync for Heimserver environments
+  # The deployed container mounts from a specific path (e.g. /opt/heimgewebe/edge/Caddyfile)
+  # Ensure the repo's Source of Truth is synced there before validation and deployment.
+  export CADDYFILE_PATH=""
+  if [[ -d "/opt/heimgewebe/edge" ]]; then
+     echo "   Detected Heimserver edge environment. Syncing Caddyfile..."
+     cp -v "$REPO_DIR/infra/caddy/Caddyfile.heim" "/opt/heimgewebe/edge/Caddyfile" || true
+     export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
+  elif [[ -f "$REPO_DIR/Caddyfile" ]]; then
+     export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
   elif [[ -f "$REPO_DIR/infra/caddy/Caddyfile.heim" ]]; then
-    export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
+     export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
   fi
 
   if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then

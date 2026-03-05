@@ -20,13 +20,18 @@ elif [[ -f "$ROOT/infra/caddy/Caddyfile.prod" ]]; then
 elif [[ -f "$ROOT/infra/caddy/Caddyfile" ]]; then
   CADDYFILE="$ROOT/infra/caddy/Caddyfile"
 else
-  echo "csp_contract_static: Caddyfile not found, skipping."
-  exit 0
+  CADDYFILE=""
 fi
 
 if [[ "$REQUIRE_WEB_BUILD" != "1" ]]; then
   echo "csp_contract_static: Web build not required, skipping."
   exit 0
+fi
+
+if [[ -z "$CADDYFILE" || ! -f "$CADDYFILE" ]]; then
+  echo "ERROR: csp_contract_static could not find the target Caddyfile." >&2
+  echo "       This is a fail-closed check because the web build is required and Caddy is enabled." >&2
+  exit 1
 fi
 
 INDEX_HTML="$ROOT/apps/web/build/index.html"
