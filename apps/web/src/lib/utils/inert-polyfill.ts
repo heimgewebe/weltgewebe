@@ -174,7 +174,7 @@ export function ensureInertPolyfill() {
 
       if (m.type === "childList" && m.addedNodes.length > 0) {
         for (let i = 0; i < m.addedNodes.length; i++) {
-          if (m.addedNodes[i] instanceof HTMLElement) {
+          if (m.addedNodes[i].nodeType === Node.ELEMENT_NODE) {
             hasAddedNodes = true;
             break;
           }
