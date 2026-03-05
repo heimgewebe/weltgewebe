@@ -27,21 +27,23 @@ if bash "$PREFLIGHT_SCRIPT" 2>/dev/null; then
   exit 1
 fi
 
-# Case 2: missing index.html
-cleanup; ROOT="$(mktemp -d)"
-setup_valid
-rm "$ROOT/apps/web/build/index.html"
-if bash "$PREFLIGHT_SCRIPT" 2>/dev/null; then
-  echo "FAIL: Should have exited 1 on missing index.html"
-  exit 1
-fi
 
-# Case 3: empty index.html
+# Case 2: empty index.html
 cleanup; ROOT="$(mktemp -d)"
 setup_valid
 > "$ROOT/apps/web/build/index.html"
 if bash "$PREFLIGHT_SCRIPT" 2>/dev/null; then
   echo "FAIL: Should have exited 1 on empty index.html"
+  exit 1
+fi
+
+# Case 3: API-only deploy (no web build)
+cleanup; ROOT="$(mktemp -d)"
+mkdir -p "$ROOT/policies"
+echo "---" > "$ROOT/policies/limits.yaml"
+
+if ! bash "$PREFLIGHT_SCRIPT" >/dev/null; then
+  echo "FAIL: API-only deploy should pass without frontend artifacts"
   exit 1
 fi
 
