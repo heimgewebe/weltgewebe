@@ -29,6 +29,7 @@ The guard validates required artifacts and aborts the deployment early if mandat
 
 The production frontend currently contains an inline bootstrap `<script>` (SvelteKit).
 Therefore the served `Content-Security-Policy` must allow that inline script, either via:
+
 - `script-src 'unsafe-inline'` (pragmatic), or
 - a nonce/hash-based CSP (preferred hardening, follow-up work).
 
