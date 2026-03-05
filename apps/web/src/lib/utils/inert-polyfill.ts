@@ -10,10 +10,18 @@
 const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 
 function setSubtreeAriaHidden(root: Element, on: boolean) {
-  const elements = [root, ...root.querySelectorAll<HTMLElement>("*")];
+  const descendants = root.querySelectorAll<HTMLElement>("*");
 
   if (on) {
-    for (const element of elements) {
+    if (!previousSubtreeAriaHidden.has(root)) {
+      previousSubtreeAriaHidden.set(root, root.getAttribute("aria-hidden"));
+    }
+    if (root.getAttribute("aria-hidden") !== "true") {
+      root.setAttribute("aria-hidden", "true");
+    }
+
+    for (let i = 0; i < descendants.length; i++) {
+      const element = descendants[i];
       if (!previousSubtreeAriaHidden.has(element)) {
         previousSubtreeAriaHidden.set(
           element,
@@ -27,7 +35,19 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
     return;
   }
 
-  for (const element of elements) {
+  if (previousSubtreeAriaHidden.has(root)) {
+    const previous = previousSubtreeAriaHidden.get(root);
+    previousSubtreeAriaHidden.delete(root);
+
+    if (previous === null) {
+      root.removeAttribute("aria-hidden");
+    } else if (previous !== undefined) {
+      root.setAttribute("aria-hidden", previous);
+    }
+  }
+
+  for (let i = 0; i < descendants.length; i++) {
+    const element = descendants[i];
     if (!previousSubtreeAriaHidden.has(element)) continue;
 
     const previous = previousSubtreeAriaHidden.get(element);
@@ -138,6 +158,8 @@ export function ensureInertPolyfill() {
 
   // Beobachte nachträgliche Änderungen an 'inert' und neu eingefügte Knoten
   const mo = new MutationObserver((muts) => {
+    let hasAddedNodes = false;
+
     for (const m of muts) {
       if (
         m.type === "attributes" &&
@@ -150,24 +172,13 @@ export function ensureInertPolyfill() {
         continue;
       }
 
-      if (m.type === "childList") {
-        for (const node of m.addedNodes) {
-          if (!(node instanceof HTMLElement)) continue;
-
-          if (node.hasAttribute("inert")) {
-            setSubtreeAriaHidden(node, true);
-          }
-
-          node
-            .querySelectorAll("[inert]")
-            .forEach((el) => setSubtreeAriaHidden(el, true));
-
-          const inertHost = node.closest<HTMLElement>("[inert]");
-          if (inertHost) {
-            setSubtreeAriaHidden(node, true);
-          }
-        }
+      if (m.type === "childList" && m.addedNodes.length > 0) {
+        hasAddedNodes = true;
       }
+    }
+
+    if (hasAddedNodes) {
+      syncAll();
     }
   });
 
