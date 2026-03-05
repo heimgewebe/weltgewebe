@@ -3,7 +3,7 @@ id: deployment-contract
 title: Deployment Contract and Preflight Guard
 role: norm
 status: active
-last_reviewed: "2024-03-05"
+last_reviewed: "2026-03-05"
 ---
 
 ## Required runtime artifacts

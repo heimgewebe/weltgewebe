@@ -1,4 +1,4 @@
 ---
-limits: {}
+# Default API policy constraints
 max_nodes_jsonl_mb: 10
 max_edges_jsonl_mb: 10
