@@ -40,6 +40,9 @@ COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/entrypoint.sh
 
+# Provide a default policy artifact to prevent preflight/runtime failures
+COPY apps/api/policies /app/policies
+
 # Expose the port
 EXPOSE 8080
 
