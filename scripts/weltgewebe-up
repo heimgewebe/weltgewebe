@@ -446,6 +446,25 @@ fi
 
 # 7. Deploy
 echo
+echo
+echo ">> Preflight: Validating runtime contract..."
+if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
+  export ROOT="$REPO_DIR"
+
+  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
+    export REQUIRE_WEB_BUILD=0
+  else
+    export REQUIRE_WEB_BUILD=1
+  fi
+
+  if ! bash scripts/preflight/runtime_contract.sh; then
+    echo "ERROR: Runtime contract validation failed. Aborting deploy." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: Preflight script scripts/preflight/runtime_contract.sh not found or not executable. Skipping." >&2
+fi
+
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
 
