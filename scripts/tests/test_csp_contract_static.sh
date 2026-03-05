@@ -70,4 +70,16 @@ echo '<html><head><title>test</title><script>let x=1;</script></head><body></bod
 echo 'Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"';"' > "$CADDYFILE_PATH"
 run_test "Minified HTML with inline script and strict CSP fails" 1
 
+# Test 8: Multiple CSP lines, first strict, second allows unsafe-inline -> pass
+echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
+cat <<EOF > "$CADDYFILE_PATH"
+Host1 {
+  Content-Security-Policy "default-src 'self'; script-src 'self';"
+}
+Host2 {
+  Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline';"
+}
+EOF
+run_test "Multiple CSP lines, one valid -> passes" 0
+
 echo "All tests passed!"

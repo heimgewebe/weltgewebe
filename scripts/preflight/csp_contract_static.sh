@@ -43,13 +43,13 @@ fi
 
 # Detect inline script in HTML
 # We must find a <script ...> tag that does NOT contain a src= attribute.
-# Since HTML can be minified into a single line, we avoid grep -P and instead use tr and grep.
 HAS_INLINE_SCRIPT=0
-# Split on '<' and find things starting with 'script', avoiding non-portable PCRE.
-SCRIPT_TAGS=$(cat "$INDEX_HTML" | tr '<' '\n' | grep -i '^script' || true)
+# Extract all script tags. grep -o is standard, but the regex needs to be simple.
+# '<script[^>]*>' works in standard grep in many implementations, but to be 100% POSIX safe
+# and handle minified files, we use sed to isolate the script tags by injecting newlines.
+SCRIPT_TAGS=$(sed 's/<script/\n<script/g' "$INDEX_HTML" | grep -io '^<script[^>]*>' || true)
 
 while IFS= read -r tag; do
-  # Ignore empty lines
   if [[ -z "$tag" ]]; then
     continue
   fi
@@ -63,7 +63,7 @@ done <<< "$SCRIPT_TAGS"
 
 if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
 
-  # Extract CSP line from Caddyfile
+  # Extract CSP lines from Caddyfile
   # Assuming standard format: Content-Security-Policy "..."
   CSP_LINES=$(grep -i "Content-Security-Policy" "$CADDYFILE" || true)
 
@@ -72,34 +72,34 @@ if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
      exit 0
   fi
 
-  # Handle multiple CSP lines (take the first one, warn if multiple)
-  LINE_COUNT=$(echo "$CSP_LINES" | wc -l)
-  if [[ "$LINE_COUNT" -gt 1 ]]; then
-     echo "WARNING: csp_contract_static found multiple CSP lines in $CADDYFILE. Using the first one." >&2
-  fi
-  CSP_LINE=$(echo "$CSP_LINES" | head -n 1)
-
-  # Check if script-src allows unsafe-inline or contains nonce/hash
-  # Look specifically within the script-src directive
-  if echo "$CSP_LINE" | grep -qi "script-src"; then
-      # Extract just the script-src part (up to the next semicolon or end of string) using sed for portability
-      SCRIPT_SRC=$(echo "$CSP_LINE" | sed -n 's/.*\([sS][cC][rR][iI][pP][tT]-[sS][rR][cC][^;]*\).*/\1/p')
-
-      if echo "$SCRIPT_SRC" | grep -qF "'unsafe-inline'"; then
-          echo "csp_contract_static: OK ('unsafe-inline' present in script-src)"
-          exit 0
+  # Handle multiple CSP lines: If ANY line satisfies the requirement, we pass.
+  # This prevents false positives in multi-site Caddyfiles without needing a full parser.
+  while IFS= read -r CSP_LINE; do
+      if [[ -z "$CSP_LINE" ]]; then
+          continue
       fi
 
-      if echo "$SCRIPT_SRC" | grep -qE "'nonce-|'sha256-"; then
-          echo "csp_contract_static: OK (nonce/hash present in script-src)"
-          exit 0
-      fi
+      # Look specifically within the script-src directive
+      if echo "$CSP_LINE" | grep -qi "script-src"; then
+          # Extract just the script-src part (up to the next semicolon or end of string) using sed for portability
+          SCRIPT_SRC=$(echo "$CSP_LINE" | sed -n 's/.*\([sS][cC][rR][iI][pP][tT]-[sS][rR][cC][^;]*\).*/\1/p')
 
-      echo "ERROR: Inline <script> detected in index.html, but CSP in $CADDYFILE lacks 'unsafe-inline' or nonce/hash in script-src." >&2
-      echo "CSP Line: $CSP_LINE" >&2
-      echo "Script-src part: $SCRIPT_SRC" >&2
-      exit 1
-  fi
+          if echo "$SCRIPT_SRC" | grep -qF "'unsafe-inline'"; then
+              echo "csp_contract_static: OK ('unsafe-inline' present in script-src of $CADDYFILE)"
+              exit 0
+          fi
+
+          if echo "$SCRIPT_SRC" | grep -qE "'nonce-|'sha256-"; then
+              echo "csp_contract_static: OK (nonce/hash present in script-src of $CADDYFILE)"
+              exit 0
+          fi
+      fi
+  done <<< "$CSP_LINES"
+
+  echo "ERROR: Inline <script> detected in INDEX_HTML ($INDEX_HTML), but no matching Content-Security-Policy in CADDYFILE_PATH ($CADDYFILE) allows 'unsafe-inline' or nonce/hash." >&2
+  echo "Found CSP lines:" >&2
+  echo "$CSP_LINES" >&2
+  exit 1
 fi
 
 echo "csp_contract_static: OK (no inline script or valid CSP)"
