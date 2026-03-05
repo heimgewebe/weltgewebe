@@ -3,10 +3,8 @@ id: deployment-runtime-artifacts
 role: reality
 status: canonical
 last_reviewed: 2023-10-25
-depends_on:
-  - doc:deployment-governance
 verifies_with:
-  - test:scripts/preflight/runtime_contract.sh
+  - scripts/preflight/runtime_contract.sh
 ---
 
 # Deployment Governance: Required Runtime Artifacts

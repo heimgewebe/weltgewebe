@@ -444,6 +444,19 @@ if [[ -d "apps/web" ]]; then
   fi
 fi
 
+# Pre-deploy Guard: Runtime Contract
+echo
+echo ">> Preflight: Validating runtime contract..."
+if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
+    export ROOT="$REPO_DIR"
+    if ! bash scripts/preflight/runtime_contract.sh; then
+        echo "ERROR: Runtime contract validation failed. Aborting deploy."
+        exit 1
+    fi
+else
+    echo "WARNING: Preflight script scripts/preflight/runtime_contract.sh not found or not executable. Skipping."
+fi
+
 # 7. Deploy
 echo
 echo ">> Deploying..."
