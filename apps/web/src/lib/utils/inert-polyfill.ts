@@ -41,8 +41,8 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
 
     if (previous === null) {
       root.removeAttribute("aria-hidden");
-    } else if (previous !== undefined) {
-      root.setAttribute("aria-hidden", previous);
+    } else {
+      root.setAttribute("aria-hidden", previous!);
     }
   }
 
@@ -55,8 +55,8 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
 
     if (previous === null) {
       element.removeAttribute("aria-hidden");
-    } else if (previous !== undefined) {
-      element.setAttribute("aria-hidden", previous);
+    } else {
+      element.setAttribute("aria-hidden", previous!);
     }
   }
 }
@@ -173,7 +173,12 @@ export function ensureInertPolyfill() {
       }
 
       if (m.type === "childList" && m.addedNodes.length > 0) {
-        hasAddedNodes = true;
+        for (let i = 0; i < m.addedNodes.length; i++) {
+          if (m.addedNodes[i] instanceof HTMLElement) {
+            hasAddedNodes = true;
+            break;
+          }
+        }
       }
     }
 
