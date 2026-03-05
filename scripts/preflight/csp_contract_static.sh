@@ -36,17 +36,42 @@ if [[ ! -f "$INDEX_HTML" ]]; then
   exit 0
 fi
 
-# Detect inline script in HTML (simple heuristic: <script> without src)
-if grep -qE '<script>|<script type="module">' "$INDEX_HTML"; then
+# Detect inline script in HTML
+# We must find a <script ...> tag that does NOT contain a src= attribute.
+# Since HTML can be minified into a single line, we use grep -o to extract all script tags first.
+HAS_INLINE_SCRIPT=0
+SCRIPT_TAGS=$(grep -ioP '<script[^>]*>' "$INDEX_HTML" || true)
+
+# If grep -P fails on some alpine environments, fallback to basic sed extraction
+if [[ $? -ne 0 ]] || [[ -z "$SCRIPT_TAGS" ]]; then
+  SCRIPT_TAGS=$(sed -n 's/.*\(<script[^>]*>\).*/\1/p' "$INDEX_HTML" | tr '<' '\n' | grep -i '^script' | sed 's/^/</' || true)
+fi
+
+while IFS= read -r tag; do
+  if [[ -n "$tag" ]] && ! echo "$tag" | grep -qi "src="; then
+    HAS_INLINE_SCRIPT=1
+    break
+  fi
+done <<< "$SCRIPT_TAGS"
+
+
+if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
 
   # Extract CSP line from Caddyfile
   # Assuming standard format: Content-Security-Policy "..."
-  CSP_LINE=$(grep -i "Content-Security-Policy" "$CADDYFILE" || true)
+  CSP_LINES=$(grep -i "Content-Security-Policy" "$CADDYFILE" || true)
 
-  if [[ -z "$CSP_LINE" ]]; then
+  if [[ -z "$CSP_LINES" ]]; then
      echo "csp_contract_static: No CSP found in $CADDYFILE, assuming safe (or no CSP)."
      exit 0
   fi
+
+  # Handle multiple CSP lines (take the first one, warn if multiple)
+  LINE_COUNT=$(echo "$CSP_LINES" | wc -l)
+  if [[ "$LINE_COUNT" -gt 1 ]]; then
+     echo "WARNING: csp_contract_static found multiple CSP lines in $CADDYFILE. Using the first one." >&2
+  fi
+  CSP_LINE=$(echo "$CSP_LINES" | head -n 1)
 
   # Check if script-src allows unsafe-inline or contains nonce/hash
   # Look specifically within the script-src directive
