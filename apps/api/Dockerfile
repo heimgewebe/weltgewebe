@@ -41,6 +41,7 @@ COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/entrypoint.sh
 
 # Expose the port
+COPY apps/api/policies /app/policies
 EXPOSE 8080
 
 # Use entrypoint to handle data initialization

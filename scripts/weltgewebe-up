@@ -446,6 +446,13 @@ fi
 
 # 7. Deploy
 echo
+# Preflight check
+echo
+echo ">> Preflight Checks..."
+if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
+  bash scripts/preflight/runtime_contract.sh
+fi
+
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
 
