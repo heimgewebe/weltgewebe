@@ -10,9 +10,8 @@
 const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 
 function setSubtreeAriaHidden(root: Element, on: boolean) {
-  const descendants = root.querySelectorAll<HTMLElement>("*");
-
   if (on) {
+    const descendants = root.querySelectorAll<HTMLElement>("*");
     if (!previousSubtreeAriaHidden.has(root)) {
       previousSubtreeAriaHidden.set(root, root.getAttribute("aria-hidden"));
     }
@@ -41,11 +40,12 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
 
     if (previous === null) {
       root.removeAttribute("aria-hidden");
-    } else {
-      root.setAttribute("aria-hidden", previous!);
+    } else if (typeof previous === "string") {
+      root.setAttribute("aria-hidden", previous);
     }
   }
 
+  const descendants = root.querySelectorAll<HTMLElement>("*");
   for (let i = 0; i < descendants.length; i++) {
     const element = descendants[i];
     if (!previousSubtreeAriaHidden.has(element)) continue;
@@ -55,8 +55,8 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
 
     if (previous === null) {
       element.removeAttribute("aria-hidden");
-    } else {
-      element.setAttribute("aria-hidden", previous!);
+    } else if (typeof previous === "string") {
+      element.setAttribute("aria-hidden", previous);
     }
   }
 }
