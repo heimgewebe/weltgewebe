@@ -448,6 +448,16 @@ fi
 echo
 echo
 echo ">> Preflight: Validating runtime contract..."
+echo ">> Preflight: Validating CSP contract..."
+if [[ -x "scripts/preflight/csp_contract.sh" ]]; then
+  if ! bash scripts/preflight/csp_contract.sh; then
+    echo "ERROR: CSP contract validation failed. Aborting deploy." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: Preflight script scripts/preflight/csp_contract.sh not found or not executable. Skipping." >&2
+fi
+
 if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
   export ROOT="$REPO_DIR"
 
