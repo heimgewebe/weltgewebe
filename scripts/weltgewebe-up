@@ -469,13 +469,11 @@ echo ">> Preflight: Validating static CSP contract..."
 if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   export ROOT="$REPO_DIR"
 
-  # Target Caddyfile detection and sync for Heimserver environments
-  # The deployed container mounts from a specific path (e.g. /opt/heimgewebe/edge/Caddyfile)
-  # Ensure the repo's Source of Truth is synced there before validation and deployment.
+  # Target Caddyfile detection
   export CADDYFILE_PATH=""
-  if [[ -d "/opt/heimgewebe/edge" ]]; then
-     echo "   Detected Heimserver edge environment. Syncing Caddyfile..."
-     cp -v "$REPO_DIR/infra/caddy/Caddyfile.heim" "/opt/heimgewebe/edge/Caddyfile" || true
+  if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then
+     export CADDYFILE_PATH="$EDGE_CADDYFILE"
+  elif [[ -f "/opt/heimgewebe/edge/Caddyfile" ]]; then
      export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
   elif [[ -f "$REPO_DIR/Caddyfile" ]]; then
      export CADDYFILE_PATH="$REPO_DIR/Caddyfile"

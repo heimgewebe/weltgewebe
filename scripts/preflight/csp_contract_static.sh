@@ -43,17 +43,18 @@ fi
 
 # Detect inline script in HTML
 # We must find a <script ...> tag that does NOT contain a src= attribute.
-# Since HTML can be minified into a single line, we use grep -o to extract all script tags first.
+# Since HTML can be minified into a single line, we avoid grep -P and instead use tr and grep.
 HAS_INLINE_SCRIPT=0
-SCRIPT_TAGS=$(grep -ioP '<script[^>]*>' "$INDEX_HTML" || true)
-
-# If grep -P fails on some alpine environments, fallback to basic sed extraction
-if [[ $? -ne 0 ]] || [[ -z "$SCRIPT_TAGS" ]]; then
-  SCRIPT_TAGS=$(sed -n 's/.*\(<script[^>]*>\).*/\1/p' "$INDEX_HTML" | tr '<' '\n' | grep -i '^script' | sed 's/^/</' || true)
-fi
+# Split on '<' and find things starting with 'script', avoiding non-portable PCRE.
+SCRIPT_TAGS=$(cat "$INDEX_HTML" | tr '<' '\n' | grep -i '^script' || true)
 
 while IFS= read -r tag; do
-  if [[ -n "$tag" ]] && ! echo "$tag" | grep -qi "src="; then
+  # Ignore empty lines
+  if [[ -z "$tag" ]]; then
+    continue
+  fi
+  # If the script tag does not contain "src=", it's an inline script
+  if ! echo "$tag" | grep -qi "src="; then
     HAS_INLINE_SCRIPT=1
     break
   fi
