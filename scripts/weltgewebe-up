@@ -446,11 +446,16 @@ fi
 
 # 7. Deploy
 echo
-# Preflight check
 echo
-echo ">> Preflight Checks..."
+echo ">> Preflight: Validating runtime contract..."
 if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
-  bash scripts/preflight/runtime_contract.sh
+  export ROOT="$REPO_DIR"
+  if ! bash scripts/preflight/runtime_contract.sh; then
+    echo "ERROR: Runtime contract validation failed. Aborting deploy." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: Preflight script scripts/preflight/runtime_contract.sh not found or not executable. Skipping." >&2
 fi
 
 echo ">> Deploying..."
