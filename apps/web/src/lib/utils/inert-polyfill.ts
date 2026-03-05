@@ -34,15 +34,15 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
     return;
   }
 
-  if (previousSubtreeAriaHidden.has(root)) {
-    const previous = previousSubtreeAriaHidden.get(root);
-    previousSubtreeAriaHidden.delete(root);
+  if (!previousSubtreeAriaHidden.has(root)) return;
 
-    if (previous === null) {
-      root.removeAttribute("aria-hidden");
-    } else if (typeof previous === "string") {
-      root.setAttribute("aria-hidden", previous);
-    }
+  const previous = previousSubtreeAriaHidden.get(root);
+  previousSubtreeAriaHidden.delete(root);
+
+  if (previous === null) {
+    root.removeAttribute("aria-hidden");
+  } else {
+    root.setAttribute("aria-hidden", previous as string);
   }
 
   const descendants = root.querySelectorAll<HTMLElement>("*");
@@ -55,8 +55,8 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
 
     if (previous === null) {
       element.removeAttribute("aria-hidden");
-    } else if (typeof previous === "string") {
-      element.setAttribute("aria-hidden", previous);
+    } else {
+      element.setAttribute("aria-hidden", previous as string);
     }
   }
 }
