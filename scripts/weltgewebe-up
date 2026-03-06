@@ -469,6 +469,9 @@ echo ">> Preflight: Validating static CSP contract..."
 if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   export ROOT="$REPO_DIR"
 
+  # Set the target site for the guard
+  export CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
+
   # Target Caddyfile detection
   export CADDYFILE_PATH=""
   if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then

@@ -7,6 +7,7 @@ set -euo pipefail
 
 ROOT="${ROOT:-/opt/weltgewebe}"
 REQUIRE_WEB_BUILD="${REQUIRE_WEB_BUILD:-1}"
+CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
 
 # Caddyfile detection (heuristic: prioritize user explicit env var, then root, then infra)
 if [[ -n "${CADDYFILE_PATH:-}" ]] && [[ -f "$CADDYFILE_PATH" ]]; then
@@ -63,12 +64,30 @@ done <<< "$SCRIPT_TAGS"
 
 if [[ "$HAS_INLINE_SCRIPT" == "1" ]]; then
 
-  # Extract CSP lines from Caddyfile
+  # Extract the configuration block for the target site.
+  # This uses a simple awk script to count braces and extract only the relevant host block.
+  TARGET_BLOCK=$(awk -v site="$CADDY_TARGET_SITE" '
+    # Match the site name followed by a brace or space
+    $0 ~ site"( *{| *$)" { in_block=1; braces=0 }
+    in_block {
+      print
+      # Count opening and closing braces
+      braces += gsub(/{/, "{") - gsub(/}/, "}")
+      if (braces <= 0 && $0 ~ /}/) { in_block=0 }
+    }
+  ' "$CADDYFILE" || true)
+
+  if [[ -z "$TARGET_BLOCK" ]]; then
+     echo "ERROR: csp_contract_static could not find the host block for '$CADDY_TARGET_SITE' in $CADDYFILE." >&2
+     exit 1
+  fi
+
+  # Extract CSP lines from the target block
   # Assuming standard format: Content-Security-Policy "..."
-  CSP_LINES=$(grep -i "Content-Security-Policy" "$CADDYFILE" || true)
+  CSP_LINES=$(echo "$TARGET_BLOCK" | grep -i "Content-Security-Policy" || true)
 
   if [[ -z "$CSP_LINES" ]]; then
-     echo "csp_contract_static: No CSP found in $CADDYFILE, assuming safe (or no CSP)."
+     echo "csp_contract_static: No CSP found for $CADDY_TARGET_SITE in $CADDYFILE, assuming safe (or no CSP)."
      exit 0
   fi
 

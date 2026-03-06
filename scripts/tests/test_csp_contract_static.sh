@@ -55,31 +55,50 @@ echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
 echo 'Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"';"' > "$CADDYFILE_PATH"
 run_test "Inline script with strict CSP fails" 1
 
+export CADDY_TARGET_SITE="weltgewebe.home.arpa"
+
 # Test 5: index.html has inline script, CSP has unsafe-inline -> pass
 echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
-echo 'Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"' '"'unsafe-inline'"';"' > "$CADDYFILE_PATH"
+echo 'weltgewebe.home.arpa { Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"' '"'unsafe-inline'"';"' > "$CADDYFILE_PATH"
+echo '}' >> "$CADDYFILE_PATH"
 run_test "Inline script with unsafe-inline CSP passes" 0
 
 # Test 6: index.html has inline script, CSP has nonce -> pass
 echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
-echo 'Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"' '"'nonce-1234'"';"' > "$CADDYFILE_PATH"
+echo 'weltgewebe.home.arpa { Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"' '"'nonce-1234'"';"' > "$CADDYFILE_PATH"
+echo '}' >> "$CADDYFILE_PATH"
 run_test "Inline script with nonce CSP passes" 0
 
 # Test 7: Minified HTML with inline script -> fail
 echo '<html><head><title>test</title><script>let x=1;</script></head><body></body></html>' > "$INDEX_HTML"
-echo 'Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"';"' > "$CADDYFILE_PATH"
+echo 'weltgewebe.home.arpa { Content-Security-Policy "default-src '"'self'"'; script-src '"'self'"';"' > "$CADDYFILE_PATH"
+echo '}' >> "$CADDYFILE_PATH"
 run_test "Minified HTML with inline script and strict CSP fails" 1
 
-# Test 8: Multiple CSP lines, first strict, second allows unsafe-inline -> pass
+export CADDY_TARGET_SITE="weltgewebe.home.arpa"
+
+# Test 8: Target host strict, other host lenient -> FAIL
 echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
 cat <<EOF > "$CADDYFILE_PATH"
-Host1 {
+weltgewebe.home.arpa {
   Content-Security-Policy "default-src 'self'; script-src 'self';"
 }
-Host2 {
+other.host {
   Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline';"
 }
 EOF
-run_test "Multiple CSP lines, one valid -> passes" 0
+run_test "Target host strict, other host lenient -> FAIL" 1
+
+# Test 9: Target host lenient, other host strict -> PASS
+echo '<script>console.log("inline")</script>' > "$INDEX_HTML"
+cat <<EOF > "$CADDYFILE_PATH"
+other.host {
+  Content-Security-Policy "default-src 'self'; script-src 'self';"
+}
+weltgewebe.home.arpa {
+  Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline';"
+}
+EOF
+run_test "Target host lenient, other host strict -> PASS" 0
 
 echo "All tests passed!"
