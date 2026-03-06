@@ -14,5 +14,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Build Web App
+        run: |
+          cd apps/web
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: CSP contract check
-        run: scripts/preflight/csp_contract_static.sh
+        run: ROOT=. scripts/preflight/csp_contract_static.sh
