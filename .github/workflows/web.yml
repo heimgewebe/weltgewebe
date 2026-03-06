@@ -96,7 +96,7 @@ jobs:
 
       - name: Upload Playwright report (best-effort)
         if: always()
-        run: pnpm test:report || true
+        run: pnpm report || true
 
       - name: Upload Playwright report artifact
         if: always()
