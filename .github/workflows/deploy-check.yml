@@ -35,11 +35,11 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: pnpm-lock.yaml
 
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build Web App
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --dir apps/web install --frozen-lockfile
-          pnpm --dir apps/web build
+        run: pnpm --dir apps/web build
 
       - name: Run CSP contract guard
         run: |
