@@ -59,7 +59,7 @@
   }
 
   $: validEdges = (data.edges || []).filter(isEdge);
-  $: pointIds = new Set(markersData.map(p => p.id));
+  $: pointIds = markersData.reduce((acc, p) => acc.add(p.id), new Set<string>());
   $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
 
   let mapContainer: HTMLDivElement | null = null;
