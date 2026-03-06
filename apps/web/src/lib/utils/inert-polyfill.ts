@@ -12,7 +12,10 @@ const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 function toggleAriaHidden(element: Element, on: boolean) {
   if (on) {
     if (!previousSubtreeAriaHidden.has(element)) {
-      previousSubtreeAriaHidden.set(element, element.getAttribute("aria-hidden"));
+      previousSubtreeAriaHidden.set(
+        element,
+        element.getAttribute("aria-hidden"),
+      );
     }
     if (element.getAttribute("aria-hidden") !== "true") {
       element.setAttribute("aria-hidden", "true");
