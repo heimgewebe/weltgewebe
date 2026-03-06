@@ -33,13 +33,13 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Build Web App
         run: |
-          cd apps/web
           pnpm install --frozen-lockfile
-          pnpm build
+          pnpm --dir apps/web install --frozen-lockfile
+          pnpm --dir apps/web build
 
       - name: Run CSP contract guard
         run: |
