@@ -22,6 +22,9 @@ permissions:
 jobs:
   csp-contract-check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
 
@@ -33,15 +36,16 @@ jobs:
         with:
           node-version: 20
           cache: 'pnpm'
-          cache-dependency-path: pnpm-lock.yaml
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build Web App
-        run: pnpm --dir apps/web build
+        run: pnpm build
 
       - name: Run CSP contract guard
+        working-directory: .
         run: |
           ROOT=$GITHUB_WORKSPACE \
           CADDYFILE_PATH=infra/caddy/Caddyfile.heim \
