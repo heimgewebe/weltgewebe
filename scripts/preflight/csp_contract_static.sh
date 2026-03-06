@@ -38,8 +38,10 @@ fi
 INDEX_HTML="$ROOT/apps/web/build/index.html"
 
 if [[ ! -f "$INDEX_HTML" ]]; then
-  echo "csp_contract_static: No index.html found at $INDEX_HTML, skipping."
-  exit 0
+  echo "ERROR: csp_contract_static could not find index.html at $INDEX_HTML." >&2
+  echo "       This is a fail-closed check because REQUIRE_WEB_BUILD=1." >&2
+  echo "       (Note: runtime_contract.sh also enforces this file's existence)." >&2
+  exit 1
 fi
 
 # Detect inline script in HTML

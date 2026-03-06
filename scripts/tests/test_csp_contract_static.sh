@@ -40,10 +40,10 @@ export REQUIRE_WEB_BUILD=0
 run_test "REQUIRE_WEB_BUILD=0 skips check" 0
 export REQUIRE_WEB_BUILD=1
 
-# Test 2: index.html missing -> pass
+# Test 2: index.html missing when REQUIRE_WEB_BUILD=1 -> fail
 rm -f "$INDEX_HTML"
 touch "$CADDYFILE_PATH"
-run_test "Missing index.html skips check" 0
+run_test "Missing index.html with REQUIRE_WEB_BUILD=1 fails check" 1
 
 # Test 3: index.html has only external script, CSP lacks unsafe-inline -> pass
 echo '<script type="module" src="/app.js"></script>' > "$INDEX_HTML"
