@@ -9,46 +9,16 @@
 // oder bewusst sequentiell aktiviert werden.
 const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 
-function setSubtreeAriaHidden(root: Element, on: boolean) {
+function toggleAriaHidden(element: Element, on: boolean) {
   if (on) {
-    const descendants = root.querySelectorAll<HTMLElement>("*");
-    if (!previousSubtreeAriaHidden.has(root)) {
-      previousSubtreeAriaHidden.set(root, root.getAttribute("aria-hidden"));
+    if (!previousSubtreeAriaHidden.has(element)) {
+      previousSubtreeAriaHidden.set(element, element.getAttribute("aria-hidden"));
     }
-    if (root.getAttribute("aria-hidden") !== "true") {
-      root.setAttribute("aria-hidden", "true");
+    if (element.getAttribute("aria-hidden") !== "true") {
+      element.setAttribute("aria-hidden", "true");
     }
-
-    for (let i = 0; i < descendants.length; i++) {
-      const element = descendants[i];
-      if (!previousSubtreeAriaHidden.has(element)) {
-        previousSubtreeAriaHidden.set(
-          element,
-          element.getAttribute("aria-hidden"),
-        );
-      }
-      if (element.getAttribute("aria-hidden") !== "true") {
-        element.setAttribute("aria-hidden", "true");
-      }
-    }
-    return;
-  }
-
-  if (previousSubtreeAriaHidden.has(root)) {
-    const previous = previousSubtreeAriaHidden.get(root);
-    previousSubtreeAriaHidden.delete(root);
-
-    if (previous === null) {
-      root.removeAttribute("aria-hidden");
-    } else {
-      root.setAttribute("aria-hidden", previous as string);
-    }
-  }
-
-  const descendants = root.querySelectorAll<HTMLElement>("*");
-  for (let i = 0; i < descendants.length; i++) {
-    const element = descendants[i];
-    if (!previousSubtreeAriaHidden.has(element)) continue;
+  } else {
+    if (!previousSubtreeAriaHidden.has(element)) return;
 
     const previous = previousSubtreeAriaHidden.get(element);
     previousSubtreeAriaHidden.delete(element);
@@ -58,6 +28,15 @@ function setSubtreeAriaHidden(root: Element, on: boolean) {
     } else {
       element.setAttribute("aria-hidden", previous as string);
     }
+  }
+}
+
+function setSubtreeAriaHidden(root: Element, on: boolean) {
+  toggleAriaHidden(root, on);
+
+  const descendants = root.querySelectorAll<HTMLElement>("*");
+  for (let i = 0; i < descendants.length; i++) {
+    toggleAriaHidden(descendants[i], on);
   }
 }
 
