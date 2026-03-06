@@ -7,7 +7,17 @@ permissions:
   push:
     branches:
       - main
+    paths:
+      - 'apps/web/**'
+      - 'infra/caddy/**'
+      - 'scripts/preflight/**'
+      - '.github/workflows/deploy-check.yml'
   pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'infra/caddy/**'
+      - 'scripts/preflight/**'
+      - '.github/workflows/deploy-check.yml'
 
 jobs:
   csp-contract-check:
@@ -31,5 +41,9 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
 
-      - name: CSP contract check
-        run: ROOT=. scripts/preflight/csp_contract_static.sh
+      - name: Run CSP contract guard
+        run: |
+          ROOT=$GITHUB_WORKSPACE \
+          CADDYFILE_PATH=infra/caddy/Caddyfile.heim \
+          CADDY_TARGET_SITE=weltgewebe.home.arpa \
+          scripts/preflight/csp_contract_static.sh
