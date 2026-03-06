@@ -96,7 +96,12 @@ jobs:
 
       - name: Upload Playwright report (best-effort)
         if: always()
-        run: pnpm test:report || true
+        run: |
+          if [ -d "playwright-report" ]; then
+            pnpm test:report || true
+          else
+            echo "Kein Playwright-Report vorhanden (playwright-report/ fehlt)."
+          fi
 
       - name: Upload Playwright report artifact
         if: always()
