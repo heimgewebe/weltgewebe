@@ -4,6 +4,29 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-03-05 - Fix CSP for SvelteKit Inline Bootstrap
+
+**Ursprung / Referenz:** Fix für Whitepage (CSP-Problem)
+
+**Geänderte Dateien:**
+
+- `infra/caddy/Caddyfile`
+
+**Beschreibung:**
+
+Die Content-Security-Policy (CSP) in Caddy wurde angepasst, um SvelteKit's Inline-Bootstrap-Script zu
+erlauben. Der Direktive `script-src` wurde `'unsafe-inline'` hinzugefügt, da andernfalls das
+Svelte-Frontend mit einer leeren Seite (Whitepage) blockiert wurde.
+
+Ein Preflight-Guard (`csp_contract_static.sh`) wurde ebenfalls dem Deployment hinzugefügt, um sicherzustellen, dass
+Inline-Scripts zukünftig nicht versehentlich wieder durch die CSP blockiert werden.
+
+**Risiko:** Mittel. Die CSP ist weniger streng (`'unsafe-inline'`), was XSS-Risiken potenziell erhöht, jedoch
+im aktuellen Kontext (Heimnetz, funktionierendes UI priorisiert) als pragmatische Lösung akzeptiert wurde.
+Hardening via Nonce/Hash sollte später folgen.
+
+---
+
 ## 2026-02-21 - Fix: SMTP Env Injection via `env_file`
 
 **Ursprung / Referenz:** Fix für AUTH_PUBLIC_LOGIN (Deployment-Drift)

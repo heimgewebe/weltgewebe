@@ -465,6 +465,39 @@ else
   echo "WARNING: Preflight script scripts/preflight/runtime_contract.sh not found or not executable. Skipping." >&2
 fi
 
+echo ">> Preflight: Validating static CSP contract..."
+if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
+  export ROOT="$REPO_DIR"
+
+  # Set the target site for the guard
+  export CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
+
+  # Target Caddyfile detection
+  export CADDYFILE_PATH=""
+  if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then
+     export CADDYFILE_PATH="$EDGE_CADDYFILE"
+  elif [[ -f "/opt/heimgewebe/edge/Caddyfile" ]]; then
+     export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
+  elif [[ -f "$REPO_DIR/Caddyfile" ]]; then
+     export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
+  elif [[ -f "$REPO_DIR/infra/caddy/Caddyfile.heim" ]]; then
+     export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
+  fi
+
+  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
+    export REQUIRE_WEB_BUILD=0
+  else
+    export REQUIRE_WEB_BUILD=1
+  fi
+
+  if ! bash scripts/preflight/csp_contract_static.sh; then
+    echo "ERROR: Static CSP contract validation failed. Aborting deploy." >&2
+    exit 1
+  fi
+else
+  echo "WARNING: Preflight script scripts/preflight/csp_contract_static.sh not found or not executable. Skipping." >&2
+fi
+
 echo ">> Deploying..."
 CMD_BASE=("docker" "compose" "${BASE_ARGS[@]}" "up" "-d" "--remove-orphans")
 
