@@ -98,7 +98,8 @@ jobs:
         if: always()
         run: |
           if [ -d "playwright-report" ]; then
-            pnpm test:report || true
+            echo "Playwright-Report gefunden. Inhaltsübersicht:"
+            ls -R playwright-report || true
           else
             echo "Kein Playwright-Report vorhanden (playwright-report/ fehlt)."
           fi
