@@ -20,12 +20,12 @@ services:
       AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
       APP_BASE_URL: ${APP_BASE_URL:-}
       AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
     depends_on:
       db:
         condition: service_healthy
       nats:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test:
         - CMD-SHELL
@@ -60,9 +60,16 @@ services:
     image: nats:2.10
     command:
       - -js
+      - -m
+      - "8222"
     restart: always
     volumes:
       - nats_js:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   caddy:
     build:

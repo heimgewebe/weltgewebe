@@ -24,6 +24,9 @@ als vollwertiger Stack mit NATS/JetStream betrieben werden") wurde der `nats`-Se
 `compose.prod.yml` integriert. Die API bezieht `NATS_URL` nun per Default.
 Redundante Deklarationen in der `compose.prod.override.yml` wurden bereinigt. Der Deployment-Pfad (`weltgewebe-up`)
 startet somit den vollständigen, in sich konsistenten Stack und verifiziert NATS implizit mit über den API-Health-Check.
+Zudem wurde die Startup-Robustheit verbessert: NATS verfügt nun über einen eigenen HTTP-Healthcheck auf Port 8222,
+und die API wartet via `condition: service_healthy` explizit auf die Readiness von NATS.
+Die `NATS_URL` ist zudem für Flexibilität overridefähig.
 
 **Risiko:** Niedrig. (Auflösung von Drift / Konsistenzherstellung).
 
