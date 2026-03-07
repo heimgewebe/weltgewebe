@@ -20,9 +20,12 @@ services:
       AUTH_PUBLIC_LOGIN: ${AUTH_PUBLIC_LOGIN:-0}
       APP_BASE_URL: ${APP_BASE_URL:-}
       AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
+      NATS_URL: nats://nats:4222
     depends_on:
       db:
         condition: service_healthy
+      nats:
+        condition: service_started
     healthcheck:
       test:
         - CMD-SHELL
@@ -53,6 +56,14 @@ services:
       timeout: 3s
       retries: 5
 
+  nats:
+    image: nats:2.10
+    command:
+      - -js
+    restart: always
+    volumes:
+      - nats_js:/data
+
   caddy:
     build:
       context: ../caddy
@@ -78,3 +89,4 @@ volumes:
   caddy_data:
   caddy_config:
   gewebe_fs_data:
+  nats_js:
