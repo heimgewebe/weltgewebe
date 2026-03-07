@@ -16,9 +16,14 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 **Beschreibung:**
 
 Die Infrastruktur-Konfiguration wies einen Drift bezüglich des Message Brokers NATS auf:
-Während Dokumentation und API-Health-Checks (bei Konfiguration von `NATS_URL`) bereits von NATS als integralem Bestandteil ausgingen und der Service temporär nur über Overrides bereitgestellt wurde, fehlte er im primären Produktions-Compose-File.
-Zur Wiederherstellung der kanonischen Deckungsgleichheit (gemäß der Entscheidung: "Weltgewebe auf dem Heimserver soll als vollwertiger Stack mit NATS/JetStream betrieben werden") wurde der `nats`-Service nun wieder fest in die `compose.prod.yml` integriert. Die API bezieht `NATS_URL` nun per Default.
-Redundante Deklarationen in der `compose.prod.override.yml` wurden bereinigt. Der Deployment-Pfad (`weltgewebe-up`) startet somit den vollständigen, in sich konsistenten Stack und verifiziert NATS implizit mit über den API-Health-Check.
+Während Dokumentation und API-Health-Checks (bei Konfiguration von `NATS_URL`) bereits von NATS als integralem
+Bestandteil ausgingen und der Service temporär nur über Overrides bereitgestellt wurde, fehlte er im primären
+Produktions-Compose-File.
+Zur Wiederherstellung der kanonischen Deckungsgleichheit (gemäß der Entscheidung: "Weltgewebe auf dem Heimserver soll
+als vollwertiger Stack mit NATS/JetStream betrieben werden") wurde der `nats`-Service nun wieder fest in die
+`compose.prod.yml` integriert. Die API bezieht `NATS_URL` nun per Default.
+Redundante Deklarationen in der `compose.prod.override.yml` wurden bereinigt. Der Deployment-Pfad (`weltgewebe-up`)
+startet somit den vollständigen, in sich konsistenten Stack und verifiziert NATS implizit mit über den API-Health-Check.
 
 **Risiko:** Niedrig. (Auflösung von Drift / Konsistenzherstellung).
 
