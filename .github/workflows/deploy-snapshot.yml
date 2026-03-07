@@ -14,7 +14,7 @@ jobs:
 
       - name: Run Snapshot (Dry Mode)
         run: |
-          bash scripts/wgx-deploy-snapshot.sh
+          bash scripts/deploy-snapshot.sh
         env:
           SNAPSHOT_MODE: dry
 
