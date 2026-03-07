@@ -96,8 +96,13 @@ jobs:
 
       - name: Upload Playwright report (best-effort)
         if: always()
-        run: pnpm test:report || true
-
+        run: |
+          if [ -d "playwright-report" ]; then
+            echo "Playwright report directory contents:"
+            ls -R playwright-report || true
+          else
+            echo "No Playwright report directory found at apps/web/playwright-report"
+          fi
       - name: Upload Playwright report artifact
         if: always()
         uses: actions/upload-artifact@v4

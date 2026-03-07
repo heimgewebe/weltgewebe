@@ -26,6 +26,7 @@
     "pretest": "pnpm build --mode test",
     "test": "playwright test",
     "test:report": "playwright show-report",
+    "pretest:ci": "pnpm build --mode test",
     "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
@@ -49,7 +50,7 @@
     "prettier": "3.3.3",
     "prettier-plugin-svelte": "3.2.6",
     "rimraf": "5",
-    "svelte": "^4.2.19",
+    "svelte": "^5.53.5",
     "svelte-check": "^4.3.2",
     "typescript": "5.9.2",
     "vite": "^5.4.10"
