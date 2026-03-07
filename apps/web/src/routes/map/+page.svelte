@@ -30,20 +30,24 @@
     modules: n.modules
   })) satisfies RenderableMapPoint[];
 
-  $: accountsData = (data.accounts || []).reduce<RenderableMapPoint[]>((acc, a) => {
-    if (a.public_pos) {
-      acc.push({
-        id: a.id,
-        title: a.title,
-        lat: a.public_pos.lat,
-        lon: a.public_pos.lon,
-        summary: a.summary,
-        type: a.type, // Pass through the domain type (e.g., 'garnrolle')
-        modules: a.modules
-      });
+  let accountsData: RenderableMapPoint[] = [];
+  $: {
+    const nextAccountsData: RenderableMapPoint[] = [];
+    for (const a of data.accounts || []) {
+      if (a.public_pos) {
+        nextAccountsData.push({
+          id: a.id,
+          title: a.title,
+          lat: a.public_pos.lat,
+          lon: a.public_pos.lon,
+          summary: a.summary,
+          type: a.type, // Pass through the domain type (e.g., 'garnrolle')
+          modules: a.modules
+        });
+      }
     }
-    return acc;
-  }, []);
+    accountsData = nextAccountsData;
+  }
 
   $: markersData = [...nodesData, ...accountsData];
 
