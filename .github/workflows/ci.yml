@@ -272,10 +272,6 @@ jobs:
           PLAYWRIGHT_HTML_REPORT: playwright-report
         run: pnpm test:ci
 
-      - name: Dump preview log on failure
-        if: ${{ failure() }}
-        run: cat /tmp/preview.log || true
-
       - name: Upload Playwright report
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

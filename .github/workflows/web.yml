@@ -98,12 +98,11 @@ jobs:
         if: always()
         run: |
           if [ -d "playwright-report" ]; then
-            echo "Playwright-Report gefunden. Inhaltsübersicht:"
+            echo "Playwright report directory contents:"
             ls -R playwright-report || true
           else
-            echo "Kein Playwright-Report vorhanden (playwright-report/ fehlt)."
+            echo "No Playwright report directory found at apps/web/playwright-report"
           fi
-
       - name: Upload Playwright report artifact
         if: always()
         uses: actions/upload-artifact@v4
