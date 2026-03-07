@@ -1,5 +1,5 @@
 #!/bin/bash
 set -e
-pnpm check
-pnpm lint
-pnpm test
+pnpm --dir apps/web check
+pnpm --dir apps/web lint
+pnpm --dir apps/web test
