@@ -107,8 +107,6 @@ async fn test_open_registration_flow_auto_provisions_unknown_email() -> Result<(
     assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
 
     // CRITICAL ASSERTION:
-    // With current implementation (pre-fix), this should FAIL because account is NOT created.
-    // After fix, this should PASS.
     {
         let accounts = state.accounts.read().await;
         let found = accounts
