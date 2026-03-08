@@ -296,8 +296,15 @@ if [[ "$DO_PULL" == "1" ]]; then
       exit 1
   fi
 
+  # Git-State Analysis defaults
+  IS_DIRTY=0
   if [[ -n "$(git status --porcelain)" ]]; then
-      echo "ERROR: Local changes would block fast-forward pull."
+      IS_DIRTY=1
+  fi
+
+  if [[ "$IS_DIRTY" == "1" ]]; then
+      echo "ERROR: Dirty worktree detected."
+      echo "Local changes would block fast-forward pull."
       echo "Commit, stash, or revert your changes first."
       exit 1
   fi
@@ -312,8 +319,31 @@ if [[ "$DO_PULL" == "1" ]]; then
 
   # Check for detached HEAD
   if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
-    echo "WARNING: Detached HEAD detected. Fetch done, but skipping pull."
-    echo "         To update, checkout a branch (e.g. 'main')."
+    HEAD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+    # Safe Git-Autofix Check
+    # Conditions: detached HEAD (already here), no conflicts (already checked), clean worktree (IS_DIRTY=0)
+    if [[ "${WELTGEWEBE_AUTOFIX_GIT:-1}" == "1" && "$IS_DIRTY" == "0" && -z "$UNMERGED" ]]; then
+        echo "INFO: Detached HEAD detected."
+        echo "INFO: Working tree clean."
+        echo "INFO: Switching to main and updating fast-forward..."
+
+        if git switch main >/dev/null 2>&1; then
+            if ! git pull --ff-only "$REMOTE" main; then
+                echo "ERROR: Git pull failed (fast-forward only) after switching to main."
+                echo "       Please resolve manually or use: $0 --no-pull"
+                exit 1
+            fi
+        else
+            echo "ERROR: Failed to switch to main."
+            exit 1
+        fi
+    else
+        echo "WARNING: Detached HEAD detected."
+        echo "HEAD: $HEAD_COMMIT"
+        echo "Pull skipped."
+        echo "Deploy may not use the latest main branch."
+    fi
   else
     echo ">> Git Pull (fast-forward)..."
     if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
@@ -462,6 +492,107 @@ if [[ -d "apps/web" ]]; then
   fi
 fi
 
+# --- Failure Bundle Logic ---
+generate_failure_bundle() {
+  local error_msg="$1"
+  local timestamp=$(date +"%Y%m%d-%H%M")
+  local bundle_dir=".ops/failures/${timestamp}"
+
+  mkdir -p "$bundle_dir"
+
+  # 1. git_state.txt
+  {
+    local branch
+    branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || echo "DETACHED")
+    local head_commit
+    head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local remote_main
+    remote_main=$(git rev-parse --short refs/remotes/origin/main 2>/dev/null || echo "unknown")
+
+    echo "branch: $branch"
+    echo "head: $head_commit"
+    echo "remote main: $remote_main"
+    if [[ "$DO_PULL" == "0" ]]; then
+       echo "pull skipped: yes (--no-pull)"
+    else
+       echo "pull skipped: no"
+    fi
+  } > "${bundle_dir}/git_state.txt"
+
+  # 2. compose_ps.txt
+  docker compose "${BASE_ARGS[@]}" ps > "${bundle_dir}/compose_ps.txt" 2>&1 || true
+
+  # 3. unhealthy_containers.txt & 4. / 5. details
+  local ps_format
+  ps_format=$(docker compose "${BASE_ARGS[@]}" ps --format '{{.Name}} {{.State}} {{.Health}}' 2>/dev/null || true)
+
+  local unhealthy_containers=()
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    local name
+    name=$(echo "$line" | awk '{print $1}')
+    local state
+    state=$(echo "$line" | awk '{print $2}')
+    local health
+    health=$(echo "$line" | awk '{print $3}')
+
+    if [[ "$state" == "exited" || "$health" == "unhealthy" || "$state" == "dead" || "$state" == "created" ]]; then
+       unhealthy_containers+=("$name")
+    fi
+  done <<< "$ps_format"
+
+  if [[ ${#unhealthy_containers[@]} -gt 0 ]]; then
+      for c in "${unhealthy_containers[@]}"; do
+          echo "$c" >> "${bundle_dir}/unhealthy_containers.txt"
+          docker inspect --format '{{json .State.Health}}' "$c" > "${bundle_dir}/health_details_${c}.json" 2>/dev/null || true
+          docker logs --tail=100 "$c" > "${bundle_dir}/container_logs_${c}.log" 2>&1 || true
+      done
+  else
+      echo "No specific unhealthy/exited containers detected." > "${bundle_dir}/unhealthy_containers.txt"
+  fi
+
+  # 6. compose_config_resolved.yml
+  docker compose "${BASE_ARGS[@]}" config > "${bundle_dir}/compose_config_resolved.yml" 2>&1 || true
+
+  # Print failure summary (exact requested format)
+  echo
+  echo "ERROR: Deploy failed."
+  if [[ -n "$error_msg" ]]; then
+      echo "$error_msg"
+  fi
+  echo
+  echo "Git state:"
+  cat "${bundle_dir}/git_state.txt"
+  echo
+  echo "Compose state:"
+
+  # Compose state summary
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    local srv_name
+    srv_name=$(echo "$line" | awk '{print $1}')
+    local srv
+    srv=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service"}}' "$srv_name" 2>/dev/null || echo "unknown")
+    local state
+    state=$(echo "$line" | awk '{print $2}')
+    local health
+    health=$(echo "$line" | awk '{print $3}')
+
+    local display_state="$state"
+    if [[ "$health" == "healthy" || "$health" == "unhealthy" ]]; then
+        display_state="$health"
+    elif [[ -z "$health" || "$health" == "<nil>" || "$health" == "starting" ]]; then
+        display_state="$state"
+    fi
+    echo "${srv}: ${display_state}"
+  done <<< "$ps_format"
+
+  echo
+  echo "Diagnostics saved:"
+  echo "${bundle_dir}/"
+  echo
+}
+
 # 7. Deploy
 echo
 echo
@@ -565,9 +696,7 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         echo "Running: ${CMD_RETRY[*]}"
         "${CMD_RETRY[@]}"
      else
-        echo
-        echo "ERROR: Deployment failed."
-        echo "$ERR_CONTENT"
+        generate_failure_bundle "Container startup failed. $ERR_CONTENT"
         exit 1
      fi
   else
@@ -577,7 +706,16 @@ else
   # Caddy disabled or not present
   CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
   echo "Running: ${CMD[*]}"
-  "${CMD[@]}"
+
+  ERR_FILE=$(mktemp)
+  if ! "${CMD[@]}" 2> "$ERR_FILE"; then
+     ERR_CONTENT=$(cat "$ERR_FILE")
+     rm -f "$ERR_FILE"
+     generate_failure_bundle "Container startup failed. $ERR_CONTENT"
+     exit 1
+  else
+     rm -f "$ERR_FILE"
+  fi
 fi
 
 # 7. Health Check
@@ -721,25 +859,14 @@ done
 
 if [[ "$HEALTH_OK" != "1" ]]; then
     if [[ "$FATAL_REASON" == "missing_healthcheck" ]]; then
-        echo "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."
-        echo "Tip: Add HEALTHCHECK or set HEALTH_URL."
+        generate_failure_bundle "Health check aborted: missing Docker HEALTHCHECK for 'api'. Tip: Add HEALTHCHECK or set HEALTH_URL."
         exit 1
     fi
 
-    echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
-    echo "Strategy: $CHOSEN_STRATEGY"
-    [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
+    err_msg="Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds. Strategy: $CHOSEN_STRATEGY"
+    [[ -n "${HEALTH_URL:-}" ]] && err_msg="$err_msg URL: $HEALTH_URL"
 
-    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
-        if [[ -n "${API_CID:-}" ]]; then
-            echo "Docker Health Log (last 3 entries):"
-            docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
-        else
-            echo "Container 'api' not found, skipping log."
-        fi
-    fi
-
-    echo "Tip: Check 'docker compose ps' and logs."
+    generate_failure_bundle "$err_msg"
     exit 1
 fi
 
@@ -772,16 +899,12 @@ if [[ "$ALIAS_FOUND" == "1" ]]; then
         fi
     fi
 else
-    echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
-    echo "       This violates the integration contract."
-    echo "       Found aliases:"
-    docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null || echo "       (docker inspect failed)"
-    echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
-
     # Contract is strict. Fail unless explicitly opted out.
     if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
         echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
     else
+        msg="DNS alias weltgewebe-api missing in container metadata. This violates the integration contract."
+        generate_failure_bundle "$msg"
         exit 1
     fi
 fi
