@@ -508,6 +508,7 @@ fi
 # --- Failure Bundle Logic ---
 generate_failure_bundle() {
   local error_msg="$1"
+  local err_log_file="${2:-}"
   local timestamp=$(date +"%Y%m%d-%H%M")
   local bundle_dir=".ops/failures/${timestamp}"
 
@@ -566,13 +567,25 @@ generate_failure_bundle() {
       echo "No specific unhealthy/exited containers detected." > "${bundle_dir}/unhealthy_containers.txt"
   fi
 
-  # 6. compose_config_resolved.yml
-  docker compose "${BASE_ARGS[@]}" config > "${bundle_dir}/compose_config_resolved.yml" 2>&1 || true
+  # 6. Compose Configuration Source
+  {
+    echo "Base Compose File: $BASE_COMPOSE_FILE"
+    if [[ -f "$OVERRIDE_FILE" ]]; then
+        echo "Override File: $OVERRIDE_FILE"
+    else
+        echo "Override File: None"
+    fi
+  } > "${bundle_dir}/compose_files.txt"
 
   # 7. api_network_aliases.txt
   local api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
   if [[ -n "$api_cid" ]]; then
       docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2>/dev/null || true
+  fi
+
+  # 8. docker compose up stderr log (if provided)
+  if [[ -n "$err_log_file" && -f "$err_log_file" ]]; then
+      cp "$err_log_file" "${bundle_dir}/compose_up.stderr.log"
   fi
 
   # Print failure summary (exact requested format)
@@ -704,9 +717,9 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
   echo "Running: ${CMD_BASE[*]}"
 
   ERR_FILE=$(mktemp)
-  if ! "${CMD_BASE[@]}" 2> "$ERR_FILE"; then
+  # Capture all output (stdout and stderr) to prevent log flooding, but retain it for the failure bundle
+  if ! "${CMD_BASE[@]}" > "$ERR_FILE" 2>&1; then
      ERR_CONTENT=$(cat "$ERR_FILE")
-     rm -f "$ERR_FILE"
 
      # Check for bind errors (port conflict)
      if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
@@ -715,14 +728,19 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         echo "Retrying without Caddy (--scale caddy=0)..."
         CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
         echo "Running: ${CMD_RETRY[*]}"
-        if ! "${CMD_RETRY[@]}"; then
-            generate_failure_bundle "Container startup failed."
+
+        RETRY_ERR_FILE=$(mktemp)
+        if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
+            generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
+            rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
             exit 1
         fi
+        rm -f "$RETRY_ERR_FILE"
      else
         # We don't want to spam stdout, so we just use the simple message
-        # The full log is inherently in compose_ps or the container logs bundle
-        generate_failure_bundle "Container startup failed."
+        # The full log is safely stored in the bundle via $ERR_FILE
+        generate_failure_bundle "Container startup failed." "$ERR_FILE"
+        rm -f "$ERR_FILE"
         exit 1
      fi
   else
@@ -733,9 +751,13 @@ else
   CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
   echo "Running: ${CMD[*]}"
 
-  if ! "${CMD[@]}"; then
-     generate_failure_bundle "Container startup failed."
+  ERR_FILE=$(mktemp)
+  if ! "${CMD[@]}" > "$ERR_FILE" 2>&1; then
+     generate_failure_bundle "Container startup failed." "$ERR_FILE"
+     rm -f "$ERR_FILE"
      exit 1
+  else
+     rm -f "$ERR_FILE"
   fi
 fi
 
