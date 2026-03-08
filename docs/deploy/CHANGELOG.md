@@ -4,6 +4,22 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-03-08 - NATS Healthcheck & JetStream-Persistenz korrigiert
+
+**Ursprung / Referenz:** Heimserver-Entscheidung (vollwertiger Stack)
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.yml`
+
+**Beschreibung:**
+
+Der NATS-Healthcheck wurde korrigiert, da das bisherige `nats:2.10`-Image als Scratch-Image keine Shell (`sh`) oder Utilities (`wget`) enthielt, was dazu führte, dass der `CMD-SHELL` Healthcheck immer fehlschlug.
+Zur Lösung wurde auf `nats:2.10-alpine` umgestellt und ein strikt image-kompatibler Exec-Form-Healthcheck (`["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]`) implementiert.
+Zusätzlich wurde die JetStream-Speicherpfad-Konfiguration (`-sd /data`) zum `command` hinzugefügt, sodass persistierte Daten nun korrekt in das gemountete Docker-Volume `nats_js:/data` fließen und nicht im ungemounteten `/tmp` verschwinden.
+
+---
+
 ## 2026-03-07 - NATS wieder als kanonischer Stack-Bestandteil integriert
 
 **Ursprung / Referenz:** Heimserver-Entscheidung (vollwertiger Stack)
