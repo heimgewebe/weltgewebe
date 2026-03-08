@@ -281,6 +281,12 @@ fi
 
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
+# Git State Tracking Variables
+GIT_FETCH_ATTEMPTED="no"
+GIT_PULL_ATTEMPTED="no"
+GIT_PULL_SKIPPED_REASON=""
+GIT_AUTOFIX_APPLIED="no"
+
 # 2. Git Operations (Prioritized if PULL enabled)
 if [[ "$DO_PULL" == "1" ]]; then
   echo
@@ -296,13 +302,21 @@ if [[ "$DO_PULL" == "1" ]]; then
       exit 1
   fi
 
+  # Git-State Analysis defaults
+  IS_DIRTY=0
   if [[ -n "$(git status --porcelain)" ]]; then
-      echo "ERROR: Local changes would block fast-forward pull."
+      IS_DIRTY=1
+  fi
+
+  if [[ "$IS_DIRTY" == "1" ]]; then
+      echo "ERROR: Dirty worktree detected."
+      echo "Local changes would block fast-forward pull."
       echo "Commit, stash, or revert your changes first."
       exit 1
   fi
 
   echo ">> Git Fetch..."
+  GIT_FETCH_ATTEMPTED="yes"
 
   if ! git fetch "$REMOTE" --prune; then
     echo "ERROR: Git fetch failed."
@@ -312,10 +326,39 @@ if [[ "$DO_PULL" == "1" ]]; then
 
   # Check for detached HEAD
   if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
-    echo "WARNING: Detached HEAD detected. Fetch done, but skipping pull."
-    echo "         To update, checkout a branch (e.g. 'main')."
+    HEAD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+
+    # Safe Git-Autofix Check
+    # Conditions: detached HEAD (already here), no conflicts (locally checked), clean worktree (IS_DIRTY=0)
+    UNMERGED=$(git diff --name-only --diff-filter=U || true)
+    if [[ "${WELTGEWEBE_AUTOFIX_GIT:-1}" == "1" && "$IS_DIRTY" == "0" && -z "$UNMERGED" ]]; then
+        echo "INFO: Detached HEAD detected."
+        echo "INFO: Previous detached HEAD: $HEAD_COMMIT"
+        echo "INFO: Working tree clean."
+        echo "INFO: Switching to main and updating fast-forward..."
+
+        if git switch main >/dev/null 2>&1; then
+            GIT_PULL_ATTEMPTED="yes"
+            if ! git pull --ff-only "$REMOTE" main; then
+                echo "ERROR: Git pull failed (fast-forward only) after switching to main."
+                echo "       Please resolve manually or use: $0 --no-pull"
+                exit 1
+            fi
+            GIT_AUTOFIX_APPLIED="yes"
+        else
+            echo "ERROR: Failed to switch to main."
+            exit 1
+        fi
+    else
+        echo "WARNING: Detached HEAD detected."
+        echo "HEAD: $HEAD_COMMIT"
+        echo "Pull skipped."
+        echo "Deploy may not use the latest main branch."
+        GIT_PULL_SKIPPED_REASON="detached HEAD without autofix"
+    fi
   else
     echo ">> Git Pull (fast-forward)..."
+    GIT_PULL_ATTEMPTED="yes"
     if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
         echo "ERROR: Git pull failed (fast-forward only)."
         echo "       Please resolve manually or use: $0 --no-pull"
@@ -325,6 +368,7 @@ if [[ "$DO_PULL" == "1" ]]; then
 else
   echo
   echo ">> Git: Skipped (--no-pull)"
+  GIT_PULL_SKIPPED_REASON="--no-pull"
 fi
 
 # 3. Preflight: Docker Compose Config (Strict)
@@ -462,6 +506,128 @@ if [[ -d "apps/web" ]]; then
   fi
 fi
 
+# --- Failure Bundle Logic ---
+generate_failure_bundle() {
+  local error_msg="$1"
+  local err_log_file="${2:-}"
+  local timestamp=$(date +"%Y%m%d-%H%M%S")
+  local bundle_dir=".ops/failures/${timestamp}"
+
+  mkdir -p "$bundle_dir"
+
+  # 1. git_state.txt
+  {
+    local branch
+    branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || echo "DETACHED")
+    local head_commit
+    head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    local remote_main
+    remote_main=$(git rev-parse --short "refs/remotes/${REMOTE}/main" 2>/dev/null || echo "unknown")
+
+    echo "branch: $branch"
+    echo "head: $head_commit"
+    echo "remote main: $remote_main"
+    echo "fetch attempted: $GIT_FETCH_ATTEMPTED"
+    echo "pull attempted: $GIT_PULL_ATTEMPTED"
+
+    if [[ -n "$GIT_PULL_SKIPPED_REASON" ]]; then
+       echo "pull skipped reason: $GIT_PULL_SKIPPED_REASON"
+    fi
+    echo "autofix applied: $GIT_AUTOFIX_APPLIED"
+  } > "${bundle_dir}/git_state.txt"
+
+  # 2. compose_ps.txt
+  docker compose "${BASE_ARGS[@]}" ps > "${bundle_dir}/compose_ps.txt" 2>&1 || true
+
+  # 3. unhealthy_containers.txt & 4. / 5. details
+  local ps_format
+  ps_format=$(docker compose "${BASE_ARGS[@]}" ps --format '{{.Name}} {{.State}} {{.Health}}' 2>/dev/null || true)
+
+  local unhealthy_containers=()
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    local name
+    name=$(echo "$line" | awk '{print $1}')
+    local state
+    state=$(echo "$line" | awk '{print $2}')
+    local health
+    health=$(echo "$line" | awk '{print $3}')
+
+    if [[ "$state" == "exited" || "$health" == "unhealthy" || "$state" == "dead" || "$state" == "created" ]]; then
+       unhealthy_containers+=("$name")
+    fi
+  done <<< "$ps_format"
+
+  if [[ ${#unhealthy_containers[@]} -gt 0 ]]; then
+      for c in "${unhealthy_containers[@]}"; do
+          echo "$c" >> "${bundle_dir}/unhealthy_containers.txt"
+          docker inspect --format '{{json .State.Health}}' "$c" > "${bundle_dir}/health_details_${c}.json" 2>/dev/null || true
+          docker logs --tail=100 "$c" > "${bundle_dir}/container_logs_${c}.log" 2>&1 || true
+      done
+  else
+      echo "No specific unhealthy/exited containers detected." > "${bundle_dir}/unhealthy_containers.txt"
+  fi
+
+  # 6. Compose Configuration Source
+  {
+    echo "Base Compose File: $BASE_COMPOSE_FILE"
+    if [[ -f "$OVERRIDE_FILE" ]]; then
+        echo "Override File: $OVERRIDE_FILE"
+    else
+        echo "Override File: None"
+    fi
+  } > "${bundle_dir}/compose_files.txt"
+
+  # 7. api_network_aliases.txt
+  local api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+  if [[ -n "$api_cid" ]]; then
+      docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2>/dev/null || true
+  fi
+
+  # 8. docker compose up stderr log (if provided)
+  if [[ -n "$err_log_file" && -f "$err_log_file" ]]; then
+      cp "$err_log_file" "${bundle_dir}/compose_up.stderr.log"
+  fi
+
+  # Print failure summary (exact requested format)
+  echo
+  echo "ERROR: Deploy failed."
+  if [[ -n "$error_msg" ]]; then
+      echo "$error_msg"
+  fi
+  echo
+  echo "Git state:"
+  cat "${bundle_dir}/git_state.txt"
+  echo
+  echo "Compose state:"
+
+  # Compose state summary
+  while IFS= read -r line; do
+    if [[ -z "$line" ]]; then continue; fi
+    local srv_name
+    srv_name=$(echo "$line" | awk '{print $1}')
+    local srv
+    srv=$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service"}}' "$srv_name" 2>/dev/null || echo "unknown")
+    local state
+    state=$(echo "$line" | awk '{print $2}')
+    local health
+    health=$(echo "$line" | awk '{print $3}')
+
+    local display_state="$state"
+    if [[ "$health" == "healthy" || "$health" == "unhealthy" ]]; then
+        display_state="$health"
+    elif [[ -z "$health" || "$health" == "<nil>" || "$health" == "starting" ]]; then
+        display_state="$state"
+    fi
+    echo "${srv}: ${display_state}"
+  done <<< "$ps_format"
+
+  echo
+  echo "Diagnostics saved:"
+  echo "${bundle_dir}/"
+  echo
+}
+
 # 7. Deploy
 echo
 echo
@@ -552,9 +718,9 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
   echo "Running: ${CMD_BASE[*]}"
 
   ERR_FILE=$(mktemp)
-  if ! "${CMD_BASE[@]}" 2> "$ERR_FILE"; then
+  # Capture all output (stdout and stderr) to prevent log flooding, but retain it for the failure bundle
+  if ! "${CMD_BASE[@]}" > "$ERR_FILE" 2>&1; then
      ERR_CONTENT=$(cat "$ERR_FILE")
-     rm -f "$ERR_FILE"
 
      # Check for bind errors (port conflict)
      if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
@@ -563,11 +729,19 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         echo "Retrying without Caddy (--scale caddy=0)..."
         CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
         echo "Running: ${CMD_RETRY[*]}"
-        "${CMD_RETRY[@]}"
+
+        RETRY_ERR_FILE=$(mktemp)
+        if ! "${CMD_RETRY[@]}" > "$RETRY_ERR_FILE" 2>&1; then
+            generate_failure_bundle "Container startup failed (retry without Caddy)." "$RETRY_ERR_FILE"
+            rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
+            exit 1
+        fi
+        rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
      else
-        echo
-        echo "ERROR: Deployment failed."
-        echo "$ERR_CONTENT"
+        # We don't want to spam stdout, so we just use the simple message
+        # The full log is safely stored in the bundle via $ERR_FILE
+        generate_failure_bundle "Container startup failed." "$ERR_FILE"
+        rm -f "$ERR_FILE"
         exit 1
      fi
   else
@@ -577,7 +751,15 @@ else
   # Caddy disabled or not present
   CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
   echo "Running: ${CMD[*]}"
-  "${CMD[@]}"
+
+  ERR_FILE=$(mktemp)
+  if ! "${CMD[@]}" > "$ERR_FILE" 2>&1; then
+     generate_failure_bundle "Container startup failed." "$ERR_FILE"
+     rm -f "$ERR_FILE"
+     exit 1
+  else
+     rm -f "$ERR_FILE"
+  fi
 fi
 
 # 7. Health Check
@@ -721,25 +903,14 @@ done
 
 if [[ "$HEALTH_OK" != "1" ]]; then
     if [[ "$FATAL_REASON" == "missing_healthcheck" ]]; then
-        echo "ERROR: Health check aborted: missing Docker HEALTHCHECK for 'api'."
-        echo "Tip: Add HEALTHCHECK or set HEALTH_URL."
+        generate_failure_bundle "Health check aborted: missing Docker HEALTHCHECK for 'api'. Tip: Add HEALTHCHECK or set HEALTH_URL."
         exit 1
     fi
 
-    echo "ERROR: Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds."
-    echo "Strategy: $CHOSEN_STRATEGY"
-    [[ -n "${HEALTH_URL:-}" ]] && echo "URL: $HEALTH_URL"
+    err_msg="Health check failed after $((MAX_RETRIES * SLEEP_SEC)) seconds. Strategy: $CHOSEN_STRATEGY"
+    [[ -n "${HEALTH_URL:-}" ]] && err_msg="$err_msg URL: $HEALTH_URL"
 
-    if [[ "$CHOSEN_STRATEGY" == "Docker Native Health" ]]; then
-        if [[ -n "${API_CID:-}" ]]; then
-            echo "Docker Health Log (last 3 entries):"
-            docker inspect --format '{{json .State.Health.Log}}' "$API_CID" 2>/dev/null | grep -o '{[^}]*}' | tail -n 3 || true
-        else
-            echo "Container 'api' not found, skipping log."
-        fi
-    fi
-
-    echo "Tip: Check 'docker compose ps' and logs."
+    generate_failure_bundle "$err_msg"
     exit 1
 fi
 
@@ -772,6 +943,7 @@ if [[ "$ALIAS_FOUND" == "1" ]]; then
         fi
     fi
 else
+    # Output detailed diagnostics to stdout as requested, then generate failure bundle
     echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
     echo "       This violates the integration contract."
     echo "       Found aliases:"
@@ -782,6 +954,8 @@ else
     if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
         echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
     else
+        msg="DNS alias weltgewebe-api missing in container metadata. This violates the integration contract."
+        generate_failure_bundle "$msg"
         exit 1
     fi
 fi

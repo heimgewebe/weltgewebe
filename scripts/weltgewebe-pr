@@ -96,9 +96,7 @@ if [[ -n "$UNMERGED" ]]; then
   while IFS= read -r path; do
     [[ -n "$path" ]] && printf '  - %s\n' "$path"
   done <<< "$UNMERGED"
-  echo "Resolve them first:"
-  echo "  git status"
-  echo "  git diff --name-only --diff-filter=U"
+  echo "Resolve before creating PR."
   exit 1
 fi
 
