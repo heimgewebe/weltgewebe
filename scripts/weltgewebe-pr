@@ -89,7 +89,20 @@ if [[ "$MODE" != "plan" ]]; then
     trap cleanup EXIT
 fi
 
-# 1. Drift Detection
+# 1. Preflight: Conflict Detection
+UNMERGED=$(git diff --name-only --diff-filter=U)
+if [[ -n "$UNMERGED" ]]; then
+  echo "ERROR: Unresolved merge conflicts:"
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && printf '  - %s\n' "$path"
+  done <<< "$UNMERGED"
+  echo "Resolve them first:"
+  echo "  git status"
+  echo "  git diff --name-only --diff-filter=U"
+  exit 1
+fi
+
+# 2. Drift Detection
 echo ">> Checking for drift..."
 # Use standard porcelain for the check (command substitution drops null bytes)
 if [[ -z "$(git status --porcelain)" ]]; then
@@ -275,7 +288,8 @@ $(printf ' - %s\n' "${STAGED_FILES[@]}")
   echo "$COMMIT_BODY"
 } > "$BODY_TEMP"
 
-git commit -F "$BODY_TEMP"
+# Ensure only one commit message mode (--file) is used
+git commit --file="$BODY_TEMP"
 
 if [[ "$PUSH" == "1" ]]; then
     echo ">> Pushing to $REMOTE..."
