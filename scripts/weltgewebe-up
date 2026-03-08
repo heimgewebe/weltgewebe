@@ -329,7 +329,8 @@ if [[ "$DO_PULL" == "1" ]]; then
     HEAD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
     # Safe Git-Autofix Check
-    # Conditions: detached HEAD (already here), no conflicts (already checked), clean worktree (IS_DIRTY=0)
+    # Conditions: detached HEAD (already here), no conflicts (locally checked), clean worktree (IS_DIRTY=0)
+    UNMERGED=$(git diff --name-only --diff-filter=U || true)
     if [[ "${WELTGEWEBE_AUTOFIX_GIT:-1}" == "1" && "$IS_DIRTY" == "0" && -z "$UNMERGED" ]]; then
         echo "INFO: Detached HEAD detected."
         echo "INFO: Previous detached HEAD: $HEAD_COMMIT"
@@ -509,7 +510,7 @@ fi
 generate_failure_bundle() {
   local error_msg="$1"
   local err_log_file="${2:-}"
-  local timestamp=$(date +"%Y%m%d-%H%M")
+  local timestamp=$(date +"%Y%m%d-%H%M%S")
   local bundle_dir=".ops/failures/${timestamp}"
 
   mkdir -p "$bundle_dir"
