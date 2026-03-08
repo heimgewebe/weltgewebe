@@ -14,9 +14,12 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 **Beschreibung:**
 
-Der NATS-Healthcheck wurde korrigiert, da das bisherige `nats:2.10`-Image als Scratch-Image keine Shell (`sh`) oder Utilities (`wget`) enthielt, was dazu führte, dass der `CMD-SHELL` Healthcheck immer fehlschlug.
-Zur Lösung wurde auf `nats:2.10-alpine` umgestellt und ein strikt image-kompatibler Exec-Form-Healthcheck (`["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]`) implementiert.
-Zusätzlich wurde die JetStream-Speicherpfad-Konfiguration (`-sd /data`) zum `command` hinzugefügt, sodass persistierte Daten nun korrekt in das gemountete Docker-Volume `nats_js:/data` fließen und nicht im ungemounteten `/tmp` verschwinden.
+Der NATS-Healthcheck wurde korrigiert, da das bisherige `nats:2.10`-Image als Scratch-Image keine Shell
+(`sh`) oder Utilities (`wget`) enthielt, was dazu führte, dass der `CMD-SHELL` Healthcheck fehlschlug.
+Zur Lösung wurde auf `nats:2.10-alpine` umgestellt und ein strikt image-kompatibler Exec-Form-Healthcheck
+(`["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]`) implementiert.
+Zusätzlich wurde die JetStream-Speicherpfad-Konfiguration (`-sd /data`) zum `command` hinzugefügt,
+sodass persistierte Daten nun korrekt in das gemountete Docker-Volume `nats_js:/data` fließen.
 
 ---
 
