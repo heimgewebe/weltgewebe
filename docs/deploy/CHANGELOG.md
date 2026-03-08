@@ -242,6 +242,7 @@ Der harte Pfad `/opt/weltgewebe/policies/limits.yaml` für den Volume-Mount in d
 `infra/compose/compose.prod.override.yml` wurde durch dynamische Interpolation mittels der `REPO_DIR`-Variable ersetzt
 (`${REPO_DIR:-/opt/weltgewebe}/policies/limits.yaml`).
 Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, wenn `weltgewebe-up` die `REPO_DIR` exportiert,
-während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe erhalten bleibt.
+während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe
+erhalten bleibt.
 
 **Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
