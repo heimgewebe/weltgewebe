@@ -57,16 +57,18 @@ services:
       retries: 5
 
   nats:
-    image: nats:2.10
+    image: nats:2.10-alpine
     command:
       - -js
+      - -sd
+      - /data
       - -m
       - "8222"
     restart: always
     volumes:
       - nats_js:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz >/dev/null 2>&1 || exit 1"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
