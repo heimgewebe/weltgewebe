@@ -21,8 +21,8 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
   → Lokales Frontend (Container `weltgewebe-web` oder statisch via Caddy). Kein Cloudflare-Proxy.
 - **User API:** `https://weltgewebe.home.arpa/api/*`
   → Lokales API (Service: `api:8080`).
-- **Host Debug:** `http://127.0.0.1:8081`
-  → Host-Mapped Port (nur für lokale Diagnose, nicht für User-Traffic oder Browser).
+- **Host Debug (Local Dev Only):** `http://127.0.0.1:8081`
+  → Host-Mapped Port (nur in der lokalen Entwicklungsumgebung, nicht in Produktion).
 - **Public Mirror:** `weltgewebe.pages.dev`
   → Nur statisches Schaufenster, keine Heim-Login-Funktionalität.
 

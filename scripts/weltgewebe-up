@@ -19,9 +19,6 @@ WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
 OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
 
-# Default Health URL (fallback)
-HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
-
 # Arguments
 WITH_CADDY=0
 DO_PULL=1
@@ -383,129 +380,6 @@ else
 fi
 BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}")
 
-if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
-  echo "ERROR: Docker Compose config failed. Please fix your configuration."
-  exit 1
-fi
-echo "OK"
-
-# 4. Build Decision
-echo
-echo ">> Build Decision:"
-
-DO_BUILD=1
-REASON="unknown"
-
-# Get Current HEAD (safely)
-if [[ "$DO_PULL" == "1" ]]; then
-    CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
-else
-    # Explicitly avoid git calls if no-pull
-    CURRENT_HEAD="unknown"
-fi
-
-if [[ "$BUILD_MODE" == "force" ]]; then
-    DO_BUILD=1
-    REASON="Forced by --build-mode force"
-elif [[ "$BUILD_MODE" == "no" ]]; then
-    DO_BUILD=0
-    REASON="Skipped by --build-mode no"
-else
-    # Auto Mode
-    if [[ "$CURRENT_HEAD" == "unknown" ]]; then
-        DO_BUILD=1
-        REASON="Auto: HEAD unknown (conservative build)"
-    elif [[ ! -f "$STATE_FILE" ]]; then
-        DO_BUILD=1
-        REASON="Auto: No previous deployment state found"
-    else
-        LAST_DEPLOYED_SHA=$(cat "$STATE_FILE")
-        if [[ "$CURRENT_HEAD" != "$LAST_DEPLOYED_SHA" ]]; then
-            DO_BUILD=1
-            REASON="Auto: HEAD changed ($LAST_DEPLOYED_SHA -> $CURRENT_HEAD)"
-        else
-            DO_BUILD=0
-            REASON="Auto: HEAD unchanged ($CURRENT_HEAD)"
-        fi
-    fi
-fi
-
-echo "   Mode:   $BUILD_MODE"
-echo "   Reason: $REASON"
-echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
-
-
-# 5. Service Plan & Caddy Logic
-HAS_CADDY=0
-if docker compose "${BASE_ARGS[@]}" config --services | grep -qFx "caddy"; then
-  HAS_CADDY=1
-fi
-
-SCALE_ARGS=()
-ENABLE_CADDY=0
-
-echo
-echo ">> Service Plan:"
-if [[ "$HAS_CADDY" == "1" ]]; then
-  if [[ "$WITH_CADDY" == "1" ]]; then
-    echo " - caddy: ENABLED (explicit request)"
-    ENABLE_CADDY=1
-  else
-    echo " - caddy: DISABLED (default)"
-    SCALE_ARGS=("--scale" "caddy=0")
-  fi
-else
-  echo " - caddy: NOT FOUND"
-  if [[ "$WITH_CADDY" == "1" ]]; then
-     echo "WARNING: --with-caddy requested but service 'caddy' not found."
-  fi
-fi
-
-# 6. Frontend Build (Optional/Heuristic)
-if [[ -d "apps/web" ]]; then
-  NEEDS_WEB_BUILD=0
-  WEB_MSG="OK"
-
-  if [[ "$BUILD_WEB" == "force" ]]; then
-     NEEDS_WEB_BUILD=1
-     WEB_MSG="Forced"
-  elif [[ "$BUILD_WEB" == "no" ]]; then
-     NEEDS_WEB_BUILD=0
-     WEB_MSG="Skipped (explicit)"
-  else
-     # Auto
-     if [[ ! -f "apps/web/build/index.html" ]]; then
-        NEEDS_WEB_BUILD=1
-        WEB_MSG="Auto: Artifact missing"
-     fi
-  fi
-
-  if [[ "$NEEDS_WEB_BUILD" == "1" ]]; then
-     echo
-     echo ">> Frontend Build ($WEB_MSG)"
-
-     if command -v pnpm >/dev/null; then
-         # Check node_modules
-         if [[ ! -d "apps/web/node_modules" ]]; then
-             echo "   Installing dependencies..."
-             pnpm -C apps/web install --frozen-lockfile
-         fi
-         echo "   Building..."
-         pnpm -C apps/web build
-     else
-         echo "WARNING: Frontend build required but 'pnpm' not found."
-         echo "         UI may be stale or broken."
-         if [[ "$BUILD_WEB" == "force" ]]; then
-             echo "ERROR: --build-web requested but pnpm missing."
-             exit 1
-         fi
-     fi
-  elif [[ "$BUILD_WEB" == "no" && ! -f "apps/web/build/index.html" ]]; then
-      echo
-      echo "WARNING: Frontend artifact missing and build disabled."
-  fi
-fi
-
 # --- Failure Bundle Logic ---
 generate_failure_bundle() {
   local error_msg="$1"
@@ -627,6 +501,163 @@ generate_failure_bundle() {
   echo "${bundle_dir}/"
   echo
 }
+
+if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
+  echo "ERROR: Docker Compose config failed. Please fix your configuration."
+  exit 1
+fi
+
+# Guard: Validate API host port publishing for Heimserver production path
+# Target specifically the Heimserver layout which relies on proxy/FQDN without host port publishing
+if [[ "$BASE_COMPOSE_FILE" == *"compose.prod.yml"* && "$OVERRIDE_FILE" == *"compose.prod.override.yml"* ]]; then
+  set +e
+  api_published=$(docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | python3 -c '
+import sys, json
+try:
+    cfg = json.load(sys.stdin)
+    api = cfg.get("services", {}).get("api", {})
+    ports = api.get("ports", [])
+    has_published = any(str(p.get("published", "")).strip() for p in ports)
+    print("1" if has_published else "0")
+except Exception as e:
+    sys.exit(2)
+')
+  rc_guard=$?
+  set -e
+
+  if [[ "$rc_guard" == "2" || -z "$api_published" ]]; then
+    msg="Preflight Evaluation Failed: Could not securely determine if API publishes host ports. Guard is fail-closed."
+    echo "ERROR: $msg" >&2
+    generate_failure_bundle "$msg"
+    exit 1
+  fi
+
+  if [[ "$api_published" == "1" ]]; then
+    msg="Canonical deployment drift detected: api publishes host ports in the Heimserver production path. Expected: internal-only service behind edge/proxy. Refusing deploy."
+    echo "ERROR: $msg" >&2
+    generate_failure_bundle "$msg"
+    exit 1
+  fi
+fi
+
+echo "OK"
+
+# 4. Build Decision
+echo
+echo ">> Build Decision:"
+
+DO_BUILD=1
+REASON="unknown"
+
+# Get Current HEAD (safely)
+if [[ "$DO_PULL" == "1" ]]; then
+    CURRENT_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+else
+    # Explicitly avoid git calls if no-pull
+    CURRENT_HEAD="unknown"
+fi
+
+if [[ "$BUILD_MODE" == "force" ]]; then
+    DO_BUILD=1
+    REASON="Forced by --build-mode force"
+elif [[ "$BUILD_MODE" == "no" ]]; then
+    DO_BUILD=0
+    REASON="Skipped by --build-mode no"
+else
+    # Auto Mode
+    if [[ "$CURRENT_HEAD" == "unknown" ]]; then
+        DO_BUILD=1
+        REASON="Auto: HEAD unknown (conservative build)"
+    elif [[ ! -f "$STATE_FILE" ]]; then
+        DO_BUILD=1
+        REASON="Auto: No previous deployment state found"
+    else
+        LAST_DEPLOYED_SHA=$(cat "$STATE_FILE")
+        if [[ "$CURRENT_HEAD" != "$LAST_DEPLOYED_SHA" ]]; then
+            DO_BUILD=1
+            REASON="Auto: HEAD changed ($LAST_DEPLOYED_SHA -> $CURRENT_HEAD)"
+        else
+            DO_BUILD=0
+            REASON="Auto: HEAD unchanged ($CURRENT_HEAD)"
+        fi
+    fi
+fi
+
+echo "   Mode:   $BUILD_MODE"
+echo "   Reason: $REASON"
+echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
+
+
+# 5. Service Plan & Caddy Logic
+HAS_CADDY=0
+if docker compose "${BASE_ARGS[@]}" config --services | grep -qFx "caddy"; then
+  HAS_CADDY=1
+fi
+
+SCALE_ARGS=()
+ENABLE_CADDY=0
+
+echo
+echo ">> Service Plan:"
+if [[ "$HAS_CADDY" == "1" ]]; then
+  if [[ "$WITH_CADDY" == "1" ]]; then
+    echo " - caddy: ENABLED (explicit request)"
+    ENABLE_CADDY=1
+  else
+    echo " - caddy: DISABLED (default)"
+    SCALE_ARGS=("--scale" "caddy=0")
+  fi
+else
+  echo " - caddy: NOT FOUND"
+  if [[ "$WITH_CADDY" == "1" ]]; then
+     echo "WARNING: --with-caddy requested but service 'caddy' not found."
+  fi
+fi
+
+# 6. Frontend Build (Optional/Heuristic)
+if [[ -d "apps/web" ]]; then
+  NEEDS_WEB_BUILD=0
+  WEB_MSG="OK"
+
+  if [[ "$BUILD_WEB" == "force" ]]; then
+     NEEDS_WEB_BUILD=1
+     WEB_MSG="Forced"
+  elif [[ "$BUILD_WEB" == "no" ]]; then
+     NEEDS_WEB_BUILD=0
+     WEB_MSG="Skipped (explicit)"
+  else
+     # Auto
+     if [[ ! -f "apps/web/build/index.html" ]]; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: Artifact missing"
+     fi
+  fi
+
+  if [[ "$NEEDS_WEB_BUILD" == "1" ]]; then
+     echo
+     echo ">> Frontend Build ($WEB_MSG)"
+
+     if command -v pnpm >/dev/null; then
+         # Check node_modules
+         if [[ ! -d "apps/web/node_modules" ]]; then
+             echo "   Installing dependencies..."
+             pnpm -C apps/web install --frozen-lockfile
+         fi
+         echo "   Building..."
+         pnpm -C apps/web build
+     else
+         echo "WARNING: Frontend build required but 'pnpm' not found."
+         echo "         UI may be stale or broken."
+         if [[ "$BUILD_WEB" == "force" ]]; then
+             echo "ERROR: --build-web requested but pnpm missing."
+             exit 1
+         fi
+     fi
+  elif [[ "$BUILD_WEB" == "no" && ! -f "apps/web/build/index.html" ]]; then
+      echo
+      echo "WARNING: Frontend artifact missing and build disabled."
+  fi
+fi
 
 # 7. Deploy
 echo
