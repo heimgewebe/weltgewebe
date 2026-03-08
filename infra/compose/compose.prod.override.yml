@@ -25,7 +25,7 @@ services:
       WEB_UPSTREAM_URL: https://weltgewebe.home.arpa
     volumes:
       - type: bind
-        source: /opt/weltgewebe/policies/limits.yaml
+        source: ${REPO_DIR:-/opt/weltgewebe}/policies/limits.yaml
         target: /app/policies/limits.yaml
         read_only: true
   caddy:
