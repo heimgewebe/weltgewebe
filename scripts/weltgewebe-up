@@ -735,7 +735,7 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
             rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
             exit 1
         fi
-        rm -f "$RETRY_ERR_FILE"
+        rm -f "$RETRY_ERR_FILE" "$ERR_FILE"
      else
         # We don't want to spam stdout, so we just use the simple message
         # The full log is safely stored in the bundle via $ERR_FILE
