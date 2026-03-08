@@ -228,7 +228,7 @@ docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" cad
 - Evaluation von Caddy mit custom build inkl. rate_limit Plugin
 - Oder: Implementierung von Rate-Limiting auf Applikationsebene (API-Service)
 
-## 2026-03-08 - Parameterized hardcoded absolute paths in compose.prod.override.yml
+## 2026-03-08 - Parameterized policy bind path in compose.prod.override.yml
 
 **Ursprung / Referenz:** Fix für Deployment-Drift (REPO_DIR)
 
@@ -238,12 +238,10 @@ docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" cad
 
 **Beschreibung:**
 
-Die harten Pfade `/opt/weltgewebe/.env` und `/opt/weltgewebe/policies/limits.yaml` in der Datei
-`infra/compose/compose.prod.override.yml` wurden durch dynamische Interpolation mittels der `REPO_DIR`-Variable ersetzt
-(`${REPO_DIR:-/opt/weltgewebe}`). Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, während die
-Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) erhalten bleibt.
-Die Verwendung verschachtelter Interpolationen wurde explizit vermieden, um Kompatibilitätsprobleme mit Docker Compose
-zu verhindern. Relative Volume-Mounts wurden ebenfalls nicht verwendet, da das Preflight-Skript `guard-compose-no-relative-volumes.sh`
-diese in Produktions-Compose-Dateien untersagt.
+Der harte Pfad `/opt/weltgewebe/policies/limits.yaml` für den Volume-Mount in der Datei
+`infra/compose/compose.prod.override.yml` wurde durch dynamische Interpolation mittels der `REPO_DIR`-Variable ersetzt
+(`${REPO_DIR:-/opt/weltgewebe}/policies/limits.yaml`).
+Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, wenn `weltgewebe-up` die `REPO_DIR` exportiert,
+während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe erhalten bleibt.
 
 **Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
