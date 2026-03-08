@@ -282,6 +282,7 @@ fi
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
 # Git State Tracking Variables
+GIT_FETCH_ATTEMPTED="no"
 GIT_PULL_ATTEMPTED="no"
 GIT_PULL_SKIPPED_REASON=""
 GIT_AUTOFIX_APPLIED="no"
@@ -315,7 +316,7 @@ if [[ "$DO_PULL" == "1" ]]; then
   fi
 
   echo ">> Git Fetch..."
-  GIT_PULL_ATTEMPTED="yes"
+  GIT_FETCH_ATTEMPTED="yes"
 
   if ! git fetch "$REMOTE" --prune; then
     echo "ERROR: Git fetch failed."
@@ -336,6 +337,7 @@ if [[ "$DO_PULL" == "1" ]]; then
         echo "INFO: Switching to main and updating fast-forward..."
 
         if git switch main >/dev/null 2>&1; then
+            GIT_PULL_ATTEMPTED="yes"
             if ! git pull --ff-only "$REMOTE" main; then
                 echo "ERROR: Git pull failed (fast-forward only) after switching to main."
                 echo "       Please resolve manually or use: $0 --no-pull"
@@ -355,6 +357,7 @@ if [[ "$DO_PULL" == "1" ]]; then
     fi
   else
     echo ">> Git Pull (fast-forward)..."
+    GIT_PULL_ATTEMPTED="yes"
     if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
         echo "ERROR: Git pull failed (fast-forward only)."
         echo "       Please resolve manually or use: $0 --no-pull"
@@ -522,6 +525,7 @@ generate_failure_bundle() {
     echo "branch: $branch"
     echo "head: $head_commit"
     echo "remote main: $remote_main"
+    echo "fetch attempted: $GIT_FETCH_ATTEMPTED"
     echo "pull attempted: $GIT_PULL_ATTEMPTED"
 
     if [[ -n "$GIT_PULL_SKIPPED_REASON" ]]; then
@@ -564,6 +568,12 @@ generate_failure_bundle() {
 
   # 6. compose_config_resolved.yml
   docker compose "${BASE_ARGS[@]}" config > "${bundle_dir}/compose_config_resolved.yml" 2>&1 || true
+
+  # 7. api_network_aliases.txt
+  local api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+  if [[ -n "$api_cid" ]]; then
+      docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2>/dev/null || true
+  fi
 
   # Print failure summary (exact requested format)
   echo
@@ -705,9 +715,14 @@ if [[ "$ENABLE_CADDY" == "1" ]]; then
         echo "Retrying without Caddy (--scale caddy=0)..."
         CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")
         echo "Running: ${CMD_RETRY[*]}"
-        "${CMD_RETRY[@]}"
+        if ! "${CMD_RETRY[@]}"; then
+            generate_failure_bundle "Container startup failed."
+            exit 1
+        fi
      else
-        generate_failure_bundle "Container startup failed. $ERR_CONTENT"
+        # We don't want to spam stdout, so we just use the simple message
+        # The full log is inherently in compose_ps or the container logs bundle
+        generate_failure_bundle "Container startup failed."
         exit 1
      fi
   else
@@ -718,14 +733,9 @@ else
   CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
   echo "Running: ${CMD[*]}"
 
-  ERR_FILE=$(mktemp)
-  if ! "${CMD[@]}" 2> "$ERR_FILE"; then
-     ERR_CONTENT=$(cat "$ERR_FILE")
-     rm -f "$ERR_FILE"
-     generate_failure_bundle "Container startup failed. $ERR_CONTENT"
+  if ! "${CMD[@]}"; then
+     generate_failure_bundle "Container startup failed."
      exit 1
-  else
-     rm -f "$ERR_FILE"
   fi
 fi
 
