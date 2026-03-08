@@ -106,14 +106,12 @@ jobs:
           }
 
           RUST=$(get_version "rust")
-          PY=$(get_version "python")
           UV=$(get_version "uv")
           DENY=$(get_version "cargo-deny")
 
-          echo "Found versions: Rust=$RUST, Python=$PY, uv=$UV, cargo-deny=$DENY"
+          echo "Found versions: Rust=$RUST, uv=$UV, cargo-deny=$DENY"
 
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
-          echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
           echo "DENY_VERSION=${DENY}" >> "$GITHUB_ENV"
 

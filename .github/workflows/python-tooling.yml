@@ -10,6 +10,7 @@ name: python-tooling
       - "**/requirements*.txt"
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
+      - ".python-version"
   push:
     branches: [main]
     paths:
@@ -18,6 +19,7 @@ name: python-tooling
       - "**/requirements*.txt"
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
+      - ".python-version"
   workflow_dispatch: {}
 
 permissions:

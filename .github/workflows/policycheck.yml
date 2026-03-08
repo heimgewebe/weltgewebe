@@ -8,6 +8,7 @@ permissions:
       - "policies/**"
       - "tools/py/**"
       - ".github/workflows/policycheck.yml"
+      - ".python-version"
 jobs:
   check:
     runs-on: ubuntu-latest

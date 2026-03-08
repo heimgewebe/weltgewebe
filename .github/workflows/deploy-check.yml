@@ -12,12 +12,14 @@ permissions:
       - 'infra/caddy/**'
       - 'scripts/preflight/**'
       - '.github/workflows/deploy-check.yml'
+      - '.node-version'
   pull_request:
     paths:
       - 'apps/web/**'
       - 'infra/caddy/**'
       - 'scripts/preflight/**'
       - '.github/workflows/deploy-check.yml'
+      - '.node-version'
 
 jobs:
   csp-contract-check:
