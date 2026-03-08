@@ -281,6 +281,11 @@ fi
 
 export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 
+# Git State Tracking Variables
+GIT_PULL_ATTEMPTED="no"
+GIT_PULL_SKIPPED_REASON=""
+GIT_AUTOFIX_APPLIED="no"
+
 # 2. Git Operations (Prioritized if PULL enabled)
 if [[ "$DO_PULL" == "1" ]]; then
   echo
@@ -310,6 +315,7 @@ if [[ "$DO_PULL" == "1" ]]; then
   fi
 
   echo ">> Git Fetch..."
+  GIT_PULL_ATTEMPTED="yes"
 
   if ! git fetch "$REMOTE" --prune; then
     echo "ERROR: Git fetch failed."
@@ -325,6 +331,7 @@ if [[ "$DO_PULL" == "1" ]]; then
     # Conditions: detached HEAD (already here), no conflicts (already checked), clean worktree (IS_DIRTY=0)
     if [[ "${WELTGEWEBE_AUTOFIX_GIT:-1}" == "1" && "$IS_DIRTY" == "0" && -z "$UNMERGED" ]]; then
         echo "INFO: Detached HEAD detected."
+        echo "INFO: Previous detached HEAD: $HEAD_COMMIT"
         echo "INFO: Working tree clean."
         echo "INFO: Switching to main and updating fast-forward..."
 
@@ -334,6 +341,7 @@ if [[ "$DO_PULL" == "1" ]]; then
                 echo "       Please resolve manually or use: $0 --no-pull"
                 exit 1
             fi
+            GIT_AUTOFIX_APPLIED="yes"
         else
             echo "ERROR: Failed to switch to main."
             exit 1
@@ -343,6 +351,7 @@ if [[ "$DO_PULL" == "1" ]]; then
         echo "HEAD: $HEAD_COMMIT"
         echo "Pull skipped."
         echo "Deploy may not use the latest main branch."
+        GIT_PULL_SKIPPED_REASON="detached HEAD without autofix"
     fi
   else
     echo ">> Git Pull (fast-forward)..."
@@ -355,6 +364,7 @@ if [[ "$DO_PULL" == "1" ]]; then
 else
   echo
   echo ">> Git: Skipped (--no-pull)"
+  GIT_PULL_SKIPPED_REASON="--no-pull"
 fi
 
 # 3. Preflight: Docker Compose Config (Strict)
@@ -507,16 +517,17 @@ generate_failure_bundle() {
     local head_commit
     head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     local remote_main
-    remote_main=$(git rev-parse --short refs/remotes/origin/main 2>/dev/null || echo "unknown")
+    remote_main=$(git rev-parse --short "refs/remotes/${REMOTE}/main" 2>/dev/null || echo "unknown")
 
     echo "branch: $branch"
     echo "head: $head_commit"
     echo "remote main: $remote_main"
-    if [[ "$DO_PULL" == "0" ]]; then
-       echo "pull skipped: yes (--no-pull)"
-    else
-       echo "pull skipped: no"
+    echo "pull attempted: $GIT_PULL_ATTEMPTED"
+
+    if [[ -n "$GIT_PULL_SKIPPED_REASON" ]]; then
+       echo "pull skipped reason: $GIT_PULL_SKIPPED_REASON"
     fi
+    echo "autofix applied: $GIT_AUTOFIX_APPLIED"
   } > "${bundle_dir}/git_state.txt"
 
   # 2. compose_ps.txt
@@ -899,6 +910,13 @@ if [[ "$ALIAS_FOUND" == "1" ]]; then
         fi
     fi
 else
+    # Output detailed diagnostics to stdout as requested, then generate failure bundle
+    echo "ERROR: DNS alias weltgewebe-api missing in container metadata."
+    echo "       This violates the integration contract."
+    echo "       Found aliases:"
+    docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$API_CID" 2>/dev/null || echo "       (docker inspect failed)"
+    echo "Ensure 'aliases: [weltgewebe-api]' is set in compose."
+
     # Contract is strict. Fail unless explicitly opted out.
     if [[ "${ALLOW_UNSTABLE_API_DNS:-0}" == "1" ]]; then
         echo "WARNING: Continuing due to ALLOW_UNSTABLE_API_DNS=1."
