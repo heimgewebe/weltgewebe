@@ -7,7 +7,7 @@ cp .env.example .env
 # 2. Stack starten
 make up
 
-# 3. URLs prüfen
+# 3. URLs prüfen (nur lokale Entwicklung)
 #    - Frontend: http://localhost:8081
 #    - API Live: http://localhost:8081/api/health/live
 #    - API Version: http://localhost:8081/api/version
@@ -21,7 +21,8 @@ make down
 
 ## Hinweise
 
-- Der primäre Einstiegspunkt ist der Proxy auf Port `8081`.
+- In der lokalen Entwicklungsumgebung ist der primäre Einstiegspunkt der Proxy auf Port `8081`.
+  (Im Heimserver-Produktionsbetrieb ist der Port 8081 reserviert und Weltgewebe publiziert keinen eigenen Host-Port.)
 - Das Frontend (Port `5173`) wird automatisch vom Proxy bedient.
 - Frontend nutzt `PUBLIC_API_BASE=/api` (siehe `apps/web/.env.development`).
 - Compose-Profil `dev` schützt vor Verwechslungen mit späteren prod-Stacks.

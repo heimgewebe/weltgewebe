@@ -19,9 +19,6 @@ WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
 OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
 
-# Default Health URL (fallback)
-HEALTH_URL_DEFAULT="http://127.0.0.1:8081/health/ready"
-
 # Arguments
 WITH_CADDY=0
 DO_PULL=1
@@ -387,6 +384,29 @@ if ! docker compose "${BASE_ARGS[@]}" config >/dev/null; then
   echo "ERROR: Docker Compose config failed. Please fix your configuration."
   exit 1
 fi
+
+# Guard: Validate API host port publishing for Heimserver production path
+if [[ "$BASE_COMPOSE_FILE" == *"compose.prod.yml"* ]]; then
+  api_published=$(docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | python3 -c '
+import sys, json
+try:
+    cfg = json.load(sys.stdin)
+    api = cfg.get("services", {}).get("api", {})
+    ports = api.get("ports", [])
+    has_published = any(str(p.get("published", "")).strip() for p in ports)
+    print("1" if has_published else "0")
+except Exception:
+    print("0")
+' 2>/dev/null || true)
+
+  if [[ "$api_published" == "1" ]]; then
+    msg="Canonical deployment drift detected: api publishes host ports in the Heimserver production path. Expected: internal-only service behind edge/proxy. Refusing deploy."
+    echo "ERROR: $msg" >&2
+    generate_failure_bundle "$msg"
+    exit 1
+  fi
+fi
+
 echo "OK"
 
 # 4. Build Decision

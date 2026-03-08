@@ -19,8 +19,3 @@ weltgewebe.home.arpa {
     Referrer-Policy "no-referrer"
   }
 }
-
-# Health Check Interface (Loopback Only)
-127.0.0.1:8081 {
-  reverse_proxy api:8080
-}

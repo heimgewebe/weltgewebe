@@ -96,10 +96,10 @@ docker exec edge-caddy cat /data/caddy/pki/authorities/local/root.crt \
   > /opt/heimgewebe/edge/edge-ca.crt
 ```
 
-- API lokal:
-  - `curl -fsS http://127.0.0.1:8081/health/ready`
 - API via edge:
   - `curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS https://api.weltgewebe.home.arpa/health/ready`
+- API via Container (Docker Native, falls nötig):
+  - `docker compose exec api curl -fsS http://localhost:8080/health/ready`
 - Alias via edge:
   - `curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS https://weltgewebe.home.arpa/api/health/ready`
 
