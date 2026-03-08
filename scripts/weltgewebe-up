@@ -474,8 +474,32 @@ if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
 
   # Target Caddyfile detection
   export CADDYFILE_PATH=""
+
+  # Try to extract the active Caddyfile mount dynamically from compose config
+  # We look for the bind mount targeting /etc/caddy/Caddyfile
+  # Using Python for robust JSON parsing since it's universally available in our stack
+  EXTRACTED_CADDYFILE="$(
+    docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | \
+    python3 -c '
+import json
+import sys
+
+try:
+    d = json.load(sys.stdin)
+    vols = d.get("services", {}).get("caddy", {}).get("volumes", [])
+    for v in vols:
+        if v.get("target") == "/etc/caddy/Caddyfile":
+            print(v.get("source", ""))
+            break
+except Exception:
+    pass
+' 2>/dev/null || true
+  )"
+
   if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then
      export CADDYFILE_PATH="$EDGE_CADDYFILE"
+  elif [[ -n "$EXTRACTED_CADDYFILE" && -f "$EXTRACTED_CADDYFILE" ]]; then
+     export CADDYFILE_PATH="$EXTRACTED_CADDYFILE"
   elif [[ -f "/opt/heimgewebe/edge/Caddyfile" ]]; then
      export CADDYFILE_PATH="/opt/heimgewebe/edge/Caddyfile"
   elif [[ -f "$REPO_DIR/Caddyfile" ]]; then
