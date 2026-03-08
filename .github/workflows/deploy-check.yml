@@ -12,12 +12,14 @@ permissions:
       - 'infra/caddy/**'
       - 'scripts/preflight/**'
       - '.github/workflows/deploy-check.yml'
+      - '.node-version'
   pull_request:
     paths:
       - 'apps/web/**'
       - 'infra/caddy/**'
       - 'scripts/preflight/**'
       - '.github/workflows/deploy-check.yml'
+      - '.node-version'
 
 jobs:
   csp-contract-check:
@@ -34,7 +36,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: '.node-version'
           cache: 'pnpm'
           cache-dependency-path: apps/web/pnpm-lock.yaml
 

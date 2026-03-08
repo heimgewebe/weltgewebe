@@ -7,10 +7,12 @@ permissions:
     paths:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
+      - '.node-version'
   pull_request:
     paths:
       - 'contracts/domain/**.schema.json'
       - 'contracts/domain/examples/**.json'
+      - '.node-version'
 
 jobs:
   validate-schemas:
