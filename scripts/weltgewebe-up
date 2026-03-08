@@ -478,7 +478,9 @@ if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   # Try to extract the active Caddyfile mount dynamically from compose config
   # We look for the bind mount targeting /etc/caddy/Caddyfile
   # Using Python for robust JSON parsing since it's universally available in our stack
-  PYTHON_SCRIPT=$(cat <<'PY'
+  EXTRACTED_CADDYFILE="$(
+    docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | \
+    python3 -c '
 import json
 import sys
 
@@ -491,12 +493,8 @@ try:
             break
 except Exception:
     pass
-PY
-)
-  EXTRACTED_CADDYFILE=$(
-    docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | \
-    python3 -c "$PYTHON_SCRIPT" || true
-  )
+' 2>/dev/null || true
+  )"
 
   if [[ -n "${EDGE_CADDYFILE:-}" && -f "$EDGE_CADDYFILE" ]]; then
      export CADDYFILE_PATH="$EDGE_CADDYFILE"
