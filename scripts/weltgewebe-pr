@@ -92,7 +92,8 @@ fi
 # 1. Preflight: Conflict Detection
 UNMERGED=$(git diff --name-only --diff-filter=U)
 if [[ -n "$UNMERGED" ]]; then
-  echo "ERROR: Repository has unresolved merge conflicts."
+  echo "ERROR: Unresolved merge conflicts:"
+  printf '  - %s\n' $UNMERGED
   echo "Resolve them first:"
   echo "  git status"
   echo "  git diff --name-only --diff-filter=U"
@@ -285,7 +286,7 @@ $(printf ' - %s\n' "${STAGED_FILES[@]}")
   echo "$COMMIT_BODY"
 } > "$BODY_TEMP"
 
-# Fix: Ensure only exactly one commit message mode (-F) is used, avoiding fatal option errors
+# Ensure only one commit message mode (--file) is used
 git commit --file="$BODY_TEMP"
 
 if [[ "$PUSH" == "1" ]]; then

@@ -288,13 +288,14 @@ if [[ "$DO_PULL" == "1" ]]; then
 
   UNMERGED=$(git diff --name-only --diff-filter=U)
   if [[ -n "$UNMERGED" ]]; then
-      echo "ERROR: unresolved merge conflicts."
+      echo "ERROR: Unresolved merge conflicts:"
+      printf '  - %s\n' $UNMERGED
       echo "Resolve them first or use: $0 --no-pull"
       exit 1
   fi
 
   if [[ -n "$(git status --porcelain)" ]]; then
-      echo "ERROR: local changes would block fast-forward pull."
+      echo "ERROR: Local changes would block fast-forward pull."
       echo "Commit, stash, or revert your changes first."
       exit 1
   fi
