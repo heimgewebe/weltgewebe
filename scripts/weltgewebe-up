@@ -289,7 +289,9 @@ if [[ "$DO_PULL" == "1" ]]; then
   UNMERGED=$(git diff --name-only --diff-filter=U)
   if [[ -n "$UNMERGED" ]]; then
       echo "ERROR: Unresolved merge conflicts:"
-      printf '  - %s\n' $UNMERGED
+      while IFS= read -r path; do
+        [[ -n "$path" ]] && printf '  - %s\n' "$path"
+      done <<< "$UNMERGED"
       echo "Resolve them first or use: $0 --no-pull"
       exit 1
   fi

@@ -93,7 +93,9 @@ fi
 UNMERGED=$(git diff --name-only --diff-filter=U)
 if [[ -n "$UNMERGED" ]]; then
   echo "ERROR: Unresolved merge conflicts:"
-  printf '  - %s\n' $UNMERGED
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && printf '  - %s\n' "$path"
+  done <<< "$UNMERGED"
   echo "Resolve them first:"
   echo "  git status"
   echo "  git diff --name-only --diff-filter=U"
