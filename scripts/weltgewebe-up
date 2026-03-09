@@ -73,7 +73,7 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-EDGE_CA="/opt/heimgewebe/edge/edge-ca.crt"
+EDGE_CA="${EDGE_CA:-/opt/heimgewebe/edge/edge-ca.crt}"
 
 # --- REPO_DIR Resolution ---
 # We must find the actual repository root.
