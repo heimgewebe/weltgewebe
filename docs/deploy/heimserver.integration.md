@@ -72,14 +72,24 @@ api.weltgewebe.home.arpa {
 
 ## 4. CORS-Vertrag
 
-Falls CORS verwendet wird:
+Die Weltgewebe-API akzeptiert mutierende Requests nur von der
+kanonischen Weltgewebe-UI-Origin.
 
 **Erlaubte Origin:**
 
-`https://leitstand.heimgewebe.home.arpa`
+`https://weltgewebe.home.arpa`
 
-* Kein Wildcard-`*`
-* Keine parallelen Domains
+**Nicht erlaubt:**
+
+* `*`
+* multiple domains
+* Cross-system origins (z.B. `leitstand.heimgewebe.home.arpa`)
+
+> **Hinweis:** Andere Heimgewebe-Systeme (z.B. Leitstand) gehören nicht zum
+> Weltgewebe-Deployment-Contract. Falls solche Systeme API-Zugriffe
+> benötigen, müssen sie über dedizierte Integrationsmechanismen
+> (authenticated service calls oder interne APIs) erfolgen und nicht
+> über Browser-CORS.
 
 ---
 
