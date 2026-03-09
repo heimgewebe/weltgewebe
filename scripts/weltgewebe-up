@@ -1033,8 +1033,9 @@ fi
 
 echo
 if [[ ! -f "$EDGE_CA" ]]; then
-    echo "ERROR: Edge CA certificate missing: $EDGE_CA"
-    echo "Edge routing checks require this certificate."
+    msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
     exit 1
 fi
 
