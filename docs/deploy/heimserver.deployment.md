@@ -9,7 +9,7 @@
   - Container: `edge-caddy` (bindet Ports 80/443)
   - Edge-Caddy ist mit `weltgewebe_default` verbunden (wichtig für DNS/Reverse Proxy)
   - Der Service `caddy` (Container typischerweise `weltgewebe-caddy-1`) publiziert **keine Host-Ports**,
-  routet aber container-intern im produktiven Deployment.
+    routet aber container-intern im produktiven Deployment.
 
 ## DNS / Hosts
 

@@ -18,7 +18,7 @@ Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
 
 3. **Routing-Umstellung:**
    - Heimserver-Edge routet `weltgewebe.home.arpa` auf den internen Web-Service
-    (z.B. Volume in Stack-Caddy) oder liefert ihn direkt.
+     (z.B. Volume in Stack-Caddy) oder liefert ihn direkt.
 
 ### Phase 1: Frontend API Base Decision
 

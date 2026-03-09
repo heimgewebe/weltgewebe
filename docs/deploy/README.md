@@ -240,10 +240,10 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
 ### Grundsätze
 
 1. **Internal-Only Stack:**
-   Weltgewebe publiziert in Produktion **keine** Host-Ports. Das `weltgewebe-up` Script (Deployment Härtung)
-   verifiziert dies (Host-Port Drift Guard) und verhindert Deployments, die z.B. Port `8081` exponieren.
-   Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
-   Die Frontdoor (Reverse Proxy mit den Ports 80 und 443) wird durch den Heimserver-Edge bereitgestellt.
+   Weltgewebe ist im Heimserver-Produktionspfad internal-only. Die Frontdoor (Reverse Proxy mit den Ports 80 und 443) wird
+   durch den Heimserver-Edge bereitgestellt.
+   Das `weltgewebe-up` Script (Deployment Härtung) erzwingt dies auf API-Ebene fail-closed: Der *Host-Port Drift Guard*
+   verhindert aktiv Deployments, bei denen der `api`-Service unzulässige Host-Ports (wie z.B. `8081`) exponiert.
 
 2. **Referenzkonfiguration & Frontdoor:**
    `infra/caddy/Caddyfile.heim` dient als *repo-interne Referenz* für das Routing. Die operativ wirksame Frontdoor
@@ -258,20 +258,18 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
    Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden,
    nicht über Host-Ports.
 
-### Einrichtung
+### Einrichtung & Lokale Upstreams
 
-1. **Netzwerk erstellen:**
+1. **Netzwerk erstellen (Heimserver-Infrastruktur):**
+   Damit externe Edge-Proxys oder Upstreams (z.B. Leitstand) sicher mit Weltgewebe kommunizieren können, wird ein
+   dediziertes Netzwerk genutzt (statt Host-Ports).
 
    ```bash
    docker network create heimnet
    ```
 
-2. **Bind-Adresse setzen (Optional):**
-   Standardmäßig bindet Caddy jetzt sicher an `127.0.0.1`.
-   Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner `.env`-Datei, wenn du externen Zugriff benötigst.
-
-3. **Start mit Override:**
-   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden und die VHosts zu laden:
+2. **Start mit Override:**
+   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden:
 
    ```bash
    docker compose \
@@ -279,6 +277,12 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
      -f infra/compose/compose.heimserver.override.yml \
      up -d
    ```
+
+> **Hinweis für lokales Debugging (ohne Edge-Proxy):**
+> Sollte der Stack *außerhalb* des Heimserver-Produktionspfades (z.B. für reine lokale Entwicklung) gestartet werden,
+> bindet Caddy standardmäßig sicher an `127.0.0.1`. Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner
+> `.env`-Datei, wenn du direkten Zugriff auf den Stack-internen Caddy benötigst. In Produktion übernimmt das Routing
+> der Edge-Proxy.
 
 ### Verifikation
 

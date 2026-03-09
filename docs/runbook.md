@@ -204,34 +204,33 @@ proxy IPs.
    AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
    ```
 
-### Rate Limiting (Edge Defense)
+### Rate Limiting (Backend Enforcement)
 
-To protect the authentication endpoints from abuse, rate limiting is configured at the edge (Caddy).
+To protect the authentication endpoints from abuse, rate limiting is primarily enforced by the backend API.
+The Edge Proxy (Caddy) passes the client IP to the backend.
 
-> **Warning:** Rate limits are keyed by `{remote_host}`. Ensure your reverse
-> proxy configuration (trusted proxies) is correct so that Caddy sees the real
-> client IP, especially if behind another proxy. Otherwise, you risk
-> rate-limiting the proxy itself.
+> **Warning:** Rate limits rely on accurate client IP resolution. Ensure your Edge Proxy
+> configuration correctly sets headers (e.g., `X-Forwarded-For`) and the API backend
+> trusts the correct proxy IPs (`AUTH_TRUSTED_PROXIES`), especially if behind another proxy.
+> Otherwise, you risk rate-limiting the proxy itself because all requests appear to come from the proxy IP.
 
 #### Check Client IP Visibility
 
-Before enforcing strict limits, verify that Caddy sees the correct client IP:
+Before enforcing strict limits, verify that the API sees the correct client IP:
 
-1. **Check Access Logs:** Inspect Caddy's logs to confirm the remote IP matches the client, not the load balancer.
+1. **Check Access Logs:** Inspect the API or Edge-Caddy logs to confirm the remote IP matches the client, not the load balancer.
 
    ```bash
-   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy
-   # Optional: If you have jq installed, filter for IPs
-   docker compose -f infra/compose/compose.prod.yml logs -n 200 caddy | \
-     jq -r '.. | objects | select(.request) | (.request.remote_ip // .request.remote_addr)'
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 api
    ```
 
 2. **Verify Proxy Visibility:**
-   > **Critical Warning:** If Caddy is behind another Edge Proxy or Load Balancer, `{remote_host}` will likely
-   > contain the proxy's IP, not the user's. This causes **all users** to share the same rate limit bucket.
+   > **Critical Warning:** If the API is behind an Edge Proxy or Load Balancer, it will likely
+   > receive the proxy's IP instead of the user's if trust is misconfigured. This causes **all users**
+   > to share the same rate limit bucket.
 
    **Mitigation:**
-   - **Caddy:** If running behind an Edge/LB, you **must** configure `trusted_proxies` in your Edge Caddyfile.
+   - **Edge-Caddy:** If running behind a secondary Edge/LB, you **must** configure `trusted_proxies` in your Edge Caddyfile.
      Ensure you properly pass down the real IP:
 
      ```caddy
@@ -243,15 +242,18 @@ Before enforcing strict limits, verify that Caddy sees the correct client IP:
      }
      ```
 
-   - **App:** Separately, check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (audit logs).
-   - **Do not blindly trust headers** if Caddy is directly exposed to the internet alongside the external proxy.
+   - **App:** Check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (rate limits and
+     audit logs). The API must trust the IP of the Edge-Caddy to parse the forwarded headers.
+   - **Do not blindly trust headers** if the API is directly exposed to the internet
+     (which violates the proxy-first contract).
 
 3. **Practical Test (Device Isolation):**
    - **Step A:** Connect Device A (e.g., WiFi) and trigger 10 requests -> Expect `429 Too Many Requests`.
    - **Step B:** Connect Device B (e.g., Mobile Data) and trigger 1 request -> Expect `200 OK`.
    - **Result:**
      - If Device B gets `200 OK`: Rate limiting is correctly keyed by Client IP.
-     - If Device B gets `429`: Caddy sees the upstream Proxy IP. **Action required:** Fix `trusted_proxies`.
+     - If Device B gets `429`: The API sees the upstream Proxy IP. **Action required:**
+       Fix `AUTH_TRUSTED_PROXIES` and Edge-Caddy headers.
 
 #### Request Endpoint (`login_limit`)
 
