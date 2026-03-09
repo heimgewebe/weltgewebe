@@ -79,9 +79,13 @@ Die kanonische Browser-Origin der Weltgewebe-UI ist:
 
 `https://weltgewebe.home.arpa`
 
-Wenn ein Session-Cookie vorhanden ist, müssen `Origin` oder `Referer`
-mit dem Host der API übereinstimmen oder in der konfigurierten
-Allowlist (`CSRF_ALLOWED_ORIGINS`) enthalten sein.
+Wenn ein Session-Cookie vorhanden ist, erzwingt die Runtime einen
+CSRF-Origin-Check: `Origin` oder `Referer` müssen mit dem Host der API
+übereinstimmen.
+
+Abweichende Origins sind kein Teil des kanonischen Deployment-Contracts
+und dürfen nur über eine explizite Runtime-Konfiguration
+(`CSRF_ALLOWED_ORIGINS`) zugelassen werden.
 
 **Typische erlaubte Origin:**
 
