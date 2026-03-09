@@ -73,6 +73,8 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
+EDGE_CA="${EDGE_CA:-/opt/heimgewebe/edge/edge-ca.crt}"
+
 # --- REPO_DIR Resolution ---
 # We must find the actual repository root.
 # Priority: ENV -> /opt -> Git Root -> Symlink -> CWD
@@ -462,6 +464,22 @@ generate_failure_bundle() {
   if [[ -n "$err_log_file" && -f "$err_log_file" ]]; then
       cp "$err_log_file" "${bundle_dir}/compose_up.stderr.log"
   fi
+
+  # 9. Additional diagnostics requested in deploy-hardening (Phase 2)
+  docker compose "${BASE_ARGS[@]}" logs --tail=200 api > "${bundle_dir}/docker_logs_api.txt" 2>&1 || true
+  docker compose "${BASE_ARGS[@]}" logs --tail=200 nats > "${bundle_dir}/docker_logs_nats.txt" 2>&1 || true
+  docker compose "${BASE_ARGS[@]}" logs --tail=200 db > "${bundle_dir}/docker_logs_db.txt" 2>&1 || true
+  {
+      echo "api.weltgewebe.home.arpa:"
+      getent hosts api.weltgewebe.home.arpa || echo "(unresolvable)"
+      echo "weltgewebe.home.arpa:"
+      getent hosts weltgewebe.home.arpa || echo "(unresolvable)"
+  } > "${bundle_dir}/dns_lookup.txt" 2>&1 || true
+  curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready > "${bundle_dir}/edge_api_health.txt" 2>&1 || true
+  curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > "${bundle_dir}/alias_route_health.txt" 2>&1 || true
+  curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa > "${bundle_dir}/frontend_head.txt" 2>&1 || true
+
+  ln -sfn "$PWD/$bundle_dir" /tmp/weltgewebe-deploy-failure
 
   # Print failure summary (exact requested format)
   echo
@@ -989,6 +1007,65 @@ else
         generate_failure_bundle "$msg"
         exit 1
     fi
+fi
+
+echo
+echo ">> Guard 1: DNS Resolution..."
+if ! getent hosts api.weltgewebe.home.arpa >/dev/null 2>&1 || ! getent hosts weltgewebe.home.arpa >/dev/null 2>&1; then
+    msg="DNS Guard failed: api.weltgewebe.home.arpa or weltgewebe.home.arpa is not resolvable."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
+else
+    echo "OK (resolvable)"
+fi
+
+echo
+echo ">> Guard 2: Container Health (API internals)..."
+if ! docker compose "${BASE_ARGS[@]}" exec -T api wget -qO- http://localhost:8080/health/ready >/dev/null 2>&1; then
+    msg="Container Health Guard failed: wget to http://localhost:8080/health/ready inside api container returned an error."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
+else
+    echo "OK (health endpoint reachable)"
+fi
+
+echo
+if [[ ! -f "$EDGE_CA" ]]; then
+    msg="Edge CA certificate missing: $EDGE_CA. Edge routing checks require this certificate."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
+fi
+
+echo ">> Guard 3: Edge Routing..."
+if ! curl -fsS --cacert "$EDGE_CA" https://api.weltgewebe.home.arpa/health/ready >/dev/null 2>&1; then
+    msg="Edge Routing Guard failed: Could not reach API via Edge Route."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
+else
+    echo "OK (health endpoint reachable)"
+fi
+
+echo
+echo ">> Guard 4: Alias Route..."
+if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready >/dev/null 2>&1; then
+    msg="Alias Route Guard failed: Could not reach API via Alias Route."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
+else
+    echo "OK (health endpoint reachable)"
+fi
+
+echo
+echo ">> Guard 5: Frontend Reachability..."
+if ! curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa >/dev/null 2>&1; then
+    echo "WARNING: Frontend Reachability check failed (HTTP error, TLS error, or connection error)."
+else
+    echo "OK"
 fi
 
 # 8. Update State (Post-Health)

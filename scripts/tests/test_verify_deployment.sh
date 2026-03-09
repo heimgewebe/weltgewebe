@@ -201,6 +201,8 @@ chmod +x mock_bin/*
 export PATH="$(pwd)/mock_bin:$PATH"
 
 # Default Mock State: Assume Health Checks exist for all tests unless overridden
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 
 REPO_DIR=$(pwd)
@@ -559,6 +561,8 @@ unset MOCK_HEALTH_EXISTS
 # 17b. Test Docker Native Status Inspect Fails (Retryable)
 echo ">>> Test 17b: Docker Native Status Inspect Fails (Retryable)"
 export MOCK_PORT_MODE="0"
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 export MOCK_INSPECT_FAIL_STATUS="1"
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
@@ -586,6 +590,8 @@ unset MOCK_HEALTH_EXISTS
 
 # 18. Test Docker Native Exists and No Port
 echo ">>> Test 18: Docker HEALTHCHECK exists AND no published host port"
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 export MOCK_PORT_MODE="0"
 rm -f "$MOCK_PORT_CALLS_FILE"
@@ -630,6 +636,101 @@ else
     exit 1
 fi
 unset MOCK_MISSING_API
+
+# 20. DNS Guard Success
+echo ">>> Test 20: DNS Guard Success"
+cat << 'EOF_GETENT' > mock_bin/getent
+#!/bin/bash
+exit 0
+EOF_GETENT
+chmod +x mock_bin/getent
+
+cat << 'EOF_CURL' > mock_bin/curl
+#!/bin/bash
+if [[ "$*" == *"--cacert"* || "$*" == *"-I"* ]]; then
+    exit 0
+fi
+echo "curl mock invoked: $*"
+exit 0
+EOF_CURL
+chmod +x mock_bin/curl
+
+cat << 'EOF_WGET' > mock_bin/wget
+#!/bin/bash
+exit 0
+EOF_WGET
+chmod +x mock_bin/wget
+
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
+export MOCK_HEALTH_EXISTS="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q ">> Guard 5: Frontend Reachability..."; then
+    echo "PASS: DNS Guard succeeded and script progressed through guards."
+else
+    echo "FAIL: Script did not reach Guard 5 as expected."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_HEALTH_EXISTS
+
+# 21. DNS Guard Failure
+echo ">>> Test 21: DNS Guard Failure"
+cat << 'EOF_GETENT_FAIL' > mock_bin/getent
+#!/bin/bash
+exit 1
+EOF_GETENT_FAIL
+chmod +x mock_bin/getent
+
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
+export MOCK_HEALTH_EXISTS="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "DNS Guard failed"; then
+    if echo "$OUTPUT" | grep -q "Diagnostics saved:"; then
+        echo "PASS: DNS Guard failed and generated bundle as expected."
+    else
+        echo "FAIL: DNS Guard failed but did not generate failure bundle."
+        echo "$OUTPUT"
+        exit 1
+    fi
+else
+    echo "FAIL: DNS Guard succeeded unexpectedly."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_HEALTH_EXISTS
+
+cat << 'EOF_GETENT' > mock_bin/getent
+#!/bin/bash
+exit 0
+EOF_GETENT
+chmod +x mock_bin/getent
+
+# 22. Container Health Guard Failure
+echo ">>> Test 22: Container Health Guard Failure"
+cat << 'EOF_WGET_FAIL' > mock_bin/wget
+#!/bin/bash
+exit 1
+EOF_WGET_FAIL
+chmod +x mock_bin/wget
+export MOCK_EXEC_FAIL="1"
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
+export MOCK_HEALTH_EXISTS="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Container Health Guard failed"; then
+    echo "PASS: Container Health Guard failed as expected."
+else
+    echo "FAIL: Container Health Guard succeeded unexpectedly."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset MOCK_EXEC_FAIL
+unset MOCK_HEALTH_EXISTS
+rm -f mock_bin/getent mock_bin/curl mock_bin/wget
+rm -f mock_edge_ca.crt
+unset EDGE_CA
 
 # Final Cleanup
 unset WELTGEWEBE_COMPOSE_BAKE
