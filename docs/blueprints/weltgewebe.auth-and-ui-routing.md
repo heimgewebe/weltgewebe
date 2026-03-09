@@ -4,7 +4,7 @@
 
 Der aktuelle Zustand leidet unter einem "Split-Brain":
 
-- **UI:** `weltgewebe.home.arpa` liefert HTML identisch zu `weltgewebe.pages.dev` (Cloudflare Pages).
+- **UI:** `weltgewebe.home.arpa` liefert das UI vom lokalen Heimserver-Stack (Caddy/Statischer Server).
 - **API:** `weltgewebe.home.arpa/api/*` proxyt zur lokalen API.
 - **Identity:** Auth-Versuche (Login/Magic-Link) enden in 405 (Method Not Allowed) von Cloudflare ("server: cloudflare"),
   da die UI versucht, Auth-Endpunkte gegen Cloudflare zu feuern, oder Cloudflare diese Routen nicht kennt.
@@ -13,7 +13,6 @@ Der aktuelle Zustand leidet unter einem "Split-Brain":
 ## Zielzustand (Kanonisch)
 
 Das Heimnetz (`.home.arpa`) ist die primäre Authority für UI und Identität.
-Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster").
 
 ### 1. Routing-Invarianten
 
@@ -22,9 +21,8 @@ Cloudflare Pages dient nur als optionaler öffentlicher Spiegel ("Schaufenster")
 - **User API:** `https://weltgewebe.home.arpa/api/*`
   → Lokales API (Service: `api:8080`).
 - **Host Debug (Local Dev Only):** `http://127.0.0.1:8081`
-  → Host-Mapped Port (nur in der lokalen Entwicklungsumgebung, nicht in Produktion).
-- **Public Mirror:** `weltgewebe.pages.dev`
-  → Nur statisches Schaufenster, keine Heim-Login-Funktionalität.
+  → Host-Mapped Port (nur in lokalen Entwicklungsumgebungen).
+  Weltgewebe publiziert produktiv keine Ports wie 8081.
 
 ### 2. Identity & Auth API
 

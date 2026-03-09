@@ -41,9 +41,10 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 ## 2. Reverse-Proxy-Vertrag
 
-Der Reverse-Proxy (Caddy) nutzt im Heimserver-Betrieb die Referenzkonfiguration als primären Caddyfile.
-Technisch wird `docs/reference/caddy.heimserver.caddy` via `infra/compose/compose.heimserver.override.yml`
-nach `/etc/caddy/Caddyfile` gemountet.
+Der Reverse-Proxy (Edge-Caddy) läuft im Heimserver-Betrieb außerhalb des Weltgewebe-Stacks.
+`docs/reference/caddy.heimserver.caddy` und `infra/caddy/Caddyfile.heim` dienen hierbei lediglich
+als Referenzkonfigurationen für das Routing. Die operativ wirksame Frontdoor wird im Heimserver-Repository
+konfiguriert.
 
 ```caddy
 api.weltgewebe.home.arpa {

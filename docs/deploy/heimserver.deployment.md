@@ -8,8 +8,8 @@
 - Edge-Gateway läuft separat als Compose Projekt `edge`:
   - Container: `edge-caddy` (bindet Ports 80/443)
   - Edge-Caddy ist mit `weltgewebe_default` verbunden (wichtig für DNS/Reverse Proxy)
-  - Der Service `caddy` (Container typischerweise `weltgewebe-caddy-1`) im Stack ist optional und wird typischerweise
-    nicht gestartet, da `edge-caddy` die Ports belegt.
+  - Der Service `caddy` (Container typischerweise `weltgewebe-caddy-1`) publiziert **keine Host-Ports**,
+  routet aber container-intern im produktiven Deployment.
 
 ## DNS / Hosts
 
@@ -17,7 +17,7 @@
 - API: `api.weltgewebe.home.arpa` → edge-caddy → `weltgewebe-api-1:8080`
 - Frontend-Alias: `weltgewebe.home.arpa`
   - `/api/*` → lokal an `weltgewebe-api-1:8080`
-  - sonst → Cloudflare Pages (Proxy, kein 308 Redirect)
+  - sonst → lokaler Web-Container (Caddy) oder statisches File-Serving (Frontdoor Edge)
 
 ## Env / Secrets
 
