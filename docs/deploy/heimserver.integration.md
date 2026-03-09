@@ -70,16 +70,33 @@ api.weltgewebe.home.arpa {
 
 ---
 
-## 4. CORS-Vertrag
+## 4. CSRF / Origin-Policy
 
-Falls CORS verwendet wird:
+Die Weltgewebe-API verwendet einen CSRF-Origin-Check für
+session-authentifizierte mutierende Requests.
 
-**Erlaubte Origin:**
+Die kanonische Browser-Origin der Weltgewebe-UI ist:
 
-`https://leitstand.heimgewebe.home.arpa`
+`https://weltgewebe.home.arpa`
 
-* Kein Wildcard-`*`
-* Keine parallelen Domains
+Wenn ein Session-Cookie vorhanden ist, erzwingt die Runtime einen
+CSRF-Origin-Check: `Origin` oder `Referer` müssen mit dem Host der API
+übereinstimmen.
+
+Abweichende Origins sind kein Teil des kanonischen Deployment-Contracts
+und dürfen nur über eine explizite Runtime-Konfiguration
+(`CSRF_ALLOWED_ORIGINS`) zugelassen werden.
+
+**Nicht vorgesehen:**
+
+* Wildcard-Origin (`*`)
+* mehrere parallele Browser-Domains
+* Cross-System-Origins (z.B. `leitstand.heimgewebe.home.arpa`)
+
+> **Hinweis:** Andere Heimgewebe-Systeme (z.B. Leitstand) gehören nicht zum
+> Weltgewebe-Deployment-Contract. Falls solche Systeme API-Zugriffe
+> benötigen, sollten diese über authentifizierte Service-Aufrufe oder
+> interne APIs erfolgen und nicht über Browser-CORS.
 
 ---
 
