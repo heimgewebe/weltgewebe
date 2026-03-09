@@ -1,16 +1,13 @@
 # Blueprint: Heim-first Auth & UI Routing
 
-## Problemstatement
+## Historischer Kontext (Split-Brain)
 
-Der aktuelle Zustand leidet unter einem "Split-Brain":
+Dieser Blueprint löst einen historischen "Split-Brain"-Zustand auf, bei dem die UI
+noch über Cloudflare Pages ausgeliefert wurde und Authentifizierungsaufrufe ins Leere (`405 Method Not Allowed`) liefen.
+Die Abhängigkeit vom Internet für UI-Assets und die inkonsistente Umgebung wurden
+durch die Etablierung des Heimservers als primäre Frontdoor aufgelöst.
 
-- **UI:** `weltgewebe.home.arpa` liefert das UI vom lokalen Heimserver-Stack (Caddy/Statischer Server).
-- **API:** `weltgewebe.home.arpa/api/*` proxyt zur lokalen API.
-- **Identity:** Auth-Versuche (Login/Magic-Link) enden in 405 (Method Not Allowed) von Cloudflare ("server: cloudflare"),
-  da die UI versucht, Auth-Endpunkte gegen Cloudflare zu feuern, oder Cloudflare diese Routen nicht kennt.
-- **Folge:** Keine funktionierende Anmeldung im Heimnetz, Abhängigkeit vom Internet für UI-Assets, inkonsistente Umgebung.
-
-## Zielzustand (Kanonisch)
+## Kanonische Realität
 
 Das Heimnetz (`.home.arpa`) ist die primäre Authority für UI und Identität.
 

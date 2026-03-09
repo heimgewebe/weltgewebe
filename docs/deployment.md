@@ -42,8 +42,9 @@ a running server.
 In Heimserver environments, the Heimserver's Edge-Caddy acts as the primary reverse proxy and frontdoor, meaning
 `infra/caddy/Caddyfile.heim` strictly serves as a repository-internal reference for the expected routing.
 
-It is the operator's responsibility to ensure the deployed Edge-Caddyfile (e.g., in `/opt/heimgewebe/edge/Caddyfile`)
-is synchronized with the repository template. To ensure the CSP contract is valid, `scripts/weltgewebe-up` explicitly
+It is an architectural invariant that the actively deployed Edge-Caddyfile (e.g., in `/opt/heimgewebe/edge/Caddyfile`)
+remains synchronized with the repository's reference proxy routing.
+To ensure the CSP contract is valid, `scripts/weltgewebe-up` explicitly
 resolves and evaluates the active deployment target file (e.g., the mounted host path) rather than the repository
 template, guaranteeing the validation guard tests the exact configuration that governs the running container.
 

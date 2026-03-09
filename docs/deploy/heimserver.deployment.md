@@ -17,7 +17,7 @@
 - API: `api.weltgewebe.home.arpa` → edge-caddy → `weltgewebe-api-1:8080`
 - Frontend-Alias: `weltgewebe.home.arpa`
   - `/api/*` → lokal an `weltgewebe-api-1:8080`
-  - sonst → lokaler Web-Container (Caddy) oder statisches File-Serving (Frontdoor Edge)
+  - sonst → lokale statische UI, bereitgestellt durch die Heimserver-Frontdoor (Edge-Caddy) aus dem Weltgewebe-Build-Pfad
 
 ## Env / Secrets
 
