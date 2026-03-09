@@ -87,10 +87,6 @@ Abweichende Origins sind kein Teil des kanonischen Deployment-Contracts
 und dürfen nur über eine explizite Runtime-Konfiguration
 (`CSRF_ALLOWED_ORIGINS`) zugelassen werden.
 
-**Typische erlaubte Origin:**
-
-`https://weltgewebe.home.arpa`
-
 **Nicht vorgesehen:**
 
 * Wildcard-Origin (`*`)
