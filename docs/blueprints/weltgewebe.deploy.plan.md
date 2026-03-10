@@ -13,12 +13,12 @@ Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
    - Da `adapter-static` verwendet wird, entstehen statische Assets.
 
 2. **Containerisierung (Optional):**
-   - Ein dedizierter `weltgewebe-web` Service (z.B. Caddy-Container mit statischem HTML) serviert die Assets.
-   - Alternativ: Einbindung als Volume im existierenden Caddy (`infra/caddy`).
+   - Ein dedizierter `weltgewebe-web` Service (z.B. Caddy-Container mit statischem HTML) für isolierte Setups.
+   - Alternativ (Kanonisch): Direkte Einbindung des Build-Outputs als Volume im Heimserver-Edge.
 
 3. **Routing-Umstellung:**
-   - Heimserver-Edge routet `weltgewebe.home.arpa` auf den internen Web-Service
-     (z.B. Volume in Stack-Caddy) oder liefert ihn direkt.
+   - Heimserver-Edge ist die primäre Frontdoor und liefert `weltgewebe.home.arpa`
+     primär lokal aus dem Weltgewebe-Build-Pfad aus.
 
 ### Phase 1: Frontend API Base Decision
 
