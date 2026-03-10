@@ -218,10 +218,14 @@ The Edge Proxy (Caddy) passes the client IP to the backend.
 
 Before enforcing strict limits, verify that the API sees the correct client IP:
 
-1. **Check Access Logs:** Inspect the API or Edge-Caddy logs to confirm the remote IP matches the client, not the load balancer.
+1. **Check Access Logs:** Inspect the API logs to confirm the remote IP matches the client, not the Edge proxy.
 
    ```bash
+   # Check the Weltgewebe stack API logs
    docker compose -f infra/compose/compose.prod.yml logs -n 200 api
+
+   # Alternatively, check the Heimserver Edge-Caddy logs (outside this repository)
+   # e.g., cd /opt/heimgewebe/edge && docker compose logs -n 200 edge-caddy
    ```
 
 2. **Verify Proxy Visibility:**
