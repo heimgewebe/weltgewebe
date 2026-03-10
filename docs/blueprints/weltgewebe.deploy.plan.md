@@ -13,12 +13,12 @@ Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
    - Da `adapter-static` verwendet wird, entstehen statische Assets.
 
 2. **Containerisierung (Optional):**
-   - Ein dedizierter `weltgewebe-web` Service (z.B. Caddy-Container mit statischem HTML) serviert die Assets.
-   - Alternativ: Einbindung als Volume im existierenden Caddy (`infra/caddy`).
+   - Ein dedizierter `weltgewebe-web` Service (z.B. Caddy-Container mit statischem HTML) für isolierte Setups.
+   - Alternativ (Kanonisch): Direkte Einbindung des Build-Outputs als Volume im Heimserver-Edge.
 
 3. **Routing-Umstellung:**
-   - Caddy (lokal oder Edge) routet `weltgewebe.home.arpa` auf den lokalen Web-Service (z.B. `web:80` oder Volume)
-     statt auf Cloudflare.
+   - Heimserver-Edge ist die primäre Frontdoor und liefert `weltgewebe.home.arpa`
+     primär lokal aus dem Weltgewebe-Build-Pfad aus.
 
 ### Phase 1: Frontend API Base Decision
 
@@ -53,8 +53,7 @@ Nach Deployment von Phase 0 sind folgende Checks durchzuführen:
 
 ```bash
 curl -I https://weltgewebe.home.arpa/
-# Erwartet: 200 OK (und Server: Caddy, NICHT cloudflare)
-# Falls 'cf-ray' Header vorhanden ist, kommt es noch von Cloudflare!
+# Erwartet: 200 OK (und Server: Caddy)
 ```
 
 ### 2. API Proxy-Beweis
@@ -74,26 +73,14 @@ curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
   -d '{"email": "test@example.com"}'
 
 # IST (derzeit): 404 Not Found
-#   (Server: Caddy ohne Cloudflare-Header -> Proxy OK, aber Backend-Route fehlt)
+#   (Server: Caddy -> Proxy OK, aber Backend-Route fehlt)
 #   Hinweis: Andere API-Routen wie /api/health/ready, /api/nodes, /api/accounts
 #   liefern bereits 200 -> Proxy/Upstream ist korrekt; fehlend sind spezifisch die Auth-Routen.
 
 # ZIEL (Blueprint): 200 OK (Request accepted) oder 429 (Rate Limit).
 ```
 
-### 4. Cloudflare-Indikator (Non-API)
-
-```bash
-# Request auf Login-Seite (sollte im Ziel lokal sein, aktuell Pages)
-curl -isS -X POST https://weltgewebe.home.arpa/login | sed -n '1,25p'
-
-# IST (Cloudflare): Header enthält `server: cloudflare` (oft zusätzlich `cf-ray:`).
-# ZIEL (Lokal): Header enthält `server: Caddy` und KEIN `cf-ray:`.
-# Hinweis: Statuscode kann lokal 200/404/405 sein (abhängig von SPA fallback).
-```
-
 ## Stop-Kriterien (Rollback)
 
 - UI nicht erreichbar (502/504).
 - API liefert 404 auf `/api/*` (außer Auth, das ist bekannt).
-- Cloudflare interceptet weiterhin Requests (Check `cf-ray`).

@@ -84,7 +84,7 @@ Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config
 | Service | Rolle | Netzwerk |
 | ------- | ----- | -------- |
 | api | Applikationslogik | intern |
-| caddy | Entry-Gateway | host-published |
+| caddy | Stack-Routing | intern |
 | db | PostgreSQL | intern |
 
 ### Netzwerkdetails
@@ -93,10 +93,8 @@ Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config
   - läuft intern auf `8080`
   - **nicht** host-published
 - **Caddy**
-  - einziges öffentliches Entry-Gateway
-  - published:
-    - `0.0.0.0:80` (Host 80 -> Container 80)
-    - `0.0.0.0:443` (Host 443 -> Container 443)
+  - routet innerhalb des Stacks
+  - **nicht** host-published im produktiven Heimserver-Deployment
 
 **Konsequenz:**
 Health-Checks dürfen **nicht** über `127.0.0.1:8080` (Host) erfolgen, sondern müssen container-intern laufen.
@@ -241,32 +239,39 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
 
 ### Grundsätze
 
-1. **Gateway-Only Entry:**
-   Nur der Caddy-Container darf Ports auf dem Host veröffentlichen.
-   Alle anderen Services (API, DB, Upstreams) müssen isoliert bleiben.
+1. **Internal-Only Stack:**
+   Weltgewebe ist im Heimserver-Produktionspfad internal-only. Die Frontdoor (Reverse Proxy mit den Ports 80 und 443) wird
+   durch den Heimserver-Edge bereitgestellt.
+   Das `weltgewebe-up` Script (Deployment Härtung) erzwingt dies auf API-Ebene fail-closed: Der *Host-Port Drift Guard*
+   verhindert aktiv Deployments, bei denen der `api`-Service unzulässige Host-Ports (wie z.B. `8081`) exponiert.
 
-2. **Loopback Binding:**
-   Ports werden standardmäßig auf `127.0.0.1` ("eingesperrt") gebunden, um versehentliche Exponierung im LAN/WAN
-   zu verhindern.
+2. **Referenzkonfiguration & Frontdoor:**
+   `infra/caddy/Caddyfile.heim` dient als *repo-interne Referenz* für das Routing. Die operativ wirksame Frontdoor
+   (Edge-Caddyfile) wird jedoch im Heimserver-Repository konfiguriert und durchgesetzt.
 
-3. **Shared Network (Upstreams):**
+3. **Guards & Failure Bundles:**
+   Das Deployment wird durch preflight `Guards` geschützt, z.B. CSP Contract Static Checks und Host-Port Prüfungen.
+   Bei Integrationsfehlern auf Netzwerkebene nach dem Start erzeugt das Skript automatisch ein `Failure Bundle`
+   (`weltgewebe-deploy-failure`) zur Diagnose, das Docker-Zustand, Logs und curl-Integrationstests sichert.
+
+4. **Shared Network (Upstreams):**
    Lokale Upstream-Dienste (z. B. Leitstand) werden über ein dediziertes Docker-Netzwerk (`heimnet`) angebunden,
    nicht über Host-Ports.
 
-### Einrichtung
+### Einrichtung & Lokale Upstreams
 
-1. **Netzwerk erstellen:**
+1. **Netzwerk erstellen (Heimserver-Infrastruktur):**
+   Damit externe Edge-Proxys oder Upstreams (z.B. Leitstand) sicher mit Weltgewebe kommunizieren können, wird ein
+   dediziertes Netzwerk genutzt (statt Host-Ports).
 
    ```bash
    docker network create heimnet
    ```
 
-2. **Bind-Adresse setzen (Optional):**
-   Standardmäßig bindet Caddy jetzt sicher an `127.0.0.1`.
-   Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner `.env`-Datei, wenn du externen Zugriff benötigst.
-
-3. **Start mit Override:**
-   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden und die VHosts zu laden:
+2. **Lokale Edge-Simulation (Optionaler Override):**
+   In Produktion übernimmt der Heimserver-Edge (außerhalb dieses Stacks) das Proxy-Routing.
+   Für lokale Integrations- und Debug-Tests ohne reale Edge-Infrastruktur kann das Heimnet
+   angebunden und die Referenz-Konfiguration lokal simuliert werden:
 
    ```bash
    docker compose \
@@ -274,6 +279,12 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
      -f infra/compose/compose.heimserver.override.yml \
      up -d
    ```
+
+> **Hinweis für lokales Debugging (ohne Edge-Proxy):**
+> Sollte der Stack *außerhalb* des Heimserver-Produktionspfades (z.B. für reine lokale Entwicklung) gestartet werden,
+> bindet Caddy standardmäßig sicher an `127.0.0.1`. Setze `CADDY_BIND=0.0.0.0` (oder eine LAN-IP) in deiner
+> `.env`-Datei, wenn du direkten Zugriff auf den Stack-internen Caddy benötigst. In Produktion übernimmt das Routing
+> der Edge-Proxy.
 
 ### Verifikation
 
