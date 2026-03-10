@@ -268,8 +268,10 @@ Für den Betrieb auf einem Heimserver (z. B. hinter einer Firewall oder in einem
    docker network create heimnet
    ```
 
-2. **Start mit Override:**
-   Nutze die `compose.heimserver.override.yml`, um das Netzwerk anzubinden:
+2. **Lokale Edge-Simulation (Optionaler Override):**
+   In Produktion übernimmt der Heimserver-Edge (außerhalb dieses Stacks) das Proxy-Routing.
+   Für lokale Integrations- und Debug-Tests ohne reale Edge-Infrastruktur kann das Heimnet
+   angebunden und die Referenz-Konfiguration lokal simuliert werden:
 
    ```bash
    docker compose \
