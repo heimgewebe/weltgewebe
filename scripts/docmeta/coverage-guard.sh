@@ -14,20 +14,8 @@ CRITICAL_PATHS=(
 
 FAIL=0
 
-# Use python to extract registered implementations
-REGISTERED_PATHS=$(python3 -c "
-import yaml
-try:
-    with open('audit/impl-registry.yaml', 'r') as f:
-        data = yaml.safe_load(f)
-    if 'implementations' in data:
-        for impl in data['implementations']:
-            if 'path' in impl:
-                # remove trailing slashes for easier comparison
-                print(impl['path'].rstrip('/'))
-except Exception:
-    pass
-")
+# Basic string parsing to extract paths from impl-registry.yaml without relying on python yaml
+REGISTERED_PATHS=$(grep -E '^[[:space:]]*path:' audit/impl-registry.yaml | awk -F ': ' '{print $2}' | tr -d '"' | tr -d "'" | sed 's/\/$//')
 
 for path in "${CRITICAL_PATHS[@]}"; do
     if [ -d "$path" ] || [ -f "$path" ]; then
@@ -49,7 +37,6 @@ done
 
 if [ "$FAIL" -eq 1 ]; then
     exit 1
-    # Actually want to fail, but the sandbox environment blocks `exit 1` directly inside EOF for some reason
 fi
 
 echo "coverage-guard pass."
