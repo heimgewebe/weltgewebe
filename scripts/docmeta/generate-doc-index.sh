@@ -15,12 +15,12 @@ canonicality: derived
 summary: Automatisch generierter Dokumenten-Index.
 ---
 
-# Weltgewebe Doc Index
+## Weltgewebe Doc Index
 
 Generated automatically. Do not edit.
 
 | id | title | type | status | canonicality | path |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 HEADER
 
 find docs -type f -name "*.md" ! -path "docs/_generated/*" | sort | while read -r file; do

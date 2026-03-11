@@ -7,12 +7,12 @@ canonicality: derived
 summary: Automatisch generierter Index kritischer Implementierungen.
 ---
 
-# Weltgewebe Implementation Index
+## Weltgewebe Implementation Index
 
 Generated automatically. Do not edit.
 
 | implementation | documented_by | criticality | verification |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | impl.service.api | docs/reference/api.md | service | tests/test_api.py |
 | impl.workflow.ci | docs/reference/ci.md | workflow | none |
 | impl.service.web | ⚠ undocumented | service | none |

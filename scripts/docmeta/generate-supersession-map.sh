@@ -15,7 +15,7 @@ canonicality: derived
 summary: Automatisch generierte Karte der abgelösten Dokumente.
 ---
 
-# Weltgewebe Supersession Map
+## Weltgewebe Supersession Map
 
 Generated automatically. Do not edit.
 
@@ -23,10 +23,41 @@ HEADER
 
 python3 -c "
 import os
-import yaml
 
 out_file = 'docs/_generated/supersession-map.md'
 relations = []
+
+def extract_relations(content):
+    relations = {}
+    if content.startswith('---'):
+        parts = content.split('---', 2)
+        if len(parts) >= 3:
+            fm_str = parts[1]
+            lines = fm_str.strip().split('\n')
+            current_key = None
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                if ':' in line and not line.startswith('- '):
+                    key, val = line.split(':', 1)
+                    key = key.strip()
+                    val = val.strip()
+                    current_key = key
+                    if val and val != '[]':
+                        if val.startswith('[') and val.endswith(']'):
+                            items = [i.strip() for i in val[1:-1].split(',') if i.strip()]
+                            relations[key] = items
+                        else:
+                            relations[key] = [val]
+                    else:
+                        relations[key] = []
+                elif line.startswith('- ') and current_key:
+                    val = line[2:].strip()
+                    if current_key not in relations:
+                        relations[current_key] = []
+                    relations[current_key].append(val)
+    return relations
 
 for root, dirs, files in os.walk('docs'):
     if '_generated' in root:
@@ -37,25 +68,15 @@ for root, dirs, files in os.walk('docs'):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
-                    if content.startswith('---'):
-                        parts = content.split('---', 2)
-                        if len(parts) >= 3:
-                            fm = yaml.safe_load(parts[1])
-                            if isinstance(fm, dict):
-                                if 'supersedes' in fm and fm['supersedes']:
-                                    targets = fm['supersedes']
-                                    if isinstance(targets, list):
-                                        for t in targets:
-                                            relations.append((t, file_path))
-                                    elif isinstance(targets, str):
-                                        relations.append((targets, file_path))
-                                if 'deprecated_by' in fm and fm['deprecated_by']:
-                                    targets = fm['deprecated_by']
-                                    if isinstance(targets, list):
-                                        for t in targets:
-                                            relations.append((file_path, t))
-                                    elif isinstance(targets, str):
-                                        relations.append((file_path, targets))
+                    fm = extract_relations(content)
+                    if 'supersedes' in fm and fm['supersedes']:
+                        targets = fm['supersedes']
+                        for t in targets:
+                            relations.append((t, file_path))
+                    if 'deprecated_by' in fm and fm['deprecated_by']:
+                        targets = fm['deprecated_by']
+                        for t in targets:
+                            relations.append((file_path, t))
             except Exception:
                 pass
 

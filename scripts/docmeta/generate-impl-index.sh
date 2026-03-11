@@ -15,12 +15,12 @@ canonicality: derived
 summary: Automatisch generierter Index kritischer Implementierungen.
 ---
 
-# Weltgewebe Implementation Index
+## Weltgewebe Implementation Index
 
 Generated automatically. Do not edit.
 
 | implementation | documented_by | criticality | verification |
-|---|---|---|---|
+| --- | --- | --- | --- |
 HEADER
 
 python3 -c "

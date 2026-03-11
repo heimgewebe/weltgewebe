@@ -7,7 +7,7 @@ canonicality: derived
 summary: Automatisch generierte Karte der abgelösten Dokumente.
 ---
 
-# Weltgewebe Supersession Map
+## Weltgewebe Supersession Map
 
 Generated automatically. Do not edit.
 

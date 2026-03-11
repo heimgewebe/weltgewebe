@@ -7,12 +7,12 @@ canonicality: derived
 summary: Automatisch generierter Dokumenten-Index.
 ---
 
-# Weltgewebe Doc Index
+## Weltgewebe Doc Index
 
 Generated automatically. Do not edit.
 
 | id | title | type | status | canonicality | path |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | docs.architecture.overview | Architekturüberblick | architecture | active | canonical | docs/architekturstruktur.md |
 | deploy.security | Deploy Security | architecture | active | canonical | docs/deploy/security.md |
 | deployment-contract | Deployment Contract and Preflight Guard | guide | active | canonical | docs/deployment.md |
