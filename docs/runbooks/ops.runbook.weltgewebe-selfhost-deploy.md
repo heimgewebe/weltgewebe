@@ -14,11 +14,7 @@ Die Migration beinhaltete:
 
 Ziel ist ein reproduzierbares Deployment-Runbook.
 
-## 1 Neues Runbook
-
-### Inhalt
-
-Dokumentiert:
+## Scope
 
 * DNS-Migration
 * Router-Portforward
@@ -175,18 +171,22 @@ Server: Caddy
 
 ### HTTPS
 
-```text
-https://weltgewebe.net
+```bash
+curl -I https://weltgewebe.net
 ```
 
-Caddy stellt Zertifikate automatisch aus.
+Erwartung:
+
+* HTTPS antwortet
+* Zertifikat wird sauber ausgeliefert (kein SSL/TLS-Fehler)
+* Response kommt über Caddy
 
 ## Ergebnis
 
 Deployment-Kette:
 
 ```text
-weltgewebe.net
+weltgewebe.net / api.weltgewebe.net
   ↓
 IONOS DNS
   ↓
@@ -194,7 +194,7 @@ Router Portforward
   ↓
 edge-caddy
   ↓
-API Container
+Weltgewebe-Stack
 ```
 
 System ist jetzt öffentlich erreichbar.
@@ -210,27 +210,7 @@ Ohne diese Dokumentation sind typische Fehlerszenarien schwer zu diagnostizieren
 
 Das Runbook verhindert zukünftige Deployment-Blocker.
 
-## Tests
-
-Validiert durch:
-
-```bash
-curl -I http://weltgewebe.net
-# → 308 redirect
-
-dig MX weltgewebe.net
-# → mx00.ionos.de
-# → mx01.ionos.de
-```
-
-## Risiko
-
-Dokumentations-only PR.
-Keine Laufzeitänderung.
-
-## Follow-ups
-
-Optional:
+## Optionale weitere Härtung
 
 * DNS Healthcheck CI
 * Deploy-Guard für fehlende A-Records
