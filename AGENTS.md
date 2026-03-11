@@ -114,3 +114,45 @@ exit 1
 
 - Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische
   Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.
+
+---
+
+# AGENTS
+
+## Purpose
+Agent configuration and operational boundaries for Weltgewebe.
+
+## Read This First
+Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
+
+## Canonical Sources
+- `repo.meta.yaml`
+- `AGENTS.md`
+- `docs/index.md`
+
+## Discovery Rules
+Scan `docs/`, `src/`, `scripts/`, `tests/`, and `.github/workflows/` for changes.
+
+## Generated Files
+Files in `docs/_generated/` are automatically generated and protected.
+
+## Safe Read Paths
+- `README.md`
+- `AGENTS.md`
+- `docs/`
+
+## Guarded / Risky Paths
+- `docs/`
+- `scripts/`
+- `src/`
+
+## Required Checks
+- `repo-structure-guard`
+- `docs-relations-guard`
+- `generated-files-guard`
+
+## Common Traps
+Do not manually edit `docs/_generated/` files. Ensure new code or docs are linked.
+
+## Open Gaps
+Ensure that critical infrastructure changes are added to `audit/impl-registry.yaml`.

@@ -1,0 +1,19 @@
+implementations:
+  - id: impl.service.api
+    path: apps/api/
+    impl_type: service
+    status: active
+    documented_by:
+      - docs/reference/api.md
+    verified_by:
+      - tests/test_api.py
+    supersedes: []
+    deprecated_by: []
+
+  - id: impl.workflow.ci
+    path: .github/workflows/ci.yml
+    impl_type: workflow
+    status: active
+    documented_by:
+      - docs/reference/ci.md
+    verified_by: []

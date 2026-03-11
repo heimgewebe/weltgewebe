@@ -1,3 +1,12 @@
+---
+id: docs.techstack
+title: Techstack
+doc_type: architecture
+status: active
+canonicality: canonical
+summary: >
+  Dokumentation des verwendeten Technologie-Stacks.
+---
 Weltgewebe Tech Stack
 
 Der Weltgewebe Tech-Stack ist ein vollständig dokumentiertes Systemprofil. Er nutzt eine moderne Web-Architektur mit

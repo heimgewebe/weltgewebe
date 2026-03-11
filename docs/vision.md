@@ -1,3 +1,12 @@
+---
+id: docs.vision
+title: Vision
+doc_type: reference
+status: active
+canonicality: canonical
+summary: >
+  Vision und Ziele des Projekts.
+---
 Das Weltgewebe ist als soziale, technologische und ethische Infrastruktur konzipiert – ein digitales
 Gemeinwesen, das Nachbarschaften, Engagement und demokratische Aushandlung sichtbar und nachvollziehbar macht.
 

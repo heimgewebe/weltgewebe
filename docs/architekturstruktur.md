@@ -1,3 +1,12 @@
+---
+id: docs.architecture.overview
+title: Architekturüberblick
+doc_type: architecture
+status: active
+canonicality: canonical
+summary: >
+  Kurzbeschreibung der Architektur und Struktur.
+---
 # Architektur & Struktur
 
 Dieses Dokument beschreibt die Zielstruktur des Weltgewebe-Repositories. Es dient als Referenzrahmen,

@@ -1,0 +1,33 @@
+safe_read_paths:
+  - README.md
+  - AGENTS.md
+  - docs/
+
+guarded_write_paths:
+  - docs/
+  - scripts/
+  - src/
+  - .github/workflows/
+
+forbidden_write_paths:
+  - docs/_generated/
+  - secrets/
+  - snapshots/
+
+requires_target_proof_for:
+  - src/
+  - infra/
+  - deployment/
+  - .github/workflows/
+
+required_checks_before_patch:
+  - repo-structure-guard
+  - docs-relations-guard
+  - generated-files-guard
+  - lint
+  - test
+
+human_review_required_for:
+  - security/
+  - deployment/
+  - credentials/
