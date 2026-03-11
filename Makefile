@@ -9,8 +9,13 @@ docs-guard:
 	python3 -m scripts.docmeta.export_docs_index
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
+	bash scripts/docmeta/generate-doc-index.sh
+	bash scripts/docmeta/generate-backlinks.sh
+	bash scripts/docmeta/generate-impl-index.sh
+	bash scripts/docmeta/orphan-guard.sh
+	bash scripts/docmeta/generate-supersession-map.sh
 	python3 -m scripts.docmeta.generate_system_map
-	git diff --exit-code docs/_generated/system-map.md
+	git diff --exit-code docs/_generated/
 
 up:
 	docker compose -f infra/compose/compose.core.yml --profile dev up -d --build

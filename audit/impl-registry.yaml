@@ -12,9 +12,29 @@ implementations:
     deprecated_by: []
 
   - id: impl.workflow.ci
-    path: .github/workflows/ci.yml
+    path: .github/workflows/
     impl_type: workflow
     status: active
     documented_by:
       - docs/reference/ci.md
+    verified_by: []
+  - id: impl.service.web
+    path: apps/web/
+    impl_type: service
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.infra.compose
+    path: infra/compose/
+    impl_type: config
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.contracts
+    path: contracts/
+    impl_type: schema
+    status: active
+    documented_by: []
     verified_by: []

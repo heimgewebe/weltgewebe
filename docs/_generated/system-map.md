@@ -1,4 +1,12 @@
-# SYSTEM_MAP
+---
+id: docs.generated.system-map
+title: System Map
+---
+# Weltgewebe System Map
+
+Generated automatically. Do not edit.
+
+Source: scripts/docmeta/generate_system_map.py
 
 ## Zone: norm
 

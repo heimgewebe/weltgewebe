@@ -18,3 +18,12 @@ summary: >
 – **Inhalt/Story:** inhalt.md, zusammenstellung.md
 – **X-Repo Learnings:** x-repo/peers-learnings.md
 – **Beitragen:** ../CONTRIBUTING.md
+
+## Generated Knowledge Maps
+
+- [Doc Index](_generated/doc-index.md)
+- [System Map](_generated/system-map.md)
+- [Backlinks](_generated/backlinks.md)
+- [Implementation Index](_generated/impl-index.md)
+- [Orphans](_generated/orphans.md)
+- [Supersession Map](_generated/supersession-map.md)
