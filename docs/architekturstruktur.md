@@ -7,7 +7,7 @@ canonicality: canonical
 summary: >
   Kurzbeschreibung der Architektur und Struktur.
 ---
-# Architektur & Struktur
+## Architektur # Architektur & Struktur Struktur
 
 Dieses Dokument beschreibt die Zielstruktur des Weltgewebe-Repositories. Es dient als Referenzrahmen,
 damit sich Contributors schnell orientieren können und klar ist, wo welche Verantwortlichkeiten liegen.

@@ -7,7 +7,7 @@ canonicality: canonical
 summary: >
   Runbook für Systembeobachtung und Metriken.
 ---
-# Observability – Local Profile
+## Observability – Local Profile
 
 ## Start
 

@@ -10,7 +10,7 @@ docs-guard:
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
 	python3 -m scripts.docmeta.generate_system_map
-	git diff --exit-code SYSTEM_MAP.md
+	git diff --exit-code docs/_generated/system-map.md
 
 up:
 	docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
