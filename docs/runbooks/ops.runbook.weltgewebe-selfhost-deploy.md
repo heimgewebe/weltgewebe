@@ -21,7 +21,7 @@ Ziel ist ein reproduzierbares Deployment-Runbook.
 * Caddy-Gateway
 * typische Fehler
 
-## 2 DNS-Migration dokumentiert
+## DNS-Migration
 
 Domain:
 
@@ -67,7 +67,7 @@ Dabei:
 * `<selector>` bleibt generisch
 * keine provider-internen Details einbauen
 
-## 3 Router-Konfiguration (kritisch)
+## Router-Konfiguration (kritisch)
 
 Für self-hosted Deployments müssen folgende Ports freigegeben werden:
 
@@ -86,7 +86,7 @@ HTTPS  TCP 443
 
 Ohne diese Ports ist das System öffentlich nicht erreichbar.
 
-## 4 Edge Gateway
+## Edge Gateway
 
 Edge-Gateway:
 
@@ -110,7 +110,7 @@ weltgewebe.net
 api.weltgewebe.net
 ```
 
-## 5 Hairpin-NAT / Host-Header Fallstrick
+## Hairpin-NAT / Host-Header Fallstrick
 
 Ein Test mit
 
@@ -147,7 +147,7 @@ curl -H "Host: weltgewebe.net" http://<public-ip>
 
 Hairpin-NAT kann zusätzlich lokale Tests beeinflussen.
 
-## 6 Validierungschecks
+## Validierungschecks
 
 ### DNS
 
