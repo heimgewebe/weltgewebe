@@ -11,9 +11,11 @@ summary: Automatisch generierter Report über die Dokumentationsabdeckung.
 
 Generated automatically. Do not edit.
 
-> (Heuristic placeholder: parsing audit/impl-registry.yaml vs coverage)
+> **Note:** Coverage is calculated based on `audit/impl-registry.yaml` and the verified existence of documents referenced in `documented_by`.
 
-| Component | Coverage |
-| --- | --- |
-| Apps | unknown |
-| Contracts | unknown |
+| Component Type | Coverage | Total | Documented |
+| --- | --- | --- | --- |
+| Config | 0% | 1 | 0 |
+| Schema | 0% | 1 | 0 |
+| Service | 0% | 2 | 0 |
+| Workflow | 0% | 1 | 0 |

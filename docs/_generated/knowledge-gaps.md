@@ -11,6 +11,6 @@ summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.
 
 Generated automatically. Do not edit.
 
-> (Heuristic placeholder: scanning frontmatter and content for explicit gaps)
+> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps` fields in markdown frontmatter. It does not scan the general content of documents.
 
 - **No critical knowledge gaps reported.**
