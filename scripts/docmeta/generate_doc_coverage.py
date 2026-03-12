@@ -61,7 +61,7 @@ try:
                     current_list_field = None
                 elif line_stripped.startswith('deprecated_by:'):
                     current_list_field = None
-                elif line.startswith('    - ') and current_list_field:
+                elif line_stripped.startswith('- ') and current_list_field:
                     val = line_stripped[2:].strip()
                     current_impl[current_list_field].append(val)
 

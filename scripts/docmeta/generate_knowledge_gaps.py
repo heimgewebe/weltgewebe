@@ -42,7 +42,7 @@ try:
                 frontmatter = parse_frontmatter(file_path)
                 if frontmatter:
                     doc_gaps = []
-                    for key in ['audit_gaps', 'todo', 'unknown']:
+                    for key in ['audit_gaps']:
                         val = frontmatter.get(key)
                         if val is not None:
                             if isinstance(val, list):
@@ -72,7 +72,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Knowledge Gaps\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps`, `todo`, or `unknown` fields in markdown frontmatter. It does not scan the general content of documents.\n\n")
+        f.write("> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps` fields in markdown frontmatter. It does not scan the general content of documents.\n\n")
 
         if not gaps_found:
             f.write("- **No critical knowledge gaps reported.**\n")
