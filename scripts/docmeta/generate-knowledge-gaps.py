@@ -17,7 +17,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Knowledge Gaps\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("_(Heuristic placeholder: scanning frontmatter and content for explicit gaps)_\n\n")
+        f.write("*(Heuristic placeholder: scanning frontmatter and content for explicit gaps)*\n\n")
         f.write("- **No critical knowledge gaps reported.**\n")
 
     print(f"Generated {out_file}")

@@ -11,6 +11,6 @@ summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.
 
 Generated automatically. Do not edit.
 
-_(Heuristic placeholder: scanning frontmatter and content for explicit gaps)_
+*(Heuristic placeholder: scanning frontmatter and content for explicit gaps)*
 
 - **No critical knowledge gaps reported.**

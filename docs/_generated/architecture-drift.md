@@ -11,6 +11,6 @@ summary: Automatisch generierter Report über Architektur-Drift.
 
 Generated automatically. Do not edit.
 
-_(Heuristic placeholder: comparing src/ vs documented paths)_
+*(Heuristic placeholder: comparing src/ vs documented paths)*
 
 - **No significant drift detected.**

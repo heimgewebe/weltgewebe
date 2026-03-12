@@ -11,7 +11,7 @@ summary: Zusammenfassung der agentischen Reife.
 
 Generated automatically. Do not edit.
 
-_(Heuristic placeholder: checking core artifacts, coverage, and drift)_
+*(Heuristic placeholder: checking core artifacts, coverage, and drift)*
 
 - **Core Artifacts:** ✅ Present
 - **Discovery:** ✅ Active

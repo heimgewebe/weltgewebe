@@ -17,7 +17,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Doc Coverage\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("_(Heuristic placeholder: parsing audit/impl-registry.yaml vs coverage)_\n\n")
+        f.write("*(Heuristic placeholder: parsing audit/impl-registry.yaml vs coverage)*\n\n")
         f.write("| Component | Coverage |\n")
         f.write("| --- | --- |\n")
         f.write("| Apps | unknown |\n")
