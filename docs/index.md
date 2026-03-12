@@ -8,9 +8,8 @@ summary: >
   Kanonischer Einstiegspunkt für die Dokumentation im Weltgewebe-Repository.
 ---
 
-# Weltgewebe Dokumentations-Index
-
-Willkommen im kanonischen Dokumentationsindex für das Weltgewebe-Projekt. Diese Seite bietet den Einstieg in die Struktur und die wichtigsten Dokumente.
+Willkommen im kanonischen Dokumentationsindex für das Weltgewebe-Projekt. Diese Seite bietet den Einstieg
+in die Struktur und die wichtigsten Dokumente.
 
 ## Einstieg
 
