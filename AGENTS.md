@@ -11,12 +11,12 @@ summary: Agent configuration and operational boundaries for Weltgewebe.
 
 ## Purpose
 
-Agent configuration, operational boundaries, and coding guidelines for Weltgewebe. This document defines how agents should navigate the repository, what files are canonical, and the strict rules required for CI-ready code contributions.
+Agent configuration, operational boundaries, and strict coding guidelines for Weltgewebe. This document defines how agents navigate the repository, canonical files, and the rules for CI-ready code contributions.
 
 ## Read This First
 
-Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
-Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich sind – statt nur „so ungefähr“ zu passen.
+1. Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
+2. Read the "Coding Guidelines" below. Sie definieren, wie Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich vorgeschlagen werden müssen – statt nur „so ungefähr“ zu passen.
 
 ## Canonical Sources
 
