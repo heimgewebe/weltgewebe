@@ -3,7 +3,7 @@ id: overview.inhalt
 title: Inhalt
 doc_type: reference
 status: active
-canonicality: derived
+canonicality: canonical
 summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Einführung: Ethik- & UX-First-Startpunkt

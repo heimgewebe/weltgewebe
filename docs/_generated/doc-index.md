@@ -48,7 +48,7 @@ Generated automatically. Do not edit.
 | geist-und-plan | Geist Und Plan | reference | active | derived | docs/geist-und-plan.md |
 | inhalt | Inhalt | reference | active | canonical | docs/inhalt.md |
 | konzepte.garnrolle | Garnrolle | reference | active | derived | docs/konzepte/garnrolle.md |
-| overview.inhalt | Inhalt | reference | active | derived | docs/overview/inhalt.md |
+| overview.inhalt | Inhalt | reference | active | canonical | docs/overview/inhalt.md |
 | overview.zusammenstellung | Zusammenstellung | reference | active | canonical | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | derived | docs/policies/orientierung.md |
 | process.README | Readme | reference | active | derived | docs/process/README.md |
