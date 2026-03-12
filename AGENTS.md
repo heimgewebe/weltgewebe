@@ -7,7 +7,7 @@ canonicality: canonical
 summary: Agent configuration and operational boundaries for Weltgewebe.
 ---
 
-# AGENTS
+## AGENTS
 
 ## Purpose
 
@@ -61,7 +61,8 @@ Ensure that critical infrastructure changes are added to `audit/impl-registry.ya
 ## Coding Guidelines
 
 Zweck:
-Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich sind – statt nur „so ungefähr“ zu passen.
+Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und
+CI-tauglich sind – statt nur „so ungefähr“ zu passen.
 
 ### 1. Allgemeine Arbeitsweise
 

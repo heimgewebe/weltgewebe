@@ -10,6 +10,7 @@ summary: >
 # Weltgewebe – Doku-Index
 
 ## Canonical Knowledge
+
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
 – **Techstack:** [techstack.md](techstack.md)
 – **Prozess & Fahrplan:** [process/README.md](process/README.md)
@@ -21,6 +22,7 @@ summary: >
 – **Beitragen:** [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Generated Knowledge Maps
+
 - [Doc Index](_generated/doc-index.md)
 - [System Map](_generated/system-map.md)
 - [Backlinks](_generated/backlinks.md)
