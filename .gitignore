@@ -53,7 +53,8 @@ artifacts/
 *.rej
 
 # Runtime artifacts
-*output*.txt
-*output*.json
-*output*.png
-full_results.txt
+/server_output.txt
+/full_results.txt
+/nodes_output.json
+/nodes_output_2.json
+/test_output.png

@@ -1,21 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
+
 echo "Checking for accidental token/secret leaks in text files..."
 
-# We check for authentication tokens, magic links, passwords, and secrets.
-# We use git grep over tracked files to find matches.
-MATCHES=$(git grep -i -E "token=[a-zA-Z0-9-]{10,}|/api/auth/login/consume|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" -- . || true)
+set +e
+MATCHES=$(git -C "$REPO_ROOT" grep -i -E "token=[a-zA-Z0-9-]{10,}|/api/auth/login/consume|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" \
+  -- . \
+  ':!scripts/guard/token-leak-guard.sh' \
+  ':!apps/api/src/routes/auth.rs' \
+  ':!apps/api/tests/api_auth.rs' \
+  ':!docs/runbook.md' \
+  ':!docs/blueprints/weltgewebe.auth-and-ui-routing.md' \
+  ':!verification/verify_magic_link.py')
+EXIT_CODE=$?
+set -e
 
-if [ -n "$MATCHES" ]; then
-    # Filter out matches in legitimate context such as source code, tests, docs, and the CI scripts themselves.
-    FILTERED_MATCHES=$(echo "$MATCHES" | grep -vE "^apps/api/" | grep -vE "^apps/web/" | grep -vE "^docs/" | grep -vE "^verification/" | grep -vE "^scripts/" | grep -vE "^ci/" | grep -vE "^\.github/" | grep -vE "^\.wgx/" || true)
-
-    if [ -n "$FILTERED_MATCHES" ]; then
-        echo "ERROR: Found potential token leaks or secrets in repository files:"
-        echo "$FILTERED_MATCHES"
-        exit 1
-    fi
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "ERROR: Found potential token leaks or secrets in repository files:"
+    echo "$MATCHES"
+    exit 1
+elif [ $EXIT_CODE -eq 1 ]; then
+    echo "OK: No token leaks detected."
+    exit 0
+else
+    echo "ERROR: git grep failed with exit code $EXIT_CODE."
+    exit $EXIT_CODE
 fi
-
-echo "OK: No token leaks detected."
