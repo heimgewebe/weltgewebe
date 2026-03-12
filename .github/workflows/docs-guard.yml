@@ -14,6 +14,10 @@ name: Docs Guard
       - 'runbooks/**'
       - 'scripts/docmeta/**'
       - 'docs/_generated/system-map.md'
+      - 'AGENTS.md'
+      - 'repo.meta.yaml'
+      - 'agent-policy.yaml'
+      - 'audit/impl-registry.yaml'
       - '.python-version'
 
 permissions:
