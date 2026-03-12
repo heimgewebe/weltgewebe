@@ -17,7 +17,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Agent Readiness\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("*(Heuristic placeholder: checking core artifacts, coverage, and drift)*\n\n")
+        f.write("> (Heuristic placeholder: checking core artifacts, coverage, and drift)\n\n")
         f.write("- **Core Artifacts:** ✅ Present\n")
         f.write("- **Discovery:** ✅ Active\n")
         f.write("- **Guarded Paths:** ✅ Defined\n")

@@ -11,7 +11,7 @@ summary: Wenn sich X ändert, prüfe oder aktualisiere Y.
 
 Generated automatically. Do not edit.
 
-*(Heuristic placeholder)*
+> (Heuristic placeholder)
 
 - **Infra / Compose:** -> Deploy-Doku / Runbooks
 - **Workflows:** -> AGENTS.md / Policy-Doku

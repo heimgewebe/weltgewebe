@@ -17,10 +17,10 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Implicit Dependencies\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("*(Heuristic placeholder: scanning Makefile, Compose and scripts)*\n\n")
+        f.write("> (Heuristic placeholder: scanning Makefile, Compose and scripts)\n\n")
         f.write("| Source | Inferred Dependency | Evidence | Documented |\n")
         f.write("| --- | --- | --- | --- |\n")
-        f.write("| Makefile | docs-guard | `make docs-guard` | _unclear_ |\n")
+        f.write("| Makefile | docs-guard | `make docs-guard` | *unclear* |\n")
 
     print(f"Generated {out_file}")
 except Exception as e:

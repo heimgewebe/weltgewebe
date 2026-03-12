@@ -17,7 +17,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Staleness Report\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("*(Heuristic placeholder: scanning frontmatter for deprecated/superseded labels)*\n\n")
+        f.write("> (Heuristic placeholder: scanning frontmatter for deprecated/superseded labels)\n\n")
         f.write("- **No stale documents found.**\n")
 
     print(f"Generated {out_file}")

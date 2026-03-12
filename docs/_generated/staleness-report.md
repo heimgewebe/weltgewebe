@@ -11,6 +11,6 @@ summary: Markiert veraltete oder abgelöste Dokumente.
 
 Generated automatically. Do not edit.
 
-*(Heuristic placeholder: scanning frontmatter for deprecated/superseded labels)*
+> (Heuristic placeholder: scanning frontmatter for deprecated/superseded labels)
 
 - **No stale documents found.**

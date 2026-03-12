@@ -11,8 +11,8 @@ summary: Heuristische Karte impliziter Abhängigkeiten.
 
 Generated automatically. Do not edit.
 
-*(Heuristic placeholder: scanning Makefile, Compose and scripts)*
+> (Heuristic placeholder: scanning Makefile, Compose and scripts)
 
 | Source | Inferred Dependency | Evidence | Documented |
 | --- | --- | --- | --- |
-| Makefile | docs-guard | `make docs-guard` | _unclear_ |
+| Makefile | docs-guard | `make docs-guard` | *unclear* |

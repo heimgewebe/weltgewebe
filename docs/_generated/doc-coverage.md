@@ -11,7 +11,7 @@ summary: Automatisch generierter Report über die Dokumentationsabdeckung.
 
 Generated automatically. Do not edit.
 
-*(Heuristic placeholder: parsing audit/impl-registry.yaml vs coverage)*
+> (Heuristic placeholder: parsing audit/impl-registry.yaml vs coverage)
 
 | Component | Coverage |
 | --- | --- |

@@ -17,7 +17,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Change Resonance\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("*(Heuristic placeholder)*\n\n")
+        f.write("> (Heuristic placeholder)\n\n")
         f.write("- **Infra / Compose:** -> Deploy-Doku / Runbooks\n")
         f.write("- **Workflows:** -> AGENTS.md / Policy-Doku\n")
 
