@@ -7,16 +7,15 @@ canonicality: canonical
 summary: Agent configuration and operational boundaries for Weltgewebe.
 ---
 
-# AGENTS
+## AGENTS
 
 ## Purpose
 
-Agent configuration, operational boundaries, and coding guidelines for Weltgewebe. This document defines how agents should navigate the repository, what files are canonical, and the strict rules required for CI-ready code contributions.
+Agent configuration and operational boundaries for Weltgewebe.
 
 ## Read This First
 
 Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
-Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich sind – statt nur „so ungefähr“ zu passen.
 
 ## Canonical Sources
 
@@ -60,6 +59,10 @@ Do not manually edit `docs/_generated/` files. Ensure new code or docs are linke
 Ensure that critical infrastructure changes are added to `audit/impl-registry.yaml`.
 
 ## Coding Guidelines
+
+Zweck:
+Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und
+CI-tauglich sind – statt nur „so ungefähr“ zu passen.
 
 ### 1. Allgemeine Arbeitsweise
 
@@ -130,7 +133,7 @@ declare -i end=$SECONDS+$TIMEOUT
 while [ "$SECONDS" -lt "$end" ]; do
   if echo >"/dev/tcp/$HOST/$PORT" 2>/dev/null; then
     printf 'Postgres is available at %s:%s\n' "$HOST" "$PORT"
-    exit 0
+    exit 1
   fi
   sleep "$INTERVAL"
 done

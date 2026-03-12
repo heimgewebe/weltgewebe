@@ -23,7 +23,10 @@ Generated automatically. Do not edit.
 | --- | --- | --- | --- | --- | --- |
 HEADER
 
-find docs -type f -name "*.md" ! -path "docs/_generated/*" | sort | while read -r file; do
+# Create a temporary file to hold entries before sorting
+TEMP_ENTRIES=$(mktemp)
+
+find docs -type f -name "*.md" ! -path "docs/_generated/*" -print0 | while IFS= read -r -d '' file; do
     # Skip files without frontmatter
     if ! head -n 1 "$file" | grep -q "^---$"; then
         continue
@@ -37,8 +40,12 @@ find docs -type f -name "*.md" ! -path "docs/_generated/*" | sort | while read -
     canonicality=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^canonicality:" | sed 's/^canonicality: *//' | tr -d '"'\''')
 
     if [ -n "$id" ]; then
-        echo "| $id | $title | $doc_type | $status | $canonicality | $file |" >> "$OUT_FILE"
+        echo "| $id | $title | $doc_type | $status | $canonicality | $file |" >> "$TEMP_ENTRIES"
     fi
 done
+
+# Sort entries deterministically and append to output
+sort "$TEMP_ENTRIES" >> "$OUT_FILE"
+rm -f "$TEMP_ENTRIES"
 
 echo "Generated $OUT_FILE"
