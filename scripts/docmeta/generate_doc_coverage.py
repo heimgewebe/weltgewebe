@@ -1,6 +1,5 @@
 import os
 import sys
-import re
 from scripts.docmeta.docmeta import REPO_ROOT
 
 out_file = os.path.join(REPO_ROOT, "docs", "_generated", "doc-coverage.md")
@@ -45,7 +44,7 @@ try:
                     if val == '[]':
                         current_list_field = None
                     elif val.startswith('[') and val.endswith(']'):
-                        items = [x.strip() for x in val[1:-1].split(',')]
+                        items = [x.strip() for x in val[1:-1].split(',') if x.strip()]
                         current_impl[current_list_field].extend(items)
                         current_list_field = None
                 elif line_stripped.startswith('verified_by:'):
@@ -55,7 +54,7 @@ try:
                     if val == '[]':
                         current_list_field = None
                     elif val.startswith('[') and val.endswith(']'):
-                        items = [x.strip() for x in val[1:-1].split(',')]
+                        items = [x.strip() for x in val[1:-1].split(',') if x.strip()]
                         current_impl[current_list_field].extend(items)
                         current_list_field = None
                 elif line_stripped.startswith('supersedes:'):
@@ -77,8 +76,21 @@ try:
 
         coverage[impl_type]['total'] += 1
         docs = impl.get('documented_by', [])
-        # Also check if it's a list with empty strings
-        if docs and any(d.strip() for d in docs):
+
+        # Verify that at least one documented_by target exists relative to repo root
+        has_valid_doc = False
+        for doc in docs:
+            doc_path = doc.strip()
+            # Strip quotes if present
+            if (doc_path.startswith('"') and doc_path.endswith('"')) or (doc_path.startswith("'") and doc_path.endswith("'")):
+                doc_path = doc_path[1:-1]
+            if doc_path:
+                full_path = os.path.join(REPO_ROOT, doc_path)
+                if os.path.exists(full_path):
+                    has_valid_doc = True
+                    break
+
+        if has_valid_doc:
             coverage[impl_type]['covered'] += 1
 
     with open(out_file, "w", encoding="utf-8") as f:
@@ -92,6 +104,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Doc Coverage\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
+        f.write("> **Note:** Coverage is calculated based on `audit/impl-registry.yaml` and the verified existence of documents referenced in `documented_by`.\n\n")
 
         if not coverage:
             f.write("> (No implementations found in audit/impl-registry.yaml)\n\n")

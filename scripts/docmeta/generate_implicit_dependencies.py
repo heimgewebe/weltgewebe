@@ -21,8 +21,8 @@ try:
                 continue
 
             # Regex to match targets with or without dependencies
-            # A target starts at the beginning of the line (no tabs) and ends with a colon before dependencies
-            match = re.match(r'^([a-zA-Z0-9_-]+):', line)
+            # Matches target names with alphanumeric, dashes, dots, underscores
+            match = re.match(r'^([a-zA-Z0-9_.-]+):', line)
             if match:
                 current_target = match.group(1).strip()
             elif current_target and line.startswith('\t'):
@@ -57,13 +57,16 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Implicit Dependencies\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
+        f.write("> **Note:** This report uses Makefile-based heuristic inference to identify script execution dependencies. Documentation status validation is not yet fully automated here.\n\n")
 
         f.write("| Source | Inferred Dependency | Evidence | Documented |\n")
         f.write("| --- | --- | --- | --- |\n")
         if deps:
             for dep in deps:
                 # evidence may contain markdown syntax which breaks table formatting
-                evidence = f"`{dep['evidence']}`"
+                # Escape any pipe characters
+                evidence_text = dep['evidence'].replace('|', '\\|')
+                evidence = f"`{evidence_text}`"
                 f.write(f"| {dep['source']} ({dep['target']}) | {dep['dependency']} | {evidence} | {dep['documented']} |\n")
         else:
             f.write("| Makefile | docs-guard | `make docs-guard` | *unclear* |\n")

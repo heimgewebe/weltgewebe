@@ -11,6 +11,8 @@ summary: Heuristische Karte impliziter Abhängigkeiten.
 
 Generated automatically. Do not edit.
 
+> **Note:** This report uses Makefile-based heuristic inference to identify script execution dependencies. Documentation status validation is not yet fully automated here.
+
 | Source | Inferred Dependency | Evidence | Documented |
 | --- | --- | --- | --- |
 | Makefile (docs-guard) | unittest | `python3 -m unittest discover scripts/docmeta/tests/` | *unclear* |

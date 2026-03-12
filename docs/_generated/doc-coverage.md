@@ -11,6 +11,8 @@ summary: Automatisch generierter Report über die Dokumentationsabdeckung.
 
 Generated automatically. Do not edit.
 
+> **Note:** Coverage is calculated based on `audit/impl-registry.yaml` and the verified existence of documents referenced in `documented_by`.
+
 | Component Type | Coverage | Total | Documented |
 | --- | --- | --- | --- |
 | Config | 0% | 1 | 0 |

@@ -11,4 +11,6 @@ summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.
 
 Generated automatically. Do not edit.
 
+> **Note:** This report specifically aggregates explicit gaps declared via `audit_gaps`, `todo`, or `unknown` fields in markdown frontmatter. It does not scan the general content of documents.
+
 - **No critical knowledge gaps reported.**
