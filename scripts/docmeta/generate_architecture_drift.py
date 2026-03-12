@@ -18,7 +18,7 @@ try:
         f.write("---\n\n")
         f.write("## Weltgewebe Architecture Drift\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("> (Heuristic placeholder: comparing src/ vs documented paths)\n\n")
+        f.write("> (Heuristic placeholder: comparing implementation roots and documented structure)\n\n")
         f.write("- **No significant drift detected.**\n")
 
     print(f"Generated {out_file}")
