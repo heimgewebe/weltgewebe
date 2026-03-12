@@ -18,6 +18,13 @@ REQUIRED_FILES=(
     "impl-index.md"
     "orphans.md"
     "supersession-map.md"
+    "architecture-drift.md"
+    "doc-coverage.md"
+    "knowledge-gaps.md"
+    "implicit-dependencies.md"
+    "change-resonance.md"
+    "staleness-report.md"
+    "agent-readiness.md"
 )
 
 for req in "${REQUIRED_FILES[@]}"; do

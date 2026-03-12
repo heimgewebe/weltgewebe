@@ -39,6 +39,16 @@ generated_artifacts:
   - docs/_generated/doc-index.md
   - docs/_generated/system-map.md
   - docs/_generated/orphans.md
+  - docs/_generated/impl-index.md
+  - docs/_generated/backlinks.md
+  - docs/_generated/supersession-map.md
+  - docs/_generated/architecture-drift.md
+  - docs/_generated/doc-coverage.md
+  - docs/_generated/knowledge-gaps.md
+  - docs/_generated/implicit-dependencies.md
+  - docs/_generated/change-resonance.md
+  - docs/_generated/staleness-report.md
+  - docs/_generated/agent-readiness.md
 
 safe_read_paths:
   - README.md
