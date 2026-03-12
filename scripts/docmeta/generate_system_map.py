@@ -15,7 +15,17 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    output = ["# SYSTEM_MAP\n"]
+    output = [
+        "---",
+        "id: docs.generated.system-map",
+        "title: System Map",
+        "doc_type: generated",
+        "status: active",
+        "canonicality: derived",
+        "summary: Automatisch generierte System Map.",
+        "---",
+        "## Weltgewebe System Map\n\nGenerated automatically. Do not edit.\n\nSource: scripts/docmeta/generate_system_map.py\n"
+    ]
 
     for zone_name, zone_data in sorted(repo_index.get('zones', {}).items()):
         output.append(f"## Zone: {zone_name}\n")
@@ -119,7 +129,7 @@ def main():
             output.append(f"- {check}")
         output.append("")
 
-    out_path = os.path.join(REPO_ROOT, 'SYSTEM_MAP.md')
+    out_path = os.path.join(REPO_ROOT, 'docs', '_generated', 'system-map.md')
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write("\n".join(output))
 

@@ -1,3 +1,11 @@
+---
+id: process.sprache
+title: Sprache
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Sprache & Ton im Weltgewebe
 
 ## 1. Grundsatz

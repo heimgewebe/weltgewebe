@@ -1,3 +1,11 @@
+---
+id: deploy.heimserver.integration
+title: Heimserver.Integration
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe API – Heimserver Integration
 
 ## 0. Zweck

@@ -1,3 +1,11 @@
+---
+id: domain.modules
+title: Modules
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Modul-IDs im Weltgewebe
 
 ## Zweck

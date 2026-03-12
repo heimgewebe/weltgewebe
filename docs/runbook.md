@@ -1,4 +1,13 @@
-# Runbook
+---
+id: docs.runbook
+title: Runbook
+doc_type: runbook
+status: active
+canonicality: canonical
+summary: >
+  Allgemeines operatives Runbook.
+---
+## Runbook
 
 Dieses Dokument enthält praxisorientierte Anleitungen für den Betrieb, die
 Wartung und das Onboarding im Weltgewebe-Projekt.

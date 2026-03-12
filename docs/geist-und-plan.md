@@ -1,3 +1,11 @@
+---
+id: geist-und-plan
+title: Geist Und Plan
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 Hier ist eine (meinerseits strukturierte) Analyse und Extraktion des „Geistes und Plans“ der
 Weltweberei basierend auf der Website weltweberei.org.
 Ich ziehe aus den öffentlich verfügbaren Texten, sortiere nach Themen und ziehe Schlussfolgerungen —

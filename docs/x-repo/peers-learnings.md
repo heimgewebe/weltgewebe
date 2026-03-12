@@ -1,3 +1,11 @@
+---
+id: x-repo.peers-learnings
+title: Peers Learnings
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil
 

@@ -1,3 +1,11 @@
+---
+id: adr.ADR-0005-auth
+title: Adr 0005 Auth
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR-0005: Minimales Authentifizierungskonzept
 
 ## Status

@@ -1,3 +1,11 @@
+---
+id: blueprints.weltgewebe.deploy.plan
+title: Weltgewebe.Deploy.Plan
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Migrationsplan: Heim-first Deployment (Phase 0)
 
 Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.

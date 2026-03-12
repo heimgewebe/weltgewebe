@@ -1,3 +1,11 @@
+---
+id: inhalt
+title: Inhalt
+doc_type: reference
+status: active
+canonicality: canonical
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Inhalt (MANDATORISCH)
 
 ## Was bedeutet Weltweberei?

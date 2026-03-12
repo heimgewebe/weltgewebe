@@ -1,3 +1,11 @@
+---
+id: dev.codespaces
+title: Codespaces
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Codespaces: Dev-Server schnell starten
 
 Für die schnellste Entwicklung empfehlen wir den "Ein-Klick"-Task.

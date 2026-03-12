@@ -1,3 +1,11 @@
+---
+id: zusammenstellung
+title: Zusammenstellung
+doc_type: reference
+status: active
+canonicality: canonical
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Zusammenstellung (MANDATORISCH)
 
 Das Weltgewebe: Eine Systematische Zusammenfassung

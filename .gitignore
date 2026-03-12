@@ -47,3 +47,7 @@ infra/compose/compose.prod.nocaddy.override.yml
 *.bak.*
 artifacts/
 .ops/
+
+# Patch artifacts
+*.orig
+*.rej

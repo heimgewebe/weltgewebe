@@ -1,3 +1,11 @@
+---
+id: policies.orientierung
+title: Orientierung
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 
 **Stand:** 2025-10-06

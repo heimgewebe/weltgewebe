@@ -1,3 +1,11 @@
+---
+id: overview.zusammenstellung
+title: Zusammenstellung
+doc_type: reference
+status: active
+canonicality: canonical
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Systematik & Strukturüberblick
 
 Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltgewebe-Dokumentation.

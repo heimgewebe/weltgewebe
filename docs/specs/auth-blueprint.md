@@ -1,3 +1,11 @@
+---
+id: specs.auth-blueprint
+title: Auth Blueprint
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Blaupause: Schrittweise Implementierung von Account- und Login-Logik im Weltgewebe
 
 > Ziel dieses Dokuments ist eine **dump- und ADR-konforme**, schrittweise Abarbeitung

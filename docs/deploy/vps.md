@@ -1,3 +1,11 @@
+---
+id: deploy.vps
+title: Vps
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # VPS Deployment Runbook
 
 Dieses Runbook beschreibt die Schritte zur Bereitstellung der Weltgewebe-Infrastruktur (API, Datenbank, Proxy)

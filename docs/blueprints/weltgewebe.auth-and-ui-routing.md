@@ -1,3 +1,11 @@
+---
+id: blueprints.weltgewebe.auth-and-ui-routing
+title: Weltgewebe.Auth And Ui Routing
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Blueprint: Heim-first Auth & UI Routing
 
 ## Historischer Kontext (Split-Brain)

@@ -15,7 +15,7 @@ verifies_with: []
 
 ## Prinzipien (Querschnitt)
 
-- **Determinismus:** Alle generierten Artefakte (`docs.index.json`, `impact.md`, `SYSTEM_MAP.md`) müssen
+- **Determinismus:** Alle generierten Artefakte (`docs.index.json`, `impact.md`, `docs/_generated/system-map.md`) müssen
   bei jedem Lauf identisch ausfallen (stable sort, keine Timestamp-Fluktuation).
 - **Abhängigkeitsfrei:** Werkzeuge in `scripts/docmeta/` nutzen ausschließlich die Python Standardbibliothek.
 
@@ -29,7 +29,7 @@ Checks (2-5):
 - [x] Zähle: wie viele kanonische Docs, wie viele ohne `id`, wie viele ohne `last_reviewed`, wie viele mit `depends_on`/`verifies_with`.
 - [x] Linkreport prüfen: broken internal links, Anzahl total links in `artifacts/docmeta/link_report.json`.
 - [x] Impactreport prüfen: cycles? missing ids? transitive impacts plausibel in `artifacts/docmeta/impact.json`.
-- [x] `SYSTEM_MAP.md`: deterministisch (zweimal laufen lassen, `git diff --exit-code SYSTEM_MAP.md` muss leer bleiben).
+- [x] `docs/_generated/system-map.md`: deterministisch (zweimal laufen lassen, `git diff --exit-code docs/_generated/system-map.md` muss leer bleiben).
 - [x] Stop-Kriterium: Artefakte stabil + deterministisch; sonst erst Determinismus fixen, bevor Struktur ausgebaut wird.
 
 ## Phase 1: Kanonisches Docmeta-Minimum (Contract-first)
@@ -99,7 +99,7 @@ Artefakte unter `artifacts/docmeta/` pflegen:
 - [x] `link_report.{json,md}`
 - [x] `impact.{json,md}`
 - [x] `docs.index.json`
-- [x] `SYSTEM_MAP.md` (via `scripts/docmeta/generate_system_map.py`)
+- [x] `docs/_generated/system-map.md` (via `scripts/docmeta/generate_system_map.py`)
 
 ### 3.2 "Known debt" als first-class
 
@@ -135,7 +135,7 @@ Ziel: Contributor versteht das System in 5 Minuten.
 ### 5.1 "Start Here" Links
 
 - [ ] `README.md` oben mit 5 expliziten Links versehen (Constitution, System Map, Runtime, Operations, Architecture Overview).
-- [ ] `SYSTEM_MAP.md` bleibt diff-guarded via `Makefile`.
+- [ ] `docs/_generated/system-map.md` bleibt diff-guarded via `Makefile`.
 
 ## Definition of Done (DoD)
 

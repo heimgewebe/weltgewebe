@@ -1,8 +1,10 @@
 ---
 id: deployment-contract
 title: Deployment Contract and Preflight Guard
-role: norm
+doc_type: guide
 status: active
+canonicality: canonical
+summary: Anleitung und Dokumentation zum Deployment.
 last_reviewed: "2026-03-05"
 ---
 

@@ -1,3 +1,11 @@
+---
+id: konzepte.garnrolle
+title: Garnrolle
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Garnrolle (Konzept)
 
 Die **Garnrolle** repräsentiert das Konto (Account) eines Akteurs im Weltgewebe.

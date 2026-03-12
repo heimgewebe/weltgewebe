@@ -1,0 +1,71 @@
+---
+repo_name: weltgewebe
+repo_type: service
+role: weltgewebe-stack
+status: active
+summary: >
+  Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres+Outbox, JetStream und Caddy.
+
+owners:
+  - heimgewebe
+
+primary_languages:
+  - rust
+  - typescript
+  - svelte
+  - markdown
+
+entrypoints:
+  - README.md
+  - AGENTS.md
+  - docs/index.md
+
+canonical_sources:
+  - repo.meta.yaml
+  - AGENTS.md
+  - docs/index.md
+
+discovery_roots:
+  - docs/
+  - src/
+  - scripts/
+  - tests/
+  - .github/workflows/
+
+generated_artifacts:
+  - docs/_generated/doc-index.md
+  - docs/_generated/system-map.md
+  - docs/_generated/orphans.md
+
+safe_read_paths:
+  - README.md
+  - AGENTS.md
+  - docs/
+
+guarded_write_paths:
+  - docs/
+  - scripts/
+  - src/
+
+forbidden_write_paths:
+  - docs/_generated/
+
+required_checks:
+  - repo-structure-guard
+  - docs-relations-guard
+  - generated-files-guard
+
+indexing:
+  enabled: true
+  require_frontmatter_for_docs: true
+  require_registry_for_critical_impl: false
+  fail_on_untyped_docs: true
+  fail_on_missing_doc_index: true
+  fail_on_orphans: false
+  fail_on_unmapped_critical_impl: false
+
+related_repos: []
+
+keywords:
+  - docs
+  - agent-ready

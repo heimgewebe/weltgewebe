@@ -1,31 +1,79 @@
-Codex-Anweisung für das Repo weltgewebe
-
-Zweck:
-Diese Anweisung sagt dir, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und
-CI-tauglich sind – statt nur „so ungefähr“ zu passen.
-
-1. Allgemeine Arbeitsweise
-
-- Immer echte Dateien bevorzugen: Bevor du Code vorschlägst oder analysierst, musst du nach der realen Datei im Repo suchen
-  und von dort aus arbeiten. Rate nicht frei, wenn die Datei existiert.
-- Keine „stilisierten“ Snippets: Verwende keine verkürzten Schreibweisen wie SECONDS end oder zerstückelte Redirections
-  (devtcpHOSTPORT). Alles, was du zeigst, muss so in einer echten Datei kompilierbar bzw. ausführbar sein.
-- Vollständige Blöcke: Wenn du Funktionen oder Skripte änderst, zeige immer den ganzen betroffenen Block (z.B. komplette
-  Funktion, komplettes Skript), nicht nur einzelne zerhackte Zeilen.
-- Kennzeichnung von Auslassungen: Wenn du Teile weglässt, markiere das explizit mit Kommentaren wie // ... oder # ... ohne
-  die Syntax zu zerstören.
-
+---
+id: repo.agents
+title: AGENTS
+doc_type: policy
+status: active
+canonicality: canonical
+summary: Agent configuration and operational boundaries for Weltgewebe.
 ---
 
-1. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
+# AGENTS
+
+## Purpose
+
+Agent configuration, operational boundaries, and strict coding guidelines for Weltgewebe. This document defines how agents navigate the repository, canonical files, and the rules for CI-ready code contributions.
+
+## Read This First
+
+1. Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
+2. Read the "Coding Guidelines" below. Sie definieren, wie Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich vorgeschlagen werden müssen – statt nur „so ungefähr“ zu passen.
+
+## Canonical Sources
+
+- `repo.meta.yaml`
+- `AGENTS.md`
+- `docs/index.md`
+
+## Discovery Rules
+
+Scan `docs/`, `src/`, `scripts/`, `tests/`, and `.github/workflows/` for changes.
+
+## Generated Files
+
+Files in `docs/_generated/` are automatically generated and protected.
+
+## Safe Read Paths
+
+- `README.md`
+- `AGENTS.md`
+- `docs/`
+
+## Guarded / Risky Paths
+
+- `docs/`
+- `scripts/`
+- `src/`
+
+## Required Checks
+
+- `repo-structure-guard`
+- `docs-relations-guard`
+- `generated-files-guard`
+- `coverage-guard`
+
+## Common Traps
+
+Do not manually edit `docs/_generated/` files. Ensure new code or docs are linked.
+
+## Open Gaps
+
+Ensure that critical infrastructure changes are added to `audit/impl-registry.yaml`.
+
+## Coding Guidelines
+
+### 1. Allgemeine Arbeitsweise
+
+- Immer echte Dateien bevorzugen: Bevor du Code vorschlägst oder analysierst, musst du nach der realen Datei im Repo suchen und von dort aus arbeiten. Rate nicht frei, wenn die Datei existiert.
+- Keine „stilisierten“ Snippets: Verwende keine verkürzten Schreibweisen wie SECONDS end oder zerstückelte Redirections (devtcpHOSTPORT). Alles, was du zeigst, muss so in einer echten Datei kompilierbar bzw. ausführbar sein.
+- Vollständige Blöcke: Wenn du Funktionen oder Skripte änderst, zeige immer den ganzen betroffenen Block (z.B. komplette Funktion, komplettes Skript), nicht nur einzelne zerhackte Zeilen.
+- Kennzeichnung von Auslassungen: Wenn du Teile weglässt, markiere das explizit mit Kommentaren wie // ... oder # ... ohne die Syntax zu zerstören.
+
+### 2. Regeln für Node-/JS-Snippets (z.B. assert-web-budget.mjs)
 
 - Erfolgsmeldungen nur bei tatsächlichem Erfolg:
-  `console.log('Frontend performance budget matches expected thresholds')` oder
-  ähnliche Erfolgsmeldungen dürfen nur ausgeführt werden, wenn vorher kein Fehler geworfen wurde.
-- Wenn du throw verwendest, achte darauf, dass die Logik so strukturiert ist, dass bei Fehlern kein „Alles ok“ im CI-Log
-  erscheint.
-- Saubere Fehlermeldungen: Keine überflüssigen Zeichen am Ende von Template Strings, z.B. kein abschließendes Komma nach
-  ${actual}.
+  `console.log('Frontend performance budget matches expected thresholds')` oder ähnliche Erfolgsmeldungen dürfen nur ausgeführt werden, wenn vorher kein Fehler geworfen wurde.
+- Wenn du throw verwendest, achte darauf, dass die Logik so strukturiert ist, dass bei Fehlern kein „Alles ok“ im CI-Log erscheint.
+- Saubere Fehlermeldungen: Keine überflüssigen Zeichen am Ende von Template Strings, z.B. kein abschließendes Komma nach ${actual}.
 - Fehlermeldungen müssen klar, einzeilig und ohne überflüssige Interpunktion sein.
 - Strikte Typprüfungen: Wenn du Performance-Budgets oder Konfigwerte prüfst, nutze Muster wie:
 
@@ -45,9 +93,7 @@ if (actual !== expectedValue) {
 }
 ```
 
----
-
-1. Regeln für Shell-Skripte (z.B. db-wait.sh)
+### 3. Regeln für Shell-Skripte (z.B. db-wait.sh)
 
 - POSIX- oder Bash-Syntax niemals „optisch vereinfachen“.
 - [ und ] brauchen immer Leerzeichen:
@@ -94,23 +140,16 @@ printf 'Timed out waiting for Postgres at %s:%s after %s seconds\n' \
 exit 1
 ```
 
-- Kein Pseudocode in echten Skripten: Wenn du ein Snippet als Beispiel zeigst, das nicht 1:1 lauffähig ist, musst du das
-  ausdrücklich als Pseudocode markieren. In echten Dateien darfst du nur ausführbaren Code vorschlagen.
+- Kein Pseudocode in echten Skripten: Wenn du ein Snippet als Beispiel zeigst, das nicht 1:1 lauffähig ist, musst du das ausdrücklich als Pseudocode markieren. In echten Dateien darfst du nur ausführbaren Code vorschlagen.
 
----
+### 4. Verhalten bei Unsicherheit
 
-1. Verhalten bei Unsicherheit
-
-- Wenn du dir bei einer Datei, Syntax oder Semantik nicht sicher bist, sage das explizit und schlage eine mögliche Variante
-  vor.
+- Wenn du dir bei einer Datei, Syntax oder Semantik nicht sicher bist, sage das explizit und schlage eine mögliche Variante vor.
 - Bitte darum, den realen Build- oder Lint-Fehler zu posten, statt so zu tun, als wäre alles sicher.
 - Bevor du Änderungen an CI-relevanten Skripten vorschlägst (Node, Bash, YAML), simuliere gedanklich mindestens:
   - Läuft das Skript von set -e / errexit umgeben sauber durch?
   - Sind alle Erfolgsmeldungen wirklich nur im Erfolgsfall sichtbar?
 
----
+### 5. Zielbild
 
-1. Zielbild
-
-- Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische
-  Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.
+- Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.

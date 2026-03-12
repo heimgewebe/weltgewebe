@@ -13,7 +13,11 @@ name: Docs Guard
       - 'runtime/**'
       - 'runbooks/**'
       - 'scripts/docmeta/**'
-      - 'SYSTEM_MAP.md'
+      - 'docs/_generated/system-map.md'
+      - 'AGENTS.md'
+      - 'repo.meta.yaml'
+      - 'agent-policy.yaml'
+      - 'audit/impl-registry.yaml'
       - '.python-version'
 
 permissions:
@@ -36,3 +40,10 @@ jobs:
 
       - name: Run Docs Guard
         run: make docs-guard
+
+      - name: Run Architecture & Coverage Guards
+        run: |
+          bash scripts/docmeta/repo-structure-guard.sh
+          bash scripts/docmeta/docs-relations-guard.sh
+          bash scripts/docmeta/generated-files-guard.sh
+          bash scripts/docmeta/coverage-guard.sh

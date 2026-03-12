@@ -1,3 +1,11 @@
+---
+id: reference.glossar
+title: Glossar
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Glossar
 
 **Rolle** (Garnrolle): auf Wohnsitz verorteter Account.
