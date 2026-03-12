@@ -1,3 +1,13 @@
+---
+id: docs.architekturstruktur
+title: Architektur & Struktur
+doc_type: architecture
+status: active
+canonicality: canonical
+summary: >
+  Beschreibung der Zielstruktur des Weltgewebe-Repositories.
+---
+
 # Architektur & Struktur
 
 Dieses Dokument beschreibt die Zielstruktur des Weltgewebe-Repositories. Es dient als Referenzrahmen,

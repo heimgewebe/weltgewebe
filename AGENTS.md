@@ -1,3 +1,51 @@
+# AGENTS
+
+## Purpose
+Dieses Repo ist ein intelligentes, selbstbeobachtendes Repo. Es macht Strukturen, Abhängigkeiten und Historie sowohl für Menschen als auch für Agents deterministisch lesbar.
+Zweck dieser Anweisung ist, dir zu sagen, wie du in diesem Repo arbeiten sollst, damit Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich sind – statt nur „so ungefähr“ zu passen.
+
+## Read This First
+- Die Discovery-Regeln und Guards dieses Repos prüfen, ob neue Dokumente und kritische Implementierungen korrekt gemappt sind.
+- Lies zuerst `docs/index.md` und die relevanten `docs/_generated/` Reports (falls vorhanden), um ein Bild von der Systemstruktur zu bekommen.
+
+## Canonical Sources
+- `repo.meta.yaml` = Repo-Identität und Strukturwahrheit
+- `README.md` = menschlicher Einstieg
+- `AGENTS.md` = agentischer Lesepfad und Arbeitsgrenzen
+- `docs/index.md` = kanonischer Dokumentationsindex
+- `agent-policy.yaml` = maschinenlesbare Änderungsgrenzen
+
+## Discovery Rules
+Neue Dokumente und Implementierungen müssen gemappt sein. Neue Markdown-Dateien benötigen standardisiertes Frontmatter.
+
+## Generated Files
+Generierte Artefakte in `docs/_generated/` (wie `doc-index.md`, `system-map.md`, etc.) dürfen **niemals** manuell bearbeitet werden. Sie werden automatisch aktualisiert.
+
+## Safe Read Paths
+- `README.md`
+- `AGENTS.md`
+- `docs/`
+
+## Guarded / Risky Paths
+- `docs/` (für Writes)
+- `scripts/`
+- `src/`
+- `apps/`
+- `infra/`
+- `.github/workflows/`
+
+## Required Checks
+Bevor du Änderungen einreichst, musst du die Guards (z.B. in `scripts/docmeta/`) beachten und idealerweise lokal ausführen.
+
+## Common Traps
+- Manuelles Editieren generierter Dateien.
+- Stilisierte / gekürzte Code-Beispiele, die nicht syntaktisch korrekt sind (siehe unten).
+
+## Open Gaps
+- Siehe `docs/_generated/knowledge-gaps.md` und `docs/_generated/architecture-drift.md` (sofern vorhanden).
+
+---
+
 Codex-Anweisung für das Repo weltgewebe
 
 Zweck:

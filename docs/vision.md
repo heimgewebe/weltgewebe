@@ -1,3 +1,13 @@
+---
+id: docs.vision
+title: Vision & Leitidee
+doc_type: index
+status: active
+canonicality: canonical
+summary: >
+  Zweck und Leitidee des Weltgewebes als soziale, technologische und ethische Infrastruktur.
+---
+
 Das Weltgewebe ist als soziale, technologische und ethische Infrastruktur konzipiert – ein digitales
 Gemeinwesen, das Nachbarschaften, Engagement und demokratische Aushandlung sichtbar und nachvollziehbar macht.
 
