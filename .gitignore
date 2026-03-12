@@ -51,3 +51,9 @@ artifacts/
 # Patch artifacts
 *.orig
 *.rej
+
+# Runtime artifacts
+*output*.txt
+*output*.json
+*output*.png
+full_results.txt
