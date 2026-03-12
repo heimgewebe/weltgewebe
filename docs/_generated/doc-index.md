@@ -42,10 +42,10 @@ Generated automatically. Do not edit.
 | edge.systemd.README | Readme | reference | active | derived | docs/edge/systemd/README.md |
 | geist-und-plan | Geist Und Plan | reference | active | derived | docs/geist-und-plan.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | canonical | docs/index.md |
-| inhalt | Inhalt | reference | active | derived | docs/inhalt.md |
+| inhalt | Inhalt | reference | active | canonical | docs/inhalt.md |
 | konzepte.garnrolle | Garnrolle | reference | active | derived | docs/konzepte/garnrolle.md |
-| overview.inhalt | Inhalt | reference | active | derived | docs/overview/inhalt.md |
-| overview.zusammenstellung | Zusammenstellung | reference | active | derived | docs/overview/zusammenstellung.md |
+| overview.inhalt | Inhalt | reference | active | canonical | docs/overview/inhalt.md |
+| overview.zusammenstellung | Zusammenstellung | reference | active | canonical | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | derived | docs/policies/orientierung.md |
 | process.README | Readme | reference | active | derived | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | derived | docs/process/bash-tooling-guidelines.md |
@@ -69,4 +69,4 @@ Generated automatically. Do not edit.
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | derived | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | derived | docs/x-repo/peers-learnings.md |
 | x-repo.semantAH | Semantah | reference | active | derived | docs/x-repo/semantAH.md |
-| zusammenstellung | Zusammenstellung | reference | active | derived | docs/zusammenstellung.md |
+| zusammenstellung | Zusammenstellung | reference | active | canonical | docs/zusammenstellung.md |

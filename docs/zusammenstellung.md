@@ -3,7 +3,7 @@ id: zusammenstellung
 title: Zusammenstellung
 doc_type: reference
 status: active
-canonicality: derived
+canonicality: canonical
 summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Zusammenstellung (MANDATORISCH)
