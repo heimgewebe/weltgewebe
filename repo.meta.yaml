@@ -26,11 +26,14 @@ canonical_sources:
   - docs/index.md
 
 discovery_roots:
-  - docs/
-  - src/
-  - scripts/
-  - tests/
   - .github/workflows/
+  - apps/
+  - contracts/
+  - docs/
+  - infra/
+  - scripts/
+  - src/
+  - tests/
 
 generated_artifacts:
   - docs/_generated/doc-index.md
@@ -43,7 +46,10 @@ safe_read_paths:
   - docs/
 
 guarded_write_paths:
+  - apps/
+  - contracts/
   - docs/
+  - infra/
   - scripts/
   - src/
 
