@@ -13,8 +13,8 @@ Generated automatically. Do not edit.
 
 | implementation | documented_by | criticality | verification |
 | --- | --- | --- | --- |
-| impl.service.api | docs/reference/api.md | service | tests/test_api.py |
-| impl.workflow.ci | docs/reference/ci.md | workflow | none |
+| impl.service.api | ⚠ undocumented | service | none |
+| impl.workflow.ci | ⚠ undocumented | workflow | none |
 | impl.service.web | ⚠ undocumented | service | none |
 | impl.infra.compose | ⚠ undocumented | config | none |
 | impl.contracts | ⚠ undocumented | schema | none |

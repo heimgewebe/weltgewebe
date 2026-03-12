@@ -1,3 +1,11 @@
+---
+id: deploy.DRIFT_POLICY
+title: Drift_Policy
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Drift-Taxonomie & Guard-Policy
 
 > **Status:** Entwurf (Jan 2026)

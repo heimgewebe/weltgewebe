@@ -1,3 +1,11 @@
+---
+id: adr.0042-consume-semantah-contracts
+title: 0042 Consume Semantah Contracts
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR-0042: semantAH-Contracts konsumieren
 
 Status: superseded

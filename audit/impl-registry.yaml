@@ -4,10 +4,8 @@ implementations:
     path: apps/api/
     impl_type: service
     status: active
-    documented_by:
-      - docs/reference/api.md
-    verified_by:
-      - tests/test_api.py
+    documented_by: []
+    verified_by: []
     supersedes: []
     deprecated_by: []
 
@@ -15,9 +13,9 @@ implementations:
     path: .github/workflows/
     impl_type: workflow
     status: active
-    documented_by:
-      - docs/reference/ci.md
+    documented_by: []
     verified_by: []
+
   - id: impl.service.web
     path: apps/web/
     impl_type: service

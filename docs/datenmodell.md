@@ -1,3 +1,11 @@
+---
+id: datenmodell
+title: Datenmodell
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Datenmodell
 
 Dieses Dokument beschreibt das Datenmodell der Weltgewebe-Anwendung, das auf PostgreSQL aufbaut.

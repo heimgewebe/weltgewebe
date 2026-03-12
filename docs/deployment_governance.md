@@ -1,3 +1,11 @@
+---
+id: deployment_governance
+title: Deployment_Governance
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Deployment Governance: Port Ownership
 
 To ensure stable operation on home servers alongside other services, `weltgewebe-up` enforces strict port ownership rules.

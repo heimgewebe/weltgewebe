@@ -1,3 +1,11 @@
+---
+id: process.fahrplan
+title: Fahrplan
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Fahrplan
 
 **Stand:** 2025-10-20

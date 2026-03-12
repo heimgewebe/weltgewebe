@@ -1,3 +1,11 @@
+---
+id: deploy.README
+title: Readme
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe – Deployment
 
 Dieses Dokument beschreibt den **kanonischen Deployment-Stand** von Weltgewebe.

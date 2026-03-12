@@ -1,6 +1,10 @@
 ---
 id: docs.generated.system-map
 title: System Map
+doc_type: generated
+status: active
+canonicality: derived
+summary: Automatisch generierte System Map.
 ---
 ## Weltgewebe System Map
 

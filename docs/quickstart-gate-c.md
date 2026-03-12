@@ -1,3 +1,11 @@
+---
+id: quickstart-gate-c
+title: Quickstart Gate C
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Quickstart · Gate C (Dev-Stack)
 
 ```bash

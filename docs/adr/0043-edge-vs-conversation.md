@@ -1,3 +1,11 @@
+---
+id: adr.0043-edge-vs-conversation
+title: 0043 Edge Vs Conversation
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR 0043: Begriffsvereinheitlichung edge vs conversation
 
 ## Status

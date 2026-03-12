@@ -1,3 +1,11 @@
+---
+id: weltgewebe-agenten-manifest
+title: Weltgewebe Agenten Manifest
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe-Agenten-Manifest
 
 ## Präambel

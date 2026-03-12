@@ -1,3 +1,11 @@
+---
+id: process.bash-tooling-guidelines
+title: Bash Tooling Guidelines
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Bash-Tooling-Richtlinien
 
 Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt

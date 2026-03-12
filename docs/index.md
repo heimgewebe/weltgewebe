@@ -7,20 +7,20 @@ canonicality: canonical
 summary: >
   Kanonischer Doku-Index für das Projekt Weltgewebe.
 ---
-## Weltgewebe – Doku-Index
+# Weltgewebe – Doku-Index
 
-– **Start:** architekturstruktur.md
-– **Techstack:** techstack.md
-– **Prozess & Fahrplan:** process/README.md
-– **ADRs:** adr/
-– **Runbooks:** runbooks/README.md
-– **Glossar:** reference/glossar.md
-– **Inhalt/Story:** inhalt.md, zusammenstellung.md
-– **X-Repo Learnings:** x-repo/peers-learnings.md
-– **Beitragen:** ../CONTRIBUTING.md
+## Canonical Knowledge
+– **Start:** [architekturstruktur.md](architekturstruktur.md)
+– **Techstack:** [techstack.md](techstack.md)
+– **Prozess & Fahrplan:** [process/README.md](process/README.md)
+– **ADRs:** [adr/](adr/)
+– **Runbooks:** [runbooks/README.md](runbooks/README.md)
+– **Glossar:** [reference/glossar.md](reference/glossar.md)
+– **Inhalt/Story:** [inhalt.md](inhalt.md), [zusammenstellung.md](zusammenstellung.md)
+– **X-Repo Learnings:** [x-repo/peers-learnings.md](x-repo/peers-learnings.md)
+– **Beitragen:** [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ## Generated Knowledge Maps
-
 - [Doc Index](_generated/doc-index.md)
 - [System Map](_generated/system-map.md)
 - [Backlinks](_generated/backlinks.md)

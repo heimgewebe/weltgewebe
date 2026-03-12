@@ -13,7 +13,7 @@ name: Docs Guard
       - 'runtime/**'
       - 'runbooks/**'
       - 'scripts/docmeta/**'
-      - 'SYSTEM_MAP.md'
+      - 'docs/_generated/system-map.md'
       - '.python-version'
 
 permissions:

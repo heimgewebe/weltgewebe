@@ -1,3 +1,11 @@
+---
+id: deploy.heim-first-phase0
+title: Heim First Phase0
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Heim-first UI (Phase 0) Deployment
 
 This document acknowledges the deployment changes introduced for the "Heim-first UI" Phase 0 implementation.

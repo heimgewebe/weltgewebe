@@ -1,3 +1,11 @@
+---
+id: deploy.weltgewebe.naming
+title: Weltgewebe.Naming
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe Naming Policy
 
 ## 1. Zweck

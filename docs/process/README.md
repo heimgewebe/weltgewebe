@@ -1,3 +1,11 @@
+---
+id: process.README
+title: Readme
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Prozess
 
 Übersicht über Abläufe und Konventionen.

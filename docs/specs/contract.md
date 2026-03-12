@@ -1,3 +1,11 @@
+---
+id: specs.contract
+title: Contract
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe Contract – Löschkonzept (Tombstone & Key-Erase)
 
 **Status:** Draft v0.1 · **Scope:** Beiträge, Kommentare, Artefakte

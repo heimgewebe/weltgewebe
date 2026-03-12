@@ -1,3 +1,11 @@
+---
+id: deploy.CHANGELOG
+title: Changelog
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Deployment-Änderungsprotokoll
 
 Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf das Deployment haben.

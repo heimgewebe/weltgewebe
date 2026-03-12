@@ -1,3 +1,11 @@
+---
+id: overview.inhalt
+title: Inhalt
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Einführung: Ethik- & UX-First-Startpunkt
 
 Die Weltgewebe-Initiative stellt Menschen und ihre Lebensrealität in den Mittelpunkt. Die technische

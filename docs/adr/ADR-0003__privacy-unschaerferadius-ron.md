@@ -1,3 +1,11 @@
+---
+id: adr.ADR-0003__privacy-unschaerferadius-ron
+title: Adr 0003__Privacy Unschaerferadius Ron
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle (v1)
 
 Datum: 2025-09-13

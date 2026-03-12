@@ -1,3 +1,11 @@
+---
+id: adr.ADR-0004__fahrplan-verweis
+title: Adr 0004__Fahrplan Verweis
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR-0004 — Fahrplan als kanonischer Verweis
 
 Datum: 2025-02-14

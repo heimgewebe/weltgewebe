@@ -1,3 +1,11 @@
+---
+id: adr.ADR-0002__reentry-kriterien
+title: Adr 0002__Reentry Kriterien
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # ADR-0002 — Re-Entry-Kriterien (Gates)
 
 Datum: 2025-09-12

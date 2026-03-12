@@ -1,3 +1,11 @@
+---
+id: runbooks.uv-tooling
+title: Uv Tooling
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # UV Tooling – Ist-Stand & Ausbauoptionen
 
 Dieser Runbook-Eintrag fasst zusammen, wie der Python-Paketmanager

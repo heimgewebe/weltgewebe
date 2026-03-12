@@ -1,3 +1,11 @@
+---
+id: deploy.heimserver.deployment
+title: Heimserver.Deployment
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Weltgewebe – Deployment Runbook (Heimserver)
 
 ## Architektur (Ist)

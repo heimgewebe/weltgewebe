@@ -1,3 +1,11 @@
+---
+id: blueprints.weltgewebe.config.diff
+title: Weltgewebe.Config.Diff
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Blueprint Configuration Diff
 
 ## 1. Web Service (Docker Compose)

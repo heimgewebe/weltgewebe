@@ -1,3 +1,11 @@
+---
+id: runbooks.README
+title: Readme
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 # Runbooks
 
 Anleitungen für wiederkehrende Aufgaben.

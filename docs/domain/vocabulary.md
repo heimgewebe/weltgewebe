@@ -1,3 +1,11 @@
+---
+id: domain.vocabulary
+title: Vocabulary
+doc_type: reference
+status: active
+canonicality: derived
+summary: Automatisch hinzugefügtes Frontmatter.
+---
 |Domäne|Deutsch|Technik/API|Bedeutung|
 |---|---|---|---|
 |node|Knoten|/nodes|Orte, Ideen, Ressourcen|
