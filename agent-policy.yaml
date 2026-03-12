@@ -5,10 +5,13 @@ safe_read_paths:
   - docs/
 
 guarded_write_paths:
+  - .github/workflows/
+  - apps/
+  - contracts/
   - docs/
+  - infra/
   - scripts/
   - src/
-  - .github/workflows/
 
 forbidden_write_paths:
   - docs/_generated/
@@ -16,10 +19,11 @@ forbidden_write_paths:
   - snapshots/
 
 requires_target_proof_for:
-  - src/
-  - infra/
-  - deployment/
   - .github/workflows/
+  - apps/
+  - deployment/
+  - infra/
+  - src/
 
 required_checks_before_patch:
   - repo-structure-guard

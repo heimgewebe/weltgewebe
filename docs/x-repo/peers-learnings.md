@@ -41,7 +41,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 
 ## Nächste Schritte (knapp & machbar)
 
-- [x] `docs/README.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
+- [x] `docs/index.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
 - [ ] `.wgx/profile.yml`: Standard-Tasks `up|lint|test|build|smoke` definieren (Repo-SSoT).
 - [ ] `/health/ready`: Policy-Signal-Platzhalter ausgeben (z. B. als JSON-Objekt wie
   `{ "governance_timer_ok": true, "rate_limit_ok": true }`), um den Status relevanter Policies

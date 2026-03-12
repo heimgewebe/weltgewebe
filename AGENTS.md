@@ -26,7 +26,7 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 
 ## Discovery Rules
 
-Scan `docs/`, `src/`, `scripts/`, `tests/`, and `.github/workflows/` for changes.
+Scan `.github/workflows/`, `apps/`, `contracts/`, `docs/`, `infra/`, `scripts/`, `src/`, and `tests/` for changes.
 
 ## Generated Files
 
@@ -40,7 +40,11 @@ Files in `docs/_generated/` are automatically generated and protected.
 
 ## Guarded / Risky Paths
 
+- `.github/workflows/`
+- `apps/`
+- `contracts/`
 - `docs/`
+- `infra/`
 - `scripts/`
 - `src/`
 
