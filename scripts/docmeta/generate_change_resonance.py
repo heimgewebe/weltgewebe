@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import os
 import sys
+from scripts.docmeta.docmeta import REPO_ROOT
 
-out_file = "docs/_generated/change-resonance.md"
-os.makedirs("docs/_generated", exist_ok=True)
+out_file = os.path.join(REPO_ROOT, "docs", "_generated", "change-resonance.md")
+os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
 try:
     with open(out_file, "w", encoding="utf-8") as f:
@@ -23,5 +24,5 @@ try:
 
     print(f"Generated {out_file}")
 except Exception as e:
-    print(f"Error generating change resonance: {e}")
+    print(f"Error generating change resonance: {e}", file=sys.stderr)
     sys.exit(1)
