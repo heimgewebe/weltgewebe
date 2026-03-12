@@ -46,6 +46,7 @@ safe_read_paths:
   - docs/
 
 guarded_write_paths:
+  - .github/workflows/
   - apps/
   - contracts/
   - docs/
