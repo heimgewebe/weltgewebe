@@ -3,7 +3,7 @@ id: overview.inhalt
 title: Inhalt
 doc_type: reference
 status: active
-canonicality: canonical
+canonicality: derived
 summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Einführung: Ethik- & UX-First-Startpunkt
@@ -18,7 +18,7 @@ einen klaren Einstieg in die inhaltliche Stoßrichtung des Projekts.
 - **Ethik vor Feature-Liste:** Entscheidungen werden entlang von Wirkungszielen und Schutzbedarfen
   priorisiert. UX-Entscheidungen orientieren sich an Barrierefreiheit, Datenschutz und
   erklärbaren Abläufen.
-- **Partizipation sichern:** Stakeholder:innen aus Zivilgesellschaft, Verwaltung und Forschung
+- **Partizipation sichern:** Stakeholder aus Zivilgesellschaft, Verwaltung und Forschung
   erhalten früh Zugang zu Prototypen, um Risiken zu erkennen und gemeinsam zu mitigieren.
 - **Transparenz herstellen:** Dokumentation, Policies und öffentlich nachvollziehbare Entscheidungen
   haben Vorrang vor reinem Feature-Output.
