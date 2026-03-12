@@ -15,6 +15,13 @@ docs-guard:
 	bash scripts/docmeta/orphan-guard.sh
 	bash scripts/docmeta/generate-supersession-map.sh
 	python3 -m scripts.docmeta.generate_system_map
+	python3 scripts/docmeta/generate-architecture-drift.py
+	python3 scripts/docmeta/generate-doc-coverage.py
+	python3 scripts/docmeta/generate-knowledge-gaps.py
+	python3 scripts/docmeta/generate-implicit-dependencies.py
+	python3 scripts/docmeta/generate-change-resonance.py
+	python3 scripts/docmeta/generate-staleness-report.py
+	python3 scripts/docmeta/generate-agent-readiness.py
 	git diff --exit-code docs/_generated/
 
 up:

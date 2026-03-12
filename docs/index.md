@@ -29,3 +29,13 @@ summary: >
 - [Implementation Index](_generated/impl-index.md)
 - [Orphans](_generated/orphans.md)
 - [Supersession Map](_generated/supersession-map.md)
+
+## Repo Observatorium
+
+- [Architecture Drift](_generated/architecture-drift.md)
+- [Doc Coverage](_generated/doc-coverage.md)
+- [Knowledge Gaps](_generated/knowledge-gaps.md)
+- [Implicit Dependencies](_generated/implicit-dependencies.md)
+- [Change Resonance](_generated/change-resonance.md)
+- [Staleness Report](_generated/staleness-report.md)
+- [Agent Readiness](_generated/agent-readiness.md)
