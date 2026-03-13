@@ -27,7 +27,7 @@
   /* Desktop: adjust layout slightly to avoid overlapping ContextPanel */
   @media (min-width: 769px) {
     .topbar.panel-open {
-      right: 400px; /* leaves room for ContextPanel */
+      right: var(--context-panel-width, 400px); /* leaves room for ContextPanel */
     }
   }
 </style>

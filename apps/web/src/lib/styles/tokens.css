@@ -10,6 +10,7 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
   /* Layout-Defaults */
   --toolbar-offset: 52px;
+  --context-panel-width: 400px;
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
   --edge-inset-x: 24px; /* Abstand von links/rechts */

@@ -49,7 +49,7 @@
   /* Desktop: adjust layout slightly if needed */
   @media (min-width: 769px) {
     .action-bar.panel-open {
-      right: 400px; /* leaves room for ContextPanel */
+      right: var(--context-panel-width, 400px); /* leaves room for ContextPanel */
     }
   }
 </style>

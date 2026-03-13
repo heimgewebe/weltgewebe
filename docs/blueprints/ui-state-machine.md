@@ -86,7 +86,7 @@ type Selection =
 
 - `systemState === "fokus"` → `selection !== null`
 - `systemState === "navigation"` → `selection === null`
-- `systemState === "komposition"` → `selection === null` *(aktuell in `komposition` noch im Übergang)*
+- `systemState === "komposition"` → `selection === null`
 
 ### `kompositionDraft`
 
@@ -178,7 +178,7 @@ Datei: `apps/web/src/routes/map/+page.svelte`
 
 Datei: `apps/web/src/lib/components/ActionBar.svelte`
 
-- Pflichtaktion: Neuer Knoten → navigation → komposition
+- Pflichtaktion: Neuer Knoten → Eintritt in komposition; bestehende selection wird vorher geleert
 
 ## 8 Testpflicht (Playwright)
 
