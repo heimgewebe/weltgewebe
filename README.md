@@ -210,7 +210,7 @@ See: `docs/deploy/heimserver.integration.md`
 - **Gate-Checklisten:** [docs/process/fahrplan.md](docs/process/fahrplan.md)
   (Gates A–D mit konkreten Prüfpunkten)
 - **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md)
-  (Frontend-Prototyp für Karte · Drawer · Zeitleiste · Ethik-UI)
+  (Frontend-Prototyp für Karte · Kontextpanel · Aktionsleiste · Ethik-UI)
 
 ## Beiträge & Docs
 

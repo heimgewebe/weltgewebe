@@ -8,11 +8,8 @@
   --accent-soft: rgba(106, 166, 255, 0.18);
   --radius: 12px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
-  /* Layout- und Drawer-Defaults */
+  /* Layout-Defaults */
   --toolbar-offset: 52px;
-  --drawer-gap: 12px;
-  --drawer-width: 360px;
-  --drawer-slide-offset: 20px;
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
   --edge-inset-x: 24px; /* Abstand von links/rechts */

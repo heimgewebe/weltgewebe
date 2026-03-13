@@ -15,10 +15,14 @@ export const view = writable<ViewToggles>({
 });
 
 export type Selection = {
-  type: "node" | "edge" | "account";
+  type: "node" | "edge" | "account" | "garnrolle";
   id: string;
   data?: any;
 } | null;
 
 export const selection = writable<Selection>(null);
-export const viewPanelOpen = writable(false);
+
+export type SystemState = "navigation" | "fokus" | "komposition";
+export const systemState = writable<SystemState>("navigation");
+
+export const contextPanelOpen = writable(false);

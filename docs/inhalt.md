@@ -47,12 +47,7 @@ Faden zu ihm führt.
 
 ### Benutzeroberfläche und Navigation
 
-Der linke Drawer enthält den Webrat und das Nähstübchen. Hier wird über alle ortsunabhängigen Themen
-beraten (und abgestimmt. Generell kann jeder jederzeit Abstimmungen einleiten). Im Nähstübchen wird
-einfach (orts-/kartenunabhängig) geplaudert. Das Ortsgewebekonto (oberer Slider) ist das
-Gemeinschaftskonto. Hier gehen sowohl anonyme Spenden, als auch sichtbare Spenden (als Goldfäden von der
-jeweiligen Rolle) ein. Hier, wie auch überall im Gewebe können Weber Anträge (auf Auszahlung, Anschaffung,
-Veränderung, etc.) stellen.
+Alle Detailinformationen und Funktionen, wie der Webrat, das Nähstübchen, und das Ortsgewebekonto, werden im Kontextpanel und über die Aktionsleiste angezeigt. Hier wird über alle ortsunabhängigen Themen beraten (und abgestimmt. Generell kann jeder jederzeit Abstimmungen einleiten). Im Nähstübchen wird einfach (orts-/kartenunabhängig) geplaudert. Das Ortsgewebekonto ist das Gemeinschaftskonto. Hier gehen sowohl anonyme Spenden, als auch sichtbare Spenden (als Goldfäden von der jeweiligen Rolle) ein. Hier, wie auch überall im Gewebe können Weber Anträge (auf Auszahlung, Anschaffung, Veränderung, etc.) stellen.
 
 Solch ein Antrag ist ebenso durch einen speziellen Antragsfaden mit der Rolle des Webers verbunden und
 enthält sichtbar einen 7-Tage Timer. Nun haben alle Weber 7 Tage lang Zeit Einspruch einzulegen.
@@ -72,13 +67,13 @@ eigenen Garnrolle einen privaten Bereich (Kontoeinstellungen, etc.) und einen ö
 dem öffentlich einsehbaren kann man unter anderem Güter und Kompetenzen, die man der Gesamtheit zur
 Verfügung stellen möchte, angeben.
 
-Über eine Suche im rechten Drawer kann man alle möglichen Aspekte suchen. Sie werden per Glow auf dem
+Über eine Suche in der Aktionsleiste kann man alle möglichen Aspekte suchen. Sie werden per Glow auf dem
 verorteten Knoten oder Garnrolle und auf einer Liste dargestellt. Die Liste ist geordnet nach Entfernung
 zur Bildmitte bei Suchbeginn. Von der Liste springt man zu dem verorteten Knoten oder Garnrolle, wenn man
 den Treffer anklickt.
 
-All diese Ebenen (links, oben, Ecke rechts oben, rechts) werden aus der jeweiligen Ecke oder Kante
-herausgezogen. Die Standardansicht zeigt nur die Karte. Kleine Symbole zeigen die herausziehbaren Ebenen an.
+Die Benutzeroberfläche basiert auf einer Mobile-First Architektur mit drei Hauptflächen: der Karte, dem
+Kontextpanel und der Aktionsleiste.
 
 ### Fadenarten und Knotentypen
 

@@ -109,7 +109,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ### Gate A: Umfang
 
 - PWA: `manifest.webmanifest`, Offline-Shell, App-Icon.
-- Layout: Header-Slot, Drawer-Platzhalter (links: Webrat/Nähstübchen, rechts: Filter/Zeitleiste).
+- Layout: ActionBar-Slot, ContextPanel-Platzhalter (Details, Webrat/Nähstübchen, Filter).
 - Route `/`: Überschrift + Dummy-Karte (MapLibre einbinden, Tiles später).
 - Budgets: **≤60 KB Initial-JS**, **TTI ≤2 s** (Mess-Skript + Budgetdatei).
 - Telemetrie (Client): PerformanceObserver für Long-Tasks (nur Log/console bis Gate C).
@@ -196,7 +196,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 - Zeit-Slider (UI) ohne Datenwirkung, nur State/URL-Sync.
 - **Knoten anlegen (UI)**: kleines Formular (Name), flüchtige Speicherung (Client/Mem), Marker
   erscheint.
-- Mobile-Nav-Gesten (Drawer wischen).
+- Mobile-Nav-Gesten (ContextPanel wischen).
 
 **Akzeptanz:** Mobile Lighthouse ≥ 90; TTI ≤ 2 s; UI-Flows klickbar; Knoten-Form erzeugt Marker.
 

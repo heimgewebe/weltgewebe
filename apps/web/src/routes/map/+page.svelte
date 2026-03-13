@@ -6,12 +6,11 @@
   import type { Map as MapLibreMap, GeoJSONSource, Marker } from 'maplibre-gl';
 
   import TopBar from '$lib/components/TopBar.svelte';
-  import ViewPanel from '$lib/components/ViewPanel.svelte';
-  import Schaufenster from '$lib/components/Schaufenster.svelte';
-  import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import ContextPanel from '$lib/components/ContextPanel.svelte';
+  import ActionBar from '$lib/components/ActionBar.svelte';
   import type { Edge, RenderableMapPoint } from './types';
 
-  import { view, selection } from '$lib/stores/uiView';
+  import { view, selection, contextPanelOpen, systemState } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -317,7 +316,9 @@
       const markerCategory = getMarkerCategory(item.type);
 
       lastFocusedElement = markerBtn;
-      $selection = { type: markerCategory as 'node' | 'account', id: item.id, data: item };
+      $selection = { type: markerCategory as 'node' | 'account' | 'garnrolle', id: item.id, data: item };
+      $contextPanelOpen = true;
+      $systemState = 'fokus';
 
       const lat = item.lat;
       const lon = item.lon;
@@ -366,6 +367,38 @@
       };
 
       map.on('load', finishLoading);
+
+      let longPressTimer: ReturnType<typeof setTimeout>;
+
+      map.on('mousedown', (e) => {
+        longPressTimer = setTimeout(() => {
+          $systemState = 'komposition';
+          $contextPanelOpen = true;
+        }, 800);
+      });
+
+      map.on('mouseup', () => clearTimeout(longPressTimer));
+      map.on('mousemove', () => clearTimeout(longPressTimer));
+
+      map.on('touchstart', (e) => {
+        longPressTimer = setTimeout(() => {
+          $systemState = 'komposition';
+          $contextPanelOpen = true;
+        }, 800);
+      });
+
+      map.on('touchend', () => clearTimeout(longPressTimer));
+      map.on('touchmove', () => clearTimeout(longPressTimer));
+
+      map.on('click', (e) => {
+        const features = map?.queryRenderedFeatures(e.point);
+        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+        if (!features?.length && !markerClicked) {
+           $contextPanelOpen = false;
+           $selection = null;
+           $systemState = 'navigation';
+        }
+      });
       map.on('error', finishLoading);
     })();
 
@@ -496,6 +529,8 @@
 </style>
 
 <main class="shell">
+  <ContextPanel />
+  <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
@@ -514,7 +549,6 @@
     </div>
   {/if}
   <TopBar />
-  <ViewPanel />
   <div id="map" bind:this={mapContainer}></div>
   <button class="demo-btn" on:click={jumpToDemo}>
     Zur Demo springen
@@ -524,6 +558,4 @@
       <div class="spinner"></div>
     </div>
   {/if}
-  <Schaufenster />
-  <TimelineDock />
 </main>

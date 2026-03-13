@@ -1,7 +1,7 @@
 # weltgewebe-web (Gate A Click-Dummy)
 
 Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten,
-Fäden, Drawer, Zeitachse).
+Fäden, Kontextpanel, Aktionsleiste).
 
 ## Development & Preview
 
@@ -69,7 +69,7 @@ Legt `public/demo.png` an.
 ## Was kann das?
 
 - Vollbild-Karte (MapLibre) mit 4 Strukturknoten (Platzhalter).
-- Linker/rechter Drawer (UI-Stubs), Legende, Zeitachsen-Stub im Footer.
+- Kontextpanel (UI-Stubs), Legende, Aktionsleisten-Stub.
 - Keine Persistenz, keine echten Filter/Abfragen (Ethik → UX → Gemeinschaft →
   Zukunft → Autonomie → Kosten).
 
@@ -87,11 +87,11 @@ Legt `public/demo.png` an.
 Playwright legt lokale HTML-Reports unter `apps/web/playwright-report` ab. Öffne sie bei
 Bedarf mit `pnpm exec playwright show-report playwright-report`.
 
-### Playwright (Drawer + Keyboard)
+### Playwright (UI-Interaktionen)
 
 ```bash
 pnpm exec playwright install --with-deps  # einmalig
-pnpm exec playwright test tests/drawers.spec.ts
+pnpm exec playwright test tests/map-interaction.spec.ts
 ```
 
 Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit
