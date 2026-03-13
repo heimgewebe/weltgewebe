@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { systemState, contextPanelOpen, kompositionDraft, selection } from '$lib/stores/uiView';
+  import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
 
   function onNewNode() {
-    selection.set(null);
-    systemState.set('komposition');
-    kompositionDraft.set({ mode: 'new-knoten', source: 'action-bar' });
+    enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
   }
 </script>
 

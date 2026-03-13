@@ -10,7 +10,7 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import type { Edge, RenderableMapPoint } from './types';
 
-  import { view, selection, systemState, kompositionDraft } from '$lib/stores/uiView';
+  import { view, selection, systemState, kompositionDraft, enterFokus, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -315,8 +315,7 @@
       const itemType = item.type || 'node';
 
       lastFocusedElement = markerBtn;
-      $selection = { type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item };
-      $systemState = 'fokus';
+      enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
 
       const lat = item.lat;
       const lon = item.lon;
@@ -378,13 +377,11 @@
       map.on('mousedown', (e) => {
         clearLongPressTimer();
         longPressTimer = setTimeout(() => {
-          $selection = null;
-          $systemState = 'komposition';
-          $kompositionDraft = {
+          enterKomposition({
             mode: 'new-knoten',
             lngLat: [e.lngLat.lng, e.lngLat.lat],
             source: 'map-longpress'
-          };
+          });
         }, 800);
       });
 
@@ -397,13 +394,11 @@
       map.on('touchstart', (e) => {
         clearLongPressTimer();
         longPressTimer = setTimeout(() => {
-          $selection = null;
-          $systemState = 'komposition';
-          $kompositionDraft = {
+          enterKomposition({
             mode: 'new-knoten',
             lngLat: [e.lngLat.lng, e.lngLat.lat],
             source: 'map-longpress'
-          };
+          });
         }, 800);
       });
 
@@ -417,8 +412,7 @@
 
         if (!features?.length && !markerClicked) {
            if ($systemState === 'fokus') {
-               $selection = null;
-               $systemState = 'navigation';
+               leaveToNavigation();
            }
            // Explicitly do not close 'komposition' on an empty map click to protect the workflow.
            // A workflow should only be aborted by intentional cancel actions (e.g. close panel).
