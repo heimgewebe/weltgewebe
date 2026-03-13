@@ -1,5 +1,6 @@
 <script lang="ts">
   import Garnrolle from './Garnrolle.svelte';
+  import AuthStatus from '$lib/auth/AuthStatus.svelte';
 </script>
 
 <style>
@@ -13,9 +14,19 @@
   }
 
   .spacer{ flex:1; pointer-events: none; }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    pointer-events: auto;
+  }
 </style>
 
 <div class="topbar" role="toolbar" aria-label="Navigation">
   <div class="spacer"></div>
-  <div style="pointer-events: auto"><Garnrolle /></div>
+  <div class="actions">
+    <AuthStatus />
+    <Garnrolle />
+  </div>
 </div>
