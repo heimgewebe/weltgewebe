@@ -74,7 +74,9 @@ test.describe("Map Interaction & Context Panel", () => {
 
       // Verify tab is reset back to 'uebersicht' (or 'profil' depending on what nth(1) is, but gespraech should no longer be active)
       // Because `gespraechTab` might no longer exist if the second marker is an account/garnrolle, we just check count or active state loosely
-      await expect(page.locator('button.active')).not.toHaveText("Gespräch", { timeout: 5000 });
+      await expect(page.locator("button.active")).not.toHaveText("Gespräch", {
+        timeout: 5000,
+      });
     }
   });
 
