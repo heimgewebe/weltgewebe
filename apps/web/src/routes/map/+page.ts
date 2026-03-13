@@ -1,10 +1,7 @@
 import type { PageLoad } from "./$types";
 import type { Account, Edge, Node } from "./types";
 
-export const load: PageLoad = async ({ url, fetch }) => {
-  const params = url.searchParams;
-
-
+export const load: PageLoad = async ({ fetch }) => {
   // Fallback to local dev/test default if not configured
   const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
 
