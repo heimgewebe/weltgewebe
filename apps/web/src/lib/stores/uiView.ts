@@ -41,6 +41,7 @@ export type KompositionDraft = {
 export const kompositionDraft = writable<KompositionDraft>(null);
 
 export function enterFokus(newSelection: Selection) {
+  kompositionDraft.set(null);
   selection.set(newSelection);
   systemState.set("fokus");
 }
@@ -62,30 +63,32 @@ if (import.meta.env.DEV || import.meta.env.MODE === "test") {
     [systemState, selection, kompositionDraft, contextPanelOpen],
     ([$state, $sel, $draft, $open]) => ({ $state, $sel, $draft, $open }),
   ).subscribe(({ $state, $sel, $draft, $open }) => {
-    if ($state === "fokus" && !$sel) {
-      console.error(
-        "Invariant Violation: systemState is 'fokus' but selection is null",
-      );
-    }
-    if ($state === "navigation" && $sel) {
-      console.error(
-        "Invariant Violation: systemState is 'navigation' but selection is not null",
-      );
-    }
-    if ($state === "komposition" && !$draft) {
-      console.error(
-        "Invariant Violation: systemState is 'komposition' but kompositionDraft is null",
-      );
-    }
-    if ($state !== "komposition" && $draft) {
-      console.error(
-        "Invariant Violation: systemState is not 'komposition' but kompositionDraft is not null",
-      );
-    }
-    if ($state === "navigation" && $open) {
-      console.error(
-        "Invariant Violation: systemState is 'navigation' but contextPanelOpen is true",
-      );
-    }
+    queueMicrotask(() => {
+      if ($state === "fokus" && !$sel) {
+        console.error(
+          "Invariant Violation: systemState is 'fokus' but selection is null",
+        );
+      }
+      if ($state === "navigation" && $sel) {
+        console.error(
+          "Invariant Violation: systemState is 'navigation' but selection is not null",
+        );
+      }
+      if ($state === "komposition" && !$draft) {
+        console.error(
+          "Invariant Violation: systemState is 'komposition' but kompositionDraft is null",
+        );
+      }
+      if ($state !== "komposition" && $draft) {
+        console.error(
+          "Invariant Violation: systemState is not 'komposition' but kompositionDraft is not null",
+        );
+      }
+      if ($state === "navigation" && $open) {
+        console.error(
+          "Invariant Violation: systemState is 'navigation' but contextPanelOpen is true",
+        );
+      }
+    });
   });
 }
