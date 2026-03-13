@@ -15,7 +15,9 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto("/");
   // Ensure the page has fully loaded and `onMount` (where `ensureInertPolyfill` runs) has finished
-  await page.waitForLoadState("networkidle");
+  await page.waitForLoadState("domcontentloaded");
+  // Give a small amount of time for any synchronous initialization like `ensureInertPolyfill` to complete in CI environments
+  await page.waitForTimeout(500);
 });
 
 test("polyfill schützt dynamisch eingefügte Elemente", async ({ page }) => {
