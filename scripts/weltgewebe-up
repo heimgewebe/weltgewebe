@@ -638,9 +638,9 @@ fi
 
 # 6. Frontend Requirement Logic
 if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-  export REQUIRE_WEB_BUILD=0
+  export REQUIRE_FRONTEND=0
 else
-  export REQUIRE_WEB_BUILD=1
+  export REQUIRE_FRONTEND=1
 fi
 
 # 6b. Frontend Build (Optional/Heuristic)
@@ -696,7 +696,7 @@ EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 EDGE_CADDY_CONTAINER="edge-caddy"
 
 # Only attempt this if the frontend was expected to be available
-if [[ "$REQUIRE_WEB_BUILD" == "1" ]]; then
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     EDGE_NEEDS_RECREATE=0
 
     if [[ "$REFRESH_EDGE" == "1" ]]; then
@@ -1118,7 +1118,7 @@ fi
 
 echo
 echo ">> Guard 5: Frontend Reachability..."
-if [[ "$REQUIRE_WEB_BUILD" == "1" ]]; then
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
     HTML_OUT=$(mktemp)
     HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
@@ -1139,7 +1139,26 @@ if [[ "$REQUIRE_WEB_BUILD" == "1" ]]; then
         exit 1
     fi
 
-    echo "OK (frontend route /map reachable and structurally valid)"
+    # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
+    # We use a robust grep and head -n 1 to grab exactly one asset URL
+    ASSET_PATH=$(grep -oE '/_app/immutable/[a-zA-Z0-9_.-]+' "$HTML_OUT" | head -n 1 || true)
+
+    if [[ -n "$ASSET_PATH" ]]; then
+        ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH}"
+        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
+        if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
+            msg="Frontend Asset Guard failed: HTML is present, but asset $ASSET_PATH returned HTTP $ASSET_HTTP_CODE. Static files might be missing."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT"
+            exit 1
+        fi
+        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH verified)"
+    else
+        # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
+        echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
+    fi
+
     rm -f "$HTML_OUT"
 else
     echo "   Skipped (Frontend build disabled)."

@@ -31,7 +31,7 @@ Weltgewebe UI deployment fundamentally operates on three coupled layers:
 
 A successful frontend build does *not* automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. It is an established architectural known issue that Docker container bind mounts can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
 
-To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a hard recreation of the `edge-caddy` container to restore the mount coupling.
+To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a hard recreation of the `edge-caddy` container to restore the mount coupling, provided frontend delivery is required for the current deploy run.
 
 ## Preflight guard
 

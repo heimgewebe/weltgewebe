@@ -35,15 +35,15 @@ run_test() {
   fi
 }
 
-# Test 1: REQUIRE_WEB_BUILD=0 -> pass
-export REQUIRE_WEB_BUILD=0
-run_test "REQUIRE_WEB_BUILD=0 skips check" 0
-export REQUIRE_WEB_BUILD=1
+# Test 1: REQUIRE_FRONTEND=0 -> pass
+export REQUIRE_FRONTEND=0
+run_test "REQUIRE_FRONTEND=0 skips check" 0
+export REQUIRE_FRONTEND=1
 
-# Test 2: index.html missing when REQUIRE_WEB_BUILD=1 -> fail
+# Test 2: index.html missing when REQUIRE_FRONTEND=1 -> fail
 rm -f "$INDEX_HTML"
 touch "$CADDYFILE_PATH"
-run_test "Missing index.html with REQUIRE_WEB_BUILD=1 fails check" 1
+run_test "Missing index.html with REQUIRE_FRONTEND=1 fails check" 1
 
 # Test 3: index.html has only external script, CSP lacks unsafe-inline -> pass
 echo '<script type="module" src="/app.js"></script>' > "$INDEX_HTML"
