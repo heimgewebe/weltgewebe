@@ -48,5 +48,5 @@ export const load: PageLoad = async ({ url, fetch }) => {
     console.error("Error fetching edges:", e);
   }
 
-  return { leftOpen, rightOpen, topOpen, nodes, accounts, edges };
+  return { nodes, accounts, edges };
 };

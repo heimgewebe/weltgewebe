@@ -49,18 +49,18 @@ Rolle
 Die Karte ist die primäre Bühne des Gewebes.
 
 Sie zeigt:
-	•	Knoten
-	•	Fäden
-	•	Aktivität
-	•	räumliche Struktur
+  •  Knoten
+  •  Fäden
+  •  Aktivität
+  •  räumliche Struktur
 
 ⸻
 
 Interaktionen
 
 Navigation
-	•	Drag → Karte verschieben
-	•	Pinch → Zoom
+  •  Drag → Karte verschieben
+  •  Pinch → Zoom
 
 Fokus
 
@@ -128,9 +128,9 @@ Tabs:
 Übersicht
 
 Zeigt:
-	•	Beschreibung
-	•	beteiligte Garnrollen
-	•	Aktivität
+  •  Beschreibung
+  •  beteiligte Garnrollen
+  •  Aktivität
 
 ⸻
 
@@ -143,9 +143,9 @@ Gesprächsraum des Knotens.
 Anträge
 
 Bereich für:
-	•	Vorschläge
-	•	Abstimmungen
-	•	Entscheidungen
+  •  Vorschläge
+  •  Abstimmungen
+  •  Entscheidungen
 
 ⸻
 
@@ -296,8 +296,8 @@ Kontextpanel wird zum Editor.
 Suche arbeitet gewebewweit.
 
 Ergebnisse erscheinen:
-	•	auf Karte
-	•	im Kontextpanel
+  •  auf Karte
+  •  im Kontextpanel
 
 ⸻
 
