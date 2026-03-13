@@ -1,10 +1,27 @@
 <script lang="ts">
-  import { view, selection, systemState, contextPanelOpen } from '$lib/stores/uiView';
+  import { selection, systemState, contextPanelOpen, kompositionDraft } from '$lib/stores/uiView';
 
   let activeTab = 'uebersicht';
 
   function setTab(tab: string) {
     activeTab = tab;
+  }
+
+  $: if ($selection) {
+    if ($selection.type === 'node') {
+      if (!['uebersicht', 'gespraech', 'antraege', 'verlauf'].includes(activeTab)) {
+        activeTab = 'uebersicht';
+      }
+    } else if ($selection.type === 'garnrolle' || $selection.type === 'account') {
+      if (!['profil', 'aktivitaet', 'knoten'].includes(activeTab)) {
+        activeTab = 'profil';
+      }
+    }
+  }
+
+  function closePanel() {
+    systemState.set('navigation');
+    selection.set(null);
   }
 </script>
 
@@ -24,13 +41,17 @@
       {:else}
         <h2>Details</h2>
       {/if}
-      <button class="close-btn" on:click={() => contextPanelOpen.set(false)} aria-label="Schließen">✕</button>
+      <button class="close-btn" on:click={closePanel} aria-label="Schließen">✕</button>
     </header>
 
     <div class="panel-content">
       {#if $systemState === 'komposition'}
         <div class="komposition-mode">
-          <p>Bitte wähle einen Ort auf der Karte für den neuen Knoten.</p>
+          {#if $kompositionDraft?.source === 'map-longpress' && $kompositionDraft.lngLat}
+            <p>Neuer Knoten am Ort: {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
+          {:else}
+            <p>Bitte wähle einen Ort auf der Karte (Longpress) für den neuen Knoten.</p>
+          {/if}
           <!-- Additional editor fields would go here -->
         </div>
       {:else if $selection}
@@ -104,9 +125,9 @@
   .context-panel {
     position: fixed;
     z-index: 50;
-    background: var(--panel-bg, #fff);
-    color: var(--text-main, #333);
-    box-shadow: 0 -4px 16px rgba(0,0,0,0.1);
+    background: var(--panel, #fff);
+    color: var(--text, #333);
+    box-shadow: var(--shadow, 0 -4px 16px rgba(0,0,0,0.1));
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -117,7 +138,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
+    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
   }
 
   .panel-header h2 {
@@ -130,7 +151,7 @@
     border: none;
     font-size: 1.2rem;
     cursor: pointer;
-    color: var(--text-main);
+    color: var(--text);
   }
 
   .panel-content {
@@ -139,14 +160,14 @@
   }
 
   .summary {
-    color: var(--text-muted, #666);
+    color: var(--ghost, #666);
     margin-bottom: 1.5rem;
   }
 
   .tabs {
     display: flex;
     gap: 0.5rem;
-    border-bottom: 1px solid rgba(0,0,0,0.1);
+    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
     margin-bottom: 1rem;
     overflow-x: auto;
   }
@@ -157,13 +178,13 @@
     padding: 0.5rem 1rem;
     cursor: pointer;
     border-bottom: 2px solid transparent;
-    color: var(--text-muted, #666);
+    color: var(--ghost, #666);
     white-space: nowrap;
   }
 
   .tabs button.active {
-    border-bottom-color: var(--brand, #0070f3);
-    color: var(--text-main, #333);
+    border-bottom-color: var(--accent, #0070f3);
+    color: var(--text, #333);
     font-weight: bold;
   }
 
@@ -189,7 +210,7 @@
       right: 0;
       bottom: 0;
       width: 400px;
-      box-shadow: -4px 0 16px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow, -4px 0 16px rgba(0,0,0,0.1));
     }
   }
 </style>

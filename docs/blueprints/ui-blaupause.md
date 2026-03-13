@@ -248,7 +248,7 @@ Abschnitte:
 
 * Ursprung
 * Ziel
-* beteilte Garnrollen
+* beteiligte Garnrollen
 * Zeitlichkeit
 
 ⸻

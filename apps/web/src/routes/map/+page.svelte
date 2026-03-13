@@ -10,7 +10,7 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import type { Edge, RenderableMapPoint } from './types';
 
-  import { view, selection, contextPanelOpen, systemState } from '$lib/stores/uiView';
+  import { view, selection, systemState, kompositionDraft } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -84,7 +84,6 @@
 
   // UI Mapping Helper
   function getMarkerCategory(type: string | undefined): string {
-    if (type === 'garnrolle') return 'account';
     return type || 'node';
   }
 
@@ -313,11 +312,10 @@
       if (!entry) return;
 
       const { item } = entry;
-      const markerCategory = getMarkerCategory(item.type);
+      const itemType = item.type || 'node';
 
       lastFocusedElement = markerBtn;
-      $selection = { type: markerCategory as 'node' | 'account' | 'garnrolle', id: item.id, data: item };
-      $contextPanelOpen = true;
+      $selection = { type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item };
       $systemState = 'fokus';
 
       const lat = item.lat;
@@ -368,33 +366,40 @@
 
       map.on('load', finishLoading);
 
-      let longPressTimer: ReturnType<typeof setTimeout>;
+      let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 
       map.on('mousedown', (e) => {
         longPressTimer = setTimeout(() => {
           $systemState = 'komposition';
-          $contextPanelOpen = true;
+          $kompositionDraft = {
+            mode: 'new-knoten',
+            lngLat: [e.lngLat.lng, e.lngLat.lat],
+            source: 'map-longpress'
+          };
         }, 800);
       });
 
-      map.on('mouseup', () => clearTimeout(longPressTimer));
-      map.on('mousemove', () => clearTimeout(longPressTimer));
+      map.on('mouseup', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+      map.on('mousemove', () => { if (longPressTimer) clearTimeout(longPressTimer); });
 
       map.on('touchstart', (e) => {
         longPressTimer = setTimeout(() => {
           $systemState = 'komposition';
-          $contextPanelOpen = true;
+          $kompositionDraft = {
+            mode: 'new-knoten',
+            lngLat: [e.lngLat.lng, e.lngLat.lat],
+            source: 'map-longpress'
+          };
         }, 800);
       });
 
-      map.on('touchend', () => clearTimeout(longPressTimer));
-      map.on('touchmove', () => clearTimeout(longPressTimer));
+      map.on('touchend', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+      map.on('touchmove', () => { if (longPressTimer) clearTimeout(longPressTimer); });
 
       map.on('click', (e) => {
         const features = map?.queryRenderedFeatures(e.point);
         const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
         if (!features?.length && !markerClicked) {
-           $contextPanelOpen = false;
            $selection = null;
            $systemState = 'navigation';
         }
