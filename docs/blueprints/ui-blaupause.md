@@ -293,7 +293,7 @@ Kontextpanel wird zum Editor.
 
 ## 8 Suche
 
-Suche arbeitet gewebewweit.
+Suche arbeitet gewebeweit.
 
 Ergebnisse erscheinen:
   •  auf Karte

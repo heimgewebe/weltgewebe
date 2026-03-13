@@ -368,7 +368,15 @@
 
       let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 
+      const clearLongPressTimer = () => {
+        if (longPressTimer !== undefined) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
+        }
+      };
+
       map.on('mousedown', (e) => {
+        clearLongPressTimer();
         longPressTimer = setTimeout(() => {
           $systemState = 'komposition';
           $kompositionDraft = {
@@ -379,10 +387,11 @@
         }, 800);
       });
 
-      map.on('mouseup', () => { if (longPressTimer) clearTimeout(longPressTimer); });
-      map.on('mousemove', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+      map.on('mouseup', clearLongPressTimer);
+      map.on('mousemove', clearLongPressTimer);
 
       map.on('touchstart', (e) => {
+        clearLongPressTimer();
         longPressTimer = setTimeout(() => {
           $systemState = 'komposition';
           $kompositionDraft = {
@@ -393,15 +402,20 @@
         }, 800);
       });
 
-      map.on('touchend', () => { if (longPressTimer) clearTimeout(longPressTimer); });
-      map.on('touchmove', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+      map.on('touchend', clearLongPressTimer);
+      map.on('touchmove', clearLongPressTimer);
 
       map.on('click', (e) => {
         const features = map?.queryRenderedFeatures(e.point);
         const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+
         if (!features?.length && !markerClicked) {
-           $selection = null;
-           $systemState = 'navigation';
+           // Prevent trailing clicks after long-press from immediately closing composition
+           if ($systemState === 'fokus' || ($systemState === 'komposition' && $kompositionDraft?.source !== 'map-longpress')) {
+               $selection = null;
+               $systemState = 'navigation';
+               $kompositionDraft = null;
+           }
         }
       });
       map.on('error', finishLoading);

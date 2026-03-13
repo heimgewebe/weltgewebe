@@ -22,6 +22,7 @@
   function closePanel() {
     systemState.set('navigation');
     selection.set(null);
+    kompositionDraft.set(null);
   }
 </script>
 
