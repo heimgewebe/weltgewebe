@@ -3,12 +3,13 @@ id: ui-state-machine
 title: Weltgewebe UI State Machine
 doc_type: blueprint
 status: canonical
+canonicality: "state-machine-contract"
 summary: Kanonische Zustandsmaschine der Weltgewebe-UI und verbindliche Implementierungsregeln.
 ---
 
+# Weltgewebe UI State Machine
 
-
-## # 1 Ziel
+## 1 Ziel
 
 Die UI besitzt eine einzige globale Interaktionslogik.
 
@@ -21,7 +22,7 @@ Ziele:
 
 Die State Machine beschreibt nur Frontend-Interaktion, nicht Backend-Logik.
 
-## # 2 Kanonische Zustände
+## 2 Kanonische Zustände
 
 Die UI kennt genau drei globale Zustände:
 
@@ -31,7 +32,7 @@ Die UI kennt genau drei globale Zustände:
 
 Kein weiterer globaler Zustand darf eingeführt werden ohne Anpassung dieses Dokuments.
 
-## # 3 State-Machine-Diagramm
+## 3 State-Machine-Diagramm
 
 ```text
 navigation
@@ -56,7 +57,7 @@ komposition
 navigation
 ```
 
-## # 4 Kanonische Zustandsdaten
+## 4 Kanonische Zustandsdaten
 
 ### `systemState`
 
@@ -85,7 +86,7 @@ type Selection =
 
 - `systemState === "fokus"` → `selection !== null`
 - `systemState === "navigation"` → `selection === null`
-- `systemState === "komposition"` → `selection === null`
+- `systemState === "komposition"` → `selection === null` *(aktuell in `komposition` noch im Übergang)*
 
 ### `kompositionDraft`
 
@@ -111,7 +112,7 @@ type KompositionDraft =
 
 Es darf keine zweite Open-State-Quelle existieren.
 
-## # 5 Erlaubte Übergänge
+## 5 Erlaubte Übergänge
 
 ### navigation → fokus
 
@@ -121,7 +122,7 @@ Es darf keine zweite Open-State-Quelle existieren.
 ### navigation → komposition
 
 - Trigger: ActionBar → Neuer Knoten, Longpress auf Karte
-- Effekt: `kompositionDraft = { ... }`, `systemState = "komposition"`
+- Effekt: `kompositionDraft = { ... }`, `systemState = "komposition"`, `selection = null`
 
 ### fokus → navigation
 
@@ -138,7 +139,7 @@ Es darf keine zweite Open-State-Quelle existieren.
 - Trigger: cancel, panel close, submit success
 - Effekt: `kompositionDraft = null`, `systemState = "navigation"`
 
-## # 6 Verbotene Zustände
+## 6 Verbotene Zustände
 
 Diese Zustände dürfen nie auftreten:
 
@@ -146,18 +147,18 @@ Diese Zustände dürfen nie auftreten:
 - `systemState === "komposition"` AND `kompositionDraft === null`
 - `systemState === "navigation"` AND `contextPanelOpen === true`
 
-## # 7 Implementierungsanweisungen
+## 7 Implementierungsanweisungen
 
 ### 7.1 State-Store
 
-Datei: `apps/web/src/state/uiView.ts`
+Datei: `apps/web/src/lib/stores/uiView.ts`
 
 - Pflicht: `export const systemState`, `export const selection`, `export const kompositionDraft`
 - Derived: `contextPanelOpen`
 
 ### 7.2 ContextPanel
 
-Datei: `components/ContextPanel.svelte`
+Datei: `apps/web/src/lib/components/ContextPanel.svelte`
 
 - Regel:
   - `if systemState === "komposition"` render KompositionView
@@ -166,7 +167,7 @@ Datei: `components/ContextPanel.svelte`
 
 ### 7.3 Map-Interaktionen
 
-Datei: `routes/map/+page.svelte`
+Datei: `apps/web/src/routes/map/+page.svelte`
 
 - Implementieren:
   - marker click → fokus
@@ -175,14 +176,14 @@ Datei: `routes/map/+page.svelte`
 
 ### 7.4 ActionBar
 
-Datei: `components/ActionBar.svelte`
+Datei: `apps/web/src/lib/components/ActionBar.svelte`
 
 - Pflichtaktion: Neuer Knoten → navigation → komposition
 
-## # 8 Testpflicht (Playwright)
+## 8 Testpflicht (Playwright)
 
 Jeder Zustandsübergang benötigt einen Test.
-Tests: `tests/map-interaction.spec.ts`
+Tests: `apps/web/tests/map-interaction.spec.ts`
 
 Pflichtfälle:
 
@@ -193,7 +194,7 @@ Pflichtfälle:
 - **longpress:** map longpress, draft.lngLat gesetzt
 - **kompositionsschutz:** empty map click, komposition bleibt aktiv
 
-## # 9 CI-Guard gegen Zustandsdrift
+## 9 CI-Guard gegen Zustandsdrift
 
 Empfehlung: Unit-Test `expectInvalidState()`
 Beispiel:
@@ -205,7 +206,7 @@ if (systemState === "fokus" && !selection)
 
 Ziel: UI-Bugs sofort sichtbar machen.
 
-## # 10 Erweiterungsregel
+## 10 Erweiterungsregel
 
 Neue Zustände dürfen nicht einfach ergänzt werden.
 Vor Einführung prüfen:
@@ -242,7 +243,7 @@ Die Umsetzung erfolgt idealerweise als gestaffelte PR-Serie.
 - [ ] `ContextPanel.svelte` zerlegen
   (Sub-Komponenten für KompositionPanel, NodePanel, etc.).
 - [ ] Tab-Reset explizit machen (Standardtab beim Wechsel neu setzen).
-- [ ] Komposition hart gegen Fokus entkoppeln
+- [x] Komposition hart gegen Fokus entkoppeln
   (beim Eintritt in Komposition `selection` null setzen).
 
 ### [ ] PR 3 — Map-Interaktionen härten

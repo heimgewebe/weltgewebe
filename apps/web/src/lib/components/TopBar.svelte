@@ -1,6 +1,7 @@
 <script lang="ts">
   import Garnrolle from './Garnrolle.svelte';
   import AuthStatus from '$lib/auth/AuthStatus.svelte';
+  import { contextPanelOpen } from '$lib/stores/uiView';
 </script>
 
 <style>
@@ -11,6 +12,7 @@
     background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
     color:var(--text);
     pointer-events: none;
+    transition: right 0.3s ease-in-out;
   }
 
   .spacer{ flex:1; pointer-events: none; }
@@ -21,9 +23,16 @@
     gap: 8px;
     pointer-events: auto;
   }
+
+  /* Desktop: adjust layout slightly to avoid overlapping ContextPanel */
+  @media (min-width: 769px) {
+    .topbar.panel-open {
+      right: 400px; /* leaves room for ContextPanel */
+    }
+  }
 </style>
 
-<div class="topbar" role="toolbar" aria-label="Navigation">
+<div class="topbar" class:panel-open={$contextPanelOpen} role="toolbar" aria-label="Navigation">
   <div class="spacer"></div>
   <div class="actions">
     <AuthStatus />
