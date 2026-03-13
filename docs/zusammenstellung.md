@@ -104,9 +104,9 @@ IV. Governance und Demokratische Prozesse
 V. Benutzeroberfläche und Nutzererlebnis
 
 - Karten-Interface: Die primäre Oberfläche ist eine Vollbildkarte (MapLibre GL).
-- Drawer-System:
-  - Links: Zugriff auf Webrat und Nähstübchen (Governance und Kommunikation).
-  - Rechts: Filter für Knoten- und Fadenarten, ein Zeitfenster und ein Suchmenü.
+- UI-Architektur:
+  - Kontextpanel (für Details zu Knoten, Garnrollen und Fäden).
+  - Aktionsleiste (Navigation und Suche).
 - Suchfunktion: Über das Suchmenü können die von Nutzern zur Verfügung gestellten Güter und Kompetenzen abgefragt
   werden. Treffer werden als aufleuchtende Rollen oder Knoten auf der Karte sowie in einer nach Entfernung sortierten
   Liste angezeigt. Ein Klick auf einen Listeneintrag zentriert die Karte auf den entsprechenden Nutzer.

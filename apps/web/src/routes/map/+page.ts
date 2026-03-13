@@ -1,14 +1,7 @@
 import type { PageLoad } from "./$types";
-import { readDrawerParam } from "./drawerDefaults";
 import type { Account, Edge, Node } from "./types";
 
-export const load: PageLoad = async ({ url, fetch }) => {
-  const params = url.searchParams;
-
-  const leftOpen = readDrawerParam(params, "l");
-  const rightOpen = readDrawerParam(params, "r");
-  const topOpen = readDrawerParam(params, "t");
-
+export const load: PageLoad = async ({ fetch }) => {
   // Fallback to local dev/test default if not configured
   const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
 
@@ -52,5 +45,5 @@ export const load: PageLoad = async ({ url, fetch }) => {
     console.error("Error fetching edges:", e);
   }
 
-  return { leftOpen, rightOpen, topOpen, nodes, accounts, edges };
+  return { nodes, accounts, edges };
 };

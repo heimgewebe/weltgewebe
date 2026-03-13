@@ -19,6 +19,7 @@ Generated automatically. Do not edit.
 - docs/adr/ADR-0004__fahrplan-verweis.md
 - docs/adr/ADR-0005-auth.md
 - docs/architekturstruktur.md
+- docs/blueprints/ui-blaupause.md
 - docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - docs/blueprints/weltgewebe.config.diff.md
 - docs/blueprints/weltgewebe.deploy.plan.md

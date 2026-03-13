@@ -25,8 +25,8 @@ summary: Automatisch hinzugefügtes Frontmatter.
   Standard-Tasks (`up/lint/test/build/smoke`) und vermeidet Drift zwischen lokal & CI.
 - **Health/Readiness mit Policies koppeln:** Die bestehenden `/health/live` und `/health/ready` um
   Policy-Signale (Rate-Limits, Retention, Governance-Timer) ergänzen und in Runbooks verankern.
-- **UI/Produkt-Definition testbar machen:** UI-Spezifika (Map-UI, Drawer,
-  Zeitleiste, Knotentypen) als Playwright-/Vitest-Szenarien automatisieren, um
+- **UI/Produkt-Definition testbar machen:** UI-Spezifika (Map-UI, ContextPanel,
+  Aktionsleiste, Knotentypen) als Playwright-/Vitest-Szenarien automatisieren, um
   Regressionen früh zu erkennen.
 - **Föderierung & Archiv-Strategie festigen:** Hybrid-Indexierung durch
   wiederkehrende Archiv-Validierung, URL-Kanonisierungstests und CI-Jobs

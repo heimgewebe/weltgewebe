@@ -6,12 +6,11 @@
   import type { Map as MapLibreMap, GeoJSONSource, Marker } from 'maplibre-gl';
 
   import TopBar from '$lib/components/TopBar.svelte';
-  import ViewPanel from '$lib/components/ViewPanel.svelte';
-  import Schaufenster from '$lib/components/Schaufenster.svelte';
-  import TimelineDock from '$lib/components/TimelineDock.svelte';
+  import ContextPanel from '$lib/components/ContextPanel.svelte';
+  import ActionBar from '$lib/components/ActionBar.svelte';
   import type { Edge, RenderableMapPoint } from './types';
 
-  import { view, selection } from '$lib/stores/uiView';
+  import { view, selection, systemState, kompositionDraft } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -85,7 +84,6 @@
 
   // UI Mapping Helper
   function getMarkerCategory(type: string | undefined): string {
-    if (type === 'garnrolle') return 'account';
     return type || 'node';
   }
 
@@ -271,8 +269,8 @@
   }
 
 
-  // Restore focus when selection is closed
-  $: if (!$selection && lastFocusedElement) {
+  // Restore focus when selection is closed or state becomes navigation
+  $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
     if (document.body.contains(lastFocusedElement)) {
       lastFocusedElement.focus();
     }
@@ -314,10 +312,11 @@
       if (!entry) return;
 
       const { item } = entry;
-      const markerCategory = getMarkerCategory(item.type);
+      const itemType = item.type || 'node';
 
       lastFocusedElement = markerBtn;
-      $selection = { type: markerCategory as 'node' | 'account', id: item.id, data: item };
+      $selection = { type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item };
+      $systemState = 'fokus';
 
       const lat = item.lat;
       const lon = item.lon;
@@ -366,6 +365,63 @@
       };
 
       map.on('load', finishLoading);
+
+      let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const clearLongPressTimer = () => {
+        if (longPressTimer !== undefined) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
+        }
+      };
+
+      map.on('mousedown', (e) => {
+        clearLongPressTimer();
+        longPressTimer = setTimeout(() => {
+          $systemState = 'komposition';
+          $kompositionDraft = {
+            mode: 'new-knoten',
+            lngLat: [e.lngLat.lng, e.lngLat.lat],
+            source: 'map-longpress'
+          };
+        }, 800);
+      });
+
+      map.on('mouseup', clearLongPressTimer);
+      map.on('mousemove', clearLongPressTimer);
+      map.on('mouseout', clearLongPressTimer);
+      map.on('dragstart', clearLongPressTimer);
+      map.on('movestart', clearLongPressTimer);
+
+      map.on('touchstart', (e) => {
+        clearLongPressTimer();
+        longPressTimer = setTimeout(() => {
+          $systemState = 'komposition';
+          $kompositionDraft = {
+            mode: 'new-knoten',
+            lngLat: [e.lngLat.lng, e.lngLat.lat],
+            source: 'map-longpress'
+          };
+        }, 800);
+      });
+
+      map.on('touchend', clearLongPressTimer);
+      map.on('touchmove', clearLongPressTimer);
+      map.on('touchcancel', clearLongPressTimer);
+
+      map.on('click', (e) => {
+        const features = map?.queryRenderedFeatures(e.point);
+        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+
+        if (!features?.length && !markerClicked) {
+           if ($systemState === 'fokus') {
+               $selection = null;
+               $systemState = 'navigation';
+           }
+           // Explicitly do not close 'komposition' on an empty map click to protect the workflow.
+           // A workflow should only be aborted by intentional cancel actions (e.g. close panel).
+        }
+      });
       map.on('error', finishLoading);
     })();
 
@@ -496,6 +552,8 @@
 </style>
 
 <main class="shell">
+  <ContextPanel />
+  <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
@@ -514,7 +572,6 @@
     </div>
   {/if}
   <TopBar />
-  <ViewPanel />
   <div id="map" bind:this={mapContainer}></div>
   <button class="demo-btn" on:click={jumpToDemo}>
     Zur Demo springen
@@ -524,6 +581,4 @@
       <div class="spinner"></div>
     </div>
   {/if}
-  <Schaufenster />
-  <TimelineDock />
 </main>

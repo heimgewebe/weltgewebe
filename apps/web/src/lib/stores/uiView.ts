@@ -15,10 +15,27 @@ export const view = writable<ViewToggles>({
 });
 
 export type Selection = {
-  type: "node" | "edge" | "account";
+  type: "node" | "edge" | "account" | "garnrolle";
   id: string;
   data?: any;
 } | null;
 
 export const selection = writable<Selection>(null);
-export const viewPanelOpen = writable(false);
+
+import { derived } from "svelte/store";
+
+export type SystemState = "navigation" | "fokus" | "komposition";
+export const systemState = writable<SystemState>("navigation");
+
+export const contextPanelOpen = derived(
+  systemState,
+  ($state) => $state !== "navigation",
+);
+
+export type KompositionDraft = {
+  mode: "new-knoten";
+  lngLat?: [number, number];
+  source: "map-longpress" | "action-bar";
+} | null;
+
+export const kompositionDraft = writable<KompositionDraft>(null);
