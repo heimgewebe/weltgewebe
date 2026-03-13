@@ -40,9 +40,12 @@ usage() {
   echo "  --purge-compose-leaks   Automatically remove detected 'zombie' containers (from wrong project)"
   echo "  --build-web             Force frontend build"
   echo "  --no-build-web          Skip frontend build (warn only)"
+  echo "  --refresh-edge          Force recreation of the Edge Caddy container to fix static mount issues"
   echo
   exit 1
 }
+
+REFRESH_EDGE=0
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -67,6 +70,7 @@ while [[ "$#" -gt 0 ]]; do
     --purge-compose-leaks) PURGE_ZOMBIES=1 ;;
     --build-web) BUILD_WEB="force" ;;
     --no-build-web) BUILD_WEB="no" ;;
+    --refresh-edge) REFRESH_EDGE=1 ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -677,6 +681,53 @@ if [[ -d "apps/web" ]]; then
   fi
 fi
 
+# 6b. Static UI Runtime Guard & Edge Caddy Recreate
+echo
+echo ">> Edge Caddy Guard:"
+
+EDGE_CADDY_DIR="/opt/heimgewebe/edge"
+EDGE_CADDY_CONTAINER="edge-caddy"
+
+# Only attempt this if the frontend was expected to be available
+if [[ "${BUILD_WEB:-auto}" != "no" ]]; then
+    EDGE_NEEDS_RECREATE=0
+
+    if [[ "$REFRESH_EDGE" == "1" ]]; then
+        echo "   Recreation forced by --refresh-edge flag."
+        EDGE_NEEDS_RECREATE=1
+    elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_CADDY_CONTAINER"; then
+        # Check if running container sees the static artifacts properly
+        echo "   Checking static UI mount in $EDGE_CADDY_CONTAINER..."
+        if ! docker exec "$EDGE_CADDY_CONTAINER" sh -lc 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+            echo "WARNING: Static UI artifacts invisible in $EDGE_CADDY_CONTAINER."
+            echo "         Container mount state drift detected."
+            EDGE_NEEDS_RECREATE=1
+        else
+            echo "   Static UI mount is valid."
+        fi
+    else
+        echo "   Container $EDGE_CADDY_CONTAINER is not running. Skipping runtime check."
+    fi
+
+    if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
+        if [[ -d "$EDGE_CADDY_DIR" ]]; then
+            echo "   Recreating $EDGE_CADDY_CONTAINER to restore static UI mount..."
+
+            # Safe recreate logic
+            docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
+            (
+                cd "$EDGE_CADDY_DIR" && docker compose up -d
+            )
+            echo "   $EDGE_CADDY_CONTAINER recreated."
+        else
+            echo "WARNING: Could not recreate $EDGE_CADDY_CONTAINER. Directory $EDGE_CADDY_DIR not found."
+            echo "         Static UI may remain broken until manually fixed."
+        fi
+    fi
+else
+    echo "   Skipped (Frontend build disabled)."
+fi
+
 # 7. Deploy
 echo
 echo
@@ -1062,10 +1113,13 @@ fi
 
 echo
 echo ">> Guard 5: Frontend Reachability..."
-if ! curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa >/dev/null 2>&1; then
-    echo "WARNING: Frontend Reachability check failed (HTTP error, TLS error, or connection error)."
+if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/map >/dev/null 2>&1; then
+    msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. Check static build mount."
+    echo "ERROR: $msg"
+    generate_failure_bundle "$msg"
+    exit 1
 else
-    echo "OK"
+    echo "OK (frontend route /map reachable)"
 fi
 
 # 8. Update State (Post-Health)
