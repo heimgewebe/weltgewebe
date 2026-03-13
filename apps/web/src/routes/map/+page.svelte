@@ -269,8 +269,8 @@
   }
 
 
-  // Restore focus when selection is closed
-  $: if (!$selection && lastFocusedElement) {
+  // Restore focus when selection is closed or state becomes navigation
+  $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
     if (document.body.contains(lastFocusedElement)) {
       lastFocusedElement.focus();
     }
@@ -389,6 +389,9 @@
 
       map.on('mouseup', clearLongPressTimer);
       map.on('mousemove', clearLongPressTimer);
+      map.on('mouseout', clearLongPressTimer);
+      map.on('dragstart', clearLongPressTimer);
+      map.on('movestart', clearLongPressTimer);
 
       map.on('touchstart', (e) => {
         clearLongPressTimer();
@@ -404,6 +407,7 @@
 
       map.on('touchend', clearLongPressTimer);
       map.on('touchmove', clearLongPressTimer);
+      map.on('touchcancel', clearLongPressTimer);
 
       map.on('click', (e) => {
         const features = map?.queryRenderedFeatures(e.point);
