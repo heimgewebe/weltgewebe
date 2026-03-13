@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { systemState, contextPanelOpen, kompositionDraft } from '$lib/stores/uiView';
+  import { systemState, contextPanelOpen, kompositionDraft, selection } from '$lib/stores/uiView';
 
   function onNewNode() {
+    selection.set(null);
     systemState.set('komposition');
     kompositionDraft.set({ mode: 'new-knoten', source: 'action-bar' });
   }
@@ -48,7 +49,7 @@
   /* Desktop: adjust layout slightly if needed */
   @media (min-width: 769px) {
     .action-bar.panel-open {
-      right: 400px; /* leaves room for ContextPanel */
+      right: var(--context-panel-width, 400px); /* leaves room for ContextPanel */
     }
   }
 </style>

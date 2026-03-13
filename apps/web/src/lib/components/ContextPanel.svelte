@@ -221,7 +221,7 @@
       top: 0;
       right: 0;
       bottom: 0;
-      width: 400px;
+      width: var(--context-panel-width, 400px);
       box-shadow: var(--shadow, -4px 0 16px rgba(0,0,0,0.1));
     }
   }

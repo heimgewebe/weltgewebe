@@ -378,6 +378,7 @@
       map.on('mousedown', (e) => {
         clearLongPressTimer();
         longPressTimer = setTimeout(() => {
+          $selection = null;
           $systemState = 'komposition';
           $kompositionDraft = {
             mode: 'new-knoten',
@@ -396,6 +397,7 @@
       map.on('touchstart', (e) => {
         clearLongPressTimer();
         longPressTimer = setTimeout(() => {
+          $selection = null;
           $systemState = 'komposition';
           $kompositionDraft = {
             mode: 'new-knoten',
