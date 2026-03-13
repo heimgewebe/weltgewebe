@@ -410,12 +410,12 @@
         const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
 
         if (!features?.length && !markerClicked) {
-           // Prevent trailing clicks after long-press from immediately closing composition
-           if ($systemState === 'fokus' || ($systemState === 'komposition' && $kompositionDraft?.source !== 'map-longpress')) {
+           if ($systemState === 'fokus') {
                $selection = null;
                $systemState = 'navigation';
-               $kompositionDraft = null;
            }
+           // Explicitly do not close 'komposition' on an empty map click to protect the workflow.
+           // A workflow should only be aborted by intentional cancel actions (e.g. close panel).
         }
       });
       map.on('error', finishLoading);

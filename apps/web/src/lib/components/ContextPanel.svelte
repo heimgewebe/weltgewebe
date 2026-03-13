@@ -7,13 +7,18 @@
     activeTab = tab;
   }
 
-  $: if ($selection) {
-    if ($selection.type === 'node') {
-      if (!['uebersicht', 'gespraech', 'antraege', 'verlauf'].includes(activeTab)) {
+  $: contextKey = $systemState === 'komposition'
+    ? 'komposition'
+    : $selection ? `${$selection.type}:${$selection.id}` : 'none';
+
+  let lastContextKey = contextKey;
+
+  $: if (contextKey !== lastContextKey) {
+    lastContextKey = contextKey;
+    if ($systemState === 'fokus' && $selection) {
+      if ($selection.type === 'node') {
         activeTab = 'uebersicht';
-      }
-    } else if ($selection.type === 'garnrolle' || $selection.type === 'account') {
-      if (!['profil', 'aktivitaet', 'knoten'].includes(activeTab)) {
+      } else if ($selection.type === 'garnrolle' || $selection.type === 'account') {
         activeTab = 'profil';
       }
     }
@@ -48,12 +53,18 @@
     <div class="panel-content">
       {#if $systemState === 'komposition'}
         <div class="komposition-mode">
-          {#if $kompositionDraft?.source === 'map-longpress' && $kompositionDraft.lngLat}
-            <p>Neuer Knoten am Ort: {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
+          {#if $kompositionDraft?.lngLat}
+            <div class="state-set">
+              <p><strong>Ort gesetzt:</strong> {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
+              <p class="ghost">Du kannst den Ort ändern, indem du einen anderen Punkt auf der Karte lange drückst.</p>
+              <!-- Future: Form for Node Type and Details goes here -->
+            </div>
           {:else}
-            <p>Bitte wähle einen Ort auf der Karte (Longpress) für den neuen Knoten.</p>
+            <div class="state-pending">
+              <p><strong>Ort ausstehend</strong></p>
+              <p>Bitte wähle den Startpunkt für den neuen Knoten, indem du lange auf die Karte tippst (Longpress).</p>
+            </div>
           {/if}
-          <!-- Additional editor fields would go here -->
         </div>
       {:else if $selection}
         {#if $selection.type === 'node'}
