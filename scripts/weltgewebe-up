@@ -644,7 +644,7 @@ else
 fi
 
 # 6b. Frontend Build
-if [[ -d "apps/web" && "$REQUIRE_FRONTEND" == "1" ]]; then
+if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" ) ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
 
@@ -680,7 +680,7 @@ if [[ -d "apps/web" && "$REQUIRE_FRONTEND" == "1" ]]; then
          fi
      fi
   fi
-elif [[ "$REQUIRE_FRONTEND" == "0" && ! -f "apps/web/build/index.html" ]]; then
+elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/index.html" ]]; then
   echo
   echo "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
 fi
