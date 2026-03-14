@@ -883,6 +883,8 @@ else
     exit 1
 fi
 unset REQUIRE_FRONTEND
+unset EDGE_CA
+unset MOCK_HEALTH_EXISTS
 
 # 23. Container Health Guard Failure
 echo ">>> Test 23: Container Health Guard Failure"
