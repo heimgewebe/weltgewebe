@@ -550,23 +550,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .demo-btn {
-    position: absolute;
-    bottom: 24px;
-    left: 24px;
-    z-index: 20;
-    padding: 8px 16px;
-    background: var(--surface);
-    border: 1px solid var(--panel-border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  }
-  .demo-btn:hover {
-    background: var(--panel-bg);
-  }
-
   .debug-badge {
     position: absolute;
     top: 60px;
