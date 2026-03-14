@@ -48,8 +48,8 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.locator(".map-marker").first().click();
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
-    // Click empty map area (bottom left corner might be safe)
-    await page.mouse.click(10, 10);
+    // Click empty map area (top left corner is generally safe from markers)
+    await page.locator("#map").click({ position: { x: 10, y: 10 } });
 
     // Panel should close
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
@@ -107,11 +107,11 @@ test.describe("Map Interaction & Context Panel", () => {
     const mapContainer = page.locator("#map");
     await mapContainer.hover({ position: { x: 200, y: 200 } });
     await page.mouse.down();
-    await page.waitForTimeout(900); // 800ms is the longpress threshold
+    await page.waitForTimeout(1000); // 800ms is the longpress threshold
     await page.mouse.up();
 
     const panel = page.locator('[data-testid="context-panel"]');
-    await expect(panel).toBeVisible();
+    await panel.waitFor({ state: "visible", timeout: 5000 });
     await expect(panel).toContainText("Ort gesetzt");
   });
 
@@ -126,7 +126,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeVisible();
 
     // Click on an empty area of the map
-    await page.mouse.click(10, 10);
+    await page.locator("#map").click({ position: { x: 10, y: 10 } });
 
     // Panel should still be visible (komposition protection)
     await expect(panel).toBeVisible();
