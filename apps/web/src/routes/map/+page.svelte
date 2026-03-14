@@ -15,6 +15,8 @@
   import { isRecord } from '$lib/utils/guards';
 
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
+  import { currentBasemap } from '$lib/map/config/basemap.current';
+  import { resolveBasemapStyle } from '$lib/map/basemap';
 
   export let data: PageData;
 
@@ -287,15 +289,6 @@
     });
   }
 
-  function jumpToDemo() {
-    if (!map) return;
-    map.flyTo({
-      center: [10.0616, 53.5596],
-      zoom: 15,
-      animate: true
-    });
-  }
-
   async function toggleLogin() {
     if ($authStore.authenticated) {
       await authStore.logout();
@@ -349,9 +342,13 @@
       container.addEventListener('click', handleMarkerClick);
       map = new maplibregl.Map({
         container,
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: [10.00, 53.55],
-        zoom: 13
+        style: resolveBasemapStyle(currentBasemap),
+        center: currentBasemap.center,
+        zoom: currentBasemap.zoom,
+        minZoom: currentBasemap.minZoom ?? 10,
+        maxZoom: currentBasemap.maxZoom ?? 18,
+        pitch: currentBasemap.pitch ?? 0,
+        bearing: currentBasemap.bearing ?? 0
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
@@ -607,9 +604,6 @@
   {/if}
   <TopBar />
   <div id="map" bind:this={mapContainer}></div>
-  <button class="demo-btn" on:click={jumpToDemo}>
-    Zur Demo springen
-  </button>
   {#if isLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>
