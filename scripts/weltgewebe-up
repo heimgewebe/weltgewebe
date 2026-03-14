@@ -643,17 +643,14 @@ else
   export REQUIRE_FRONTEND=1
 fi
 
-# 6b. Frontend Build (Optional/Heuristic)
-if [[ -d "apps/web" ]]; then
+# 6b. Frontend Build
+if [[ -d "apps/web" && "$REQUIRE_FRONTEND" == "1" ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
 
   if [[ "$BUILD_WEB" == "force" ]]; then
      NEEDS_WEB_BUILD=1
      WEB_MSG="Forced"
-  elif [[ "$BUILD_WEB" == "no" ]]; then
-     NEEDS_WEB_BUILD=0
-     WEB_MSG="Skipped (explicit)"
   else
      # Auto
      if [[ ! -f "apps/web/build/index.html" ]]; then
@@ -682,10 +679,10 @@ if [[ -d "apps/web" ]]; then
              exit 1
          fi
      fi
-  elif [[ "$BUILD_WEB" == "no" && ! -f "apps/web/build/index.html" ]]; then
-      echo
-      echo "WARNING: Frontend artifact missing and build disabled."
   fi
+elif [[ "$REQUIRE_FRONTEND" == "0" && ! -f "apps/web/build/index.html" ]]; then
+  echo
+  echo "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
 fi
 
 # 6c. Static UI Runtime Guard & Edge Caddy Recreate
@@ -724,9 +721,9 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
 
             RECREATE_ERR_FILE=$(mktemp)
-            # We omit a specific service name here because $EDGE_CADDY_CONTAINER is likely the container name,
-            # not necessarily the compose service name (which could be just "caddy").
-            # Recreating the whole stack with --force-recreate after deleting the container is the safest approach.
+            # We omit a specific service name here because the edge deployment configuration is external to this repository.
+            # We cannot reliably assume the exact service name (e.g., whether it is 'caddy' or 'edge-caddy').
+            # Recreating the whole stack with --force-recreate ensures all linked services are properly refreshed.
             if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate ) > "$RECREATE_ERR_FILE" 2>&1; then
                 msg="Failed to recreate edge-caddy stack. The edge deployment is broken."
                 echo "ERROR: $msg"
@@ -1127,7 +1124,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
 
     if [[ "$HTTP_CODE" != "200" ]]; then
-        msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. Got: $HTTP_CODE"
+        msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. HTML not reachable. Got: $HTTP_CODE"
         echo "ERROR: $msg"
         generate_failure_bundle "$msg"
         rm -f "$HTML_OUT"
@@ -1135,7 +1132,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     fi
 
     if ! grep -q "_app/" "$HTML_OUT"; then
-        msg="Frontend Reachability Guard failed: /map route is reachable (200), but missing expected '_app/' asset references. Container mount may be stale or empty."
+        msg="Frontend Reachability Guard failed: /map route is reachable (200), but HTML without expected '_app/' structure. Container mount may be stale or empty."
         echo "ERROR: $msg"
         generate_failure_bundle "$msg"
         rm -f "$HTML_OUT"
@@ -1154,15 +1151,17 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
         ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
         if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
-            msg="Frontend Asset Guard failed: HTML is present, but asset $ASSET_PATH_NORMALIZED returned HTTP $ASSET_HTTP_CODE. Static files might be missing."
+            msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
             rm -f "$HTML_OUT"
             exit 1
         fi
+        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
         echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified)"
     else
         # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
+        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
         echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
     fi
 
