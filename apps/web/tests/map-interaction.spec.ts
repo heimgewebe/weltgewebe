@@ -75,10 +75,11 @@ test.describe("Map Interaction & Context Panel", () => {
       await markers.nth(1).click({ force: true });
 
       // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
-      // Da wir nicht genau wissen, was nth(1) ist, prüfen wir positiv: "Übersicht" oder "Profil" muss aktiv sein
-      const activeTab = page.locator("button.active");
-      const activeText = await activeTab.innerText();
-      expect(["Übersicht", "Profil"]).toContain(activeText.trim());
+      // Wir scopen auf das Panel und warten explizit auf den finalen DOM-Zustand, um Flakiness zu vermeiden.
+      const activeTab = panel.locator("button.active");
+      await expect(activeTab).toHaveText(/^(Übersicht|Profil)$/, {
+        timeout: 5000,
+      });
     }
   });
 

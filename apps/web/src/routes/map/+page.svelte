@@ -405,7 +405,9 @@
       map.on('mouseup', clearLongPressTimer);
       map.on('mousemove', (e) => {
         if (longPressTimer !== undefined) {
-          if (Math.abs(e.point.x - longPressStartX) > 10 || Math.abs(e.point.y - longPressStartY) > 10) {
+          const dx = e.point.x - longPressStartX;
+          const dy = e.point.y - longPressStartY;
+          if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
             clearLongPressTimer();
           }
         }
@@ -433,7 +435,9 @@
       map.on('touchend', clearLongPressTimer);
       map.on('touchmove', (e) => {
         if (longPressTimer !== undefined) {
-          if (Math.abs(e.point.x - longPressStartX) > 10 || Math.abs(e.point.y - longPressStartY) > 10) {
+          const dx = e.point.x - longPressStartX;
+          const dy = e.point.y - longPressStartY;
+          if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
             clearLongPressTimer();
           }
         }
