@@ -31,7 +31,7 @@ fi
 
 if [[ -z "$CADDYFILE" || ! -f "$CADDYFILE" ]]; then
   echo "ERROR: csp_contract_static could not find the target Caddyfile." >&2
-  echo "       This is a fail-closed check because the web build is required and Caddy is enabled." >&2
+  echo "       This is a fail-closed check because frontend delivery is required and Caddy is enabled." >&2
   exit 1
 fi
 
