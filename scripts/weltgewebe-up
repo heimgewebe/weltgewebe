@@ -1148,8 +1148,8 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
         exit 1
     fi
-    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT"; then
-        msg="Frontend Cache Guard failed: /map route did not return 'no-cache' header."
+    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
         echo "ERROR: $msg"
         generate_failure_bundle "$msg"
         rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
@@ -1187,8 +1187,8 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             exit 1
         fi
 
-        if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT"; then
-            msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'immutable' header."
+        if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
+            msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
             rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
@@ -1204,11 +1204,12 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
     # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
     # This is a diagnostic guard (warn-only), curl failures should not abort the deploy.
-    if ! VERSION_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
+    VERSION_OUT=$(mktemp)
+    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
         echo "WARNING: curl connection failed while fetching /_app/version.json. Build-ID unverified."
     elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
-        # Robust parsing: strip newlines, find "version" key with optional spaces, extract value
-        BUILD_VERSION=$(curl -s --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" | tr -d '\n' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        # Robust parsing: strip newlines, find "version" key with optional spaces, extract value cleanly
+        BUILD_VERSION=$(cat "$VERSION_OUT" | tr -d '\n' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
         if [[ -z "$BUILD_VERSION" ]]; then
             BUILD_VERSION="unknown (parse error)"
         fi
@@ -1217,7 +1218,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
     fi
 
-    rm -f "$HTML_OUT"
+    rm -f "$HTML_OUT" "$VERSION_OUT"
 else
     echo "   Skipped (Frontend not required for this deploy run)."
 fi
