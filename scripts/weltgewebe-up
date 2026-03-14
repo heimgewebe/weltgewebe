@@ -724,8 +724,11 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
 
             RECREATE_ERR_FILE=$(mktemp)
-            if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate "$EDGE_CADDY_CONTAINER" ) > "$RECREATE_ERR_FILE" 2>&1; then
-                msg="Failed to recreate $EDGE_CADDY_CONTAINER. The edge deployment is broken."
+            # We omit a specific service name here because $EDGE_CADDY_CONTAINER is likely the container name,
+            # not necessarily the compose service name (which could be just "caddy").
+            # Recreating the whole stack with --force-recreate after deleting the container is the safest approach.
+            if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate ) > "$RECREATE_ERR_FILE" 2>&1; then
+                msg="Failed to recreate edge-caddy stack. The edge deployment is broken."
                 echo "ERROR: $msg"
                 generate_failure_bundle "$msg" "$RECREATE_ERR_FILE"
                 rm -f "$RECREATE_ERR_FILE"

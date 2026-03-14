@@ -15,7 +15,7 @@ for f in "${required_core[@]}"; do
   fi
 done
 
-# Optional web artifacts
+# Optional frontend artifacts
 REQUIRE_FRONTEND=${REQUIRE_FRONTEND:-1}
 WEB_INDEX="$ROOT/apps/web/build/index.html"
 WEB_APP="$ROOT/apps/web/build/_app"
