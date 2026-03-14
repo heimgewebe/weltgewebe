@@ -1,7 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Deployment Snapshot",
-  "description": "Schema for capturing the deployment snapshot, including container health, mounts, and cache configuration states.",
   "type": "object",
   "required": ["ts", "host", "repo", "compose", "containers", "volumes", "mounts", "health"],
   "properties": {
