@@ -1141,7 +1141,13 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
     # Phase B: Verifizieren der HTML Cache-Header (revalidating)
     HTML_HEADERS_OUT=$(mktemp)
-    curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"
+    if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+        exit 1
+    fi
     if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT"; then
         msg="Frontend Cache Guard failed: /map route did not return 'no-cache' header."
         echo "ERROR: $msg"
@@ -1165,7 +1171,14 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
         # Verify asset reachability and Cache-Control headers (immutable)
         ASSET_HEADERS_OUT=$(mktemp)
-        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL")
+        if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
+            msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+            exit 1
+        fi
+
         if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
             msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
             echo "ERROR: $msg"
@@ -1190,10 +1203,16 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     fi
 
     # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
-    VERSION_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json")
-    if [[ "$VERSION_HTTP_CODE" == "200" ]]; then
-        BUILD_VERSION=$(curl -s --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" | grep -o '"version":"[^"]*"' | cut -d '"' -f 4 || true)
-        echo "OK (Build-ID / Version: ${BUILD_VERSION:-unknown} verified via /_app/version.json)"
+    # This is a diagnostic guard (warn-only), curl failures should not abort the deploy.
+    if ! VERSION_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
+        echo "WARNING: curl connection failed while fetching /_app/version.json. Build-ID unverified."
+    elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+        # Robust parsing: strip newlines, find "version" key with optional spaces, extract value
+        BUILD_VERSION=$(curl -s --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" | tr -d '\n' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        if [[ -z "$BUILD_VERSION" ]]; then
+            BUILD_VERSION="unknown (parse error)"
+        fi
+        echo "OK (Build-ID / Version: $BUILD_VERSION verified via /_app/version.json)"
     else
         echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
     fi
