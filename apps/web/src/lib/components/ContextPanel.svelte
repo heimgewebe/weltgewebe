@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { selection, systemState, contextPanelOpen, kompositionDraft } from '$lib/stores/uiView';
+  import { selection, systemState, contextPanelOpen, kompositionDraft, leaveToNavigation } from '$lib/stores/uiView';
 
   let activeTab = 'uebersicht';
 
@@ -25,9 +25,7 @@
   }
 
   function closePanel() {
-    systemState.set('navigation');
-    selection.set(null);
-    kompositionDraft.set(null);
+    leaveToNavigation();
   }
 </script>
 

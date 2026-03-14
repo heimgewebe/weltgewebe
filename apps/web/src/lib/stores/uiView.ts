@@ -39,3 +39,68 @@ export type KompositionDraft = {
 } | null;
 
 export const kompositionDraft = writable<KompositionDraft>(null);
+
+export function enterFokus(newSelection: NonNullable<Selection>) {
+  kompositionDraft.set(null);
+  selection.set(newSelection);
+  systemState.set("fokus");
+}
+
+export function enterKomposition(draft: NonNullable<KompositionDraft>) {
+  selection.set(null);
+  kompositionDraft.set(draft);
+  systemState.set("komposition");
+}
+
+export function leaveToNavigation() {
+  selection.set(null);
+  kompositionDraft.set(null);
+  systemState.set("navigation");
+}
+
+if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+  let latestSnapshot: {
+    $state: SystemState;
+    $sel: Selection;
+    $draft: KompositionDraft;
+  } | null = null;
+  let isValidationQueued = false;
+
+  derived(
+    [systemState, selection, kompositionDraft],
+    ([$state, $sel, $draft]) => ({ $state, $sel, $draft }),
+  ).subscribe((snapshot) => {
+    latestSnapshot = snapshot;
+
+    if (!isValidationQueued) {
+      isValidationQueued = true;
+      queueMicrotask(() => {
+        isValidationQueued = false;
+        if (!latestSnapshot) return;
+
+        const { $state, $sel, $draft } = latestSnapshot;
+
+        if ($state === "fokus" && !$sel) {
+          console.error(
+            "Invariant Violation: systemState is 'fokus' but selection is null",
+          );
+        }
+        if ($state === "navigation" && $sel) {
+          console.error(
+            "Invariant Violation: systemState is 'navigation' but selection is not null",
+          );
+        }
+        if ($state === "komposition" && !$draft) {
+          console.error(
+            "Invariant Violation: systemState is 'komposition' but kompositionDraft is null",
+          );
+        }
+        if ($state !== "komposition" && $draft) {
+          console.error(
+            "Invariant Violation: systemState is not 'komposition' but kompositionDraft is not null",
+          );
+        }
+      });
+    }
+  });
+}

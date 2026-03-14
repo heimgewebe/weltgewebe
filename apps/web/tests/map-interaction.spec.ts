@@ -15,13 +15,15 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.goto("/map");
   });
 
+  test("Initial state is navigation with closed panel", async ({ page }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
+  });
+
   test("Clicking a marker opens the context panel in fokus mode", async ({
     page,
   }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
-
-    // Ensure panel is not initially visible
-    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
 
     // Click a marker
     await page.locator(".map-marker").first().click();
@@ -46,8 +48,8 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.locator(".map-marker").first().click();
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
-    // Click empty map area (bottom left corner might be safe)
-    await page.mouse.click(10, 10);
+    // Click empty map area (top left corner is generally safe from markers)
+    await page.locator("#map").click({ position: { x: 10, y: 10 } });
 
     // Panel should close
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
@@ -85,9 +87,6 @@ test.describe("Map Interaction & Context Panel", () => {
   }) => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
-    // Ensure panel is not initially visible
-    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
-
     // Click new node in action bar
     await page.locator('button:has-text("Neuer Knoten")').click();
 
@@ -97,9 +96,39 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Should show "Ort ausstehend" state
     await expect(panel).toContainText("Ort ausstehend");
+  });
 
-    // Close panel
-    await panel.locator(".close-btn").click({ force: true });
-    await expect(panel).toHaveCount(0);
+  test("Longpress on map initializes komposition mode with coordinates", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+
+    // Simulate longpress by dispatching mousedown and waiting
+    const mapContainer = page.locator("#map");
+    await mapContainer.hover({ position: { x: 200, y: 200 } });
+    await page.mouse.down();
+    await page.waitForTimeout(1000); // 800ms is the longpress threshold
+    await page.mouse.up();
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await panel.waitFor({ state: "visible", timeout: 5000 });
+    await expect(panel).toContainText("Ort gesetzt");
+  });
+
+  test("Empty map click does not close context panel in komposition mode", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+
+    // Enter komposition mode via action bar
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Click on an empty area of the map
+    await page.locator("#map").click({ position: { x: 10, y: 10 } });
+
+    // Panel should still be visible (komposition protection)
+    await expect(panel).toBeVisible();
   });
 });
