@@ -18,10 +18,10 @@ export const demoNodes = [
     created_at: "2025-01-01T12:00:00Z",
     updated_at: "2025-01-01T12:00:00Z",
     modules: [
-      { id: "profile", label: "Info", locked: true, type: "standard" },
+      { id: "profile", label: "Übersicht", locked: true, type: "standard" },
       {
         id: "forum",
-        label: "Forum",
+        label: "Gespräch",
         locked: true,
         type: "standard",
       },
@@ -56,10 +56,10 @@ export const demoAccounts = [
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo"],
     modules: [
-      { id: "profile", label: "Info", locked: true, type: "standard" },
+      { id: "profile", label: "Übersicht", locked: true, type: "standard" },
       {
         id: "forum",
-        label: "Forum",
+        label: "Gespräch",
         locked: true,
         type: "standard",
       },

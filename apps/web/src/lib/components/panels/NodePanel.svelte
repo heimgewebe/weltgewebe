@@ -39,19 +39,6 @@
         {#if $selection?.data?.location}
           <p><strong>Koordinaten:</strong> {$selection.data.location.lat.toFixed(5)}, {$selection.data.location.lon.toFixed(5)}</p>
         {/if}
-
-        <div class="modules-list">
-          <h4>Module</h4>
-          {#if $selection?.data?.modules && $selection.data.modules.length > 0}
-            <ul>
-              {#each $selection.data.modules as mod}
-                <li>{mod.label} <span class="badge">{mod.type}</span></li>
-              {/each}
-            </ul>
-          {:else}
-            <p class="ghost">Keine Module aktiviert.</p>
-          {/if}
-        </div>
       </div>
 
     {:else if activeTab === 'gespraech'}
@@ -132,42 +119,6 @@
   .overview p {
     margin-bottom: 0.5rem;
     font-size: 0.95rem;
-  }
-
-  .modules-list {
-    margin-top: 1.5rem;
-  }
-
-  .modules-list h4 {
-    margin-bottom: 0.5rem;
-    font-size: 1rem;
-    color: var(--text, #e9eef5);
-  }
-
-  .modules-list ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .modules-list li {
-    background: var(--panel-border, rgba(255, 255, 255, 0.06));
-    padding: 0.5rem 0.75rem;
-    border-radius: var(--radius, 6px);
-    margin-bottom: 0.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 0.9rem;
-  }
-
-  .badge {
-    background: var(--accent-soft, rgba(106, 166, 255, 0.18));
-    color: var(--accent, #6aa6ff);
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    text-transform: uppercase;
   }
 
   /* Chat Styles */
