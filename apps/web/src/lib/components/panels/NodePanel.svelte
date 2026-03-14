@@ -8,12 +8,15 @@
   }
 
   // Explicitly reset tab when node ID changes
-  $: currentSelectionId = $selection?.id;
-  let lastSelectionId = currentSelectionId;
+  let currentSelectionId: string | undefined;
+  let lastSelectionId: string | undefined;
 
-  $: if (currentSelectionId !== lastSelectionId) {
-    lastSelectionId = currentSelectionId;
-    activeTab = 'uebersicht';
+  $: {
+    currentSelectionId = $selection?.id;
+    if (currentSelectionId !== lastSelectionId) {
+      lastSelectionId = currentSelectionId;
+      activeTab = 'uebersicht';
+    }
   }
 </script>
 
