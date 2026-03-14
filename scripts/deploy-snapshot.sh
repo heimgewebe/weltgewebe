@@ -342,7 +342,7 @@ PY
 fi
 
 # -----------------------------
-# Emit snapshot
+# Emit snapshot (Phase B ack)
 # -----------------------------
 ISO_TS="$(iso_ts)"
 HOSTNAME="$(hostname)"
