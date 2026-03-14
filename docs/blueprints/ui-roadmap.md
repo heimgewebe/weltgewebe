@@ -17,26 +17,25 @@ Diese Blaupause beschreibt die konkrete, priorisierte Implementierungsfolge für
 
 Der Fokus liegt auf dem produktiven Hebel: Der Kompositionsfluss muss aus dem reinen Statusanzeige-Zustand in einen echten Editor überführt werden.
 
-### [ ] Roadmap PR 1 — Kompositionseditor vollenden
+### [x] Roadmap PR 1 — Kompositionseditor vollenden
 
-- [ ] KompositionPanel von Statusanzeige zu echtem Editor ausbauen
-- [ ] Knotentyp-Auswahl ergänzen
-- [ ] Titel/Beschreibung ergänzen
-- [ ] lokale Schrittlogik im Panel definieren
-- [ ] Validierung für Pflichtfelder ergänzen
-- [ ] Cancel-Flow sauber definieren
-- [ ] Submit-Flow implementieren
-- [ ] Erfolgspfad für erfolgreichen Submit entscheiden und dokumentieren:
-  - Option A: `komposition -> navigation`
-  - Option B: `komposition -> fokus(neuer Knoten)`
+- [x] KompositionPanel von Statusanzeige zu echtem Editor ausbauen
+- [x] Knotentyp-Auswahl ergänzen
+- [x] Titel/Beschreibung ergänzen
+- [x] lokale Schrittlogik im Panel definieren
+- [x] Validierung für Pflichtfelder ergänzen
+- [x] Cancel-Flow sauber definieren
+- [x] Submit-Flow implementieren
+- [x] Erfolgspfad für erfolgreichen Submit entscheiden und dokumentieren:
+  - Option A wurde gewählt: `komposition -> navigation`
 
-### [ ] Roadmap PR 1a — Kompositions-Tests ergänzen
+### [x] Roadmap PR 1a — Kompositions-Tests ergänzen
 
-- [ ] Test für erfolgreichen Submit ergänzen
-- [ ] Test für Validation Error ergänzen
-- [ ] Test für Cancel während Komposition ergänzen
-- [ ] Test für „Ort ändern“ ergänzen, falls unterstützt
-- [ ] Test für Draft-Cleanup nach Close/Success ergänzen
+- [x] Test für erfolgreichen Submit ergänzen
+- [x] Test für Validation Error ergänzen
+- [x] Test für Cancel während Komposition ergänzen
+- [x] Test für „Ort ändern“ ergänzen, falls unterstützt
+- [x] Test für Draft-Cleanup nach Close/Success ergänzen
 
 ⸻
 
