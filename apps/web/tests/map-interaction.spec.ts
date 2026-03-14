@@ -20,7 +20,9 @@ test.describe("Map Interaction & Context Panel", () => {
     // Click a marker
     // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
     await page.evaluate(() => {
-      (document.querySelector(".map-marker") as HTMLElement)?.click();
+      (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
     });
 
     // Context panel should open
@@ -42,24 +44,17 @@ test.describe("Map Interaction & Context Panel", () => {
     // Open panel first
     // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
     await page.evaluate(() => {
-      (document.querySelector(".map-marker") as HTMLElement)?.click();
+      (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
     });
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
-    // Wait for the context panel to be fully visible before clicking away
-    await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
-
     // Click empty map area (stabile Leerklick-Zone determined at 50,50)
-    // Avoid action bar
-    await page
-      .locator("#map")
-      .click({ position: { x: 50, y: 50 }, force: true });
-
-    // Ensure we trigger the map's click event. Sometimes the map canvas absorbs the click strangely in tests.
     // MapLibre's canvas handles clicks
     await page
       .locator("canvas.maplibregl-canvas")
-      .click({ position: { x: 50, y: 50 }, force: true });
+      .click({ position: { x: 50, y: 50 } });
 
     // Panel should close
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
@@ -71,7 +66,9 @@ test.describe("Map Interaction & Context Panel", () => {
     // Open panel on first marker
     // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
     await page.evaluate(() => {
-      (document.querySelectorAll(".map-marker")[0] as HTMLElement)?.click();
+      (
+        document.querySelectorAll(".map-marker")[0] as HTMLElement
+      )?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const panel = page.locator('[data-testid="context-panel"]');
@@ -86,7 +83,9 @@ test.describe("Map Interaction & Context Panel", () => {
       // Click a different marker
       // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
       await page.evaluate(() => {
-        (document.querySelectorAll(".map-marker")[1] as HTMLElement)?.click();
+        (
+          document.querySelectorAll(".map-marker")[1] as HTMLElement
+        )?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       });
 
       // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
@@ -120,9 +119,9 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
     // Simulate longpress by dispatching mousedown and waiting
-    const mapContainer = page.locator("#map");
+    const mapCanvas = page.locator("canvas.maplibregl-canvas");
     // Ensure we hover and click on empty space (50, 50)
-    await mapContainer.hover({ position: { x: 50, y: 50 } });
+    await mapCanvas.hover({ position: { x: 50, y: 50 } });
     await page.mouse.down();
     await page.waitForTimeout(1000); // 800ms is the longpress threshold
     await page.mouse.up();
@@ -143,7 +142,9 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeVisible();
 
     // Click on an empty area of the map
-    await page.locator("#map").click({ position: { x: 50, y: 50 } });
+    await page
+      .locator("canvas.maplibregl-canvas")
+      .click({ position: { x: 50, y: 50 } });
 
     // Panel should still be visible (komposition protection)
     await expect(panel).toBeVisible();
