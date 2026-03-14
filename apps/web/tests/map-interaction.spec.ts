@@ -17,11 +17,11 @@ test.describe("Map Interaction & Context Panel", () => {
   }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
-    // Ensure the map rendering is stable
-    await page.waitForTimeout(500);
-
     // Click a marker
-    await page.locator(".map-marker").first().click({ force: true });
+    // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
+    await page.evaluate(() => {
+      (document.querySelector(".map-marker") as HTMLElement)?.click();
+    });
 
     // Context panel should open
     const panel = page.locator('[data-testid="context-panel"]');
@@ -40,7 +40,10 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
     // Open panel first
-    await page.locator(".map-marker").first().click({ force: true });
+    // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
+    await page.evaluate(() => {
+      (document.querySelector(".map-marker") as HTMLElement)?.click();
+    });
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
     // Wait for the context panel to be fully visible before clicking away
@@ -65,12 +68,11 @@ test.describe("Map Interaction & Context Panel", () => {
   test("Switching between markers resets the active tab", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
-    // Ensure the map rendering is stable
-    await page.waitForTimeout(500);
-
     // Open panel on first marker
-    const markers = page.locator(".map-marker");
-    await markers.nth(0).click({ force: true });
+    // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
+    await page.evaluate(() => {
+      (document.querySelectorAll(".map-marker")[0] as HTMLElement)?.click();
+    });
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
@@ -82,7 +84,10 @@ test.describe("Map Interaction & Context Panel", () => {
       await expect(gespraechTab).toHaveClass(/active/, { timeout: 5000 });
 
       // Click a different marker
-      await markers.nth(1).click({ force: true });
+      // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
+      await page.evaluate(() => {
+        (document.querySelectorAll(".map-marker")[1] as HTMLElement)?.click();
+      });
 
       // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
       // Wir scopen auf das Panel und warten explizit auf den finalen DOM-Zustand, um Flakiness zu vermeiden.
