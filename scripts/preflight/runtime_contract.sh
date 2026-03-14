@@ -15,12 +15,12 @@ for f in "${required_core[@]}"; do
   fi
 done
 
-# Optional web artifacts
-REQUIRE_WEB_BUILD=${REQUIRE_WEB_BUILD:-1}
+# Optional frontend artifacts
+REQUIRE_FRONTEND=${REQUIRE_FRONTEND:-1}
 WEB_INDEX="$ROOT/apps/web/build/index.html"
 WEB_APP="$ROOT/apps/web/build/_app"
 
-if [[ "$REQUIRE_WEB_BUILD" == "1" ]]; then
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
   if [[ ! -f "$WEB_INDEX" ]]; then
     echo "ERROR: frontend build index.html is missing: $WEB_INDEX" >&2
     exit 1

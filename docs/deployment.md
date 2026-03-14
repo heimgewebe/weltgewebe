@@ -21,6 +21,18 @@ Conditionally required (when the frontend is deployed):
 - `apps/web/build/index.html`
 - `apps/web/build/_app`
 
+## Runtime Contract for Static UI
+
+Weltgewebe UI deployment fundamentally operates on three coupled layers:
+
+1. **Build layer**: `pnpm build` produces the static artifacts in `apps/web/build`.
+2. **Container mount layer**: A bind mount structurally exposes these artifacts to the `edge-caddy` container (`/srv/weltgewebe-web`).
+3. **Edge serving layer**: Caddy reads and serves these static files to the client.
+
+A successful frontend build does *not* automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. It is an established architectural known issue that Docker container bind mounts can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
+
+To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a refresh of the edge deployment stack to restore the `edge-caddy` mount coupling, provided frontend delivery is required for the current deploy run.
+
 ## Preflight guard
 
 `scripts/weltgewebe-up` runs `scripts/preflight/runtime_contract.sh` before `docker compose up`.

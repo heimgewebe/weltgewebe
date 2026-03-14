@@ -40,9 +40,12 @@ usage() {
   echo "  --purge-compose-leaks   Automatically remove detected 'zombie' containers (from wrong project)"
   echo "  --build-web             Force frontend build"
   echo "  --no-build-web          Skip frontend build (warn only)"
+  echo "  --refresh-edge          Force recreation of the Edge Caddy container to fix static mount issues"
   echo
   exit 1
 }
+
+REFRESH_EDGE=0
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -67,6 +70,7 @@ while [[ "$#" -gt 0 ]]; do
     --purge-compose-leaks) PURGE_ZOMBIES=1 ;;
     --build-web) BUILD_WEB="force" ;;
     --no-build-web) BUILD_WEB="no" ;;
+    --refresh-edge) REFRESH_EDGE=1 ;;
     -h|--help) usage ;;
     *) echo "Unknown parameter passed: $1"; usage ;;
   esac
@@ -632,7 +636,14 @@ else
   fi
 fi
 
-# 6. Frontend Build (Optional/Heuristic)
+# 6. Frontend Requirement Logic
+if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
+  export REQUIRE_FRONTEND=0
+else
+  export REQUIRE_FRONTEND=1
+fi
+
+# 6b. Frontend Build (Optional/Heuristic)
 if [[ -d "apps/web" ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
@@ -677,18 +688,72 @@ if [[ -d "apps/web" ]]; then
   fi
 fi
 
+# 6c. Static UI Runtime Guard & Edge Caddy Recreate
+echo
+echo ">> Edge Caddy Guard:"
+
+EDGE_CADDY_DIR="/opt/heimgewebe/edge"
+EDGE_CADDY_CONTAINER="edge-caddy"
+
+# Only attempt this if frontend delivery is required for this run
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+    EDGE_NEEDS_RECREATE=0
+
+    if [[ "$REFRESH_EDGE" == "1" ]]; then
+        echo "   Recreation forced by --refresh-edge flag."
+        EDGE_NEEDS_RECREATE=1
+    elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_CADDY_CONTAINER"; then
+        # Check if running container sees the static artifacts properly
+        echo "   Checking static UI mount in $EDGE_CADDY_CONTAINER..."
+        if ! docker exec "$EDGE_CADDY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+            echo "WARNING: Static UI artifacts invisible in $EDGE_CADDY_CONTAINER."
+            echo "         Container mount state drift detected."
+            EDGE_NEEDS_RECREATE=1
+        else
+            echo "   Static UI mount is valid."
+        fi
+    else
+        echo "   Container $EDGE_CADDY_CONTAINER is not running. Skipping runtime check."
+    fi
+
+    if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
+        if [[ -d "$EDGE_CADDY_DIR" ]]; then
+            echo "   Refreshing edge deployment to restore static UI mount..."
+
+            # Safe recreate logic
+            docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
+
+            RECREATE_ERR_FILE=$(mktemp)
+            # We omit a specific service name here because $EDGE_CADDY_CONTAINER is likely the container name,
+            # not necessarily the compose service name (which could be just "caddy").
+            # Recreating the whole stack with --force-recreate after deleting the container is the safest approach.
+            if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate ) > "$RECREATE_ERR_FILE" 2>&1; then
+                msg="Failed to recreate edge-caddy stack. The edge deployment is broken."
+                echo "ERROR: $msg"
+                generate_failure_bundle "$msg" "$RECREATE_ERR_FILE"
+                rm -f "$RECREATE_ERR_FILE"
+                exit 1
+            fi
+            rm -f "$RECREATE_ERR_FILE"
+
+            echo "   Edge deployment refreshed; edge-caddy should now see static artifacts."
+        else
+            msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            exit 1
+        fi
+    fi
+else
+    echo "   Skipped (Frontend not required for this deploy run)."
+fi
+
 # 7. Deploy
 echo
 echo
 echo ">> Preflight: Validating runtime contract..."
 if [[ -x "scripts/preflight/runtime_contract.sh" ]]; then
   export ROOT="$REPO_DIR"
-
-  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-    export REQUIRE_WEB_BUILD=0
-  else
-    export REQUIRE_WEB_BUILD=1
-  fi
 
   if ! bash scripts/preflight/runtime_contract.sh; then
     echo "ERROR: Runtime contract validation failed. Aborting deploy." >&2
@@ -739,12 +804,6 @@ except Exception:
      export CADDYFILE_PATH="$REPO_DIR/Caddyfile"
   elif [[ -f "$REPO_DIR/infra/caddy/Caddyfile.heim" ]]; then
      export CADDYFILE_PATH="$REPO_DIR/infra/caddy/Caddyfile.heim"
-  fi
-
-  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-    export REQUIRE_WEB_BUILD=0
-  else
-    export REQUIRE_WEB_BUILD=1
   fi
 
   if ! bash scripts/preflight/csp_contract_static.sh; then
@@ -1062,10 +1121,54 @@ fi
 
 echo
 echo ">> Guard 5: Frontend Reachability..."
-if ! curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa >/dev/null 2>&1; then
-    echo "WARNING: Frontend Reachability check failed (HTTP error, TLS error, or connection error)."
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+    # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
+    HTML_OUT=$(mktemp)
+    HTTP_CODE=$(curl -s -o "$HTML_OUT" -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map")
+
+    if [[ "$HTTP_CODE" != "200" ]]; then
+        msg="Frontend Reachability Guard failed: HTTP 200 expected for /map. Got: $HTTP_CODE"
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT"
+        exit 1
+    fi
+
+    if ! grep -q "_app/" "$HTML_OUT"; then
+        msg="Frontend Reachability Guard failed: /map route is reachable (200), but missing expected '_app/' asset references. Container mount may be stale or empty."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT"
+        exit 1
+    fi
+
+    # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
+    # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
+    ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
+
+    if [[ -n "$ASSET_PATH" ]]; then
+        # Normalize: ensure path starts with a single slash (handle relative ./ cases)
+        ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
+        ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
+
+        ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
+        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
+        if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
+            msg="Frontend Asset Guard failed: HTML is present, but asset $ASSET_PATH_NORMALIZED returned HTTP $ASSET_HTTP_CODE. Static files might be missing."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT"
+            exit 1
+        fi
+        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified)"
+    else
+        # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
+        echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
+    fi
+
+    rm -f "$HTML_OUT"
 else
-    echo "OK"
+    echo "   Skipped (Frontend not required for this deploy run)."
 fi
 
 # 8. Update State (Post-Health)

@@ -6,7 +6,7 @@ set -euo pipefail
 # verifies that the target Caddyfile's CSP allows it.
 
 ROOT="${ROOT:-/opt/weltgewebe}"
-REQUIRE_WEB_BUILD="${REQUIRE_WEB_BUILD:-1}"
+REQUIRE_FRONTEND="${REQUIRE_FRONTEND:-1}"
 CADDY_TARGET_SITE="${CADDY_TARGET_SITE:-weltgewebe.home.arpa}"
 
 # Caddyfile detection (heuristic: prioritize user explicit env var, then root, then infra)
@@ -24,14 +24,14 @@ else
   CADDYFILE=""
 fi
 
-if [[ "$REQUIRE_WEB_BUILD" != "1" ]]; then
-  echo "csp_contract_static: Web build not required, skipping."
+if [[ "$REQUIRE_FRONTEND" != "1" ]]; then
+  echo "csp_contract_static: Frontend delivery not required, skipping."
   exit 0
 fi
 
 if [[ -z "$CADDYFILE" || ! -f "$CADDYFILE" ]]; then
   echo "ERROR: csp_contract_static could not find the target Caddyfile." >&2
-  echo "       This is a fail-closed check because the web build is required and Caddy is enabled." >&2
+  echo "       This is a fail-closed check because frontend delivery is required and Caddy is enabled." >&2
   exit 1
 fi
 
@@ -39,7 +39,7 @@ INDEX_HTML="$ROOT/apps/web/build/index.html"
 
 if [[ ! -f "$INDEX_HTML" ]]; then
   echo "ERROR: csp_contract_static could not find index.html at $INDEX_HTML." >&2
-  echo "       This is a fail-closed check because REQUIRE_WEB_BUILD=1." >&2
+  echo "       This is a fail-closed check because REQUIRE_FRONTEND=1." >&2
   echo "       (Note: runtime_contract.sh also enforces this file's existence)." >&2
   exit 1
 fi
