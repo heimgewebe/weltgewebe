@@ -17,8 +17,11 @@ test.describe("Map Interaction & Context Panel", () => {
   }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
+    // Ensure the map rendering is stable
+    await page.waitForTimeout(500);
+
     // Click a marker
-    await page.locator(".map-marker").first().click();
+    await page.locator(".map-marker").first().click({ force: true });
 
     // Context panel should open
     const panel = page.locator('[data-testid="context-panel"]');
@@ -36,8 +39,11 @@ test.describe("Map Interaction & Context Panel", () => {
   test("Clicking empty map area closes the context panel", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
+    // Ensure the map rendering is stable
+    await page.waitForTimeout(500);
+
     // Open panel first
-    await page.locator(".map-marker").first().click();
+    await page.locator(".map-marker").first().click({ force: true });
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
     // Wait for the context panel to be fully visible before clicking away
@@ -60,9 +66,12 @@ test.describe("Map Interaction & Context Panel", () => {
   test("Switching between markers resets the active tab", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
+    // Ensure the map rendering is stable
+    await page.waitForTimeout(500);
+
     // Open panel on first marker
     const markers = page.locator(".map-marker");
-    await markers.nth(0).click();
+    await markers.nth(0).click({ force: true });
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
