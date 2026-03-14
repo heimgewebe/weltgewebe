@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { kompositionDraft, leaveToNavigation } from '$lib/stores/uiView';
+  import { kompositionDraft, leaveToNavigation, systemState } from '$lib/stores/uiView';
 
   let title = '';
   let description = '';
@@ -27,12 +27,22 @@
 
     isSubmitting = true;
 
-    // Simulate network request
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // Create a local snapshot to guard against stale state transitions
+      const submitDraft = $kompositionDraft;
 
-    // For now, success path Option A (komposition -> navigation)
-    isSubmitting = false;
-    leaveToNavigation();
+      // Simulate network request
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Guard: only execute success path if we are still in komposition state
+      // and the draft hasn't been maliciously replaced
+      if ($systemState === 'komposition' && $kompositionDraft === submitDraft) {
+        // For now, success path Option A (komposition -> navigation)
+        leaveToNavigation();
+      }
+    } finally {
+      isSubmitting = false;
+    }
   }
 </script>
 
@@ -52,7 +62,7 @@
 
     <div class="form-group">
       <label for="nodeType">Typ</label>
-      <select id="nodeType" bind:value={nodeType} class="input">
+      <select id="nodeType" bind:value={nodeType} class="input" disabled={isSubmitting}>
         <option value="standard">Standard</option>
         <option value="event">Event</option>
         <option value="resource">Ressource</option>
@@ -69,9 +79,12 @@
         class:error={titleError}
         placeholder="Name des Knotens"
         disabled={isSubmitting}
+        required
+        aria-invalid={titleError}
+        aria-describedby={titleError ? 'title-error' : undefined}
       />
       {#if titleError}
-        <span class="error-msg">Titel ist erforderlich</span>
+        <span id="title-error" class="error-msg">Titel ist erforderlich</span>
       {/if}
     </div>
 
