@@ -718,7 +718,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
     if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
         if [[ -d "$EDGE_CADDY_DIR" ]]; then
-            echo "   Recreating $EDGE_CADDY_CONTAINER to restore static UI mount..."
+            echo "   Refreshing edge deployment to restore static UI mount..."
 
             # Safe recreate logic
             docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
@@ -736,9 +736,9 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             fi
             rm -f "$RECREATE_ERR_FILE"
 
-            echo "   $EDGE_CADDY_CONTAINER recreated."
+            echo "   Edge deployment refreshed; edge-caddy should now see static artifacts."
         else
-            msg="Could not recreate $EDGE_CADDY_CONTAINER. Directory $EDGE_CADDY_DIR not found."
+            msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
             exit 1
