@@ -43,21 +43,21 @@ Der Fokus liegt auf dem produktiven Hebel: Der Kompositionsfluss muss aus dem re
 
 Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnung und Schranke muss ontologisch durchgesetzt werden.
 
-### [ ] Roadmap PR 2 — Zustandsdurchsetzung härten
+### [x] Roadmap PR 2 — Zustandsdurchsetzung härten
 
-- [ ] Entscheiden, ob der dev/test-Invariant-Watcher weiter nur loggt oder hart werfen soll
-- [ ] Falls Throw gewünscht:
-  - [ ] `assertUiStateInvariant()` oder gleichwertige Schicht ergänzen
-  - [ ] Nutzung im Dev/Test-Modus klar einbauen
-- [ ] Explizite Ausschlussregel festhalten: `selection !== null` und `kompositionDraft !== null` dürfen nie gleichzeitig gelten
-- [ ] Optional: separaten Unit-Test für ungültige Zustandskombinationen ergänzen
+- [x] Entscheiden, ob der dev/test-Invariant-Watcher weiter nur loggt oder hart werfen soll
+- [x] Falls Throw gewünscht:
+  - [x] `assertUiStateInvariant()` oder gleichwertige Schicht ergänzen
+  - [x] Nutzung im Dev/Test-Modus klar einbauen
+- [x] Explizite Ausschlussregel festhalten: `selection !== null` und `kompositionDraft !== null` dürfen nie gleichzeitig gelten
+- [x] Optional: separaten Unit-Test für ungültige Zustandskombinationen ergänzen
 
-### [ ] Roadmap PR 2a — Store-nahe Tests ergänzen
+### [x] Roadmap PR 2a — Store-nahe Tests ergänzen
 
-- [ ] Explizit prüfen, dass `enterFokus(...)` `selection !== null` ergibt
-- [ ] Explizit prüfen, dass `enterKomposition(...)` `selection === null` setzt
-- [ ] Explizit prüfen, dass `leaveToNavigation()` `selection === null` und `kompositionDraft === null` herstellt
-- [ ] Sofern sinnvoll: `contextPanelOpen` indirekt oder direkt derived prüfen
+- [x] Explizit prüfen, dass `enterFokus(...)` `selection !== null` ergibt
+- [x] Explizit prüfen, dass `enterKomposition(...)` `selection === null` setzt
+- [x] Explizit prüfen, dass `leaveToNavigation()` `selection === null` und `kompositionDraft === null` herstellt
+- [x] Sofern sinnvoll: `contextPanelOpen` indirekt oder direkt derived prüfen
 
 ⸻
 

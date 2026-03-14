@@ -58,7 +58,46 @@ export function leaveToNavigation() {
   systemState.set("navigation");
 }
 
-if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+export function assertUiStateInvariant(
+  state: SystemState,
+  sel: Selection,
+  draft: KompositionDraft,
+) {
+  if (sel !== null && draft !== null) {
+    throw new Error(
+      "Invariant Violation: selection and kompositionDraft cannot both be set at the same time",
+    );
+  }
+  if (state === "fokus" && !sel) {
+    throw new Error(
+      "Invariant Violation: systemState is 'fokus' but selection is null",
+    );
+  }
+  if (state === "navigation" && sel) {
+    throw new Error(
+      "Invariant Violation: systemState is 'navigation' but selection is not null",
+    );
+  }
+  if (state === "komposition" && !draft) {
+    throw new Error(
+      "Invariant Violation: systemState is 'komposition' but kompositionDraft is null",
+    );
+  }
+  if (state !== "komposition" && draft) {
+    throw new Error(
+      "Invariant Violation: systemState is not 'komposition' but kompositionDraft is not null",
+    );
+  }
+}
+
+// Fallback for environments where import.meta.env is not available
+const isDevOrTest =
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    (import.meta.env.DEV || import.meta.env.MODE === "test")) ||
+  (typeof process !== "undefined" && process.env.NODE_ENV === "test");
+
+if (isDevOrTest) {
   let latestSnapshot: {
     $state: SystemState;
     $sel: Selection;
@@ -80,26 +119,7 @@ if (import.meta.env.DEV || import.meta.env.MODE === "test") {
 
         const { $state, $sel, $draft } = latestSnapshot;
 
-        if ($state === "fokus" && !$sel) {
-          console.error(
-            "Invariant Violation: systemState is 'fokus' but selection is null",
-          );
-        }
-        if ($state === "navigation" && $sel) {
-          console.error(
-            "Invariant Violation: systemState is 'navigation' but selection is not null",
-          );
-        }
-        if ($state === "komposition" && !$draft) {
-          console.error(
-            "Invariant Violation: systemState is 'komposition' but kompositionDraft is null",
-          );
-        }
-        if ($state !== "komposition" && $draft) {
-          console.error(
-            "Invariant Violation: systemState is not 'komposition' but kompositionDraft is not null",
-          );
-        }
+        assertUiStateInvariant($state, $sel, $draft);
       });
     }
   });
