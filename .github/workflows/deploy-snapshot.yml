@@ -14,7 +14,6 @@ jobs:
 
       - name: Run Snapshot (Dry Mode)
         run: |
-          # Acknowledges phase B infra-caddy drift
           bash scripts/deploy-snapshot.sh
         env:
           SNAPSHOT_MODE: dry
