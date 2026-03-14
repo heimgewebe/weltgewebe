@@ -1139,6 +1139,19 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         exit 1
     fi
 
+    # Phase B: Verifizieren der HTML Cache-Header (revalidating)
+    HTML_HEADERS_OUT=$(mktemp)
+    curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"
+    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: /map route did not return 'no-cache' header."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+        exit 1
+    fi
+    rm -f "$HTML_HEADERS_OUT"
+    echo "OK (frontend route /map cache-control verified)"
+
     # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
     # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
     ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
@@ -1149,20 +1162,40 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
 
         ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
-        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
+
+        # Verify asset reachability and Cache-Control headers (immutable)
+        ASSET_HEADERS_OUT=$(mktemp)
+        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL")
         if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
             msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
             exit 1
         fi
-        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
-        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified)"
+
+        if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT"; then
+            msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'immutable' header."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+            exit 1
+        fi
+        rm -f "$ASSET_HEADERS_OUT"
+
+        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
     else
         # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
-        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
         echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
+    fi
+
+    # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
+    VERSION_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json")
+    if [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+        BUILD_VERSION=$(curl -s --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" | grep -o '"version":"[^"]*"' | cut -d '"' -f 4 || true)
+        echo "OK (Build-ID / Version: ${BUILD_VERSION:-unknown} verified via /_app/version.json)"
+    else
+        echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
     fi
 
     rm -f "$HTML_OUT"
