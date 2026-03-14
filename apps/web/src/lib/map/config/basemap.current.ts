@@ -1,4 +1,4 @@
-export type BasemapMode = "remote-style" | "local-style";
+export type BasemapMode = "remote-style";
 
 export type BasemapConfig = {
   mode: BasemapMode;
