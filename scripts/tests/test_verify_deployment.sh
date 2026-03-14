@@ -725,13 +725,20 @@ chmod +x mock_bin/wget
 # Sub-test 22a: Missing HTML Cache Header
 cat << 'EOF_CURL_NO_HTML_CACHE' > mock_bin/curl
 #!/bin/bash
+# Mock health endpoints (Guard 3 & 4)
+if [[ "$*" == *"/health/ready"* ]]; then
+    echo "OK"
+    exit 0
+fi
+# Mock HTML Cache Guard
 if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
-    # Fake missing headers
+    # Fake missing cache headers
     echo "HTTP/1.1 200 OK"
     echo "Content-Type: text/html"
     exit 0
 fi
-if [[ "$*" == *"--cacert"* ]]; then
+# Mock general reachability / frontend asset extraction (Guard 5)
+if [[ "$*" == *"/map"* ]]; then
     echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
     exit 0
 fi
@@ -755,11 +762,18 @@ fi
 # Sub-test 22b: Missing Asset Cache Header
 cat << 'EOF_CURL_NO_ASSET_CACHE' > mock_bin/curl
 #!/bin/bash
+# Mock health endpoints (Guard 3 & 4)
+if [[ "$*" == *"/health/ready"* ]]; then
+    echo "OK"
+    exit 0
+fi
+# Mock HTML Cache Guard (make it pass)
 if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
     echo "HTTP/1.1 200 OK"
     echo "Cache-Control: no-cache, must-revalidate"
     exit 0
 fi
+# Mock Asset Cache Guard (make it fail by providing empty headers)
 if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
     # Parse args for -D <file> to accurately write headers
     D_FILE=""
@@ -771,14 +785,13 @@ if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
         shift
     done
     if [[ -n "$D_FILE" ]]; then
-        # Fake missing immutable headers for asset
         echo "HTTP/1.1 200 OK" > "$D_FILE"
     fi
-    # Simulate output of "%{http_code}" to stdout
     echo "200"
     exit 0
 fi
-if [[ "$*" == *"--cacert"* ]]; then
+# Mock general reachability / frontend asset extraction (Guard 5)
+if [[ "$*" == *"/map"* ]]; then
     echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
     exit 0
 fi
@@ -791,6 +804,81 @@ if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: Immutable asset .* did
     echo "PASS: Detected missing immutable asset headers correctly."
 else
     echo "FAIL: Did not detect missing immutable asset headers."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# Sub-test 22c: Valid Cache Headers (Positive Path)
+cat << 'EOF_CURL_POSITIVE_CACHE' > mock_bin/curl
+#!/bin/bash
+# Mock health endpoints (Guard 3 & 4)
+if [[ "$*" == *"/health/ready"* ]]; then
+    echo "OK"
+    exit 0
+fi
+# Mock HTML Cache Guard (make it pass)
+if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
+    echo "HTTP/1.1 200 OK"
+    echo "Cache-Control: no-cache, must-revalidate"
+    exit 0
+fi
+# Mock Asset Cache Guard (make it pass)
+if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+            break
+        fi
+        shift
+    done
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+        echo "Cache-Control: public, max-age=31536000, immutable" >> "$D_FILE"
+    fi
+    echo "200"
+    exit 0
+fi
+# Mock /_app/version.json (make it pass)
+if [[ "$*" == *"/_app/version.json"* ]]; then
+    O_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-o" ]]; then
+            O_FILE="$2"
+            break
+        fi
+        shift
+    done
+    if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
+        echo "{\"version\":\"mock-build-id-123\"}" > "$O_FILE"
+    fi
+    # If -w %{http_code} is used, we output ONLY 200 to stdout
+    if [[ "$*" == *"-w"* ]]; then
+        echo "200"
+    else
+        # Fallback if no -w and no -o was used (for manual curls)
+        if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
+            echo "{\"version\":\"mock-build-id-123\"}"
+        fi
+    fi
+    exit 0
+fi
+# Mock general reachability / frontend asset extraction (Guard 5)
+if [[ "$*" == *"/map"* ]]; then
+    echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
+    exit 0
+fi
+exit 0
+EOF_CURL_POSITIVE_CACHE
+chmod +x mock_bin/curl
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
+   echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
+   echo "$OUTPUT" | grep -q "Build-ID / Version: mock-build-id-123"; then
+    echo "PASS: Valid cache headers and version.json correctly passed the guards."
+else
+    echo "FAIL: Positive cache header validation path failed."
     echo "$OUTPUT"
     exit 1
 fi
