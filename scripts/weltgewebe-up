@@ -1140,20 +1140,24 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     fi
 
     # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
-    # We use a robust grep and head -n 1 to grab exactly one asset URL
-    ASSET_PATH=$(grep -oE '/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
+    # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
+    ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
 
     if [[ -n "$ASSET_PATH" ]]; then
-        ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH}"
+        # Normalize: ensure path starts with a single slash (handle relative ./ cases)
+        ASSET_PATH_NORMALIZED="/${ASSET_PATH#./}"
+        ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
+
+        ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
         ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
         if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
-            msg="Frontend Asset Guard failed: HTML is present, but asset $ASSET_PATH returned HTTP $ASSET_HTTP_CODE. Static files might be missing."
+            msg="Frontend Asset Guard failed: HTML is present, but asset $ASSET_PATH_NORMALIZED returned HTTP $ASSET_HTTP_CODE. Static files might be missing."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
             rm -f "$HTML_OUT"
             exit 1
         fi
-        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH verified)"
+        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified)"
     else
         # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
         echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"

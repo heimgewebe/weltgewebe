@@ -25,7 +25,7 @@ else
 fi
 
 if [[ "$REQUIRE_FRONTEND" != "1" ]]; then
-  echo "csp_contract_static: Web build not required, skipping."
+  echo "csp_contract_static: Frontend delivery not required, skipping."
   exit 0
 fi
 
