@@ -48,8 +48,8 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.locator(".map-marker").first().click();
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
-    // Click empty map area (top left corner is generally safe from markers)
-    await page.locator("#map").click({ position: { x: 10, y: 10 } });
+    // Click empty map area (stabile Leerklick-Zone determined at 50,50)
+    await page.locator("#map").click({ position: { x: 50, y: 50 } });
 
     // Panel should close
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
@@ -74,9 +74,10 @@ test.describe("Map Interaction & Context Panel", () => {
       // Click a different marker (force since sometimes map elements overlay)
       await markers.nth(1).click({ force: true });
 
-      // Verify tab is reset back to 'uebersicht' (or 'profil' depending on what nth(1) is, but gespraech should no longer be active)
-      // Because `gespraechTab` might no longer exist if the second marker is an account/garnrolle, we just check count or active state loosely
-      await expect(page.locator("button.active")).not.toHaveText("Gespräch", {
+      // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
+      // Wir scopen auf das Panel und warten explizit auf den finalen DOM-Zustand, um Flakiness zu vermeiden.
+      const activeTab = panel.locator("button.active");
+      await expect(activeTab).toHaveText(/^(Übersicht|Profil)$/, {
         timeout: 5000,
       });
     }
@@ -105,7 +106,8 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Simulate longpress by dispatching mousedown and waiting
     const mapContainer = page.locator("#map");
-    await mapContainer.hover({ position: { x: 200, y: 200 } });
+    // Ensure we hover and click on empty space (50, 50)
+    await mapContainer.hover({ position: { x: 50, y: 50 } });
     await page.mouse.down();
     await page.waitForTimeout(1000); // 800ms is the longpress threshold
     await page.mouse.up();
@@ -126,7 +128,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeVisible();
 
     // Click on an empty area of the map
-    await page.locator("#map").click({ position: { x: 10, y: 10 } });
+    await page.locator("#map").click({ position: { x: 50, y: 50 } });
 
     // Panel should still be visible (komposition protection)
     await expect(panel).toBeVisible();

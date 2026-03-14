@@ -246,18 +246,18 @@ Die Umsetzung erfolgt idealerweise als gestaffelte PR-Serie.
 - [x] Komposition hart gegen Fokus entkoppeln
   (beim Eintritt in Komposition `selection` null setzen).
 
-### [ ] PR 3 — Map-Interaktionen härten
+### [x] PR 3 — Map-Interaktionen härten
 
 **Ziel:** Kartenlogik robust machen.
 
-- [ ] Zustandsübergänge in kleine Funktionen ziehen (`enterFokus`, `enterKomposition`, `leaveToNavigation`).
-- [ ] Longpress-Schutz vervollständigen (Distanz prüfen, nicht auf Marker feuern).
-- [ ] Fokus-Restore robuster machen.
+- [x] Zustandsübergänge in kleine Funktionen ziehen (`enterFokus`, `enterKomposition`, `leaveToNavigation`).
+- [x] Longpress-Schutz vervollständigen (Distanz prüfen, nicht auf Marker feuern).
+- [x] Fokus-Restore robuster machen.
 
-### [ ] PR 4 — Testmatrix aus dem Dokument erzwingen
+### [x] PR 4 — Testmatrix aus dem Dokument erzwingen
 
 **Ziel:** Die Blaupause durch Tests beweisen.
 
-- [ ] Stabile, testbare Leerklick-Zone bestimmen.
-- [ ] Harte Tab-Assertions statt weicher Negation.
-- [ ] Neue Pflichttests ergänzen (z.B. Tab-Resets, Kompositionsschutz).
+- [x] Stabile, testbare Leerklick-Zone bestimmen.
+- [x] Harte Tab-Assertions statt weicher Negation.
+- [x] Neue Pflichttests ergänzen (z.B. Tab-Resets, Kompositionsschutz).
