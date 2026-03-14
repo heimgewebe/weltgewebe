@@ -1,13 +1,16 @@
 import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.route("https://demotiles.maplibre.org/style.json", (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
-    });
-  });
+  await page.route(
+    "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+      });
+    },
+  );
   await page.addInitScript(() => {
     (window as any).__E2E__ = true;
     (window as any).__FORCE_INERT_POLYFILL__ = true;

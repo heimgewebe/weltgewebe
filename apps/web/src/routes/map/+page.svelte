@@ -359,15 +359,6 @@
       const finishLoading = () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
-
-        // Initial flyTo if markers exist
-        if (markersData.length > 0) {
-           map?.flyTo({
-             center: [markersData[0].lon, markersData[0].lat],
-             zoom: 14,
-             animate: true
-           });
-        }
       };
 
       map.on('load', finishLoading);

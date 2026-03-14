@@ -4,17 +4,6 @@ import { mockApiResponses } from "./fixtures/mockApi";
 test.describe("Map Interaction & Context Panel", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page);
-    // intercept MapLibre styling which requires an internet connection in playwright tests
-    await page.route(
-      "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-      (route) => {
-        route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
-        });
-      },
-    );
     await page.goto("/map");
   });
 
@@ -51,8 +40,8 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.locator(".map-marker").first().click();
     await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
-    // Wait to ensure rendering logic has processed
-    await page.waitForTimeout(500);
+    // Wait for the context panel to be fully visible before clicking away
+    await expect(page.locator('[data-testid="context-panel"]')).toBeVisible();
 
     // Click empty map area (stabile Leerklick-Zone determined at 50,50)
     // Avoid action bar
