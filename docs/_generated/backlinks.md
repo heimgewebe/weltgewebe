@@ -11,4 +11,10 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
-_No relations found._
+## docs/blueprints/ui-roadmap.md
+
+- [related_docs] docs/blueprints/ui-blaupause.md
+
+## docs/blueprints/ui-state-machine.md
+
+- [related_docs] docs/blueprints/ui-blaupause.md

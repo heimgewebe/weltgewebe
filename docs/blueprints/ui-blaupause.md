@@ -5,6 +5,9 @@ doc_type: blueprint
 status: canonical
 canonicality: This document is the canonical source of truth for the UI architecture.
 summary: Defines the core principles, layout, and interaction model for the Weltgewebe mobile-first UI.
+related_docs:
+  - docs/blueprints/ui-state-machine.md
+  - docs/blueprints/ui-roadmap.md
 ---
 
 # Weltgewebe – UI-Blaupause
@@ -353,3 +356,10 @@ Nutzer erstellt neuen Inhalt.
 * Knoten besitzen keine ausgehenden Fäden
 * Garnrollen besitzen vergemeinschaftete Güter
 * Fäden sind Handlungen, keine dauerhaften Beziehungen
+
+⸻
+
+## Weiterführende Dokumente
+
+* [Weltgewebe UI State Machine](ui-state-machine.md)
+* [Weltgewebe UI Roadmap](ui-roadmap.md)
