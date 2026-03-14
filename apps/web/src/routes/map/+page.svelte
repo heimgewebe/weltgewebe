@@ -271,10 +271,20 @@
 
   // Restore focus when selection is closed or state becomes navigation
   $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
-    if (document.body.contains(lastFocusedElement)) {
-      lastFocusedElement.focus();
-    }
-    lastFocusedElement = null;
+    const elToFocus = lastFocusedElement;
+    lastFocusedElement = null; // Clear immediately to prevent loop
+
+    // Use tick() to wait for DOM updates (e.g. context panel removed)
+    // and try to focus safely.
+    tick().then(() => {
+      if (elToFocus && document.body.contains(elToFocus)) {
+        try {
+          elToFocus.focus();
+        } catch (e) {
+          // ignore focus errors
+        }
+      }
+    });
   }
 
   function jumpToDemo() {
@@ -366,6 +376,8 @@
       map.on('load', finishLoading);
 
       let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+      let longPressStartX = 0;
+      let longPressStartY = 0;
 
       const clearLongPressTimer = () => {
         if (longPressTimer !== undefined) {
@@ -376,6 +388,11 @@
 
       map.on('mousedown', (e) => {
         clearLongPressTimer();
+        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+        if (markerClicked) return;
+
+        longPressStartX = e.point.x;
+        longPressStartY = e.point.y;
         longPressTimer = setTimeout(() => {
           enterKomposition({
             mode: 'new-knoten',
@@ -386,13 +403,24 @@
       });
 
       map.on('mouseup', clearLongPressTimer);
-      map.on('mousemove', clearLongPressTimer);
+      map.on('mousemove', (e) => {
+        if (longPressTimer !== undefined) {
+          if (Math.abs(e.point.x - longPressStartX) > 10 || Math.abs(e.point.y - longPressStartY) > 10) {
+            clearLongPressTimer();
+          }
+        }
+      });
       map.on('mouseout', clearLongPressTimer);
       map.on('dragstart', clearLongPressTimer);
       map.on('movestart', clearLongPressTimer);
 
       map.on('touchstart', (e) => {
         clearLongPressTimer();
+        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+        if (markerClicked) return;
+
+        longPressStartX = e.point.x;
+        longPressStartY = e.point.y;
         longPressTimer = setTimeout(() => {
           enterKomposition({
             mode: 'new-knoten',
@@ -403,7 +431,13 @@
       });
 
       map.on('touchend', clearLongPressTimer);
-      map.on('touchmove', clearLongPressTimer);
+      map.on('touchmove', (e) => {
+        if (longPressTimer !== undefined) {
+          if (Math.abs(e.point.x - longPressStartX) > 10 || Math.abs(e.point.y - longPressStartY) > 10) {
+            clearLongPressTimer();
+          }
+        }
+      });
       map.on('touchcancel', clearLongPressTimer);
 
       map.on('click', (e) => {
