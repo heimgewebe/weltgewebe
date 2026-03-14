@@ -29,9 +29,13 @@ Weltgewebe UI deployment fundamentally operates on three coupled layers:
 2. **Container mount layer**: A bind mount structurally exposes these artifacts to the `edge-caddy` container (`/srv/weltgewebe-web`).
 3. **Edge serving layer**: Caddy reads and serves these static files to the client.
 
-A successful frontend build does *not* automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. It is an established architectural known issue that Docker container bind mounts can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
+A successful frontend build does *not* automatically guarantee a successful deployment unless the container mount layer correctly reflects the newly built files. The complete chain (Build + Container-Mount + Edge-Serving) is necessary for server-side deployment correctness. It is a known issue with Docker bind mounts that they can drift from the host directory state (meaning the container sees an empty or outdated directory despite the host having the latest files).
 
 To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a refresh of the edge deployment stack to restore the `edge-caddy` mount coupling, provided frontend delivery is required for the current deploy run.
+
+*Note (Phase B Preparation): Inconsistent browser states can also stem from client-side caching (e.g., Cache-Control headers for HTML versus immutable assets). The server-side guards described here verify server state, but do not guarantee client cache coherence.*
+
+*Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely.*
 
 ## Preflight guard
 
