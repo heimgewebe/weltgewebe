@@ -342,7 +342,7 @@ PY
 fi
 
 # -----------------------------
-# Emit snapshot output
+# Emit snapshot
 # -----------------------------
 ISO_TS="$(iso_ts)"
 HOSTNAME="$(hostname)"

@@ -1209,7 +1209,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         echo "WARNING: curl connection failed while fetching /_app/version.json. Build-ID unverified."
     elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
         # Robust parsing: strip newlines, find "version" key with optional spaces, extract value cleanly
-        BUILD_VERSION=$(cat "$VERSION_OUT" | tr -d '\n' | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
+        BUILD_VERSION=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
         if [[ -z "$BUILD_VERSION" ]]; then
             BUILD_VERSION="unknown (parse error)"
         fi
