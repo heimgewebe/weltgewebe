@@ -1,13 +1,6 @@
 import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
-  await page.route("https://demotiles.maplibre.org/style.json", (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
-    });
-  });
   await page.addInitScript(() => {
     (window as any).__E2E__ = true;
     (window as any).__FORCE_INERT_POLYFILL__ = true;
@@ -15,9 +8,7 @@ test.beforeEach(async ({ page }) => {
   });
   await page.goto("/");
   // Ensure the page has fully loaded and `onMount` (where `ensureInertPolyfill` runs) has finished
-  await page.waitForLoadState("domcontentloaded");
-  // Give a small amount of time for any synchronous initialization like `ensureInertPolyfill` to complete in CI environments
-  await page.waitForTimeout(500);
+  await page.waitForLoadState("networkidle");
 });
 
 test("polyfill schützt dynamisch eingefügte Elemente", async ({ page }) => {
