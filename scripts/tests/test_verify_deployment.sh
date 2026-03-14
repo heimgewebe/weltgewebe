@@ -707,8 +707,97 @@ exit 0
 EOF_GETENT
 chmod +x mock_bin/getent
 
-# 22. Container Health Guard Failure
-echo ">>> Test 22: Container Health Guard Failure"
+# 22. Cache Guards Logic
+echo ">>> Test 22: Cache Guards Logic"
+
+cat << 'EOF_GETENT' > mock_bin/getent
+#!/bin/bash
+exit 0
+EOF_GETENT
+chmod +x mock_bin/getent
+
+cat << 'EOF_WGET' > mock_bin/wget
+#!/bin/bash
+exit 0
+EOF_WGET
+chmod +x mock_bin/wget
+
+# Sub-test 22a: Missing HTML Cache Header
+cat << 'EOF_CURL_NO_HTML_CACHE' > mock_bin/curl
+#!/bin/bash
+if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
+    # Fake missing headers
+    echo "HTTP/1.1 200 OK"
+    echo "Content-Type: text/html"
+    exit 0
+fi
+if [[ "$*" == *"--cacert"* ]]; then
+    echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
+    exit 0
+fi
+exit 0
+EOF_CURL_NO_HTML_CACHE
+chmod +x mock_bin/curl
+
+touch mock_edge_ca.crt
+export EDGE_CA="$PWD/mock_edge_ca.crt"
+export MOCK_HEALTH_EXISTS="1"
+export REQUIRE_FRONTEND="1"
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header"; then
+    echo "PASS: Detected missing HTML cache headers correctly."
+else
+    echo "FAIL: Did not detect missing HTML cache headers."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# Sub-test 22b: Missing Asset Cache Header
+cat << 'EOF_CURL_NO_ASSET_CACHE' > mock_bin/curl
+#!/bin/bash
+if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
+    echo "HTTP/1.1 200 OK"
+    echo "Cache-Control: no-cache, must-revalidate"
+    exit 0
+fi
+if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
+    # Parse args for -D <file> to accurately write headers
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+            break
+        fi
+        shift
+    done
+    if [[ -n "$D_FILE" ]]; then
+        # Fake missing immutable headers for asset
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+    fi
+    # Simulate output of "%{http_code}" to stdout
+    echo "200"
+    exit 0
+fi
+if [[ "$*" == *"--cacert"* ]]; then
+    echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
+    exit 0
+fi
+exit 0
+EOF_CURL_NO_ASSET_CACHE
+chmod +x mock_bin/curl
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: Immutable asset .* did not return 'max-age=31536000, immutable' header"; then
+    echo "PASS: Detected missing immutable asset headers correctly."
+else
+    echo "FAIL: Did not detect missing immutable asset headers."
+    echo "$OUTPUT"
+    exit 1
+fi
+unset REQUIRE_FRONTEND
+
+# 23. Container Health Guard Failure
+echo ">>> Test 23: Container Health Guard Failure"
 cat << 'EOF_WGET_FAIL' > mock_bin/wget
 #!/bin/bash
 exit 1

@@ -35,7 +35,7 @@ To enforce correct runtime state, the deploy pipeline includes an active guard. 
 
 ### Client-Cache-Kohärenz
 
-Server-side correctness does not intrinsically prevent browsers from rendering stale application states due to aggressive caching. To guarantee client coherence across deployments, the infrastructure implements distinct caching strategies based on the asset type:
+Server-side correctness does not intrinsically prevent browsers from rendering stale application states due to aggressive caching. To reduce client divergence and make cache behavior deterministic at the delivery layer, the infrastructure implements distinct caching strategies based on the asset type:
 
 1. **Revalidating Routing (HTML/Root)**: Core HTML entrypoints (e.g. `index.html`, `/map`) strictly use `Cache-Control: no-cache, must-revalidate` to ensure browsers always check for the latest application shell upon load.
 2. **Aggressive Caching (Immutable Assets)**: Hashed internal assets located under `/_app/immutable/` are served with `Cache-Control: public, max-age=31536000, immutable`.
