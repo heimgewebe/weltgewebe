@@ -1,28 +1,10 @@
 <script lang="ts">
-  import { selection, systemState, contextPanelOpen, kompositionDraft, leaveToNavigation } from '$lib/stores/uiView';
+  import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
 
-  let activeTab = 'uebersicht';
-
-  function setTab(tab: string) {
-    activeTab = tab;
-  }
-
-  $: contextKey = $systemState === 'komposition'
-    ? 'komposition'
-    : $selection ? `${$selection.type}:${$selection.id}` : 'none';
-
-  let lastContextKey = contextKey;
-
-  $: if (contextKey !== lastContextKey) {
-    lastContextKey = contextKey;
-    if ($systemState === 'fokus' && $selection) {
-      if ($selection.type === 'node') {
-        activeTab = 'uebersicht';
-      } else if ($selection.type === 'garnrolle' || $selection.type === 'account') {
-        activeTab = 'profil';
-      }
-    }
-  }
+  import NodePanel from './panels/NodePanel.svelte';
+  import AccountPanel from './panels/AccountPanel.svelte';
+  import EdgePanel from './panels/EdgePanel.svelte';
+  import KompositionPanel from './panels/KompositionPanel.svelte';
 
   function closePanel() {
     leaveToNavigation();
@@ -50,77 +32,14 @@
 
     <div class="panel-content">
       {#if $systemState === 'komposition'}
-        <div class="komposition-mode">
-          {#if $kompositionDraft?.lngLat}
-            <div class="state-set">
-              <p><strong>Ort gesetzt:</strong> {$kompositionDraft.lngLat[1].toFixed(5)}, {$kompositionDraft.lngLat[0].toFixed(5)}</p>
-              <p class="ghost">Du kannst den Ort ändern, indem du einen anderen Punkt auf der Karte lange drückst.</p>
-              <!-- Future: Form for Node Type and Details goes here -->
-            </div>
-          {:else}
-            <div class="state-pending">
-              <p><strong>Ort ausstehend</strong></p>
-              <p>Bitte wähle den Startpunkt für den neuen Knoten, indem du lange auf die Karte tippst (Longpress).</p>
-            </div>
-          {/if}
-        </div>
+        <KompositionPanel />
       {:else if $selection}
         {#if $selection.type === 'node'}
-          <div class="node-mode">
-            <h3>{$selection.data?.title || $selection.id}</h3>
-            <p class="summary">{$selection.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
-
-            <div class="tabs">
-              <button class:active={activeTab === 'uebersicht'} on:click={() => setTab('uebersicht')}>Übersicht</button>
-              <button class:active={activeTab === 'gespraech'} on:click={() => setTab('gespraech')}>Gespräch</button>
-              <button class:active={activeTab === 'antraege'} on:click={() => setTab('antraege')}>Anträge</button>
-              <button class:active={activeTab === 'verlauf'} on:click={() => setTab('verlauf')}>Verlauf</button>
-            </div>
-
-            <div class="tab-content">
-              {#if activeTab === 'uebersicht'}
-                <p>Beteiligte Garnrollen und allgemeine Aktivität.</p>
-              {:else if activeTab === 'gespraech'}
-                <p>Gesprächsraum des Knotens.</p>
-              {:else if activeTab === 'antraege'}
-                <p>Vorschläge und Abstimmungen.</p>
-              {:else if activeTab === 'verlauf'}
-                <p>Zeitliche Entwicklung.</p>
-              {/if}
-            </div>
-          </div>
+          <NodePanel />
         {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
-          <div class="account-mode">
-            <h3>{$selection.data?.title || $selection.id}</h3>
-            <p class="summary">{$selection.data?.summary || 'Handelnder Akteur im Gewebe.'}</p>
-
-            <div class="tabs">
-              <button class:active={activeTab === 'profil'} on:click={() => setTab('profil')}>Profil</button>
-              <button class:active={activeTab === 'aktivitaet'} on:click={() => setTab('aktivitaet')}>Aktivität</button>
-              <button class:active={activeTab === 'knoten'} on:click={() => setTab('knoten')}>Knoten</button>
-            </div>
-
-            <div class="tab-content">
-              {#if activeTab === 'profil'}
-                <p><strong>Kompetenzen:</strong> ...</p>
-                <p><strong>Vergemeinschaftete Güter:</strong> Werkzeuge, Wissen, Zeit...</p>
-              {:else if activeTab === 'aktivitaet'}
-                <p>Geknüpfte Knoten und Beiträge.</p>
-              {:else if activeTab === 'knoten'}
-                <p>Knoten, an denen diese Garnrolle beteiligt ist.</p>
-              {/if}
-            </div>
-          </div>
+          <AccountPanel />
         {:else if $selection.type === 'edge'}
-          <div class="edge-mode">
-            <h3>Faden: {$selection.id}</h3>
-
-            <div class="details">
-              <p><strong>Ursprung:</strong> {$selection.data?.source || 'Unbekannt'}</p>
-              <p><strong>Ziel:</strong> {$selection.data?.target || 'Unbekannt'}</p>
-              <p><strong>Zeitlichkeit:</strong> ...</p>
-            </div>
-          </div>
+          <EdgePanel />
         {/if}
       {:else}
         <div class="empty-state">
@@ -167,39 +86,6 @@
   .panel-content {
     padding: 1rem;
     flex: 1;
-  }
-
-  .summary {
-    color: var(--ghost, #666);
-    margin-bottom: 1.5rem;
-  }
-
-  .tabs {
-    display: flex;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
-    margin-bottom: 1rem;
-    overflow-x: auto;
-  }
-
-  .tabs button {
-    background: none;
-    border: none;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    color: var(--ghost, #666);
-    white-space: nowrap;
-  }
-
-  .tabs button.active {
-    border-bottom-color: var(--accent, #0070f3);
-    color: var(--text, #333);
-    font-weight: bold;
-  }
-
-  .tab-content {
-    padding-top: 0.5rem;
   }
 
   /* Mobile: Bottom Sheet */

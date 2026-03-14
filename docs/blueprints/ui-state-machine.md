@@ -227,22 +227,22 @@ Beispiele:
 
 Die Umsetzung erfolgt idealerweise als gestaffelte PR-Serie.
 
-### [ ] PR 1 — State Contract kanonisieren
+### [x] PR 1 — State Contract kanonisieren
 
 **Ziel:** Die drei Hauptzustände als einzige globale Wahrheit technisch fixieren.
 
-- [ ] Typen und Stores sauber trennen in `uiView.ts`
+- [x] Typen und Stores sauber trennen in `uiView.ts`
   (nur noch systemState, selection, kompositionDraft, contextPanelOpen).
-- [ ] Invarianten zentral prüfen (z.B. Hilfsfunktion `assertUiStateInvariant`).
-- [ ] Dev-only invariant watcher einbauen.
+- [x] Invarianten zentral prüfen (z.B. Hilfsfunktion `assertUiStateInvariant`).
+- [x] Dev-only invariant watcher einbauen.
 
-### [ ] PR 2 — ContextPanel als strikt exklusiver Detailraum
+### [x] PR 2 — ContextPanel als strikt exklusiver Detailraum
 
 **Ziel:** Das Panel zeigt entweder Fokus oder Komposition, nie beides und nie „irgendwas“.
 
-- [ ] `ContextPanel.svelte` zerlegen
+- [x] `ContextPanel.svelte` zerlegen
   (Sub-Komponenten für KompositionPanel, NodePanel, etc.).
-- [ ] Tab-Reset explizit machen (Standardtab beim Wechsel neu setzen).
+- [x] Tab-Reset explizit machen (Standardtab beim Wechsel neu setzen).
 - [x] Komposition hart gegen Fokus entkoppeln
   (beim Eintritt in Komposition `selection` null setzen).
 
