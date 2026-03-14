@@ -885,6 +885,7 @@ fi
 unset REQUIRE_FRONTEND
 unset EDGE_CA
 unset MOCK_HEALTH_EXISTS
+rm -f mock_edge_ca.crt
 
 # 23. Container Health Guard Failure
 echo ">>> Test 23: Container Health Guard Failure"
