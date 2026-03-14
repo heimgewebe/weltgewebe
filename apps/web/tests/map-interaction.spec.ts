@@ -96,7 +96,9 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeVisible();
 
     // Should show "Ort ausstehend" state
-    await expect(panel).toContainText("Ort ausstehend");
+    await expect(panel.locator(".state-pending")).toContainText(
+      "Ort ausstehend",
+    );
   });
 
   test("Longpress on map initializes komposition mode with coordinates", async ({
@@ -114,7 +116,7 @@ test.describe("Map Interaction & Context Panel", () => {
 
     const panel = page.locator('[data-testid="context-panel"]');
     await panel.waitFor({ state: "visible", timeout: 5000 });
-    await expect(panel).toContainText("Ort gesetzt");
+    await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
   });
 
   test("Empty map click does not close context panel in komposition mode", async ({
