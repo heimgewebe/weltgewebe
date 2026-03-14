@@ -67,6 +67,7 @@ Generated automatically. Do not edit.
 | specs.privacy-api | Privacy Api | reference | active | derived | docs/specs/privacy-api.md |
 | specs.privacy-ui | Privacy Ui | reference | active | derived | docs/specs/privacy-ui.md |
 | ui-blaupause | Weltgewebe UI-Blaupause | blueprint | canonical | This document is the canonical source of truth for the UI architecture. | docs/blueprints/ui-blaupause.md |
+| ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | This document is the canonical source of truth for the UI implementation roadmap. | docs/blueprints/ui-roadmap.md |
 | ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | state-machine-contract | docs/blueprints/ui-state-machine.md |
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | derived | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | derived | docs/x-repo/peers-learnings.md |
