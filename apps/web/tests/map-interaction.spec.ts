@@ -5,13 +5,16 @@ test.describe("Map Interaction & Context Panel", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page);
     // intercept MapLibre styling which requires an internet connection in playwright tests
-    await page.route("https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json", (route) => {
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
-      });
-    });
+    await page.route(
+      "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      (route) => {
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+        });
+      },
+    );
     await page.goto("/map");
   });
 
@@ -57,7 +60,9 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Ensure we trigger the map's click event. Sometimes the map canvas absorbs the click strangely in tests.
     // MapLibre's canvas handles clicks
-    await page.locator('canvas.maplibregl-canvas').click({ position: { x: 50, y: 50 } });
+    await page
+      .locator("canvas.maplibregl-canvas")
+      .click({ position: { x: 50, y: 50 } });
 
     // Panel should close
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
