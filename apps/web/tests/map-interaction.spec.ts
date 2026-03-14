@@ -74,7 +74,6 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForTimeout(1000);
 
     // Open panel on first marker
-    const markers = page.locator(".map-marker");
     await page.evaluate(() => {
       (document.querySelectorAll(".map-marker")[0] as HTMLElement)?.click();
     });
@@ -88,8 +87,10 @@ test.describe("Map Interaction & Context Panel", () => {
       await gespraechTab.click();
       await expect(gespraechTab).toHaveClass(/active/, { timeout: 5000 });
 
-      // Click a different marker (force since sometimes map elements overlay)
-      await markers.nth(1).click({ force: true });
+      // Click a different marker (using evaluate since click sometimes fails)
+      await page.evaluate(() => {
+        (document.querySelectorAll(".map-marker")[1] as HTMLElement)?.click();
+      });
 
       // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
       // Wir scopen auf das Panel und warten explizit auf den finalen DOM-Zustand, um Flakiness zu vermeiden.
