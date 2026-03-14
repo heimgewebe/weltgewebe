@@ -17,7 +17,7 @@ Diese Blaupause beschreibt die konkrete, priorisierte Implementierungsfolge für
 
 Der Fokus liegt auf dem produktiven Hebel: Der Kompositionsfluss muss aus dem reinen Statusanzeige-Zustand in einen echten Editor überführt werden.
 
-### [ ] PR 1 — Kompositionseditor vollenden
+### [ ] Roadmap PR 1 — Kompositionseditor vollenden
 
 - [ ] KompositionPanel von Statusanzeige zu echtem Editor ausbauen
 - [ ] Knotentyp-Auswahl ergänzen
@@ -26,11 +26,11 @@ Der Fokus liegt auf dem produktiven Hebel: Der Kompositionsfluss muss aus dem re
 - [ ] Validierung für Pflichtfelder ergänzen
 - [ ] Cancel-Flow sauber definieren
 - [ ] Submit-Flow implementieren
-- [ ] Erfolgspfad entscheiden:
-  - `komposition -> navigation`
-  - oder `komposition -> fokus(neuer Knoten)`
+- [ ] Erfolgspfad für erfolgreichen Submit entscheiden und dokumentieren:
+  - Option A: `komposition -> navigation`
+  - Option B: `komposition -> fokus(neuer Knoten)`
 
-### [ ] PR 1a — Kompositions-Tests ergänzen
+### [ ] Roadmap PR 1a — Kompositions-Tests ergänzen
 
 - [ ] Test für erfolgreichen Submit ergänzen
 - [ ] Test für Validation Error ergänzen
@@ -44,7 +44,7 @@ Der Fokus liegt auf dem produktiven Hebel: Der Kompositionsfluss muss aus dem re
 
 Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnung und Schranke muss ontologisch durchgesetzt werden.
 
-### [ ] PR 2 — Zustandsdurchsetzung härten
+### [ ] Roadmap PR 2 — Zustandsdurchsetzung härten
 
 - [ ] Entscheiden, ob der dev/test-Invariant-Watcher weiter nur loggt oder hart werfen soll
 - [ ] Falls Throw gewünscht:
@@ -53,7 +53,7 @@ Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnu
 - [ ] Explizite Ausschlussregel festhalten: `selection !== null` und `kompositionDraft !== null` dürfen nie gleichzeitig gelten
 - [ ] Optional: separaten Unit-Test für ungültige Zustandskombinationen ergänzen
 
-### [ ] PR 2a — Store-nahe Tests ergänzen
+### [ ] Roadmap PR 2a — Store-nahe Tests ergänzen
 
 - [ ] Explizit prüfen, dass `enterFokus(...)` `selection !== null` ergibt
 - [ ] Explizit prüfen, dass `enterKomposition(...)` `selection === null` setzt
@@ -66,7 +66,7 @@ Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnu
 
 Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause einziehen.
 
-### [ ] PR 3 — NodePanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
 - [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität
 - [ ] Gesprächs-Tab mit echter Gesprächsansicht
@@ -74,13 +74,13 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [ ] Verlauf-Tab mit Timeline/Chronik
 - [ ] Relevante Datenquellen/API-Pfade klären
 
-### [ ] PR 4 — AccountPanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
 - [ ] Profil mit Kompetenzen/Interessen/Gütern
 - [ ] Aktivität mit Beiträgen/Teilnahmen
 - [ ] Knotenliste mit echten Verknüpfungen
 
-### [ ] PR 5 — EdgePanel ausbauen
+### [ ] Roadmap PR 5 — EdgePanel ausbauen
 
 - [ ] Typ und Beschreibung ergänzen
 - [ ] Zeitlichkeit konkretisieren
@@ -91,20 +91,20 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ## Phase 4 — Mittelfristig: Suche, Filter, Bedienbarkeit
 
-### [ ] PR 6 — Suche als Panel-Modus umsetzen
+### [ ] Roadmap PR 6 — Suche als Panel-Modus umsetzen
 
 - [ ] Suchfeld in ActionBar/TopBar einziehen
 - [ ] Ergebnisse im Kontextpanel rendern
 - [ ] Treffer auf der Karte markieren
 - [ ] *Search als Panel-/lokalen Modus halten, nicht als vierten Global-State modellieren*
 
-### [ ] PR 7 — Filter als Panel-/lokalen Modus umsetzen
+### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
 
 - [ ] Filter-UI ergänzen
 - [ ] Karten-/Treffer-Filterung anbinden
 - [ ] *Keine neue globale Hauptzustandsklasse einführen*
 
-### [ ] PR 8 — A11y und Keyboard-Navigation
+### [ ] Roadmap PR 8 — A11y und Keyboard-Navigation
 
 - [ ] Keyboard-Navigation für Tabs ergänzen
 - [ ] Escape-Verhalten definieren

@@ -353,3 +353,10 @@ Nutzer erstellt neuen Inhalt.
 * Knoten besitzen keine ausgehenden Fäden
 * Garnrollen besitzen vergemeinschaftete Güter
 * Fäden sind Handlungen, keine dauerhaften Beziehungen
+
+⸻
+
+## Weiterführende Dokumente
+
+* [Weltgewebe UI State Machine](ui-state-machine.md)
+* [Weltgewebe UI Roadmap](ui-roadmap.md)
