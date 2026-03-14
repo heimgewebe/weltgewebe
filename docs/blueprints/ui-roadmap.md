@@ -65,13 +65,13 @@ Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnu
 
 Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause einziehen.
 
-### [ ] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
+### [x] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-- [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht
-- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen
-- [ ] Verlauf-Tab mit Timeline/Chronik
-- [ ] Relevante Datenquellen/API-Pfade klären
+- [x] Übersicht mit Beschreibung/Beteiligten/Aktivität
+- [x] Gesprächs-Tab mit echter Gesprächsansicht
+- [x] Anträge-Tab mit Vorschlägen/Abstimmungen
+- [x] Verlauf-Tab mit Timeline/Chronik
+- [x] Relevante Datenquellen/API-Pfade klären
 
 ### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
