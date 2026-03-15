@@ -21,6 +21,7 @@
   import { updateEdges } from '$lib/map/overlay/edges';
   import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
   import { setupFocusInteraction } from '$lib/map/overlay/focus';
+  import { setupActivityInteraction } from '$lib/map/overlay/activity';
 
   export let data: PageData;
 
@@ -140,6 +141,7 @@
 
   let cleanupKomposition: (() => void) | undefined = undefined;
   let cleanupFocus: (() => void) | undefined = undefined;
+  let cleanupActivity: (() => void) | undefined = undefined;
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
   onMount(() => {
@@ -192,11 +194,13 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
+      // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, activity, etc.) carry domain meaning.
       nodesOverlay = new NodesOverlay(map);
       cleanupKomposition = setupKompositionInteraction(map);
       let sysStateStr = '';
       unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
+      cleanupActivity = setupActivityInteraction(map);
 
       const loadingTimeout = setTimeout(() => {
         isLoading = false;
@@ -214,6 +218,7 @@
     return () => {
       cleanupKomposition?.();
       cleanupFocus?.();
+      cleanupActivity?.();
       unsubscribeSysState?.();
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
