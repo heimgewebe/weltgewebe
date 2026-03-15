@@ -1,5 +1,5 @@
 import type { PageLoad } from "./$types";
-import type { Account, Edge, Node } from "./types";
+import type { Account, Edge, Node } from "$lib/map/types";
 
 export const load: PageLoad = async ({ fetch }) => {
   // Fallback to local dev/test default if not configured

@@ -8,15 +8,19 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import ContextPanel from '$lib/components/ContextPanel.svelte';
   import ActionBar from '$lib/components/ActionBar.svelte';
-  import type { Edge, RenderableMapPoint } from './types';
+  import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
-  import { view, selection, systemState, kompositionDraft, enterFokus, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
+  import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
-  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
   import { currentBasemap } from '$lib/map/config/basemap.current';
   import { resolveBasemapStyle } from '$lib/map/basemap';
+
+  import { NodesOverlay } from '$lib/map/overlay/nodes';
+  import { updateEdges } from '$lib/map/overlay/edges';
+  import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
+  import { setupFocusInteraction } from '$lib/map/overlay/focus';
 
   export let data: PageData;
 
@@ -81,192 +85,19 @@
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
 
-  // Optimization: Track active markers to allow updating instead of rebuilding
-  const activeMarkers = new Map<string, { marker: Marker, element: HTMLElement, item: RenderableMapPoint, cleanup: () => void }>();
-
-  // UI Mapping Helper
-  function getMarkerCategory(type: string | undefined): string {
-    return type || 'node';
-  }
-
-  // Update markers when data changes or view toggles change
-  async function updateMarkers(points: RenderableMapPoint[]) {
-    if (!map) return;
-    const maplibregl = await import('maplibre-gl');
-
-    if (!$view.showNodes) {
-        // If hidden, remove all
-        activeMarkers.forEach(({ cleanup }) => cleanup());
-        activeMarkers.clear();
-        return;
-    }
-
-    const currentIds = new Set<string>();
-
-    for (const item of points) {
-        currentIds.add(item.id);
-        const markerCategory = getMarkerCategory(item.type);
-        let existing = activeMarkers.get(item.id);
-
-        // Robustness: Check if category changed (e.g. node became account, unlikely but possible)
-        if (existing) {
-             const isAccount = existing.element.classList.contains('marker-account');
-             const shouldBeAccount = markerCategory === 'account';
-
-             if (isAccount !== shouldBeAccount) {
-                 // Category mismatch - force recreate
-                 existing.cleanup();
-                 activeMarkers.delete(item.id);
-                 existing = undefined;
-             }
-        }
-
-        // Check if we need to update or create
-        if (existing) {
-            // Update item data to prevent stale data in delegated events
-            existing.item = item;
-
-            // Update position if changed
-            const { marker, element } = existing;
-            element.dataset.id = item.id;
-            const lngLat = marker.getLngLat();
-            if (Math.abs(lngLat.lng - item.lon) > 0.000001 || Math.abs(lngLat.lat - item.lat) > 0.000001) {
-                marker.setLngLat([item.lon, item.lat]);
-            }
-            // Update attributes
-            if (element.title !== item.title) {
-                element.title = item.title;
-                element.setAttribute('aria-label', item.title);
-            }
-            element.dataset.testid = `marker-${item.type || 'node'}-${item.id}`;
-        } else {
-            // Create new
-            const element = document.createElement('button');
-            element.type = 'button';
-            element.className = markerCategory === 'account' ? 'map-marker marker-account' : 'map-marker';
-
-            // Identifying data for event delegation
-            element.dataset.id = item.id;
-
-            // Robust testing selector based on domain semantics (and unique ID for stability)
-            element.dataset.testid = `marker-${item.type || 'node'}-${item.id}`;
-
-            if (markerCategory === 'account') {
-                element.style.setProperty('--marker-icon', `url('${ICONS.garnrolle}')`);
-                element.style.setProperty('--marker-size', `${MARKER_SIZES.account}px`);
-            }
-
-            element.setAttribute('aria-label', item.title);
-            element.title = item.title;
-
-            const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-                .setLngLat([item.lon, item.lat])
-                .addTo(map);
-
-            // Re-apply accessibility attributes after addTo()
-            element.setAttribute('aria-label', item.title);
-            element.title = item.title;
-
-            activeMarkers.set(item.id, {
-                marker,
-                element,
-                item,
-                cleanup: () => {
-                    marker.remove();
-                }
-            });
-        }
-    }
-
-    // Cleanup removed markers
-    for (const [id, { cleanup }] of activeMarkers.entries()) {
-        if (!currentIds.has(id)) {
-            cleanup();
-            activeMarkers.delete(id);
-        }
-    }
-  }
-
-  // Update edges on map
-  function updateEdges(edges: Edge[], points: RenderableMapPoint[]) {
-    if (!map) return;
-
-    const shouldShow = $view.showEdges && edges.length > 0;
-    const sourceId = 'edges-source';
-    const layerId = 'edges-layer';
-
-    const source = map.getSource(sourceId) as GeoJSONSource | undefined;
-
-    // Build GeoJSON features
-    const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
-    if (shouldShow) {
-      // Create a map for faster lookup (optimization)
-      const pointMap = new Map(points.map(p => [p.id, p]));
-
-      for (const edge of edges) {
-        const s = pointMap.get(edge.source_id);
-        const t = pointMap.get(edge.target_id);
-
-        if (s && t) {
-          features.push({
-            type: 'Feature',
-            geometry: {
-              type: 'LineString',
-              coordinates: [
-                [s.lon, s.lat],
-                [t.lon, t.lat]
-              ]
-            },
-            properties: {
-              id: edge.id,
-              kind: edge.edge_kind
-            }
-          });
-        }
-      }
-    }
-
-    const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
-      type: 'FeatureCollection',
-      features: features
-    };
-
-    if (source) {
-      source.setData(geoJsonData);
-    } else if (features.length > 0) {
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: geoJsonData
-      });
-
-      map.addLayer({
-        id: layerId,
-        type: 'line',
-        source: sourceId,
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round'
-        },
-        paint: {
-          'line-color': '#888',
-          'line-width': 2,
-          'line-dasharray': [2, 1]
-        }
-      });
-    }
-  }
+  let nodesOverlay: NodesOverlay | null = null;
 
   // Reactive update for markers
-  $: if (map && markersData && $view) {
-    updateMarkers(markersData);
+  $: if (nodesOverlay && markersData && $view) {
+    nodesOverlay.update(markersData, $view.showNodes);
   }
 
   // Reactive update for edges
   $: if (map && markersData && edgesData && $view && map.getStyle()) {
      if (map.isStyleLoaded()) {
-        updateEdges(edgesData, markersData);
+        updateEdges(map, edgesData, markersData, $view.showEdges);
      } else {
-        map.once('styledata', () => updateEdges(edgesData, markersData));
+        map.once('styledata', () => updateEdges(map!, edgesData, markersData, $view.showEdges));
      }
   }
 
@@ -302,16 +133,20 @@
     }
   }
 
+  let cleanupKomposition: (() => void) | undefined = undefined;
+  let cleanupFocus: (() => void) | undefined = undefined;
+  let unsubscribeSysState: (() => void) | undefined = undefined;
+
   onMount(() => {
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
-      if (!markerBtn) return;
+      if (!markerBtn || !nodesOverlay) return;
 
       const id = markerBtn.dataset.id;
       if (!id) return;
 
-      const entry = activeMarkers.get(id);
+      const entry = nodesOverlay.getActiveMarker(id);
       if (!entry) return;
 
       const { item } = entry;
@@ -352,6 +187,12 @@
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
+      nodesOverlay = new NodesOverlay(map);
+      cleanupKomposition = setupKompositionInteraction(map);
+      let sysStateStr = '';
+      unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
+      cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
+
       const loadingTimeout = setTimeout(() => {
         isLoading = false;
       }, 10000);
@@ -362,96 +203,16 @@
       };
 
       map.on('load', finishLoading);
-
-      let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-      let longPressStartX = 0;
-      let longPressStartY = 0;
-
-      const clearLongPressTimer = () => {
-        if (longPressTimer !== undefined) {
-          clearTimeout(longPressTimer);
-          longPressTimer = undefined;
-        }
-      };
-
-      map.on('mousedown', (e) => {
-        clearLongPressTimer();
-        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
-        if (markerClicked) return;
-
-        longPressStartX = e.point.x;
-        longPressStartY = e.point.y;
-        longPressTimer = setTimeout(() => {
-          enterKomposition({
-            mode: 'new-knoten',
-            lngLat: [e.lngLat.lng, e.lngLat.lat],
-            source: 'map-longpress'
-          });
-        }, 800);
-      });
-
-      map.on('mouseup', clearLongPressTimer);
-      map.on('mousemove', (e) => {
-        if (longPressTimer !== undefined) {
-          const dx = e.point.x - longPressStartX;
-          const dy = e.point.y - longPressStartY;
-          if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
-            clearLongPressTimer();
-          }
-        }
-      });
-      map.on('mouseout', clearLongPressTimer);
-      map.on('dragstart', clearLongPressTimer);
-      map.on('movestart', clearLongPressTimer);
-
-      map.on('touchstart', (e) => {
-        clearLongPressTimer();
-        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
-        if (markerClicked) return;
-
-        longPressStartX = e.point.x;
-        longPressStartY = e.point.y;
-        longPressTimer = setTimeout(() => {
-          enterKomposition({
-            mode: 'new-knoten',
-            lngLat: [e.lngLat.lng, e.lngLat.lat],
-            source: 'map-longpress'
-          });
-        }, 800);
-      });
-
-      map.on('touchend', clearLongPressTimer);
-      map.on('touchmove', (e) => {
-        if (longPressTimer !== undefined) {
-          const dx = e.point.x - longPressStartX;
-          const dy = e.point.y - longPressStartY;
-          if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
-            clearLongPressTimer();
-          }
-        }
-      });
-      map.on('touchcancel', clearLongPressTimer);
-
-      map.on('click', (e) => {
-        const features = map?.queryRenderedFeatures(e.point);
-        const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
-
-        if (!features?.length && !markerClicked) {
-           if ($systemState === 'fokus') {
-               leaveToNavigation();
-           }
-           // Explicitly do not close 'komposition' on an empty map click to protect the workflow.
-           // A workflow should only be aborted by intentional cancel actions (e.g. close panel).
-        }
-      });
       map.on('error', finishLoading);
     })();
 
     return () => {
+      cleanupKomposition?.();
+      cleanupFocus?.();
+      unsubscribeSysState?.();
+      nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
-      activeMarkers.forEach(({ cleanup }) => cleanup());
-      activeMarkers.clear();
     };
   });
 </script>
