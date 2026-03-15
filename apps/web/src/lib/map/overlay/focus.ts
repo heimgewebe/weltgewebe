@@ -6,12 +6,15 @@ export function setupFocusInteraction(
   getSystemState: () => string,
 ) {
   const handleClick = (e: MapMouseEvent) => {
-    const features = map?.queryRenderedFeatures(e.point);
     const markerClicked =
       e.originalEvent.target instanceof HTMLElement &&
       e.originalEvent.target.closest(".map-marker");
 
-    if (!features?.length && !markerClicked) {
+    // Exit focus if the user clicks the map but *not* on a marker.
+    // We intentionally do not use `queryRenderedFeatures()` globally
+    // here because a rich vector basemap might return features (like roads or parks)
+    // everywhere, preventing the empty map click exit.
+    if (!markerClicked) {
       if (getSystemState() === "fokus") {
         leaveToNavigation();
       }
