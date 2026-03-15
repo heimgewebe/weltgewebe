@@ -6,6 +6,8 @@ import type { RequestEvent } from "@sveltejs/kit";
 // by providing a list of entries, but for demo we can just let it fall back or prerender known IDs.
 // Using 'auto' or 'true' here with a dynamic route without explicitly defining entries
 // breaks the static adapter.
+// Turn off prerender here too to consistently avoid static adapter conflicts.
+// The data fetched here is purely for the demo and works dynamically.
 export const prerender = false;
 
 export function GET({ params }: RequestEvent) {

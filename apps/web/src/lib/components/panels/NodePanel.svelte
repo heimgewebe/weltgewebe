@@ -1,7 +1,24 @@
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
 
+  import { env } from '$env/dynamic/public';
+
+  const API_BASE = env.PUBLIC_GEWEBE_API_BASE ?? '';
+
   let activeTab = 'uebersicht';
+
+  interface NodeDetails {
+    id: string;
+    title: string;
+    summary?: string;
+    created_at?: string;
+    updated_at?: string;
+    kind?: string;
+    tags?: string[];
+    location?: { lat: number; lon: number };
+    participants?: { account_title?: string; account_id: string; edge_kind?: string }[];
+    history?: { date: string; event: string }[];
+  }
 
   function setTab(tab: string) {
     activeTab = tab;
@@ -11,8 +28,10 @@
   let currentSelectionId: string | undefined;
   let lastSelectionId: string | undefined;
 
-  let nodeDetails: any = null;
+  let nodeDetails: NodeDetails | null = null;
   let isLoadingDetails = false;
+
+  let abortController: AbortController | null = null;
 
   $: {
     currentSelectionId = $selection?.id;
@@ -21,21 +40,38 @@
       activeTab = 'uebersicht';
       nodeDetails = null;
 
+      // Cancel any ongoing fetch if selection changes rapidly
+      if (abortController) {
+        abortController.abort();
+      }
+
       if (currentSelectionId) {
         isLoadingDetails = true;
-        fetch(`/api/nodes/${currentSelectionId}`)
+        abortController = new AbortController();
+        const currentReqId = currentSelectionId;
+
+        fetch(`${API_BASE}/api/nodes/${currentSelectionId}/`, {
+          signal: abortController.signal
+        })
           .then((res) => {
             if (res.ok) return res.json();
             throw new Error('Failed to load node details');
           })
           .then((data) => {
-            nodeDetails = data;
+            // Only update state if this response matches the currently selected node
+            if (currentSelectionId === currentReqId) {
+              nodeDetails = data;
+            }
           })
           .catch((err) => {
-            console.error(err);
+            if (err.name !== 'AbortError') {
+              console.error(err);
+            }
           })
           .finally(() => {
-            isLoadingDetails = false;
+            if (currentSelectionId === currentReqId) {
+              isLoadingDetails = false;
+            }
           });
       }
     }

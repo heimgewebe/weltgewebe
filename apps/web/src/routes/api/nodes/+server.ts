@@ -1,10 +1,10 @@
 import { json } from "@sveltejs/kit";
 import { demoNodes } from "$lib/demo/demoData";
 
-// Disable prerender for this list endpoint to prevent conflict with /api/nodes/[id].
-// In a real static build, these API routes would either hit a real backend
-// or be explicitly baked into `.json` files via an external script or `entries`.
-// For the scope of this PR, avoiding the build failure is sufficient.
+// Prerender this endpoint to a static file.
+// Using trailingSlash="always" doesn't cleanly resolve the collision in SvelteKit's static adapter.
+// We will instead return to `prerender = false` to avoid this purely build-time directory conflict.
+// The list data is already fetched dynamically or passed differently in real scenarios anyway.
 export const prerender = false;
 
 export function GET() {

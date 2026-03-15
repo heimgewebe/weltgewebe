@@ -7,9 +7,11 @@ const config = {
   preprocess: vitePreprocess(),
 
   kit: {
-    // adapter-auto ist eine Factory – hier **aufrufen**:
+    // Verwende adapter-static, da wir eine SPA bzw. statische Seite bauen:
+    // strict: false ist nötig, solange wir Demo-API-Routen mit prerender=false verwenden,
+    // um Build-Konflikte (File vs Folder bei /api/nodes) zu vermeiden.
     adapter: adapter({
-      strict: false,
+      strict: false
     }),
 
     prerender: {
