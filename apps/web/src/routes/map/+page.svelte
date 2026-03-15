@@ -193,8 +193,8 @@
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false
       });
-      map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
-      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors' }), 'bottom-right');
+      map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, activity, etc.) carry domain meaning.
       nodesOverlay = new NodesOverlay(map);
