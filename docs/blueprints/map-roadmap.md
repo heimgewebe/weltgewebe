@@ -31,10 +31,11 @@ summary: >
 
 - [ ] Eigenes `style.json` im `map-style` Repository anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
+- [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
 
-**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert.
+**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert und sind lizenzrechtlich dokumentiert.
 **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung (Light/Dark).
 
 ## Phase 3 — Runtime-Integration
@@ -44,6 +45,7 @@ summary: >
 - [ ] PMTiles-Protokoll in MapLibre registrieren
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+- [ ] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [ ] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
 
 **Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
