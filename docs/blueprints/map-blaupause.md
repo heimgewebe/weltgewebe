@@ -133,9 +133,9 @@ Beispiel:
 
 Mögliche Startpunkte:
 
-- `hamburg.pmtiles` – schnelle lokale Iteration und kleine Builds
-- `germany.pmtiles` – regionaler Maßstab
-- `europe.pmtiles` – große räumliche Abdeckung von Beginn an
+- `hamburg.pmtiles` – schnelle lokale Iteration, geringste Speicherkosten
+- `germany.pmtiles` – guter Mittelweg aus Abdeckung und Build-Dauer
+- `europe.pmtiles` – maximale Reichweite, aber höchste Build- und Speicherkosten
 
 Damit wird klar unterschieden zwischen Large Scale und Local Scale.
 
@@ -244,9 +244,19 @@ weltgewebe-map-style
 
 ---
 
-### 3.3 weltgewebe-web
+### 3.3 Asset-Compliance & Lizenzierung
 
-hier lebt:
+Souveränität umfasst nicht nur das Hosting, sondern auch eine lückenlos nachvollziehbare Rechtekette für alle Assets.
+
+- **Karten-Attribution:** Die OSM-/ODbL-Pflichten müssen im Client (MapLibre UI) jederzeit korrekt und sichtbar erfüllt sein.
+- **Style-Assets:** Herkunft und Lizenz von Glyphs, Sprites und Fonts müssen im `map-style` Repository dokumentiert sein.
+- **Keine stillen Abhängigkeiten:** Das finale Kartenprodukt darf nicht stillschweigend von fremden Diensten oder unklaren Fremdlizenzen abhängen.
+
+---
+
+### 3.4 weltgewebe-web
+
+Hier lebt:
 
 - MapLibre
 - Overlay
