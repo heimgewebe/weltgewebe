@@ -90,7 +90,7 @@
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    background: var(--color-bg-1);
+    background: var(--panel);
     border: 1px solid var(--panel-border);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -105,20 +105,20 @@
   .menu-header {
     padding: 12px 16px 8px;
     border-bottom: 1px solid var(--panel-border);
-    background: var(--color-bg-0);
+    background: var(--bg);
   }
 
   .role-badge {
     padding: 0.1rem 0.5rem;
     border-radius: 99px;
-    background: var(--color-bg-2);
+    background: rgba(255, 255, 255, 0.05);
     text-transform: uppercase;
     font-weight: bold;
     font-size: 0.7rem;
     display: inline-block;
   }
-  .role-badge.admin { background: var(--color-theme-1); color: var(--color-bg-1); }
-  .role-badge.weber { background: var(--color-theme-2); color: var(--color-bg-1); }
+  .role-badge.admin { background: var(--accent); color: var(--panel); }
+  .role-badge.weber { background: #54e1a6; color: var(--panel); }
   .role-badge.gast { background: var(--muted); color: var(--bg); }
 
   .menu-item {
@@ -136,15 +136,15 @@
     transition: background 0.1s ease;
   }
   .menu-item:hover {
-    background: var(--color-bg-2);
+    background: rgba(255, 255, 255, 0.05);
   }
 
   .logout-btn {
-    color: var(--color-danger);
+    color: #ff6b6b;
     border-top: 1px solid var(--panel-border);
   }
   .logout-btn:hover {
-    background: var(--color-danger);
+    background: #ff6b6b;
     color: white;
   }
 </style>
