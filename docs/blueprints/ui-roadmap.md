@@ -77,9 +77,9 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
-- [ ] Profil mit Kompetenzen/Interessen/Gütern
-- [ ] Aktivität mit Beiträgen/Teilnahmen
-- [ ] Knotenliste mit echten Verknüpfungen
+- [x] Profil: Basisdaten integriert (Typ, Tags, Erstellungsdatum), tiefergehende Domänenfelder (Kompetenzen/Güter) offen
+- [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
+- [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
 
 ### [ ] Roadmap PR 5 — EdgePanel ausbauen
 
