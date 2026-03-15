@@ -18,6 +18,18 @@
       activeTab = 'uebersicht';
     }
   }
+
+  function formatDate(isoString: string | undefined) {
+    if (!isoString) return 'Unbekannt';
+    try {
+      return new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(isoString));
+    } catch (e) {
+      return 'Unbekannt';
+    }
+  }
+
+  $: displayLat = $selection?.data?.location?.lat ?? $selection?.lat;
+  $: displayLon = $selection?.data?.location?.lon ?? $selection?.lng;
 </script>
 
 <div class="node-mode">
@@ -34,10 +46,12 @@
   <div class="tab-content">
     {#if activeTab === 'uebersicht'}
       <div class="overview">
-        <p><strong>Erstellt am:</strong> {$selection?.data?.created_at ? new Date($selection.data.created_at).toLocaleDateString() : 'Unbekannt'}</p>
+        {#if $selection?.data?.created_at}
+          <p><strong>Erstellt am:</strong> {formatDate($selection?.data?.created_at)}</p>
+        {/if}
 
-        {#if $selection?.data?.location}
-          <p><strong>Koordinaten:</strong> {$selection.data.location.lat.toFixed(5)}, {$selection.data.location.lon.toFixed(5)}</p>
+        {#if typeof displayLat === 'number' && typeof displayLon === 'number'}
+          <p><strong>Koordinaten:</strong> {displayLat.toFixed(5)}, {displayLon.toFixed(5)}</p>
         {/if}
       </div>
 
@@ -67,7 +81,7 @@
       <div class="timeline-placeholder">
         <ul class="timeline">
           <li>
-            <span class="date">{$selection?.data?.created_at ? new Date($selection.data.created_at).toLocaleDateString() : 'Kürzlich'}</span>
+            <span class="date">{$selection?.data?.created_at ? formatDate($selection?.data?.created_at) : 'Kürzlich'}</span>
             <span class="event">Knoten wurde im Gewebe verankert.</span>
           </li>
         </ul>
