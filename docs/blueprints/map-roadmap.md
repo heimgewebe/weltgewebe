@@ -22,6 +22,9 @@ summary: >
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
 - [ ] Basemap-Artefakt erstmals reproduzierbar bauen
 
+**Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert werden.
+**Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
+
 ## Phase 2 — Style-Souveränität
 
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
@@ -30,6 +33,9 @@ summary: >
 - [ ] Glyph- und Sprite-Strategie festlegen
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
+
+**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert.
+**Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung (Light/Dark).
 
 ## Phase 3 — Runtime-Integration
 
@@ -40,6 +46,9 @@ summary: >
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [ ] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
 
+**Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
+**Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.
+
 ## Phase 4 — Betrieb und Versionierung
 
 **Ziel:** Die Basemap wird dauerhaft, vorhersehbar und sicher als Version gepflegt.
@@ -49,6 +58,9 @@ summary: >
 - [ ] Publish- und Rollback-Strategie festlegen
 - [ ] Basemap-Metadaten dokumentieren
 
+**Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne Clients zu brechen.
+**Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches Deployment ohne Review.
+
 ## Phase 5 — Ausbau
 
 **Ziel:** Erweiterung der souveränen Kartengrundlage um spezifische Sichten und Leistungsmerkmale.
@@ -57,3 +69,6 @@ summary: >
 - [ ] Offline-Modus-Konzepte prüfen
 - [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
 - [ ] Mehrskalige Projektionen prüfen
+
+**Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der Architektur verankert und abrufbar.
+**Nicht-Ziele:** Implementierung einer komplett neuen Render-Engine.
