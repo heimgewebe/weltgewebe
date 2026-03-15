@@ -1,4 +1,8 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type {
+  Map as MapLibreMap,
+  MapMouseEvent,
+  MapTouchEvent,
+} from "maplibre-gl";
 import { enterKomposition } from "$lib/stores/uiView";
 
 export function setupKompositionInteraction(map: MapLibreMap) {
@@ -13,7 +17,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     }
   };
 
-  const handleMousedown = (e: any) => {
+  const handleMousedown = (e: MapMouseEvent) => {
     clearLongPressTimer();
     const markerClicked =
       e.originalEvent.target instanceof HTMLElement &&
@@ -31,7 +35,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     }, 800);
   };
 
-  const handleMousemove = (e: any) => {
+  const handleMousemove = (e: MapMouseEvent) => {
     if (longPressTimer !== undefined) {
       const dx = e.point.x - longPressStartX;
       const dy = e.point.y - longPressStartY;
@@ -42,7 +46,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     }
   };
 
-  const handleTouchstart = (e: any) => {
+  const handleTouchstart = (e: MapTouchEvent) => {
     clearLongPressTimer();
     const markerClicked =
       e.originalEvent.target instanceof HTMLElement &&
@@ -60,7 +64,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     }, 800);
   };
 
-  const handleTouchmove = (e: any) => {
+  const handleTouchmove = (e: MapTouchEvent) => {
     if (longPressTimer !== undefined) {
       const dx = e.point.x - longPressStartX;
       const dy = e.point.y - longPressStartY;

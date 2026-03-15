@@ -1,11 +1,11 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapLibreMap, MapMouseEvent } from "maplibre-gl";
 import { leaveToNavigation } from "$lib/stores/uiView";
 
 export function setupFocusInteraction(
   map: MapLibreMap,
   getSystemState: () => string,
 ) {
-  const handleClick = (e: any) => {
+  const handleClick = (e: MapMouseEvent) => {
     const features = map?.queryRenderedFeatures(e.point);
     const markerClicked =
       e.originalEvent.target instanceof HTMLElement &&
