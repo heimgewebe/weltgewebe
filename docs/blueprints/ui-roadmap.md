@@ -69,11 +69,11 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 > Aktueller Stand: UI-Strukturen und Tabs wurden als Scaffold vorbereitet, Modul-Labels synchronisiert. Die Anbindung an echte Domain-Objekte und Backend-APIs im Fokuspfad ist noch offen.
 
-- [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten)
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht
-- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen
-- [ ] Verlauf-Tab mit Timeline/Chronik
-- [ ] Relevante Datenquellen/API-Pfade klären
+- [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten)
+- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold erhalten, Integration offen)
+- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold erhalten, Integration offen)
+- [x] Verlauf-Tab mit Timeline/Chronik
+- [x] Relevante Datenquellen/API-Pfade klären
 
 ### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
