@@ -32,7 +32,8 @@
     summary: n.summary,
     info: n.info,
     type: 'node',
-    modules: n.modules
+    modules: n.modules,
+    created_at: n.created_at
   })) satisfies RenderableMapPoint[];
 
   let accountsData: RenderableMapPoint[] = [];
@@ -47,7 +48,8 @@
           lon: a.public_pos.lon,
           summary: a.summary,
           type: a.type, // Pass through the domain type (e.g., 'garnrolle')
-          modules: a.modules
+          modules: a.modules,
+          created_at: a.created_at
         });
       }
     }
