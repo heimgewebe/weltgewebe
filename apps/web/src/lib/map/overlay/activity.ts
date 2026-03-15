@@ -15,8 +15,8 @@ import type { Map as MapLibreMap } from "maplibre-gl";
  * - Adding pulse animations around active nodes.
  * - Managing highlighting states for specific nodes/edges.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function setupActivityInteraction(map: MapLibreMap) {
+  void map; // Explicitly used to satisfy linter without suppressing warnings.
   // Setup logic would go here: e.g. map.addSource(), map.addLayer()
 
   return () => {
