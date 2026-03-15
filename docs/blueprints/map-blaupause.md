@@ -1,55 +1,66 @@
 ---
 id: map-blaupause
-title: Basemap Architecture Blueprint
+title: Basemap-Architektur-Blaupause
 doc_type: blueprint
 status: draft
 canonicality: canonical
 summary: >
-  Architecture blueprint for a sovereign basemap stack based on
-  MapLibre, PMTiles and a reproducible tile generation pipeline
-  for Weltgewebe overlays.
+  Architektur-Blaupause für einen souveränen Basemap-Stack basierend auf
+  MapLibre, PMTiles und einer reproduzierbaren Tile-Generierungs-Pipeline
+  für Weltgewebe-Overlays.
 ---
 
-# Basemap Architecture Blueprint
+# Basemap-Architektur-Blaupause
 
-## Context
+## Kontext
 
 Wenn die Karte der Kern des Systems ist, sollte sie vollständig souverän betrieben werden:
 eigene Daten → eigenes Tile-Artefakt → eigener Stil → eigener Hosting-Pfad.
 Das führt zu einer Architektur MapLibre + PMTiles + eigener Pipeline.
 Die Karte wird als Kerninfrastruktur und nicht als UI-Service betrachtet.
 
-## Current State
+## Ist-Zustand
 
-The current implementation uses MapLibre with an external basemap style.
-The basemap is currently treated as an external dependency.
-This blueprint defines the target architecture for replacing that dependency
-with a sovereign PMTiles-based basemap pipeline.
+Aktuell nutzt die Implementierung MapLibre mit einem externen Basemap-Stil.
+Die Basemap wird derzeit als externe Abhängigkeit behandelt.
+Dieser Blueprint definiert die Zielarchitektur, um diese Abhängigkeit durch eine souveräne PMTiles-basierte Basemap-Pipeline zu ersetzen.
 
-## Trade-offs
+## Abwägungen
 
 Zu frühe Souveränität kann operative Komplexität erzeugen:
 Tile-Builds, OSM-Updates, Style-Assets, CDN-Konfiguration.
 Viele Projekte verlieren hier Geschwindigkeit, was bei selbst gehosteten Basemaps bedacht werden muss.
 
-## Design Principles
+## Entwurfsprinzipien
 
 Die ideale Blaupause ist souverän, aber modular:
 
-- Basemap is an artifact, not a service
-- Hosting can be serverless (PMTiles)
-- Pipeline must be reproducible
-- MapLibre is only the rendering engine
-- Overlays remain fully decoupled
+- Basemap ist ein Artefakt, kein Service
+- Hosting ist serverlos möglich (PMTiles)
+- Pipeline ist reproduzierbar
+- MapLibre bleibt reine Rendering-Engine
+- Overlays bleiben komplett entkoppelt
 
 Damit erhält man Souveränität ohne Architekturbruch.
 
-## Architecture Goals
+## Architekturziele
 
-- full basemap sovereignty
-- provider independence
-- reproducible builds
-- artifact-based deployment
+- Volle Basemap-Souveränität
+- Anbieterunabhängigkeit
+- Reproduzierbare Builds
+- Artefaktbasiertes Deployment
+
+## Artefaktfluss
+
+- OpenStreetMap-Daten
+- → Tile-Generierung
+- → MBTiles
+- → PMTiles-Artefakt
+- → Hosting
+- → MapLibre Rendering
+- → Weltgewebe-Overlay-Layer
+
+Ziel: Die Basemap wird als Artefakt erzeugt und verteilt, nicht als externer Kartenservice konsumiert.
 
 ---
 
@@ -116,16 +127,15 @@ Beispiel:
 
 `basemap-europe-v1.pmtiles`
 
-### Tileset Strategy
+### Tileset-Strategie
 
-Primary tileset: `europe.pmtiles`
+Mögliche Startpunkte:
 
-Optional regional tilesets:
+- `hamburg.pmtiles` – schnelle lokale Iteration und kleine Builds
+- `germany.pmtiles` – regionaler Maßstab
+- `europe.pmtiles` – große räumliche Abdeckung von Beginn an
 
-- `germany.pmtiles`
-- `hamburg.pmtiles`
-
-Damit wird klar unterschieden zwischen Large scale und local scale.
+Damit wird klar unterschieden zwischen Large Scale und Local Scale.
 
 ---
 
@@ -159,10 +169,6 @@ Regionen:
 - germany
 - hamburg
 
-Start sinnvoll:
-
-europe
-
 ---
 
 ### 2.5 Hosting
@@ -189,7 +195,7 @@ Cloudflare CDN
 
 ## 3. Repositories (empfohlene Struktur)
 
-Im Heimgewebe-Kosmos ist eine Trennung sinnvoll:
+Eine logische und physische Trennung der Repositories ist sinnvoll:
 
 - weltgewebe-basemap
 - weltgewebe-map-style
@@ -264,7 +270,7 @@ wget https://download.geofabrik.de/europe-latest.osm.pbf
 
 Tiles generieren
 
-Recommended build environment:
+Empfohlene Build-Umgebung:
 
 - RAM: 32-64 GB
 - Storage: 100 GB
@@ -399,15 +405,13 @@ cron → rebuild tiles → publish artifact
 
 PMTiles Vorteile:
 
-- weniger HTTP Requests
+- Weniger HTTP Requests
 - CDN Cache
 - Streaming Tiles
 
 Typischer Ladevorgang:
 
-\<100 requests
-
-statt tausender Tiles.
+PMTiles reduziert typischerweise die Anzahl einzelner Tile-Anfragen, da Tiles aus einem zusammenhängenden Artefakt per HTTP Range Requests gelesen werden.
 
 ---
 
@@ -466,17 +470,17 @@ Das liefert:
 
 ---
 
-## Risks
+## Risiken
 
-- Tile generation pipeline complexity
-- OSM update management
-- Storage size of regional tilesets (Europa Tileset: 10-20 GB)
+- Komplexität der Tile-Generierungs-Pipeline
+- Management von OSM-Updates
+- Speichergröße regionaler Tilesets (Europa Tileset: 10-20 GB)
 - Buildzeit (Planet: mehrere Stunden)
 
 ---
 
-## Assumptions
+## Annahmen
 
-- Long-term platform ownership of the basemap
-- Integration with Heimserver infrastructure
-- MapLibre remains the rendering engine
+- Langfristiger Plattformanspruch für die Basemap
+- Infrastruktur-Integration (z. B. Heimserver)
+- MapLibre bleibt als Rendering-Engine erhalten
