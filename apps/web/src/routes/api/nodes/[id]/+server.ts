@@ -18,19 +18,25 @@ export function GET({ params }: RequestEvent) {
   }
 
   // Find associated edges and participants
-  const relatedEdges = demoEdges.filter((e) => e.target_id === id && e.target_type === "node");
+  const relatedEdges = demoEdges.filter(
+    (e) => e.target_id === id && e.target_type === "node",
+  );
 
-  const participants = relatedEdges.map((edge) => {
-    const account = demoAccounts.find((a) => a.id === edge.source_id && edge.source_type === "account");
-    return {
-      edge_id: edge.id,
-      edge_kind: edge.edge_kind,
-      note: edge.note,
-      account_id: account?.id,
-      account_title: account?.title,
-      account_type: account?.type
-    };
-  }).filter(p => p.account_id);
+  const participants = relatedEdges
+    .map((edge) => {
+      const account = demoAccounts.find(
+        (a) => a.id === edge.source_id && edge.source_type === "account",
+      );
+      return {
+        edge_id: edge.id,
+        edge_kind: edge.edge_kind,
+        note: edge.note,
+        account_id: account?.id,
+        account_title: account?.title,
+        account_type: account?.type,
+      };
+    })
+    .filter((p) => p.account_id);
 
   // Return the complete domain object with enriched participant data
   return json({
@@ -39,13 +45,17 @@ export function GET({ params }: RequestEvent) {
     history: [
       {
         date: node.created_at,
-        event: "Knoten wurde im Gewebe verankert."
+        event: "Knoten wurde im Gewebe verankert.",
       },
       // If updated_at exists and is different, add it
-      ...(node.updated_at && node.updated_at !== node.created_at ? [{
-        date: node.updated_at,
-        event: "Knoten aktualisiert."
-      }] : [])
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      ...(node.updated_at && node.updated_at !== node.created_at
+        ? [
+            {
+              date: node.updated_at,
+              event: "Knoten aktualisiert.",
+            },
+          ]
+        : []),
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   });
 }

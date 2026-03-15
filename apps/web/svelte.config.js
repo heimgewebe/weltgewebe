@@ -9,7 +9,7 @@ const config = {
   kit: {
     // adapter-auto ist eine Factory – hier **aufrufen**:
     adapter: adapter({
-      strict: false
+      strict: false,
     }),
 
     prerender: {
