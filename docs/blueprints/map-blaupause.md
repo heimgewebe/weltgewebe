@@ -12,6 +12,8 @@ summary: >
 
 # Basemap-Architektur-Blaupause
 
+> **Hinweis:** Dies ist das normative Architektur-Dokument. Der exekutive Inkrementpfad dazu befindet sich in der [Basemap-Umsetzungsroadmap](map-roadmap.md). Blueprint und Roadmap sind als Paket zu verstehen.
+
 ## Kontext
 
 Wenn die Karte der Kern des Systems ist, sollte sie vollständig souverän betrieben werden:
