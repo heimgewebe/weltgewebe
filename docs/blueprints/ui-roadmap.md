@@ -65,15 +65,15 @@ Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnu
 
 Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause einziehen.
 
-### [ ] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
+### [x] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-> Aktueller Stand: UI-Strukturen und Tabs wurden als Scaffold vorbereitet, Modul-Labels synchronisiert. Die Anbindung an echte Domain-Objekte und Backend-APIs im Fokuspfad ist noch offen.
+> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt via `/api/nodes/[id]`, was die echten Teilnehmer und den korrekten Verlauf lädt. Die "Gespräch"- und "Anträge"-Tabs wurden explizit als Scaffold belassen, um Feature Creep zu vermeiden (diese benötigen noch komplexere Backend-Integrationen in zukünftigen Schritten).
 
-- [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad noch offen)
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold erhalten, Integration offen)
-- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold erhalten, Integration offen)
-- [ ] Verlauf-Tab mit Timeline/Chronik (Scaffold vorbereitet, Integration echter Daten offen)
-- [ ] Relevante Datenquellen/API-Pfade klären
+- [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
+- [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)
+- [x] Relevante Datenquellen/API-Pfade klären (`/api/nodes/[id]` als Detail-Endpoint eingeführt und angebunden)
+- [-] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
+- [-] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
 
 ### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 

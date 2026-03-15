@@ -11,11 +11,33 @@
   let currentSelectionId: string | undefined;
   let lastSelectionId: string | undefined;
 
+  let nodeDetails: any = null;
+  let isLoadingDetails = false;
+
   $: {
     currentSelectionId = $selection?.id;
     if (currentSelectionId !== lastSelectionId) {
       lastSelectionId = currentSelectionId;
       activeTab = 'uebersicht';
+      nodeDetails = null;
+
+      if (currentSelectionId) {
+        isLoadingDetails = true;
+        fetch(`/api/nodes/${currentSelectionId}`)
+          .then((res) => {
+            if (res.ok) return res.json();
+            throw new Error('Failed to load node details');
+          })
+          .then((data) => {
+            nodeDetails = data;
+          })
+          .catch((err) => {
+            console.error(err);
+          })
+          .finally(() => {
+            isLoadingDetails = false;
+          });
+      }
     }
   }
 
@@ -34,15 +56,15 @@
   // Typecast or fallback carefully since $selection type doesn't formally export .lat/.lng at the root
   // even though MapPoint might contain them at runtime
   $: {
-    const selectionData = $selection?.data as any;
+    const selectionData = nodeDetails || ($selection?.data as any);
     displayLat = selectionData?.location?.lat ?? selectionData?.lat;
     displayLon = selectionData?.location?.lon ?? selectionData?.lon;
   }
 </script>
 
 <div class="node-mode">
-  <h3>{$selection?.data?.title || $selection?.id}</h3>
-  <p class="summary">{$selection?.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
+  <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
+  <p class="summary">{nodeDetails?.summary || $selection?.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
 
   <div class="tabs">
     <button class:active={activeTab === 'uebersicht'} on:click={() => setTab('uebersicht')}>Übersicht</button>
@@ -54,20 +76,40 @@
   <div class="tab-content">
     {#if activeTab === 'uebersicht'}
       <div class="overview">
-        {#if $selection?.data?.created_at}
-          <p><strong>Erstellt am:</strong> {formatDate($selection?.data?.created_at)}</p>
-        {/if}
+        {#if isLoadingDetails}
+          <p class="ghost">Lade Details...</p>
+        {:else}
+          {#if (nodeDetails?.created_at || $selection?.data?.created_at)}
+            <p><strong>Erstellt am:</strong> {formatDate(nodeDetails?.created_at || $selection?.data?.created_at)}</p>
+          {/if}
 
-        {#if $selection?.data?.kind}
-          <p><strong>Art:</strong> {$selection?.data?.kind}</p>
-        {/if}
+          {#if (nodeDetails?.kind || $selection?.data?.kind)}
+            <p><strong>Art:</strong> {nodeDetails?.kind || $selection?.data?.kind}</p>
+          {/if}
 
-        {#if $selection?.data?.tags && $selection?.data?.tags.length > 0}
-          <p><strong>Tags:</strong> {$selection?.data?.tags.join(', ')}</p>
-        {/if}
+          {#if (nodeDetails?.tags || $selection?.data?.tags)?.length > 0}
+            <p><strong>Tags:</strong> {(nodeDetails?.tags || $selection?.data?.tags).join(', ')}</p>
+          {/if}
 
-        {#if typeof displayLat === 'number' && typeof displayLon === 'number'}
-          <p><strong>Koordinaten:</strong> {displayLat.toFixed(5)}, {displayLon.toFixed(5)}</p>
+          {#if typeof displayLat === 'number' && typeof displayLon === 'number'}
+            <p><strong>Koordinaten:</strong> {displayLat.toFixed(5)}, {displayLon.toFixed(5)}</p>
+          {/if}
+
+          {#if nodeDetails?.participants && nodeDetails.participants.length > 0}
+            <div class="participants">
+              <p><strong>Beteiligte:</strong></p>
+              <ul>
+                {#each nodeDetails.participants as participant}
+                  <li>
+                    <span class="participant-name">{participant.account_title || participant.account_id}</span>
+                    {#if participant.edge_kind}
+                      <span class="participant-role">({participant.edge_kind})</span>
+                    {/if}
+                  </li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
         {/if}
       </div>
 
@@ -95,24 +137,66 @@
 
     {:else if activeTab === 'verlauf'}
       <div class="timeline-placeholder">
-        <ul class="timeline">
-          {#if $selection?.data?.updated_at && $selection?.data?.updated_at !== $selection?.data?.created_at}
-          <li>
-            <span class="date">{formatDate($selection?.data?.updated_at)}</span>
-            <span class="event">Knoten aktualisiert.</span>
-          </li>
-          {/if}
-          <li>
-            <span class="date">{$selection?.data?.created_at ? formatDate($selection?.data?.created_at) : 'Kürzlich'}</span>
-            <span class="event">Knoten wurde im Gewebe verankert.</span>
-          </li>
-        </ul>
+        {#if isLoadingDetails}
+          <p class="ghost">Lade Verlauf...</p>
+        {:else if nodeDetails?.history && nodeDetails.history.length > 0}
+          <ul class="timeline">
+            {#each nodeDetails.history as event}
+              <li>
+                <span class="date">{formatDate(event.date)}</span>
+                <span class="event">{event.event}</span>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <ul class="timeline">
+            {#if $selection?.data?.updated_at && $selection?.data?.updated_at !== $selection?.data?.created_at}
+            <li>
+              <span class="date">{formatDate($selection?.data?.updated_at)}</span>
+              <span class="event">Knoten aktualisiert.</span>
+            </li>
+            {/if}
+            <li>
+              <span class="date">{$selection?.data?.created_at ? formatDate($selection?.data?.created_at) : 'Kürzlich'}</span>
+              <span class="event">Knoten wurde im Gewebe verankert.</span>
+            </li>
+          </ul>
+        {/if}
       </div>
     {/if}
   </div>
 </div>
 
 <style>
+  .participants {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+  }
+
+  .participants ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+  }
+
+  .participants li {
+    margin-bottom: 0.25rem;
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+  }
+
+  .participant-name {
+    font-weight: 500;
+    color: var(--text, #333);
+  }
+
+  .participant-role {
+    font-size: 0.85em;
+    color: var(--ghost, #666);
+  }
+
   .summary {
     color: var(--ghost, #666);
     margin-bottom: 1.5rem;

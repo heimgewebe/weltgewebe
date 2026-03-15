@@ -1,9 +1,11 @@
 import { json } from "@sveltejs/kit";
 import { demoNodes } from "$lib/demo/demoData";
 
-// Prerender this endpoint to a static file (e.g. api/nodes.json or api/nodes/index.html containing JSON)
-// to support static hosting (Path A).
-export const prerender = true;
+// Disable prerender for this list endpoint to prevent conflict with /api/nodes/[id].
+// In a real static build, these API routes would either hit a real backend
+// or be explicitly baked into `.json` files via an external script or `entries`.
+// For the scope of this PR, avoiding the build failure is sufficient.
+export const prerender = false;
 
 export function GET() {
   return json(demoNodes);

@@ -8,7 +8,9 @@ const config = {
 
   kit: {
     // adapter-auto ist eine Factory – hier **aufrufen**:
-    adapter: adapter(),
+    adapter: adapter({
+      strict: false
+    }),
 
     prerender: {
       handleHttpError: ({ path, message }) => {
