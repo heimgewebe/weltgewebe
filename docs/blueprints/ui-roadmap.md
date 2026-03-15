@@ -75,11 +75,11 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
 - [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
 
-### [x] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
-- [x] Profil mit Kompetenzen/Interessen/Gütern
-- [x] Aktivität mit Beiträgen/Teilnahmen
-- [x] Knotenliste mit echten Verknüpfungen
+- [x] Profil: Basisdaten integriert (Typ, Tags, Erstellungsdatum), tiefergehende Domänenfelder (Kompetenzen/Güter) offen
+- [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
+- [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
 
 ### [ ] Roadmap PR 5 — EdgePanel ausbauen
 

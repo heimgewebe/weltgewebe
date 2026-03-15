@@ -16,14 +16,15 @@ export function GET({ params }: RequestEvent) {
 
   // Find associated nodes (where account is source)
   const relatedEdges = demoEdges.filter(
-    (e) => e.source_id === id && e.source_type === "account",
+    (e) =>
+      e.source_id === id &&
+      e.source_type === "account" &&
+      e.target_type === "node",
   );
 
   const nodes = relatedEdges
     .map((edge) => {
-      const node = demoNodes.find(
-        (n) => n.id === edge.target_id && edge.target_type === "node",
-      );
+      const node = demoNodes.find((n) => n.id === edge.target_id);
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
