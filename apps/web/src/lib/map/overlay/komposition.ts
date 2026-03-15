@@ -1,5 +1,5 @@
-import type { Map as MapLibreMap } from 'maplibre-gl';
-import { enterKomposition } from '$lib/stores/uiView';
+import type { Map as MapLibreMap } from "maplibre-gl";
+import { enterKomposition } from "$lib/stores/uiView";
 
 export function setupKompositionInteraction(map: MapLibreMap) {
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -15,16 +15,18 @@ export function setupKompositionInteraction(map: MapLibreMap) {
 
   const handleMousedown = (e: any) => {
     clearLongPressTimer();
-    const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+    const markerClicked =
+      e.originalEvent.target instanceof HTMLElement &&
+      e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;
     longPressTimer = setTimeout(() => {
       enterKomposition({
-        mode: 'new-knoten',
+        mode: "new-knoten",
         lngLat: [e.lngLat.lng, e.lngLat.lat],
-        source: 'map-longpress'
+        source: "map-longpress",
       });
     }, 800);
   };
@@ -33,7 +35,8 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     if (longPressTimer !== undefined) {
       const dx = e.point.x - longPressStartX;
       const dy = e.point.y - longPressStartY;
-      if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
+      if (dx * dx + dy * dy > 100) {
+        // equivalent to 10px distance
         clearLongPressTimer();
       }
     }
@@ -41,16 +44,18 @@ export function setupKompositionInteraction(map: MapLibreMap) {
 
   const handleTouchstart = (e: any) => {
     clearLongPressTimer();
-    const markerClicked = e.originalEvent.target instanceof HTMLElement && e.originalEvent.target.closest('.map-marker');
+    const markerClicked =
+      e.originalEvent.target instanceof HTMLElement &&
+      e.originalEvent.target.closest(".map-marker");
     if (markerClicked) return;
 
     longPressStartX = e.point.x;
     longPressStartY = e.point.y;
     longPressTimer = setTimeout(() => {
       enterKomposition({
-        mode: 'new-knoten',
+        mode: "new-knoten",
         lngLat: [e.lngLat.lng, e.lngLat.lat],
-        source: 'map-longpress'
+        source: "map-longpress",
       });
     }, 800);
   };
@@ -59,36 +64,37 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     if (longPressTimer !== undefined) {
       const dx = e.point.x - longPressStartX;
       const dy = e.point.y - longPressStartY;
-      if (dx * dx + dy * dy > 100) { // equivalent to 10px distance
+      if (dx * dx + dy * dy > 100) {
+        // equivalent to 10px distance
         clearLongPressTimer();
       }
     }
   };
 
-  map.on('mousedown', handleMousedown);
-  map.on('mouseup', clearLongPressTimer);
-  map.on('mousemove', handleMousemove);
-  map.on('mouseout', clearLongPressTimer);
-  map.on('dragstart', clearLongPressTimer);
-  map.on('movestart', clearLongPressTimer);
+  map.on("mousedown", handleMousedown);
+  map.on("mouseup", clearLongPressTimer);
+  map.on("mousemove", handleMousemove);
+  map.on("mouseout", clearLongPressTimer);
+  map.on("dragstart", clearLongPressTimer);
+  map.on("movestart", clearLongPressTimer);
 
-  map.on('touchstart', handleTouchstart);
-  map.on('touchend', clearLongPressTimer);
-  map.on('touchmove', handleTouchmove);
-  map.on('touchcancel', clearLongPressTimer);
+  map.on("touchstart", handleTouchstart);
+  map.on("touchend", clearLongPressTimer);
+  map.on("touchmove", handleTouchmove);
+  map.on("touchcancel", clearLongPressTimer);
 
   return () => {
     clearLongPressTimer();
-    map.off('mousedown', handleMousedown);
-    map.off('mouseup', clearLongPressTimer);
-    map.off('mousemove', handleMousemove);
-    map.off('mouseout', clearLongPressTimer);
-    map.off('dragstart', clearLongPressTimer);
-    map.off('movestart', clearLongPressTimer);
+    map.off("mousedown", handleMousedown);
+    map.off("mouseup", clearLongPressTimer);
+    map.off("mousemove", handleMousemove);
+    map.off("mouseout", clearLongPressTimer);
+    map.off("dragstart", clearLongPressTimer);
+    map.off("movestart", clearLongPressTimer);
 
-    map.off('touchstart', handleTouchstart);
-    map.off('touchend', clearLongPressTimer);
-    map.off('touchmove', handleTouchmove);
-    map.off('touchcancel', clearLongPressTimer);
+    map.off("touchstart", handleTouchstart);
+    map.off("touchend", clearLongPressTimer);
+    map.off("touchmove", handleTouchmove);
+    map.off("touchcancel", clearLongPressTimer);
   };
 }
