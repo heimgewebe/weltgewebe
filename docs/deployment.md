@@ -33,7 +33,13 @@ A successful frontend build does *not* automatically guarantee a successful depl
 
 To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a refresh of the edge deployment stack to restore the `edge-caddy` mount coupling, provided frontend delivery is required for the current deploy run.
 
-*Note (Phase B Preparation): Inconsistent browser states can also stem from client-side caching (e.g., Cache-Control headers for HTML versus immutable assets). The server-side guards described here verify server state, but do not guarantee client cache coherence.*
+### Client-Cache-Kohärenz
+
+Server-side correctness does not intrinsically prevent browsers from rendering stale application states due to aggressive caching. To reduce client divergence and make cache behavior deterministic at the delivery layer, the infrastructure implements distinct caching strategies based on the asset type:
+
+1. **Revalidating Routing (HTML/Root)**: Core HTML entrypoints (e.g. `index.html`, `/map`) strictly use `Cache-Control: no-cache, must-revalidate` to ensure browsers always check for the latest application shell upon load.
+2. **Aggressive Caching (Immutable Assets)**: Hashed internal assets located under `/_app/immutable/` are served with `Cache-Control: public, max-age=31536000, immutable`.
+3. **Build Diagnosis**: When present, `/_app/version.json` provides a machine-readable build identifier capable of diagnosing client-vs-server build discrepancies.
 
 *Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely.*
 

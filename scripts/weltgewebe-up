@@ -1139,6 +1139,25 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         exit 1
     fi
 
+    # Phase B: Verifizieren der HTML Cache-Header (revalidating)
+    HTML_HEADERS_OUT=$(mktemp)
+    if ! curl -s -I --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/map" > "$HTML_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: curl connection failed while checking HTML headers for /map."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+        exit 1
+    fi
+    if ! grep -iq "Cache-Control:.*no-cache" "$HTML_HEADERS_OUT" || ! grep -iq "Cache-Control:.*must-revalidate" "$HTML_HEADERS_OUT"; then
+        msg="Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$HTML_HEADERS_OUT"
+        exit 1
+    fi
+    rm -f "$HTML_HEADERS_OUT"
+    echo "OK (frontend route /map cache-control verified)"
+
     # Extract one real asset path (e.g. an immutable JS or CSS file) and verify it
     # We use a robust grep and head -n 1 to grab exactly one asset URL, allowing optional ./ prefix
     ASSET_PATH=$(grep -oE '\.?/_app/immutable/[^"'\'' ]+\.(js|css|png|svg|webp|jpg|jpeg)' "$HTML_OUT" | head -n 1 || true)
@@ -1149,23 +1168,57 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         ASSET_PATH_NORMALIZED="${ASSET_PATH_NORMALIZED//\/\//\/}"
 
         ASSET_URL="https://weltgewebe.home.arpa${ASSET_PATH_NORMALIZED}"
-        ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --cacert "$EDGE_CA" "$ASSET_URL")
+
+        # Verify asset reachability and Cache-Control headers (immutable)
+        ASSET_HEADERS_OUT=$(mktemp)
+        if ! ASSET_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -D "$ASSET_HEADERS_OUT" --cacert "$EDGE_CA" "$ASSET_URL"); then
+            msg="Frontend Asset Guard failed: curl connection failed while fetching asset $ASSET_PATH_NORMALIZED."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+            exit 1
+        fi
+
         if [[ "$ASSET_HTTP_CODE" != "200" ]]; then
             msg="Frontend Asset Guard failed: HTML is present, but structural asset $ASSET_PATH_NORMALIZED is referenced and not reachable (HTTP $ASSET_HTTP_CODE)."
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
             exit 1
         fi
-        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
-        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified)"
+
+        if ! grep -iq "Cache-Control:.*immutable" "$ASSET_HEADERS_OUT" || ! grep -iq "Cache-Control:.*max-age=31536000" "$ASSET_HEADERS_OUT"; then
+            msg="Frontend Cache Guard failed: Immutable asset $ASSET_PATH_NORMALIZED did not return 'max-age=31536000, immutable' header."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$ASSET_HEADERS_OUT"
+            exit 1
+        fi
+        rm -f "$ASSET_HEADERS_OUT"
+
+        echo "OK (frontend route /map reachable and structural asset $ASSET_PATH_NORMALIZED verified with immutable cache headers)"
     else
         # Fallback if the regex fails but _app/ is present (e.g. dev mode or different build structure)
-        # Note: This verifies the server state. It does not guarantee client cache coherence (Phase B).
         echo "OK (frontend route /map reachable and structurally valid, but no specific immutable asset matched for deep check)"
     fi
 
-    rm -f "$HTML_OUT"
+    # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
+    # This is a diagnostic guard (warn-only), curl failures should not abort the deploy.
+    VERSION_OUT=$(mktemp)
+    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
+        echo "WARNING: curl connection failed while fetching /_app/version.json. Build-ID unverified."
+    elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+        # Robust parsing: strip newlines, find "version" key with optional spaces, extract value cleanly
+        BUILD_VERSION=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
+        if [[ -z "$BUILD_VERSION" ]]; then
+            BUILD_VERSION="unknown (parse error)"
+        fi
+        echo "OK (Build-ID / Version: $BUILD_VERSION verified via /_app/version.json)"
+    else
+        echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
+    fi
+
+    rm -f "$HTML_OUT" "$VERSION_OUT"
 else
     echo "   Skipped (Frontend not required for this deploy run)."
 fi
