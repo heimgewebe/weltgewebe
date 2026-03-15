@@ -44,6 +44,13 @@ Die ideale Blaupause ist souverän, aber modular:
 
 Damit erhält man Souveränität ohne Architekturbruch.
 
+## Architecture Goals
+
+- full basemap sovereignty
+- provider independence
+- reproducible builds
+- artifact-based deployment
+
 ---
 
 ## 1. Systemarchitektur
@@ -108,6 +115,17 @@ Eigenschaften:
 Beispiel:
 
 `basemap-europe-v1.pmtiles`
+
+### Tileset Strategy
+
+Primary tileset: `europe.pmtiles`
+
+Optional regional tilesets:
+
+- `germany.pmtiles`
+- `hamburg.pmtiles`
+
+Damit wird klar unterschieden zwischen Large scale und local scale.
 
 ---
 
@@ -197,6 +215,17 @@ weltgewebe-basemap
 
 ### 3.2 map-style repo
 
+MapLibre `style.json` ist Teil des `map-style` repositories.
+
+Style-Ownership ist wichtig, weil:
+
+- Glyphs
+- Sprites
+- Layer order
+- Color palette
+
+sonst wieder fremd kontrolliert werden.
+
 ```text
 weltgewebe-map-style
  ├─ style.json
@@ -234,6 +263,12 @@ wget https://download.geofabrik.de/europe-latest.osm.pbf
 ### Schritt 2
 
 Tiles generieren
+
+Recommended build environment:
+
+- RAM: 32-64 GB
+- Storage: 100 GB
+- CPU: multi-core
 
 ```bash
 planetiler \
@@ -294,16 +329,36 @@ Style:
 }
 ```
 
+### MapLibre Layer Order
+
+MapLibre Layer Order:
+
+1. Basemap layers
+2. Graph edges
+3. Activity layers
+4. Nodes (DOM markers)
+5. Focus / highlight
+
 ---
 
 ## 6. Overlay-Philosophie
 
-Basemap enthält nur:
+Basemap enthält:
 
-- roads
+- landcover
 - water
-- landuse
-- labels
+- roads
+- administrative boundaries
+- place labels
+
+Basemap enthält NICHT:
+
+- domain nodes
+- graph edges
+- activity layers
+- semantic overlays
+
+Strikte Trennung. Das verhindert später die Frage: "Packen wir das noch in die Basemap?"
 
 Weltgewebe enthält:
 
@@ -312,8 +367,6 @@ Weltgewebe enthält:
 - activity
 - focus
 - komposition
-
-Strikte Trennung.
 
 ---
 
