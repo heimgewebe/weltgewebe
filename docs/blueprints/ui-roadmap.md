@@ -81,12 +81,15 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
 - [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
 
-### [x] Roadmap PR 5 — EdgePanel ausbauen
+### [ ] Roadmap PR 5 — EdgePanel ausbauen
+
+> Aktueller Stand: UI-Fortschritt im EdgePanel ist lokal abgeschlossen (Typ, Beschreibung, Teilnehmer, Zeitlichkeit). Die Remote-Backend-Infrastruktur unterstützt jedoch noch keinen konsistenten Edge-Detailpfad (z.B. `/api/edges/:id`), daher wird die Funktionalität lokal/demo-tauglich gehalten, die Architektur-Parität ist jedoch noch offen.
 
 - [x] Typ und Beschreibung ergänzen
 - [x] Zeitlichkeit konkretisieren
 - [x] Beteiligte Garnrollen ergänzen
 - [x] Quelle/Ziel sauber modellieren
+- [ ] Remote-Backend: Echten Edge-Detail-Endpoint (`/api/edges/:id`) implementieren und anbinden
 
 ⸻
 

@@ -3,9 +3,24 @@
   import { onDestroy } from 'svelte';
 
   // To support static builds and dynamic API switching similar to NodePanel
-  const API_BASE = import.meta.env.VITE_API_BASE || '';
+  const API_BASE = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '';
 
-  let edgeDetails: any = null;
+  interface EdgeParticipantDetails {
+    id: string;
+    title: string;
+    type?: string;
+  }
+
+  interface EdgeDetails {
+    id: string;
+    edge_kind: string;
+    note?: string;
+    created_at?: string;
+    source_details?: EdgeParticipantDetails | null;
+    target_details?: EdgeParticipantDetails | null;
+  }
+
+  let edgeDetails: EdgeDetails | null = null;
   let isLoadingDetails = false;
   let abortController: AbortController | null = null;
   let lastSelectionId: string | null = null;
@@ -14,7 +29,7 @@
   $: {
     const currentSelectionId = $selection?.id || null;
 
-    if (currentSelectionId && currentSelectionId !== lastSelectionId) {
+    if (currentSelectionId !== lastSelectionId) {
       lastSelectionId = currentSelectionId;
       edgeDetails = null;
       isLoadingDetails = false;
@@ -22,36 +37,39 @@
       // Cancel any ongoing fetch if selection changes rapidly
       if (abortController) {
         abortController.abort();
+        abortController = null;
       }
 
-      isLoadingDetails = true;
-      abortController = new AbortController();
-      const currentReqId = currentSelectionId;
+      if (currentSelectionId) {
+        isLoadingDetails = true;
+        abortController = new AbortController();
+        const currentReqId = currentSelectionId;
 
-      const endpoint = API_BASE ? `${API_BASE}/api/edges/${currentSelectionId}` : `/api/edge/${currentSelectionId}`;
+        const endpoint = API_BASE ? `${API_BASE}/api/edges/${currentSelectionId}` : `/api/edge/${currentSelectionId}`;
 
-      fetch(endpoint, {
-        signal: abortController.signal
-      })
-        .then((res) => {
-          if (res.ok) return res.json();
-          throw new Error('Failed to load edge details');
+        fetch(endpoint, {
+          signal: abortController.signal
         })
-        .then((data) => {
-          if (currentSelectionId === currentReqId) {
-            edgeDetails = data;
-          }
-        })
-        .catch((err) => {
-          if (err.name !== 'AbortError') {
-            console.error(err);
-          }
-        })
-        .finally(() => {
-          if (currentSelectionId === currentReqId) {
-            isLoadingDetails = false;
-          }
-        });
+          .then((res) => {
+            if (res.ok) return res.json();
+            throw new Error('Failed to load edge details');
+          })
+          .then((data: EdgeDetails) => {
+            if ($selection?.id === currentReqId) {
+              edgeDetails = data;
+            }
+          })
+          .catch((err) => {
+            if (err.name !== 'AbortError') {
+              console.error(err);
+            }
+          })
+          .finally(() => {
+            if ($selection?.id === currentReqId) {
+              isLoadingDetails = false;
+            }
+          });
+      }
     }
   }
 
@@ -107,7 +125,12 @@
             </li>
           </ul>
         {:else}
-          <p class="ghost">{$selection?.data?.source || 'Unbekannt'}</p>
+          <p class="ghost">
+            {$selection?.data?.source_id || 'Unbekannt'}
+            {#if $selection?.data?.source_type}
+              <span class="participant-role">({$selection?.data?.source_type})</span>
+            {/if}
+          </p>
         {/if}
 
         <p class="target-title"><strong>Ziel:</strong></p>
@@ -121,7 +144,12 @@
             </li>
           </ul>
         {:else}
-          <p class="ghost">{$selection?.data?.target || 'Unbekannt'}</p>
+          <p class="ghost">
+            {$selection?.data?.target_id || 'Unbekannt'}
+            {#if $selection?.data?.target_type}
+              <span class="participant-role">({$selection?.data?.target_type})</span>
+            {/if}
+          </p>
         {/if}
       </div>
     {/if}
