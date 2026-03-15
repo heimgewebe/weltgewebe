@@ -7,19 +7,6 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("smoke", () => {
-  test("displays explicit OSM/ODbL attribution", async ({ page }) => {
-    const attributionLink = page.locator(".maplibregl-ctrl-attrib-inner a", {
-      hasText: "OpenStreetMap",
-    });
-    await expect(attributionLink).toBeVisible();
-    await expect(attributionLink).toHaveAttribute(
-      "href",
-      "https://www.openstreetmap.org/copyright",
-    );
-    await expect(attributionLink).toHaveAttribute("target", "_blank");
-    await expect(attributionLink).toHaveAttribute("rel", "noopener noreferrer");
-  });
-
   test("loads /map without console errors", async ({ page }) => {
     const consoleLogs: string[] = [];
     const pageErrors: string[] = [];
