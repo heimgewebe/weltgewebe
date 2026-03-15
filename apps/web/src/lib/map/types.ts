@@ -63,4 +63,7 @@ export interface RenderableMapPoint {
   type?: string;
   modules?: Module[];
   created_at?: string;
+  updated_at?: string;
+  kind?: string;
+  tags?: string[];
 }

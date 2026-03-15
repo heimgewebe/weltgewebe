@@ -33,7 +33,10 @@
     info: n.info,
     type: 'node',
     modules: n.modules,
-    created_at: n.created_at
+    created_at: n.created_at,
+    updated_at: n.updated_at,
+    kind: n.kind,
+    tags: n.tags
   })) satisfies RenderableMapPoint[];
 
   let accountsData: RenderableMapPoint[] = [];
