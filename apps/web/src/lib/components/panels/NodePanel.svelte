@@ -48,7 +48,7 @@
         abortController = new AbortController();
         const currentReqId = currentSelectionId;
 
-        fetch(`${API_BASE}/api/nodes/${currentSelectionId}/`, {
+        fetch(`${API_BASE}/api/node/${currentSelectionId}`, {
           signal: abortController.signal
         })
           .then((res) => {

@@ -8,13 +8,10 @@ const config = {
 
   kit: {
     // Verwende adapter-static, da wir eine SPA bzw. statische Seite bauen:
-    // strict: false ist nötig, solange wir Demo-API-Routen mit prerender=false verwenden,
-    // um Build-Konflikte (File vs Folder bei /api/nodes) zu vermeiden.
-    adapter: adapter({
-      strict: false,
-    }),
+    adapter: adapter(),
 
     prerender: {
+      entries: ['*', '/api/node/b52be17c-4ab7-4434-98ce-520f86290cf0'],
       handleHttpError: ({ path, message }) => {
         // Suppress 404 errors for development-only routes (e.g., /_dev)
         // which are blocked in production builds via +page.server.ts.
