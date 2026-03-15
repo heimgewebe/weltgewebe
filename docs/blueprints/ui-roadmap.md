@@ -67,7 +67,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [x] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt via `/api/nodes/[id]`, was die echten Teilnehmer und den korrekten Verlauf lädt. Die "Gespräch"- und "Anträge"-Tabs wurden explizit als Scaffold belassen, um Feature Creep zu vermeiden (diese benötigen noch komplexere Backend-Integrationen in zukünftigen Schritten).
+> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt zur Vermeidung von Build-Konflikten lokal dynamisch via `/api/node/[id]` und remote gegen das reguläre Listen-Backend via `/api/nodes/[id]`. Diese laden die echten Teilnehmer und den korrekten Verlauf in die Panel-Ansicht. Die "Gespräch"- und "Anträge"-Tabs wurden explizit als Scaffold belassen, um Feature Creep zu vermeiden (diese benötigen noch komplexere Backend-Integrationen in zukünftigen Schritten).
 
 - [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
 - [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)

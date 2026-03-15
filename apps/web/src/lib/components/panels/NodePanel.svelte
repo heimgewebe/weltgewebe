@@ -37,6 +37,8 @@
       lastSelectionId = currentSelectionId;
       activeTab = 'uebersicht';
       nodeDetails = null;
+      // explicitly reset loading state in case the selection was cleared entirely
+      isLoadingDetails = false;
 
       // Cancel any ongoing fetch if selection changes rapidly
       if (abortController) {
