@@ -10,7 +10,7 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
-  import { view, selection, systemState, kompositionDraft, enterFokus, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
+  import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
