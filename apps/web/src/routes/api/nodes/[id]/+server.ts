@@ -7,7 +7,6 @@ import type { RequestEvent } from "@sveltejs/kit";
 // Using 'auto' or 'true' here with a dynamic route without explicitly defining entries
 // breaks the static adapter.
 // Turn off prerender here too to consistently avoid static adapter conflicts.
-// The data fetched here is purely for the demo and works dynamically.
 export const prerender = false;
 
 export function GET({ params }: RequestEvent) {

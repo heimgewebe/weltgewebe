@@ -1,9 +1,7 @@
 <script lang="ts">
   import { selection } from '$lib/stores/uiView';
 
-  import { env } from '$env/dynamic/public';
-
-  const API_BASE = env.PUBLIC_GEWEBE_API_BASE ?? '';
+  const API_BASE = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '';
 
   let activeTab = 'uebersicht';
 
