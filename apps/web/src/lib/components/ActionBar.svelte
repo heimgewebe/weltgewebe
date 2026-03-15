@@ -9,7 +9,6 @@
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
   <button class="action-btn" aria-label="Suche">Suche</button>
   <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
-  <button class="action-btn" aria-label="Mein Konto">Mein Konto</button>
   <button class="action-btn" aria-label="Filter">Filter</button>
 </nav>
 

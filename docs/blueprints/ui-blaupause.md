@@ -268,8 +268,9 @@ Elemente
 
 * Suche
 * Neuer Knoten
-* Mein Konto
 * Filter
+
+Hinweis: Der persönliche Kontoeinstieg befindet sich oben rechts über die Garnrolle, welche als Dropdown-Menü für alle Kontofunktionen (Einstellungen, Login, Logout) dient.
 
 ⸻
 

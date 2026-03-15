@@ -1,6 +1,5 @@
 <script lang="ts">
   import Garnrolle from './Garnrolle.svelte';
-  import AuthStatus from '$lib/auth/AuthStatus.svelte';
   import { contextPanelOpen } from '$lib/stores/uiView';
 </script>
 
@@ -35,7 +34,6 @@
 <div class="topbar" class:panel-open={$contextPanelOpen} role="toolbar" aria-label="Navigation">
   <div class="spacer"></div>
   <div class="actions">
-    <AuthStatus />
     <Garnrolle />
   </div>
 </div>
