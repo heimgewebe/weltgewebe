@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
-import type { RenderableMapPoint } from "../../../routes/map/types";
+import type { RenderableMapPoint } from "$lib/map/types";
 import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
 
 export class NodesOverlay {
@@ -15,8 +15,16 @@ export class NodesOverlay {
 
   constructor(private map: MapLibreMap) {}
 
-  private getMarkerCategory(type: string | undefined): string {
-    return type || "node";
+  private getMarkerCategory(type: string | undefined): "node" | "account" {
+    if (!type) return "node";
+
+    const normalized = type.toLowerCase();
+
+    if (normalized === "account" || normalized === "garnrolle") {
+      return "account";
+    }
+
+    return "node";
   }
 
   public async update(points: RenderableMapPoint[], showNodes: boolean) {

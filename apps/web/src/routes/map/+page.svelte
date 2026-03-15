@@ -8,7 +8,7 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import ContextPanel from '$lib/components/ContextPanel.svelte';
   import ActionBar from '$lib/components/ActionBar.svelte';
-  import type { Edge, RenderableMapPoint } from './types';
+  import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
   import { view, selection, systemState, kompositionDraft, enterFokus, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
   import { authStore } from '$lib/auth/store';
@@ -133,9 +133,9 @@
     }
   }
 
-  let cleanupKomposition: () => void;
-  let cleanupFocus: () => void;
-  let unsubscribeSysState: () => void;
+  let cleanupKomposition: (() => void) | undefined = undefined;
+  let cleanupFocus: (() => void) | undefined = undefined;
+  let unsubscribeSysState: (() => void) | undefined = undefined;
 
   onMount(() => {
     const handleMarkerClick = (e: Event) => {
@@ -207,10 +207,10 @@
     })();
 
     return () => {
-      if (cleanupKomposition) cleanupKomposition();
-      if (cleanupFocus) cleanupFocus();
-      if (unsubscribeSysState) unsubscribeSysState();
-      if (nodesOverlay) nodesOverlay.destroy();
+      cleanupKomposition?.();
+      cleanupFocus?.();
+      unsubscribeSysState?.();
+      nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
     };
