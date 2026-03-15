@@ -15,6 +15,8 @@
   import { isRecord } from '$lib/utils/guards';
 
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
+  import { currentBasemap } from '$lib/map/config/basemap.current';
+  import { resolveBasemapStyle } from '$lib/map/basemap';
 
   export let data: PageData;
 
@@ -287,15 +289,6 @@
     });
   }
 
-  function jumpToDemo() {
-    if (!map) return;
-    map.flyTo({
-      center: [10.0616, 53.5596],
-      zoom: 15,
-      animate: true
-    });
-  }
-
   async function toggleLogin() {
     if ($authStore.authenticated) {
       await authStore.logout();
@@ -349,9 +342,13 @@
       container.addEventListener('click', handleMarkerClick);
       map = new maplibregl.Map({
         container,
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: [10.00, 53.55],
-        zoom: 13
+        style: resolveBasemapStyle(currentBasemap),
+        center: currentBasemap.center,
+        zoom: currentBasemap.zoom,
+        minZoom: currentBasemap.minZoom ?? 10,
+        maxZoom: currentBasemap.maxZoom ?? 18,
+        pitch: currentBasemap.pitch ?? 0,
+        bearing: currentBasemap.bearing ?? 0
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
 
@@ -362,15 +359,6 @@
       const finishLoading = () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
-
-        // Initial flyTo if markers exist
-        if (markersData.length > 0) {
-           map?.flyTo({
-             center: [markersData[0].lon, markersData[0].lat],
-             zoom: 14,
-             animate: true
-           });
-        }
       };
 
       map.on('load', finishLoading);
@@ -553,23 +541,6 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  .demo-btn {
-    position: absolute;
-    bottom: 24px;
-    left: 24px;
-    z-index: 20;
-    padding: 8px 16px;
-    background: var(--surface);
-    border: 1px solid var(--panel-border);
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: bold;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  }
-  .demo-btn:hover {
-    background: var(--panel-bg);
-  }
-
   .debug-badge {
     position: absolute;
     top: 60px;
@@ -607,9 +578,6 @@
   {/if}
   <TopBar />
   <div id="map" bind:this={mapContainer}></div>
-  <button class="demo-btn" on:click={jumpToDemo}>
-    Zur Demo springen
-  </button>
   {#if isLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>

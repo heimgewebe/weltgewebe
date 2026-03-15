@@ -16,6 +16,18 @@ import {
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
+  // intercept MapLibre styling which requires an internet connection in playwright tests
+  await page.route(
+    "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+      });
+    },
+  );
+
   // Track auth state in the mock
   let isAuthenticated = false;
   let currentAccountId: string | null = null;
