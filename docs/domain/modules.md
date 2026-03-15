@@ -45,8 +45,8 @@ Begründung:
 
 | ID                 | Label (de)      | Bedeutung                          |
 | ------------------ | --------------- | ---------------------------------- |
-| `profile`          | Info            | Beschreibung, Kontext, Selbstbild  |
-| `forum`            | Forum           | Diskussion, Austausch, Besprechung |
+| `profile`          | Übersicht       | Beschreibung, Kontext, Selbstbild  |
+| `forum`            | Gespräch        | Diskussion, Austausch, Besprechung |
 | `responsibilities` | Verantwortungen | Zuständigkeiten, Rollen, Aufgaben  |
 
 ## Verwendung

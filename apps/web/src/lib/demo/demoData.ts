@@ -18,10 +18,10 @@ export const demoNodes = [
     created_at: "2025-01-01T12:00:00Z",
     updated_at: "2025-01-01T12:00:00Z",
     modules: [
-      { id: "profile", label: "Info", locked: true, type: "standard" },
+      { id: "profile", label: "Übersicht", locked: true, type: "standard" },
       {
         id: "forum",
-        label: "Forum",
+        label: "Gespräch",
         locked: true,
         type: "standard",
       },
@@ -39,7 +39,7 @@ export const demoAccounts = [
   {
     id: "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
     type: "garnrolle",
-    title: "gewebespinnerAYE",
+    title: "weltgewebeknoten1",
     summary: "Lokale Garnrolle / Account",
     // Public view: Internal location is hidden. Only public_pos is exposed.
     location: {
@@ -56,10 +56,10 @@ export const demoAccounts = [
     created_at: "2025-01-01T12:00:00Z",
     tags: ["account", "garnrolle", "demo"],
     modules: [
-      { id: "profile", label: "Info", locked: true, type: "standard" },
+      { id: "profile", label: "Übersicht", locked: true, type: "standard" },
       {
         id: "forum",
-        label: "Forum",
+        label: "Gespräch",
         locked: true,
         type: "standard",
       },
@@ -115,7 +115,7 @@ export const demoEdges = [
   {
     id: "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
     source_type: "account",
-    // Must match the UUID of gewebespinnerAYE
+    // Must match the UUID of weltgewebeknoten1
     source_id: "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
     target_type: "node",
     // Must match the UUID of fairschenkbox
