@@ -58,14 +58,6 @@
           <p><strong>Erstellt am:</strong> {formatDate($selection?.data?.created_at)}</p>
         {/if}
 
-        {#if $selection?.data?.kind}
-          <p><strong>Art:</strong> {$selection?.data?.kind}</p>
-        {/if}
-
-        {#if $selection?.data?.tags && $selection?.data?.tags.length > 0}
-          <p><strong>Tags:</strong> {$selection?.data?.tags.join(', ')}</p>
-        {/if}
-
         {#if typeof displayLat === 'number' && typeof displayLon === 'number'}
           <p><strong>Koordinaten:</strong> {displayLat.toFixed(5)}, {displayLon.toFixed(5)}</p>
         {/if}
@@ -96,12 +88,6 @@
     {:else if activeTab === 'verlauf'}
       <div class="timeline-placeholder">
         <ul class="timeline">
-          {#if $selection?.data?.updated_at && $selection?.data?.updated_at !== $selection?.data?.created_at}
-          <li>
-            <span class="date">{formatDate($selection?.data?.updated_at)}</span>
-            <span class="event">Knoten aktualisiert.</span>
-          </li>
-          {/if}
           <li>
             <span class="date">{$selection?.data?.created_at ? formatDate($selection?.data?.created_at) : 'Kürzlich'}</span>
             <span class="event">Knoten wurde im Gewebe verankert.</span>
