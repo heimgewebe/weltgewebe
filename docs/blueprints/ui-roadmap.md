@@ -71,7 +71,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 - [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
 - [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)
-- [x] Relevante Datenquellen/API-Pfade klären (`/api/nodes/[id]` als Detail-Endpoint eingeführt und angebunden)
+- [x] Relevante Datenquellen/API-Pfade klären (Lokal: `/api/node/[id]` zur Vermeidung von Static-Build-Konflikten, Remote: `/api/nodes/[id]`)
 - [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
 - [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
 

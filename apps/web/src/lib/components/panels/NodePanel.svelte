@@ -48,7 +48,11 @@
         abortController = new AbortController();
         const currentReqId = currentSelectionId;
 
-        fetch(`${API_BASE}/api/node/${currentSelectionId}`, {
+        // Use plural /api/nodes/[id] if hitting a remote API server
+        // Use singular /api/node/[id] locally to avoid SvelteKit static build file/folder collisions
+        const endpoint = API_BASE ? `${API_BASE}/api/nodes/${currentSelectionId}` : `/api/node/${currentSelectionId}`;
+
+        fetch(endpoint, {
           signal: abortController.signal
         })
           .then((res) => {

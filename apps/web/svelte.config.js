@@ -11,7 +11,6 @@ const config = {
     adapter: adapter(),
 
     prerender: {
-      entries: ["*", "/api/node/b52be17c-4ab7-4434-98ce-520f86290cf0"],
       handleHttpError: ({ path, message }) => {
         // Suppress 404 errors for development-only routes (e.g., /_dev)
         // which are blocked in production builds via +page.server.ts.
