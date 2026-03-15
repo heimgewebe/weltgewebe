@@ -1,32 +1,50 @@
-# Dialektische Erörterung
+---
+id: map-blaupause
+title: Basemap Architecture Blueprint
+doc_type: blueprint
+status: draft
+canonicality: canonical
+summary: >
+  Architecture blueprint for a sovereign basemap stack based on
+  MapLibre, PMTiles and a reproducible tile generation pipeline
+  for Weltgewebe overlays.
+---
 
-## These
+# Basemap Architecture Blueprint
+
+## Context
 
 Wenn die Karte der Kern des Systems ist, sollte sie vollständig souverän betrieben werden:
 eigene Daten → eigenes Tile-Artefakt → eigener Stil → eigener Hosting-Pfad.
 Das führt zu einer Architektur MapLibre + PMTiles + eigener Pipeline.
+Die Karte wird als Kerninfrastruktur und nicht als UI-Service betrachtet.
 
-## Antithese
+## Current State
+
+The current implementation uses MapLibre with an external basemap style.
+The basemap is currently treated as an external dependency.
+This blueprint defines the target architecture for replacing that dependency
+with a sovereign PMTiles-based basemap pipeline.
+
+## Trade-offs
 
 Zu frühe Souveränität kann operative Komplexität erzeugen:
 Tile-Builds, OSM-Updates, Style-Assets, CDN-Konfiguration.
-Viele Projekte verlieren hier Geschwindigkeit.
+Viele Projekte verlieren hier Geschwindigkeit, was bei selbst gehosteten Basemaps bedacht werden muss.
 
-## Synthese
+## Design Principles
 
 Die ideale Blaupause ist souverän, aber modular:
 
-1. Basemap ist Artefakt, kein Service.
-2. Hosting ist serverlos möglich (PMTiles).
-3. Pipeline ist reproduzierbar.
-4. MapLibre bleibt reine Rendering-Engine.
-5. Weltgewebe-Overlays bleiben komplett entkoppelt.
+- Basemap is an artifact, not a service
+- Hosting can be serverless (PMTiles)
+- Pipeline must be reproducible
+- MapLibre is only the rendering engine
+- Overlays remain fully decoupled
 
-Damit erhältst du Souveränität ohne Architekturbruch.
+Damit erhält man Souveränität ohne Architekturbruch.
 
 ---
-
-# Ideale Basemap-Blaupause für Weltgewebe
 
 ## 1. Systemarchitektur
 
@@ -153,7 +171,7 @@ Cloudflare CDN
 
 ## 3. Repositories (empfohlene Struktur)
 
-Im Heimgewebe-Kosmos würde ich trennen:
+Im Heimgewebe-Kosmos ist eine Trennung sinnvoll:
 
 - weltgewebe-basemap
 - weltgewebe-map-style
@@ -359,23 +377,7 @@ local pmtiles
 
 ---
 
-## 11. Risiken
-
-Speicher
-
-Europa Tileset:
-
-10-20 GB
-
-Buildzeit
-
-Planet:
-
-mehrere Stunden
-
----
-
-## 12. Alternative Sinnachse
+## 11. Alternative Sinnachse
 
 Langfristig könnte Weltgewebe mehrere Kartenprojektionen haben:
 
@@ -390,7 +392,7 @@ Die Basemap ist dann nur eine Projektion des Wissensraums.
 
 ## Essenz
 
-Die ideale Basemap-Architektur für euch ist:
+Die ideale Basemap-Architektur für das System ist:
 
 MapLibre
    +
@@ -411,34 +413,17 @@ Das liefert:
 
 ---
 
-## Unsicherheitsgrad
+## Risks
 
-0.17
-
-Ursachen:
-
-- genaue Region noch offen
-- Infrastrukturentscheidung (Cloud vs Heimserver)
+- Tile generation pipeline complexity
+- OSM update management
+- Storage size of regional tilesets (Europa Tileset: 10-20 GB)
+- Buildzeit (Planet: mehrere Stunden)
 
 ---
 
-## Interpolationsgrad
+## Assumptions
 
-0.14
-
-Annahmen:
-
-- langfristiger Plattformanspruch
-- Heimserver-Integration
-- MapLibre bleibt Rendering-Engine
-
----
-
-Humorvolle Erkenntnis zum Schluss:
-
-Die meisten Webkarten behandeln die Basemap wie Tapete.
-
-Du dagegen behandelst sie wie Fundament.
-
-Das ist ungefähr der Unterschied zwischen
-einem IKEA-Regal und einer Kathedrale.
+- Long-term platform ownership of the basemap
+- Integration with Heimserver infrastructure
+- MapLibre remains the rendering engine
