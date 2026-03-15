@@ -67,7 +67,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [ ] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-*(Aktueller Stand: UI-Strukturen und Tabs wurden als Scaffold vorbereitet, Modul-Labels synchronisiert. Die Anbindung an echte Domain-Objekte und Backend-APIs im Fokuspfad ist noch offen.)*
+> Aktueller Stand: UI-Strukturen und Tabs wurden als Scaffold vorbereitet, Modul-Labels synchronisiert. Die Anbindung an echte Domain-Objekte und Backend-APIs im Fokuspfad ist noch offen.
 
 - [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten)
 - [ ] Gesprächs-Tab mit echter Gesprächsansicht

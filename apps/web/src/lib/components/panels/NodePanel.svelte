@@ -28,8 +28,11 @@
     }
   }
 
-  $: displayLat = $selection?.data?.location?.lat ?? $selection?.lat;
-  $: displayLon = $selection?.data?.location?.lon ?? $selection?.lng;
+  // Typecast or fallback carefully since $selection type doesn't formally export .lat/.lng at the root
+  // even though MapPoint might contain them at runtime
+  $: selectionData = $selection?.data as any;
+  $: displayLat = selectionData?.location?.lat ?? selectionData?.lat;
+  $: displayLon = selectionData?.location?.lon ?? selectionData?.lon;
 </script>
 
 <div class="node-mode">
