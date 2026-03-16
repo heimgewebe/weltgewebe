@@ -68,7 +68,9 @@ fi
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
 # Using a pinned docker image to ensure a deterministic toolchain without requiring local java/planetiler installation
 # Using --user to prevent creating root-owned files in the host build directory
+# Enforcing linux/amd64 platform to match the specific toolchain digest
 docker run --rm \
+  --platform linux/amd64 \
   --user "$(id -u):$(id -g)" \
   -v "$BASEMAP_DIR":/data \
   "$PLANETILER_IMAGE" \
