@@ -57,4 +57,25 @@ test.describe("Version Diagnostics", () => {
     // The timestamp element should not be rendered if built_at is missing
     await expect(page.locator('[data-testid="version-date"]')).toHaveCount(0);
   });
+
+  test("remains stable and hides timestamp if built_at is invalid", async ({
+    page,
+  }) => {
+    await page.route("**/_app/version.json", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: "test-build-invalid-date",
+          built_at: "not-a-valid-date",
+        }),
+      });
+    });
+
+    await page.goto("/settings");
+    await expect(page.locator('[data-testid="version-text"]')).toHaveText(
+      "Build test-build-invalid-date",
+    );
+    await expect(page.locator('[data-testid="version-date"]')).toHaveCount(0);
+  });
 });

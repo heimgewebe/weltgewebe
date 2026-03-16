@@ -12,6 +12,8 @@
   let versionData: VersionData | null = null;
   let loading = true;
   let error = false;
+  let displayText = 'Wird geladen...';
+  let builtAtText: string | null = null;
 
   onMount(async () => {
     try {
@@ -27,29 +29,53 @@
     }
   });
 
-  $: displayText = (() => {
-    if (loading) return 'Wird geladen...';
-    if (error || !versionData) return 'Version unbekannt';
-
-    const buildId = versionData.version || versionData.build || versionData.commit;
-    const release = versionData.release;
-
-    if (release && buildId) {
-      return `Release ${release} · Build ${buildId}`;
-    } else if (buildId) {
-      return `Build ${buildId}`;
+  $: {
+    if (loading) {
+      displayText = 'Wird geladen...';
+      builtAtText = null;
+    } else if (error || !versionData) {
+      displayText = 'Version unbekannt';
+      builtAtText = null;
     } else {
-      return 'Version unbekannt';
+      // Prioritize explicit build id sources over generic git commit
+      const buildId = versionData.version || versionData.build || versionData.commit;
+      const release = versionData.release;
+
+      if (release && buildId) {
+        displayText = `Release ${release} · Build ${buildId}`;
+      } else if (buildId) {
+        displayText = `Build ${buildId}`;
+      } else {
+        displayText = 'Version unbekannt';
+      }
+
+      if (versionData.built_at) {
+        const date = new Date(versionData.built_at);
+        if (!isNaN(date.getTime())) {
+          builtAtText = new Intl.DateTimeFormat('de-DE', {
+            timeZone: 'UTC',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          }).format(date);
+        } else {
+          builtAtText = null;
+        }
+      } else {
+        builtAtText = null;
+      }
     }
-  })();
+  }
 </script>
 
 <div class="version-diagnostics">
   <span class="label">Versionsdiagnose:</span>
   <span class="value" data-testid="version-text">{displayText}</span>
-  {#if versionData?.built_at}
+  {#if builtAtText}
     <span class="timestamp" data-testid="version-date">
-      (gebaut am {new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(versionData.built_at))} UTC)
+      (gebaut am {builtAtText} UTC)
     </span>
   {/if}
 </div>
