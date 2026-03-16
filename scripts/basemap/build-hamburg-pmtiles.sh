@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Scripts for reproducible generation of the sovereign PMTiles basemap artifact.
+# Scripts for operational bootstrap of the sovereign PMTiles basemap artifact.
 # Phase 1: Local generation (Hamburg) with planetiler
 #
-# Reproducibility status:
-# - Pinned Planetiler container version
-# - Explicit host path and user mapping
+# Determinism status:
+# - Pinned Planetiler container version (deterministic toolchain)
+# - Explicit host path and user mapping (reproducible environment)
 # - Tool presence checks
-# - TODO: Pin OSM data source to guarantee identical outputs
+# - OSM input is currently volatile (outputs are not yet strictly reproducible)
 
 # 1. Resolve repo root securely
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -55,9 +55,9 @@ cd "$BASEMAP_DIR"
 if [ ! -f "$OSM_FILE" ]; then
   echo "=> Downloading OSM data for Hamburg ($OSM_FILE)..."
   if [ "$DOWNLOADER" = "wget" ]; then
-    wget -O "$OSM_FILE" "$OSM_URL"
+    wget -qO "$OSM_FILE" "$OSM_URL" || { rm -f "$OSM_FILE"; exit 1; }
   else
-    curl -L -o "$OSM_FILE" "$OSM_URL"
+    curl -fL -o "$OSM_FILE" "$OSM_URL" || { rm -f "$OSM_FILE"; exit 1; }
   fi
 else
   echo "=> OSM data '$OSM_FILE' already exists locally, skipping download."
@@ -65,7 +65,7 @@ fi
 
 # 6. Build the artifact
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
-# Using docker to ensure reproducible builds without requiring local java/planetiler installation
+# Using a pinned docker image to ensure a deterministic toolchain without requiring local java/planetiler installation
 # Using --user to prevent creating root-owned files in the host build directory
 docker run --rm \
   --user "$(id -u):$(id -g)" \
