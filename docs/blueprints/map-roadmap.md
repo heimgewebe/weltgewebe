@@ -16,11 +16,11 @@ summary: >
 
 **Ziel:** Die erste funktionale Pipeline zur Generierung und Bereitstellung eines Artefakts steht.
 
-- [x] Zielregion für ersten Build festlegen (z. B. Hamburg / Germany / Europe)
-- [x] Tile-Generator festlegen (Standard: planetiler)
-- [x] Artefaktformat festlegen (PMTiles)
+- [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
+- [x] Tile-Generator festlegen (Entscheidung: planetiler)
+- [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
-- [x] Basemap-Artefakt erstmals reproduzierbar bauen
+- [x] Basemap-Artefakt erstmals reproduzierbar bauen (mit gepinnten Inputs und Tool-Versionen)
 
 **Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert werden.
 **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
@@ -46,7 +46,7 @@ summary: >
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
-- [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
+- [ ] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
 
 **Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
 **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.
