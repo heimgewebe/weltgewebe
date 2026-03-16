@@ -124,10 +124,10 @@
 
     if (nextIndex !== currentIndex) {
       setTab(tabs[nextIndex]);
-      // Optional: focus the button so it visibly updates
-      const tabList = (e.currentTarget as HTMLElement);
+      const currentButton = e.currentTarget as HTMLElement | null;
+      const tabList = currentButton?.closest('.tabs') as HTMLElement | null;
       if (tabList) {
-        const buttons = tabList.querySelectorAll('button');
+        const buttons = tabList.querySelectorAll('button[role="tab"]');
         if (buttons[nextIndex]) {
           (buttons[nextIndex] as HTMLElement).focus();
         }
@@ -140,11 +140,11 @@
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   <p class="summary">{nodeDetails?.summary || $selection?.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
 
-  <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <div class="tabs" role="tablist" aria-label="Knoten Tabs" on:keydown={handleKeydown}>
+  <div class="tabs" role="tablist" aria-label="Knoten Tabs">
     <button
       class:active={activeTab === 'uebersicht'}
       on:click={() => setTab('uebersicht')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'uebersicht'}
       aria-controls="panel-uebersicht"
@@ -154,6 +154,7 @@
     <button
       class:active={activeTab === 'gespraech'}
       on:click={() => setTab('gespraech')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'gespraech'}
       aria-controls="panel-gespraech"
@@ -163,6 +164,7 @@
     <button
       class:active={activeTab === 'antraege'}
       on:click={() => setTab('antraege')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'antraege'}
       aria-controls="panel-antraege"
@@ -172,6 +174,7 @@
     <button
       class:active={activeTab === 'verlauf'}
       on:click={() => setTab('verlauf')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'verlauf'}
       aria-controls="panel-verlauf"

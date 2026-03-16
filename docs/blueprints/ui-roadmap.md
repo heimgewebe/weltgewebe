@@ -115,8 +115,8 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Keyboard-Navigation für Tabs ergänzen
 - [x] Escape-Verhalten definieren
 - [ ] Fokusmanagement bei Markerwechsel weiter härten
-- [x] `aria-*` für Panel/Tabs/Toolbar prüfen
-- [x] Screenreader-taugliche Rollen nachziehen
+- [x] `aria-*` für Tabs/Tabpanels grundlegend ergänzt
+- [ ] Screenreader-taugliche Rollen vollständig absichern
 
 ⸻
 

@@ -110,9 +110,10 @@
 
     if (nextIndex !== currentIndex) {
       setTab(tabs[nextIndex]);
-      const tabList = (e.currentTarget as HTMLElement);
+      const currentButton = e.currentTarget as HTMLElement | null;
+      const tabList = currentButton?.closest('.tabs') as HTMLElement | null;
       if (tabList) {
-        const buttons = tabList.querySelectorAll('button');
+        const buttons = tabList.querySelectorAll('button[role="tab"]');
         if (buttons[nextIndex]) {
           (buttons[nextIndex] as HTMLElement).focus();
         }
@@ -125,11 +126,11 @@
   <h3>{accountDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   <p class="summary">{accountDetails?.summary || $selection?.data?.summary || 'Handelnder Akteur im Gewebe.'}</p>
 
-  <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <div class="tabs" role="tablist" aria-label="Garnrollen Tabs" on:keydown={handleKeydown}>
+  <div class="tabs" role="tablist" aria-label="Garnrollen Tabs">
     <button
       class:active={activeTab === 'profil'}
       on:click={() => setTab('profil')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'profil'}
       aria-controls="panel-profil"
@@ -139,6 +140,7 @@
     <button
       class:active={activeTab === 'aktivitaet'}
       on:click={() => setTab('aktivitaet')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'aktivitaet'}
       aria-controls="panel-aktivitaet"
@@ -148,6 +150,7 @@
     <button
       class:active={activeTab === 'knoten'}
       on:click={() => setTab('knoten')}
+      on:keydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === 'knoten'}
       aria-controls="panel-knoten"
