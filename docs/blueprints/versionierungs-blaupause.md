@@ -70,7 +70,7 @@ Pflichtfelder:
 
 ```json
 {
-  "build": "4f9a0e3-1742155012000",
+  "version": "4f9a0e3-1742155012000",
   "built_at": "2026-03-16T20:10:12Z"
 }
 ```
@@ -79,7 +79,7 @@ Empfohlen:
 
 ```json
 {
-  "build": "4f9a0e3-1742155012000",
+  "version": "4f9a0e3-1742155012000",
   "built_at": "2026-03-16T20:10:12Z",
   "commit": "4f9a0e3"
 }
@@ -95,7 +95,7 @@ Optional, nur wenn sauber ableitbar:
 
 ### 2.3 Semantik der Felder
 
-#### build
+#### version
 
 Technische Build-ID. Soll sich pro realem Build/Deploy zuverlässig ändern.
 
@@ -116,7 +116,7 @@ Nur verwenden, wenn das Repo bereits einen sauberen fachlichen Release-Begriff h
 - Keine Platzhalter.
 - Keine geratenen Werte.
 - Keine Vermischung von Produktversion und technischer Build-ID.
-- Kein stilles Weglassen von `build`, wenn `commit` fehlt.
+- Kein stilles Weglassen von `version`, wenn `commit` fehlt.
 
 ## 3. Build-Pipeline
 
@@ -164,7 +164,7 @@ In `apps/web/package.json`:
 Erfüllt, wenn:
 
 - `pnpm build` reproduzierbar `build/_app/version.json` erzeugt.
-- Die Datei `build` und `built_at` enthält.
+- Die Datei `version` und `built_at` enthält.
 - Die Datei dort liegt, wo Caddy sie real ausliefert.
 
 ## 4. Edge-/Caddy-Semantik
@@ -213,7 +213,7 @@ Erfüllt, wenn:
 - **Schritt 4 — immutable header korrekt:** `immutable`, `max-age=31536000`.
 - **Schritt 5 — version endpoint erreichbar:** `/_app/version.json`, HTTP 200.
 - **Schritt 6 — version endpoint ungecached:** `Cache-Control: no-store`.
-- **Schritt 7 — version payload semantisch gültig:** JSON parsebar, `build` vorhanden und nicht leer, optional `built_at` parsebar.
+- **Schritt 7 — version payload semantisch gültig:** JSON parsebar, `version` vorhanden und nicht leer, optional `built_at` parsebar.
 
 ### 5.3 Fehlersemantik
 
@@ -222,7 +222,7 @@ Erfüllt, wenn:
 - Endpoint fehlt.
 - Falscher Header.
 - JSON kaputt.
-- `build` fehlt.
+- `version` fehlt.
 
 ### 5.4 REQUIRE_FRONTEND
 
@@ -367,9 +367,9 @@ und zeigt einen Hinweis an.
 ### Phase A — Basis konsolidieren
 
 - [ ] Prüfen, ob `build/_app/version.json` bereits deterministisch erzeugt wird.
-- [ ] Schema minimal halten: `build`, `built_at`, optional `commit`.
+- [ ] Schema minimal halten: `version`, `built_at`, optional `commit`.
 - [ ] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
-- [ ] Prüfen, ob `version` als Feld noch nötig ist oder ob `build` als kanonisches Feld ausreicht.
+- [ ] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
 - [ ] Build-Integration in `apps/web/package.json` verifizieren.
 
 **Stop-Kriterium:** `pnpm build` erzeugt reproduzierbar `build/_app/version.json`.
@@ -386,7 +386,7 @@ und zeigt einen Hinweis an.
 ### Phase C — Deploy-Verify finalisieren
 
 - [ ] `weltgewebe-up` auf harte Prüfung von `version.json` ausrichten.
-- [ ] `build`-Feld als Pflicht prüfen.
+- [ ] `version`-Feld als Pflicht prüfen.
 - [ ] Bei invalidem JSON klar scheitern.
 - [ ] `REQUIRE_FRONTEND`-Override validieren.
 - [ ] Leeren oder ungültigen `REQUIRE_FRONTEND` fail fast behandeln.
@@ -404,16 +404,23 @@ und zeigt einen Hinweis an.
 
 **Stop-Kriterium:** Die Vertragsmatrix ist vollständig und stabil.
 
-### Phase E — UI-Diagnose (PR 2)
+### Phase E — UI-Diagnose (bereits implementiert)
 
-- [ ] `VersionDiagnostics.svelte` oder äquivalent sauber integrieren.
-- [ ] `build` sichtbar machen.
-- [ ] Optional `release`.
-- [ ] `built_at` nur bei validem Datum anzeigen.
-- [ ] Fallback auf "Version unbekannt".
-- [ ] Playwright/Svelte-Tests für valid/fail/invalid-date.
+Status: implementiert
+
+Referenzen:
+
+- `apps/web/src/lib/components/VersionDiagnostics.svelte`
+- `apps/web/tests/version-diagnostics.spec.ts`
+
+- [x] `VersionDiagnostics.svelte` integriert
+- [x] Build-Version in UI sichtbar
+- [x] `built_at` nur bei gültigem Datum anzeigen
+- [x] Fallback "Version unbekannt"
+- [x] Playwright Tests vorhanden
 
 **Stop-Kriterium:** Browser A und Browser B können ihre ausgelieferte Build-ID direkt vergleichen.
+Status: bereits erfüllt.
 
 ### Phase F — Kontrollierte Selbstaktualisierung (PR 3)
 
@@ -447,12 +454,9 @@ und zeigt einen Hinweis an.
 - 22a–22e Tests
 - Doku
 
-### PR 2 — Sichtbare Client-Diagnose
+### PR 2 — UI-Diagnose konsolidieren (bereits umgesetzt)
 
-- Settings-Integration
-- `VersionDiagnostics`-Komponente
-- Frontend-Tests
-- Knappe Doku-Ergänzung
+Status: bereits implementiert
 
 ### PR 3 — Browser-Selbstaktualisierung
 
