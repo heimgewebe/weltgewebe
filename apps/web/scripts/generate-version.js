@@ -9,10 +9,16 @@ if (!existsSync(outDir)) {
 }
 
 let commit = "unknown";
-try {
-  commit = execSync("git rev-parse HEAD").toString().trim();
-} catch {
-  // fallback to unknown if git fails
+if (process.env.GITHUB_SHA) {
+  commit = process.env.GITHUB_SHA;
+} else if (process.env.SOURCE_COMMIT) {
+  commit = process.env.SOURCE_COMMIT;
+} else {
+  try {
+    commit = execSync("git rev-parse HEAD").toString().trim();
+  } catch {
+    // fallback to unknown if git fails
+  }
 }
 
 const buildId = `${commit}-${Date.now()}`;
