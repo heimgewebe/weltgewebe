@@ -97,12 +97,12 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ## Phase 4 — Mittelfristig: Suche, Filter, Bedienbarkeit
 
-### [ ] Roadmap PR 6 — Suche als Panel-Modus umsetzen
+### [x] Roadmap PR 6 — Suche als lokaler Modus (ActionBar) umsetzen
 
-- [ ] Suchfeld in ActionBar/TopBar einziehen
-- [ ] Ergebnisse im Kontextpanel rendern
+- [x] Suchfeld in ActionBar/TopBar einziehen
+- [x] Ergebnisse lokal über der ActionBar rendern (ohne Konflikt mit ContextPanel)
 - [ ] Treffer auf der Karte markieren
-- [ ] *Search als Panel-/lokalen Modus halten, nicht als vierten Global-State modellieren*
+- [x] *Search als lokalen Modus halten, nicht als vierten Global-State modellieren*
 
 ### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
 
@@ -124,7 +124,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig für die langfristige Gesundheit.
 
-### [ ] Doku-Pflege
+### [x] Doku-Pflege (teilweise)
 
 - [ ] `ui-state-machine.md` besser in die Doku-Navigation einhängen
 - [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
@@ -132,6 +132,6 @@ Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig f
 
 ### [ ] Strukturpflege
 
-- [ ] `+page.svelte` weiter entlasten, falls wieder zu schwer
+- [x] `+page.svelte` weiter entlasten (Suche als eigenes Overlay extrahiert)
 - [ ] Gemeinsame Tab-/Panel-Styling-Bausteine prüfen
 - [ ] Optional `uiInvariants.ts` oder ähnliche Trennung einführen, falls Guard komplexer wird

@@ -8,6 +8,7 @@
   import TopBar from '$lib/components/TopBar.svelte';
   import ContextPanel from '$lib/components/ContextPanel.svelte';
   import ActionBar from '$lib/components/ActionBar.svelte';
+  import SearchOverlay from '$lib/components/SearchOverlay.svelte';
   import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
@@ -331,6 +332,7 @@
 
 <main class="shell">
   <ContextPanel />
+  <SearchOverlay {markersData} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
