@@ -75,7 +75,9 @@ test.describe("Search mode", () => {
 
     // Clear search and verify highlight is removed
     await searchInput.fill("");
-    await expect(page.locator('.map-marker[data-search-match="true"]')).toHaveCount(0);
+    await expect(
+      page.locator('.map-marker[data-search-match="true"]'),
+    ).toHaveCount(0);
 
     // Refill and proceed
     await searchInput.fill("Strick");
