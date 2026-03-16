@@ -20,7 +20,8 @@ summary: >
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
-- [ ] Basemap-Artefakt erstmals reproduzierbar bauen (Tool-Basis gepinnt, aber OSM-Input-Pin fehlt noch)
+- [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
+- [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
 **Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert werden.
 **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
