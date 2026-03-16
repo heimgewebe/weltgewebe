@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("Search mode", () => {
-  // Use mock data to ensure we have results instead of relying on the backend
   test.beforeEach(async ({ page }) => {
-    // Override the API response for nodes to guarantee data
-    await page.route("/api/nodes", async (route) => {
+    await mockApiResponses(page);
+
+    await page.route("**/api/nodes", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -22,26 +23,19 @@ test.describe("Search mode", () => {
       });
     });
 
-    await page.route("/api/accounts", async (route) => {
+    await page.route("**/api/node/mock-node-1", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([]),
-      });
-    });
-
-    await page.route("/api/edges", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: "[]",
-      });
-    });
-    await page.route("/api/auth/me", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: '{"authenticated": false}',
+        body: JSON.stringify({
+          id: "mock-node-1",
+          title: "Abendliches Stricken",
+          summary: "Wir stricken gemeinsam",
+          kind: "Treffen",
+          location: { lat: 51, lon: 10 },
+          modules: [],
+          created_at: new Date().toISOString(),
+        }),
       });
     });
   });
@@ -80,7 +74,11 @@ test.describe("Search mode", () => {
     const contextPanel = page.locator('[data-testid="context-panel"]');
     await expect(contextPanel).toBeVisible();
     await expect(page.locator(".context-panel .panel-header h2")).toContainText(
-      /Knoten|Garnrolle/,
+      /Knoten/,
     );
+
+    // Also verify search field was cleared
+    await searchBtn.click();
+    await expect(searchInput).toHaveValue("");
   });
 });

@@ -124,7 +124,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig für die langfristige Gesundheit.
 
-### [x] Doku-Pflege (teilweise)
+### [ ] Doku-Pflege
 
 - [ ] `ui-state-machine.md` besser in die Doku-Navigation einhängen
 - [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden

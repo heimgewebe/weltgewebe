@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
   import { enterFokus, contextPanelOpen } from '$lib/stores/uiView';
   import type { RenderableMapPoint } from '$lib/map/types';
@@ -8,13 +9,16 @@
   let inputEl: HTMLInputElement;
 
   // focus on input when search opens
-  $: if ($isSearchOpen && inputEl) {
-    // using requestAnimationFrame or tick to wait for DOM update
-    setTimeout(() => {
-      inputEl.focus();
-    }, 50);
+  $: if ($isSearchOpen) {
+    (async () => {
+      await tick();
+      if ($isSearchOpen && inputEl) {
+        inputEl.focus();
+      }
+    })();
   }
 
+  let filteredResults: RenderableMapPoint[] = [];
   $: filteredResults = $searchQuery.trim().length > 0
     ? markersData.filter(m => {
         const titleMatch = m.title?.toLowerCase().includes($searchQuery.toLowerCase());
@@ -23,13 +27,21 @@
       }).slice(0, 10)
     : [];
 
+  function toSupportedSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
+    if (type === 'node' || type === 'account' || type === 'garnrolle') {
+      return type;
+    }
+    return 'node';
+  }
+
   function onSelect(item: RenderableMapPoint) {
-    const itemType = item.type || 'node';
-    enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
+    const selectionType = toSupportedSelectionType(item.type);
+    enterFokus({ type: selectionType, id: item.id, data: item });
     closeSearch();
   }
 
   function handleKeydown(e: KeyboardEvent) {
+    if (!$isSearchOpen) return;
     if (e.key === 'Escape') {
       closeSearch();
     }
