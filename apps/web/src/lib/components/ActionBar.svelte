@@ -1,13 +1,18 @@
 <script lang="ts">
   import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
+  import { toggleSearch, isSearchOpen } from '$lib/stores/searchStore';
 
   function onNewNode() {
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
   }
+
+  function onToggleSearch() {
+    toggleSearch();
+  }
 </script>
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
-  <button class="action-btn" aria-label="Suche">Suche</button>
+  <button class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
   <button class="action-btn" aria-label="Filter">Filter</button>
 </nav>
@@ -41,6 +46,11 @@
 
   .action-btn:hover {
     background: rgba(0,0,0,0.05);
+  }
+
+  .action-btn.active {
+    background: var(--accent, #ff8c42);
+    color: var(--bg, #fff);
   }
 
   /* Desktop: adjust layout slightly if needed */
