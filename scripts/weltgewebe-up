@@ -637,10 +637,22 @@ else
 fi
 
 # 6. Frontend Requirement Logic
-if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-  export REQUIRE_FRONTEND=0
+if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
+  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
+    export REQUIRE_FRONTEND=0
+  else
+    export REQUIRE_FRONTEND=1
+  fi
 else
-  export REQUIRE_FRONTEND=1
+  case "$REQUIRE_FRONTEND" in
+    0|1)
+      # valid explicit override
+      ;;
+    *)
+      echo "ERROR: REQUIRE_FRONTEND must be '0' or '1' (got '${REQUIRE_FRONTEND}')." >&2
+      exit 1
+      ;;
+  esac
 fi
 
 # 6b. Frontend Build
