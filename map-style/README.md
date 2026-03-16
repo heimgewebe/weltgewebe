@@ -8,13 +8,13 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 
 ## Structure
 
-*   `style.json`: The standard MapLibre style document.
-*   `colors.json`: High-level color definitions and palette.
-*   `glyphs/`: (Placeholder) Local, self-hosted font stacks in PBF format to prevent external font service dependencies.
-*   `sprites/`: (Placeholder) Local, self-hosted icons and sprites.
+* `style.json`: The standard MapLibre style document.
+* `colors.json`: High-level color definitions and palette.
+* `glyphs/`: (Placeholder) Local, self-hosted font stacks in PBF format to prevent external font service dependencies.
+* `sprites/`: (Placeholder) Local, self-hosted icons and sprites.
 
 ## Next Steps
 
-1.  Generate and store sovereign fonts (glyphs) to replace default remote font stacks.
-2.  Build the custom sprites needed for POIs or specific basemap markers.
-3.  Load this `style.json` natively in the MapLibre client once the PMTiles protocol is registered.
+1. Generate and store sovereign fonts (glyphs) to replace default remote font stacks.
+2. Build the custom sprites needed for POIs or specific basemap markers.
+3. Load this `style.json` natively in the MapLibre client once the PMTiles protocol is registered.
