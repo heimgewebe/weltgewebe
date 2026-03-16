@@ -86,7 +86,7 @@ export function updateEdges(
           "line-dasharray": [2, 1],
         },
       },
-      firstSymbolId
+      firstSymbolId,
     );
   }
 }
