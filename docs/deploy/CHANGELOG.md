@@ -12,6 +12,19 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
+## 2026-03-16 - Canonical Build ID Diagnostic Route
+
+**Ursprung / Referenz:** Frontend Deploy Invariants
+
+**Geänderte Dateien:**
+- `infra/caddy/Caddyfile.heim`
+
+**Beschreibung:**
+- Added a diagnostic route to serve `/_app/version.json` with a strict `no-store` cache control policy.
+- This ensures the deployment verification script (`weltgewebe-up`) can reliably read the technical frontend version generated during the build step without caching interference.
+
+---
+
 ## 2026-03-08 - NATS Healthcheck & JetStream-Persistenz korrigiert
 
 **Ursprung / Referenz:** Heimserver-Entscheidung (vollwertiger Stack)
