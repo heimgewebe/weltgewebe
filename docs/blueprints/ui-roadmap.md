@@ -112,11 +112,11 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [ ] Roadmap PR 8 — A11y und Keyboard-Navigation
 
-- [ ] Keyboard-Navigation für Tabs ergänzen
+- [x] Keyboard-Navigation für Tabs ergänzen
 - [x] Escape-Verhalten definieren
 - [ ] Fokusmanagement bei Markerwechsel weiter härten
-- [ ] `aria-*` für Panel/Tabs/Toolbar prüfen
-- [ ] Screenreader-taugliche Rollen nachziehen
+- [x] `aria-*` für Panel/Tabs/Toolbar prüfen
+- [x] Screenreader-taugliche Rollen nachziehen
 
 ⸻
 
