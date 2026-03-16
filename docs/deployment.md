@@ -33,6 +33,8 @@ A successful frontend build does *not* automatically guarantee a successful depl
 
 To enforce correct runtime state, the deploy pipeline includes an active guard. After building the UI, `weltgewebe-up` verifies that the `edge-caddy` container can genuinely read the critical build artifacts (`test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app`). If this check fails, the pipeline forces a refresh of the edge deployment stack to restore the `edge-caddy` mount coupling, provided frontend delivery is required for the current deploy run.
 
+> **Note on Verification**: The deployment script infers the need for frontend validation dynamically (e.g. from `ENABLE_CADDY`). For deterministic testing or reproducible diagnostic runs, the environment variable `REQUIRE_FRONTEND=1` can be explicitly set to force the script into the frontend validation path regardless of the detected infrastructure state.
+
 ### Client-Cache-Kohärenz
 
 Server-side correctness does not intrinsically prevent browsers from rendering stale application states due to aggressive caching. To reduce client divergence and make cache behavior deterministic at the delivery layer, the infrastructure implements distinct caching strategies based on the asset type:

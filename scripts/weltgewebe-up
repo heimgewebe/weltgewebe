@@ -637,10 +637,12 @@ else
 fi
 
 # 6. Frontend Requirement Logic
-if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-  export REQUIRE_FRONTEND=0
-else
-  export REQUIRE_FRONTEND=1
+if [[ -z "${REQUIRE_FRONTEND+x}" ]]; then
+  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
+    export REQUIRE_FRONTEND=0
+  else
+    export REQUIRE_FRONTEND=1
+  fi
 fi
 
 # 6b. Frontend Build
