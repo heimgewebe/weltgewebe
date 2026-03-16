@@ -75,7 +75,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
 - [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
 
-### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
+### [x] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
 > Aktueller Stand: Im Demo-/Scaffold-Scope funktional abgeschlossen. Basisdaten, Aktivitäten und Knotenlisten sind demo-basiert integriert, die tiefergehende Domänenintegration bleibt jedoch explizit offen.
 
