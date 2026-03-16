@@ -39,7 +39,9 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
 
 1. **Revalidating Routing (HTML/Root)**: Core HTML entrypoints (e.g. `index.html`, `/map`) strictly use `Cache-Control: no-cache, must-revalidate` to ensure browsers always check for the latest application shell upon load.
 2. **Aggressive Caching (Immutable Assets)**: Hashed internal assets located under `/_app/immutable/` are served with `Cache-Control: public, max-age=31536000, immutable`.
-3. **Build Diagnosis**: `/_app/version.json` acts as the technical diagnostic source for the currently deployed frontend build in Heimserver deployments. It is strictly served with `no-store` via the `Caddyfile.heim` routing to ensure the browser always retrieves the current server state without caching interference.
+3. **Build Diagnosis**: When present, `/_app/version.json` provides a machine-readable build identifier capable of diagnosing client-vs-server build discrepancies.
+   - **Client-visible diagnostics**: The technical build identifier is also shown directly in the Settings UI.
+   - **Primary use**: Enables immediate comparison of delivered versions across clients (for example, Browser A vs. Browser B).
 
 *Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely.*
 
