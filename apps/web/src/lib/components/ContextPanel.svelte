@@ -32,6 +32,8 @@
           }
         });
       }
+    } else {
+      lastSelectionId = null;
     }
   }
 </script>

@@ -146,6 +146,59 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel.locator(".state-set")).toContainText("Ort gesetzt");
   });
 
+  test("Panel header receives focus when opening, switching and reopening", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+
+    // 1. Open first marker and check focus
+    await page.evaluate(() => {
+      const markers = document.querySelectorAll(".map-marker");
+      if (markers.length > 0) {
+        (markers[0] as HTMLElement).dispatchEvent(
+          new MouseEvent("click", { bubbles: true }),
+        );
+      }
+    });
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Check if the h2 header inside the panel is focused
+    const header = panel.locator("header h2");
+    await expect(header).toBeFocused();
+
+    // 2. Switch to second marker and check focus
+    await page.evaluate(() => {
+      const markers = document.querySelectorAll(".map-marker");
+      if (markers.length > 1) {
+        (markers[1] as HTMLElement).dispatchEvent(
+          new MouseEvent("click", { bubbles: true }),
+        );
+      }
+    });
+
+    // Header should be focused again (it might briefly lose it during re-render, so we expect it to be focused eventually)
+    await expect(header).toBeFocused();
+
+    // 3. Close panel and reopen same marker
+    await panel.locator(".close-btn").click({ force: true });
+    await expect(panel).toHaveCount(0);
+
+    await page.evaluate(() => {
+      const markers = document.querySelectorAll(".map-marker");
+      if (markers.length > 1) {
+        (markers[1] as HTMLElement).dispatchEvent(
+          new MouseEvent("click", { bubbles: true }),
+        );
+      }
+    });
+
+    // The panel header should regain focus upon reopening
+    await expect(panel).toBeVisible();
+    await expect(header).toBeFocused();
+  });
+
   test("Empty map click does not close context panel in komposition mode", async ({
     page,
   }) => {
