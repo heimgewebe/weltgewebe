@@ -6,6 +6,13 @@ weltgewebe.home.arpa {
     reverse_proxy api:8080
   }
 
+  # Phase B: Canonical Build ID (strictly no-store)
+  handle /_app/version.json {
+    root * /srv/weltgewebe-web
+    header Cache-Control "no-store"
+    file_server
+  }
+
   # Phase B: Immutable Assets (aggressive caching)
   handle /_app/immutable/* {
     root * /srv/weltgewebe-web
