@@ -4,7 +4,7 @@
   import { enterFokus, contextPanelOpen } from '$lib/stores/uiView';
   import type { RenderableMapPoint } from '$lib/map/types';
 
-  export let markersData: RenderableMapPoint[] = [];
+  export let filteredResults: RenderableMapPoint[] = [];
 
   let inputEl: HTMLInputElement;
 
@@ -17,15 +17,6 @@
       }
     })();
   }
-
-  let filteredResults: RenderableMapPoint[] = [];
-  $: filteredResults = $searchQuery.trim().length > 0
-    ? markersData.filter(m => {
-        const titleMatch = m.title?.toLowerCase().includes($searchQuery.toLowerCase());
-        const summaryMatch = m.summary?.toLowerCase().includes($searchQuery.toLowerCase());
-        return titleMatch || summaryMatch;
-      }).slice(0, 10)
-    : [];
 
   function toSupportedSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
     if (type === 'node' || type === 'account' || type === 'garnrolle') {

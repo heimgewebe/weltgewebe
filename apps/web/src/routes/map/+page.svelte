@@ -12,6 +12,7 @@
   import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
+  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -89,6 +90,25 @@
 
   $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
 
+  // Search logic moved from SearchOverlay to orchestrator
+  let filteredResults: RenderableMapPoint[] = [];
+  let searchMatchIds = new Set<string>();
+
+  $: {
+    if ($isSearchOpen && $searchQuery.trim().length > 0) {
+      const q = $searchQuery.toLowerCase();
+      filteredResults = markersData.filter(m => {
+        const titleMatch = m.title?.toLowerCase().includes(q);
+        const summaryMatch = m.summary?.toLowerCase().includes(q);
+        return titleMatch || summaryMatch;
+      }).slice(0, 10);
+      searchMatchIds = new Set(filteredResults.map(r => r.id));
+    } else {
+      filteredResults = [];
+      searchMatchIds = new Set();
+    }
+  }
+
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
   let isLoading = true;
@@ -96,9 +116,18 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  // Reactive update for markers
+  // Reactive update for markers and search highlight to avoid asynchronous drift
   $: if (nodesOverlay && markersData && $view) {
-    nodesOverlay.update(markersData, $view.showNodes);
+    (async () => {
+      await nodesOverlay.update(markersData, $view.showNodes);
+      nodesOverlay.updateSearchHighlight(searchMatchIds);
+    })();
+  }
+
+  // Secondary reactive update strictly for when searchMatchIds changes independently.
+  // Re-apply highlight when only searchMatchIds changes, because markersData/view may stay referentially stable.
+  $: if (nodesOverlay) {
+    nodesOverlay.updateSearchHighlight(searchMatchIds);
   }
 
   // Reactive update for edges
@@ -317,6 +346,19 @@
     z-index: 10;
   }
 
+  #map :global(.map-marker.search-highlight) {
+    outline: 2px solid var(--error, #e53e3e);
+    outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+    z-index: 5;
+  }
+
+  #map :global(.marker-account.search-highlight) {
+    outline: 2px solid var(--error, #e53e3e);
+    outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+  }
+
   #map :global(.marker-account:focus-visible) {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
@@ -358,7 +400,7 @@
 
 <main class="shell">
   <ContextPanel />
-  <SearchOverlay {markersData} />
+  <SearchOverlay {filteredResults} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">

@@ -66,6 +66,23 @@ test.describe("Search mode", () => {
     await expect(resultItem.locator(".result-type")).toBeVisible();
     await expect(resultItem.locator(".result-title")).toContainText("Stricken");
 
+    // Verify the map marker gets highlighted
+    const highlightedMarker = page.locator(
+      '.map-marker[data-search-match="true"]',
+    );
+    await expect(highlightedMarker).toBeVisible();
+    await expect(highlightedMarker).toHaveAttribute("data-id", "mock-node-1");
+
+    // Clear search and verify highlight is removed
+    await searchInput.fill("");
+    await expect(
+      page.locator('.map-marker[data-search-match="true"]'),
+    ).toHaveCount(0);
+
+    // Refill and proceed
+    await searchInput.fill("Strick");
+    await expect(resultItem).toBeVisible();
+
     // Click result
     await resultItem.click();
 
