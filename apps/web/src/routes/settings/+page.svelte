@@ -1,5 +1,4 @@
 <script lang="ts">
-  import VersionDiagnostics from '$lib/components/VersionDiagnostics.svelte';
 </script>
 
 <div class="container">
@@ -25,10 +24,6 @@
 
     <p class="coming-soon">🚧 Diese Einstellungen werden bald verfügbar sein.</p>
   </div>
-
-  <div class="card diagnostics-card">
-    <VersionDiagnostics />
-  </div>
 </div>
 
 <style>
@@ -40,5 +35,4 @@
   .setting-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; opacity: 0.6; }
   .disabled { pointer-events: none; }
   .coming-soon { margin-top: 1rem; font-weight: bold; color: var(--accent); }
-  .diagnostics-card { margin-top: 24px; padding: 16px 24px; }
 </style>

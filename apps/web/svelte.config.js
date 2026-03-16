@@ -7,7 +7,7 @@ const config = {
   preprocess: vitePreprocess(),
 
   kit: {
-    // Verwende adapter-static, da wir eine SPA bzw. statische Seite bauen:
+    // adapter-auto ist eine Factory – hier **aufrufen**:
     adapter: adapter(),
 
     prerender: {

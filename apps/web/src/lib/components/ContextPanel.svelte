@@ -9,15 +9,7 @@
   function closePanel() {
     leaveToNavigation();
   }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if ($contextPanelOpen && event.key === 'Escape') {
-      closePanel();
-    }
-  }
 </script>
-
-<svelte:window on:keydown={handleKeydown} />
 
 {#if $contextPanelOpen}
   <aside class="context-panel" data-testid="context-panel">

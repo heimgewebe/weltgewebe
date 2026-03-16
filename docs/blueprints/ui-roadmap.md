@@ -65,33 +65,28 @@ Der aktuelle State-Watcher meldet Verstöße nur; der Unterschied zwischen Warnu
 
 Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause einziehen.
 
-### [x] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 3 — NodePanel mit echten Inhalten ausbauen
 
-> Aktueller Stand: Fokus-Panels wurden inhaltlich auf geladene Domänendaten umgestellt. Die Anbindung erfolgt zur Vermeidung von Build-Konflikten lokal dynamisch via `/api/node/[id]` und remote gegen das reguläre Listen-Backend via `/api/nodes/[id]`. Diese laden die echten Teilnehmer und den korrekten Verlauf in die Panel-Ansicht. Die "Gespräch"- und "Anträge"-Tabs wurden explizit als Scaffold belassen, um Feature Creep zu vermeiden (diese benötigen noch komplexere Backend-Integrationen in zukünftigen Schritten).
+> Aktueller Stand: UI-Strukturen und Tabs wurden als Scaffold vorbereitet, Modul-Labels synchronisiert. Die Anbindung an echte Domain-Objekte und Backend-APIs im Fokuspfad ist noch offen.
 
-- [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
-- [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)
-- [x] Relevante Datenquellen/API-Pfade klären (Lokal: `/api/node/[id]` zur Vermeidung von Static-Build-Konflikten, Remote: `/api/nodes/[id]`)
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
-- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
+- [ ] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad noch offen)
+- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold erhalten, Integration offen)
+- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold erhalten, Integration offen)
+- [ ] Verlauf-Tab mit Timeline/Chronik (Scaffold vorbereitet, Integration echter Daten offen)
+- [ ] Relevante Datenquellen/API-Pfade klären
 
-### [x] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
 
-> Aktueller Stand: Im Demo-/Scaffold-Scope funktional abgeschlossen. Basisdaten, Aktivitäten und Knotenlisten sind demo-basiert integriert, die tiefergehende Domänenintegration bleibt jedoch explizit offen.
+- [ ] Profil mit Kompetenzen/Interessen/Gütern
+- [ ] Aktivität mit Beiträgen/Teilnahmen
+- [ ] Knotenliste mit echten Verknüpfungen
 
-- [x] Profil: Basisdaten integriert (Typ, Tags, Erstellungsdatum), tiefergehende Domänenfelder (Kompetenzen/Güter) offen
-- [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
-- [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
+### [ ] Roadmap PR 5 — EdgePanel ausbauen
 
-### [ ] Roadmap PR 5 — EdgePanel ausbauen (teilweise erledigt)
-
-> Aktueller Stand: UI-Fortschritt im EdgePanel ist lokal abgeschlossen (Typ, Beschreibung, Teilnehmer, Zeitlichkeit). Die Remote-Backend-Infrastruktur unterstützt jedoch noch keinen konsistenten Edge-Detailpfad (z.B. `/api/edges/:id`), daher wird die Funktionalität lokal/demo-tauglich gehalten, die Architektur-Parität ist jedoch noch offen.
-
-- [x] Typ und Beschreibung ergänzen
-- [x] Zeitlichkeit konkretisieren
-- [x] Beteiligte Garnrollen ergänzen
-- [x] Quelle/Ziel sauber modellieren
-- [ ] Remote-Backend: Echten Edge-Detail-Endpoint (`/api/edges/:id`) implementieren und anbinden
+- [ ] Typ und Beschreibung ergänzen
+- [ ] Zeitlichkeit konkretisieren
+- [ ] Beteiligte Garnrollen ergänzen
+- [ ] Quelle/Ziel sauber modellieren
 
 ⸻
 
@@ -112,11 +107,11 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [ ] Roadmap PR 8 — A11y und Keyboard-Navigation
 
-- [x] Keyboard-Navigation für Tabs ergänzen
-- [x] Escape-Verhalten definieren
+- [ ] Keyboard-Navigation für Tabs ergänzen
+- [ ] Escape-Verhalten definieren
 - [ ] Fokusmanagement bei Markerwechsel weiter härten
-- [x] `aria-*` für Tabs/Tabpanels grundlegend ergänzt
-- [ ] Screenreader-taugliche Rollen vollständig absichern
+- [ ] `aria-*` für Panel/Tabs/Toolbar prüfen
+- [ ] Screenreader-taugliche Rollen nachziehen
 
 ⸻
 
