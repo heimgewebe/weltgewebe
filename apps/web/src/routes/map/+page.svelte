@@ -177,10 +177,15 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      const pmtiles = await import('pmtiles');
       const container = mapContainer;
       if (!container) {
         return;
       }
+
+      const protocol = new pmtiles.Protocol();
+      maplibregl.addProtocol('pmtiles', protocol.tile);
+
       container.addEventListener('click', handleMarkerClick);
       map = new maplibregl.Map({
         container,
