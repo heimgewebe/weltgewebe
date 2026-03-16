@@ -177,6 +177,11 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      const pmtiles = await import('pmtiles');
+
+      const protocol = new pmtiles.Protocol();
+      maplibregl.default.addProtocol('pmtiles', protocol.tile);
+
       const container = mapContainer;
       if (!container) {
         return;

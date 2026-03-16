@@ -42,7 +42,7 @@ summary: >
 
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 
-- [ ] PMTiles-Protokoll in MapLibre registrieren
+- [x] PMTiles-Protokoll in MapLibre registrieren
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
