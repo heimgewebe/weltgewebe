@@ -15,7 +15,9 @@
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
-  import { currentBasemap } from '$lib/map/config/basemap.current';
+  import { get } from 'svelte/store';
+
+  import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
   import { resolveBasemapStyle } from '$lib/map/basemap';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
@@ -212,13 +214,37 @@
       const finishLoading = () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
+
+        const currentSelection = get(selection);
+        const currentSystemState = get(systemState);
+
+        if (!currentSelection && currentSystemState === 'navigation') {
+          const currentZoom = map?.getZoom() ?? 14;
+          map?.flyTo({
+            center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
+            zoom: Math.max(currentZoom, 14),
+            speed: 0.8,
+            curve: 1
+          });
+        }
       };
 
-      map.on('load', finishLoading);
-      map.on('error', finishLoading);
+      map.once('load', finishLoading);
+      map.on('error', () => {
+        clearTimeout(loadingTimeout);
+        isLoading = false;
+      });
+
+      // Expose map for testing
+      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+        (window as any).__TEST_MAP__ = map;
+      }
     })();
 
     return () => {
+      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+        delete (window as any).__TEST_MAP__;
+      }
       cleanupKomposition?.();
       cleanupFocus?.();
       cleanupActivity?.();
