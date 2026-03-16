@@ -72,15 +72,15 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Übersicht mit Beschreibung/Beteiligten/Aktivität (echte Daten) (Integration im Fokuspfad umgesetzt)
 - [x] Verlauf-Tab mit Timeline/Chronik (Echte Daten aus der History eingebunden)
 - [x] Relevante Datenquellen/API-Pfade klären (Lokal: `/api/node/[id]` zur Vermeidung von Static-Build-Konflikten, Remote: `/api/nodes/[id]`)
-- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Scaffold bewusst erhalten, Integration auf später verschoben)
-- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Scaffold bewusst erhalten, Integration auf später verschoben)
+- [ ] Gesprächs-Tab mit echter Gesprächsansicht (Fehlt: Komplexe Backend-Integration)
+- [ ] Anträge-Tab mit Vorschlägen/Abstimmungen (Fehlt: Komplexe Backend-Integration)
 
-### [x] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen
+### [ ] Roadmap PR 4 — AccountPanel mit echten Inhalten ausbauen (teilweise erledigt)
 
 > Aktueller Stand: Im Demo-/Scaffold-Scope funktional abgeschlossen. Basisdaten, Aktivitäten und Knotenlisten sind demo-basiert integriert, die tiefergehende Domänenintegration bleibt jedoch explizit offen.
 
-- [x] Profil: Basisdaten integriert (Typ, Tags, Erstellungsdatum), tiefergehende Domänenfelder (Kompetenzen/Güter) offen
-- [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
+- [ ] Profil: Basisdaten integriert (Typ, Tags, Erstellungsdatum), tiefergehende Domänenfelder (Kompetenzen/Güter) offen (Fehlt: Tiefergehende Domänenintegration)
+- [ ] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen (Fehlt: Tiefere Fachintegration)
 - [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
 
 ### [ ] Roadmap PR 5 — EdgePanel ausbauen (teilweise erledigt)
@@ -91,7 +91,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Zeitlichkeit konkretisieren
 - [x] Beteiligte Garnrollen ergänzen
 - [x] Quelle/Ziel sauber modellieren
-- [ ] Remote-Backend: Echten Edge-Detail-Endpoint (`/api/edges/:id`) implementieren und anbinden
+- [ ] Remote-Backend: Echten Edge-Detail-Endpoint (`/api/edges/:id`) implementieren und anbinden (Epistemische Leerstelle: Remote-Backend fehlt im Repo)
 
 ⸻
 
@@ -114,9 +114,9 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 - [x] Keyboard-Navigation für Tabs ergänzen
 - [x] Escape-Verhalten definieren
-- [ ] Fokusmanagement bei Markerwechsel weiter härten
+- [x] Fokusmanagement bei Markerwechsel weiter härten
 - [x] `aria-*` für Tabs/Tabpanels grundlegend ergänzt
-- [ ] Screenreader-taugliche Rollen vollständig absichern
+- [ ] Screenreader-taugliche Rollen vollständig absichern (Fehlt noch)
 
 ⸻
 
