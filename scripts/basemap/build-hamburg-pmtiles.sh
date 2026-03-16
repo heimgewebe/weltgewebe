@@ -4,23 +4,22 @@ set -euo pipefail
 # Scripts for reproducible generation of the sovereign PMTiles basemap artifact.
 # Phase 1: Local generation (Hamburg) with planetiler
 #
-# Reproducibility criteria met:
-# - Pinned OSM data source URL
+# Reproducibility status:
 # - Pinned Planetiler container version
 # - Explicit host path and user mapping
 # - Tool presence checks
+# - TODO: Pin OSM data source to guarantee identical outputs
 
 # 1. Resolve repo root securely
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
 BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
-# 2. Pin inputs and tools
-# Pinning the specific daily build to guarantee reproducible output hashes
-# If this file expires from Geofabrik, a mirror or archive link must be used.
-OSM_DATE="140101"
-OSM_FILE="hamburg-$OSM_DATE.osm.pbf"
-OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-$OSM_DATE.osm.pbf"
+# 2. Pin tools (OSM input pin is currently missing / volatile)
+# TODO: To guarantee reproducible output hashes, we need a stable OSM snapshot
+# mirror. Currently, Geofabrik's latest URL redirects daily, breaking reproducible builds.
+OSM_FILE="hamburg-latest.osm.pbf"
+OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"
 
 OUTPUT_PMTILES="hamburg.pmtiles"
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler:0.8.2"
@@ -28,7 +27,7 @@ PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler:0.8.2"
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
 echo "Tool:    Planetiler (Pinned: $PLANETILER_IMAGE)"
-echo "Input:   $OSM_FILE"
+echo "Input:   $OSM_FILE (Volatile)"
 echo "Format:  PMTiles"
 echo "=================================="
 
@@ -52,9 +51,9 @@ fi
 mkdir -p "$BASEMAP_DIR"
 cd "$BASEMAP_DIR"
 
-# 5. Fetch pinned input data
+# 5. Fetch input data
 if [ ! -f "$OSM_FILE" ]; then
-  echo "=> Downloading pinned OSM data for Hamburg ($OSM_FILE)..."
+  echo "=> Downloading OSM data for Hamburg ($OSM_FILE)..."
   if [ "$DOWNLOADER" = "wget" ]; then
     wget -O "$OSM_FILE" "$OSM_URL"
   else
