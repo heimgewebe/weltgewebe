@@ -45,7 +45,7 @@ summary: >
 - [ ] PMTiles-Protokoll in MapLibre registrieren
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-- [ ] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
+- [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [ ] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
 
 **Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
