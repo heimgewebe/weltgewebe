@@ -229,14 +229,22 @@
         }
       };
 
-      map.on('load', finishLoading);
-      map.on('error', finishLoading);
+      map.once('load', finishLoading);
+      map.on('error', () => {
+        clearTimeout(loadingTimeout);
+        isLoading = false;
+      });
 
       // Expose map for testing
-      (window as any).__TEST_MAP__ = map;
+      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+        (window as any).__TEST_MAP__ = map;
+      }
     })();
 
     return () => {
+      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+        delete (window as any).__TEST_MAP__;
+      }
       cleanupKomposition?.();
       cleanupFocus?.();
       cleanupActivity?.();
