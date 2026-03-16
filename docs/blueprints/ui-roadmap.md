@@ -83,7 +83,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Aktivität: demo-/edge-basierte Aktivität integriert, tiefere Fachintegration offen
 - [x] Knotenliste: echte Verknüpfungen im Demo-Scope integriert
 
-### [ ] Roadmap PR 5 — EdgePanel ausbauen
+### [ ] Roadmap PR 5 — EdgePanel ausbauen (teilweise erledigt)
 
 > Aktueller Stand: UI-Fortschritt im EdgePanel ist lokal abgeschlossen (Typ, Beschreibung, Teilnehmer, Zeitlichkeit). Die Remote-Backend-Infrastruktur unterstützt jedoch noch keinen konsistenten Edge-Detailpfad (z.B. `/api/edges/:id`), daher wird die Funktionalität lokal/demo-tauglich gehalten, die Architektur-Parität ist jedoch noch offen.
 
@@ -113,7 +113,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 ### [ ] Roadmap PR 8 — A11y und Keyboard-Navigation
 
 - [ ] Keyboard-Navigation für Tabs ergänzen
-- [ ] Escape-Verhalten definieren
+- [x] Escape-Verhalten definieren
 - [ ] Fokusmanagement bei Markerwechsel weiter härten
 - [ ] `aria-*` für Panel/Tabs/Toolbar prüfen
 - [ ] Screenreader-taugliche Rollen nachziehen
