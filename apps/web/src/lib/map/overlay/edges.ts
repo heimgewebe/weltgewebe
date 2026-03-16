@@ -58,8 +58,7 @@ export function updateEdges(
       data: geoJsonData,
     });
 
-    // Architecture Note: MapLibre Layer-Reihenfolge final absichern.
-    // Edges (overlay) should sit below basemap symbols (labels, POIs) to keep text readable.
+    // Insert edges below basemap symbols (labels, POIs) so they stay readable.
     const layers = map.getStyle()?.layers;
     let firstSymbolId: string | undefined;
     if (layers) {
