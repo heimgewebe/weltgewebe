@@ -1,5 +1,7 @@
 <script lang="ts">
   import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
+  import { tick } from 'svelte';
+
 
   import NodePanel from './panels/NodePanel.svelte';
   import AccountPanel from './panels/AccountPanel.svelte';
@@ -15,25 +17,42 @@
       closePanel();
     }
   }
+
+  let headerElement: HTMLElement | null = null;
+  let lastSelectionId: string | null = null;
+
+  $: {
+    if ($contextPanelOpen) {
+      const currentId = $systemState === 'komposition' ? 'komposition-draft' : ($selection?.id ?? null);
+      if (currentId !== lastSelectionId) {
+        lastSelectionId = currentId;
+        tick().then(() => {
+          if (headerElement) {
+            headerElement.focus();
+          }
+        });
+      }
+    }
+  }
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
 
 {#if $contextPanelOpen}
-  <aside class="context-panel" data-testid="context-panel">
+  <aside class="context-panel" data-testid="context-panel" aria-label="Kontextinformationen">
     <header class="panel-header">
       {#if $systemState === 'komposition'}
-        <h2>Neuer Knoten</h2>
+        <h2 tabindex="-1" bind:this={headerElement}>Neuer Knoten</h2>
       {:else if $selection}
         {#if $selection.type === 'node'}
-          <h2>Knoten</h2>
+          <h2 tabindex="-1" bind:this={headerElement}>Knoten</h2>
         {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
-          <h2>Garnrolle</h2>
+          <h2 tabindex="-1" bind:this={headerElement}>Garnrolle</h2>
         {:else if $selection.type === 'edge'}
-          <h2>Faden</h2>
+          <h2 tabindex="-1" bind:this={headerElement}>Faden</h2>
         {/if}
       {:else}
-        <h2>Details</h2>
+        <h2 tabindex="-1" bind:this={headerElement}>Details</h2>
       {/if}
       <button class="close-btn" on:click={closePanel} aria-label="Schließen">✕</button>
     </header>
