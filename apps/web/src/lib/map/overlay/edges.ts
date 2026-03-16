@@ -58,19 +58,35 @@ export function updateEdges(
       data: geoJsonData,
     });
 
-    map.addLayer({
-      id: layerId,
-      type: "line",
-      source: sourceId,
-      layout: {
-        "line-join": "round",
-        "line-cap": "round",
+    // Architecture Note: MapLibre Layer-Reihenfolge final absichern.
+    // Edges (overlay) should sit below basemap symbols (labels, POIs) to keep text readable.
+    const layers = map.getStyle()?.layers;
+    let firstSymbolId: string | undefined;
+    if (layers) {
+      for (const layer of layers) {
+        if (layer.type === "symbol") {
+          firstSymbolId = layer.id;
+          break;
+        }
+      }
+    }
+
+    map.addLayer(
+      {
+        id: layerId,
+        type: "line",
+        source: sourceId,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#888",
+          "line-width": 2,
+          "line-dasharray": [2, 1],
+        },
       },
-      paint: {
-        "line-color": "#888",
-        "line-width": 2,
-        "line-dasharray": [2, 1],
-      },
-    });
+      firstSymbolId
+    );
   }
 }
