@@ -22,11 +22,12 @@ OSM_FILE="hamburg-latest.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"
 
 OUTPUT_PMTILES="hamburg.pmtiles"
-PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler:0.8.2"
+# Planetiler 0.8.2 (linux/amd64) pinned by digest for a truly deterministic toolchain
+PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
-echo "Tool:    Planetiler (Pinned: $PLANETILER_IMAGE)"
+echo "Tool:    Planetiler (Pinned: 0.8.2 @ sha256:10e4...)"
 echo "Input:   $OSM_FILE (Volatile)"
 echo "Format:  PMTiles"
 echo "=================================="
