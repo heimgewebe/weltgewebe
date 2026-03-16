@@ -30,7 +30,7 @@ summary: >
 
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
-- [ ] Eigenes `style.json` im `map-style` Repository anlegen
+- [x] Eigenes `style.json` im `map-style` Repository anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
 - [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
@@ -47,7 +47,7 @@ summary: >
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
-- [ ] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern
+- [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `edges.ts`)
 
 **Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
 **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.

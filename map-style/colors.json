@@ -1,0 +1,10 @@
+{
+  "theme": {
+    "background": "#e0e0e0",
+    "water": "#a0c8f0",
+    "roads": "#ffffff",
+    "buildings": "#d0d0d0",
+    "text": "#333333",
+    "text-halo": "#ffffff"
+  }
+}
