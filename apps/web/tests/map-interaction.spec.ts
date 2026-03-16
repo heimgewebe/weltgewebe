@@ -164,4 +164,124 @@ test.describe("Map Interaction & Context Panel", () => {
     // Panel should still be visible (komposition protection)
     await expect(panel).toBeVisible();
   });
+
+  test("NodePanel keyboard navigation allows arrow keys, Home, and End", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+
+    // Ensure we open a node. In our mock data, nodes usually have the title "Demo Node" or "Hamburg Workshop".
+    // We can evaluate and click the first node marker.
+    await page.evaluate(() => {
+      const markers = Array.from(
+        document.querySelectorAll(".map-marker"),
+      ) as HTMLElement[];
+      // Try to find a node by finding a marker that doesn't look like an account (just a generic marker)
+      const nodeMarker =
+        markers.find((m) => !m.classList.contains("garnrolle-marker")) ||
+        markers[0];
+      nodeMarker?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Ensure we are in a NodePanel by checking for the 'Übersicht' tab
+    const uebersichtTab = panel.locator('button[role="tab"]', {
+      hasText: "Übersicht",
+    });
+    await expect(uebersichtTab).toBeVisible();
+
+    // Focus the active tab (usually Übersicht by default)
+    await uebersichtTab.focus();
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+
+    // Press ArrowRight -> Should move to "Gespräch"
+    await page.keyboard.press("ArrowRight");
+    const gespraechTab = panel.locator('button[role="tab"]', {
+      hasText: "Gespräch",
+    });
+    await expect(gespraechTab).toBeFocused();
+    await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+
+    // Press End -> Should move to "Verlauf"
+    await page.keyboard.press("End");
+    const verlaufTab = panel.locator('button[role="tab"]', {
+      hasText: "Verlauf",
+    });
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-verlauf")).toBeVisible();
+
+    // Press Home -> Should move back to "Übersicht"
+    await page.keyboard.press("Home");
+    await expect(uebersichtTab).toBeFocused();
+    await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+
+    // Press ArrowLeft -> Should wrap around to "Verlauf"
+    await page.keyboard.press("ArrowLeft");
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("AccountPanel keyboard navigation allows arrow keys, Home, and End", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+
+    // Open an account. In our mock data, accounts usually use garnrolle markers.
+    await page.evaluate(() => {
+      const markers = Array.from(
+        document.querySelectorAll(".map-marker"),
+      ) as HTMLElement[];
+      const accountMarker =
+        markers.find((m) => m.classList.contains("garnrolle-marker")) ||
+        markers[markers.length - 1];
+      accountMarker?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Ensure we are in an AccountPanel by checking for the 'Profil' tab
+    const profilTab = panel.locator('button[role="tab"]', {
+      hasText: "Profil",
+    });
+    await expect(profilTab).toBeVisible();
+
+    // Focus the active tab (usually Profil by default)
+    await profilTab.focus();
+    await expect(profilTab).toBeFocused();
+    await expect(profilTab).toHaveAttribute("aria-selected", "true");
+
+    // Press ArrowRight -> Should move to "Aktivität"
+    await page.keyboard.press("ArrowRight");
+    const aktivitaetTab = panel.locator('button[role="tab"]', {
+      hasText: "Aktivität",
+    });
+    await expect(aktivitaetTab).toBeFocused();
+    await expect(aktivitaetTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-aktivitaet")).toBeVisible();
+
+    // Press End -> Should move to "Knoten"
+    await page.keyboard.press("End");
+    const knotenTab = panel.locator('button[role="tab"]', {
+      hasText: "Knoten",
+    });
+    await expect(knotenTab).toBeFocused();
+    await expect(knotenTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-knoten")).toBeVisible();
+
+    // Press Home -> Should move back to "Profil"
+    await page.keyboard.press("Home");
+    await expect(profilTab).toBeFocused();
+    await expect(profilTab).toHaveAttribute("aria-selected", "true");
+
+    // Press ArrowLeft -> Should wrap around to "Knoten"
+    await page.keyboard.press("ArrowLeft");
+    await expect(knotenTab).toBeFocused();
+    await expect(knotenTab).toHaveAttribute("aria-selected", "true");
+  });
 });

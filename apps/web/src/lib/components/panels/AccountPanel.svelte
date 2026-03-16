@@ -86,23 +86,84 @@
       return 'Unbekannt';
     }
   }
+
+  const tabs = ['profil', 'aktivitaet', 'knoten'];
+
+  function handleKeydown(e: KeyboardEvent) {
+    const currentIndex = tabs.indexOf(activeTab);
+    if (currentIndex === -1) return;
+
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (currentIndex + 1) % tabs.length;
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      e.preventDefault();
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+      e.preventDefault();
+    } else if (e.key === 'End') {
+      nextIndex = tabs.length - 1;
+      e.preventDefault();
+    }
+
+    if (nextIndex !== currentIndex) {
+      setTab(tabs[nextIndex]);
+      const currentButton = e.currentTarget as HTMLElement | null;
+      const tabList = currentButton?.closest('.tabs') as HTMLElement | null;
+      if (tabList) {
+        const buttons = tabList.querySelectorAll('button[role="tab"]');
+        if (buttons[nextIndex]) {
+          (buttons[nextIndex] as HTMLElement).focus();
+        }
+      }
+    }
+  }
 </script>
 
 <div class="account-mode">
   <h3>{accountDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   <p class="summary">{accountDetails?.summary || $selection?.data?.summary || 'Handelnder Akteur im Gewebe.'}</p>
 
-  <div class="tabs">
-    <button class:active={activeTab === 'profil'} on:click={() => setTab('profil')}>Profil</button>
-    <button class:active={activeTab === 'aktivitaet'} on:click={() => setTab('aktivitaet')}>Aktivität</button>
-    <button class:active={activeTab === 'knoten'} on:click={() => setTab('knoten')}>Knoten</button>
+  <div class="tabs" role="tablist" aria-label="Garnrollen Tabs">
+    <button
+      class:active={activeTab === 'profil'}
+      on:click={() => setTab('profil')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'profil'}
+      aria-controls="panel-profil"
+      id="tab-profil"
+      tabindex={activeTab === 'profil' ? 0 : -1}
+    >Profil</button>
+    <button
+      class:active={activeTab === 'aktivitaet'}
+      on:click={() => setTab('aktivitaet')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'aktivitaet'}
+      aria-controls="panel-aktivitaet"
+      id="tab-aktivitaet"
+      tabindex={activeTab === 'aktivitaet' ? 0 : -1}
+    >Aktivität</button>
+    <button
+      class:active={activeTab === 'knoten'}
+      on:click={() => setTab('knoten')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'knoten'}
+      aria-controls="panel-knoten"
+      id="tab-knoten"
+      tabindex={activeTab === 'knoten' ? 0 : -1}
+    >Knoten</button>
   </div>
 
   <div class="tab-content">
     {#if isLoadingDetails && !accountDetails}
       <p class="ghost">Lade Details...</p>
     {:else if activeTab === 'profil'}
-      <div class="overview">
+      <div class="overview" id="panel-profil" role="tabpanel" aria-labelledby="tab-profil">
         {#if (accountDetails?.created_at || $selection?.data?.created_at)}
           <p><strong>Dabei seit:</strong> {formatDate(accountDetails?.created_at || $selection?.data?.created_at)}</p>
         {/if}
@@ -120,7 +181,7 @@
       </div>
 
     {:else if activeTab === 'aktivitaet'}
-      <div class="timeline-placeholder">
+      <div class="timeline-placeholder" id="panel-aktivitaet" role="tabpanel" aria-labelledby="tab-aktivitaet">
         {#if isLoadingDetails}
           <p class="ghost">Lade Verlauf...</p>
         {:else if accountDetails?.activity && accountDetails.activity.length > 0}
@@ -138,7 +199,7 @@
       </div>
 
     {:else if activeTab === 'knoten'}
-      <div class="nodes-placeholder">
+      <div class="nodes-placeholder" id="panel-knoten" role="tabpanel" aria-labelledby="tab-knoten">
         {#if isLoadingDetails}
           <p class="ghost">Lade Knoten...</p>
         {:else if accountDetails?.nodes && accountDetails.nodes.length > 0}

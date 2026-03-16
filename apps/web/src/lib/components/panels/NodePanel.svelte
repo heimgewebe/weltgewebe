@@ -100,22 +100,92 @@
     displayLat = selectionData?.location?.lat ?? selectionData?.lat;
     displayLon = selectionData?.location?.lon ?? selectionData?.lon;
   }
+
+  const tabs = ['uebersicht', 'gespraech', 'antraege', 'verlauf'];
+
+  function handleKeydown(e: KeyboardEvent) {
+    const currentIndex = tabs.indexOf(activeTab);
+    if (currentIndex === -1) return;
+
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (currentIndex + 1) % tabs.length;
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      e.preventDefault();
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+      e.preventDefault();
+    } else if (e.key === 'End') {
+      nextIndex = tabs.length - 1;
+      e.preventDefault();
+    }
+
+    if (nextIndex !== currentIndex) {
+      setTab(tabs[nextIndex]);
+      const currentButton = e.currentTarget as HTMLElement | null;
+      const tabList = currentButton?.closest('.tabs') as HTMLElement | null;
+      if (tabList) {
+        const buttons = tabList.querySelectorAll('button[role="tab"]');
+        if (buttons[nextIndex]) {
+          (buttons[nextIndex] as HTMLElement).focus();
+        }
+      }
+    }
+  }
 </script>
 
 <div class="node-mode">
   <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
   <p class="summary">{nodeDetails?.summary || $selection?.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
 
-  <div class="tabs">
-    <button class:active={activeTab === 'uebersicht'} on:click={() => setTab('uebersicht')}>Übersicht</button>
-    <button class:active={activeTab === 'gespraech'} on:click={() => setTab('gespraech')}>Gespräch</button>
-    <button class:active={activeTab === 'antraege'} on:click={() => setTab('antraege')}>Anträge</button>
-    <button class:active={activeTab === 'verlauf'} on:click={() => setTab('verlauf')}>Verlauf</button>
+  <div class="tabs" role="tablist" aria-label="Knoten Tabs">
+    <button
+      class:active={activeTab === 'uebersicht'}
+      on:click={() => setTab('uebersicht')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'uebersicht'}
+      aria-controls="panel-uebersicht"
+      id="tab-uebersicht"
+      tabindex={activeTab === 'uebersicht' ? 0 : -1}
+    >Übersicht</button>
+    <button
+      class:active={activeTab === 'gespraech'}
+      on:click={() => setTab('gespraech')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'gespraech'}
+      aria-controls="panel-gespraech"
+      id="tab-gespraech"
+      tabindex={activeTab === 'gespraech' ? 0 : -1}
+    >Gespräch</button>
+    <button
+      class:active={activeTab === 'antraege'}
+      on:click={() => setTab('antraege')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'antraege'}
+      aria-controls="panel-antraege"
+      id="tab-antraege"
+      tabindex={activeTab === 'antraege' ? 0 : -1}
+    >Anträge</button>
+    <button
+      class:active={activeTab === 'verlauf'}
+      on:click={() => setTab('verlauf')}
+      on:keydown={handleKeydown}
+      role="tab"
+      aria-selected={activeTab === 'verlauf'}
+      aria-controls="panel-verlauf"
+      id="tab-verlauf"
+      tabindex={activeTab === 'verlauf' ? 0 : -1}
+    >Verlauf</button>
   </div>
 
   <div class="tab-content">
     {#if activeTab === 'uebersicht'}
-      <div class="overview">
+      <div class="overview" id="panel-uebersicht" role="tabpanel" aria-labelledby="tab-uebersicht">
         {#if isLoadingDetails}
           <p class="ghost">Lade Details...</p>
         {:else}
@@ -154,7 +224,7 @@
       </div>
 
     {:else if activeTab === 'gespraech'}
-      <div class="chat-placeholder">
+      <div class="chat-placeholder" id="panel-gespraech" role="tabpanel" aria-labelledby="tab-gespraech">
         <div class="messages">
           <div class="message">
             <span class="author">System:</span>
@@ -168,7 +238,7 @@
       </div>
 
     {:else if activeTab === 'antraege'}
-      <div class="proposals-placeholder">
+      <div class="proposals-placeholder" id="panel-antraege" role="tabpanel" aria-labelledby="tab-antraege">
         <div class="empty-state">
           <p class="ghost">Keine aktiven Anträge.</p>
           <button class="btn-secondary" disabled>Neuen Antrag stellen</button>
@@ -176,7 +246,7 @@
       </div>
 
     {:else if activeTab === 'verlauf'}
-      <div class="timeline-placeholder">
+      <div class="timeline-placeholder" id="panel-verlauf" role="tabpanel" aria-labelledby="tab-verlauf">
         {#if isLoadingDetails}
           <p class="ghost">Lade Verlauf...</p>
         {:else if nodeDetails?.history && nodeDetails.history.length > 0}
