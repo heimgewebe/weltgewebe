@@ -124,7 +124,8 @@
     })();
   }
 
-  // Secondary reactive update strictly for when searchMatchIds changes independently
+  // Secondary reactive update strictly for when searchMatchIds changes independently.
+  // Re-apply highlight when only searchMatchIds changes, because markersData/view may stay referentially stable.
   $: if (nodesOverlay) {
     nodesOverlay.updateSearchHighlight(searchMatchIds);
   }
@@ -346,14 +347,16 @@
   }
 
   #map :global(.map-marker.search-highlight) {
-    outline: 2px solid var(--accent, #ff8c42);
+    outline: 2px solid var(--error, #e53e3e);
     outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
     z-index: 5;
   }
 
   #map :global(.marker-account.search-highlight) {
-    outline: 2px solid var(--accent, #ff8c42);
+    outline: 2px solid var(--error, #e53e3e);
     outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
   }
 
   #map :global(.marker-account:focus-visible) {
