@@ -116,14 +116,16 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  // Reactive update for markers
+  // Reactive update for markers and search highlight to avoid asynchronous drift
   $: if (nodesOverlay && markersData && $view) {
-    nodesOverlay.update(markersData, $view.showNodes);
+    (async () => {
+      await nodesOverlay.update(markersData, $view.showNodes);
+      nodesOverlay.updateSearchHighlight(searchMatchIds);
+    })();
   }
 
-  // Reactive update for search highlight
+  // Secondary reactive update strictly for when searchMatchIds changes independently
   $: if (nodesOverlay) {
-    // We assume updateSearchHighlight method exists on NodesOverlay
     nodesOverlay.updateSearchHighlight(searchMatchIds);
   }
 
