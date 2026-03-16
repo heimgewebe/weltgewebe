@@ -126,7 +126,6 @@
   <p class="summary">{accountDetails?.summary || $selection?.data?.summary || 'Handelnder Akteur im Gewebe.'}</p>
 
   <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="tabs" role="tablist" aria-label="Garnrollen Tabs" on:keydown={handleKeydown}>
     <button
       class:active={activeTab === 'profil'}

@@ -141,7 +141,6 @@
   <p class="summary">{nodeDetails?.summary || $selection?.data?.summary || 'Keine Beschreibung verfügbar.'}</p>
 
   <!-- svelte-ignore a11y_interactive_supports_focus -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="tabs" role="tablist" aria-label="Knoten Tabs" on:keydown={handleKeydown}>
     <button
       class:active={activeTab === 'uebersicht'}
