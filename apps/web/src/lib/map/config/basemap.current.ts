@@ -11,6 +11,11 @@ export type BasemapConfig = {
   bearing?: number;
 };
 
+export const HAMMER_PARK_CENTER = {
+  lat: 53.5585,
+  lon: 10.058,
+};
+
 export const currentBasemap: BasemapConfig = {
   mode: "remote-style",
   styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
