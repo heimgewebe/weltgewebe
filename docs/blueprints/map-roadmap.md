@@ -16,11 +16,12 @@ summary: >
 
 **Ziel:** Die erste funktionale Pipeline zur Generierung und Bereitstellung eines Artefakts steht.
 
-- [ ] Zielregion für ersten Build festlegen (z. B. Hamburg / Germany / Europe)
-- [ ] Tile-Generator festlegen (Standard: planetiler)
-- [ ] Artefaktformat festlegen (PMTiles)
+- [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
+- [x] Tile-Generator festlegen (Entscheidung: planetiler)
+- [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
-- [ ] Basemap-Artefakt erstmals reproduzierbar bauen
+- [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
+- [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
 **Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert werden.
 **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
