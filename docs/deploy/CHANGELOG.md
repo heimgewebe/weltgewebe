@@ -17,9 +17,11 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 **Ursprung / Referenz:** Frontend Deploy Invariants
 
 **Geänderte Dateien:**
+
 - `infra/caddy/Caddyfile.heim`
 
 **Beschreibung:**
+
 - Added a diagnostic route to serve `/_app/version.json` with a strict `no-store` cache control policy.
 - This ensures the deployment verification script (`weltgewebe-up`) can reliably read the technical frontend version generated during the build step without caching interference.
 
