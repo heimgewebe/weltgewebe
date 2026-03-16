@@ -140,6 +140,18 @@ export class NodesOverlay {
     return this.activeMarkers.get(id);
   }
 
+  public updateSearchHighlight(matchIds: Set<string>) {
+    for (const [id, { element }] of this.activeMarkers.entries()) {
+      if (matchIds.size > 0 && matchIds.has(id)) {
+        element.classList.add("search-highlight");
+        element.dataset.searchMatch = "true";
+      } else {
+        element.classList.remove("search-highlight");
+        delete element.dataset.searchMatch;
+      }
+    }
+  }
+
   public destroy() {
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();

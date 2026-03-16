@@ -101,7 +101,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 - [x] Suchfeld in ActionBar/TopBar einziehen
 - [x] Ergebnisse lokal über der ActionBar rendern (ohne Konflikt mit ContextPanel)
-- [ ] Treffer auf der Karte markieren
+- [x] Treffer auf der Karte markieren
 - [x] *Search als lokalen Modus halten, nicht als vierten Global-State modellieren*
 
 ### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
