@@ -51,6 +51,43 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
   });
 
+  test("Escape closes ContextPanel when in focus mode", async ({ page }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+
+    // Open panel first
+    // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
+    await page.evaluate(() => {
+      (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+
+    // Panel should close
+    await expect(panel).toBeHidden();
+  });
+
+  test("Escape closes ContextPanel when composing", async ({ page }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+
+    // Enter komposition mode via action bar
+    await page.locator('button:has-text("Neuer Knoten")').click();
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+
+    // Panel should close
+    await expect(panel).toBeHidden();
+  });
+
   test("Clicking empty map area closes the context panel", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
