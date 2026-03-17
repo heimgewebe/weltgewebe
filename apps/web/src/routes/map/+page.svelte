@@ -216,11 +216,15 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      const pmtiles = await import('pmtiles');
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
+
+      maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap),
@@ -230,7 +234,16 @@
         maxZoom: currentBasemap.maxZoom ?? 18,
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
-        attributionControl: false
+        attributionControl: false,
+        transformRequest: (url, resourceType) => {
+          if (url.startsWith('pmtiles://') && !url.includes('http://') && !url.includes('https://')) {
+            const alias = url.replace('pmtiles://', '');
+            return {
+              url: `pmtiles://${window.location.origin}/basemap/${alias}`
+            };
+          }
+          return { url };
+        }
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
