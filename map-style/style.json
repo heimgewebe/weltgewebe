@@ -3,7 +3,6 @@
   "name": "Weltgewebe Sovereign Basemap",
   "metadata": {
     "weltgewebe:version": "0.1.0",
-    "weltgewebe:basemap_version": "0.1.0",
     "weltgewebe:note": "PMTiles URL is a placeholder; actual resolution depends on runtime protocol handler"
   },
   "sources": {

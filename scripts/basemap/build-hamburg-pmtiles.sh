@@ -75,7 +75,6 @@ echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
 # Using a pinned docker image to ensure a deterministic toolchain without requiring local java/planetiler installation
 # Using --user to prevent creating root-owned files in the host build directory
 # Enforcing linux/amd64 platform to match the specific toolchain digest
-# Fallback for CI/sandbox rootless environments if docker run fails: stub creation
 if ! docker run --rm \
   --platform linux/amd64 \
   --user "$(id -u):$(id -g)" \
@@ -83,8 +82,14 @@ if ! docker run --rm \
   "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
   --output="/data/$OUTPUT_PMTILES"; then
-    echo "Warning: Docker execution failed (likely rootless overlayfs issue in sandbox). Creating a dummy artifact for verification purposes."
+
+  if [ "${ALLOW_DUMMY_ARTIFACT:-0}" = "1" ]; then
+    echo "Warning: Docker execution failed. ALLOW_DUMMY_ARTIFACT is set, creating a dummy artifact for verification." >&2
     touch "$BASEMAP_DIR/$OUTPUT_PMTILES"
+  else
+    echo "Error: Docker execution failed. To allow dummy artifacts for sandbox testing, set ALLOW_DUMMY_ARTIFACT=1" >&2
+    exit 1
+  fi
 fi
 
 # 7. Generate Metadata Manifest
