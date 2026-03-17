@@ -254,7 +254,7 @@
 
           transformRequestFn = (url, resourceType) => {
             if (url.startsWith('pmtiles://')) {
-              const remainder = url.replace('pmtiles://', '');
+              const remainder = url.slice('pmtiles://'.length);
               if (!remainder.includes('/')) {
                 return {
                   url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
