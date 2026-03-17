@@ -80,8 +80,8 @@ elif [[ "$1" == "compose" ]]; then
         echo "caddy"
      fi
      if [[ "$ARGS" != *"--services"* ]]; then
-         # config check succeeds
-         echo "services: {}"
+         # config check succeeds (simulate API without published host ports)
+         echo '{"services": {"api": {"ports": []}}}'
      fi
      exit 0
   fi
@@ -155,8 +155,8 @@ cat << 'EOF' > mock_bin/pnpm
 #!/bin/bash
 echo "Mocked pnpm execution: $*"
 if [[ "$*" == *"-C apps/web build"* ]]; then
-    mkdir -p apps/web/build
-    touch apps/web/build/index.html
+    mkdir -p apps/web/build/_app
+    echo "mock content" > apps/web/build/index.html
 fi
 exit 0
 EOF
@@ -250,7 +250,7 @@ fi
 # 3. Test Zombie Guard (Purge)
 echo ">>> Test 3: Zombie Guard (Purge)"
 export MOCK_ZOMBIE=1
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1 || true)
 if echo "$OUTPUT" | grep -q "Purging as requested"; then
   echo "PASS: Purge triggered."
 else
@@ -270,7 +270,7 @@ export VERIFY_BAKE=1
 # Use probe override to simulate missing directory
 export WELTGEWEBE_APPS_PROBE="./missing_apps_mock"
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
   echo "PASS: COMPOSE_BAKE=0 set when apps probe fails."
 else
@@ -289,7 +289,7 @@ export VERIFY_BAKE=1
 # Point probe to existing repo dir (we know infra exists)
 export WELTGEWEBE_APPS_PROBE="infra"
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=<unset>"; then
   echo "PASS: COMPOSE_BAKE preserved (unset) when apps probe succeeds."
 else
@@ -308,7 +308,7 @@ export WELTGEWEBE_COMPOSE_BAKE=0
 # Probe should not matter here, but let's point to existing
 export WELTGEWEBE_APPS_PROBE="infra"
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "VERIFY_BAKE: COMPOSE_BAKE=0"; then
   echo "PASS: Explicit WELTGEWEBE_COMPOSE_BAKE=0 honored."
 else
@@ -326,7 +326,7 @@ export VERIFY_BAKE=1
 export WELTGEWEBE_COMPOSE_BAKE="invalid_value"
 export WELTGEWEBE_APPS_PROBE="infra"
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "Unrecognized WELTGEWEBE_COMPOSE_BAKE"; then
   echo "PASS: Warning detected for invalid value."
 else
@@ -348,7 +348,7 @@ if [[ ! -f "infra/compose/compose.prod.yml" ]]; then
 fi
 
 # We expect success (exit 0) and validation that correct repo was picked
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -qF "Repo:    $(pwd)"; then
     echo "PASS: Auto-detection worked and selected current directory."
 else
@@ -445,12 +445,19 @@ fi
 unset HEALTH_URL
 unset MOCK_HEALTH_EXISTS
 
+# Mock getent
+cat << 'EOF_GETENT' > mock_bin/getent
+#!/bin/bash
+exit 0
+EOF_GETENT
+chmod +x mock_bin/getent
+
 # 14. Test State Dir Customization
 echo ">>> Test 14: State Dir Customization"
 export WELTGEWEBE_STATE_DIR="$(pwd)/custom_state"
 mkdir -p "$WELTGEWEBE_STATE_DIR"
 # ENABLE PULL (no flag) so git mock is used and CURRENT_HEAD is set
-OUTPUT=$(./scripts/weltgewebe-up --no-build 2>&1)
+OUTPUT=$(./scripts/weltgewebe-up --no-build 2>&1 || true)
 
 if [[ -f "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state" ]]; then
     CONTENT=$(cat "$WELTGEWEBE_STATE_DIR/weltgewebe-up.state")
@@ -722,6 +729,10 @@ exit 0
 EOF_WGET
 chmod +x mock_bin/wget
 
+# Make sure frontend requirement file check passes
+mkdir -p apps/web/build/_app
+echo "mock html content" > apps/web/build/index.html
+
 # Sub-test 22a: Missing HTML Cache Header
 cat << 'EOF_CURL_NO_HTML_CACHE' > mock_bin/curl
 #!/bin/bash
@@ -739,6 +750,21 @@ if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
 fi
 # Mock general reachability / frontend asset extraction (Guard 5)
 if [[ "$*" == *"/map"* ]]; then
+    if [[ "$*" == *"-w %{http_code}"* && "$*" != *"-I"* ]]; then
+        O_FILE=""
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "-o" ]]; then
+                O_FILE="$2"
+                break
+            fi
+            shift
+        done
+        if [[ -n "$O_FILE" ]]; then
+            echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>" > "$O_FILE"
+        fi
+        echo "200"
+        exit 0
+    fi
     echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
     exit 0
 fi
@@ -792,6 +818,21 @@ if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
 fi
 # Mock general reachability / frontend asset extraction (Guard 5)
 if [[ "$*" == *"/map"* ]]; then
+    if [[ "$*" == *"-w %{http_code}"* && "$*" != *"-I"* ]]; then
+        O_FILE=""
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "-o" ]]; then
+                O_FILE="$2"
+                break
+            fi
+            shift
+        done
+        if [[ -n "$O_FILE" ]]; then
+            echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>" > "$O_FILE"
+        fi
+        echo "200"
+        exit 0
+    fi
     echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
     exit 0
 fi
@@ -842,19 +883,35 @@ fi
 # Mock /_app/version.json (make it pass)
 if [[ "$*" == *"/_app/version.json"* ]]; then
     O_FILE=""
-    while [[ $# -gt 0 ]]; do
-        if [[ "$1" == "-o" ]]; then
-            O_FILE="$2"
-            break
+    D_FILE=""
+    for arg in "$@"; do
+        if [[ "$arg" == "-o" ]]; then
+            O_FILE_NEXT=1
+        elif [[ "$O_FILE_NEXT" == "1" ]]; then
+            O_FILE="$arg"
+            O_FILE_NEXT=0
+        elif [[ "$arg" == "-D" ]]; then
+            D_FILE_NEXT=1
+        elif [[ "$D_FILE_NEXT" == "1" ]]; then
+            D_FILE="$arg"
+            D_FILE_NEXT=0
         fi
-        shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
         echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
     fi
+    if [[ -n "$D_FILE" && "$D_FILE" != "/dev/null" ]]; then
+        cat > "$D_FILE" <<EOF
+HTTP/1.1 200 OK
+Cache-Control: no-store
+Content-Type: application/json
+
+EOF
+    fi
     # If -w %{http_code} is used, we output ONLY 200 to stdout
     if [[ "$*" == *"-w"* ]]; then
         echo "200"
+        exit 0
     else
         # Fallback if no -w and no -o was used (for manual curls)
         if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
@@ -865,6 +922,21 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
 fi
 # Mock general reachability / frontend asset extraction (Guard 5)
 if [[ "$*" == *"/map"* ]]; then
+    if [[ "$*" == *"-w %{http_code}"* && "$*" != *"-I"* ]]; then
+        O_FILE=""
+        while [[ $# -gt 0 ]]; do
+            if [[ "$1" == "-o" ]]; then
+                O_FILE="$2"
+                break
+            fi
+            shift
+        done
+        if [[ -n "$O_FILE" ]]; then
+            echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>" > "$O_FILE"
+        fi
+        echo "200"
+        exit 0
+    fi
     echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
     exit 0
 fi
