@@ -40,7 +40,7 @@ test.describe("Search mode", () => {
     });
   });
 
-  test("toggles search overlay from action bar and filters results", async ({
+  test("toggles search overlay, highlights markers, and supports keyboard navigation with map centering", async ({
     page,
   }) => {
     // Navigate to map
@@ -79,12 +79,26 @@ test.describe("Search mode", () => {
       page.locator('.map-marker[data-search-match="true"]'),
     ).toHaveCount(0);
 
-    // Refill and proceed
+    // Refill and proceed to test keyboard navigation
     await searchInput.fill("Strick");
     await expect(resultItem).toBeVisible();
 
-    // Click result
-    await resultItem.click();
+    // Focus is still on input. Press ArrowDown to highlight first result
+    await searchInput.press("ArrowDown");
+
+    // Verify ARIA activedescendant is set
+    const firstResultId = `search-result-mock-node-1`;
+    await expect(searchInput).toHaveAttribute(
+      "aria-activedescendant",
+      firstResultId,
+    );
+
+    // Check that the item has active class
+    const activeItem = page.locator(`li#${firstResultId}.active`);
+    await expect(activeItem).toBeVisible();
+
+    // Press Enter to select
+    await searchInput.press("Enter");
 
     // Verify search overlay is closed and ContextPanel is open (Fokus state)
     await expect(searchOverlay).not.toBeVisible();
@@ -92,6 +106,21 @@ test.describe("Search mode", () => {
     await expect(contextPanel).toBeVisible();
     await expect(page.locator(".context-panel .panel-header h2")).toContainText(
       /Knoten/,
+    );
+
+    // Verify map is centered on the selected node (lon: 10, lat: 51)
+    await page.waitForFunction(
+      () => {
+        const map = (window as any).__TEST_MAP__;
+        if (!map) return false;
+        const center = map.getCenter();
+        // Allow slight epsilon for floating point math
+        return (
+          Math.abs(center.lng - 10) < 0.0001 &&
+          Math.abs(center.lat - 51) < 0.0001
+        );
+      },
+      { timeout: 10000 },
     );
 
     // Also verify search field was cleared

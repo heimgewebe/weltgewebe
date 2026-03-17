@@ -27,7 +27,11 @@ export class NodesOverlay {
     return "node";
   }
 
-  public async update(points: RenderableMapPoint[], showNodes: boolean) {
+  public async update(
+    points: RenderableMapPoint[],
+    showNodes: boolean,
+    searchMatchIds: Set<string> = new Set(),
+  ) {
     if (!this.map) return;
     const maplibregl = await import("maplibre-gl");
 
@@ -79,6 +83,14 @@ export class NodesOverlay {
           element.setAttribute("aria-label", item.title);
         }
         element.dataset.testid = `marker-${item.type || "node"}-${item.id}`;
+
+        if (searchMatchIds.has(item.id)) {
+          element.classList.add("search-highlight");
+          element.dataset.searchMatch = "true";
+        } else {
+          element.classList.remove("search-highlight");
+          delete element.dataset.searchMatch;
+        }
       } else {
         // Create new
         const element = document.createElement("button");
@@ -116,6 +128,11 @@ export class NodesOverlay {
         element.setAttribute("aria-label", item.title);
         element.title = item.title;
 
+        if (searchMatchIds.has(item.id)) {
+          element.classList.add("search-highlight");
+          element.dataset.searchMatch = "true";
+        }
+
         this.activeMarkers.set(item.id, {
           marker,
           element,
@@ -138,18 +155,6 @@ export class NodesOverlay {
 
   public getActiveMarker(id: string) {
     return this.activeMarkers.get(id);
-  }
-
-  public updateSearchHighlight(matchIds: Set<string>) {
-    for (const [id, { element }] of this.activeMarkers.entries()) {
-      if (matchIds.size > 0 && matchIds.has(id)) {
-        element.classList.add("search-highlight");
-        element.dataset.searchMatch = "true";
-      } else {
-        element.classList.remove("search-highlight");
-        delete element.dataset.searchMatch;
-      }
-    }
   }
 
   public destroy() {

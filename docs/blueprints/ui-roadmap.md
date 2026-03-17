@@ -101,7 +101,9 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 - [x] Suchfeld in ActionBar/TopBar einziehen
 - [x] Ergebnisse lokal über der ActionBar rendern (ohne Konflikt mit ContextPanel)
-- [x] Treffer auf der Karte markieren
+- [x] Treffer auf der Karte markieren (Highlighting architektonisch entdriften)
+- [x] Suchnavigation per Keyboard ergänzen (ArrowUp/ArrowDown/Enter)
+- [x] Karte zentriert sinnvoll auf den ausgewählten Treffer (flyTo)
 - [x] *Search als lokalen Modus halten, nicht als vierten Global-State modellieren*
 
 ### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
@@ -114,9 +116,9 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 - [x] Keyboard-Navigation für Tabs ergänzen
 - [x] Escape-Verhalten definieren
-- [ ] Fokusmanagement bei Markerwechsel weiter härten
+- [x] Fokusmanagement bei Markerwechsel weiter härten (Suche/ContextPanel stabilisiert)
 - [x] `aria-*` für Tabs/Tabpanels grundlegend ergänzt
-- [ ] Screenreader-taugliche Rollen vollständig absichern
+- [x] Screenreader-taugliche Rollen vollständig absichern (Listbox/Option Pattern für Suche integriert)
 
 ⸻
 

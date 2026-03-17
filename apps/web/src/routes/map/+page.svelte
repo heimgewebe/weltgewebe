@@ -116,18 +116,11 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  // Reactive update for markers and search highlight to avoid asynchronous drift
+  // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && markersData && $view) {
     (async () => {
-      await nodesOverlay.update(markersData, $view.showNodes);
-      nodesOverlay.updateSearchHighlight(searchMatchIds);
+      await nodesOverlay.update(markersData, $view.showNodes, searchMatchIds);
     })();
-  }
-
-  // Secondary reactive update strictly for when searchMatchIds changes independently.
-  // Re-apply highlight when only searchMatchIds changes, because markersData/view may stay referentially stable.
-  $: if (nodesOverlay) {
-    nodesOverlay.updateSearchHighlight(searchMatchIds);
   }
 
   // Reactive update for edges
@@ -139,6 +132,26 @@
      }
   }
 
+
+  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+    const item = event.detail;
+    const itemType = item.type || 'node';
+
+    // Fallback if needed, but the search overlay closes itself anyway
+    enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
+
+    const lat = item.lat;
+    const lon = item.lon;
+    if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+      const currentZoom = map?.getZoom() ?? 14;
+      map?.flyTo({
+        center: [lon, lat],
+        zoom: Math.max(currentZoom, 14),
+        speed: 0.8,
+        curve: 1
+      });
+    }
+  }
 
   // Restore focus when selection is closed or state becomes navigation
   $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
@@ -400,7 +413,7 @@
 
 <main class="shell">
   <ContextPanel />
-  <SearchOverlay {filteredResults} />
+  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
