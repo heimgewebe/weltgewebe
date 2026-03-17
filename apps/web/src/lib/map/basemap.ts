@@ -21,7 +21,14 @@ export function resolvePmtilesUrl(url: string, origin: string): string {
     const target = url.slice("pmtiles://".length);
     // Only bare aliases (without "/") are rewritten
     if (!target.includes("/")) {
-      return `pmtiles://${origin}/basemap/${target}`;
+      try {
+        const normalizedHost = new URL(origin).host;
+        return `pmtiles://${normalizedHost}/basemap/${target}`;
+      } catch {
+        // Fallback for malformed origins
+        const fallbackHost = origin.replace(/^https?:\/\//, "");
+        return `pmtiles://${fallbackHost}/basemap/${target}`;
+      }
     }
   }
   return url;

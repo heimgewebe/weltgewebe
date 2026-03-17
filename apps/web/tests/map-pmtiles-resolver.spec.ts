@@ -4,11 +4,11 @@ import { resolvePmtilesUrl } from "../src/lib/map/basemap";
 test.describe("PMTiles Resolver Logic", () => {
   const mockOrigin = "http://localhost:5173";
 
-  test("rewrites bare aliases to local basemap directory", () => {
+  test("rewrites bare aliases to local basemap directory without http scheme", () => {
     const inputUrl = "pmtiles://basemap-hamburg.pmtiles";
     const result = resolvePmtilesUrl(inputUrl, mockOrigin);
     expect(result).toBe(
-      "pmtiles://http://localhost:5173/basemap/basemap-hamburg.pmtiles",
+      "pmtiles://localhost:5173/basemap/basemap-hamburg.pmtiles",
     );
   });
 
