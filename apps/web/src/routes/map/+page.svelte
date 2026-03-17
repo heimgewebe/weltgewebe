@@ -123,6 +123,9 @@
     return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
   }
 
+  let availableFilterTypes: { id: string, label: string, count: number }[] = [];
+  let filteredMarkersData: RenderableMapPoint[] = [];
+
   // Derivation of filterable types
   $: availableFilterTypes = (() => {
     const counts = new Map<string, number>();
