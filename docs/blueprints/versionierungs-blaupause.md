@@ -362,13 +362,13 @@ und zeigt einen Hinweis an.
 
 ### Phase A — Basis konsolidieren
 
-- [x] Prüfen, ob `build/_app/version.json` bereits deterministisch erzeugt wird.
+- [x] Prüfen, ob `build/_app/version.json` bei vorhandener Git-Metadaten-/Epoch-Basis deterministisch erzeugt wird (sonst pragmatischer Timestamp-Fallback).
 - [x] Schema minimal halten: `version`, `built_at`, optional `commit`.
 - [x] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
 - [x] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
 - [x] Build-Integration in `apps/web/package.json` verifizieren.
 
-**Stop-Kriterium:** `pnpm build` erzeugt reproduzierbar `build/_app/version.json`.
+**Stop-Kriterium:** `pnpm build` erzeugt `build/_app/version.json` (reproduzierbar, sofern Quell-Metadaten wie Git-Commit oder `SOURCE_DATE_EPOCH` verfügbar sind).
 
 ### Phase B — Edge-Semantik härten
 

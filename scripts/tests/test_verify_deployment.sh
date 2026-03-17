@@ -875,7 +875,7 @@ chmod +x mock_bin/curl
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
    echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
-   echo "$OUTPUT" | grep -q "Build-ID / Version: mock-build-id-123"; then
+   echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json)"; then
     echo "PASS: Valid cache headers and version.json correctly passed the guards."
 else
     echo "FAIL: Positive cache header validation path failed."

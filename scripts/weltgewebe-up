@@ -1228,12 +1228,11 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             BUILD_VERSION="unknown (parse error)"
         fi
 
-        DISPLAY_VERSION="$BUILD_VERSION"
-        if [[ -n "$BUILD_ID" ]]; then
-            DISPLAY_VERSION="$BUILD_ID"
+        if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
+            echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json)"
+        else
+            echo "OK (Version: $BUILD_VERSION verified via /_app/version.json)"
         fi
-
-        echo "OK (Build-ID / Version: $DISPLAY_VERSION verified via /_app/version.json)"
     else
         echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
     fi
