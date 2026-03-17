@@ -368,11 +368,11 @@ und zeigt einen Hinweis an.
 
 ### Phase A — Basis konsolidieren
 
-- [ ] Prüfen, ob `build/_app/version.json` bereits deterministisch erzeugt wird.
-- [ ] Schema minimal halten: `version`, `built_at`, optional `commit`.
-- [ ] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
-- [ ] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
-- [ ] Build-Integration in `apps/web/package.json` verifizieren.
+- [x] Prüfen, ob `build/_app/version.json` bereits deterministisch erzeugt wird.
+- [x] Schema minimal halten: `version`, `built_at`, optional `commit`.
+- [x] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
+- [x] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
+- [x] Build-Integration in `apps/web/package.json` verifizieren.
 
 **Stop-Kriterium:** `pnpm build` erzeugt reproduzierbar `build/_app/version.json`.
 
