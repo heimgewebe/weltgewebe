@@ -45,7 +45,9 @@ summary: >
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
+  - *Anmerkung: Verfrühter Vorratscode im Frontend wurde entfernt, da das konsumierbare Hosting gemäß Phase 1 noch blockiert.*
 - [ ] Externe Style-Abhängigkeiten entfernen
+  - *Anmerkung: Aktuell wird CartoCDN als Fallback genutzt.*
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)

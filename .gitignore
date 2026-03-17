@@ -58,6 +58,6 @@ artifacts/
 /nodes_output.json
 /nodes_output_2.json
 /test_output.png
-/verification/*.webm
-/verification/*.png
+/verification/map-*.webm
+/verification/map-*.png
 /verification/video/
