@@ -70,18 +70,9 @@ Pflichtfelder:
 
 ```json
 {
-  "version": "4f9a0e3-1742155012000",
+  "version": "4f9a0e3",
+  "build_id": "4f9a0e3-1742155012000",
   "built_at": "2026-03-16T20:10:12Z"
-}
-```
-
-Empfohlen:
-
-```json
-{
-  "version": "4f9a0e3-1742155012000",
-  "built_at": "2026-03-16T20:10:12Z",
-  "commit": "4f9a0e3"
 }
 ```
 
@@ -97,15 +88,15 @@ Optional, nur wenn sauber ableitbar:
 
 #### version
 
-Technische Build-ID. Soll sich pro realem Build/Deploy zuverlässig ändern.
+Kanonische und deterministische Artefakt-ID (z.B. Git-Commit). Bleibt für identische Quellcodes gleich.
+
+#### build_id
+
+Optionaler, nicht-kanonischer Bezeichner für den spezifischen CI-Lauf, meist zusammengesetzt aus Commit und Timestamp.
 
 #### built_at
 
-UTC-Zeitstempel des Builds.
-
-#### commit
-
-Der zugrunde liegende Git-Commit, falls verfügbar.
+UTC-Zeitstempel des Builds. Optional, falls Determinismus oberste Prio hat (kann via `SOURCE_DATE_EPOCH` überschrieben werden).
 
 #### release
 
@@ -115,8 +106,8 @@ Nur verwenden, wenn das Repo bereits einen sauberen fachlichen Release-Begriff h
 
 - Keine Platzhalter.
 - Keine geratenen Werte.
-- Keine Vermischung von Produktversion und technischer Build-ID.
-- Kein stilles Weglassen von `version`, wenn `commit` fehlt.
+- Vermischung von Inhalt und Zeit in der kanonischen `version`.
+- Kein stilles Weglassen von `version`, wenn `commit` fehlt (Fallback auf Epoche, falls unvermeidbar).
 
 ## 3. Build-Pipeline
 
@@ -124,20 +115,24 @@ Nur verwenden, wenn das Repo bereits einen sauberen fachlichen Release-Begriff h
 
 Bevorzugte Reihenfolge:
 
-1. `git rev-parse HEAD` oder short SHA.
-2. UTC-Timestamp.
-3. Kombination daraus (z.B. `<short-sha>-<epoch-ms>`).
+1. `version`: `git rev-parse HEAD` (oder short SHA).
+2. `build_id`: `<short-sha>-<epoch-ms>`
+3. `built_at`: UTC-Timestamp, ggf. via `SOURCE_DATE_EPOCH` fixiert.
 
-Beispiel:
+Beispiel `version.json`:
 
-`4f9a0e3-1742155012000`
+```json
+{
+  "version": "4f9a0e3",
+  "build_id": "4f9a0e3-1742155012000",
+  "built_at": "2026-03-16T20:10:12Z"
+}
+```
 
-Warum:
+Warum Duales Modell:
 
-- Nachvollziehbar.
-- Pro Build eindeutig.
-- Technisch statt marketinghaft.
-- Leicht vergleichbar.
+- `version` ermöglicht echte Reproduzierbarkeit (Commit A erzeugt Version A).
+- `build_id` + `built_at` behält den CI-Kontext für Deployment-Tracking, ohne die kanonische Identität zu vergiften.
 
 ### 3.2 Erzeugungsort
 

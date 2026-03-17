@@ -1,6 +1,6 @@
-import fs from "fs";
-import path from "path";
-import { execSync } from "child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { execSync } from "node:child_process";
 
 // Ensure we output to build/_app/version.json
 const targetFile = path.resolve(process.cwd(), "build/_app/version.json");
@@ -21,15 +21,21 @@ try {
   console.warn("WARNING: Could not determine git commit. Using fallback.");
 }
 
-const now = new Date();
+const now = process.env.SOURCE_DATE_EPOCH
+  ? new Date(parseInt(process.env.SOURCE_DATE_EPOCH, 10) * 1000)
+  : new Date();
 const epochMs = now.getTime();
 const builtAt = now.toISOString();
 
-// Format: <short-sha>-<epoch-ms> or fallback to just <epoch-ms>
-const version = shortSha ? `${shortSha}-${epochMs}` : `${epochMs}`;
+// Canonical artifact ID (deterministic). Fallback to epoch if no commit exists.
+const version = shortSha || `${epochMs}`;
+
+// CI run ID (volatile context)
+const buildId = shortSha ? `${shortSha}-${epochMs}` : `${epochMs}`;
 
 const payload = {
   version,
+  build_id: buildId,
   built_at: builtAt,
 };
 

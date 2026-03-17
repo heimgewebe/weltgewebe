@@ -850,7 +850,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
         shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
-        echo "{\"version\":\"mock-build-id-123\"}" > "$O_FILE"
+        echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
     fi
     # If -w %{http_code} is used, we output ONLY 200 to stdout
     if [[ "$*" == *"-w"* ]]; then
@@ -858,7 +858,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
     else
         # Fallback if no -w and no -o was used (for manual curls)
         if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
-            echo "{\"version\":\"mock-build-id-123\"}"
+            echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}"
         fi
     fi
     exit 0

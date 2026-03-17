@@ -4,6 +4,7 @@
   interface VersionData {
     version: string;
     build?: string;
+    build_id?: string;
     built_at?: string;
     commit?: string;
     release?: string;
@@ -38,7 +39,7 @@
       builtAtText = null;
     } else {
       // Prioritize explicit build id sources over generic git commit
-      const buildId = versionData.version || versionData.build || versionData.commit;
+      const buildId = versionData.build_id || versionData.version || versionData.build || versionData.commit;
       const release = versionData.release;
 
       if (release && buildId) {
