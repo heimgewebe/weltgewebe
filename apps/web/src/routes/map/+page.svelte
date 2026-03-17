@@ -302,6 +302,13 @@
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
+
+      // Cleanup PMTiles protocol mapping properly during HMR and unmounts
+      // as recommended by the PMTiles library. Note: moving this to an app-level
+      // setup function later could make this cleanup unnecessary.
+      import('maplibre-gl').then((ml) => {
+         ml.removeProtocol('pmtiles');
+      }).catch(() => { /* ignore */ });
     };
   });
 </script>

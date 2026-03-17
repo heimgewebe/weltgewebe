@@ -21,14 +21,9 @@ export function resolvePmtilesUrl(url: string, origin: string): string {
     const target = url.slice("pmtiles://".length);
     // Only bare aliases (without "/") are rewritten
     if (!target.includes("/")) {
-      try {
-        const normalizedHost = new URL(origin).host;
-        return `pmtiles://${normalizedHost}/basemap/${target}`;
-      } catch {
-        // Fallback for malformed origins
-        const fallbackHost = origin.replace(/^https?:\/\//, "");
-        return `pmtiles://${fallbackHost}/basemap/${target}`;
-      }
+      // Official PMTiles convention embeds the fully qualified HTTP(S) url
+      // Example: pmtiles://https://example.com/example.pmtiles
+      return `pmtiles://${origin}/basemap/${target}`;
     }
   }
   return url;
