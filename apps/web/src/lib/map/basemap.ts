@@ -8,3 +8,21 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
       throw new Error(`Unsupported basemap mode: ${config.mode}`);
   }
 }
+
+/**
+ * Resolves stable PMTiles aliases to their local runtime endpoints.
+ * A bare alias (e.g., 'pmtiles://basemap-hamburg.pmtiles') without any slashes
+ * is treated as a local alias and mapped to the basemap directory.
+ * Fully qualified PMTiles URLs (e.g., 'pmtiles://tiles.domain.org/basemap.pmtiles')
+ * are left unchanged.
+ */
+export function resolvePmtilesUrl(url: string, origin: string): string {
+  if (url.startsWith("pmtiles://")) {
+    const target = url.slice("pmtiles://".length);
+    // Only bare aliases (without "/") are rewritten
+    if (!target.includes("/")) {
+      return `pmtiles://${origin}/basemap/${target}`;
+    }
+  }
+  return url;
+}

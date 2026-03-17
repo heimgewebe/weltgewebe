@@ -19,7 +19,7 @@
   import { get } from 'svelte/store';
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle } from '$lib/map/basemap';
+  import { resolveBasemapStyle, resolvePmtilesUrl } from '$lib/map/basemap';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
@@ -223,7 +223,14 @@
       }
       container.addEventListener('click', handleMarkerClick);
 
-      maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+      try {
+        maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+      } catch (e: any) {
+        // Ignored. maplibregl throws if 'pmtiles' is already registered (e.g. during HMR/Remount)
+        if (!e.message?.includes('already registered')) {
+          console.warn('Failed to register pmtiles protocol', e);
+        }
+      }
 
       map = new maplibregl.Map({
         container,
@@ -236,13 +243,7 @@
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
         transformRequest: (url, resourceType) => {
-          if (url.startsWith('pmtiles://') && !url.includes('http://') && !url.includes('https://')) {
-            const alias = url.replace('pmtiles://', '');
-            return {
-              url: `pmtiles://${window.location.origin}/basemap/${alias}`
-            };
-          }
-          return { url };
+          return { url: resolvePmtilesUrl(url, window.location.origin) };
         }
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
