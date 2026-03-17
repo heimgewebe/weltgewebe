@@ -18,7 +18,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 |------------------------|--------------------------------------|--------------------------------------------------------|
 | **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
 | **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
-| **Architektur**        | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/`         |
+| **Architektur**        | Technische Boundaries, Integrationen | `docs/architekturstruktur.md`, `docs/architecture/`    |
 |                        | UI State Machine & Interaction       | `docs/blueprints/ui-state-machine.md`                  |
 |                        | Datenflüsse                          | `contracts/`                                           |
 | **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml`         |
@@ -28,7 +28,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 1. **Einführung lesen:** `docs/overview/inhalt.md` liefert Vision, Prinzipien und Scope.
 2. **Systematik prüfen:** Dieses Dokument zeigt, wo welche Detailtiefe zu finden ist.
 3. **Architektur & Fahrplan vertiefen:**
-   - `architekturstruktur.md` für Domänen & Komponenten.
+   - `docs/architekturstruktur.md` für Domänen & Komponenten.
    - `docs/process/fahrplan.md` für Timeline, Gates und Verantwortlichkeiten.
 4. **Ethik & UX-Vertiefung:**
    - `docs/ethik/` für Entscheidungskriterien und Risikokataloge.
