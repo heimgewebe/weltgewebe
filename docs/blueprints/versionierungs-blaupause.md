@@ -422,8 +422,7 @@ Referenzen:
 - [x] Fallback "Version unbekannt"
 - [x] Playwright Tests vorhanden
 
-**Stop-Kriterium:** Browser A und Browser B können ihre ausgelieferte Build-ID direkt vergleichen.
-Status: bereits erfüllt.
+**Stop-Kriterium (bereits erfüllt):** Browser A und Browser B können ihre ausgelieferte Build-ID direkt vergleichen.
 
 ### Phase F — Kontrollierte Selbstaktualisierung (PR 3)
 
