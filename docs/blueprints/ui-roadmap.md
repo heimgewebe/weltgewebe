@@ -132,9 +132,9 @@ Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig f
 
 ### [ ] Doku-Pflege
 
-- [ ] `ui-state-machine.md` besser in die Doku-Navigation einhängen
+- [x] `ui-state-machine.md` besser in die Doku-Navigation einhängen
 - [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
-- [ ] Fokus-Restore als UX-Regel statt fachlicher Kerninvariante markieren
+- [x] Fokus-Restore als UX-Regel statt fachlicher Kerninvariante markieren
 
 ### [ ] Strukturpflege
 
