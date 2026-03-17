@@ -70,18 +70,9 @@ Pflichtfelder:
 
 ```json
 {
-  "version": "4f9a0e3-1742155012000",
+  "version": "4f9a0e3",
+  "build_id": "4f9a0e3-1742155012000",
   "built_at": "2026-03-16T20:10:12Z"
-}
-```
-
-Empfohlen:
-
-```json
-{
-  "version": "4f9a0e3-1742155012000",
-  "built_at": "2026-03-16T20:10:12Z",
-  "commit": "4f9a0e3"
 }
 ```
 
@@ -97,15 +88,15 @@ Optional, nur wenn sauber ableitbar:
 
 #### version
 
-Technische Build-ID. Soll sich pro realem Build/Deploy zuverlässig ändern.
+Kanonische und deterministische Artefakt-ID (z.B. Git-Commit). Bleibt für identische Quellcodes gleich.
+
+#### build_id
+
+Optionaler, nicht-kanonischer Bezeichner für den spezifischen CI-Lauf, meist zusammengesetzt aus Commit und Timestamp.
 
 #### built_at
 
-UTC-Zeitstempel des Builds.
-
-#### commit
-
-Der zugrunde liegende Git-Commit, falls verfügbar.
+UTC-Zeitstempel des Builds. Optional, falls Determinismus oberste Prio hat (kann via `SOURCE_DATE_EPOCH` überschrieben werden).
 
 #### release
 
@@ -115,8 +106,8 @@ Nur verwenden, wenn das Repo bereits einen sauberen fachlichen Release-Begriff h
 
 - Keine Platzhalter.
 - Keine geratenen Werte.
-- Keine Vermischung von Produktversion und technischer Build-ID.
-- Kein stilles Weglassen von `version`, wenn `commit` fehlt.
+- Vermischung von Inhalt und Zeit in der kanonischen `version`.
+- Kein stilles Weglassen von `version`, wenn `commit` fehlt (Fallback auf Epoche, falls unvermeidbar).
 
 ## 3. Build-Pipeline
 
@@ -124,20 +115,24 @@ Nur verwenden, wenn das Repo bereits einen sauberen fachlichen Release-Begriff h
 
 Bevorzugte Reihenfolge:
 
-1. `git rev-parse HEAD` oder short SHA.
-2. UTC-Timestamp.
-3. Kombination daraus (z.B. `<short-sha>-<epoch-ms>`).
+1. `version`: `git rev-parse HEAD` (oder short SHA).
+2. `build_id`: `<short-sha>-<epoch-ms>`
+3. `built_at`: UTC-Timestamp, ggf. via `SOURCE_DATE_EPOCH` fixiert.
 
-Beispiel:
+Beispiel `version.json`:
 
-`4f9a0e3-1742155012000`
+```json
+{
+  "version": "4f9a0e3",
+  "build_id": "4f9a0e3-1742155012000",
+  "built_at": "2026-03-16T20:10:12Z"
+}
+```
 
-Warum:
+Warum Duales Modell:
 
-- Nachvollziehbar.
-- Pro Build eindeutig.
-- Technisch statt marketinghaft.
-- Leicht vergleichbar.
+- `version` ermöglicht echte Reproduzierbarkeit (Commit A erzeugt Version A).
+- `build_id` + `built_at` behält den CI-Kontext für Deployment-Tracking, ohne die kanonische Identität zu vergiften.
 
 ### 3.2 Erzeugungsort
 
@@ -316,17 +311,16 @@ Erfüllt, wenn:
 
 ### 8.1 Ziel
 
-Settings oder ein anderer diskreter Ort zeigt:
+Settings oder ein anderer diskreter Ort zeigt primär die kanonische Version:
 
-`Build abc123`
+`Version abc123`
 
-Optional:
+Optional, falls Release und Build-ID vorhanden sind:
 
-`Release 1.2.0 · Build abc123`
+`Release 1.2.0 · Version abc123`
+`(Build abc123-174... · gebaut am … UTC)`
 
-`Built at …`
-
-Die Bezeichnung „Build“ ist hierbei rein darstellungsbezogen und entspricht dem kanonischen Feld `version` der Build-Identität aus dem `version.json`-Payload.
+Die Bezeichnung „Version“ entspricht hierbei dem kanonischen Feld `version` der Artefakt-Identität. Die Angabe „Build“ (und der Zeitstempel) entspringt `build_id` bzw. `built_at` und liefert lediglich den sekundären Ausführungskontext des CI-Laufs.
 
 ### 8.2 Anforderungen
 
@@ -368,13 +362,13 @@ und zeigt einen Hinweis an.
 
 ### Phase A — Basis konsolidieren
 
-- [ ] Prüfen, ob `build/_app/version.json` bereits deterministisch erzeugt wird.
-- [ ] Schema minimal halten: `version`, `built_at`, optional `commit`.
-- [ ] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
-- [ ] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
-- [ ] Build-Integration in `apps/web/package.json` verifizieren.
+- [x] Prüfen, ob `build/_app/version.json` bei vorhandener Git-Metadaten-/Epoch-Basis deterministisch erzeugt wird (sonst pragmatischer Timestamp-Fallback).
+- [x] Schema minimal halten: `version`, `built_at`, optional `commit`.
+- [x] Sicherstellen, dass die Build-ID pro Build eindeutig ist.
+- [x] Sicherstellen, dass `version` das kanonische Feld ist und kein Alias-System entsteht.
+- [x] Build-Integration in `apps/web/package.json` verifizieren.
 
-**Stop-Kriterium:** `pnpm build` erzeugt reproduzierbar `build/_app/version.json`.
+**Stop-Kriterium:** `pnpm build` erzeugt `build/_app/version.json` (reproduzierbar, sofern Quell-Metadaten wie Git-Commit oder `SOURCE_DATE_EPOCH` verfügbar sind).
 
 ### Phase B — Edge-Semantik härten
 

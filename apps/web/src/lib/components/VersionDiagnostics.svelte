@@ -4,6 +4,7 @@
   interface VersionData {
     version: string;
     build?: string;
+    build_id?: string;
     built_at?: string;
     commit?: string;
     release?: string;
@@ -13,6 +14,7 @@
   let loading = true;
   let error = false;
   let displayText = 'Wird geladen...';
+  let buildIdText: string | null = null;
   let builtAtText: string | null = null;
 
   onMount(async () => {
@@ -32,22 +34,30 @@
   $: {
     if (loading) {
       displayText = 'Wird geladen...';
+      buildIdText = null;
       builtAtText = null;
     } else if (error || !versionData) {
       displayText = 'Version unbekannt';
+      buildIdText = null;
       builtAtText = null;
     } else {
-      // Prioritize explicit build id sources over generic git commit
-      const buildId = versionData.version || versionData.build || versionData.commit;
+      // Prioritize canonical version
+      const canonicalVersion = versionData.version || versionData.commit || versionData.build;
+      const buildId = versionData.build_id;
       const release = versionData.release;
 
-      if (release && buildId) {
-        displayText = `Release ${release} · Build ${buildId}`;
+      if (release && canonicalVersion) {
+        displayText = `Release ${release} · Version ${canonicalVersion}`;
+      } else if (canonicalVersion) {
+        displayText = `Version ${canonicalVersion}`;
       } else if (buildId) {
         displayText = `Build ${buildId}`;
       } else {
         displayText = 'Version unbekannt';
       }
+
+      // Secondary diagnostic build context
+      buildIdText = buildId && buildId !== canonicalVersion ? buildId : null;
 
       if (versionData.built_at) {
         const date = new Date(versionData.built_at);
@@ -73,9 +83,11 @@
 <div class="version-diagnostics">
   <span class="label">Versionsdiagnose:</span>
   <span class="value" data-testid="version-text">{displayText}</span>
-  {#if builtAtText}
-    <span class="timestamp" data-testid="version-date">
-      (gebaut am {builtAtText} UTC)
+  {#if buildIdText || builtAtText}
+    <span class="meta" data-testid="version-meta">
+      {#if buildIdText}(Build {buildIdText}){/if}
+      {#if buildIdText && builtAtText} · {/if}
+      {#if builtAtText}gebaut am {builtAtText} UTC{/if}
     </span>
   {/if}
 </div>
@@ -95,7 +107,7 @@
   .value {
     font-family: monospace;
   }
-  .timestamp {
+  .meta {
     font-size: 0.75rem;
     opacity: 0.8;
   }

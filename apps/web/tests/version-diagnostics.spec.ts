@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Version Diagnostics", () => {
-  test("displays build ID when version.json is successfully fetched", async ({
+  test("displays canonical version and optional build_id when version.json is successfully fetched", async ({
     page,
   }) => {
     await page.route("**/_app/version.json", async (route) => {
@@ -9,7 +9,8 @@ test.describe("Version Diagnostics", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          version: "test-build-12345",
+          version: "abc1234",
+          build_id: "abc1234-1742155012000",
           release: "1.2.0",
           built_at: "2026-03-15T12:00:00Z",
         }),
@@ -18,10 +19,10 @@ test.describe("Version Diagnostics", () => {
 
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
-      "Release 1.2.0 · Build test-build-12345",
+      "Release 1.2.0 · Version abc1234",
     );
-    await expect(page.locator('[data-testid="version-date"]')).toContainText(
-      "15.03.2026",
+    await expect(page.locator('[data-testid="version-meta"]')).toContainText(
+      "(Build abc1234-1742155012000) · gebaut am 15.03.2026",
     );
   });
 
@@ -39,7 +40,9 @@ test.describe("Version Diagnostics", () => {
     );
   });
 
-  test("displays only build ID when release is missing", async ({ page }) => {
+  test("displays only version when release and build_id are missing", async ({
+    page,
+  }) => {
     await page.route("**/_app/version.json", async (route) => {
       await route.fulfill({
         status: 200,
@@ -52,10 +55,10 @@ test.describe("Version Diagnostics", () => {
 
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
-      "Build test-build-67890",
+      "Version test-build-67890",
     );
-    // The timestamp element should not be rendered if built_at is missing
-    await expect(page.locator('[data-testid="version-date"]')).toHaveCount(0);
+    // The meta element should not be rendered if built_at and build_id are missing
+    await expect(page.locator('[data-testid="version-meta"]')).toHaveCount(0);
   });
 
   test("remains stable and hides timestamp if built_at is invalid", async ({
@@ -74,8 +77,8 @@ test.describe("Version Diagnostics", () => {
 
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
-      "Build test-build-invalid-date",
+      "Version test-build-invalid-date",
     );
-    await expect(page.locator('[data-testid="version-date"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="version-meta"]')).toHaveCount(0);
   });
 });

@@ -850,7 +850,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
         shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
-        echo "{\"version\":\"mock-build-id-123\"}" > "$O_FILE"
+        echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
     fi
     # If -w %{http_code} is used, we output ONLY 200 to stdout
     if [[ "$*" == *"-w"* ]]; then
@@ -858,7 +858,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
     else
         # Fallback if no -w and no -o was used (for manual curls)
         if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
-            echo "{\"version\":\"mock-build-id-123\"}"
+            echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}"
         fi
     fi
     exit 0
@@ -875,7 +875,7 @@ chmod +x mock_bin/curl
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
    echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
-   echo "$OUTPUT" | grep -q "Build-ID / Version: mock-build-id-123"; then
+   echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json)"; then
     echo "PASS: Valid cache headers and version.json correctly passed the guards."
 else
     echo "FAIL: Positive cache header validation path failed."

@@ -1222,10 +1222,17 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
         # Robust parsing: strip newlines, find "version" key with optional spaces, extract value cleanly
         BUILD_VERSION=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
+        BUILD_ID=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"build_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
+
         if [[ -z "$BUILD_VERSION" ]]; then
             BUILD_VERSION="unknown (parse error)"
         fi
-        echo "OK (Build-ID / Version: $BUILD_VERSION verified via /_app/version.json)"
+
+        if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
+            echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json)"
+        else
+            echo "OK (Version: $BUILD_VERSION verified via /_app/version.json)"
+        fi
     else
         echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
     fi
