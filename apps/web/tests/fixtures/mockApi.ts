@@ -18,6 +18,20 @@ import {
 export async function mockApiResponses(page: Page): Promise<void> {
   // intercept MapLibre styling which requires an internet connection in playwright tests
   await page.route(
+    "**/local-style/style.json",
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          version: 8,
+          sources: {},
+          layers: [],
+        }),
+      });
+    },
+  );
+  await page.route(
     "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
     (route) => {
       route.fulfill({

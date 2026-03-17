@@ -19,7 +19,7 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
+- [x] Hosting-Ziel festlegen (Entscheidung: Dev-Server für lokale Entwicklung etabliert, externes Hosting noch offen)
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -44,11 +44,12 @@ summary: >
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
 
-- [ ] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Verfrühter Vorratscode im Frontend wurde entfernt, da das konsumierbare Hosting gemäß Phase 1 noch blockiert.*
+- [x] PMTiles-Protokoll in MapLibre registrieren
+  - *Anmerkung: Protokoll via lazy-load (`pmtiles`) im Client implementiert.*
 - [ ] Externe Style-Abhängigkeiten entfernen
-  - *Anmerkung: Aktuell wird CartoCDN als Fallback genutzt.*
+  - *Anmerkung: Aktuell wird CartoCDN als Fallback genutzt, da das lokale PMTiles-Artefakt im Repo fehlt.*
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - *Anmerkung: Dev-Server (`vite.config.ts`), `transformRequest` und Protokoll sind vorbereitet. Umschaltung auf `local-sovereign` blockiert durch fehlende Artefakte (`basemap-hamburg.pmtiles`, Glyphen, Sprites).*
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

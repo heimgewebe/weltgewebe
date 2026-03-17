@@ -1,8 +1,8 @@
-export type BasemapMode = "remote-style";
+export type BasemapMode = "remote-style" | "local-sovereign";
 
 export type BasemapConfig = {
   mode: BasemapMode;
-  styleUrl: string;
+  styleUrl?: string;
   center: [number, number];
   zoom: number;
   minZoom?: number;
@@ -17,8 +17,7 @@ export const HAMMER_PARK_CENTER = {
 };
 
 export const currentBasemap: BasemapConfig = {
-  mode: "remote-style",
-  styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+  mode: "local-sovereign",
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
   zoom: 15,
   minZoom: 10,

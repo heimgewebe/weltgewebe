@@ -246,11 +246,19 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      const pmtiles = await import('pmtiles');
+
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
+
+      try {
+        maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+      } catch (e) {
+        // Idempotent registration: ignore if already added (e.g. during HMR)
+      }
 
       map = new maplibregl.Map({
         container,
@@ -262,6 +270,15 @@
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
+        transformRequest: (url, resourceType) => {
+          if (url.startsWith('pmtiles://') && !url.includes('http')) {
+             const bareAlias = url.replace('pmtiles://', '');
+             return {
+               url: `pmtiles://${window.location.origin}/local-basemap/${bareAlias}`
+             };
+          }
+          return { url };
+        }
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -309,6 +326,10 @@
     })();
 
     return () => {
+      import('maplibre-gl').then(maplibregl => {
+         try { maplibregl.removeProtocol('pmtiles'); } catch (e) { /* ignore */ }
+      }).catch(() => { /* ignore */ });
+
       if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;
       }
