@@ -3,7 +3,10 @@ import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("Filter mode", () => {
   test.beforeEach(async ({ page }) => {
-    // Explicit, deterministic mock data
+    // 1. Load the base mock API to prevent CartoCDN errors, etc.
+    await mockApiResponses(page);
+
+    // 2. Explicit, deterministic mock data overrides
     await page.route("**/api/nodes", async (route) => {
       route.fulfill({
         status: 200,
@@ -51,9 +54,6 @@ test.describe("Filter mode", () => {
       });
     });
 
-    // We still load the rest of the mock API to prevent CartoCDN errors, etc.
-    await mockApiResponses(page);
-
     await page.goto("/map");
     // Wait for the map to be ready
     await page.waitForFunction(() =>
@@ -76,39 +76,34 @@ test.describe("Filter mode", () => {
     const overlay = page.getByTestId("filter-overlay");
     await expect(overlay).toBeVisible();
 
-    // Wait for the labels to populate. In our mock override, we have 'Event', 'Place', and 'Garnrolle' (3).
-    // Note: Due to Playwright's parallel execution and route overrides, sometimes the global
-    // `mockApiResponses` executes *after* the local route override if not managed carefully.
-    // To fix this without flaky delays, we'll assert that AT LEAST TWO options are visible,
-    // click one of them, and ensure the map marker count goes down.
+    // Our explicit mock defines exactly 3 types: "Event", "Place", and "Garnrolle".
+    // We expect the overlay to list all of them.
     const filterLabels = page.locator(".filter-label");
-    await expect(filterLabels.nth(1)).toBeVisible();
+    await expect(filterLabels).toHaveCount(3);
 
-    // Wait for markers to appear
-    await expect(page.locator(".map-marker").first()).toBeVisible();
+    // Check they contain the expected text (order might vary)
+    await expect(
+      page.locator("label.filter-item", { hasText: "Event" }),
+    ).toBeVisible();
+    await expect(
+      page.locator("label.filter-item", { hasText: "Place" }),
+    ).toBeVisible();
+    await expect(
+      page.locator("label.filter-item", { hasText: "Garnrolle" }),
+    ).toBeVisible();
 
-    // Save current marker count for reference.
-    const currentMarkerCount = await page.locator(".map-marker").count();
-    expect(currentMarkerCount).toBeGreaterThan(1);
-
-    // Get the label texts before clicking
-    const selectedLabelText = await filterLabels.nth(0).innerText();
-
-    // 2. We want to test exact exclusion.
-    // Click the first label to filter by it.
-    await filterLabels.nth(0).click();
+    // 2. Test exact exclusion dynamically
+    // Currently, all 3 are technically "visible" on the map (no active filters means show all).
+    // We filter to ONLY show "Event".
+    const eventLabel = page.locator("label.filter-item", { hasText: "Event" });
+    await eventLabel.click();
 
     // Verify clear button appears
     const clearBtn = page.getByRole("button", { name: "Alle löschen" });
     await expect(clearBtn).toBeVisible();
 
-    // Marker count should strictly drop to less than the pre-filtered count.
-    await expect(page.locator(".map-marker")).not.toHaveCount(
-      currentMarkerCount,
-    );
-    const filteredCount = await page.locator(".map-marker").count();
-    expect(filteredCount).toBeLessThan(currentMarkerCount);
-    expect(filteredCount).toBeGreaterThan(0);
+    // The marker count MUST strictly drop to 1 because there is exactly 1 Event node in the mock.
+    await expect(page.locator(".map-marker")).toHaveCount(1);
 
     // 3. Verify Search operates ONLY on the filtered base
     await searchBtn.click();
@@ -125,7 +120,7 @@ test.describe("Filter mode", () => {
     // so we clear it explicitly first.
     await searchInput.clear();
 
-    // Search for an explicitly excluded item
+    // Search for an explicitly excluded node item
     // Since our item "Test Node 2" (Place) was filtered out, let's search for "Test Node 2" directly
     await searchInput.fill("Test Node 2");
     await expect(page.locator(".result-item")).toHaveCount(0);
@@ -135,18 +130,25 @@ test.describe("Filter mode", () => {
 
     await searchInput.clear();
 
-    // The previous filter is still active (only 'Event' is checked).
-    // We searched for "Test Node 2" and found nothing.
-    // Now we search for the original selected label text (e.g. Event) to make sure our
-    // filtering logic works generically regardless of what the first element was.
-    await searchInput.fill(selectedLabelText);
-    // Explicitly wait for results to appear to avoid test flakiness
-    // We assert that the status item indicating NO results does not exist
-    await expect(page.getByRole("status")).not.toBeVisible();
+    // Search for an explicitly excluded account item
+    // Since our item "Test Account" (Garnrolle) was filtered out, let's search for "Test Account"
+    await searchInput.fill("Test Account");
+    await expect(page.locator(".result-item")).toHaveCount(0);
+    await expect(page.getByRole("status")).toHaveText(
+      `Keine Treffer für "Test Account"`,
+    );
 
-    // Then we assert that there are some results, and the first one is visible
-    const resultItem = page.locator(".result-item").first();
-    await expect(resultItem).toBeVisible();
+    await searchInput.clear();
+
+    // Search for the strictly included item
+    // In our mock, 'Test Node 1' is an 'Event'.
+    await searchInput.fill("Test Node 1");
+    // Explicitly wait for results to appear to avoid test flakiness
+    // We assert that exactly 1 result is visible
+    await expect(page.locator(".result-item")).toHaveCount(1);
+    await expect(page.locator(".result-item").first()).toHaveText(
+      /Test Node 1/,
+    );
 
     // 4. Close Search, open Filter again, clear filters
     await filterBtn.click();
@@ -156,7 +158,7 @@ test.describe("Filter mode", () => {
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
 
-    // Verify marker count returns to 3
+    // Assert marker count returns to 3
     await expect(page.locator(".map-marker")).toHaveCount(3);
 
     // 5. Test Escape key support
