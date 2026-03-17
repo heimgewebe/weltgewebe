@@ -20,7 +20,7 @@ use self::{
         consume_login_get, consume_login_post, dev_login, list_dev_accounts, logout, me,
         request_login,
     },
-    edges::list_edges,
+    edges::{get_edge, list_edges},
     nodes::{get_node, list_nodes, patch_node},
 };
 
@@ -34,6 +34,7 @@ pub fn api_router() -> Router<ApiState> {
                 .route_layer(from_fn(require_write)),
         )
         .route("/edges", get(list_edges))
+        .route("/edges/:id", get(get_edge))
         .route("/accounts", get(list_accounts))
         .route("/accounts/:id", get(get_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))
