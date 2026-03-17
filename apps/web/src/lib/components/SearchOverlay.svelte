@@ -112,7 +112,6 @@
           bind:this={listEl}
         >
           {#each filteredResults as result, index}
-            <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
             <li
               id={`search-result-${result.id}`}
               class="result-item"
