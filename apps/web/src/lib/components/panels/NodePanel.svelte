@@ -312,34 +312,6 @@
     margin-bottom: 1.5rem;
   }
 
-  .tabs {
-    display: flex;
-    gap: 0.5rem;
-    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
-    margin-bottom: 1rem;
-    overflow-x: auto;
-  }
-
-  .tabs button {
-    background: none;
-    border: none;
-    padding: 0.5rem 1rem;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    color: var(--ghost, #666);
-    white-space: nowrap;
-  }
-
-  .tabs button.active {
-    border-bottom-color: var(--accent, #0070f3);
-    color: var(--text, #333);
-    font-weight: bold;
-  }
-
-  .tab-content {
-    padding-top: 0.5rem;
-  }
-
   .ghost {
     color: var(--muted, #9aa4b2);
     font-size: 0.9rem;
@@ -417,40 +389,4 @@
     cursor: not-allowed;
   }
 
-  /* Timeline Styles */
-  .timeline {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    border-left: 2px solid var(--panel-border, rgba(255, 255, 255, 0.1));
-    margin-left: 0.5rem;
-  }
-
-  .timeline li {
-    padding-left: 1rem;
-    position: relative;
-    margin-bottom: 1.5rem;
-  }
-
-  .timeline li::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 0.25rem;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--accent, #6aa6ff);
-  }
-
-  .timeline .date {
-    display: block;
-    font-size: 0.8rem;
-    color: var(--muted, #9aa4b2);
-    margin-bottom: 0.25rem;
-  }
-
-  .timeline .event {
-    font-size: 0.95rem;
-  }
 </style>
