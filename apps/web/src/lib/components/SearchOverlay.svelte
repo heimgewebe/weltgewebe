@@ -3,6 +3,7 @@
   import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
   import { contextPanelOpen } from '$lib/stores/uiView';
   import type { RenderableMapPoint } from '$lib/map/types';
+  import { restoreTarget } from '$lib/utils/focusManager';
 
   export let filteredResults: RenderableMapPoint[] = [];
 
@@ -13,17 +14,25 @@
   let inputEl: HTMLInputElement;
   let listEl: HTMLUListElement;
   let activeIndex = -1;
+  let wasOpen = false;
 
   // focus on input when search opens and reset active index
-  $: if ($isSearchOpen) {
-    (async () => {
-      await tick();
-      if ($isSearchOpen && inputEl) {
-        inputEl.focus();
+  $: {
+    if ($isSearchOpen) {
+      wasOpen = true;
+      (async () => {
+        await tick();
+        if ($isSearchOpen && inputEl) {
+          inputEl.focus();
+        }
+      })();
+    } else {
+      activeIndex = -1;
+      if (wasOpen) {
+        wasOpen = false;
+        restoreTarget('search');
       }
-    })();
-  } else {
-    activeIndex = -1;
+    }
   }
 
   // Reset activeIndex when results change
@@ -86,7 +95,7 @@
 <svelte:window on:keydown={handleGlobalKeydown} />
 
 {#if $isSearchOpen}
-  <div class="search-overlay" class:panel-open={$contextPanelOpen} data-testid="search-overlay">
+  <div class="search-overlay" class:panel-open={$contextPanelOpen} data-testid="search-overlay" role="dialog" aria-label="Suche" aria-modal="false">
     <div class="search-box">
       <input
         bind:this={inputEl}

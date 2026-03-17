@@ -127,4 +127,23 @@ test.describe("Search mode", () => {
     await searchBtn.click();
     await expect(searchInput).toHaveValue("");
   });
+
+  test("focus restores to search button on Escape", async ({ page }) => {
+    await page.goto("/map");
+
+    const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
+    await searchBtn.click();
+
+    const searchOverlay = page.locator('[data-testid="search-overlay"]');
+    await expect(searchOverlay).toBeVisible();
+
+    const searchInput = page.locator(".search-box input");
+    await expect(searchInput).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(searchOverlay).not.toBeVisible();
+
+    // Verify focus is restored back to the search button
+    await expect(searchBtn).toBeFocused();
+  });
 });

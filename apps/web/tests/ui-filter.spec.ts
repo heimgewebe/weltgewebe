@@ -149,7 +149,7 @@ test.describe("Filter mode", () => {
     await expect(page.locator(markerSelector)).toHaveCount(3);
   });
 
-  test("Case C: Overlay exclusivity", async ({ page }) => {
+  test("Case C: Overlay exclusivity and focus shift", async ({ page }) => {
     const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
     const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
 
@@ -161,15 +161,19 @@ test.describe("Filter mode", () => {
     await expect(searchOverlay).toBeVisible();
     await expect(filterOverlay).not.toBeVisible();
 
-    // Open filter -> Search closes
+    // Open filter -> Search closes, focus should be inside filter
     await filterBtn.click();
     await expect(filterOverlay).toBeVisible();
     await expect(searchOverlay).not.toBeVisible();
+    const firstCheckbox = page.locator('input[type="checkbox"]').first();
+    await expect(firstCheckbox).toBeFocused();
 
-    // Open search -> Filter closes
+    // Open search -> Filter closes, focus should be inside search
     await searchBtn.click();
     await expect(searchOverlay).toBeVisible();
     await expect(filterOverlay).not.toBeVisible();
+    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    await expect(searchInput).toBeFocused();
   });
 
   test("Case D: Focus management for Filter", async ({ page }) => {
