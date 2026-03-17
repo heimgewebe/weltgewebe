@@ -68,8 +68,10 @@ test.describe("Filter mode", () => {
     const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
     const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
 
+    // Use an explicit, robust selector to cover both standard nodes and accounts.
     // Initial marker count should be exactly 3 (2 nodes + 1 account)
-    await expect(page.locator(".map-marker")).toHaveCount(3);
+    const markerSelector = ".map-marker, .marker-account";
+    await expect(page.locator(markerSelector)).toHaveCount(3);
 
     // 1. Open filter overlay
     await filterBtn.click();
@@ -103,7 +105,7 @@ test.describe("Filter mode", () => {
     await expect(clearBtn).toBeVisible();
 
     // The marker count MUST strictly drop to 1 because there is exactly 1 Event node in the mock.
-    await expect(page.locator(".map-marker")).toHaveCount(1);
+    await expect(page.locator(markerSelector)).toHaveCount(1);
 
     // 3. Verify Search operates ONLY on the filtered base
     await searchBtn.click();
@@ -159,7 +161,7 @@ test.describe("Filter mode", () => {
     await expect(clearBtn).not.toBeVisible();
 
     // Assert marker count returns to 3
-    await expect(page.locator(".map-marker")).toHaveCount(3);
+    await expect(page.locator(markerSelector)).toHaveCount(3);
 
     // 5. Test Escape key support
     await page.keyboard.press("Escape");

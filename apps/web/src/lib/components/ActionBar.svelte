@@ -7,6 +7,11 @@
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
   }
 
+  import { tick } from 'svelte';
+
+  let searchBtnEl: HTMLButtonElement;
+  let filterBtnEl: HTMLButtonElement;
+
   function onToggleSearch() {
     if ($isFilterOpen) {
       closeFilter();
@@ -20,12 +25,27 @@
     }
     toggleFilter();
   }
+
+  // Restore focus when closing overlays if we were inside them
+  $: if (!$isFilterOpen && filterBtnEl && typeof document !== 'undefined' && document.activeElement) {
+     const active = document.activeElement;
+     if (active.closest && active.closest('.filter-overlay')) {
+         tick().then(() => filterBtnEl.focus());
+     }
+  }
+
+  $: if (!$isSearchOpen && searchBtnEl && typeof document !== 'undefined' && document.activeElement) {
+     const active = document.activeElement;
+     if (active.closest && active.closest('.search-overlay')) {
+         tick().then(() => searchBtnEl.focus());
+     }
+  }
 </script>
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
-  <button class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
+  <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
-  <button class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
+  <button bind:this={filterBtnEl} class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
 </nav>
 
 <style>
