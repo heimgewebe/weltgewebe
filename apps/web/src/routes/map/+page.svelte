@@ -116,18 +116,11 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  // Reactive update for markers and search highlight to avoid asynchronous drift
+  // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && markersData && $view) {
     (async () => {
-      await nodesOverlay.update(markersData, $view.showNodes);
-      nodesOverlay.updateSearchHighlight(searchMatchIds);
+      await nodesOverlay.update(markersData, $view.showNodes, searchMatchIds);
     })();
-  }
-
-  // Secondary reactive update strictly for when searchMatchIds changes independently.
-  // Re-apply highlight when only searchMatchIds changes, because markersData/view may stay referentially stable.
-  $: if (nodesOverlay) {
-    nodesOverlay.updateSearchHighlight(searchMatchIds);
   }
 
   // Reactive update for edges
@@ -139,6 +132,35 @@
      }
   }
 
+
+  function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
+    if (type === 'account' || type === 'garnrolle') {
+      return type;
+    }
+    return 'node';
+  }
+
+  function focusAndFlyToPoint(item: RenderableMapPoint) {
+    const itemType = normalizeSelectionType(item.type);
+
+    enterFokus({ type: itemType, id: item.id, data: item });
+
+    const lat = item.lat;
+    const lon = item.lon;
+    if (map && typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+      const currentZoom = map.getZoom();
+      map.flyTo({
+        center: [lon, lat],
+        zoom: Math.max(currentZoom, 14),
+        speed: 0.8,
+        curve: 1
+      });
+    }
+  }
+
+  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+    focusAndFlyToPoint(event.detail);
+  }
 
   // Restore focus when selection is closed or state becomes navigation
   $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
@@ -188,23 +210,8 @@
       const entry = nodesOverlay.getActiveMarker(id);
       if (!entry) return;
 
-      const { item } = entry;
-      const itemType = item.type || 'node';
-
       lastFocusedElement = markerBtn;
-      enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
-
-      const lat = item.lat;
-      const lon = item.lon;
-      if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
-        const currentZoom = map?.getZoom() ?? 14;
-        map?.flyTo({
-          center: [lon, lat],
-          zoom: Math.max(currentZoom, 14),
-          speed: 0.8,
-          curve: 1
-        });
-      }
+      focusAndFlyToPoint(entry.item);
     };
 
     (async () => {
@@ -347,16 +354,16 @@
   }
 
   #map :global(.map-marker.search-highlight) {
-    outline: 2px solid var(--error, #e53e3e);
+    outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
     z-index: 5;
   }
 
   #map :global(.marker-account.search-highlight) {
-    outline: 2px solid var(--error, #e53e3e);
+    outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
   }
 
   #map :global(.marker-account:focus-visible) {
@@ -400,7 +407,7 @@
 
 <main class="shell">
   <ContextPanel />
-  <SearchOverlay {filteredResults} />
+  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
