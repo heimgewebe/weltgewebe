@@ -19,6 +19,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 | **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
 | **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
 | **Architektur**        | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/`         |
+|                        | UI State Machine & Interaction       | `docs/blueprints/ui-state-machine.md`                  |
 |                        | Datenflüsse                          | `contracts/`                                           |
 | **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml`         |
 

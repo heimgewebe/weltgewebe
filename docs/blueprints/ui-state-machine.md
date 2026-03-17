@@ -112,12 +112,6 @@ type KompositionDraft =
 
 Es darf keine zweite Open-State-Quelle existieren.
 
-### Fokus-Restore als UX-Regel
-
-Der Fokus-Restore (das Zurücksetzen des UI-Fokus auf den zuletzt aktiven Marker oder das Trigger-Element nach Schließen eines Panels) ist eine **UX-Regel** und keine fachliche Kerninvariante der State Machine.
-
-Ein fehlgeschlagener Fokus-Restore (z. B. weil das DOM-Element nicht mehr existiert) darf den globalen Zustandsübergang (z. B. `fokus` -> `navigation`) nicht blockieren oder invalidieren.
-
 ## 5 Erlaubte Übergänge
 
 ### navigation → fokus
@@ -134,6 +128,7 @@ Ein fehlgeschlagener Fokus-Restore (z. B. weil das DOM-Element nicht mehr existi
 
 - Trigger: empty map click, panel close
 - Effekt: `selection = null`, `systemState = "navigation"`
+- **UX-Regel:** Der Fokus sollte (sofern DOM-technisch möglich) auf das Trigger-Element (Marker/Liste) zurückkehren. Ein fehlgeschlagener Restore blockiert oder invalidiert diesen Zustandsübergang jedoch explizit nicht.
 
 ### fokus → fokus
 
