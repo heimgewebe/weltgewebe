@@ -19,7 +19,8 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [x] Hosting-Ziel festlegen (Entscheidung: Dev-Server für lokale Entwicklung etabliert, externes Hosting noch offen)
+- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
+  - *Anmerkung: Dev-Server Proxy für lokale Entwicklung etabliert, produktives Hosting-Ziel noch offen.*
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -44,8 +45,8 @@ summary: >
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
 
-- [x] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Protokoll via lazy-load (`pmtiles`) im Client implementiert.*
+- [ ] PMTiles-Protokoll in MapLibre registrieren
+  - *Anmerkung: Dev-Infrastruktur (Code, Lazy-Load) ist vorbereitet. Harte Umschaltung in Produktion bleibt blockiert.*
 - [ ] Externe Style-Abhängigkeiten entfernen
   - *Anmerkung: Aktuell wird CartoCDN als Fallback genutzt, da das lokale PMTiles-Artefakt im Repo fehlt.*
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden

@@ -16,7 +16,8 @@ import {
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
 export async function mockApiResponses(page: Page): Promise<void> {
-  // intercept MapLibre styling which requires an internet connection in playwright tests
+  // Mock local-style solely to decouple Dev infrastructure tests.
+  // This is a test helper and DOES NOT prove the artifact actually exists in the repo.
   await page.route("**/local-style/style.json", (route) => {
     route.fulfill({
       status: 200,

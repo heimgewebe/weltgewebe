@@ -271,11 +271,15 @@
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
         transformRequest: (url, resourceType) => {
-          if (url.startsWith('pmtiles://') && !url.includes('http')) {
-             const bareAlias = url.replace('pmtiles://', '');
-             return {
-               url: `pmtiles://${window.location.origin}/local-basemap/${bareAlias}`
-             };
+          if (url.startsWith('pmtiles://')) {
+             const remainder = url.replace('pmtiles://', '');
+             // A bare alias contains no slashes.
+             // If there are slashes, it's already a fully qualified or relative HTTP path wrapped in pmtiles://
+             if (!remainder.includes('/')) {
+               return {
+                 url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
+               };
+             }
           }
           return { url };
         }
