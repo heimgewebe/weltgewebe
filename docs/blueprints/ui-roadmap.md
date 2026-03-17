@@ -106,13 +106,13 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Karte zentriert sinnvoll auf den ausgewählten Treffer (flyTo)
 - [x] *Search als lokalen Modus halten, nicht als vierten Global-State modellieren*
 
-### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
+### [x] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
 
-> Aktueller Stand: Offen. Ein Filter-Button ist vorhanden, jedoch fehlt weiterhin eine echte Filter-UI sowie nutzerseitige Steuerlogik. Bestehende interne Datenfilterung (z. B. `validEdges.filter`) dient lediglich der Konsistenz und stellt noch keinen nutzerseitigen Filtermodus dar.
+> Aktueller Stand: Abgeschlossen. Eine Filter-UI wurde als lokaler Modus (ähnlich der Suche) implementiert. Marker auf der Karte werden entsprechend der Auswahl (z.B. Knoten vs Garnrolle) gefiltert.
 
-- [ ] Filter-UI ergänzen
-- [ ] Karten-/Treffer-Filterung anbinden
-- [ ] *Keine neue globale Hauptzustandsklasse einführen*
+- [x] Filter-UI ergänzen
+- [x] Karten-/Treffer-Filterung anbinden
+- [x] *Keine neue globale Hauptzustandsklasse einführen*
 
 ### [x] Roadmap PR 8 — A11y und Keyboard-Navigation
 

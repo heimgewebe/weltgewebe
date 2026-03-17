@@ -9,10 +9,12 @@
   import ContextPanel from '$lib/components/ContextPanel.svelte';
   import ActionBar from '$lib/components/ActionBar.svelte';
   import SearchOverlay from '$lib/components/SearchOverlay.svelte';
+  import FilterOverlay from '$lib/components/FilterOverlay.svelte';
   import type { Edge, RenderableMapPoint } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import { activeFilters } from '$lib/stores/filterStore';
   import { authStore } from '$lib/auth/store';
   import { isRecord } from '$lib/utils/guards';
 
@@ -116,19 +118,40 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
+  // Derivation of filterable types
+  $: availableFilterTypes = (() => {
+    const counts = new Map<string, number>();
+    for (const m of markersData) {
+      const typeKey = m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+      counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([id, count]) => ({
+      id,
+      label: id.charAt(0).toUpperCase() + id.slice(1),
+      count
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
+  $: filteredMarkersData = $activeFilters.size === 0
+    ? markersData
+    : markersData.filter(m => {
+        const typeKey = m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+        return $activeFilters.has(typeKey);
+      });
+
   // Reactive update for markers and search highlight strictly handled in overlay update
-  $: if (nodesOverlay && markersData && $view) {
+  $: if (nodesOverlay && filteredMarkersData && $view) {
     (async () => {
-      await nodesOverlay.update(markersData, $view.showNodes, searchMatchIds);
+      await nodesOverlay.update(filteredMarkersData, $view.showNodes, searchMatchIds);
     })();
   }
 
   // Reactive update for edges
   $: if (map && markersData && edgesData && $view && map.getStyle()) {
      if (map.isStyleLoaded()) {
-        updateEdges(map, edgesData, markersData, $view.showEdges);
+        updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
      } else {
-        map.once('styledata', () => updateEdges(map!, edgesData, markersData, $view.showEdges));
+        map.once('styledata', () => updateEdges(map!, edgesData, filteredMarkersData, $view.showEdges));
      }
   }
 
@@ -408,6 +431,7 @@
 <main class="shell">
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  <FilterOverlay availableTypes={availableFilterTypes} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
   import { toggleSearch, isSearchOpen } from '$lib/stores/searchStore';
+  import { toggleFilter, isFilterOpen } from '$lib/stores/filterStore';
 
   function onNewNode() {
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
@@ -14,7 +15,7 @@
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
   <button class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
-  <button class="action-btn" aria-label="Filter">Filter</button>
+  <button class="action-btn" class:active={$isFilterOpen} on:click={toggleFilter} aria-label="Filter">Filter</button>
 </nav>
 
 <style>
