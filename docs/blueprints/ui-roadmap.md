@@ -118,7 +118,7 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 - [x] Escape-Verhalten definieren
 - [x] Fokusmanagement bei Markerwechsel weiter härten (Suche/ContextPanel stabilisiert)
 - [x] `aria-*` für Tabs/Tabpanels grundlegend ergänzt
-- [x] Screenreader-taugliche Rollen vollständig absichern (Listbox/Option Pattern für Suche integriert)
+- [x] Screenreader-taugliche Rollen weitgehend ergänzt (Listbox/Option Pattern für Suche integriert)
 
 ⸻
 

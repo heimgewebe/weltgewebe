@@ -95,7 +95,7 @@
         placeholder="Gewebe durchsuchen..."
         aria-label="Suchbegriff"
         aria-autocomplete="list"
-        aria-controls={$searchQuery.trim().length > 0 ? "search-results-listbox" : undefined}
+        aria-controls={$searchQuery.trim().length > 0 && filteredResults.length > 0 ? "search-results-listbox" : undefined}
         aria-activedescendant={activeIndex >= 0 && filteredResults.length > 0 ? `search-result-${filteredResults[activeIndex]?.id}` : undefined}
         on:keydown={handleInputKeydown}
       />
@@ -103,36 +103,39 @@
     </div>
 
     {#if $searchQuery.trim().length > 0}
-      <ul
-        class="results"
-        id="search-results-listbox"
-        role="listbox"
-        aria-label="Suchergebnisse"
-        bind:this={listEl}
-      >
-        {#each filteredResults as result, index}
-          <!-- svelte-ignore a11y-click-events-have-key-events -->
-          <li
-            id={`search-result-${result.id}`}
-            class="result-item"
-            role="option"
-            aria-selected={activeIndex === index}
-            class:active={activeIndex === index}
-            on:click={() => onSelect(result)}
-            on:mouseenter={() => (activeIndex = index)}
-          >
-            <div class="result-content">
-              <span class="result-title">{result.title}</span>
-              {#if result.summary}
-                <span class="result-summary">{result.summary.length > 60 ? result.summary.slice(0, 60) + '...' : result.summary}</span>
-              {/if}
-            </div>
-            <span class="result-type">{result.type === 'node' ? 'Knoten' : 'Garnrolle'}</span>
-          </li>
-        {:else}
-          <li class="no-results" role="status">Keine Treffer für "{$searchQuery}"</li>
-        {/each}
-      </ul>
+      {#if filteredResults.length > 0}
+        <ul
+          class="results"
+          id="search-results-listbox"
+          role="listbox"
+          aria-label="Suchergebnisse"
+          bind:this={listEl}
+        >
+          {#each filteredResults as result, index}
+            <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+            <li
+              id={`search-result-${result.id}`}
+              class="result-item"
+              role="option"
+              aria-selected={activeIndex === index}
+              class:active={activeIndex === index}
+              on:click={() => onSelect(result)}
+              on:keydown={(e) => { if (e.key === 'Enter') onSelect(result); }}
+              on:mouseenter={() => (activeIndex = index)}
+            >
+              <div class="result-content">
+                <span class="result-title">{result.title}</span>
+                {#if result.summary}
+                  <span class="result-summary">{result.summary.length > 60 ? result.summary.slice(0, 60) + '...' : result.summary}</span>
+                {/if}
+              </div>
+              <span class="result-type">{result.type === 'node' ? 'Knoten' : 'Garnrolle'}</span>
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="no-results" role="status">Keine Treffer für "{$searchQuery}"</div>
+      {/if}
     {/if}
   </div>
 {/if}
