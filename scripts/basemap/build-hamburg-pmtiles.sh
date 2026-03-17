@@ -126,6 +126,20 @@ ${BUILD_TIMESTAMP_JSON}
 }
 EOF
 
+# 8. Create stable aliases
+echo "=> Creating stable aliases for deployment..."
+ALIAS_PMTILES="basemap-hamburg.pmtiles"
+ALIAS_META="basemap-hamburg.meta.json"
+
+# We use robust file copying (cp) instead of symlinks.
+# This ensures maximum cross-platform portability and prevents issues
+# with static file servers that might not follow symlinks by default or
+# where symlinks are not permitted outside specific directories.
+cp -f "$BASEMAP_DIR/$OUTPUT_PMTILES" "$BASEMAP_DIR/$ALIAS_PMTILES"
+cp -f "$BASEMAP_DIR/$OUTPUT_META" "$BASEMAP_DIR/$ALIAS_META"
+
 echo "=> Basemap generation complete!"
 echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
 echo "Metadata: $BASEMAP_DIR/$OUTPUT_META"
+echo "Alias (PMTiles): $BASEMAP_DIR/$ALIAS_PMTILES"
+echo "Alias (Meta): $BASEMAP_DIR/$ALIAS_META"
