@@ -47,7 +47,7 @@ summary: >
 - [ ] Externe Style-Abhängigkeiten entfernen
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
-- [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `edges.ts`)
+- [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
 **Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
 **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.
