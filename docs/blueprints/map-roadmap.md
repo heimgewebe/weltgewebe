@@ -58,6 +58,7 @@ summary: >
 **Ziel:** Die Basemap wird dauerhaft, vorhersehbar und sicher als Version gepflegt.
 
 - [x] Versioniertes Artefakt-Schema definieren (z. B. `basemap-vX.pmtiles`)
+- [x] Stabiler Alias-/Current-Pfad für das versionierte Artefakt bereitstellen
 - [ ] Update-Zyklus definieren (z. B. monatliche OSM-Updates)
 - [ ] Publish- und Rollback-Strategie festlegen
 - [x] Basemap-Metadaten dokumentieren
