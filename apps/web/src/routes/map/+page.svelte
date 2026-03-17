@@ -81,16 +81,8 @@
 
   $: validEdges = (data.edges || []).filter(isEdge);
 
-  let pointIds = new Set<string>();
-  $: {
-    const ids = new Set<string>();
-    for (const p of markersData) {
-      ids.add(p.id);
-    }
-    pointIds = ids;
-  }
-
-  $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
+  $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
+  $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
   // Search logic moved from SearchOverlay to orchestrator
   let filteredResults: RenderableMapPoint[] = [];
