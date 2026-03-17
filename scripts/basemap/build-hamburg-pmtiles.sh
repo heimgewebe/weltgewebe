@@ -131,12 +131,27 @@ echo "=> Creating stable aliases for deployment..."
 ALIAS_PMTILES="basemap-hamburg.pmtiles"
 ALIAS_META="basemap-hamburg.meta.json"
 
+TMP_ALIAS_PMTILES="${BASEMAP_DIR}/${ALIAS_PMTILES}.tmp.$$"
+TMP_ALIAS_META="${BASEMAP_DIR}/${ALIAS_META}.tmp.$$"
+
+# Clean up temporary files on exit
+trap 'rm -f "$TMP_ALIAS_PMTILES" "$TMP_ALIAS_META"' EXIT
+
 # We use robust file copying (cp) instead of symlinks.
 # This ensures maximum cross-platform portability and prevents issues
 # with static file servers that might not follow symlinks by default or
 # where symlinks are not permitted outside specific directories.
-cp -f "$BASEMAP_DIR/$OUTPUT_PMTILES" "$BASEMAP_DIR/$ALIAS_PMTILES"
-cp -f "$BASEMAP_DIR/$OUTPUT_META" "$BASEMAP_DIR/$ALIAS_META"
+# To avoid clients observing partially written files, we copy to a temporary
+# file in the same directory and atomically rename it.
+cp -f "$BASEMAP_DIR/$OUTPUT_PMTILES" "$TMP_ALIAS_PMTILES"
+cp -f "$BASEMAP_DIR/$OUTPUT_META" "$TMP_ALIAS_META"
+
+# Atomic rename
+mv -f "$TMP_ALIAS_PMTILES" "$BASEMAP_DIR/$ALIAS_PMTILES"
+mv -f "$TMP_ALIAS_META" "$BASEMAP_DIR/$ALIAS_META"
+
+# Remove trap now that files have been successfully moved
+trap - EXIT
 
 echo "=> Basemap generation complete!"
 echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
