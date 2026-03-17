@@ -128,7 +128,7 @@ Es darf keine zweite Open-State-Quelle existieren.
 
 - Trigger: empty map click, panel close
 - Effekt: `selection = null`, `systemState = "navigation"`
-- **UX-Regel:** Der Fokus sollte (sofern DOM-technisch möglich) auf das Trigger-Element (Marker/Liste) zurückkehren. Ein fehlgeschlagener Restore blockiert oder invalidiert diesen Zustandsübergang jedoch explizit nicht.
+- **UX-Regel:** Fokus-Restore auf das auslösende Element ist ein nachgelagertes UX-/A11y-Verhalten, keine fachliche Kerninvariante des Übergangs. Scheitert der Restore (z. B. wegen fehlender DOM-Verfügbarkeit), bleibt der Zustandswechsel dennoch gültig.
 
 ### fokus → fokus
 
