@@ -81,15 +81,6 @@
 
   $: validEdges = (data.edges || []).filter(isEdge);
 
-  let pointIds = new Set<string>();
-  $: {
-    const ids = new Set<string>();
-    for (const p of markersData) {
-      ids.add(p.id);
-    }
-    pointIds = ids;
-  }
-
   $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
   $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
