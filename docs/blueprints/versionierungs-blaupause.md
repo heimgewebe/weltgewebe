@@ -326,6 +326,8 @@ Optional:
 
 `Built at …`
 
+Die Bezeichnung „Build“ ist hierbei rein darstellungsbezogen und entspricht dem kanonischen Feld `version` der Build-Identität aus dem `version.json`-Payload.
+
 ### 8.2 Anforderungen
 
 - `fetch('/_app/version.json', { cache: 'no-store' })`
@@ -345,7 +347,7 @@ Optional:
 
 Browser erkennt:
 
-`server_build != local_build`
+`server_version != local_version`
 
 und zeigt einen Hinweis an.
 
@@ -415,6 +417,7 @@ Referenzen:
 
 - [x] `VersionDiagnostics.svelte` integriert
 - [x] Build-Version in UI sichtbar
+- [x] Optional `release` anzeigen, sofern im Payload vorhanden
 - [x] `built_at` nur bei gültigem Datum anzeigen
 - [x] Fallback "Version unbekannt"
 - [x] Playwright Tests vorhanden
@@ -457,6 +460,11 @@ Status: bereits erfüllt.
 ### PR 2 — UI-Diagnose konsolidieren (bereits umgesetzt)
 
 Status: bereits implementiert
+
+- `VersionDiagnostics.svelte` implementiert
+- Integration in Settings/Diagnosebereich
+- Anzeige von `version` (Build-ID) im UI
+- Playwright-Tests vorhanden
 
 ### PR 3 — Browser-Selbstaktualisierung
 
