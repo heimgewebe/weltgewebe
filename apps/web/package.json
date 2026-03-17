@@ -57,7 +57,8 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
-    "maplibre-gl": "4.7.1"
+    "maplibre-gl": "4.7.1",
+    "pmtiles": "^4.4.0"
   },
   "engines": {
     "node": ">=20.19.0"

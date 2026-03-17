@@ -19,7 +19,7 @@
   import { get } from 'svelte/store';
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle } from '$lib/map/basemap';
+  import { resolveBasemapStyle, resolvePmtilesUrl } from '$lib/map/basemap';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
@@ -216,11 +216,22 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      const pmtiles = await import('pmtiles');
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
+
+      try {
+        maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+      } catch (e: any) {
+        // Ignored. maplibregl throws if 'pmtiles' is already registered (e.g. during HMR/Remount)
+        if (!e.message?.includes('already registered')) {
+          console.warn('Failed to register pmtiles protocol', e);
+        }
+      }
+
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap),
@@ -230,7 +241,10 @@
         maxZoom: currentBasemap.maxZoom ?? 18,
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
-        attributionControl: false
+        attributionControl: false,
+        transformRequest: (url, resourceType) => {
+          return { url: resolvePmtilesUrl(url, window.location.origin) };
+        }
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -288,6 +302,13 @@
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
+
+      // Cleanup PMTiles protocol mapping properly during HMR and unmounts
+      // as recommended by the PMTiles library. Note: moving this to an app-level
+      // setup function later could make this cleanup unnecessary.
+      import('maplibre-gl').then((ml) => {
+         ml.removeProtocol('pmtiles');
+      }).catch(() => { /* ignore */ });
     };
   });
 </script>
