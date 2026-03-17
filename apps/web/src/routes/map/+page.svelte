@@ -248,21 +248,22 @@
 
       // Prepare local-sovereign infrastructure (PMTiles) only if activated
       if (currentBasemap.mode === 'local-sovereign') {
-        try {
-          const pmtiles = await import('pmtiles');
-          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+        const pmtiles = await import('pmtiles');
 
-          transformRequestFn = (url, resourceType) => {
-            if (url.startsWith('pmtiles://')) {
-              const remainder = url.slice('pmtiles://'.length);
-              if (!remainder.includes('/')) {
-                return {
-                  url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
-                };
-              }
+        transformRequestFn = (url, resourceType) => {
+          if (url.startsWith('pmtiles://')) {
+            const remainder = url.slice('pmtiles://'.length);
+            if (!remainder.includes('/')) {
+              return {
+                url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
+              };
             }
-            return { url };
-          };
+          }
+          return { url };
+        };
+
+        try {
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
         } catch (e) {
           // Idempotent registration: ignore if already added (e.g. during HMR)
         }
