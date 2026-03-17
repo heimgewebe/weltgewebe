@@ -1228,7 +1228,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
             BUILD_VERSION="unknown (parse error)"
         fi
 
-        local DISPLAY_VERSION="$BUILD_VERSION"
+        DISPLAY_VERSION="$BUILD_VERSION"
         if [[ -n "$BUILD_ID" ]]; then
             DISPLAY_VERSION="$BUILD_ID"
         fi

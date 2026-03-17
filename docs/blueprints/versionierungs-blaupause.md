@@ -311,17 +311,16 @@ Erfüllt, wenn:
 
 ### 8.1 Ziel
 
-Settings oder ein anderer diskreter Ort zeigt:
+Settings oder ein anderer diskreter Ort zeigt primär die kanonische Version:
 
-`Build abc123`
+`Version abc123`
 
-Optional:
+Optional, falls Release und Build-ID vorhanden sind:
 
-`Release 1.2.0 · Build abc123`
+`Release 1.2.0 · Version abc123`
+`(Build abc123-174... · gebaut am … UTC)`
 
-`Built at …`
-
-Die Bezeichnung „Build“ ist hierbei rein darstellungsbezogen und entspricht dem kanonischen Feld `version` der Build-Identität aus dem `version.json`-Payload.
+Die Bezeichnung „Version“ entspricht hierbei dem kanonischen Feld `version` der Artefakt-Identität. Die Angabe „Build“ (und der Zeitstempel) entspringt `build_id` bzw. `built_at` und liefert lediglich den sekundären Ausführungskontext des CI-Laufs.
 
 ### 8.2 Anforderungen
 
