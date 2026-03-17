@@ -8,7 +8,7 @@
   "sources": {
     "basemap": {
       "type": "vector",
-      "url": "pmtiles://hamburg.pmtiles"
+      "url": "pmtiles://basemap-hamburg.pmtiles"
     }
   },
   "sprite": "./sprites/sprite",
