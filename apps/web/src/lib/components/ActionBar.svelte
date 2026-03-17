@@ -26,19 +26,40 @@
     toggleFilter();
   }
 
-  // Restore focus when closing overlays if we were inside them
-  $: if (!$isFilterOpen && filterBtnEl && typeof document !== 'undefined' && document.activeElement) {
-     const active = document.activeElement;
-     if (active.closest && active.closest('.filter-overlay')) {
-         tick().then(() => filterBtnEl.focus());
-     }
+  // Restore focus when closing overlays if we were inside them.
+  // We use previous state tracking to avoid fragile DOM dependency
+  // since the overlay might already be unmounted when this runs.
+  let wasFilterOpen = false;
+  let wasSearchOpen = false;
+
+  $: {
+    if ($isFilterOpen) {
+      wasFilterOpen = true;
+    } else if (wasFilterOpen) {
+      wasFilterOpen = false;
+      if (filterBtnEl && typeof document !== 'undefined') {
+        const active = document.activeElement;
+        // If focus is on body (overlay unmounted) or still in overlay (if animating out), restore it.
+        if (active === document.body || (active && active.closest && active.closest('.filter-overlay'))) {
+          tick().then(() => filterBtnEl.focus());
+        }
+      }
+    }
   }
 
-  $: if (!$isSearchOpen && searchBtnEl && typeof document !== 'undefined' && document.activeElement) {
-     const active = document.activeElement;
-     if (active.closest && active.closest('.search-overlay')) {
-         tick().then(() => searchBtnEl.focus());
-     }
+  $: {
+    if ($isSearchOpen) {
+      wasSearchOpen = true;
+    } else if (wasSearchOpen) {
+      wasSearchOpen = false;
+      if (searchBtnEl && typeof document !== 'undefined') {
+        const active = document.activeElement;
+        // If focus is on body (overlay unmounted) or still in overlay (if animating out), restore it.
+        if (active === document.body || (active && active.closest && active.closest('.search-overlay'))) {
+          tick().then(() => searchBtnEl.focus());
+        }
+      }
+    }
   }
 </script>
 

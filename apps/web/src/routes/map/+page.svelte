@@ -100,7 +100,7 @@
     if ($isSearchOpen && $searchQuery.trim().length > 0) {
       const q = $searchQuery.toLowerCase();
       // Search operates strictly on currently visible/filtered markers
-      filteredResults = filteredMarkersData.filter(m => {
+      filteredResults = searchBaseData.filter(m => {
         const titleMatch = m.title?.toLowerCase().includes(q);
         const summaryMatch = m.summary?.toLowerCase().includes(q);
         return titleMatch || summaryMatch;
@@ -143,6 +143,8 @@
   $: filteredMarkersData = $activeFilters.size === 0
     ? markersData
     : markersData.filter(m => $activeFilters.has(getFilterTypeKey(m)));
+
+  $: searchBaseData = $activeFilters.size === 0 ? markersData : filteredMarkersData;
 
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {

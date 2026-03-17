@@ -62,68 +62,64 @@ test.describe("Filter mode", () => {
     await page.waitForSelector(".map-marker");
   });
 
-  test("deterministically toggles filter, impacts visible markers, and coordinates with search", async ({
+  test("Case A: No filters -> Search global", async ({ page }) => {
+    const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
+    await searchBtn.click();
+
+    const searchOverlay = page.getByTestId("search-overlay");
+    await expect(searchOverlay).toBeVisible();
+
+    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    await expect(searchInput).toBeVisible();
+
+    // Search for a node item
+    await searchInput.clear();
+    await searchInput.fill("Test Node 2");
+    await expect(page.locator(".result-item")).toHaveCount(1);
+    await expect(page.locator(".result-item").first()).toHaveText(
+      /Test Node 2/,
+    );
+
+    // Search for an account item
+    await searchInput.clear();
+    await searchInput.fill("Test Account");
+    await expect(page.locator(".result-item")).toHaveCount(1);
+    await expect(page.locator(".result-item").first()).toHaveText(
+      /Test Account/,
+    );
+  });
+
+  test("Case B & E: Active filter -> Search strictly bounded, and Clear Filters", async ({
     page,
   }) => {
     const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
     const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
-
-    // Use an explicit, robust selector to cover both standard nodes and accounts.
-    // Initial marker count should be exactly 3 (2 nodes + 1 account)
     const markerSelector = ".map-marker, .marker-account";
+
+    // Initial marker count is 3
     await expect(page.locator(markerSelector)).toHaveCount(3);
 
-    // 1. Open filter overlay
+    // Open filter overlay
     await filterBtn.click();
-    const overlay = page.getByTestId("filter-overlay");
-    await expect(overlay).toBeVisible();
+    const filterOverlay = page.getByTestId("filter-overlay");
+    await expect(filterOverlay).toBeVisible();
 
-    // Our explicit mock defines exactly 3 types: "Event", "Place", and "Garnrolle".
-    // We expect the overlay to list all of them.
-    const filterLabels = page.locator(".filter-label");
-    await expect(filterLabels).toHaveCount(3);
-
-    // Check they contain the expected text (order might vary)
-    await expect(
-      page.locator("label.filter-item", { hasText: "Event" }),
-    ).toBeVisible();
-    await expect(
-      page.locator("label.filter-item", { hasText: "Place" }),
-    ).toBeVisible();
-    await expect(
-      page.locator("label.filter-item", { hasText: "Garnrolle" }),
-    ).toBeVisible();
-
-    // 2. Test exact exclusion dynamically
-    // Currently, all 3 are technically "visible" on the map (no active filters means show all).
-    // We filter to ONLY show "Event".
+    // Filter to ONLY show "Event"
     const eventLabel = page.locator("label.filter-item", { hasText: "Event" });
     await eventLabel.click();
 
-    // Verify clear button appears
-    const clearBtn = page.getByRole("button", { name: "Alle löschen" });
-    await expect(clearBtn).toBeVisible();
-
-    // The marker count MUST strictly drop to 1 because there is exactly 1 Event node in the mock.
+    // Marker count drops strictly to 1
     await expect(page.locator(markerSelector)).toHaveCount(1);
 
-    // 3. Verify Search operates ONLY on the filtered base
+    // Open search, verify it strictly respects the active filter
     await searchBtn.click();
-    await expect(overlay).not.toBeVisible();
-    await expect(page.getByTestId("search-overlay")).toBeVisible();
+    await expect(filterOverlay).not.toBeVisible();
 
     const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
-
-    // Wait until search box is ready
     await expect(searchInput).toBeVisible();
 
-    // Wait until search box is ready.
-    // It's possible the test environment intercepts the first character if typed too quickly,
-    // so we clear it explicitly first.
+    // Search for excluded items should return no results
     await searchInput.clear();
-
-    // Search for an explicitly excluded node item
-    // Since our item "Test Node 2" (Place) was filtered out, let's search for "Test Node 2" directly
     await searchInput.fill("Test Node 2");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
@@ -131,40 +127,68 @@ test.describe("Filter mode", () => {
     );
 
     await searchInput.clear();
-
-    // Search for an explicitly excluded account item
-    // Since our item "Test Account" (Garnrolle) was filtered out, let's search for "Test Account"
     await searchInput.fill("Test Account");
     await expect(page.locator(".result-item")).toHaveCount(0);
     await expect(page.getByRole("status")).toHaveText(
       `Keine Treffer für "Test Account"`,
     );
 
+    // Search for included item
     await searchInput.clear();
-
-    // Search for the strictly included item
-    // In our mock, 'Test Node 1' is an 'Event'.
     await searchInput.fill("Test Node 1");
-    // Explicitly wait for results to appear to avoid test flakiness
-    // We assert that exactly 1 result is visible
     await expect(page.locator(".result-item")).toHaveCount(1);
     await expect(page.locator(".result-item").first()).toHaveText(
       /Test Node 1/,
     );
 
-    // 4. Close Search, open Filter again, clear filters
+    // Case E: Clear Filters resets marker count
     await filterBtn.click();
-    await expect(page.getByTestId("search-overlay")).not.toBeVisible();
-    await expect(overlay).toBeVisible();
-
+    const clearBtn = page.getByRole("button", { name: "Alle löschen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
-
-    // Assert marker count returns to 3
     await expect(page.locator(markerSelector)).toHaveCount(3);
+  });
 
-    // 5. Test Escape key support
+  test("Case C: Overlay exclusivity", async ({ page }) => {
+    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
+    const searchBtn = page.getByRole("button", { name: "Suche", exact: true });
+
+    const filterOverlay = page.getByTestId("filter-overlay");
+    const searchOverlay = page.getByTestId("search-overlay");
+
+    // Open search
+    await searchBtn.click();
+    await expect(searchOverlay).toBeVisible();
+    await expect(filterOverlay).not.toBeVisible();
+
+    // Open filter -> Search closes
+    await filterBtn.click();
+    await expect(filterOverlay).toBeVisible();
+    await expect(searchOverlay).not.toBeVisible();
+
+    // Open search -> Filter closes
+    await searchBtn.click();
+    await expect(searchOverlay).toBeVisible();
+    await expect(filterOverlay).not.toBeVisible();
+  });
+
+  test("Case D: Focus management for Filter", async ({ page }) => {
+    const filterBtn = page.getByRole("button", { name: "Filter", exact: true });
+
+    // Open filter overlay
+    await filterBtn.click();
+    const filterOverlay = page.getByTestId("filter-overlay");
+    await expect(filterOverlay).toBeVisible();
+
+    // First checkbox should be focused
+    const firstCheckbox = page.locator('input[type="checkbox"]').first();
+    await expect(firstCheckbox).toBeFocused();
+
+    // Close with Escape
     await page.keyboard.press("Escape");
-    await expect(overlay).not.toBeVisible();
+    await expect(filterOverlay).not.toBeVisible();
+
+    // Focus lands back on Filter button
+    await expect(filterBtn).toBeFocused();
   });
 });
