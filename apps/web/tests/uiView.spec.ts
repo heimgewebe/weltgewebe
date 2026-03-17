@@ -7,8 +7,8 @@ import {
   enterKomposition,
   leaveToNavigation,
   contextPanelOpen,
-  assertUiStateInvariant,
 } from "../src/lib/stores/uiView";
+import { assertUiStateInvariant } from "../src/lib/stores/uiInvariants";
 import { get } from "svelte/store";
 
 test.describe("uiView store state transitions", () => {

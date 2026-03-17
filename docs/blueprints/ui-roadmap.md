@@ -108,11 +108,13 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [ ] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
 
+> Aktueller Stand: Offen. In der ActionBar ist ein Button vorhanden, auf der Karte wird bereits gefiltert (`validEdges.filter`), aber das UI-Panel für die Steuerung der Filter fehlt noch.
+
 - [ ] Filter-UI ergänzen
 - [ ] Karten-/Treffer-Filterung anbinden
 - [ ] *Keine neue globale Hauptzustandsklasse einführen*
 
-### [ ] Roadmap PR 8 — A11y und Keyboard-Navigation
+### [x] Roadmap PR 8 — A11y und Keyboard-Navigation
 
 - [x] Keyboard-Navigation für Tabs ergänzen
 - [x] Escape-Verhalten definieren
@@ -132,8 +134,10 @@ Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig f
 - [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
 - [ ] Fokus-Restore als UX-Regel statt fachlicher Kerninvariante markieren
 
-### [ ] Strukturpflege
+### [x] Strukturpflege
+
+> Aktueller Stand: Nächster Umsetzungsschritt. Da die `uiView.ts` durch den Invarianten-Watcher recht komplex geworden ist, wird dies nun in eine dedizierte `uiInvariants.ts` ausgelagert. Dies ist architektonisch sinnvoll, bleibt klein genug für einen PR, und bereitet das Store-Layout für künftige, komplexe UI-Modi vor.
 
 - [x] `+page.svelte` weiter entlasten (Suche als eigenes Overlay extrahiert)
 - [ ] Gemeinsame Tab-/Panel-Styling-Bausteine prüfen
-- [ ] Optional `uiInvariants.ts` oder ähnliche Trennung einführen, falls Guard komplexer wird
+- [x] Optional `uiInvariants.ts` oder ähnliche Trennung einführen, falls Guard komplexer wird
