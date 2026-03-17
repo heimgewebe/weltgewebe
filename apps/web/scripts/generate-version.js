@@ -18,20 +18,26 @@ try {
     encoding: "utf8",
   }).trim();
 } catch {
-  console.warn("WARNING: Could not determine git commit. Using fallback.");
+  console.warn(
+    "WARNING: Could not determine git commit. Using non-deterministic fallback.",
+  );
 }
 
-const now = process.env.SOURCE_DATE_EPOCH
-  ? new Date(parseInt(process.env.SOURCE_DATE_EPOCH, 10) * 1000)
-  : new Date();
+let now = new Date();
+if (process.env.SOURCE_DATE_EPOCH) {
+  const epoch = parseInt(process.env.SOURCE_DATE_EPOCH, 10);
+  if (!isNaN(epoch)) {
+    now = new Date(epoch * 1000);
+  }
+}
 const epochMs = now.getTime();
 const builtAt = now.toISOString();
 
-// Canonical artifact ID (deterministic). Fallback to epoch if no commit exists.
-const version = shortSha || `${epochMs}`;
+// Canonical artifact ID (deterministic). Cannot depend on time.
+const version = shortSha || commit || "unknown";
 
 // CI run ID (volatile context)
-const buildId = shortSha ? `${shortSha}-${epochMs}` : `${epochMs}`;
+const buildId = shortSha ? `${shortSha}-${epochMs}` : `unknown-${epochMs}`;
 
 const payload = {
   version,
