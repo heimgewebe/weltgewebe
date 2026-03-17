@@ -17,7 +17,8 @@ export const HAMMER_PARK_CENTER = {
 };
 
 export const currentBasemap: BasemapConfig = {
-  mode: "local-sovereign",
+  mode: "remote-style",
+  styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
   zoom: 15,
   minZoom: 10,

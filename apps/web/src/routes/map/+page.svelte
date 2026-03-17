@@ -81,16 +81,8 @@
 
   $: validEdges = (data.edges || []).filter(isEdge);
 
-  let pointIds = new Set<string>();
-  $: {
-    const ids = new Set<string>();
-    for (const p of markersData) {
-      ids.add(p.id);
-    }
-    pointIds = ids;
-  }
-
-  $: edgesData = validEdges.filter(e => pointIds.has(e.source_id) && pointIds.has(e.target_id));
+  $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
+  $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
   // Search logic moved from SearchOverlay to orchestrator
   let filteredResults: RenderableMapPoint[] = [];
@@ -246,18 +238,34 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
-      const pmtiles = await import('pmtiles');
-
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
 
-      try {
-        maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
-      } catch (e) {
-        // Idempotent registration: ignore if already added (e.g. during HMR)
+      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+
+      // Prepare local-sovereign infrastructure (PMTiles) only if activated
+      if (currentBasemap.mode === 'local-sovereign') {
+        try {
+          const pmtiles = await import('pmtiles');
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+
+          transformRequestFn = (url, resourceType) => {
+            if (url.startsWith('pmtiles://')) {
+              const remainder = url.replace('pmtiles://', '');
+              if (!remainder.includes('/')) {
+                return {
+                  url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
+                };
+              }
+            }
+            return { url };
+          };
+        } catch (e) {
+          // Idempotent registration: ignore if already added (e.g. during HMR)
+        }
       }
 
       map = new maplibregl.Map({
@@ -270,19 +278,7 @@
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
-        transformRequest: (url, resourceType) => {
-          if (url.startsWith('pmtiles://')) {
-             const remainder = url.replace('pmtiles://', '');
-             // A bare alias contains no slashes.
-             // If there are slashes, it's already a fully qualified or relative HTTP path wrapped in pmtiles://
-             if (!remainder.includes('/')) {
-               return {
-                 url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
-               };
-             }
-          }
-          return { url };
-        }
+        transformRequest: transformRequestFn,
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -330,9 +326,11 @@
     })();
 
     return () => {
-      import('maplibre-gl').then(maplibregl => {
-         try { maplibregl.removeProtocol('pmtiles'); } catch (e) { /* ignore */ }
-      }).catch(() => { /* ignore */ });
+      if (currentBasemap.mode === 'local-sovereign') {
+        import('maplibre-gl').then(maplibregl => {
+           try { maplibregl.removeProtocol('pmtiles'); } catch (e) { /* ignore */ }
+        }).catch(() => { /* ignore */ });
+      }
 
       if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;

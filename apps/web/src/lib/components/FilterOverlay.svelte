@@ -2,25 +2,35 @@
   import { tick } from 'svelte';
   import { isFilterOpen, activeFilters, closeFilter, toggleFilterType, clearFilters } from '$lib/stores/filterStore';
   import { contextPanelOpen } from '$lib/stores/uiView';
+  import { restoreTarget } from '$lib/utils/focusManager';
 
   export let availableTypes: { id: string, label: string, count: number }[] = [];
 
   let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
+  let wasOpen = false;
 
   // Set focus when filter opens
-  $: if ($isFilterOpen) {
-    (async () => {
-      await tick();
-      if ($isFilterOpen && overlayEl) {
-        const firstCheckboxEl = overlayEl.querySelector('input[type="checkbox"]') as HTMLInputElement;
-        if (firstCheckboxEl) {
-          firstCheckboxEl.focus();
-        } else if (closeBtnEl) {
-          closeBtnEl.focus();
+  $: {
+    if ($isFilterOpen) {
+      wasOpen = true;
+      (async () => {
+        await tick();
+        if ($isFilterOpen && overlayEl) {
+          const firstCheckboxEl = overlayEl.querySelector('input[type="checkbox"]') as HTMLInputElement;
+          if (firstCheckboxEl) {
+            firstCheckboxEl.focus();
+          } else if (closeBtnEl) {
+            closeBtnEl.focus();
+          }
         }
+      })();
+    } else {
+      if (wasOpen) {
+        wasOpen = false;
+        restoreTarget('filter');
       }
-    })();
+    }
   }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
@@ -34,7 +44,7 @@
 <svelte:window on:keydown={handleGlobalKeydown} />
 
 {#if $isFilterOpen}
-  <div bind:this={overlayEl} class="filter-overlay" class:panel-open={$contextPanelOpen} data-testid="filter-overlay">
+  <div bind:this={overlayEl} class="filter-overlay" class:panel-open={$contextPanelOpen} data-testid="filter-overlay" role="dialog" aria-label="Filter" aria-modal="false">
     <div class="filter-header">
       <h3>Filter</h3>
       <div class="header-actions">
@@ -47,8 +57,8 @@
 
     <div class="filter-content">
       {#if availableTypes.length > 0}
-        <div class="filter-group">
-          <h4>Knotenarten & Garnrollen</h4>
+        <fieldset class="filter-group">
+          <legend>Knotenarten & Garnrollen</legend>
           <ul class="filter-list">
             {#each availableTypes as type}
               <li>
@@ -64,7 +74,7 @@
               </li>
             {/each}
           </ul>
-        </div>
+        </fieldset>
       {:else}
         <div class="no-filters" role="status">Keine filterbaren Elemente vorhanden</div>
       {/if}
@@ -137,7 +147,13 @@
     overflow-y: auto;
   }
 
-  .filter-group h4 {
+  .filter-group {
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .filter-group legend {
     margin: 0 0 0.5rem 0;
     font-size: 0.9rem;
     color: var(--muted, #666);
