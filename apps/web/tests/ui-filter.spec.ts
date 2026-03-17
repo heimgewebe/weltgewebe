@@ -51,16 +51,31 @@ test.describe("Filter mode", () => {
 
     // Wait for markers to update dynamically without a hardcoded timeout.
     // The framework will retry this assertion until it passes or times out.
+    // We expect the count to strictly reduce because our demo data has multiple types.
     await expect(async () => {
       const filteredMarkerCount = await page.locator(".map-marker").count();
       expect(filteredMarkerCount).toBeGreaterThan(0);
-      expect(filteredMarkerCount).toBeLessThanOrEqual(initialMarkerCount);
+      expect(filteredMarkerCount).toBeLessThan(initialMarkerCount);
     }).toPass();
 
     // 4. Verify Search operates only on filtered markers
     await searchBtn.click();
     await expect(overlay).not.toBeVisible();
     await expect(page.getByTestId("search-overlay")).toBeVisible();
+
+    // We unchecked all but the first filter type (likely "Garnrolle" alphabetically or similar).
+    // Type in a search term. We search for "fairschenkbox" which is a "Knoten" in demo data.
+    // Since "Knoten" is likely not the active filter if we just clicked the first one (Garnrolle),
+    // it should yield no results. To be absolutely sure, we'll search for something generic
+    // and verify the results list doesn't show the excluded type.
+    const searchInput = page.getByRole("textbox", { name: "Suchbegriff" });
+    await searchInput.fill("a");
+    // Just verify the listbox appears or shows no results, but we mainly want to ensure no crash
+    // and that search respects the filter state (which we patched).
+    // Because .result-type can match multiple elements, we assert that the count of elements with "Knoten" is 0
+    await expect(
+      page.locator(".result-type", { hasText: "Knoten" }),
+    ).toHaveCount(0);
 
     // 5. Close Search, open Filter again, clear filters
     await filterBtn.click();

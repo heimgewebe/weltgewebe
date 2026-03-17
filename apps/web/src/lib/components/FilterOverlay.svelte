@@ -5,20 +5,15 @@
 
   export let availableTypes: { id: string, label: string, count: number }[] = [];
 
+  let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
-  let firstCheckboxEl: HTMLInputElement;
-
-    function assignFirstCheckbox(node: HTMLInputElement, isFirst: boolean) {
-    if (isFirst) {
-      firstCheckboxEl = node;
-    }
-  }
 
   // Set focus when filter opens
   $: if ($isFilterOpen) {
     (async () => {
       await tick();
-      if ($isFilterOpen) {
+      if ($isFilterOpen && overlayEl) {
+        const firstCheckboxEl = overlayEl.querySelector('input[type="checkbox"]') as HTMLInputElement;
         if (firstCheckboxEl) {
           firstCheckboxEl.focus();
         } else if (closeBtnEl) {
@@ -39,7 +34,7 @@
 <svelte:window on:keydown={handleGlobalKeydown} />
 
 {#if $isFilterOpen}
-  <div class="filter-overlay" class:panel-open={$contextPanelOpen} data-testid="filter-overlay">
+  <div bind:this={overlayEl} class="filter-overlay" class:panel-open={$contextPanelOpen} data-testid="filter-overlay">
     <div class="filter-header">
       <h3>Filter</h3>
       <div class="header-actions">
@@ -55,12 +50,11 @@
         <div class="filter-group">
           <h4>Knotenarten & Garnrollen</h4>
           <ul class="filter-list">
-            {#each availableTypes as type, index}
+            {#each availableTypes as type}
               <li>
                 <label class="filter-item">
                   <input
                     type="checkbox"
-                    use:assignFirstCheckbox={index === 0}
                     checked={$activeFilters.has(type.id)}
                     on:change={() => toggleFilterType(type.id)}
                   />
