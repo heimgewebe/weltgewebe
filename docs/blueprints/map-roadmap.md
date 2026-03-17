@@ -42,6 +42,7 @@ summary: >
 ## Phase 3 — Runtime-Integration
 
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
+*Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
 - [ ] Externe Style-Abhängigkeiten entfernen
@@ -56,10 +57,10 @@ summary: >
 
 **Ziel:** Die Basemap wird dauerhaft, vorhersehbar und sicher als Version gepflegt.
 
-- [ ] Versioniertes Artefakt-Schema definieren (z. B. `basemap-vX.pmtiles`)
+- [x] Versioniertes Artefakt-Schema definieren (z. B. `basemap-vX.pmtiles`)
 - [ ] Update-Zyklus definieren (z. B. monatliche OSM-Updates)
 - [ ] Publish- und Rollback-Strategie festlegen
-- [ ] Basemap-Metadaten dokumentieren
+- [x] Basemap-Metadaten dokumentieren
 
 **Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne Clients zu brechen.
 **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches Deployment ohne Review.

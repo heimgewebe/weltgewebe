@@ -21,12 +21,17 @@ BASEMAP_DIR="$REPO_ROOT/build/basemap"
 OSM_FILE="hamburg-latest.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"
 
-OUTPUT_PMTILES="hamburg.pmtiles"
+# Versioning
+BASEMAP_VERSION="v0.1.0"
+OUTPUT_PMTILES="basemap-hamburg-${BASEMAP_VERSION}.pmtiles"
+OUTPUT_META="basemap-hamburg-${BASEMAP_VERSION}.meta.json"
+
 # Planetiler 0.8.2 (linux/amd64) pinned by digest for a truly deterministic toolchain
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
+echo "Version: ${BASEMAP_VERSION}"
 echo "Tool:    Planetiler (Pinned: 0.8.2 @ sha256:10e4...)"
 echo "Input:   $OSM_FILE (Volatile)"
 echo "Format:  PMTiles"
@@ -77,5 +82,25 @@ docker run --rm \
   --osm-path="/data/$OSM_FILE" \
   --output="/data/$OUTPUT_PMTILES"
 
+# 7. Generate Metadata Manifest
+echo "=> Generating metadata manifest..."
+cat <<EOF > "$BASEMAP_DIR/$OUTPUT_META"
+{
+  "version": "${BASEMAP_VERSION}",
+  "region": "hamburg",
+  "build_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "toolchain": {
+    "generator": "planetiler",
+    "image": "${PLANETILER_IMAGE}"
+  },
+  "input": {
+    "url": "${OSM_URL}",
+    "note": "Volatile input, exact reproducibility not guaranteed"
+  },
+  "artifact": "${OUTPUT_PMTILES}"
+}
+EOF
+
 echo "=> Basemap generation complete!"
 echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
+echo "Metadata: $BASEMAP_DIR/$OUTPUT_META"
