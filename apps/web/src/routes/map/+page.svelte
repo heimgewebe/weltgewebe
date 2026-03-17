@@ -133,24 +133,33 @@
   }
 
 
-  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
-    const item = event.detail;
-    const itemType = item.type || 'node';
+  function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
+    if (type === 'account' || type === 'garnrolle') {
+      return type;
+    }
+    return 'node';
+  }
 
-    // Fallback if needed, but the search overlay closes itself anyway
-    enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
+  function focusAndFlyToPoint(item: RenderableMapPoint) {
+    const itemType = normalizeSelectionType(item.type);
+
+    enterFokus({ type: itemType, id: item.id, data: item });
 
     const lat = item.lat;
     const lon = item.lon;
-    if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
-      const currentZoom = map?.getZoom() ?? 14;
-      map?.flyTo({
+    if (map && typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+      const currentZoom = map.getZoom();
+      map.flyTo({
         center: [lon, lat],
         zoom: Math.max(currentZoom, 14),
         speed: 0.8,
         curve: 1
       });
     }
+  }
+
+  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+    focusAndFlyToPoint(event.detail);
   }
 
   // Restore focus when selection is closed or state becomes navigation
@@ -201,23 +210,8 @@
       const entry = nodesOverlay.getActiveMarker(id);
       if (!entry) return;
 
-      const { item } = entry;
-      const itemType = item.type || 'node';
-
       lastFocusedElement = markerBtn;
-      enterFokus({ type: itemType as 'node' | 'account' | 'garnrolle', id: item.id, data: item });
-
-      const lat = item.lat;
-      const lon = item.lon;
-      if (typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
-        const currentZoom = map?.getZoom() ?? 14;
-        map?.flyTo({
-          center: [lon, lat],
-          zoom: Math.max(currentZoom, 14),
-          speed: 0.8,
-          curve: 1
-        });
-      }
+      focusAndFlyToPoint(entry.item);
     };
 
     (async () => {
@@ -360,16 +354,16 @@
   }
 
   #map :global(.map-marker.search-highlight) {
-    outline: 2px solid var(--error, #e53e3e);
+    outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
     z-index: 5;
   }
 
   #map :global(.marker-account.search-highlight) {
-    outline: 2px solid var(--error, #e53e3e);
+    outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--error, rgba(229,62,62,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
   }
 
   #map :global(.marker-account:focus-visible) {

@@ -95,8 +95,8 @@
         placeholder="Gewebe durchsuchen..."
         aria-label="Suchbegriff"
         aria-autocomplete="list"
-        aria-controls="search-results-listbox"
-        aria-activedescendant={activeIndex >= 0 ? `search-result-${filteredResults[activeIndex]?.id}` : undefined}
+        aria-controls={$searchQuery.trim().length > 0 ? "search-results-listbox" : undefined}
+        aria-activedescendant={activeIndex >= 0 && filteredResults.length > 0 ? `search-result-${filteredResults[activeIndex]?.id}` : undefined}
         on:keydown={handleInputKeydown}
       />
       <button class="close-btn" on:click={closeSearch} aria-label="Suche schließen">✕</button>
@@ -111,29 +111,26 @@
         bind:this={listEl}
       >
         {#each filteredResults as result, index}
+          <!-- svelte-ignore a11y-click-events-have-key-events -->
           <li
             id={`search-result-${result.id}`}
+            class="result-item"
             role="option"
             aria-selected={activeIndex === index}
             class:active={activeIndex === index}
+            on:click={() => onSelect(result)}
+            on:mouseenter={() => (activeIndex = index)}
           >
-            <button
-              class="result-btn"
-              tabindex="-1"
-              on:click={() => onSelect(result)}
-              on:mouseenter={() => (activeIndex = index)}
-            >
-              <div class="result-content">
-                <span class="result-title">{result.title}</span>
-                {#if result.summary}
-                  <span class="result-summary">{result.summary.length > 60 ? result.summary.slice(0, 60) + '...' : result.summary}</span>
-                {/if}
-              </div>
-              <span class="result-type">{result.type === 'node' ? 'Knoten' : 'Garnrolle'}</span>
-            </button>
+            <div class="result-content">
+              <span class="result-title">{result.title}</span>
+              {#if result.summary}
+                <span class="result-summary">{result.summary.length > 60 ? result.summary.slice(0, 60) + '...' : result.summary}</span>
+              {/if}
+            </div>
+            <span class="result-type">{result.type === 'node' ? 'Knoten' : 'Garnrolle'}</span>
           </li>
         {:else}
-          <li class="no-results" role="option" aria-selected="false">Keine Treffer für "{$searchQuery}"</li>
+          <li class="no-results" role="status">Keine Treffer für "{$searchQuery}"</li>
         {/each}
       </ul>
     {/if}
@@ -203,17 +200,9 @@
     border-bottom: none;
   }
 
-  .results li.active .result-btn {
-    background: var(--hover, rgba(0,0,0,0.05));
-    outline: 2px solid var(--primary, #005fcc);
-    outline-offset: -2px;
-  }
-
-  .result-btn {
+  .result-item {
     width: 100%;
     text-align: left;
-    background: none;
-    border: none;
     padding: 0.75rem 0.5rem;
     cursor: pointer;
     display: flex;
@@ -222,8 +211,13 @@
     color: var(--text);
   }
 
-  .result-btn:hover {
+  .result-item:hover, .result-item.active {
     background: var(--hover, rgba(0,0,0,0.05));
+  }
+
+  .result-item.active {
+    outline: 2px solid var(--primary, #005fcc);
+    outline-offset: -2px;
   }
 
   .result-content {

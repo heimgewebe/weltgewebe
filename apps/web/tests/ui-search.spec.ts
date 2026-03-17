@@ -59,7 +59,7 @@ test.describe("Search mode", () => {
     await searchInput.fill("Strick");
 
     // Wait for results to render
-    const resultItem = page.locator(".result-btn").first();
+    const resultItem = page.locator("li[role='option']").first();
     await expect(resultItem).toBeVisible({ timeout: 10000 });
 
     // Validate that the result type bubble is rendered
