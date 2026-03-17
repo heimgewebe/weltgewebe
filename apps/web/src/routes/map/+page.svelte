@@ -99,7 +99,8 @@
   $: {
     if ($isSearchOpen && $searchQuery.trim().length > 0) {
       const q = $searchQuery.toLowerCase();
-      filteredResults = markersData.filter(m => {
+      // Search operates strictly on currently visible/filtered markers
+      filteredResults = filteredMarkersData.filter(m => {
         const titleMatch = m.title?.toLowerCase().includes(q);
         const summaryMatch = m.summary?.toLowerCase().includes(q);
         return titleMatch || summaryMatch;
@@ -118,11 +119,15 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
+  function getFilterTypeKey(m: RenderableMapPoint): string {
+    return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+  }
+
   // Derivation of filterable types
   $: availableFilterTypes = (() => {
     const counts = new Map<string, number>();
     for (const m of markersData) {
-      const typeKey = m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+      const typeKey = getFilterTypeKey(m);
       counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
     }
     return Array.from(counts.entries()).map(([id, count]) => ({
@@ -134,10 +139,7 @@
 
   $: filteredMarkersData = $activeFilters.size === 0
     ? markersData
-    : markersData.filter(m => {
-        const typeKey = m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
-        return $activeFilters.has(typeKey);
-      });
+    : markersData.filter(m => $activeFilters.has(getFilterTypeKey(m)));
 
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {

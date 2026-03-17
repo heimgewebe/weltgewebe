@@ -108,11 +108,13 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 ### [x] Roadmap PR 7 — Filter als Panel-/lokalen Modus umsetzen
 
-> Aktueller Stand: Abgeschlossen. Eine Filter-UI wurde als lokaler Modus (ähnlich der Suche) implementiert. Marker auf der Karte werden entsprechend der Auswahl (z.B. Knoten vs Garnrolle) gefiltert.
+> Aktueller Stand: Abgeschlossen. Eine Filter-UI wurde als lokaler Modus (ähnlich der Suche) implementiert. Marker auf der Karte werden entsprechend der Auswahl (z.B. Knoten vs Garnrolle) gefiltert. Search und Filter verhalten sich konsistent und schließen sich gegenseitig aus. Die Implementierung ist durch E2E-Tests validiert und führt keine globalen Zustände ein.
 
 - [x] Filter-UI ergänzen
 - [x] Karten-/Treffer-Filterung anbinden
 - [x] *Keine neue globale Hauptzustandsklasse einführen*
+- [x] Suche und Filter auf dieselbe sichtbare Markerbasis abstimmen
+- [x] E2E-Tests für Filterverhalten ergänzen
 
 ### [x] Roadmap PR 8 — A11y und Keyboard-Navigation
 

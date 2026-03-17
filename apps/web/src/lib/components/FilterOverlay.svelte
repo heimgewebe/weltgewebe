@@ -1,8 +1,32 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { isFilterOpen, activeFilters, closeFilter, toggleFilterType, clearFilters } from '$lib/stores/filterStore';
   import { contextPanelOpen } from '$lib/stores/uiView';
 
   export let availableTypes: { id: string, label: string, count: number }[] = [];
+
+  let closeBtnEl: HTMLButtonElement;
+  let firstCheckboxEl: HTMLInputElement;
+
+    function assignFirstCheckbox(node: HTMLInputElement, isFirst: boolean) {
+    if (isFirst) {
+      firstCheckboxEl = node;
+    }
+  }
+
+  // Set focus when filter opens
+  $: if ($isFilterOpen) {
+    (async () => {
+      await tick();
+      if ($isFilterOpen) {
+        if (firstCheckboxEl) {
+          firstCheckboxEl.focus();
+        } else if (closeBtnEl) {
+          closeBtnEl.focus();
+        }
+      }
+    })();
+  }
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isFilterOpen) return;
@@ -22,7 +46,7 @@
         {#if $activeFilters.size > 0}
           <button class="clear-btn" on:click={clearFilters}>Alle löschen</button>
         {/if}
-        <button class="close-btn" on:click={closeFilter} aria-label="Filter schließen">✕</button>
+        <button class="close-btn" bind:this={closeBtnEl} on:click={closeFilter} aria-label="Filter schließen">✕</button>
       </div>
     </div>
 
@@ -31,11 +55,12 @@
         <div class="filter-group">
           <h4>Knotenarten & Garnrollen</h4>
           <ul class="filter-list">
-            {#each availableTypes as type}
+            {#each availableTypes as type, index}
               <li>
                 <label class="filter-item">
                   <input
                     type="checkbox"
+                    use:assignFirstCheckbox={index === 0}
                     checked={$activeFilters.has(type.id)}
                     on:change={() => toggleFilterType(type.id)}
                   />
