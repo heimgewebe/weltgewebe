@@ -18,15 +18,18 @@ Neue UI-Dokumente müssen einer bestehenden Kategorie zugeordnet werden.
 -->
 
 ### System
+
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
 – **Techstack:** [techstack.md](techstack.md)
 
 ### UI-System
+
 – **UI-Blaupause:** [blueprints/ui-blaupause.md](blueprints/ui-blaupause.md) (Modell: beschreibt Zielzustand)
 – **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md) (Regelwerk: definiert erlaubte Zustände & Übergänge)
 – **UI Roadmap:** [blueprints/ui-roadmap.md](blueprints/ui-roadmap.md) (Zeit/Planung: beschreibt evolutionäre Schritte)
 
 ### Prozess
+
 – **Prozess & Fahrplan:** [process/README.md](process/README.md)
 – **ADRs:** [adr/](adr/)
 – **Runbooks:** [runbooks/README.md](runbooks/README.md)
