@@ -3,7 +3,7 @@ import { toggleFilter, closeFilter, isFilterOpen } from "./filterStore";
 import { get } from "svelte/store";
 import { suppressNextRestore } from "$lib/utils/focusManager";
 
-export function openSearchExclusive() {
+export function toggleSearchExclusive() {
   if (get(isFilterOpen)) {
     suppressNextRestore("filter");
     closeFilter();
@@ -11,7 +11,7 @@ export function openSearchExclusive() {
   toggleSearch();
 }
 
-export function openFilterExclusive() {
+export function toggleFilterExclusive() {
   if (get(isSearchOpen)) {
     suppressNextRestore("search");
     closeSearch();

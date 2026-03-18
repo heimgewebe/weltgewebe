@@ -2,7 +2,7 @@
   import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
   import { isSearchOpen } from '$lib/stores/searchStore';
   import { isFilterOpen } from '$lib/stores/filterStore';
-  import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
+  import { toggleSearchExclusive, toggleFilterExclusive } from '$lib/stores/overlayManager';
   import { setRestoreTarget } from '$lib/utils/focusManager';
 
   function onNewNode() {
@@ -14,12 +14,12 @@
 
   function onToggleSearch() {
     if (searchBtnEl) setRestoreTarget('search', searchBtnEl);
-    openSearchExclusive();
+    toggleSearchExclusive();
   }
 
   function onToggleFilter() {
     if (filterBtnEl) setRestoreTarget('filter', filterBtnEl);
-    openFilterExclusive();
+    toggleFilterExclusive();
   }
 </script>
 
