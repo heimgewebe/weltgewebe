@@ -42,7 +42,7 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 - **Test-Skript:** `scripts/tests/test_verify_deployment.sh` enthält Test 22 für "Cache Guards Logic".
 - **Vorhandene Tests:** Das Skript testet den Cache-Guard aktuell über Sub-Tests `22a` (HTML-Cache) bis `22c` (Positiv-Pfad).
-- **Fehlende Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Sub-Tests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare Build-ID) fehlen derzeit vollständig im Code.
+- **Fehlende Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Sub-Tests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare kanonische Versionsangabe) fehlen derzeit vollständig im Code.
 
 ## 3. Kanonische Begriffe
 
@@ -86,7 +86,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 - **22d: version.json ohne no-store**
   - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
   - *Status:* **Fehlt** in `test_verify_deployment.sh`.
-- **22e: version.json ohne brauchbare Build-ID**
+- **22e: version.json ohne brauchbare kanonische Versionsangabe**
   - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
   - *Status:* **Fehlt** in `test_verify_deployment.sh`.
 
@@ -95,7 +95,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 - **Widerspruch Caddy vs. Blueprint:** Laut `versionierungs-blaupause.md` muss `/_app/version.json` zwingend den Header `Cache-Control: no-store` erhalten. Dies ist in `Caddyfile.heim` nicht umgesetzt.
 - **Widerspruch weltgewebe-up vs. Blueprint:** Die Blaupause fordert einen "harten Fehler" bei fehlerhaftem `version.json` ("weltgewebe-up darf Frontend-Erfolg nicht mehr nur implizit an HTML/Assets festmachen"). Der aktuelle Code in `weltgewebe-up` deklariert die Überprüfung jedoch explizit als "warn-only".
 - **Widerspruch Test-Semantik vs. Blueprint:** Die in der Blaupause geforderten Tests `22d` und `22e` zur Absicherung der harten `version.json` Guards fehlen im Testskript, obwohl die Blaupause sie als Bedingung für das Stop-Kriterium von Phase D nennt.
-- **Unklarheit REQUIRE_FRONTEND:** REQUIRE_FRONTEND ist technisch bereits strikt validiert (0|1, sonst `exit 1`), dient aber konzeptionell primär als Override-/Testhebel.
+- **Klarstellung REQUIRE_FRONTEND:** REQUIRE_FRONTEND ist technisch bereits strikt validiert (0|1, sonst `exit 1`), dient aber konzeptionell primär als Override-/Testhebel.
 
 ### Beantwortung der Kernfragen
 
@@ -118,6 +118,6 @@ Der nächste PR sollte exakt und ausschließlich diese drei zusammenhängenden P
 
 1. `infra/caddy/Caddyfile.heim`: Ergänzen einer spezifischen Regel für `/_app/version.json` mit `Cache-Control "no-store"`.
 2. `scripts/weltgewebe-up`: Umwandeln der aktuellen `warn-only` Phase B (version.json Verify) in harte Checks (Exit 1 bei Fehler/Fehlen), inkl. Prüfung auf den neuen `no-store` Header.
-3. `scripts/tests/test_verify_deployment.sh`: Hinzufügen der fehlenden Negativtests `22d` (fehlender no-store Header) und `22e` (invalides JSON/fehlende Version).
+3. `scripts/tests/test_verify_deployment.sh`: Hinzufügen der fehlenden Negativtests `22d` (fehlender no-store Header) und `22e` (invalides JSON/fehlende kanonische Versionsangabe).
 
 **Begründung:** Die UI und das Generator-Skript sind bereits konsistent und fertig. Die Lücke klafft rein auf Infrastruktur- und Test-Ebene. Dieser Schritt schließt die Lücke minimal-invasiv, ohne neue Features anzufassen, und etabliert die harte Garantie, die für alle weiteren Schritte (wie Browser-Self-Update) zwingend nötig ist.
