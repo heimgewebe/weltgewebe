@@ -102,7 +102,7 @@ Teilmodelle mit halber Adressschärfe werden bewusst verworfen.
 
 ## 4. Accounterstellung
 
-Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus.
+Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus. (Technisch beginnen automatisch provisionierte Accounts immer sicher als RoN, bis der Nutzer seine Angaben ergänzt.)
 
 ### 4.1 Verortete Garnrolle
 
