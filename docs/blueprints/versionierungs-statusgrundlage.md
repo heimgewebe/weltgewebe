@@ -19,42 +19,41 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 - **Erzeugung:** `apps/web/scripts/generate-version.js` erzeugt die Datei `build/_app/version.json`.
 - **Schema:** Das Skript schreibt ein JSON mit den Feldern `version` (Short SHA oder Commit, Fallback "unknown"), `build_id` (Short SHA + Timestamp, Fallback "unknown-Timestamp"), `built_at` (ISO Timestamp) und optional `commit`.
-- **Kanonisches Feld:** Im Skript wird `version` explizit als "Canonical artifact ID (deterministic)" deklariert.
+- **Kanonisches Feld:** Im Skript wird `version` explizit deklariert: `const version = shortSha || commit || "unknown"; // Canonical artifact ID (deterministic)`.
 
 ### 2.2 Caddy / Cache
 
-- **Caddyfile:** `infra/caddy/Caddyfile.heim` trennt zwischen `/_app/immutable/*` (Header `public, max-age=31536000, immutable`) und dem Rest via try_files (Header `no-cache, must-revalidate`).
-- **Fehlende Regel:** Es existiert aktuell **kein** separater Block für `/_app/version.json`. Die Datei wird daher implizit mit `no-cache, must-revalidate` ausgeliefert, anstatt mit dem laut Blueprint (`versionierungs-blaupause.md`) geforderten `no-store`.
+- **Caddyfile:** `infra/caddy/Caddyfile.heim` trennt zwischen `/_app/immutable/*` (Header `public, max-age=31536000, immutable`) und dem Rest via `try_files` (Header `no-cache, must-revalidate`).
+- **Fehlende Regel:** Es existiert aktuell **kein** separater Block für `/_app/version.json`. Die Datei wird daher implizit mit der generischen `handle`-Regel (`no-cache, must-revalidate`) ausgeliefert, anstatt mit dem laut Blueprint (`versionierungs-blaupause.md`) geforderten `no-store`.
 
 ### 2.3 weltgewebe-up / Guards
 
 - **Frontend Guard:** `scripts/weltgewebe-up` prüft harte Cache-Regeln für HTML (`no-cache, must-revalidate`) und Immutable Assets (`max-age=31536000, immutable`).
-- **version.json Guard:** Die Überprüfung von `/_app/version.json` in `weltgewebe-up` (Phase B) ist aktuell **warn-only** ("This is a diagnostic guard (warn-only), curl failures should not abort the deploy."). Fehler bei der JSON-Validierung oder Erreichbarkeit führen nicht zum Abbruch (Exit 1).
-- **REQUIRE_FRONTEND:** Wird im Skript abgefragt (`if [[ -n "$REQUIRE_FRONTEND" ]] ...`), aber die strikte Validierung auf exakt `0` oder `1` (wie in der Blaupause gefordert) ist rudimentär, fehlerhafte Werte crashen das Skript aktuell nicht immer zwingend hart mit Fehlerabbruch vor der Guard-Ausführung. In Test 22 wird es als Override zur Erzwingung der Tests verwendet.
+- **version.json Guard:** Die Überprüfung von `/_app/version.json` in `weltgewebe-up` (Phase B, Zeile ~1218) ist aktuell **warn-only**: `# This is a diagnostic guard (warn-only), curl failures should not abort the deploy.` Fehler bei der JSON-Validierung oder Erreichbarkeit führen nicht zum Abbruch (`exit 1`).
+- **REQUIRE_FRONTEND:** Die strikte Validierung auf ausschließlich `0` oder `1` ist im Dokument als Soll beschrieben; der aktuelle Codepfad sollte vor dem Folge-PR nochmals snippet-basiert gegengeprüft werden, da aktuell in `weltgewebe-up` fehlerhafte Werte (z.B. ein leerer String oder andere Eingaben) das Skript nicht zwingend hart vor Ausführung der Guards abbrechen lassen.
 
 ### 2.4 UI-Diagnose
 
 - **Implementierung:** `apps/web/src/lib/components/VersionDiagnostics.svelte` und zugehörige Tests (`apps/web/tests/version-diagnostics.spec.ts`) sind **bereits vollständig umgesetzt**.
-- **Begriffsverwendung:** Die UI sucht primär nach `version` (oder Fallback `commit`/`build`) als kanonische Identität ("Version abc1234"). `build_id` wird als sekundärer Kontext ("Build abc1234-174...") angezeigt.
-- **Cache:** Das UI fetched die Datei explizit mit `{ cache: 'no-store' }`.
+- **Begriffsverwendung:** Die UI sucht primär nach `version`: `const canonicalVersion = versionData.version || versionData.commit || versionData.build;`. `build_id` wird als sekundärer Kontext ("Build abc1234-174...") angezeigt.
+- **Cache:** Das UI fetched die Datei explizit ungecached: `fetch('/_app/version.json', { cache: 'no-store' })`.
 
 ### 2.5 Tests
 
 - **Test-Skript:** `scripts/tests/test_verify_deployment.sh` enthält Test 22 für "Cache Guards Logic".
-- **Vorhandene Tests:**
-  - `22a` (Missing HTML Cache Header) -> Negativtest.
-  - `22b` (Missing Asset Cache Header) -> Negativtest.
-  - `22c` (Valid Cache Headers) -> Positivtest (Prüft den positiven Pfad inkl. mock für `version.json`).
-- **Fehlende Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Negativtests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare Build-ID) fehlen komplett.
+- **Vorhandene Tests:** Das Skript testet den Cache-Guard aktuell über Sub-Tests `22a` (HTML-Cache) bis `22c` (Positiv-Pfad).
+- **Fehlende Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Sub-Tests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare Build-ID) fehlen derzeit vollständig im Code.
 
 ## 3. Kanonische Begriffe
 
-- **version:** Die kanonische, deterministische Artefakt-ID (i.d.R. der Git-Commit oder Short-SHA). Identifiziert *was* gebaut wurde.
-- **build_id:** Ein volatiler Bezeichner für den spezifischen CI-/Build-Lauf (z.B. `<sha>-<timestamp>`). Identifiziert *wann/wie* es gebaut wurde. **Achtung:** `version.json` enthält beides.
-- **built_at:** ISO-Timestamp des Build-Zeitpunkts.
-- **version.json:** Die maschinenlesbare JSON-Diagnosequelle (`/_app/version.json`), die diese Metadaten zur Laufzeit verfügbar macht.
+- **version:** Identifiziert den **Artefaktinhalt**. Die deterministische ID (i.d.R. der Git-Commit oder Short-SHA).
+- **build_id:** Identifiziert den **konkreten Buildlauf**. Ein volatiler Bezeichner für den CI-Lauf (z.B. `<sha>-<timestamp>`).
+- **built_at:** Ist reiner **Kontext, nicht Identität**. ISO-Timestamp des Build-Zeitpunkts.
+- **version.json:** Die maschinenlesbare JSON-Diagnosequelle (`/_app/version.json`), die diese drei Metadaten zur Laufzeit verfügbar macht.
 - **Cache-Control:** HTTP-Header zur Steuerung des Caching-Verhaltens.
-- **REQUIRE_FRONTEND:** Eine Umgebungsvariable, die explizit steuert, ob Frontend-Guards durchgesetzt werden. Gültige Werte sind ausschließlich `0` (deaktiviert) oder `1` (erzwungen). Aktuell wird diese Striktheit in `weltgewebe-up` noch nicht durchgängig durchgesetzt.
+- **REQUIRE_FRONTEND:** Eine Umgebungsvariable, die explizit steuert, ob Frontend-Guards durchgesetzt werden. Gültige Werte sind als `0` (deaktiviert) oder `1` (erzwungen) definiert.
+
+> **Wichtig:** Diese scharfe Trennung von Inhalt (`version`) und Kontext (`build_id`, `built_at`) schützt vor semantischem Rückfall in zukünftigen Skripten.
 
 ## 4. Vertragsmatrix
 
@@ -70,6 +69,11 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 ## 5. Testklassifikation
 
+Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden:
+
+- **Positivtest:** Zwingender Exit 0 erwartet. Bestätigt, dass der Guard im Erfolgsfall passiert wird.
+- **Negativtest:** Zwingender Exit != 0 erwartet. Bestätigt, dass der Guard bei Verletzung der Constraints hart fehlschlägt.
+
 - **22a: Missing HTML Cache Header**
   - *Typ:* Negativtest (Erwarteter Exit != 0)
   - *Verhalten:* Simuliert fehlende `no-cache, must-revalidate` Header für `/map`. Schlägt korrekt fehl.
@@ -80,10 +84,10 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
   - *Typ:* Positivtest (Erwarteter Exit 0)
   - *Verhalten:* Simuliert korrekte Header für HTML und Assets sowie eine gültige `version.json`-Antwort. Geht erfolgreich durch.
 - **22d: version.json ohne no-store**
-  - *Typ:* Geplanter Negativtest
+  - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
   - *Status:* **Fehlt** in `test_verify_deployment.sh`.
 - **22e: version.json ohne brauchbare Build-ID**
-  - *Typ:* Geplanter Negativtest
+  - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
   - *Status:* **Fehlt** in `test_verify_deployment.sh`.
 
 ## 6. Offene Widersprüche / epistemische Leerstellen
