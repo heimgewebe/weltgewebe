@@ -48,6 +48,9 @@ Generated automatically. Do not edit.
 | geist-und-plan | Geist Und Plan | reference | active | derived | docs/geist-und-plan.md |
 | inhalt | Inhalt | reference | active | canonical | docs/inhalt.md |
 | konzepte.garnrolle | Garnrolle | reference | active | derived | docs/konzepte/garnrolle.md |
+| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen | concept | active | canonical | docs/konzepte/garnrolle-und-verortung.md |
+| map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | canonical | docs/blueprints/map-blaupause.md |
+| map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | canonical | docs/blueprints/map-roadmap.md |
 | overview.inhalt | Inhalt | reference | active | canonical | docs/overview/inhalt.md |
 | overview.zusammenstellung | Zusammenstellung | reference | active | canonical | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | derived | docs/policies/orientierung.md |
@@ -69,6 +72,7 @@ Generated automatically. Do not edit.
 | ui-blaupause | Weltgewebe UI-Blaupause | blueprint | canonical | This document is the canonical source of truth for the UI architecture. | docs/blueprints/ui-blaupause.md |
 | ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | This document is the canonical source of truth for the UI implementation roadmap. | docs/blueprints/ui-roadmap.md |
 | ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | state-machine-contract | docs/blueprints/ui-state-machine.md |
+| versionierungs-blaupause | Weltgewebe Deploy-Versionierung und Browser-Aktualität | blueprint | draft | normative | docs/blueprints/versionierungs-blaupause.md |
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | derived | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | derived | docs/x-repo/peers-learnings.md |
 | x-repo.semantAH | Semantah | reference | active | derived | docs/x-repo/semantAH.md |

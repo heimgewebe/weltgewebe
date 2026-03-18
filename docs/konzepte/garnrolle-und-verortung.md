@@ -1,9 +1,10 @@
 ---
-id: konzept.garnrolle-und-verortung
+id: konzepte.garnrolle-und-verortung
 title: "Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen"
 doc_type: concept
 status: active
 canonicality: canonical
+summary: "Konzept der Garnrolle als persistentem Akteur, ihrer Verortung sowie der Beziehung zwischen Wohnsitz und emergentem Vertrauen im Weltgewebe."
 ---
 
 # Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen
