@@ -8,4 +8,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Privacy UI (ADR-0003)
 
-Slider (r Meter), RoN-Toggle, Vorschau public_pos. Texte: Transparenz = Standard.
+Slider (r Meter) für verortete Garnrollen.
+RoN ist kein nachträglicher Toggle mehr, sondern ein fundamentaler Weg bei der Accounterstellung (keine Personenangaben gemacht).
+Texte: Transparenz = Standard.
+Vorschau public_pos.

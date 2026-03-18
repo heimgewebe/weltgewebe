@@ -54,6 +54,13 @@ summary: Automatisch hinzugefügtes Frontmatter.
 - Wöchentliche Veröffentlichung eines **Transparency-Anchors** (Root-Hash der Woche).
 - Öffentliche Statistik: Anzahl Tombstones, Takedown-Holds, mediane Löschzeit.
 
+## 7. Identität & Verortung
+
+- Der Contract trägt nur die basale Kernunterscheidung (keine Vertrauenswerte oder komplexe Zwischenstufen):
+  - **Modus (`mode`)**: Eine Garnrolle ist entweder "verortet" (hat eine genaue Adresse) oder der "ron" (Rolle ohne Namen) zugeordnet.
+  - **Ungenauigkeitsradius (`radius_m`)**: Steuert ausschließlich die öffentliche Anzeige von verorteten Garnrollen.
+  - **Interne Verortung**: Nur "verortete" Garnrollen besitzen eine `location`.
+
 ---
 
 **Kurzfassung:** Löschen = _Tombstone_ (sichtbar) + _Key-Erase_ (Inhalt weg).

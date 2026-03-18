@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::{
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
-    routes::accounts::{AccountInternal, AccountPublic, Visibility},
+    routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
 };
 
@@ -338,9 +338,8 @@ async fn provision_account(
             title: email_norm.split('@').next().unwrap_or("User").to_string(),
             summary: None,
             public_pos: None,
-            visibility: Visibility::Private, // Safe default
+            mode: "verortet".to_string(), // Minimal default
             radius_m: 0,
-            ron_flag: false,
             disabled: false,
             tags: vec![],
         },

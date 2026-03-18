@@ -13,7 +13,7 @@ use weltgewebe_api::{
     auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
     config::AppConfig,
     routes::{
-        accounts::{AccountInternal, AccountPublic, Visibility},
+        accounts::{AccountInternal, AccountPublic},
         api_router,
     },
     state::ApiState,
@@ -89,9 +89,9 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
                     title: format!("Title {}", id),
                     summary: None,
                     public_pos: None,
-                    visibility: Visibility::Public,
+                    mode: "verortet".to_string(),
                     radius_m: 0,
-                    ron_flag: false,
+
                     disabled: false,
                     tags: vec![],
                 },

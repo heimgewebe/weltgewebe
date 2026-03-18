@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -36,14 +36,6 @@ pub struct Location {
     pub lon: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum Visibility {
-    Public,
-    Private,
-    Approximate,
-}
-
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
 /// Only exposes 'public_pos' which is calculated based on visibility settings.
@@ -61,9 +53,9 @@ pub struct AccountPublic {
     #[serde(skip_serializing_if = "Option::is_none", rename = "public_pos")]
     pub public_pos: Option<Location>,
 
-    pub visibility: Visibility,
+    pub mode: String,
     pub radius_m: u32,
-    pub ron_flag: bool,
+
     #[serde(default, skip_serializing)]
     pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -175,29 +167,21 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     };
 
     // Robust enum parsing with default fallback
-    let visibility_str = v
-        .get("visibility")
+    let radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+
+    let mode = v
+        .get("mode")
         .and_then(|v| v.as_str())
-        .unwrap_or("public");
+        .or_else(|| {
+            if kind == "ron" || v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false) {
+                Some("ron")
+            } else {
+                Some("verortet")
+            }
+        })
+        .unwrap_or("verortet")
+        .to_string();
 
-    let visibility = match visibility_str {
-        "private" => Visibility::Private,
-        "approximate" => Visibility::Approximate,
-        "public" => Visibility::Public,
-        _ => {
-            // Warn about unknown visibility and default to Public
-            tracing::warn!(
-                ?id,
-                ?visibility_str,
-                "Unknown visibility, defaulting to Public"
-            );
-            Visibility::Public
-        }
-    };
-
-    let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-
-    let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
     let disabled = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let tags = v
@@ -210,18 +194,9 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         })
         .unwrap_or_default();
 
-    // Calculate public position based on visibility policy
-    let public_pos = match visibility {
-        Visibility::Private => None,
-        Visibility::Approximate => {
-            // If approximate is requested but radius is 0, enforce a default fuzziness
-            // to avoid "approximate but exact" semantic contradiction.
-            if radius_m == 0 {
-                radius_m = 250;
-            }
-            Some(calculate_jittered_pos(lat, lon, radius_m, &id))
-        }
-        Visibility::Public => Some(Location { lat, lon }),
+    let public_pos = match mode.as_str() {
+        "ron" => None,
+        _ => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
     };
 
     Some(AccountPublic {
@@ -230,9 +205,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         title,
         summary,
         public_pos,
-        visibility,
+        mode,
         radius_m,
-        ron_flag,
         disabled,
         tags,
     })
@@ -361,7 +335,7 @@ mod tests {
             "type": "garnrolle",
             "title": "Private Test",
             "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "private"
+            "mode": "ron"
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
@@ -371,20 +345,19 @@ mod tests {
     }
 
     #[test]
-    fn test_guard_approximate_enforces_minimum_radius() {
-        let input = json!({
-            "id": "test-approx-zero",
+    fn test_guard_verortet_preserves_radius() {
+        let input = serde_json::json!({
+            "id": "test-verortet-zero",
             "type": "garnrolle",
-            "title": "Approx Zero",
+            "title": "Verortet Zero",
             "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "approximate",
+            "mode": "verortet",
             "radius_m": 0
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        // GUARD: Radius must be bumped to default (250) if 0
-        assert_eq!(account.radius_m, 250);
+        assert_eq!(account.radius_m, 0);
         assert!(account.public_pos.is_some());
     }
 
@@ -400,7 +373,7 @@ mod tests {
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        assert_eq!(account.visibility, Visibility::Public);
+        assert_eq!(account.mode, "verortet");
         assert!(account.public_pos.is_some());
     }
 

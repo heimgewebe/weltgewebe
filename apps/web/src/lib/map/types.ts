@@ -30,9 +30,8 @@ export interface Account {
   summary?: string | null;
   location: Location;
   public_pos?: Location;
-  visibility: string;
+  mode: string;
   radius_m: number;
-  ron_flag: boolean;
   created_at: string;
   tags: string[];
   modules?: Module[];
