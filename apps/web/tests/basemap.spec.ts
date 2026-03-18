@@ -24,15 +24,13 @@ test.describe("resolveBasemapStyle", () => {
     );
   });
 
-  test("throws for local-sovereign until assets are integrated", () => {
+  test("returns local dev path for local-sovereign mode", () => {
     const config: BasemapConfig = {
       mode: "local-sovereign",
       center: [0, 0],
       zoom: 1,
     };
 
-    expect(() => resolveBasemapStyle(config)).toThrow(
-      "Basemap mode 'local-sovereign' is prepared but not yet supported",
-    );
+    expect(resolveBasemapStyle(config)).toBe("/local-basemap/style.json");
   });
 });

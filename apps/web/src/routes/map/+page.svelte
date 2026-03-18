@@ -221,6 +221,7 @@
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
   onMount(() => {
+    let maplibreModule: any = null;
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
@@ -238,11 +239,36 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      maplibreModule = maplibregl;
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
+
+      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+
+      if (currentBasemap.mode === 'local-sovereign') {
+        const pmtiles = await import('pmtiles');
+        try {
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+        } catch (e: any) {
+          if (!e.message?.includes('already registered')) {
+            console.warn('Unexpected error registering PMTiles protocol:', e);
+          }
+        }
+
+        transformRequestFn = (url: string, resourceType?: any) => {
+          if (url.startsWith('pmtiles://')) {
+            const remainder = url.slice('pmtiles://'.length);
+            if (!remainder.includes('/')) {
+              const fullUrl = `${window.location.origin}/local-basemap/${remainder}`;
+              return { url: `pmtiles://${fullUrl}` };
+            }
+          }
+          return { url };
+        };
+      }
 
       map = new maplibregl.Map({
         container,
@@ -254,6 +280,7 @@
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
+        transformRequest: transformRequestFn,
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -311,6 +338,9 @@
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
+      if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
+        maplibreModule.removeProtocol('pmtiles');
+      }
     };
   });
 </script>

@@ -11,9 +11,7 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
         throw new Error("styleUrl required for remote-style");
       return config.styleUrl;
     case "local-sovereign":
-      throw new Error(
-        "Basemap mode 'local-sovereign' is prepared but not yet supported: missing local style asset integration",
-      );
+      return "/local-basemap/style.json";
     default:
       return assertNever(config);
   }
