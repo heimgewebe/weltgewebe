@@ -92,18 +92,13 @@ export const demoAccounts = [
   },
   {
     id: "00000000-0000-0000-0000-000000000003",
-    type: "garnrolle",
-    title: "InvisibleSpinner",
-    summary: "Private account",
-    // Public view: public_pos is undefined/null for private accounts
-    location: {
-      lat: 53.561,
-      lon: 10.063,
-    },
-    mode: "verortet" as const,
+    type: "ron",
+    title: "Rolle ohne Namen",
+    summary: "Ein Account ohne individuelle Verortung",
+    mode: "ron" as const,
     radius_m: 0,
     created_at: "2025-01-01T12:00:00Z",
-    tags: ["account", "garnrolle", "demo", "private"],
+    tags: ["account", "ron", "demo"],
     modules: [],
   },
 ];
