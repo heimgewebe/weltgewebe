@@ -1,3 +1,4 @@
+// "local-sovereign" mode is architecturally prepared, but assets are not yet integrated into the build/serving pipeline.
 export type BasemapMode = "remote-style" | "local-sovereign";
 
 export type BasemapConfig = {
