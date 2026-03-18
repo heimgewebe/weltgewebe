@@ -1,33 +1,36 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
-  import type { PageData } from './$types';
-  import '$lib/styles/tokens.css';
-  import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { Map as MapLibreMap, GeoJSONSource, Marker } from 'maplibre-gl';
+  import { onMount, onDestroy, tick } from "svelte";
+  import type { PageData } from "./$types";
+  import "$lib/styles/tokens.css";
+  import "maplibre-gl/dist/maplibre-gl.css";
+  import type { Map as MapLibreMap, GeoJSONSource, Marker } from "maplibre-gl";
 
-  import TopBar from '$lib/components/TopBar.svelte';
-  import ContextPanel from '$lib/components/ContextPanel.svelte';
-  import ActionBar from '$lib/components/ActionBar.svelte';
-  import SearchOverlay from '$lib/components/SearchOverlay.svelte';
-  import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { Edge, RenderableMapPoint } from '$lib/map/types';
+  import TopBar from "$lib/components/TopBar.svelte";
+  import ContextPanel from "$lib/components/ContextPanel.svelte";
+  import ActionBar from "$lib/components/ActionBar.svelte";
+  import SearchOverlay from "$lib/components/SearchOverlay.svelte";
+  import FilterOverlay from "$lib/components/FilterOverlay.svelte";
+  import type { Edge, RenderableMapPoint } from "$lib/map/types";
 
-  import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
-  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
-  import { activeFilters } from '$lib/stores/filterStore';
-  import { authStore } from '$lib/auth/store';
-  import { isRecord } from '$lib/utils/guards';
+  import { view, selection, systemState, enterFokus } from "$lib/stores/uiView";
+  import { isSearchOpen, searchQuery } from "$lib/stores/searchStore";
+  import { activeFilters } from "$lib/stores/filterStore";
+  import { authStore } from "$lib/auth/store";
+  import { isRecord } from "$lib/utils/guards";
 
-  import { get } from 'svelte/store';
+  import { get } from "svelte/store";
 
-  import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
+  import {
+    currentBasemap,
+    HAMMER_PARK_CENTER,
+  } from "$lib/map/config/basemap.current";
+  import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
 
-  import { NodesOverlay } from '$lib/map/overlay/nodes';
-  import { updateEdges } from '$lib/map/overlay/edges';
-  import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
-  import { setupFocusInteraction } from '$lib/map/overlay/focus';
-  import { setupActivityInteraction } from '$lib/map/overlay/activity';
+  import { NodesOverlay } from "$lib/map/overlay/nodes";
+  import { updateEdges } from "$lib/map/overlay/edges";
+  import { setupKompositionInteraction } from "$lib/map/overlay/komposition";
+  import { setupFocusInteraction } from "$lib/map/overlay/focus";
+  import { setupActivityInteraction } from "$lib/map/overlay/activity";
 
   export let data: PageData;
 
@@ -38,12 +41,12 @@
     lon: n.location.lon,
     summary: n.summary,
     info: n.info,
-    type: 'node',
+    type: "node",
     modules: n.modules,
     created_at: n.created_at,
     updated_at: n.updated_at,
     kind: n.kind,
-    tags: n.tags
+    tags: n.tags,
   })) satisfies RenderableMapPoint[];
 
   let accountsData: RenderableMapPoint[] = [];
@@ -59,7 +62,7 @@
           summary: a.summary,
           type: a.type, // Pass through the domain type (e.g., 'garnrolle')
           modules: a.modules,
-          created_at: a.created_at
+          created_at: a.created_at,
         });
       }
     }
@@ -72,17 +75,20 @@
   function isEdge(e: unknown): e is Edge {
     if (!isRecord(e)) return false;
     return (
-      typeof e.id === 'string' &&
-      typeof e.source_id === 'string' &&
-      typeof e.target_id === 'string' &&
-      typeof e.edge_kind === 'string'
+      typeof e.id === "string" &&
+      typeof e.source_id === "string" &&
+      typeof e.target_id === "string" &&
+      typeof e.edge_kind === "string"
     );
   }
 
   $: validEdges = (data.edges || []).filter(isEdge);
 
-  $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
-  $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
+  $: filteredPointIds = new Set(filteredMarkersData.map((p) => p.id));
+  $: edgesData = validEdges.filter(
+    (e) =>
+      filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id),
+  );
 
   // Search logic moved from SearchOverlay to orchestrator
   let filteredResults: RenderableMapPoint[] = [];
@@ -92,12 +98,14 @@
     if ($isSearchOpen && $searchQuery.trim().length > 0) {
       const q = $searchQuery.toLowerCase();
       // Search operates strictly on currently visible/filtered markers
-      filteredResults = searchBaseData.filter(m => {
-        const titleMatch = m.title?.toLowerCase().includes(q);
-        const summaryMatch = m.summary?.toLowerCase().includes(q);
-        return titleMatch || summaryMatch;
-      }).slice(0, 10);
-      searchMatchIds = new Set(filteredResults.map(r => r.id));
+      filteredResults = searchBaseData
+        .filter((m) => {
+          const titleMatch = m.title?.toLowerCase().includes(q);
+          const summaryMatch = m.summary?.toLowerCase().includes(q);
+          return titleMatch || summaryMatch;
+        })
+        .slice(0, 10);
+      searchMatchIds = new Set(filteredResults.map((r) => r.id));
     } else {
       filteredResults = [];
       searchMatchIds = new Set();
@@ -112,10 +120,10 @@
   let nodesOverlay: NodesOverlay | null = null;
 
   function getFilterTypeKey(m: RenderableMapPoint): string {
-    return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+    return m.type === "node" ? m.kind || "Knoten" : "Garnrolle";
   }
 
-  let availableFilterTypes: { id: string, label: string, count: number }[] = [];
+  let availableFilterTypes: { id: string; label: string; count: number }[] = [];
   let filteredMarkersData: RenderableMapPoint[] = [];
 
   // Derivation of filterable types
@@ -125,41 +133,52 @@
       const typeKey = getFilterTypeKey(m);
       counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
     }
-    return Array.from(counts.entries()).map(([id, count]) => ({
-      id,
-      label: id.charAt(0).toUpperCase() + id.slice(1),
-      count
-    })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(counts.entries())
+      .map(([id, count]) => ({
+        id,
+        label: id.charAt(0).toUpperCase() + id.slice(1),
+        count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   })();
 
-  $: filteredMarkersData = $activeFilters.size === 0
-    ? markersData
-    : markersData.filter(m => $activeFilters.has(getFilterTypeKey(m)));
+  $: filteredMarkersData =
+    $activeFilters.size === 0
+      ? markersData
+      : markersData.filter((m) => $activeFilters.has(getFilterTypeKey(m)));
 
-  $: searchBaseData = $activeFilters.size === 0 ? markersData : filteredMarkersData;
+  $: searchBaseData =
+    $activeFilters.size === 0 ? markersData : filteredMarkersData;
 
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {
     (async () => {
-      await nodesOverlay.update(filteredMarkersData, $view.showNodes, searchMatchIds);
+      await nodesOverlay.update(
+        filteredMarkersData,
+        $view.showNodes,
+        searchMatchIds,
+      );
     })();
   }
 
   // Reactive update for edges
   $: if (map && markersData && edgesData && $view && map.getStyle()) {
-     if (map.isStyleLoaded()) {
-        updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
-     } else {
-        map.once('styledata', () => updateEdges(map!, edgesData, filteredMarkersData, $view.showEdges));
-     }
+    if (map.isStyleLoaded()) {
+      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+    } else {
+      map.once("styledata", () =>
+        updateEdges(map!, edgesData, filteredMarkersData, $view.showEdges),
+      );
+    }
   }
 
-
-  function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
-    if (type === 'account' || type === 'garnrolle') {
+  function normalizeSelectionType(
+    type: string | undefined,
+  ): "node" | "account" | "garnrolle" {
+    if (type === "account" || type === "garnrolle") {
       return type;
     }
-    return 'node';
+    return "node";
   }
 
   function focusAndFlyToPoint(item: RenderableMapPoint) {
@@ -169,13 +188,19 @@
 
     const lat = item.lat;
     const lon = item.lon;
-    if (map && typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+    if (
+      map &&
+      typeof lat === "number" &&
+      typeof lon === "number" &&
+      !isNaN(lat) &&
+      !isNaN(lon)
+    ) {
       const currentZoom = map.getZoom();
       map.flyTo({
         center: [lon, lat],
         zoom: Math.max(currentZoom, 14),
         speed: 0.8,
-        curve: 1
+        curve: 1,
       });
     }
   }
@@ -185,7 +210,7 @@
   }
 
   // Restore focus when selection is closed or state becomes navigation
-  $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
+  $: if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
     const elToFocus = lastFocusedElement;
     lastFocusedElement = null; // Clear immediately to prevent loop
 
@@ -207,7 +232,7 @@
       await authStore.logout();
     } else {
       try {
-        await authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
+        await authStore.devLogin("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8");
       } catch (e: any) {
         // Simple UI feedback for dev login issues
         window.alert(`Login failed: ${e.message}\nCheck console for details.`);
@@ -224,7 +249,9 @@
     let maplibreModule: any = null;
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
-      const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
+      const markerBtn = target.closest(
+        ".map-marker",
+      ) as HTMLButtonElement | null;
       if (!markerBtn || !nodesOverlay) return;
 
       const id = markerBtn.dataset.id;
@@ -238,26 +265,29 @@
     };
 
     (async () => {
-      const maplibregl = await import('maplibre-gl');
+      const maplibregl = await import("maplibre-gl");
       maplibreModule = maplibregl;
       const container = mapContainer;
       if (!container) {
         return;
       }
-      container.addEventListener('click', handleMarkerClick);
+      container.addEventListener("click", handleMarkerClick);
 
-      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+      let transformRequestFn:
+        | ((url: string, resourceType?: any) => { url: string })
+        | undefined = undefined;
 
-      // PMTiles dev infrastructure is prepared here. The current default remains remote-style,
-      // and real local artifact proof is still missing. This code exists to reduce future
-      // activation cost, not to claim completion today.
-      if (currentBasemap.mode === 'local-sovereign') {
-        const pmtiles = await import('pmtiles');
+      // PMTiles dev infrastructure is intentionally prepared now, including the runtime
+      // dependency 'pmtiles'. The current runtime stays strictly on 'remote-style', since
+      // real local artifact proof is still missing. This setup exists solely to reduce later
+      // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
+      if (currentBasemap.mode === "local-sovereign") {
+        const pmtiles = await import("pmtiles");
         try {
-          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+          maplibregl.addProtocol("pmtiles", new pmtiles.Protocol().tile);
         } catch (e: any) {
-          if (!e.message?.includes('already registered')) {
-            console.warn('Unexpected error registering PMTiles protocol:', e);
+          if (!e.message?.includes("already registered")) {
+            console.warn("Unexpected error registering PMTiles protocol:", e);
           }
         }
 
@@ -278,14 +308,26 @@
         attributionControl: false,
         transformRequest: transformRequestFn,
       });
-      map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
-      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
+      map.addControl(
+        new maplibregl.NavigationControl({ showZoom: true }),
+        "bottom-right",
+      );
+      map.addControl(
+        new maplibregl.AttributionControl({
+          compact: false,
+          customAttribution:
+            '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+        }),
+        "bottom-right",
+      );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, activity, etc.) carry domain meaning.
       nodesOverlay = new NodesOverlay(map);
       cleanupKomposition = setupKompositionInteraction(map);
-      let sysStateStr = '';
-      unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
+      let sysStateStr = "";
+      unsubscribeSysState = systemState.subscribe((val) => {
+        sysStateStr = val;
+      });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
       cleanupActivity = setupActivityInteraction(map);
 
@@ -300,31 +342,31 @@
         const currentSelection = get(selection);
         const currentSystemState = get(systemState);
 
-        if (!currentSelection && currentSystemState === 'navigation') {
+        if (!currentSelection && currentSystemState === "navigation") {
           const currentZoom = map?.getZoom() ?? 14;
           map?.flyTo({
             center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
             zoom: Math.max(currentZoom, 14),
             speed: 0.8,
-            curve: 1
+            curve: 1,
           });
         }
       };
 
-      map.once('load', finishLoading);
-      map.on('error', () => {
+      map.once("load", finishLoading);
+      map.on("error", () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
       });
 
       // Expose map for testing
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      if (import.meta.env.MODE === "test" || import.meta.env.DEV) {
         (window as any).__TEST_MAP__ = map;
       }
     })();
 
     return () => {
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      if (import.meta.env.MODE === "test" || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;
       }
       cleanupKomposition?.();
@@ -332,14 +374,14 @@
       cleanupActivity?.();
       unsubscribeSysState?.();
       nodesOverlay?.destroy();
-      if (map && typeof map.remove === 'function') map.remove();
-      mapContainer?.removeEventListener('click', handleMarkerClick);
-      if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
+      if (map && typeof map.remove === "function") map.remove();
+      mapContainer?.removeEventListener("click", handleMarkerClick);
+      if (currentBasemap.mode === "local-sovereign" && maplibreModule) {
         try {
-          maplibreModule.removeProtocol('pmtiles');
+          maplibreModule.removeProtocol("pmtiles");
         } catch (e: any) {
-          if (!e.message?.includes('not registered')) {
-            console.warn('Unexpected error removing PMTiles protocol:', e);
+          if (!e.message?.includes("not registered")) {
+            console.warn("Unexpected error removing PMTiles protocol:", e);
           }
         }
       }
@@ -347,32 +389,76 @@
   });
 </script>
 
+<main class="shell">
+  <ContextPanel />
+  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  <FilterOverlay availableTypes={availableFilterTypes} />
+  <ActionBar />
+  {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
+    <div class="debug-badge" data-testid="debug-badge">
+      Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
+      <br />
+      {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
+        Mode: REMOTE<br />
+        API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
+      {:else}
+        Mode: DEMO (local)<br />
+        Origin: {typeof window !== "undefined"
+          ? window.location.origin
+          : "server"}
+      {/if}
+      <br />
+      <button
+        on:click={toggleLogin}
+        style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;"
+        data-testid="debug-logout"
+      >
+        {$authStore.authenticated ? "Logout" : "Login Demo"}
+      </button>
+    </div>
+  {/if}
+  <TopBar />
+  <div id="map" bind:this={mapContainer}></div>
+  {#if isLoading}
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+  {/if}
+</main>
+
 <style>
-  .shell{
-    position:relative;
-    height:100dvh;
-    height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    width:100vw;
-    overflow:hidden;
-    background:var(--bg);
-    color:var(--text);
+  .shell {
+    position: relative;
+    height: 100dvh;
+    height: calc(
+      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+    );
+    width: 100vw;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
-  #map{ position:absolute; inset:0; }
-  #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
+  #map {
+    position: absolute;
+    inset: 0;
+  }
+  #map :global(canvas) {
+    filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);
+  }
 
-  #map :global(.map-marker){
-    width:24px;
-    height:24px;
-    border-radius:999px;
-    border:2px solid var(--panel-border);
-    background:var(--accent, #ff8c42);
-    display:grid;
-    place-items:center;
-    color:var(--bg);
-    cursor:pointer;
-    box-shadow:0 0 0 2px rgba(0,0,0,0.25);
+  #map :global(.map-marker) {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 2px solid var(--panel-border);
+    background: var(--accent, #ff8c42);
+    display: grid;
+    place-items: center;
+    color: var(--bg);
+    cursor: pointer;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
     transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
 
@@ -393,32 +479,32 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    #map :global(.map-marker:hover){
+    #map :global(.map-marker:hover) {
       transform: scale(1.2);
       z-index: 10;
     }
-    #map :global(.marker-account:hover){
+    #map :global(.marker-account:hover) {
       transform: scale(1.2);
     }
   }
 
-  #map :global(.map-marker:focus-visible){
-    outline:2px solid var(--fg);
-    outline-offset:2px;
+  #map :global(.map-marker:focus-visible) {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
     z-index: 10;
   }
 
   #map :global(.map-marker.search-highlight) {
     outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
     z-index: 5;
   }
 
   #map :global(.marker-account.search-highlight) {
     outline: 2px solid var(--primary, #005fcc);
     outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
   }
 
   #map :global(.marker-account:focus-visible) {
@@ -438,12 +524,16 @@
   .spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid rgba(255,255,255,0.1);
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 1s linear infinite;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .debug-badge {
     position: absolute;
@@ -459,34 +549,3 @@
     font-family: monospace;
   }
 </style>
-
-<main class="shell">
-  <ContextPanel />
-  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
-  <FilterOverlay availableTypes={availableFilterTypes} />
-  <ActionBar />
-  {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
-    <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
-      <br>
-      {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
-        Mode: REMOTE<br>
-        API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
-      {:else}
-        Mode: DEMO (local)<br>
-        Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
-      {/if}
-      <br>
-      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
-        {$authStore.authenticated ? 'Logout' : 'Login Demo'}
-      </button>
-    </div>
-  {/if}
-  <TopBar />
-  <div id="map" bind:this={mapContainer}></div>
-  {#if isLoading}
-    <div class="loading-overlay">
-      <div class="spinner"></div>
-    </div>
-  {/if}
-</main>

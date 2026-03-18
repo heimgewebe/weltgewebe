@@ -91,6 +91,12 @@ export default defineConfig({
           }
 
           const stat = fs.statSync(targetPath);
+          if (!stat.isFile()) {
+            res.statusCode = 403;
+            res.end("Forbidden");
+            return;
+          }
+
           const range = req.headers.range;
 
           if (range) {
