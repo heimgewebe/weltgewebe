@@ -38,7 +38,7 @@ pub struct Location {
 
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
-/// Only exposes 'public_pos' which is calculated based on visibility settings.
+/// Only exposes 'public_pos' which is calculated based on the account mode (verortet vs ron).
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum AccountMode {
@@ -229,7 +229,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .unwrap_or_default();
 
     let public_pos = match mode {
-        AccountMode::Ron => None, // Or we could put it at the center of the city.
+        AccountMode::Ron => None, // RoN accounts have no individual public position.
         AccountMode::Verortet => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
     };
 

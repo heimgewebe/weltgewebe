@@ -42,8 +42,8 @@ export interface AccountVerortet extends AccountBase {
 
 export interface AccountRon extends AccountBase {
   mode: "ron";
-  location?: Location; // internal shouldn't really exist, but optional to be safe
-  public_pos?: Location; // public might not exist
+  location?: never;
+  public_pos?: never;
   radius_m: number;
 }
 
