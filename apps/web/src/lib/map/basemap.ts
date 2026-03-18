@@ -1,5 +1,9 @@
 import type { BasemapConfig } from "./config/basemap.current";
 
+function assertNever(x: never): never {
+  throw new Error(`Unsupported basemap mode: ${JSON.stringify(x)}`);
+}
+
 export function resolveBasemapStyle(config: BasemapConfig): string {
   switch (config.mode) {
     case "remote-style":
@@ -11,6 +15,6 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
         "Basemap mode 'local-sovereign' is prepared but not yet supported: missing local style asset integration",
       );
     default:
-      throw new Error(`Unsupported basemap mode: ${(config as any).mode}`);
+      return assertNever(config);
   }
 }
