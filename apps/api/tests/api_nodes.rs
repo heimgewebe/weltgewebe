@@ -196,7 +196,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        mode: "verortet".to_string(),
+        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
         radius_m: 0,
 
         disabled: false,
@@ -382,7 +382,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        mode: "verortet".to_string(),
+        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
         radius_m: 0,
 
         disabled: false,

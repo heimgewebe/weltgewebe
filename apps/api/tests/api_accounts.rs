@@ -89,7 +89,7 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
                     title: format!("Title {}", id),
                     summary: None,
                     public_pos: None,
-                    mode: "verortet".to_string(),
+                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
                     radius_m: 0,
 
                     disabled: false,

@@ -338,7 +338,7 @@ async fn provision_account(
             title: email_norm.split('@').next().unwrap_or("User").to_string(),
             summary: None,
             public_pos: None,
-            mode: "verortet".to_string(), // Minimal default
+            mode: crate::routes::accounts::AccountMode::Ron, // Minimal default
             radius_m: 0,
             disabled: false,
             tags: vec![],

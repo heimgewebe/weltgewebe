@@ -23,19 +23,31 @@ export interface Node {
   modules?: Module[];
 }
 
-export interface Account {
+export interface AccountBase {
   id: string;
-  type: string;
+  type: string; // 'garnrolle' | 'ron'
   title: string;
   summary?: string | null;
-  location: Location;
-  public_pos?: Location;
-  mode: string;
-  radius_m: number;
   created_at: string;
   tags: string[];
   modules?: Module[];
 }
+
+export interface AccountVerortet extends AccountBase {
+  mode: 'verortet';
+  location: Location; // internal
+  public_pos?: Location; // projected
+  radius_m: number;
+}
+
+export interface AccountRon extends AccountBase {
+  mode: 'ron';
+  location?: Location; // internal shouldn't really exist, but optional to be safe
+  public_pos?: Location; // public might not exist
+  radius_m: number;
+}
+
+export type Account = AccountVerortet | AccountRon;
 
 export interface MapPoint {
   id: string;

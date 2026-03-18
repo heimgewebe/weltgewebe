@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, HashMap},
@@ -39,6 +39,12 @@ pub struct Location {
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
 /// Only exposes 'public_pos' which is calculated based on visibility settings.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum AccountMode {
+    Verortet,
+    Ron,
+}
 #[derive(Serialize, Clone, Debug)]
 pub struct AccountPublic {
     pub id: String,
@@ -53,7 +59,7 @@ pub struct AccountPublic {
     #[serde(skip_serializing_if = "Option::is_none", rename = "public_pos")]
     pub public_pos: Option<Location>,
 
-    pub mode: String,
+    pub mode: AccountMode,
     pub radius_m: u32,
 
     #[serde(default, skip_serializing)]
@@ -143,44 +149,71 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let location_obj = match v.get("location") {
-        Some(obj) => obj,
-        None => {
-            tracing::debug!(%id, "Skipping account with missing location");
-            return None;
-        }
-    };
 
-    let lon = location_obj
-        .get("lon")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
-    let lat = location_obj
-        .get("lat")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
+    let mut lat = None;
+    let mut lon = None;
 
-    let (lat, lon) = match (lat, lon) {
-        (Some(lat), Some(lon)) => (lat, lon),
-        _ => {
-            tracing::debug!(%id, "Skipping account with invalid lat/lon");
-            return None;
-        }
-    };
+    if let Some(location_obj) = v.get("location") {
+        lon = location_obj.get("lon").and_then(|val| val.as_f64().or_else(|| val.as_str().and_then(|s| s.parse().ok())));
+        lat = location_obj.get("lat").and_then(|val| val.as_f64().or_else(|| val.as_str().and_then(|s| s.parse().ok())));
+    }
 
-    // Robust enum parsing with default fallback
-    let radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+    let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
-    let mode = v
-        .get("mode")
-        .and_then(|v| v.as_str())
+    // Legacy fallback mapping
+    let has_ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+    let legacy_visibility = v.get("visibility").and_then(|v| v.as_str());
+
+    let mode = v.get("mode")
+        .and_then(|v| serde_json::from_value::<AccountMode>(v.clone()).ok())
         .or_else(|| {
-            if kind == "ron" || v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false) {
-                Some("ron")
+            if kind == "ron" || has_ron_flag {
+                Some(AccountMode::Ron)
+            } else if let Some(vis) = legacy_visibility {
+                match vis {
+                    "private" => {
+                        // Legacy private records without a mode are treated safely
+                        // by forcing a high fuzziness if they must be rendered,
+                        // or mapping them to Ron if we consider them name-less.
+                        // The safest approach is to not blindly map them to "verortet" at 0m.
+                        // But since they have a location, we shouldn't drop it.
+                        // Let's map to Verortet but enforce a safe default radius if 0.
+                        if radius_m == 0 {
+                            radius_m = 1000;
+                        }
+                        Some(AccountMode::Verortet)
+                    },
+                    "approximate" => {
+                        if radius_m == 0 {
+                            radius_m = 250;
+                        }
+                        Some(AccountMode::Verortet)
+                    },
+                    _ => Some(AccountMode::Verortet),
+                }
             } else {
-                Some("verortet")
+                // If neither mode, ron_flag, nor visibility exists, default safely
+                if lat.is_some() && lon.is_some() {
+                    Some(AccountMode::Verortet)
+                } else {
+                    Some(AccountMode::Ron)
+                }
             }
         })
-        .unwrap_or("verortet")
-        .to_string();
+        .unwrap_or(AccountMode::Ron);
+
+    // Validate requirements
+    let (lat, lon) = match mode {
+        AccountMode::Verortet => {
+            if let (Some(la), Some(lo)) = (lat, lon) {
+                (la, lo)
+            } else {
+                tracing::debug!(%id, "Skipping 'verortet' account missing exact location");
+                return None;
+            }
+        },
+        AccountMode::Ron => (0.0, 0.0), // RoN has no individual location
+    };
 
     let disabled = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
@@ -194,9 +227,9 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         })
         .unwrap_or_default();
 
-    let public_pos = match mode.as_str() {
-        "ron" => None,
-        _ => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
+    let public_pos = match mode {
+        AccountMode::Ron => None, // Or we could put it at the center of the city.
+        AccountMode::Verortet => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
     };
 
     Some(AccountPublic {
@@ -373,7 +406,7 @@ mod tests {
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        assert_eq!(account.mode, "verortet");
+        assert_eq!(account.mode, AccountMode::Verortet);
         assert!(account.public_pos.is_some());
     }
 

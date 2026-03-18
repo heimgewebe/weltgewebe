@@ -84,7 +84,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "User One".to_string(),
             summary: Some("Summary 1".to_string()),
             public_pos: None,
-            mode: "verortet".to_string(),
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
 
             disabled: false,
@@ -102,7 +102,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "Admin One".to_string(),
             summary: None,
             public_pos: None,
-            mode: "verortet".to_string(),
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
 
             disabled: false,
@@ -267,7 +267,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            mode: "verortet".to_string(),
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
 
             disabled: false,
