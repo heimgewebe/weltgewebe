@@ -750,7 +750,16 @@ touch mock_edge_ca.crt
 export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 export REQUIRE_FRONTEND="1"
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+
+set +e
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+STATUS=$?
+set -e
+if [ "$STATUS" -eq 0 ]; then
+    echo "FAIL: Expected failure due to missing HTML cache headers, but got success."
+    echo "$OUTPUT"
+    exit 1
+fi
 if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: /map route did not return 'no-cache, must-revalidate' header"; then
     echo "PASS: Detected missing HTML cache headers correctly."
 else
@@ -799,7 +808,15 @@ exit 0
 EOF_CURL_NO_ASSET_CACHE
 chmod +x mock_bin/curl
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+set +e
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+STATUS=$?
+set -e
+if [ "$STATUS" -eq 0 ]; then
+    echo "FAIL: Expected failure due to missing immutable asset headers, but got success."
+    echo "$OUTPUT"
+    exit 1
+fi
 if echo "$OUTPUT" | grep -q "Frontend Cache Guard failed: Immutable asset .* did not return 'max-age=31536000, immutable' header"; then
     echo "PASS: Detected missing immutable asset headers correctly."
 else
@@ -1027,8 +1044,8 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
         shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
-        # Invalid JSON
-        echo "invalid json" > "$O_FILE"
+        # Missing 'version' field
+        echo "{\"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
     fi
     if [[ -n "$D_FILE" ]]; then
         echo "HTTP/1.1 200 OK" > "$D_FILE"
@@ -1040,7 +1057,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
     else
         # Fallback if no -w and no -o was used (for manual curls)
         if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
-            echo "invalid json"
+            echo "{\"build_id\":\"mock-build-id-123\"}"
         fi
     fi
     exit 0
@@ -1063,10 +1080,10 @@ if [ "$STATUS" -eq 0 ]; then
     echo "$OUTPUT"
     exit 1
 fi
-if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json is not valid JSON."; then
-    echo "PASS: Detected invalid version.json correctly."
+if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."; then
+    echo "PASS: Detected missing canonical version in version.json correctly."
 else
-    echo "FAIL: Did not detect invalid version.json correctly."
+    echo "FAIL: Did not detect missing canonical version in version.json."
     echo "$OUTPUT"
     exit 1
 fi
