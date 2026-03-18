@@ -78,15 +78,15 @@ export default defineConfig({
           }
 
           // Map obvious asset content types
-          if (pathname.endsWith(".pmtiles")) {
+          if (safeRelPath.endsWith(".pmtiles")) {
             res.setHeader("Content-Type", "application/octet-stream");
-          } else if (pathname.endsWith(".json")) {
+          } else if (safeRelPath.endsWith(".json")) {
             res.setHeader("Content-Type", "application/json");
-          } else if (pathname.endsWith(".pbf")) {
+          } else if (safeRelPath.endsWith(".pbf")) {
             res.setHeader("Content-Type", "application/x-protobuf");
-          } else if (pathname.endsWith(".png")) {
+          } else if (safeRelPath.endsWith(".png")) {
             res.setHeader("Content-Type", "image/png");
-          } else if (pathname.endsWith(".svg")) {
+          } else if (safeRelPath.endsWith(".svg")) {
             res.setHeader("Content-Type", "image/svg+xml");
           }
 

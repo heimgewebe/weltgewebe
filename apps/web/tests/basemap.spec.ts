@@ -54,7 +54,7 @@ test.describe("resolveBasemapStyle", () => {
     };
 
     expect(() => resolveBasemapStyle(config)).toThrow(
-      "dev-infrastructure is prepared, but requires an actual local .pmtiles artifact",
+      /is prepared but not yet enabled/,
     );
   });
 });

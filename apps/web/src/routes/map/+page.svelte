@@ -248,6 +248,9 @@
 
       let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
 
+      // PMTiles dev infrastructure is prepared here. The current default remains remote-style,
+      // and real local artifact proof is still missing. This code exists to reduce future
+      // activation cost, not to claim completion today.
       if (currentBasemap.mode === 'local-sovereign') {
         const pmtiles = await import('pmtiles');
         try {
