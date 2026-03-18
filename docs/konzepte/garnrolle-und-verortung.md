@@ -143,7 +143,7 @@ Vor Abschluss der Accounterstellung wird der Nutzer explizit informiert:
 
 > Wenn du keine Angaben zu deiner Person machst, wirst du der Rolle ohne Namen zugeordnet.
 > Deine Identität erscheint dann nicht als individuell verortete Garnrolle, sondern als Teil der
-> Rolle ohne Namen im Zentrum deines Stadtteils.
+> Rolle ohne Namen ohne individuelle Position auf der Karte.
 
 RoN ist damit:
 
@@ -174,7 +174,7 @@ Ergebnis:
 - Zuordnung zur Rolle ohne Namen
 - öffentliche Anzeige:
   - nicht individuelle Adresse
-  - stattdessen Rolle ohne Namen im Zentrum des Stadtteils
+  - stattdessen Rolle ohne Namen ohne individuelle Position (Stadtteilzentrum ist eine spätere Darstellungsoption)
 
 ---
 
@@ -273,7 +273,7 @@ Die UI der Accounterstellung muss klar zwischen zwei Wegen unterscheiden:
 
 2. **Ohne Personenangaben fortfahren**
    - Hinweis vor Abschluss:
-     Zuordnung zur Rolle ohne Namen im Zentrum des Stadtteils
+     Zuordnung zur Rolle ohne Namen ohne individuelle Position (Stadtteilzentrum ist eine spätere Darstellungsoption)
 
 Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären.
 

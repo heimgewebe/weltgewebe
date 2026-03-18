@@ -178,16 +178,11 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
             } else if let Some(vis) = legacy_visibility {
                 match vis {
                     "private" => {
-                        // Legacy private records without a mode are treated safely
-                        // by forcing a high fuzziness if they must be rendered,
-                        // or mapping them to Ron if we consider them name-less.
-                        // The safest approach is to not blindly map them to "verortet" at 0m.
-                        // But since they have a location, we shouldn't drop it.
-                        // Let's map to Verortet but enforce a safe default radius if 0.
-                        if radius_m == 0 {
-                            radius_m = 1000;
-                        }
-                        Some(AccountMode::Verortet)
+                        // Legacy private records MUST NOT be projected publicly as exact or fuzzied locations
+                        // unless explicitly opted in. Their semantic intent was "hidden".
+                        // The safest migration path is to strip their individual location
+                        // from the public sphere by treating them as RoN.
+                        Some(AccountMode::Ron)
                     }
                     "approximate" => {
                         if radius_m == 0 {
@@ -369,17 +364,18 @@ mod tests {
 
     #[test]
     fn test_guard_private_hides_public_pos() {
-        let input = json!({
+        let input = serde_json::json!({
             "id": "test-private",
             "type": "garnrolle",
             "title": "Private Test",
             "location": { "lat": 53.5, "lon": 10.0 },
-            "mode": "ron"
+            "visibility": "private" // Legacy field
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        // GUARD: Private accounts have no public_pos
+        // GUARD: Legacy private accounts are safely mapped to Ron (no public location)
+        assert_eq!(account.mode, AccountMode::Ron);
         assert!(account.public_pos.is_none());
     }
 
@@ -548,5 +544,42 @@ mod tests {
         }
 
         assert!(wrapped, "Jitter should be able to wrap around the dateline");
+    }
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_verortet_without_location_fails() {
+        let input = json!({
+            "id": "test-verortet-no-loc",
+            "type": "garnrolle",
+            "title": "No Loc",
+            "mode": "verortet",
+        });
+
+        let account = map_json_to_public_account(&input);
+        assert!(
+            account.is_none(),
+            "Verortet account without location must fail mapping"
+        );
+    }
+
+    #[test]
+    fn test_ron_without_location_succeeds() {
+        let input = json!({
+            "id": "test-ron-no-loc",
+            "type": "ron",
+            "title": "No Loc Ron",
+            "mode": "ron",
+        });
+
+        let account =
+            map_json_to_public_account(&input).expect("Ron without location should succeed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
     }
 }
