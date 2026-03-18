@@ -18,7 +18,7 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 ### 2.1 Build / version.json
 
 - **Erzeugung:** `apps/web/scripts/generate-version.js` erzeugt die Datei `build/_app/version.json`.
-- **Schema:** Das Skript schreibt ein JSON mit den Feldern `version` (Short SHA oder Commit, Fallback "unknown"), `build_id` (Short SHA + Timestamp, Fallback "unknown-Timestamp"), `built_at` (ISO Timestamp) und optional `commit`.
+- **Schema:** Das Skript schreibt ein JSON mit den Feldern `version` (Short SHA oder Commit, Fallback "unknown"), `build_id` (Short SHA + Timestamp, Fallback `unknown-<epochMs>` (Millisekunden seit Unix-Epoch)), `built_at` (ISO Timestamp) und optional `commit`.
 - **Kanonisches Feld:** Im Skript wird `version` explizit deklariert: `const version = shortSha || commit || "unknown"; // Canonical artifact ID (deterministic)`.
 
 ### 2.2 Caddy / Cache
@@ -30,7 +30,7 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 - **Frontend Guard:** `scripts/weltgewebe-up` prüft harte Cache-Regeln für HTML (`no-cache, must-revalidate`) und Immutable Assets (`max-age=31536000, immutable`).
 - **version.json Guard:** Die Überprüfung von `/_app/version.json` in `weltgewebe-up` (Phase B, Zeile ~1218) ist aktuell **warn-only**: `# This is a diagnostic guard (warn-only), curl failures should not abort the deploy.` Fehler bei der JSON-Validierung oder Erreichbarkeit führen nicht zum Abbruch (`exit 1`).
-- **REQUIRE_FRONTEND:** Die strikte Validierung auf ausschließlich `0` oder `1` ist im Dokument als Soll beschrieben; der aktuelle Codepfad sollte vor dem Folge-PR nochmals snippet-basiert gegengeprüft werden, da aktuell in `weltgewebe-up` fehlerhafte Werte (z.B. ein leerer String oder andere Eingaben) das Skript nicht zwingend hart vor Ausführung der Guards abbrechen lassen.
+- **REQUIRE_FRONTEND:** Wenn nicht gesetzt, gilt das Default-Verhalten. Wenn gesetzt, sind ausschließlich die Werte `0` oder `1` erlaubt. Jeder andere Wert führt zu sofortigem Abbruch (`exit 1`) vor Ausführung der Guards.
 
 ### 2.4 UI-Diagnose
 
@@ -95,7 +95,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 - **Widerspruch Caddy vs. Blueprint:** Laut `versionierungs-blaupause.md` muss `/_app/version.json` zwingend den Header `Cache-Control: no-store` erhalten. Dies ist in `Caddyfile.heim` nicht umgesetzt.
 - **Widerspruch weltgewebe-up vs. Blueprint:** Die Blaupause fordert einen "harten Fehler" bei fehlerhaftem `version.json` ("weltgewebe-up darf Frontend-Erfolg nicht mehr nur implizit an HTML/Assets festmachen"). Der aktuelle Code in `weltgewebe-up` deklariert die Überprüfung jedoch explizit als "warn-only".
 - **Widerspruch Test-Semantik vs. Blueprint:** Die in der Blaupause geforderten Tests `22d` und `22e` zur Absicherung der harten `version.json` Guards fehlen im Testskript, obwohl die Blaupause sie als Bedingung für das Stop-Kriterium von Phase D nennt.
-- **Unklarheit REQUIRE_FRONTEND:** Die Blaupause definiert, dass bei Setzen von `REQUIRE_FRONTEND` nur `0` oder `1` erlaubt sind und alles andere zum "fail fast" führen muss. Der Code in `weltgewebe-up` prüft dies nicht ausreichend strikt.
+- **Unklarheit REQUIRE_FRONTEND:** REQUIRE_FRONTEND ist technisch bereits strikt validiert (0|1, sonst `exit 1`), dient aber konzeptionell primär als Override-/Testhebel.
 
 ### Beantwortung der Kernfragen
 
@@ -104,7 +104,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 2. **Ist das aktuelle Schema wirklich konsistent zwischen den Dateien?**
    Ja, das Schema (Fokus auf `version`, sekundär `build_id`/`built_at`) ist zwischen Generator, UI und Blaupause konsistent. Lediglich der Infrastruktur-Code (`Caddyfile.heim`, `weltgewebe-up`) setzt die daraus resultierenden *Verträge* (`no-store`, hartes Failen) noch nicht durch.
 3. **Ist REQUIRE_FRONTEND heute eine saubere Override-Schnittstelle oder nur pragmatischer Testhebel?**
-   Aktuell eher ein pragmatischer Hebel. Die "fail fast"-Validierung auf exakt `0` oder `1` (wie dokumentiert) fehlt.
+   Die Validierung ist technisch strikt umgesetzt, konzeptionell aber eher ein pragmatischer Override-Mechanismus.
 4. **Welche Tests rund um 22c/22d/22e sind logisch korrekt benannt und welche nicht?**
    `22c` ist korrekt als Positivtest. `22d` und `22e` fehlen aktuell komplett und können daher nicht bewertet werden.
 5. **Ist die UI-Diagnose inhaltlich schon „fertig genug“, sodass PR 2 im Wesentlichen als erledigt gelten kann?**
