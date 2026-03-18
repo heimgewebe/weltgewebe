@@ -1,7 +1,11 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default defineConfig({
   plugins: [
@@ -9,14 +13,30 @@ export default defineConfig({
     {
       name: "local-basemap-serve",
       configureServer(server) {
+        // This middleware is for local DEV-Hosting only, to proxy map styles and basemaps without polluting public/
+        // It securely combines /map-style/ and /build/basemap/ into a single /local-basemap/ dev-prefix.
+        const repoRoot = path.resolve(__dirname, "../../");
+        const mapStyleDir = path.resolve(repoRoot, "map-style");
+        const buildBasemapDir = path.resolve(repoRoot, "build", "basemap");
+
+        const pipeStreamSafe = (
+          stream: fs.ReadStream,
+          res: import("http").ServerResponse,
+        ) => {
+          stream.on("error", (err) => {
+            console.error("[local-basemap-serve] Stream error:", err);
+            if (!res.headersSent) {
+              res.statusCode = 500;
+              res.end("Internal Server Error");
+            } else {
+              res.destroy(err);
+            }
+          });
+          stream.pipe(res);
+        };
+
         server.middlewares.use("/local-basemap/", (req, res, next) => {
           if (!req.url) return next();
-
-          // This middleware is for local DEV-Hosting only, to proxy map styles and basemaps without polluting public/
-          // It securely combines /map-style/ and /build/basemap/ into a single /local-basemap/ dev-prefix.
-          const repoRoot = path.resolve(__dirname, "../../");
-          const mapStyleDir = path.resolve(repoRoot, "map-style");
-          const buildBasemapDir = path.resolve(repoRoot, "build", "basemap");
 
           // Safely parse pathname
           let pathname = "";
@@ -141,14 +161,17 @@ export default defineConfig({
             if (req.method === "HEAD") {
               res.end();
             } else {
-              fs.createReadStream(targetPath, { start, end }).pipe(res);
+              pipeStreamSafe(
+                fs.createReadStream(targetPath, { start, end }),
+                res,
+              );
             }
           } else {
             res.setHeader("Content-Length", stat.size);
             if (req.method === "HEAD") {
               res.end();
             } else {
-              fs.createReadStream(targetPath).pipe(res);
+              pipeStreamSafe(fs.createReadStream(targetPath), res);
             }
           }
         });
