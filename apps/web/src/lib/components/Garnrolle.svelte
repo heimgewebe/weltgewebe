@@ -11,7 +11,6 @@
 
   function toggleMenu() {
     menuOpen = !menuOpen;
-    dispatch('clickIcon');
   }
 
   function closeMenu(event: MouseEvent) {
@@ -50,6 +49,7 @@
             {$authStore.role}
           </span>
         </div>
+        <button class="menu-item" on:click={() => { menuOpen = false; dispatch('requestZoomToOwnGarnrolle'); }}>Meine Garnrolle auf Karte zeigen</button>
         <a href="/settings" class="menu-item" on:click={() => menuOpen = false}>Einstellungen</a>
         <button class="menu-item logout-btn" on:click={logout}>Logout</button>
       {:else}

@@ -192,6 +192,7 @@
     if (userMarker) {
       focusAndFlyToPoint(userMarker);
     }
+    // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
   }
 
   // Restore focus when selection is closed or state becomes navigation

@@ -269,7 +269,7 @@ Elemente
 * Neuer Knoten
 * Filter
 
-Hinweis: Der persönliche Kontoeinstieg befindet sich oben rechts über die Garnrolle, welche als Dropdown-Menü für alle Kontofunktionen (Einstellungen, Login, Logout) dient. Bei Klick auf das Garnrollen-Icon oben rechts erfolgt ein Zoom auf die eigene Garnrolle.
+Hinweis: Der persönliche Kontoeinstieg befindet sich oben rechts über die Garnrolle, welche als Dropdown-Menü für Kontofunktionen dient. Innerhalb dieses Menüs kann die eigene Garnrolle gezielt auf der Karte fokussiert werden.
 
 ⸻
 

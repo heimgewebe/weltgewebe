@@ -37,6 +37,6 @@
 <div class="topbar" class:panel-open={$contextPanelOpen} role="toolbar" aria-label="Navigation">
   <div class="spacer"></div>
   <div class="actions">
-    <Garnrolle on:clickIcon={() => dispatch('zoomToOwnGarnrolle')} />
+    <Garnrolle on:requestZoomToOwnGarnrolle={() => dispatch('zoomToOwnGarnrolle')} />
   </div>
 </div>
