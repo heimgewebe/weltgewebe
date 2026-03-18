@@ -34,14 +34,14 @@ export interface AccountBase {
 }
 
 export interface AccountVerortet extends AccountBase {
-  mode: 'verortet';
+  mode: "verortet";
   location: Location; // internal
   public_pos?: Location; // projected
   radius_m: number;
 }
 
 export interface AccountRon extends AccountBase {
-  mode: 'ron';
+  mode: "ron";
   location?: Location; // internal shouldn't really exist, but optional to be safe
   public_pos?: Location; // public might not exist
   radius_m: number;

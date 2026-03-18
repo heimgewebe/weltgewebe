@@ -149,13 +149,18 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-
     let mut lat = None;
     let mut lon = None;
 
     if let Some(location_obj) = v.get("location") {
-        lon = location_obj.get("lon").and_then(|val| val.as_f64().or_else(|| val.as_str().and_then(|s| s.parse().ok())));
-        lat = location_obj.get("lat").and_then(|val| val.as_f64().or_else(|| val.as_str().and_then(|s| s.parse().ok())));
+        lon = location_obj.get("lon").and_then(|val| {
+            val.as_f64()
+                .or_else(|| val.as_str().and_then(|s| s.parse().ok()))
+        });
+        lat = location_obj.get("lat").and_then(|val| {
+            val.as_f64()
+                .or_else(|| val.as_str().and_then(|s| s.parse().ok()))
+        });
     }
 
     let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -164,7 +169,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     let has_ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
     let legacy_visibility = v.get("visibility").and_then(|v| v.as_str());
 
-    let mode = v.get("mode")
+    let mode = v
+        .get("mode")
         .and_then(|v| serde_json::from_value::<AccountMode>(v.clone()).ok())
         .or_else(|| {
             if kind == "ron" || has_ron_flag {
@@ -182,13 +188,13 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
                             radius_m = 1000;
                         }
                         Some(AccountMode::Verortet)
-                    },
+                    }
                     "approximate" => {
                         if radius_m == 0 {
                             radius_m = 250;
                         }
                         Some(AccountMode::Verortet)
-                    },
+                    }
                     _ => Some(AccountMode::Verortet),
                 }
             } else {
@@ -211,7 +217,7 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
                 tracing::debug!(%id, "Skipping 'verortet' account missing exact location");
                 return None;
             }
-        },
+        }
         AccountMode::Ron => (0.0, 0.0), // RoN has no individual location
     };
 
