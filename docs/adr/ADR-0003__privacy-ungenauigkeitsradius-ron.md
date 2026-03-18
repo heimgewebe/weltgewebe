@@ -43,7 +43,7 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 ## Konsequenzen
 
 - **Einfaches UI**: Zwei Wege bei der Accounterstellung ("genaue Adresse" vs. "keine Angaben"). Für verortete Garnrollen existiert ein **Slider** (Meter) für den Ungenauigkeitsradius.
-- **Konsistente Darstellung**: Verortete Garnrollen werden am exakten oder (bei Radius > 0) verfremdeten Ort angezeigt. RoN-Zuordnungen haben keine individuelle öffentliche Position (`public_pos = None`). Eine Gruppierung im Zentrum des jeweiligen Stadtteils ist eine spätere Darstellungsoption (noch nicht implementiert).
+- **Konsistente Darstellung**: Verortete Garnrollen werden am exakten oder (bei Radius > 0) verfremdeten Ort angezeigt. RoN-Zuordnungen haben keine individuelle öffentliche Verortung (`public_pos = None`), sind aber nicht ortlos. Ihre öffentliche Wirksamkeit (das Weben von Fäden) erfolgt kollektiv über die Rolle ohne Namen des jeweiligen Stadtteils (technisch eine spätere Gruppierungs-/Darstellungsoption im Zentrum).
 - **Einfacher Contract**: Der Contract trägt nur noch die Modusunterscheidung (Verortet vs. RoN) und den Ungenauigkeitsradius.
 
 ## Schnittstellen
@@ -54,7 +54,7 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
   - `radius_m` steuert die öffentliche Anzeige für verortete Rollen.
 - **Views**
   - intern: exakte Position (nur für verortete Rollen).
-  - öffentlich: public view zeigt bei `mode=verortet` die Position gemäß Radius, und bei `mode=ron` keine individuelle Position (`public_pos` ist leer).
+  - öffentlich: public view zeigt bei `mode=verortet` die Position gemäß Radius, und bei `mode=ron` keine individuelle Position (`public_pos` ist leer), sondern eine kollektive Stellvertretung über den Stadtteil.
 
 ## Rollout
 
