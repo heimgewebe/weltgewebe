@@ -878,7 +878,15 @@ exit 0
 EOF_CURL_POSITIVE_CACHE
 chmod +x mock_bin/curl
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+set +e
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+STATUS=$?
+set -e
+if [ "$STATUS" -ne 0 ]; then
+    echo "FAIL: Expected success but got exit code $STATUS."
+    echo "$OUTPUT"
+    exit 1
+fi
 if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
    echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
    echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json with no-store)"; then
@@ -958,7 +966,15 @@ exit 0
 EOF_CURL_NO_VERSION_CACHE
 chmod +x mock_bin/curl
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+set +e
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+STATUS=$?
+set -e
+if [ "$STATUS" -eq 0 ]; then
+    echo "FAIL: Expected failure due to missing no-store header, but got success."
+    echo "$OUTPUT"
+    exit 1
+fi
 if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json did not return 'no-store' header."; then
     echo "PASS: Detected missing version.json cache headers correctly."
 else
@@ -1011,8 +1027,8 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
         shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
-        # Missing 'version' field
-        echo "{\"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
+        # Invalid JSON
+        echo "invalid json" > "$O_FILE"
     fi
     if [[ -n "$D_FILE" ]]; then
         echo "HTTP/1.1 200 OK" > "$D_FILE"
@@ -1024,7 +1040,7 @@ if [[ "$*" == *"/_app/version.json"* ]]; then
     else
         # Fallback if no -w and no -o was used (for manual curls)
         if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
-            echo "{\"build_id\":\"mock-build-id-123\"}"
+            echo "invalid json"
         fi
     fi
     exit 0
@@ -1038,11 +1054,19 @@ exit 0
 EOF_CURL_NO_VERSION_FIELD
 chmod +x mock_bin/curl
 
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
-if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."; then
-    echo "PASS: Detected missing canonical version in version.json correctly."
+set +e
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
+STATUS=$?
+set -e
+if [ "$STATUS" -eq 0 ]; then
+    echo "FAIL: Expected failure due to missing canonical version, but got success."
+    echo "$OUTPUT"
+    exit 1
+fi
+if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json is not valid JSON."; then
+    echo "PASS: Detected invalid version.json correctly."
 else
-    echo "FAIL: Did not detect missing canonical version in version.json."
+    echo "FAIL: Did not detect invalid version.json correctly."
     echo "$OUTPUT"
     exit 1
 fi
