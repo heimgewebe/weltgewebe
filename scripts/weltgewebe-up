@@ -1235,7 +1235,8 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         fi
 
         # Robust parsing: ensure JSON is strictly parsable and contains canonical version
-        if ! python3 -c '
+        VERSION_PARSED_OUT=$(mktemp)
+        python3 -c '
 import sys, json
 try:
     with open(sys.argv[1], "r") as f:
@@ -1248,22 +1249,25 @@ except json.JSONDecodeError:
     sys.exit(3)
 except Exception:
     sys.exit(1)
-' "$VERSION_OUT" > "$VERSION_OUT.parsed" 2>/dev/null; then
-            PY_STATUS=$?
+' "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null
+        PY_STATUS=$?
+        if [ "$PY_STATUS" -ne 0 ]; then
             if [ "$PY_STATUS" -eq 3 ]; then
                 msg="Frontend Guard failed: /_app/version.json is not valid JSON."
-            else
+            elif [ "$PY_STATUS" -eq 2 ]; then
                 msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
+            else
+                msg="Frontend Guard failed: /_app/version.json parsing failed unexpectedly."
             fi
             echo "ERROR: $msg"
             generate_failure_bundle "$msg"
-            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_OUT.parsed"
+            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT" "$VERSION_PARSED_OUT"
             exit 1
         fi
 
-        BUILD_VERSION=$(sed -n '1p' "$VERSION_OUT.parsed")
-        BUILD_ID=$(sed -n '2p' "$VERSION_OUT.parsed")
-        rm -f "$VERSION_OUT.parsed"
+        BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
+        BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
+        rm -f "$VERSION_PARSED_OUT"
 
         if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
             echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
