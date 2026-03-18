@@ -27,9 +27,9 @@ gibt es strenge Mechanismen zum Schutz der Privatsphäre.
 
 Standardmäßig wird die Position **exakt** angezeigt.
 
-### Opt-in: Unschärfe (Radius)
+### Opt-in: Ungenauigkeit (Radius)
 
-Der Nutzer kann einen **Unschärferadius** (in Metern) definieren.
+Der Nutzer kann einen **Ungenauigkeitsradius** (in Metern) definieren.
 
 * **Radius = 0m**: Exakte Anzeige (Standard).
 * **Radius > 0m**: Die öffentliche Anzeige (`public_pos`) ist ein zufälliger,
@@ -60,7 +60,7 @@ Datenfehler oder Migrationen), fällt die Public-View **bewusst auf `public` zur
 und schreibt eine Warnung ins Log.
 
 * **Begründung:** Im Weltgewebe ist „exakt sichtbar" ein legitimer Standard
-  (Opt-in zur Unschärfe existiert). Ein fail-closed Default (`private`) würde im
+  (Opt-in zur Ungenauigkeit existiert). Ein fail-closed Default (`private`) würde im
   Fehlerfall Accounts unsichtbar machen und damit Karte, Ressourcen und Fäden
   „verschwinden lassen", ohne dass der Nutzer es versteht.
 * **Alternative (fail-closed):** Für Umgebungen mit höherem Sicherheitsbedarf
@@ -70,4 +70,4 @@ und schreibt eine Warnung ins Log.
 
 ### Normative Quelle
 
-Siehe [ADR-0003: Privacy: Unschärferadius & RoN](../adr/ADR-0003__privacy-unschaerferadius-ron.md).
+Siehe [ADR-0003: Privacy: Ungenauigkeitsradius & RoN](../adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md).

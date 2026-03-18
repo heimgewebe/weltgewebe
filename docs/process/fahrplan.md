@@ -14,7 +14,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 
 - ADR-0001 (Clean Slate & Monorepo)
 - ADR-0002 (Re-Entry-Kriterien)
-- ADR-0003 (Privacy: Unschärferadius & RoN)
+- ADR-0003 (Privacy: Ungenauigkeitsradius & RoN)
 
 ## Prinzipien: mobile-first, audit-ready, klein schneiden, Metriken vor Features
 
@@ -215,7 +215,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 
 ## Phase C (Woche 5–6): **Privacy-UI (ADR-0003) & 7-Tage-Verblassen**
 
-- UI: **Unschärferadius-Slider** + **RoN-Toggle** (Profil-State; Fake-Persist).
+- UI: **Ungenauigkeitsradius-Slider** + **RoN-Toggle** (Profil-State; Fake-Persist).
 - Zeitleiste wirkt auf Sichtbarkeit (Fäden/Knoten blenden weich aus; Client-seitig).
 - `public_pos` im View-Modell (Fake-Backend oder Local-Derivation).
 
