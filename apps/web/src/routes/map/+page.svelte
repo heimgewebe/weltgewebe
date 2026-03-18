@@ -108,6 +108,7 @@
   let map: MapLibreMap | null = null;
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
+  let showFilterTooltip = false;
 
   let nodesOverlay: NodesOverlay | null = null;
 
@@ -192,19 +193,18 @@
     const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
 
     if (userMarker) {
-      // Ensure the marker is not hidden by active filters
-      // Note: This temporarily ensures visibility of the user's marker.
-      // This mutates activeFilters implicitly and persistently, which may diverge from user-selected filters.
       const typeKey = getFilterTypeKey(userMarker);
-      if ($activeFilters.size > 0 && !$activeFilters.has(typeKey)) {
-        activeFilters.update(set => {
-          const newSet = new Set(set);
-          newSet.add(typeKey);
-          return newSet;
-        });
-      }
+      const isFilteredOut = $activeFilters.size > 0 && !$activeFilters.has(typeKey);
 
-      focusAndFlyToPoint(userMarker);
+      // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
+      if (isFilteredOut) {
+        showFilterTooltip = true;
+        setTimeout(() => {
+          showFilterTooltip = false;
+        }, 4000);
+      } else {
+        focusAndFlyToPoint(userMarker);
+      }
     }
     // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
   }
@@ -451,9 +451,41 @@
     pointer-events: none;
     font-family: monospace;
   }
+
+  .filter-tooltip {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 1000;
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none;
+    text-align: center;
+    animation: fadeInOut 4s ease forwards;
+  }
+
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -10px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -10px); }
+  }
 </style>
 
 <main class="shell">
+  {#if showFilterTooltip}
+    <div class="filter-tooltip" role="status" aria-live="polite">
+      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
+    </div>
+  {/if}
+
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <FilterOverlay availableTypes={availableFilterTypes} />
