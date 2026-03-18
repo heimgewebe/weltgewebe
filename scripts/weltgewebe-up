@@ -1215,29 +1215,51 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     fi
 
     # Phase B: Verifizieren der maschinenlesbaren Build-ID (version.json)
-    # This is a diagnostic guard (warn-only), curl failures should not abort the deploy.
+    # This is a hard guard: version.json is the deploy contract.
     VERSION_OUT=$(mktemp)
-    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
-        echo "WARNING: curl connection failed while fetching /_app/version.json. Build-ID unverified."
+    VERSION_HEADERS_OUT=$(mktemp)
+    if ! VERSION_HTTP_CODE=$(curl -s -w "%{http_code}" -o "$VERSION_OUT" -D "$VERSION_HEADERS_OUT" --cacert "$EDGE_CA" "https://weltgewebe.home.arpa/_app/version.json" 2>/dev/null); then
+        msg="Frontend Guard failed: curl connection failed while fetching /_app/version.json."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+        exit 1
     elif [[ "$VERSION_HTTP_CODE" == "200" ]]; then
+        # Check for Cache-Control: no-store
+        if ! grep -iq "Cache-Control:.*no-store" "$VERSION_HEADERS_OUT"; then
+            msg="Frontend Guard failed: /_app/version.json did not return 'no-store' header."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+            exit 1
+        fi
+
         # Robust parsing: strip newlines, find "version" key with optional spaces, extract value cleanly
         BUILD_VERSION=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
         BUILD_ID=$(tr -d '\n' < "$VERSION_OUT" | grep -oE '"build_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 || true)
 
         if [[ -z "$BUILD_VERSION" ]]; then
-            BUILD_VERSION="unknown (parse error)"
+            msg="Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg"
+            rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+            exit 1
         fi
 
         if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
-            echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json)"
+            echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
         else
-            echo "OK (Version: $BUILD_VERSION verified via /_app/version.json)"
+            echo "OK (Version: $BUILD_VERSION verified via /_app/version.json with no-store)"
         fi
     else
-        echo "WARNING: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE). Build-ID unverified."
+        msg="Frontend Guard failed: /_app/version.json not reachable (HTTP $VERSION_HTTP_CODE)."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+        exit 1
     fi
 
-    rm -f "$HTML_OUT" "$VERSION_OUT"
+    rm -f "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
 else
     echo "   Skipped (Frontend not required for this deploy run)."
 fi

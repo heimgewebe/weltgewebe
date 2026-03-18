@@ -842,15 +842,21 @@ fi
 # Mock /_app/version.json (make it pass)
 if [[ "$*" == *"/_app/version.json"* ]]; then
     O_FILE=""
+    D_FILE=""
     while [[ $# -gt 0 ]]; do
         if [[ "$1" == "-o" ]]; then
             O_FILE="$2"
-            break
+        elif [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
         fi
         shift
     done
     if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
         echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
+    fi
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+        echo "Cache-Control: no-store" >> "$D_FILE"
     fi
     # If -w %{http_code} is used, we output ONLY 200 to stdout
     if [[ "$*" == *"-w"* ]]; then
@@ -875,13 +881,172 @@ chmod +x mock_bin/curl
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
 if echo "$OUTPUT" | grep -q "OK (frontend route /map cache-control verified)" && \
    echo "$OUTPUT" | grep -q "verified with immutable cache headers" && \
-   echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json)"; then
+   echo "$OUTPUT" | grep -q "OK (Version: mock-artifact-id, Build-ID: mock-build-id-123 verified via /_app/version.json with no-store)"; then
     echo "PASS: Valid cache headers and version.json correctly passed the guards."
 else
     echo "FAIL: Positive cache header validation path failed."
     echo "$OUTPUT"
     exit 1
 fi
+
+# Sub-test 22d: Missing no-store header for version.json
+cat << 'EOF_CURL_NO_VERSION_CACHE' > mock_bin/curl
+#!/bin/bash
+# Mock health endpoints (Guard 3 & 4)
+if [[ "$*" == *"/health/ready"* ]]; then
+    echo "OK"
+    exit 0
+fi
+# Mock HTML Cache Guard (make it pass)
+if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
+    echo "HTTP/1.1 200 OK"
+    echo "Cache-Control: no-cache, must-revalidate"
+    exit 0
+fi
+# Mock Asset Cache Guard (make it pass)
+if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+            break
+        fi
+        shift
+    done
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+        echo "Cache-Control: public, max-age=31536000, immutable" >> "$D_FILE"
+    fi
+    echo "200"
+    exit 0
+fi
+# Mock /_app/version.json (make it fail by not providing Cache-Control: no-store)
+if [[ "$*" == *"/_app/version.json"* ]]; then
+    O_FILE=""
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-o" ]]; then
+            O_FILE="$2"
+        elif [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+        fi
+        shift
+    done
+    if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
+        echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
+    fi
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+    fi
+    # If -w %{http_code} is used, we output ONLY 200 to stdout
+    if [[ "$*" == *"-w"* ]]; then
+        echo "200"
+    else
+        # Fallback if no -w and no -o was used (for manual curls)
+        if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
+            echo "{\"version\":\"mock-artifact-id\", \"build_id\":\"mock-build-id-123\"}"
+        fi
+    fi
+    exit 0
+fi
+# Mock general reachability / frontend asset extraction (Guard 5)
+if [[ "$*" == *"/map"* ]]; then
+    echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
+    exit 0
+fi
+exit 0
+EOF_CURL_NO_VERSION_CACHE
+chmod +x mock_bin/curl
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json did not return 'no-store' header."; then
+    echo "PASS: Detected missing version.json cache headers correctly."
+else
+    echo "FAIL: Did not detect missing version.json cache headers."
+    echo "$OUTPUT"
+    exit 1
+fi
+
+# Sub-test 22e: Missing canonical version for version.json
+cat << 'EOF_CURL_NO_VERSION_FIELD' > mock_bin/curl
+#!/bin/bash
+# Mock health endpoints (Guard 3 & 4)
+if [[ "$*" == *"/health/ready"* ]]; then
+    echo "OK"
+    exit 0
+fi
+# Mock HTML Cache Guard (make it pass)
+if [[ "$*" == *"-I"* && "$*" == *"/map"* ]]; then
+    echo "HTTP/1.1 200 OK"
+    echo "Cache-Control: no-cache, must-revalidate"
+    exit 0
+fi
+# Mock Asset Cache Guard (make it pass)
+if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+            break
+        fi
+        shift
+    done
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+        echo "Cache-Control: public, max-age=31536000, immutable" >> "$D_FILE"
+    fi
+    echo "200"
+    exit 0
+fi
+# Mock /_app/version.json (make it fail by providing invalid json/missing canonical version)
+if [[ "$*" == *"/_app/version.json"* ]]; then
+    O_FILE=""
+    D_FILE=""
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-o" ]]; then
+            O_FILE="$2"
+        elif [[ "$1" == "-D" ]]; then
+            D_FILE="$2"
+        fi
+        shift
+    done
+    if [[ -n "$O_FILE" && "$O_FILE" != "/dev/null" ]]; then
+        # Missing 'version' field
+        echo "{\"build_id\":\"mock-build-id-123\"}" > "$O_FILE"
+    fi
+    if [[ -n "$D_FILE" ]]; then
+        echo "HTTP/1.1 200 OK" > "$D_FILE"
+        echo "Cache-Control: no-store" >> "$D_FILE"
+    fi
+    # If -w %{http_code} is used, we output ONLY 200 to stdout
+    if [[ "$*" == *"-w"* ]]; then
+        echo "200"
+    else
+        # Fallback if no -w and no -o was used (for manual curls)
+        if [[ -z "$O_FILE" || "$O_FILE" == "/dev/null" ]]; then
+            echo "{\"build_id\":\"mock-build-id-123\"}"
+        fi
+    fi
+    exit 0
+fi
+# Mock general reachability / frontend asset extraction (Guard 5)
+if [[ "$*" == *"/map"* ]]; then
+    echo "<div id=\"_app/\"></div><script src=\"./_app/immutable/test.js\"></script>"
+    exit 0
+fi
+exit 0
+EOF_CURL_NO_VERSION_FIELD
+chmod +x mock_bin/curl
+
+OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1 || true)
+if echo "$OUTPUT" | grep -q "Frontend Guard failed: /_app/version.json missing valid canonical 'version' field."; then
+    echo "PASS: Detected missing canonical version in version.json correctly."
+else
+    echo "FAIL: Did not detect missing canonical version in version.json."
+    echo "$OUTPUT"
+    exit 1
+fi
+
 unset REQUIRE_FRONTEND
 unset EDGE_CA
 unset MOCK_HEALTH_EXISTS
