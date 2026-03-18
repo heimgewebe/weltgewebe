@@ -1,14 +1,17 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
   import { authStore } from '$lib/auth/store';
   import { browser } from '$app/environment';
 
   export let label = 'Kontoeinstellungen';
 
+  const dispatch = createEventDispatcher();
   let menuOpen = false;
 
   function toggleMenu() {
     menuOpen = !menuOpen;
+    dispatch('clickIcon');
   }
 
   function closeMenu(event: MouseEvent) {

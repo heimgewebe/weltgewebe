@@ -184,6 +184,16 @@
     focusAndFlyToPoint(event.detail);
   }
 
+  function handleZoomToOwnGarnrolle() {
+    if (!$authStore.authenticated || !$authStore.account_id) return;
+    const accountId = $authStore.account_id;
+    // Find the marker corresponding to the user's account
+    const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
+    if (userMarker) {
+      focusAndFlyToPoint(userMarker);
+    }
+  }
+
   // Restore focus when selection is closed or state becomes navigation
   $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
     const elToFocus = lastFocusedElement;
@@ -450,7 +460,7 @@
       </button>
     </div>
   {/if}
-  <TopBar />
+  <TopBar on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
   <div id="map" bind:this={mapContainer}></div>
   {#if isLoading}
     <div class="loading-overlay">
