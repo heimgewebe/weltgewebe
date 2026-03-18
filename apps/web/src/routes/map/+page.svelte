@@ -109,7 +109,7 @@
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
   let showFilterTooltip = false;
-  let filterTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
+  let filterTooltipTimeout: number | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
 
@@ -199,14 +199,14 @@
 
       // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
       if (isFilteredOut) {
-        if (filterTooltipTimeout) {
-          clearTimeout(filterTooltipTimeout);
+        if (filterTooltipTimeout !== null) {
+          window.clearTimeout(filterTooltipTimeout);
         }
         showFilterTooltip = false; // brief reset for animation restart
 
         tick().then(() => {
           showFilterTooltip = true;
-          filterTooltipTimeout = setTimeout(() => {
+          filterTooltipTimeout = window.setTimeout(() => {
             showFilterTooltip = false;
           }, 4000);
         });
