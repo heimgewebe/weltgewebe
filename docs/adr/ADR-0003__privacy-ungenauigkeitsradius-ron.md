@@ -1,6 +1,6 @@
 ---
 id: adr.ADR-0003__privacy-ungenauigkeitsradius-ron
-title: Adr 0003__Privacy Unschaerferadius Ron
+title: Adr 0003__Privacy Ungenauigkeitsradius Ron
 doc_type: reference
 status: active
 canonicality: derived

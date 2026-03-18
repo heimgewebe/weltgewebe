@@ -1,5 +1,5 @@
 ---
-id: konzept.vertrauen
+id: konzept.garnrolle-und-verortung
 title: "Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen"
 doc_type: concept
 status: active

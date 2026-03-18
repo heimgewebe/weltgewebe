@@ -89,7 +89,7 @@ Es beschreibt:
 - Anonymisierung (`default_anonymized`)
   - Richtwert: *nicht festgelegt*, nur „Opt-in möglich“.
   - Herkunft: zusammenstellung.md, Abschnitt III.
-- Ortsdaten (`unschaerferadius_m`)
+- Ortsdaten (`ungenauigkeitsradius_m`)
   - Richtwert: individuell einstellbar.
   - Herkunft: zusammenstellung.md, Abschnitt III.
 - Delegation (`delegation_expire_days`)

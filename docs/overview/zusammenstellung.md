@@ -16,7 +16,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 
 | Bereich                | Zweck                                | Primäre Ressourcen                                     |
 |------------------------|--------------------------------------|--------------------------------------------------------|
-| **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/konzepte/vertrauen.md`, `docs/ethik/`, `docs/process/fahrplan.md` |
+| **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/konzepte/garnrolle-und-verortung.md`, `docs/ethik/`, `docs/process/fahrplan.md` |
 | **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
 | **Architektur**        | Technische Boundaries, Integrationen | `docs/architekturstruktur.md`, `docs/architecture/`    |
 |                        | UI State Machine & Interaction       | `docs/blueprints/ui-state-machine.md`                  |
