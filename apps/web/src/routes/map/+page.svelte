@@ -208,6 +208,7 @@
           showFilterTooltip = true;
           filterTooltipTimeout = window.setTimeout(() => {
             showFilterTooltip = false;
+            filterTooltipTimeout = null;
           }, 4000);
         });
       } else {
@@ -334,6 +335,10 @@
     })();
 
     return () => {
+      if (filterTooltipTimeout !== null) {
+        window.clearTimeout(filterTooltipTimeout);
+        filterTooltipTimeout = null;
+      }
       if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;
       }
