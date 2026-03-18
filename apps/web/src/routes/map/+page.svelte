@@ -188,8 +188,22 @@
     if (!$authStore.authenticated || !$authStore.account_id) return;
     const accountId = $authStore.account_id;
     // Find the marker corresponding to the user's account
+    // Note: 'account' type is kept for legacy/defensive purposes alongside 'garnrolle'
     const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
+
     if (userMarker) {
+      // Ensure the marker is not hidden by active filters
+      // Note: This temporarily ensures visibility of the user's marker.
+      // This mutates activeFilters implicitly and persistently, which may diverge from user-selected filters.
+      const typeKey = getFilterTypeKey(userMarker);
+      if ($activeFilters.size > 0 && !$activeFilters.has(typeKey)) {
+        activeFilters.update(set => {
+          const newSet = new Set(set);
+          newSet.add(typeKey);
+          return newSet;
+        });
+      }
+
       focusAndFlyToPoint(userMarker);
     }
     // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
