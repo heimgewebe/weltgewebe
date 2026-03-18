@@ -41,13 +41,10 @@ So bleibt die Logik einfach, sichtbar und sozial verständlich.
 
 **Garnrolle** ist die persistente Rolle eines Akteurs im Weltgewebe.
 
-Etymologie:
-- **Garn**: althochdeutsch / germanisch im Sinn von Fadenmaterial, Gesponnenes
-- **Rolle**: von rotulus / Rolle, das Gerollte, der Träger eines aufgewickelten Zusammenhangs
-
 Im Weltgewebe ist die Garnrolle die Spule, von der Fäden ausgehen.
 
 Eigenschaften:
+
 - persistent
 - wiedererkennbar
 - handlungsfähig
@@ -59,10 +56,6 @@ Eigenschaften:
 
 **Verortung** bezeichnet die Bindung einer Garnrolle an einen konkreten Wohnsitz.
 
-Etymologie:
-- **Ort**: althochdeutsch *ort* = Spitze, Stelle, Platz
-- **verorten**: an einen Ort setzen, räumlich zuweisen
-
 Im Weltgewebe bedeutet Verortung:
 > Eine Garnrolle ist intern an einen realen Wohnsitz gebunden.
 
@@ -71,10 +64,6 @@ Im Weltgewebe bedeutet Verortung:
 ### Rolle ohne Namen (RoN)
 
 **RoN** bedeutet **Rolle ohne Namen**.
-
-Etymologie:
-- **Rolle**: siehe oben
-- **Name**: althochdeutsch *namo*, indogermanisch *h₁nōmn̥* = Benennung, Kennzeichen
 
 RoN ist kein bloßer Tarnmodus, sondern ein eigenständiger Identitätsmodus für Nutzer,
 die keine Personenangaben machen.
@@ -86,10 +75,6 @@ die keine Personenangaben machen.
 **Ungenauigkeitsradius** bezeichnet den Radius in Metern, innerhalb dessen die öffentliche
 Position einer verorteten Garnrolle angezeigt wird.
 
-Etymologie:
-- **ungenau**: nicht exakt
-- **Radius**: lateinisch = Stab, Strahl, Halbmesser
-
 Er betrifft nur die **öffentliche Anzeige**, nicht die interne Verortung.
 
 ---
@@ -99,6 +84,7 @@ Er betrifft nur die **öffentliche Anzeige**, nicht die interne Verortung.
 Grundsatz:
 
 > Eine Garnrolle ist entweder
+>
 > 1. an einen konkreten Wohnsitz verortet
 > oder
 > 2. der Rolle ohne Namen zugeordnet.
@@ -123,16 +109,20 @@ Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus.
 Wenn ein Nutzer die erforderlichen Personen- und Adressangaben macht, erhält er eine verortete Garnrolle.
 
 Minimal dafür erforderlich:
+
 - Personenangaben
 - genaue Adresse
 
 Zusätzlich einstellbar:
+
 - Ungenauigkeitsradius
 
 Default:
+
 - Ungenauigkeitsradius = 0 m
 
 Bedeutung:
+
 - intern: exakte Verortung am Wohnsitz
 - öffentlich: Anzeige gemäß Ungenauigkeitsradius
 
@@ -143,6 +133,7 @@ Bedeutung:
 Wenn ein Nutzer **keine Angaben zur Person** macht, wird er der **Rolle ohne Namen** zugeordnet.
 
 Dabei gilt:
+
 - kein Name
 - keine Personenangaben
 - keine Adresse
@@ -155,6 +146,7 @@ Vor Abschluss der Accounterstellung wird der Nutzer explizit informiert:
 > Rolle ohne Namen im Zentrum deines Stadtteils.
 
 RoN ist damit:
+
 - ein bewusster Einstiegsmodus
 - keine Strafe
 - keine verdeckte Anonymisierung
@@ -169,6 +161,7 @@ Die Anzeige folgt aus den gemachten Angaben.
 ### Fall A: Genaue Adresse angegeben
 
 Ergebnis:
+
 - verortete Garnrolle
 - öffentliche Anzeige:
   - exakt bei 0 m
@@ -177,6 +170,7 @@ Ergebnis:
 ### Fall B: Keine Personenangaben gemacht
 
 Ergebnis:
+
 - Zuordnung zur Rolle ohne Namen
 - öffentliche Anzeige:
   - nicht individuelle Adresse
@@ -199,6 +193,7 @@ Prinzip:
 > Die Sichtbarkeit ist öffentlich gestaltet.
 
 Für RoN gilt:
+
 - keine individuelle interne Wohnsitzverortung im Sinne einer öffentlichen Rolle
 - öffentliche Darstellung über die Rolle ohne Namen
 
@@ -209,12 +204,14 @@ Für RoN gilt:
 Vertrauen ist kein Systemwert.
 
 Es entsteht durch:
+
 1. Wiedererkennbarkeit
 2. Ko-Präsenz
 3. Interaktion
 4. Zeit
 
 Das Weltgewebe:
+
 - berechnet kein Vertrauen
 - speichert keine Reputation
 - vergibt keine Scores
@@ -238,6 +235,7 @@ Das Weltgewebe implementiert bewusst nicht:
 - keine Pflichtverifikation als Grundvoraussetzung
 
 Es implementiert stattdessen:
+
 - klare Modusunterscheidung
 - klare Anzeige-Logik
 - klare soziale Konsequenzen ohne Systemstrafe
@@ -303,6 +301,7 @@ Er muss nur die Kernunterscheidung tragen:
 - welcher Ungenauigkeitsradius für die öffentliche Anzeige gilt
 
 Nicht in den basalen Contract gehören:
+
 - Vertrauenswert
 - Bewertungslogik
 - komplexe Zwischenstufen der Adressgranularität
@@ -328,6 +327,7 @@ Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
 0.12
 
 Ursachen:
+
 - empirische soziale Dynamiken bleiben offen
 - spätere technische Umsetzung kann neue Randfälle sichtbar machen
 
@@ -338,6 +338,7 @@ Ursachen:
 0.14
 
 Annahmen:
+
 - RoN wird als eigenständiger Einstiegsmodus kanonisiert
 - Stadtteilzentrum bleibt die öffentliche Raumlogik für RoN
 
