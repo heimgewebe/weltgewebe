@@ -45,12 +45,12 @@ summary: >
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
 *(Update: Für lokale Entwicklung über Vite-Dev-Server entsperrt. Prod-Hosting bleibt offen.)*
 
-- [x] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Für `local-sovereign` Mode über Vite-Dev-Hosting reaktiviert. Protokoll-Registrierung und transformRequest integriert.*
+- [ ] PMTiles-Protokoll in MapLibre registrieren
+  - *Anmerkung: Dev-Infrastruktur implementiert (Vite-Dev-Server / Protokoll-Registrierung), lokaler Runtime-Nachweis gegen reales Artefakt jedoch noch ausstehend.*
 - [ ] Externe Style-Abhängigkeiten entfernen
   - *Anmerkung: Aktuell wird CartoCDN als Fallback (`remote-style`) genutzt, bis das Prod-Hosting (Caddy) live ist. (Epistemische Leerstelle)*
-- [x] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - *Anmerkung: Über `/local-basemap/` im Vite Dev-Server implementiert.*
+- [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - *Anmerkung: Über `/local-basemap/` im Vite Dev-Server vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles` noch nicht vollzogen.*
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

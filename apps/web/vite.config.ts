@@ -12,21 +12,42 @@ export default defineConfig({
         server.middlewares.use("/local-basemap/", (req, res, next) => {
           if (!req.url) return next();
 
+          // This middleware is for local DEV-Hosting only, to proxy map styles and basemaps without polluting public/
+          // It securely combines /map-style/ and /build/basemap/ into a single /local-basemap/ dev-prefix.
           const repoRoot = path.resolve(__dirname, "../../");
-          const mapStyleDir = path.join(repoRoot, "map-style");
-          const buildBasemapDir = path.join(repoRoot, "build", "basemap");
+          const mapStyleDir = path.resolve(repoRoot, "map-style");
+          const buildBasemapDir = path.resolve(repoRoot, "build", "basemap");
 
-          // Strip query parameters from URL
-          const pathname = req.url.split("?")[0];
+          // Safely parse pathname
+          let pathname = "";
+          try {
+            pathname = decodeURIComponent(req.url.split("?")[0]);
+            if (pathname.includes("\0"))
+              throw new Error("Null bytes not allowed");
+          } catch {
+            res.statusCode = 400;
+            res.end("Bad Request");
+            return;
+          }
 
-          let targetPath = "";
+          let baseDir = "";
           if (
             pathname.endsWith(".pmtiles") ||
             pathname.endsWith(".meta.json")
           ) {
-            targetPath = path.join(buildBasemapDir, pathname);
+            baseDir = buildBasemapDir;
           } else {
-            targetPath = path.join(mapStyleDir, pathname);
+            baseDir = mapStyleDir;
+          }
+
+          // Strict path containment check to prevent directory traversal
+          // We use path.join to prefix the relative pathname, then path.resolve to get the absolute path.
+          const targetPath = path.resolve(path.join(baseDir, pathname));
+
+          if (!targetPath.startsWith(baseDir + path.sep)) {
+            res.statusCode = 403;
+            res.end("Forbidden");
+            return;
           }
 
           if (!fs.existsSync(targetPath)) {
@@ -50,10 +71,17 @@ export default defineConfig({
             return;
           }
 
+          // Map obvious asset content types
           if (pathname.endsWith(".pmtiles")) {
             res.setHeader("Content-Type", "application/octet-stream");
           } else if (pathname.endsWith(".json")) {
             res.setHeader("Content-Type", "application/json");
+          } else if (pathname.endsWith(".pbf")) {
+            res.setHeader("Content-Type", "application/x-protobuf");
+          } else if (pathname.endsWith(".png")) {
+            res.setHeader("Content-Type", "image/png");
+          } else if (pathname.endsWith(".svg")) {
+            res.setHeader("Content-Type", "image/svg+xml");
           }
 
           const stat = fs.statSync(targetPath);
@@ -63,6 +91,20 @@ export default defineConfig({
             const parts = range.replace(/bytes=/, "").split("-");
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+
+            // Strict Range Validation
+            if (
+              isNaN(start) ||
+              start < 0 ||
+              start >= stat.size ||
+              (parts[1] && (isNaN(end) || end < start || end >= stat.size))
+            ) {
+              res.statusCode = 416;
+              res.setHeader("Content-Range", `bytes */${stat.size}`);
+              res.end();
+              return;
+            }
+
             const chunksize = end - start + 1;
 
             res.statusCode = 206;

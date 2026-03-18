@@ -21,7 +21,7 @@
   import { get } from 'svelte/store';
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle } from '$lib/map/basemap';
+  import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
@@ -259,14 +259,7 @@
         }
 
         transformRequestFn = (url: string, resourceType?: any) => {
-          if (url.startsWith('pmtiles://')) {
-            const remainder = url.slice('pmtiles://'.length);
-            if (!remainder.includes('/')) {
-              const fullUrl = `${window.location.origin}/local-basemap/${remainder}`;
-              return { url: `pmtiles://${fullUrl}` };
-            }
-          }
-          return { url };
+          return { url: rewritePmtilesUrl(url, window.location.origin) };
         };
       }
 
@@ -339,7 +332,13 @@
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
       if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
-        maplibreModule.removeProtocol('pmtiles');
+        try {
+          maplibreModule.removeProtocol('pmtiles');
+        } catch (e: any) {
+          if (!e.message?.includes('not registered')) {
+            console.warn('Unexpected error removing PMTiles protocol:', e);
+          }
+        }
       }
     };
   });
