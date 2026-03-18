@@ -11,10 +11,26 @@ summary: >
 
 ## Canonical Knowledge
 
+<!--
+NOTE:
+Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
+-->
+
+### System
+
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
 – **Vertrauen & Garnrolle:** [konzepte/garnrolle-und-verortung.md](konzepte/garnrolle-und-verortung.md)
 – **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md)
 – **Techstack:** [techstack.md](techstack.md)
+
+### UI-System
+
+– **UI-Blaupause:** [blueprints/ui-blaupause.md](blueprints/ui-blaupause.md) (Modell)
+– **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md) (Regelwerk)
+– **UI Roadmap:** [blueprints/ui-roadmap.md](blueprints/ui-roadmap.md) (Planung)
+
+### Prozess
+
 – **Prozess & Fahrplan:** [process/README.md](process/README.md)
 – **ADRs:** [adr/](adr/)
 – **Runbooks:** [runbooks/README.md](runbooks/README.md)
