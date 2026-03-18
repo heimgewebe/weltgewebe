@@ -109,6 +109,7 @@
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
   let showFilterTooltip = false;
+  let filterTooltipTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
 
@@ -198,10 +199,17 @@
 
       // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
       if (isFilteredOut) {
-        showFilterTooltip = true;
-        setTimeout(() => {
-          showFilterTooltip = false;
-        }, 4000);
+        if (filterTooltipTimeout) {
+          clearTimeout(filterTooltipTimeout);
+        }
+        showFilterTooltip = false; // brief reset for animation restart
+
+        tick().then(() => {
+          showFilterTooltip = true;
+          filterTooltipTimeout = setTimeout(() => {
+            showFilterTooltip = false;
+          }, 4000);
+        });
       } else {
         focusAndFlyToPoint(userMarker);
       }
@@ -453,7 +461,7 @@
   }
 
   .filter-tooltip {
-    position: absolute;
+    position: fixed;
     top: 80px;
     left: 50%;
     transform: translateX(-50%);
