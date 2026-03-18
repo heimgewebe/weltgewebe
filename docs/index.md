@@ -12,7 +12,9 @@ summary: >
 ## Canonical Knowledge
 
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
+– **UI-Blaupause:** [blueprints/ui-blaupause.md](blueprints/ui-blaupause.md)
 – **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md)
+– **UI Roadmap:** [blueprints/ui-roadmap.md](blueprints/ui-roadmap.md)
 – **Techstack:** [techstack.md](techstack.md)
 – **Prozess & Fahrplan:** [process/README.md](process/README.md)
 – **ADRs:** [adr/](adr/)

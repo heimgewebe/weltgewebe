@@ -130,10 +130,10 @@ Die Struktur der Panels steht, nun müssen echte Domänendaten aus der Blaupause
 
 Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig für die langfristige Gesundheit.
 
-### [ ] Doku-Pflege
+### [x] Doku-Pflege
 
 - [x] `ui-state-machine.md` besser in die Doku-Navigation einhängen
-- [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
+- [x] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
 - [x] Fokus-Restore als UX-Regel statt fachlicher Kerninvariante markieren
 
 ### [x] Strukturpflege
