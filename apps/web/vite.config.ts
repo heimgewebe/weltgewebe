@@ -30,10 +30,13 @@ export default defineConfig({
             return;
           }
 
+          // Strip leading slashes to cleanly join
+          const safeRelPath = pathname.replace(/^\/+/, "");
+
           let baseDir = "";
           if (
-            pathname.endsWith(".pmtiles") ||
-            pathname.endsWith(".meta.json")
+            safeRelPath.endsWith(".pmtiles") ||
+            safeRelPath.endsWith(".meta.json")
           ) {
             baseDir = buildBasemapDir;
           } else {
@@ -42,9 +45,12 @@ export default defineConfig({
 
           // Strict path containment check to prevent directory traversal
           // We use path.join to prefix the relative pathname, then path.resolve to get the absolute path.
-          const targetPath = path.resolve(path.join(baseDir, pathname));
+          const targetPath = path.resolve(path.join(baseDir, safeRelPath));
 
-          if (!targetPath.startsWith(baseDir + path.sep)) {
+          if (
+            !targetPath.startsWith(baseDir + path.sep) &&
+            targetPath !== baseDir
+          ) {
             res.statusCode = 403;
             res.end("Forbidden");
             return;
@@ -88,7 +94,17 @@ export default defineConfig({
           const range = req.headers.range;
 
           if (range) {
-            const parts = range.replace(/bytes=/, "").split("-");
+            const parts = range
+              .replace(/bytes=/, "")
+              .trim()
+              .split("-");
+            if (parts.length > 2 || parts[0] === "") {
+              res.statusCode = 416;
+              res.setHeader("Content-Range", `bytes */${stat.size}`);
+              res.end();
+              return;
+            }
+
             const start = parseInt(parts[0], 10);
             const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
 
@@ -97,7 +113,9 @@ export default defineConfig({
               isNaN(start) ||
               start < 0 ||
               start >= stat.size ||
-              (parts[1] && (isNaN(end) || end < start || end >= stat.size))
+              (parts[1] !== undefined &&
+                parts[1] !== "" &&
+                (isNaN(end) || end < start || end >= stat.size))
             ) {
               res.statusCode = 416;
               res.setHeader("Content-Range", `bytes */${stat.size}`);
