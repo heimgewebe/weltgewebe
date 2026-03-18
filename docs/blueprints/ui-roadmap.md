@@ -136,10 +136,10 @@ Diese Punkte sind keine Blocker für den produktiven Fortschritt, aber wichtig f
 - [ ] Alte/veraltete Pfadangaben in Nebenquellen vermeiden
 - [x] Fokus-Restore als UX-Regel statt fachlicher Kerninvariante markieren
 
-### [ ] Strukturpflege
+### [x] Strukturpflege
 
-> Aktueller Stand: `uiInvariants.ts` wurde erfolgreich ausgelagert; weitere Strukturpunkte sind noch offen. Dies ist architektonisch sinnvoll, blieb klein genug für einen PR, und bereitet das Store-Layout für künftige, komplexe UI-Modi vor.
+> Aktueller Stand: `uiInvariants.ts` wurde erfolgreich ausgelagert; redundante Tab- und Timeline-Klassen wurden extrahiert. Dies ist architektonisch sinnvoll, blieb klein genug für einen PR, und bereitet das Store-Layout für künftige, komplexe UI-Modi vor.
 
 - [x] `+page.svelte` weiter entlasten (Suche als eigenes Overlay extrahiert)
-- [ ] Gemeinsame Tab-/Panel-Styling-Bausteine prüfen
+- [x] Gemeinsame Tab-/Panel-Styling-Bausteine prüfen (Redundante CSS-Klassen für Tabs und Timelines wurden in globale Styles ausgelagert)
 - [x] Optional `uiInvariants.ts` oder ähnliche Trennung einführen, falls Guard komplexer wird
