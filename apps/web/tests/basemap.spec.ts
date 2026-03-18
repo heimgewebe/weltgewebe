@@ -14,22 +14,25 @@ test.describe("resolveBasemapStyle", () => {
   });
 
   test("throws an error for remote-style if styleUrl is missing", () => {
-    const config: BasemapConfig = {
+    const config = {
       mode: "remote-style",
       center: [0, 0],
       zoom: 1,
-    };
+    } as any; // Type casting to test runtime guard
     expect(() => resolveBasemapStyle(config)).toThrow(
       "styleUrl required for remote-style",
     );
   });
 
-  test("returns local static path for local-sovereign mode", () => {
+  test("throws for local-sovereign until assets are integrated", () => {
     const config: BasemapConfig = {
       mode: "local-sovereign",
       center: [0, 0],
       zoom: 1,
     };
-    expect(resolveBasemapStyle(config)).toBe("/local-style/style.json");
+
+    expect(() => resolveBasemapStyle(config)).toThrow(
+      "Basemap mode 'local-sovereign' is prepared but not yet supported",
+    );
   });
 });

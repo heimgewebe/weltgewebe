@@ -7,9 +7,10 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
         throw new Error("styleUrl required for remote-style");
       return config.styleUrl;
     case "local-sovereign":
-      // Explicitly marked as prepared infrastructure, not currently active
-      return "/local-style/style.json";
+      throw new Error(
+        "Basemap mode 'local-sovereign' is prepared but not yet supported: missing local style asset integration",
+      );
     default:
-      throw new Error(`Unsupported basemap mode: ${config.mode}`);
+      throw new Error(`Unsupported basemap mode: ${(config as any).mode}`);
   }
 }

@@ -1,9 +1,7 @@
 // "local-sovereign" mode is architecturally prepared, but assets are not yet integrated into the build/serving pipeline.
 export type BasemapMode = "remote-style" | "local-sovereign";
 
-export type BasemapConfig = {
-  mode: BasemapMode;
-  styleUrl?: string;
+type BaseBasemapConfig = {
   center: [number, number];
   zoom: number;
   minZoom?: number;
@@ -11,6 +9,20 @@ export type BasemapConfig = {
   pitch?: number;
   bearing?: number;
 };
+
+export type RemoteStyleBasemapConfig = BaseBasemapConfig & {
+  mode: "remote-style";
+  styleUrl: string;
+};
+
+export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
+  mode: "local-sovereign";
+  styleUrl?: never;
+};
+
+export type BasemapConfig =
+  | RemoteStyleBasemapConfig
+  | LocalSovereignBasemapConfig;
 
 export const HAMMER_PARK_CENTER = {
   lat: 53.5585,
