@@ -89,7 +89,7 @@ Es beschreibt:
 - Anonymisierung (`default_anonymized`)
   - Richtwert: *nicht festgelegt*, nur „Opt-in möglich“.
   - Herkunft: zusammenstellung.md, Abschnitt III.
-- Ortsdaten (`unschaerferadius_m`)
+- Ortsdaten (`ungenauigkeitsradius_m`)
   - Richtwert: individuell einstellbar.
   - Herkunft: zusammenstellung.md, Abschnitt III.
 - Delegation (`delegation_expire_days`)
@@ -130,7 +130,7 @@ Es beschreibt:
 - **Monitoring:** Prometheus + Grafana + Loki + Tempo.
 - **Security:** SBOM + cosign + Key-Rotation + DSGVO-Forget-Pipeline.
 - **HA & Cost Control:** Nomad Cluster · PgBouncer · Opex-KPIs < €1 / Session.
-- **Privacy UI (ADR-0003):** RoN-Toggle + Unschärferadius-Slider (ab Phase C).
+- **Privacy UI (ADR-0003):** RoN-Toggle + Ungenauigkeitsradius-Slider (ab Phase C).
 
 ---
 
@@ -141,7 +141,7 @@ Es beschreibt:
    sichtbar.
 3. **Reversible Aktionen:** Alles ist änder- oder verzwirnbar, aber nicht heimlich.
 4. **Privacy Controls Front and Center:** Slider / Toggles direkt im Profil.
-5. **Lokale Sichtbarkeit:** Zoom ≈ Vertraulichkeit; Unschärfe nimmt mit Distanz zu.
+5. **Lokale Sichtbarkeit:** Zoom ≈ Vertraulichkeit; Ungenauigkeit nimmt mit Distanz zu.
 6. **Keine versteckte Gamification:** Engagement wird nicht bewertet, nur sichtbar gemacht.
 
 ---

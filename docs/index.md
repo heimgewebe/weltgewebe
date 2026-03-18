@@ -19,6 +19,8 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 ### System
 
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
+– **Vertrauen & Garnrolle:** [konzepte/garnrolle-und-verortung.md](konzepte/garnrolle-und-verortung.md)
+– **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md)
 – **Techstack:** [techstack.md](techstack.md)
 
 ### UI-System
