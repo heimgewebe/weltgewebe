@@ -264,8 +264,11 @@
 
         try {
           maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
-        } catch (e) {
-          // Idempotent registration: ignore if already added (e.g. during HMR)
+        } catch (e: any) {
+          // Idempotent registration: only ignore expected "already registered" HMR throw
+          if (e && typeof e.message === 'string' && !e.message.includes('already registered')) {
+            console.warn("Unexpected error registering pmtiles protocol:", e);
+          }
         }
       }
 
@@ -329,7 +332,13 @@
     return () => {
       if (currentBasemap.mode === 'local-sovereign') {
         import('maplibre-gl').then(maplibregl => {
-           try { maplibregl.removeProtocol('pmtiles'); } catch (e) { /* ignore */ }
+           try {
+             maplibregl.removeProtocol('pmtiles');
+           } catch (e: any) {
+             if (e && typeof e.message === 'string' && !e.message.includes('not registered')) {
+               console.warn("Unexpected error removing pmtiles protocol:", e);
+             }
+           }
         }).catch(() => { /* ignore */ });
       }
 
