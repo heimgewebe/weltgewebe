@@ -20,7 +20,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 | **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
 | **Architektur**        | Technische Boundaries, Integrationen | `docs/architekturstruktur.md`, `docs/architecture/`    |
 |                        | UI-Blaupause                         | `docs/blueprints/ui-blaupause.md`                      |
-|                        | UI State Machine & Interaction       | `docs/blueprints/ui-state-machine.md`                  |
+|                        | UI State Machine                     | `docs/blueprints/ui-state-machine.md`                  |
 |                        | UI Roadmap                           | `docs/blueprints/ui-roadmap.md`                        |
 |                        | Datenflüsse                          | `contracts/`                                           |
 | **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml`         |

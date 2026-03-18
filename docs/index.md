@@ -13,8 +13,7 @@ summary: >
 
 <!--
 NOTE:
-Diese Navigation ist kanonisch.
-Neue UI-Dokumente müssen einer bestehenden Kategorie zugeordnet werden.
+Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 -->
 
 ### System
