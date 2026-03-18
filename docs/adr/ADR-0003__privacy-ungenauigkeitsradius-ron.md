@@ -1,12 +1,12 @@
 ---
-id: adr.ADR-0003__privacy-unschaerferadius-ron
-title: Adr 0003__Privacy Unschaerferadius Ron
+id: adr.ADR-0003__privacy-ungenauigkeitsradius-ron
+title: Adr 0003__Privacy Ungenauigkeitsradius Ron
 doc_type: reference
 status: active
 canonicality: derived
 summary: Automatisch hinzugefügtes Frontmatter.
 ---
-# ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle (v1)
+# ADR-0003 — Privacy: Ungenauigkeitsradius & RoN-Platzhalterrolle (v1)
 
 Datum: 2025-09-13
 Status: Accepted
@@ -20,8 +20,8 @@ Nutzer, die das wünschen.
 
 ## Entscheidung
 
-1) **Unschärferadius r (Meter)**
-   Der Nutzer kann die öffentliche Genauigkeit seiner Garnrolle über einen **Unschärferadius** selbst
+1) **Ungenauigkeitsradius r (Meter)**
+   Der Nutzer kann die öffentliche Genauigkeit seiner Garnrolle über einen **Ungenauigkeitsradius** selbst
    einstellen. Die **öffentliche Anzeige** nutzt eine **ungenaue Position innerhalb dieses Radius**.
    Alle öffentlichen Darstellungen und Beziehungen (Fäden/Garn) beziehen sich auf diese angezeigte Position.
 
@@ -31,7 +31,7 @@ Nutzer, die das wünschen.
    **RoN-Platzhalter**. Beim Ausstieg werden Beiträge gemäß RoN-Prozess überführt.
 
 3) **Transparenz als Standard**
-   Standard ist **ohne Unschärfe und ohne RoN**. Die Optionen sind **Opt-in** und dienen der persönlichen
+   Standard ist **ohne Ungenauigkeit und ohne RoN**. Die Optionen sind **Opt-in** und dienen der persönlichen
    Zurückhaltung, nicht der Norm.
 
 ## Alternativen
@@ -40,7 +40,7 @@ Weitere Modi (z. B. Kachel-Snapping, Stadt-Centroid) werden **nicht** eingeführ
 
 ## Konsequenzen
 
-- **Einfaches UI**: **Slider** (Meter) für den Unschärferadius, **Toggle** für RoN.
+- **Einfaches UI**: **Slider** (Meter) für den Ungenauigkeitsradius, **Toggle** für RoN.
 - **Konsistente Darstellung**: Öffentliche Fäden starten an der öffentlich angezeigten Position der Garnrolle.
 - **Eigenverantwortung**: Nutzer wählen ihre gewünschte Sichtbarkeit bewusst.
 
@@ -56,7 +56,7 @@ Weitere Modi (z. B. Kachel-Snapping, Stadt-Centroid) werden **nicht** eingeführ
 
 ## UI
 
-**Einstellungen → Privatsphäre**: Unschärfe-Slider (Meter) + RoN-Toggle (inkl. Einstellbarkeit der Tage
+**Einstellungen → Privatsphäre**: Ungenauigkeits-Slider (Meter) + RoN-Toggle (inkl. Einstellbarkeit der Tage
 (beginnend mit 0, ab der die RoN-Anonymisierung greifen soll). Vorschau der angezeigten Position.
 
 ## Telemetrie & Logging

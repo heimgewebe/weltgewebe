@@ -186,7 +186,7 @@ Extraktion: Geist der Weltweberei
   offene Abstimmungen.
 - Freiheit plus Absicherung: Jeder kann Ressourcen freigeben oder Aktionen starten, Anträge werden
   nur blockiert, wenn Widerspruch entsteht.
-- Datenschutz: Privacy by Design, RoN-System für Anonymisierung, Unschärferadien für Ortsdaten.
+- Datenschutz: Privacy by Design, RoN-System für Anonymisierung, Ungenauigkeitsradien für Ortsdaten.
 
 ⸻
 

@@ -15,7 +15,7 @@ Generated automatically. Do not edit.
 - docs/adr/0043-edge-vs-conversation.md
 - docs/adr/ADR-0001__clean-slate-docs-monorepo.md
 - docs/adr/ADR-0002__reentry-kriterien.md
-- docs/adr/ADR-0003__privacy-unschaerferadius-ron.md
+- docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
 - docs/adr/ADR-0004__fahrplan-verweis.md
 - docs/adr/ADR-0005-auth.md
 - docs/architekturstruktur.md

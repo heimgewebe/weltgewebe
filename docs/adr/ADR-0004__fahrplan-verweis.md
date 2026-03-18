@@ -32,4 +32,4 @@ stabile, versionierte Referenz auf diesen kanonischen Speicherort und vermeidet 
 
 ## Siehe auch
 
-- [ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-unschaerferadius-ron.md)
+- [ADR-0003 — Privacy: Ungenauigkeitsradius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-ungenauigkeitsradius-ron.md)

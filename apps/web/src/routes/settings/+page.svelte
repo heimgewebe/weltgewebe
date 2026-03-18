@@ -13,7 +13,7 @@
     </p>
 
     <div class="setting-row disabled">
-      <label for="radius">Unschärferadius</label>
+      <label for="radius">Ungenauigkeitsradius</label>
       <input type="range" id="radius" min="0" max="1000" value="0" disabled />
       <span>0m (exakt)</span>
     </div>
