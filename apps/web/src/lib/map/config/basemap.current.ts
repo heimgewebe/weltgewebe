@@ -1,8 +1,8 @@
-export type BasemapMode = "remote-style";
+export type BasemapMode = "remote-style" | "local-sovereign";
 
 export type BasemapConfig = {
   mode: BasemapMode;
-  styleUrl: string;
+  styleUrl?: string;
   center: [number, number];
   zoom: number;
   minZoom?: number;

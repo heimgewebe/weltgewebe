@@ -244,6 +244,34 @@
       }
       container.addEventListener('click', handleMarkerClick);
 
+      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+
+      // Prepare local-sovereign infrastructure (PMTiles) only if activated
+      if (currentBasemap.mode === 'local-sovereign') {
+        const pmtiles = await import('pmtiles');
+
+        transformRequestFn = (url, resourceType) => {
+          if (url.startsWith('pmtiles://')) {
+            const remainder = url.slice('pmtiles://'.length);
+            if (!remainder.includes('/')) {
+              return {
+                url: `pmtiles://${window.location.origin}/local-basemap/${remainder}`
+              };
+            }
+          }
+          return { url };
+        };
+
+        try {
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+        } catch (e: any) {
+          // Idempotent registration: only ignore expected "already registered" HMR throw
+          if (e && typeof e.message === 'string' && !e.message.includes('already registered')) {
+            console.warn("Unexpected error registering pmtiles protocol:", e);
+          }
+        }
+      }
+
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap),
@@ -254,6 +282,7 @@
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
+        transformRequest: transformRequestFn,
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -301,6 +330,18 @@
     })();
 
     return () => {
+      if (currentBasemap.mode === 'local-sovereign') {
+        import('maplibre-gl').then(maplibregl => {
+           try {
+             maplibregl.removeProtocol('pmtiles');
+           } catch (e: any) {
+             if (e && typeof e.message === 'string' && !e.message.includes('not registered')) {
+               console.warn("Unexpected error removing pmtiles protocol:", e);
+             }
+           }
+        }).catch(() => { /* ignore */ });
+      }
+
       if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;
       }
