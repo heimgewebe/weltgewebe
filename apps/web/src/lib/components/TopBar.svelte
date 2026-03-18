@@ -3,7 +3,7 @@
   import Garnrolle from './Garnrolle.svelte';
   import { contextPanelOpen } from '$lib/stores/uiView';
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{ zoomToOwnGarnrolle: void }>();
 </script>
 
 <style>

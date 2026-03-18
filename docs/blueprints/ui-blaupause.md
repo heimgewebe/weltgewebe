@@ -238,7 +238,7 @@ Fäden sind Handlungen im Gewebe.
 
 ### Modus C — Faden
 
-Ein Faden ist eine konkrete Handlung oder Verbindung.
+Ein Faden ist eine konkrete Handlung oder Verbindung. Ein Faden ist kein statisches Gebilde mit festen „beteiligten Garnrollen“, sondern entsteht als Ergebnis eines Webprozesses (z. B. Knoten knüpfen, bearbeiten, teilnehmen). Jede Handlung geht von einer einzelnen Garnrolle aus; das Geflecht ergibt sich aus der zeitlichen Abfolge dieser Aktionen.
 
 ⸻
 

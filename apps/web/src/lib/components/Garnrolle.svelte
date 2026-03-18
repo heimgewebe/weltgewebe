@@ -6,8 +6,13 @@
 
   export let label = 'Kontoeinstellungen';
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{ requestZoomToOwnGarnrolle: void }>();
   let menuOpen = false;
+
+  function handleZoomToOwnGarnrolle() {
+    menuOpen = false;
+    dispatch('requestZoomToOwnGarnrolle');
+  }
 
   function toggleMenu() {
     menuOpen = !menuOpen;
@@ -49,7 +54,7 @@
             {$authStore.role}
           </span>
         </div>
-        <button class="menu-item" on:click={() => { menuOpen = false; dispatch('requestZoomToOwnGarnrolle'); }}>Meine Garnrolle auf Karte zeigen</button>
+        <button class="menu-item" on:click={handleZoomToOwnGarnrolle}>Meine Garnrolle auf Karte zeigen</button>
         <a href="/settings" class="menu-item" on:click={() => menuOpen = false}>Einstellungen</a>
         <button class="menu-item logout-btn" on:click={logout}>Logout</button>
       {:else}
