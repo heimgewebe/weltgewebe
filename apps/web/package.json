@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "node scripts/generate-version.js && vite dev --host",
     "build": "vite build",
-    "prebuild": "node scripts/generate-version.js && svelte-kit sync",
+    "prebuild": "pnpm run sync",
     "postbuild": "node scripts/generate-version.js",
     "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
