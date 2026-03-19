@@ -12,45 +12,29 @@ export const load: PageLoad = async ({ url, fetch }) => {
   // Fallback to local dev/test default if not configured
   const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
 
-  let nodes: Node[] = [];
-  let accounts: Account[] = [];
-  let edges: Edge[] = [];
-
-  try {
-    const res = await fetch(`${apiUrl}/api/nodes`);
-    if (res.ok) {
-      nodes = await res.json();
-    } else {
-      console.error("Failed to fetch nodes from", apiUrl, res.status);
-      console.error(await res.text());
+  /**
+   * Helper to fetch a resource with consistent error handling and logging.
+   */
+  async function fetchResource<T>(resource: string, fallback: T[] = []): Promise<T[]> {
+    try {
+      const res = await fetch(`${apiUrl}/api/${resource}`);
+      if (res.ok) {
+        return await res.json();
+      } else {
+        console.error(`Failed to fetch ${resource} from`, apiUrl, res.status);
+        console.error(await res.text());
+      }
+    } catch (e) {
+      console.error(`Error fetching ${resource}:`, e);
     }
-  } catch (e) {
-    console.error("Error fetching nodes:", e);
+    return fallback;
   }
 
-  try {
-    const res = await fetch(`${apiUrl}/api/accounts`);
-    if (res.ok) {
-      accounts = await res.json();
-    } else {
-      console.error("Failed to fetch accounts from", apiUrl, res.status);
-      console.error(await res.text());
-    }
-  } catch (e) {
-    console.error("Error fetching accounts:", e);
-  }
-
-  try {
-    const res = await fetch(`${apiUrl}/api/edges`);
-    if (res.ok) {
-      edges = await res.json();
-    } else {
-      console.error("Failed to fetch edges from", apiUrl, res.status);
-      console.error(await res.text());
-    }
-  } catch (e) {
-    console.error("Error fetching edges:", e);
-  }
+  const [nodes, accounts, edges] = await Promise.all([
+    fetchResource<Node>("nodes"),
+    fetchResource<Account>("accounts"),
+    fetchResource<Edge>("edges"),
+  ]);
 
   return { leftOpen, rightOpen, topOpen, nodes, accounts, edges };
 };
