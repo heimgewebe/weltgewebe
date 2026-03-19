@@ -108,6 +108,8 @@
   let map: MapLibreMap | null = null;
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
+  let showFilterTooltip = false;
+  let filterTooltipTimeout: number | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
 
@@ -182,6 +184,38 @@
 
   function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
     focusAndFlyToPoint(event.detail);
+  }
+
+  function handleZoomToOwnGarnrolle() {
+    if (!$authStore.authenticated || !$authStore.account_id) return;
+    const accountId = $authStore.account_id;
+    // Find the marker corresponding to the user's account
+    // Note: 'account' type is kept for legacy/defensive purposes alongside 'garnrolle'
+    const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
+
+    if (userMarker) {
+      const typeKey = getFilterTypeKey(userMarker);
+      const isFilteredOut = $activeFilters.size > 0 && !$activeFilters.has(typeKey);
+
+      // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
+      if (isFilteredOut) {
+        if (filterTooltipTimeout !== null) {
+          window.clearTimeout(filterTooltipTimeout);
+        }
+        showFilterTooltip = false; // brief reset for animation restart
+
+        tick().then(() => {
+          showFilterTooltip = true;
+          filterTooltipTimeout = window.setTimeout(() => {
+            showFilterTooltip = false;
+            filterTooltipTimeout = null;
+          }, 4000);
+        });
+      } else {
+        focusAndFlyToPoint(userMarker);
+      }
+    }
+    // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
   }
 
   // Restore focus when selection is closed or state becomes navigation
@@ -301,6 +335,10 @@
     })();
 
     return () => {
+      if (filterTooltipTimeout !== null) {
+        window.clearTimeout(filterTooltipTimeout);
+        filterTooltipTimeout = null;
+      }
       if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
         delete (window as any).__TEST_MAP__;
       }
@@ -426,9 +464,41 @@
     pointer-events: none;
     font-family: monospace;
   }
+
+  .filter-tooltip {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 1000;
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none;
+    text-align: center;
+    animation: fadeInOut 4s ease forwards;
+  }
+
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -10px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -10px); }
+  }
 </style>
 
 <main class="shell">
+  {#if showFilterTooltip}
+    <div class="filter-tooltip" role="status" aria-live="polite">
+      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
+    </div>
+  {/if}
+
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <FilterOverlay availableTypes={availableFilterTypes} />
@@ -450,7 +520,7 @@
       </button>
     </div>
   {/if}
-  <TopBar />
+  <TopBar on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
   <div id="map" bind:this={mapContainer}></div>
   {#if isLoading}
     <div class="loading-overlay">
