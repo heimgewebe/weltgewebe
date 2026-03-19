@@ -108,6 +108,8 @@
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
   let isLoading = true;
+
+  const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
   let lastFocusedElement: HTMLElement | null = null;
   let showFilterTooltip = false;
   let filterTooltipTimeout: number | null = null;
@@ -330,7 +332,6 @@
       });
 
       // Expose map for testing
-      const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
       if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
       }
@@ -341,7 +342,6 @@
         window.clearTimeout(filterTooltipTimeout);
         filterTooltipTimeout = null;
       }
-      const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
       }
@@ -506,7 +506,7 @@
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <FilterOverlay availableTypes={availableFilterTypes} />
   <ActionBar />
-  {#if import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true'}
+  {#if shouldExposeTestMap}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
       <br>
