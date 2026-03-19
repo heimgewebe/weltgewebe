@@ -46,15 +46,13 @@ test.describe("resolveBasemapStyle", () => {
     );
   });
 
-  test("throws for local-sovereign until a real local asset end-to-end verification is done", () => {
+  test("returns local dev-server style URL for local-sovereign", () => {
     const config: BasemapConfig = {
       mode: "local-sovereign",
       center: [0, 0],
       zoom: 1,
     };
 
-    expect(() => resolveBasemapStyle(config)).toThrow(
-      /is prepared but not yet enabled/,
-    );
+    expect(resolveBasemapStyle(config)).toBe("/local-basemap/style.json");
   });
 });

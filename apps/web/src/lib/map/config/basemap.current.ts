@@ -1,4 +1,5 @@
-// "local-sovereign" mode is architecturally prepared, but assets are not yet integrated into the build/serving pipeline.
+// "local-sovereign" mode uses the locally served map style and PMTiles artifact.
+// Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
 export type BasemapMode = "remote-style" | "local-sovereign";
 
 type BaseBasemapConfig = {

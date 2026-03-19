@@ -22,7 +22,7 @@ summary: >
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in
-      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)_
+      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis in Produktion fehlt)_
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -49,20 +49,13 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _Blockiert durch: Phase 1 (Hosting) und
-Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber
-gehostet ist._ _(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene
-vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 
-- [ ] PMTiles-Protokoll in MapLibre registrieren
-  - _Anmerkung: Laufzeit-Infrastruktur (`apps/web/src/routes/map/+page.svelte`) und Protokoll-Registrierung sind
-    implementiert, aber auf den Modus `local-sovereign` beschränkt, der ohne reales `.pmtiles`-Artefakt noch blockiert
-    ist._
-- [ ] Externe Style-Abhängigkeiten entfernen
-  - _Offen: CartoCDN ist weiterhin Default._
-- [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht
-    vollzogen._
+- [x] PMTiles-Protokoll in MapLibre registrieren
+- [x] Externe Style-Abhängigkeiten entfernen
+  - _Hinweis: Der lokale Dev-Server nutzt nun die lokale souveräne Struktur (`local-sovereign`) als Standard._
+- [x] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - _Erreicht durch die Aktivierung von `local-sovereign` im Frontend und das Dev-Hosting über Vite. Ein vollautomatisches Produktion-Hosting-Setup auf dem Heimserver steht in Phase 1 und 4 weiterhin teilweise aus, die Laufzeitanbindung im Client ist jedoch nun bewiesen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

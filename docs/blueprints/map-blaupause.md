@@ -23,8 +23,8 @@ Die Karte wird als Kerninfrastruktur und nicht als UI-Service betrachtet.
 
 ## Ist-Zustand
 
-Aktuell nutzt die Implementierung MapLibre mit einem externen Basemap-Stil.
-Die Basemap wird derzeit als externe Abhängigkeit behandelt.
+Aktuell nutzt die Implementierung MapLibre mit der lokalen souveränen PMTiles-Struktur als Standard.
+Die Basemap wird lokal als echtes PMTiles-Artefakt simuliert bzw. aus dem Build konsumiert.
 Dieser Blueprint definiert die Zielarchitektur, um diese Abhängigkeit durch eine souveräne PMTiles-basierte Basemap-Pipeline zu ersetzen.
 
 ## Abwägungen
