@@ -83,6 +83,9 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
   test("shows update banner when bfcache is restored (pageshow with persisted)", async ({
     page,
   }) => {
+    // This specifically tests the scenario where a user leaves a tab open,
+    // a new deployment occurs, and they hit 'Back' returning them via bfcache,
+    // where the client is completely stale without a hard page reload.
     let checkCount = 0;
 
     // Intercept version.json and mock a new server version ONLY on the second check (pageshow)

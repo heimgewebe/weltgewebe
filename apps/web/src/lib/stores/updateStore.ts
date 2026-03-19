@@ -15,6 +15,8 @@ function createUpdateStore() {
   const { subscribe, set } = writable(false);
   let initialized = false;
 
+  // The local version is strictly static and bound to the client bundle at build-time.
+  // It must never be dynamically updated by a runtime fetch.
   const localVersion = buildVersion.version;
 
   async function fetchServerVersion(): Promise<VersionData | null> {
