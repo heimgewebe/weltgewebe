@@ -30,7 +30,7 @@ summary: >
 
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
-- [x] Eigenes `style.json` im `map-style` Repository anlegen
+- [x] Eigenes `style.json` im `map-style`-Verzeichnis anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
   - _Teilweise dokumentiert: lokale Auslieferung über Repo-Pfade vorgesehen; konkrete Reproduktions- und Lieferkette noch zu finalisieren._
 - [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren

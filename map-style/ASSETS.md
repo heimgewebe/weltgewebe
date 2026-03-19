@@ -22,7 +22,7 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 
 - **Ausgewählte Schriftart:** Noto Sans Regular (wie in `style.json` referenziert)
 - **Lizenz:** SIL Open Font License (OFL)
-- **Herkunft:** Generiert aus den originalen Google Fonts via MapLibre-kompatiblen Tools (z.B. fontmaker). Die konkrete Toolchain, die Reproduktionsschritte und die genaue Version der Input-Quelle müssen noch verbindlich festgelegt werden.
+- **Geplante Herkunft / Erzeugung:** Ableitung aus quelloffenen Font-Dateien via MapLibre-kompatibler Toolchain (z. B. fontmaker). Die konkrete Toolchain, Reproduktionsschritte und die genaue Version der Input-Quelle sind noch verbindlich festzulegen.
 
 _Hinweis: Die `.pbf` Dateien für "Noto Sans Regular" müssen in `map-style/glyphs/Noto Sans Regular/` abgelegt werden. Bisher existiert das Verzeichnis nur als Platzhalter._
 
