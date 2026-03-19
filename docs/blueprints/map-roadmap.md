@@ -10,7 +10,9 @@ summary: >
 
 # Basemap-Umsetzungsroadmap
 
-> **Hinweis:** Dieses Dokument ist der exekutive Pfad zur Umsetzung der [Basemap-Architektur-Blaupause](map-blaupause.md). Blueprint und Roadmap sind als Paket zu verstehen: Die Blaupause definiert das Zielbild (normativ), diese Roadmap definiert den Inkrementpfad (exekutiv).
+> **Hinweis:** Dieses Dokument ist der exekutive Pfad zur Umsetzung der
+> [Basemap-Architektur-Blaupause](map-blaupause.md). Blueprint und Roadmap sind als Paket zu verstehen: Die Blaupause
+> definiert das Zielbild (normativ), diese Roadmap definiert den Inkrementpfad (exekutiv).
 
 ## Phase 1 — Souveräne Basemap-Grundlage
 
@@ -19,43 +21,53 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) *(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)*
+- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in
+      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)_
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
-**Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert werden.
-**Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
+**Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert
+werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
 
 ## Phase 2 — Style-Souveränität
 
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
-- [x] Eigenes `style.json` im `map-style` Repository anlegen
+- [x] Eigenes `style.json` im `map-style`-Verzeichnis anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
+  - _Teilweise dokumentiert: lokale Auslieferung über Repo-Pfade vorgesehen; konkrete Reproduktions- und Lieferkette
+    noch zu finalisieren._
 - [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
+  - _Teilweise dokumentiert: Font-Richtung beschrieben; Sprite-Lizenz und konkrete Asset-Bestückung noch offen (siehe
+    `map-style/ASSETS.md`)._
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
 
-**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert und sind lizenzrechtlich dokumentiert.
-**Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung (Light/Dark).
+**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert und sind
+lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
+(Light/Dark).
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
-*Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
-*(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)*
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _Blockiert durch: Phase 1 (Hosting) und
+Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber
+gehostet ist._ _(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene
+vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Infrastruktur vorbereitet, aber End-to-End-Nachweis gegen reales Artefakt steht aus.*
+  - _Anmerkung: Laufzeit-Infrastruktur (`apps/web/src/routes/map/+page.svelte`) und Protokoll-Registrierung sind
+    implementiert, aber auf den Modus `local-sovereign` beschränkt, der ohne reales `.pmtiles`-Artefakt noch blockiert
+    ist._
 - [ ] Externe Style-Abhängigkeiten entfernen
-  - *Offen: CartoCDN ist weiterhin Default.*
+  - _Offen: CartoCDN ist weiterhin Default._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - *Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht vollzogen.*
+  - _Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht
+    vollzogen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
-**Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe Requests.
-**Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.
+**Abnahmekriterium:** Die Weltgewebe-Anwendung lädt die Karte erfolgreich im Offline-/Intranet-Szenario ohne externe
+Requests. **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Knoten) auf Datenbankebene.
 
 ## Phase 4 — Betrieb und Versionierung
 
@@ -67,8 +79,8 @@ summary: >
 - [ ] Publish- und Rollback-Strategie festlegen
 - [x] Basemap-Metadaten dokumentieren
 
-**Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne Clients zu brechen.
-**Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches Deployment ohne Review.
+**Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne
+Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches Deployment ohne Review.
 
 ## Phase 5 — Ausbau
 
@@ -79,5 +91,5 @@ summary: >
 - [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
 - [ ] Mehrskalige Projektionen prüfen
 
-**Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der Architektur verankert und abrufbar.
-**Nicht-Ziele:** Implementierung einer komplett neuen Render-Engine.
+**Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der
+Architektur verankert und abrufbar. **Nicht-Ziele:** Implementierung einer komplett neuen Render-Engine.
