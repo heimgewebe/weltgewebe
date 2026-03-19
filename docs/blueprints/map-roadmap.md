@@ -19,7 +19,7 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) *(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)*
+- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)_
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -31,8 +31,8 @@ summary: >
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
 - [x] Eigenes `style.json` im `map-style` Repository anlegen
-- [ ] Glyph- und Sprite-Strategie festlegen
-- [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
+- [x] Glyph- und Sprite-Strategie festlegen (Entscheidung: lokale Auslieferung via /sprites und /glyphs im Repo)
+- [x] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren (siehe `map-style/ASSETS.md`)
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
 
@@ -42,15 +42,15 @@ summary: >
 ## Phase 3 — Runtime-Integration
 
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
-*Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
-*(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)*
+_Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist._
+_(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Infrastruktur vorbereitet, aber End-to-End-Nachweis gegen reales Artefakt steht aus.*
+  - _Anmerkung: Laufzeit-Infrastruktur (`apps/web/src/routes/map/+page.svelte`) und Protokoll-Registrierung sind implementiert, aber auf den Modus `local-sovereign` beschränkt, der ohne reales `.pmtiles`-Artefakt noch blockiert ist._
 - [ ] Externe Style-Abhängigkeiten entfernen
-  - *Offen: CartoCDN ist weiterhin Default.*
+  - _Offen: CartoCDN ist weiterhin Default._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - *Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht vollzogen.*
+  - _Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht vollzogen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
