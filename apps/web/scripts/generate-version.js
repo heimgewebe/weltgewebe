@@ -56,10 +56,10 @@ if (commit) {
 }
 
 // Write the server deployment contract file
-fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2), "utf8");
+fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
 
 // Write the local client bundle file
-fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2), "utf8");
+fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
 
 console.log(
   `Generated build identity: ${version} at ${targetFile} and ${clientFile}`,
