@@ -16,7 +16,7 @@ test.describe("Map Loader Data Resilience", () => {
 
     // Nodes will succeed (1 item)
     await page.route("**/api/nodes", async (route) => {
-      route.fulfill({
+      await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify([
@@ -33,7 +33,7 @@ test.describe("Map Loader Data Resilience", () => {
 
     // Accounts will fail with a 500 error
     await page.route("**/api/accounts", async (route) => {
-      route.fulfill({
+      await route.fulfill({
         status: 500,
         contentType: "text/plain",
         body: "Internal Server Error",
@@ -42,7 +42,7 @@ test.describe("Map Loader Data Resilience", () => {
 
     // Edges will fail completely (network abort)
     await page.route("**/api/edges", async (route) => {
-      route.abort("failed");
+      await route.abort("failed");
     });
 
     // Navigate to the map page
