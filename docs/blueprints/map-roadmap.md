@@ -31,8 +31,10 @@ summary: >
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
 - [x] Eigenes `style.json` im `map-style` Repository anlegen
-- [x] Glyph- und Sprite-Strategie festlegen (Entscheidung: lokale Auslieferung via /sprites und /glyphs im Repo)
-- [x] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren (siehe `map-style/ASSETS.md`)
+- [ ] Glyph- und Sprite-Strategie festlegen
+  - _Teilweise dokumentiert: lokale Auslieferung über Repo-Pfade vorgesehen; konkrete Reproduktions- und Lieferkette noch zu finalisieren._
+- [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
+  - _Teilweise dokumentiert: Font-Richtung beschrieben; Sprite-Lizenz und konkrete Asset-Bestückung noch offen (siehe `map-style/ASSETS.md`)._
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
 

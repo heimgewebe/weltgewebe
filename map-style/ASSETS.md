@@ -2,6 +2,8 @@
 
 Dieses Verzeichnis dokumentiert die Herkunft, Lizenzierung und Integration der visuellen Assets (Schriften und Icons), die von der souveränen Basemap (`style.json`) genutzt werden.
 
+> **Status-Hinweis:** Derzeit dokumentiert dieses Manifest die beabsichtigte lokale Asset-Strategie. Es ist noch kein vollständiges, abschließendes Lizenz- und Bestandsmanifest. Die konkrete Toolchain und die physischen Artefakte fehlen noch (Scaffold-Phase).
+
 ## Strategie
 
 Um echte **Style-Souveränität** (Phase 2) zu erreichen, dürfen wir keine externen Abhängigkeiten (wie CartoCDN oder Mapbox-Server) für Schriften (Glyphs) oder Icons (Sprites) verwenden. Diese externen Aufrufe gefährden Offline-Fähigkeit, Caching und führen zu stillen Tracking-Risiken durch Dritte.
@@ -20,9 +22,9 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 
 - **Ausgewählte Schriftart:** Noto Sans Regular (wie in `style.json` referenziert)
 - **Lizenz:** SIL Open Font License (OFL)
-- **Herkunft:** Generiert aus den originalen Google Fonts via MapLibre-kompatiblen Tools (z.B. fontmaker).
+- **Herkunft:** Generiert aus den originalen Google Fonts via MapLibre-kompatiblen Tools (z.B. fontmaker). Die konkrete Toolchain, die Reproduktionsschritte und die genaue Version der Input-Quelle müssen noch verbindlich festgelegt werden.
 
-*Hinweis: Die `.pbf` Dateien für "Noto Sans Regular" müssen in `map-style/glyphs/Noto Sans Regular/` abgelegt werden. Bisher existiert das Verzeichnis als Platzhalter.*
+_Hinweis: Die `.pbf` Dateien für "Noto Sans Regular" müssen in `map-style/glyphs/Noto Sans Regular/` abgelegt werden. Bisher existiert das Verzeichnis nur als Platzhalter._
 
 ## Sprites (Icons & Pattern)
 
@@ -30,7 +32,7 @@ Verzeichnis: `map-style/sprites/`
 
 MapLibre nutzt Spritesheets (`sprite.png`, `sprite@2x.png` und `sprite.json`), um POI-Icons, Highway-Shields oder Füllmuster (Background Patterns) zu rendern.
 
-- **Lizenz:** (noch festzulegen, z. B. CC0 / Public Domain / OpenStreetMap kompatibel)
-- **Inhalt:** Minimalistisches Set, abgestimmt auf eine beruhigte Infrastruktur-Basemap.
+- **Lizenz:** (noch festzulegen, z. B. CC0 / Public Domain / OpenStreetMap kompatibel). Lizenz und Herkunft sind derzeit unvollständig.
+- **Inhalt:** Minimalistisches Set, abgestimmt auf eine beruhigte Infrastruktur-Basemap. Konkreter Inhaltsumfang ist noch offen.
 
-*Hinweis: Die Sprite-Dateien (`sprite.json`, `sprite.png`, etc.) werden hier generiert und abgelegt.*
+_Hinweis: Die Sprite-Dateien (`sprite.json`, `sprite.png`, etc.) müssen hier noch generiert und abgelegt werden._
