@@ -6,7 +6,9 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
   let localVersionData: any;
 
   test.beforeAll(() => {
-    // Read the true buildVersion that was bundled into the client app
+    // Read the true buildVersion that was bundled into the client app.
+    // This file acts as the local build input for the bundle, not a runtime extraction,
+    // thereby correctly modeling the statically bundled "old" version logic.
     const versionFilePath = path.resolve(
       process.cwd(),
       "src/lib/generated/buildVersion.json",

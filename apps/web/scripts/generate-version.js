@@ -55,14 +55,26 @@ if (commit) {
   payload.commit = commit;
 }
 
-// Write the server deployment contract file
-// This artifact is served by the Edge proxy with Cache-Control: no-store and acts as the true server version.
-fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+const args = process.argv.slice(2);
+const writeClient = args.length === 0 || args.includes("--client");
+const writeServer = args.length === 0 || args.includes("--server");
 
-// Write the local client bundle file
-// This artifact is bundled directly into the Svelte client at build-time to statically know its own version.
-fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+const filesWritten = [];
+
+if (writeServer) {
+  // Write the server deployment contract file
+  // This artifact is served by the Edge proxy with Cache-Control: no-store and acts as the true server version.
+  fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  filesWritten.push(targetFile);
+}
+
+if (writeClient) {
+  // Write the local client bundle file
+  // This artifact is bundled directly into the Svelte client at build-time to statically know its own version.
+  fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  filesWritten.push(clientFile);
+}
 
 console.log(
-  `Generated build identity: ${version} at ${targetFile} and ${clientFile}`,
+  `Generated build identity: ${version} at ${filesWritten.join(" and ")}`,
 );
