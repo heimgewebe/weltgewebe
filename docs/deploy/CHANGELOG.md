@@ -262,6 +262,7 @@ docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" cad
 **Ursprung / Referenz:** Basemap Souveränität (Blueprint)
 
 **Geänderte Dateien:**
+
 - `infra/caddy/Caddyfile*` (Ergänzung für `/basemap/*` inkl. CORS & Range Requests)
 - `infra/compose/compose.core.yml` und `compose.prod.yml` (Volume Mount für `/srv/weltgewebe-basemap`)
 
