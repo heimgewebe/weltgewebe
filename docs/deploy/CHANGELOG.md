@@ -259,6 +259,20 @@ docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" cad
 - Evaluation von Caddy mit custom build inkl. rate_limit Plugin
 - Oder: Implementierung von Rate-Limiting auf Applikationsebene (API-Service)
 
+## 2026-03-19 - Basemap Hosting Vorbereitung
+
+**Ursprung / Referenz:** Basemap Souveränität (Blueprint)
+
+**Geänderte Dateien:**
+
+- `infra/caddy/Caddyfile*` (Ergänzung für `/basemap/*` inkl. CORS & Range Requests)
+- `infra/compose/compose.core.yml` und `compose.prod.yml` (Volume Mount für `/srv/weltgewebe-basemap`)
+
+**Zusammenfassung:**
+Um die souveräne Kartengrundlage als Artefakt (Phase 1) verteilen zu können, muss der Edge-Proxy PMTiles Dateien unterstützen und via File Server anbieten.
+
+---
+
 ## 2026-03-08 - Parameterized policy bind path in compose.prod.override.yml
 
 **Ursprung / Referenz:** Fix für Deployment-Drift (REPO_DIR)
