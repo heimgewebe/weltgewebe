@@ -43,7 +43,7 @@ summary: >
 
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
-*(Update: Dev-Infrastruktur im Vite-Server vorbereitet; echter lokaler Lauf gegen reales .pmtiles noch unbelegt. Prod-Hosting bleibt offen.)*
+*(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)*
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
   - *Anmerkung: Dev-Infrastruktur implementiert, lokaler Lauf ausstehend.*

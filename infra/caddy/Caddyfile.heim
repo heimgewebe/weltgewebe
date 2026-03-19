@@ -11,6 +11,12 @@ weltgewebe.home.arpa {
     header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
     header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
     header Access-Control-Allow-Headers "Range, If-None-Match"
+    # defensive CORS hardening for clients/browsers that do send preflight requests
+    @options {
+      method OPTIONS
+    }
+    respond @options 204
+
     file_server {
       precompressed gzip zstd
     }
