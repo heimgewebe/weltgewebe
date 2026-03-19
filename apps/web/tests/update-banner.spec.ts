@@ -128,6 +128,11 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
     await expect(
       page.locator("text=Eine neue Version ist verfügbar."),
     ).toBeVisible();
+
+    // Verify the reload button is accessible
+    const reloadBtn = page.locator("button:has-text('Neu laden')");
+    await expect(reloadBtn).toBeVisible();
+    await expect(reloadBtn).toBeEnabled();
   });
 
   test("does not show update banner when fetch fails", async ({ page }) => {

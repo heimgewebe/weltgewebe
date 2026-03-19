@@ -18,22 +18,28 @@
 <style>
   .update-banner {
     position: fixed;
-    bottom: var(--spacing-4, 16px);
+    top: var(--spacing-4, 16px);
     left: 50%;
     transform: translateX(-50%);
-    background-color: var(--surface-raised, #333);
-    color: var(--text-on-surface, #fff);
-    padding: var(--spacing-2, 8px) var(--spacing-4, 16px);
-    border-radius: var(--radius-md, 8px);
-    box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+    background-color: transparent;
+    pointer-events: none; /* Let clicks pass through the wrapper bounding box */
     z-index: 9999;
-    animation: slideUp 0.3s ease-out;
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    animation: slideDown 0.3s ease-out;
   }
 
   .content {
     display: flex;
     align-items: center;
     gap: var(--spacing-3, 12px);
+    background-color: var(--surface-raised, #333);
+    color: var(--text-on-surface, #fff);
+    padding: var(--spacing-2, 8px) var(--spacing-4, 16px);
+    border-radius: var(--radius-md, 8px);
+    box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+    pointer-events: auto; /* Reactivate clicks strictly for the banner content */
   }
 
   .message {
@@ -57,10 +63,10 @@
     background-color: var(--primary-hover, #0056b3);
   }
 
-  @keyframes slideUp {
+  @keyframes slideDown {
     from {
       opacity: 0;
-      transform: translate(-50%, 20px);
+      transform: translate(-50%, -20px);
     }
     to {
       opacity: 1;
