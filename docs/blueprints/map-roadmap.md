@@ -19,7 +19,7 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2)
+- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) *(Teilweise: Vite Dev-Server für lokale Souveränität implementiert, Prod-Hosting in Caddy/Heimserver fehlt)*
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -43,12 +43,14 @@ summary: >
 
 **Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
 *Blockiert durch: Phase 1 (Hosting) und Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber gehostet ist.*
+*(Update: Dev-Infrastruktur im Vite-Server vorbereitet; echter lokaler Lauf gegen reales .pmtiles noch unbelegt. Prod-Hosting bleibt offen.)*
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Verfrühter Vorratscode im Frontend wurde entfernt, da das konsumierbare Hosting gemäß Phase 1 noch blockiert.*
+  - *Anmerkung: Dev-Infrastruktur implementiert (Vite-Dev-Server / Protokoll-Registrierung), lokaler Runtime-Nachweis gegen reales Artefakt jedoch noch ausstehend.*
 - [ ] Externe Style-Abhängigkeiten entfernen
-  - *Anmerkung: Aktuell wird CartoCDN als Fallback genutzt.*
+  - *Anmerkung: Aktuell wird CartoCDN als Fallback (`remote-style`) genutzt, bis das Prod-Hosting (Caddy) live ist. (Epistemische Leerstelle)*
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - *Anmerkung: Über `/local-basemap/` im Vite Dev-Server vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles` noch nicht vollzogen.*
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

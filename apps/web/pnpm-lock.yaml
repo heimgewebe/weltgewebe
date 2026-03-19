@@ -13,6 +13,9 @@ importers:
       maplibre-gl:
         specifier: 4.7.1
         version: 4.7.1
+      pmtiles:
+        specifier: ^4.4.0
+        version: 4.4.0
     devDependencies:
       "@opentelemetry/api":
         specifier: ^1.9.0
@@ -1274,6 +1277,12 @@ packages:
       picomatch:
         optional: true
 
+  fflate@0.8.2:
+    resolution:
+      {
+        integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==,
+      }
+
   file-entry-cache@8.0.0:
     resolution:
       {
@@ -1785,6 +1794,12 @@ packages:
       }
     engines: { node: ">=18" }
     hasBin: true
+
+  pmtiles@4.4.0:
+    resolution:
+      {
+        integrity: sha512-tCLI1C5134MR54i8izUWhse0QUtO/EC33n9yWp1N5dYLLvyc197U0fkF5gAJhq1TdWO9Tvl+9hgvFvM0fR27Zg==,
+      }
 
   postcss-load-config@3.1.4:
     resolution:
@@ -2949,6 +2964,8 @@ snapshots:
 
   fdir@6.5.0: {}
 
+  fflate@0.8.2: {}
+
   file-entry-cache@8.0.0:
     dependencies:
       flat-cache: 4.0.1
@@ -3209,6 +3226,10 @@ snapshots:
       playwright-core: 1.55.1
     optionalDependencies:
       fsevents: 2.3.2
+
+  pmtiles@4.4.0:
+    dependencies:
+      fflate: 0.8.2
 
   postcss-load-config@3.1.4(postcss@8.5.6):
     dependencies:

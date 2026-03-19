@@ -21,7 +21,7 @@
   import { get } from 'svelte/store';
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
-  import { resolveBasemapStyle } from '$lib/map/basemap';
+  import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
@@ -255,6 +255,7 @@
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
   onMount(() => {
+    let maplibreModule: any = null;
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
@@ -272,11 +273,33 @@
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      maplibreModule = maplibregl;
       const container = mapContainer;
       if (!container) {
         return;
       }
       container.addEventListener('click', handleMarkerClick);
+
+      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
+
+      // PMTiles dev infrastructure is intentionally prepared now, including the runtime
+      // dependency 'pmtiles'. The current runtime stays strictly on 'remote-style', since
+      // real local artifact proof is still missing. This setup exists solely to reduce later
+      // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
+      if (currentBasemap.mode === 'local-sovereign') {
+        const pmtiles = await import('pmtiles');
+        try {
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+        } catch (e: any) {
+          if (!e.message?.includes('already registered')) {
+            console.warn('Unexpected error registering PMTiles protocol:', e);
+          }
+        }
+
+        transformRequestFn = (url: string, resourceType?: any) => {
+          return { url: rewritePmtilesUrl(url, window.location.origin) };
+        };
+      }
 
       map = new maplibregl.Map({
         container,
@@ -288,6 +311,7 @@
         pitch: currentBasemap.pitch ?? 0,
         bearing: currentBasemap.bearing ?? 0,
         attributionControl: false,
+        transformRequest: transformRequestFn,
       });
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
@@ -349,6 +373,15 @@
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
       mapContainer?.removeEventListener('click', handleMarkerClick);
+      if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
+        try {
+          maplibreModule.removeProtocol('pmtiles');
+        } catch (e: any) {
+          if (!e.message?.includes('not registered')) {
+            console.warn('Unexpected error removing PMTiles protocol:', e);
+          }
+        }
+      }
     };
   });
 </script>
