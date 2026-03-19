@@ -61,3 +61,4 @@ artifacts/
 /verification/map-*.webm
 /verification/map-*.png
 /verification/video/
+apps/web/src/lib/generated/

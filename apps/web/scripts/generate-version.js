@@ -2,13 +2,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
 
-// Ensure we output to build/_app/version.json
+// Ensure we output to build/_app/version.json and src/lib/generated/buildVersion.json
 const targetFile = path.resolve(process.cwd(), "build/_app/version.json");
 const targetDir = path.dirname(targetFile);
 
 if (!fs.existsSync(targetDir)) {
   fs.mkdirSync(targetDir, { recursive: true });
 }
+
+const clientDir = path.resolve(process.cwd(), "src/lib/generated");
+if (!fs.existsSync(clientDir)) {
+  fs.mkdirSync(clientDir, { recursive: true });
+}
+const clientFile = path.join(clientDir, "buildVersion.json");
 
 let commit = null;
 let shortSha = null;
@@ -49,7 +55,12 @@ if (commit) {
   payload.commit = commit;
 }
 
-// Write the file
+// Write the server deployment contract file
 fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2), "utf8");
 
-console.log(`Generated build identity: ${version} at ${targetFile}`);
+// Write the local client bundle file
+fs.writeFileSync(clientFile, JSON.stringify(payload, null, 2), "utf8");
+
+console.log(
+  `Generated build identity: ${version} at ${targetFile} and ${clientFile}`,
+);

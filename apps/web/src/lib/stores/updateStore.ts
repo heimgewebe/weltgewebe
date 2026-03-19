@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import { browser } from "$app/environment";
+import buildVersion from "$lib/generated/buildVersion.json";
 
 export interface VersionData {
   version: string;
@@ -12,8 +13,9 @@ export interface VersionData {
 // Ensure the store is only initialized once
 function createUpdateStore() {
   const { subscribe, set } = writable(false);
-  let localVersion: string | null = null;
-  let hasCheckedFirstTime = false;
+  let initialized = false;
+
+  const localVersion = buildVersion.version;
 
   async function fetchServerVersion(): Promise<VersionData | null> {
     try {
@@ -28,39 +30,40 @@ function createUpdateStore() {
   async function checkForUpdate() {
     if (!browser) return;
 
-    const data = await fetchServerVersion();
-    if (!data || !data.version) return;
+    const serverData = await fetchServerVersion();
+    if (!serverData || !serverData.version) return;
 
-    if (!hasCheckedFirstTime) {
-      // First fetch: assume this is the version we started with
-      localVersion = data.version;
-      hasCheckedFirstTime = true;
-    } else if (localVersion && data.version !== localVersion) {
-      // Version changed
+    if (serverData.version !== localVersion) {
       set(true);
     }
   }
 
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      checkForUpdate();
+    }
+  };
+
+  const handlePageShow = (event: PageTransitionEvent) => {
+    // If persisted is true, the page was restored from bfcache
+    if (event.persisted) {
+      checkForUpdate();
+    }
+  };
+
   function init() {
     if (!browser) return;
+    if (initialized) return;
+    initialized = true;
 
     // Check immediately on app start
     checkForUpdate();
 
     // Re-check when the user comes back to the tab
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        checkForUpdate();
-      }
-    });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     // Re-check when returning via back-forward cache (bfcache)
-    window.addEventListener("pageshow", (event) => {
-      // If persisted is true, the page was restored from bfcache
-      if (event.persisted) {
-        checkForUpdate();
-      }
-    });
+    window.addEventListener("pageshow", handlePageShow);
   }
 
   return {
@@ -69,6 +72,15 @@ function createUpdateStore() {
     init,
     reset: () => {
       set(false);
+      // For testing, we also reset initialization state so tests can cleanly re-init
+      if (browser) {
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+        window.removeEventListener("pageshow", handlePageShow);
+      }
+      initialized = false;
     },
   };
 }
