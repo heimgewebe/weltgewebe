@@ -56,8 +56,8 @@ test.describe("Filter mode", () => {
 
     await page.goto("/map");
     // Wait for the map to be ready
-    await page.waitForFunction(() =>
-      (window as any).__TEST_MAP__?.isStyleLoaded(),
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
     );
     await page.waitForSelector(".map-marker");
   });

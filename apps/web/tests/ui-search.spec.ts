@@ -45,6 +45,9 @@ test.describe("Search mode", () => {
   }) => {
     // Navigate to map
     await page.goto("/map");
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
+    );
 
     // Click search button
     const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
@@ -130,6 +133,9 @@ test.describe("Search mode", () => {
 
   test("focus restores to search button on Escape", async ({ page }) => {
     await page.goto("/map");
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
+    );
 
     const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
     await searchBtn.click();

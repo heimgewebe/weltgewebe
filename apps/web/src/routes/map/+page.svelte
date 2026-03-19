@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
+  import { PUBLIC_ENABLE_TEST_MAP } from '$env/static/public';
   import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
@@ -329,7 +330,8 @@
       });
 
       // Expose map for testing
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
+      if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
       }
     })();
@@ -339,7 +341,8 @@
         window.clearTimeout(filterTooltipTimeout);
         filterTooltipTimeout = null;
       }
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
+      if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
       }
       cleanupKomposition?.();
@@ -503,7 +506,7 @@
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <FilterOverlay availableTypes={availableFilterTypes} />
   <ActionBar />
-  {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+  {#if import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true'}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
       <br>
