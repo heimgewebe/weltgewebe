@@ -19,7 +19,7 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) *(Teilweise: Vite Dev-Server für lokale Souveränität implementiert, Prod-Hosting in Caddy/Heimserver fehlt)*
+- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) *(Teilweise: Vite Dev-Server für lokale Souveränität implementiert, Prod-Hosting in Caddy/Heimserver vorbereitet)*
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -46,9 +46,9 @@ summary: >
 *(Update: Dev-Infrastruktur im Vite-Server vorbereitet; echter lokaler Lauf gegen reales .pmtiles noch unbelegt. Prod-Hosting bleibt offen.)*
 
 - [ ] PMTiles-Protokoll in MapLibre registrieren
-  - *Anmerkung: Dev-Infrastruktur implementiert (Vite-Dev-Server / Protokoll-Registrierung), lokaler Runtime-Nachweis gegen reales Artefakt jedoch noch ausstehend.*
+  - *Anmerkung: Dev-Infrastruktur implementiert, lokaler Lauf ausstehend.*
 - [ ] Externe Style-Abhängigkeiten entfernen
-  - *Anmerkung: Aktuell wird CartoCDN als Fallback (`remote-style`) genutzt, bis das Prod-Hosting (Caddy) live ist. (Epistemische Leerstelle)*
+  - *Offen: CartoCDN ist weiterhin Default.*
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
   - *Anmerkung: Über `/local-basemap/` im Vite Dev-Server vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles` noch nicht vollzogen.*
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern

@@ -13,6 +13,19 @@
 :8081 {
   encode zstd gzip
   # Strippt /api Prefix, damit /api/health -> /health an der API ankommt
+
+  # Phase 1: Sovereign Basemap Hosting (PMTiles)
+  # PMTiles clients strictly require HTTP Range requests and CORS headers.
+  handle_path /basemap/* {
+    root * /srv/weltgewebe-basemap
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    header Access-Control-Expose-Headers "Content-Range"
+    file_server {
+      precompressed gzip zstd
+    }
+  }
+
   handle_path /api/* {
     reverse_proxy api:8080
   }
