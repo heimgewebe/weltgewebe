@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "vite dev --host",
-    "build": "PUBLIC_ENABLE_TEST_MAP=false vite build",
+    "build": "vite build",
     "postbuild": "node scripts/generate-version.js",
     "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
