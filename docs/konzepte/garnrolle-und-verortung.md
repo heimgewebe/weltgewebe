@@ -89,8 +89,6 @@ Grundsatz:
 > oder
 > 2. der Rolle ohne Namen zugeordnet.
 
-Diese Unterscheidung ergibt sich aus den Angaben bei der Accounterstellung.
-
 Das Weltgewebe kennt damit zwei klare Grundmodi:
 
 - **verortete Garnrolle**
@@ -149,13 +147,33 @@ RoN ist:
 
 ---
 
-## 5. Accounterstellung
+## 5. Start und Ergänzung von Angaben
 
-Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus. (Technisch beginnen automatisch provisionierte Accounts immer sicher als RoN, bis der Nutzer seine Angaben ergänzt.)
+Der Account beginnt im Startzustand RoN.
 
-### 5.1 Verortete Garnrolle
+### 5.1 Rolle ohne Namen (RoN) als Startzustand
 
-Wenn ein Nutzer die erforderlichen Personen- und Adressangaben macht, erhält er eine verortete Garnrolle.
+Alle starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
+
+Dabei gilt für RoN:
+
+- kein Name
+- keine Personenangaben
+- keine Adresse
+- keine individuelle Verortung
+
+RoN ist damit:
+
+- der kanonische Startmodus
+- ein valider Dauerzustand, keine Strafe
+- keine verdeckte Anonymisierung
+- keine bloße nachträgliche Privacy-Einstellung
+
+---
+
+### 5.2 Übergang zur verorteten Garnrolle
+
+Wenn Personen- und Adressangaben ergänzt werden, erfolgt ein expliziter Übergang zur verorteten Garnrolle.
 
 Minimal dafür erforderlich:
 
@@ -177,37 +195,11 @@ Bedeutung:
 
 ---
 
-### 5.2 Rolle ohne Namen (RoN)
-
-Wenn ein Nutzer **keine Angaben zur Person** macht, wird er der **Rolle ohne Namen** zugeordnet.
-
-Dabei gilt:
-
-- kein Name
-- keine Personenangaben
-- keine Adresse
-- keine individuelle Verortung
-
-Vor Abschluss der Accounterstellung wird der Nutzer explizit informiert:
-
-> Wenn du keine Angaben zu deiner Person machst, wirst du der Rolle ohne Namen zugeordnet.
-> Deine Identität erscheint dann nicht als individuell verortete Garnrolle, sondern als Teil der
-> Rolle ohne Namen ohne individuelle Position auf der Karte, aber mit öffentlicher Wirksamkeit über die RoN des Stadtteils (kollektive Stellvertretung).
-
-RoN ist damit:
-
-- ein bewusster Einstiegsmodus
-- keine Strafe
-- keine verdeckte Anonymisierung
-- keine bloße nachträgliche Privacy-Einstellung
-
----
-
 ## 6. Anzeige-Logik
 
-Die Anzeige folgt aus den gemachten Angaben.
+Die Anzeige folgt aus dem aktuellen Modus der Garnrolle.
 
-### Fall A: Genaue Adresse angegeben
+### Fall A: Verortung vorgenommen
 
 Ergebnis:
 
@@ -216,11 +208,11 @@ Ergebnis:
   - exakt bei 0 m
   - ungenauer bei Radius > 0 m
 
-### Fall B: Keine Personenangaben gemacht
+### Fall B: Keine Verortung vorgenommen (im RoN-Startmodus verblieben)
 
 Ergebnis:
 
-- Zuordnung zur Rolle ohne Namen
+- Verbleib in der Rolle ohne Namen
 - öffentliche Anzeige:
   - nicht individuelle Adresse
   - stattdessen Rolle ohne Namen. Keine individuelle öffentliche Verortung, sondern kollektive Stellvertretung (Weben von der RoN des Stadtteils aus).
@@ -320,18 +312,12 @@ Es implementiert stattdessen:
 
 ### UI
 
-Die UI der Accounterstellung muss klar zwischen zwei Wegen unterscheiden:
+Die UI darf keinen Zwei-Wege-Onboarding-Screen erzwingen.
 
-1. **Verortete Garnrolle erstellen**
-   - Personenangaben
-   - genaue Adresse
-   - Ungenauigkeitsradius einstellen
+- Der Startzustand (RoN) wird sichtbar kommuniziert.
+- Die Verortung (Eingabe von Personenangaben, genauer Adresse und Ungenauigkeitsradius) wird als bewusster späterer Transformationsschritt angeboten.
 
-2. **Ohne Personenangaben fortfahren**
-   - Hinweis vor Abschluss:
-     Zuordnung zur Rolle ohne Namen. Keine individuelle öffentliche Verortung, sondern kollektive Stellvertretung (Weben von der RoN des Stadtteils aus).
-
-Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären.
+Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären, sondern als den sicheren Initialzustand.
 
 ---
 
@@ -366,12 +352,12 @@ Nicht in den basalen Contract gehören:
 
 ## 13. Essenz
 
-Das Weltgewebe kennt künftig zwei klare Modi:
+Das Weltgewebe kennt zwei klare Modi:
 
 - **verortete Garnrolle**
 - **Rolle ohne Namen**
 
-Die Entscheidung ergibt sich aus den Angaben bei der Accounterstellung.
+Alle beginnen in der Rolle ohne Namen. Die Verortung ist ein expliziter Übergang durch Ergänzung der Angaben.
 
 Der Ungenauigkeitsradius verfeinert nur die öffentliche Anzeige verorteter Garnrollen.
 Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
@@ -405,8 +391,8 @@ Annahmen:
 Das Weltgewebe fragt nicht:
 „Wie vertrauenswürdig bist du?“
 
-Es fragt:
-„Willst du hier als verortete Person erscheinen oder ohne Namen teilnehmen?“
+Es bietet an:
+„Du kannst hier als verortete Person erscheinen, oder sicher in der Rolle ohne Namen bleiben.“
 
 Und die Nachbarschaft beantwortet den Rest mit der einzigen Währung, die dafür taugt:
 Zeit.

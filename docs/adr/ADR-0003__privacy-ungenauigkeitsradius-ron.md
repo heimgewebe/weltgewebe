@@ -23,22 +23,21 @@ zu komplexen Modell mit halbgaren Zuständen.
 
 ## Entscheidung
 
-Das Konzept wird vereinfacht und kanonisiert. Es gibt nun genau zwei klare Identitätsmodi, die direkt aus der Accounterstellung folgen:
+Das Konzept wird vereinfacht und kanonisiert. Es gibt nun genau zwei klare Identitätsmodi:
 
 1) **Verortete Garnrolle**
-   Wer eine genaue Adresse angibt, erhält eine verortete Garnrolle.
+   Wer seine genaue Adresse und Personenangaben ergänzt, vollzieht den Übergang zur verorteten Garnrolle.
    Der Nutzer kann die öffentliche Genauigkeit seiner Garnrolle über einen **Ungenauigkeitsradius** (Meter) selbst
    einstellen. Die **öffentliche Anzeige** nutzt eine **ungenaue Position innerhalb dieses Radius**.
    Der Ungenauigkeitsradius steuert *nur* die öffentliche Anzeige, nicht die interne Verortungswahrheit.
 
-2) **Rolle ohne Namen (RoN) als kanonischer Identitätsmodus**
-   Wer keine Personenangaben macht, wird vorab informiert, dass er der Rolle ohne Namen zugeordnet wird.
-   RoN ist *kein* bloßer nachträglicher Privacy-Toggle für verortete Garnrollen, sondern ein eigenständiger, kanonischer Identitätsmodus, der aus fehlenden Personenangaben folgt.
+2) **Rolle ohne Namen (RoN) als kanonischer Startzustand und Identitätsmodus**
+   Alle Nutzer starten im System im RoN-Modus als sicherem Initialzustand.
+   Dieser Startzustand ist nicht als bewusste Entscheidung oder alternativer Einstiegsweg zu interpretieren, sondern als vorläufiger Zustand.
+   RoN ist *kein* bloßer nachträglicher Privacy-Toggle für verortete Garnrollen, sondern ein eigenständiger, kanonischer Identitätsmodus.
+   Wer keine Verortung vornimmt, verbleibt dauerhaft im RoN-Zustand.
 
-- Alle Nutzer starten im System im RoN-Modus als sicherem Initialzustand.
-- Dieser Startzustand ist nicht als Entscheidung zu interpretieren,
-  sondern als vorbereitender Zustand vor einer möglichen Verortung.
-- Die Verortung ist ein expliziter Übergang, kein impliziter Default.
+- Die Verortung ist ein expliziter späterer Übergang, kein impliziter Default und keine gleichrangige Anfangswahl.
 
 ## Alternativen
 
@@ -50,7 +49,7 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 - Die UI darf keinen verpflichtenden Zwei-Wege-Onboarding-Screen erzwingen.
 - Stattdessen muss der aktuelle Identitätszustand sichtbar gemacht werden.
 - Der Übergang zu einer verorteten Garnrolle muss als bewusste Handlung gestaltet werden.
-- **Einfaches UI**: Zwei Wege bei der Accounterstellung ("genaue Adresse" vs. "keine Angaben"). Für verortete Garnrollen existiert ein **Slider** (Meter) für den Ungenauigkeitsradius.
+- **Einfaches UI**: Alle Nutzer starten im RoN-Startzustand. Die UI macht den aktuellen Zustand sichtbar. Die Verortung wird als bewusster Übergang angeboten. Für verortete Garnrollen existiert ein **Slider** (Meter) für den Ungenauigkeitsradius.
 - **Konsistente Darstellung**: Verortete Garnrollen werden am exakten oder (bei Radius > 0) verfremdeten Ort angezeigt. RoN-Zuordnungen haben keine individuelle öffentliche Verortung (`public_pos = None`), sind aber nicht ortlos. Ihre öffentliche Wirksamkeit (das Weben von Fäden) erfolgt kollektiv über die Rolle ohne Namen des jeweiligen Stadtteils (technisch eine spätere Gruppierungs-/Darstellungsoption im Zentrum).
 - **Einfacher Contract**: Der Contract trägt nur noch die Modusunterscheidung (Verortet vs. RoN) und den Ungenauigkeitsradius.
 
@@ -69,5 +68,5 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 
 ## Rollout
 
-- **Web**: Accounterstellung anpassen, RoN-Toggle aus den nachträglichen Privatsphäre-Einstellungen entfernen, Slider beibehalten.
+- **Web**: Start-UI anpassen (RoN als Default-Sichtbarkeit), Zwei-Wege-Screen entfernen, RoN-Toggle aus den nachträglichen Privatsphäre-Einstellungen entfernen, Slider für verortete Rollen beibehalten.
 - **API**: Schema-Anpassung, Ersetzung von `visibility` und dem RoN-Toggle durch ein modusbasiertes Modell (`mode: "verortet" | "ron"`).
