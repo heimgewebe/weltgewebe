@@ -1236,7 +1236,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
         # Robust parsing: ensure JSON is strictly parsable and contains canonical version
         VERSION_PARSED_OUT=$(mktemp)
-        python3 -c '
+        if python3 -c '
 import sys, json
 try:
     with open(sys.argv[1], "r") as f:
@@ -1249,8 +1249,12 @@ except json.JSONDecodeError:
     sys.exit(3)
 except Exception:
     sys.exit(1)
-' "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null
-        PY_STATUS=$?
+' "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null; then
+            PY_STATUS=0
+        else
+            PY_STATUS=$?
+        fi
+
         if [ "$PY_STATUS" -ne 0 ]; then
             if [ "$PY_STATUS" -eq 3 ]; then
                 msg="Frontend Guard failed: /_app/version.json is not valid JSON."
