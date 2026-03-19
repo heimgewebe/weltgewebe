@@ -180,6 +180,13 @@ Ergebnis:
 
 ## 6. Sichtbarkeit und Wahrheit
 
+### 6.1 Kanonisches Modell vs. Legacy-Kompatibilität
+
+Das oben beschriebene Zwei-Modi-Modell (verortet vs. RoN) ist der kanonische Zielzustand.
+Für bestehende Datensätze aus dem alten `visibility`-Modell gilt eine sichere Kompatibilitätsregel:
+Alte `private`-Accounts werden **nicht** ontologisch zu RoN umgedeutet. Sie behalten ihre individuelle Garnrollen-Semantik und interne Verortung (mode = `verortet`), jedoch wird ihre öffentliche individuelle Position strikt unterdrückt (`public_pos = None`), um ihren alten Privatsphäre-Wunsch zu respektieren, bis der Nutzer explizit in das neue Modell migriert.
+
+
 Zentrale Trennung:
 
 | Ebene | Bedeutung |

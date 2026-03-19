@@ -178,11 +178,10 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
             } else if let Some(vis) = legacy_visibility {
                 match vis {
                     "private" => {
-                        // Legacy private records MUST NOT be projected publicly as exact or fuzzied locations
-                        // unless explicitly opted in. Their semantic intent was "hidden".
-                        // The safest migration path is to strip their individual location
-                        // from the public sphere by treating them as RoN.
-                        Some(AccountMode::Ron)
+                        // Legacy private records had an individual residence but were not projected publicly.
+                        // We map them to Verortet to preserve their ontological identity (they are not a collective RoN),
+                        // but we will suppress their public_pos calculation below.
+                        Some(AccountMode::Verortet)
                     }
                     "approximate" => {
                         if radius_m == 0 {
@@ -230,7 +229,15 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
 
     let public_pos = match mode {
         AccountMode::Ron => None, // RoN accounts have no individual public position.
-        AccountMode::Verortet => Some(calculate_jittered_pos(lat, lon, radius_m, &id)),
+        AccountMode::Verortet => {
+            // Legacy compatibility: If this was explicitly a "private" account,
+            // it retains its individual Verortet identity but its public position is suppressed.
+            if legacy_visibility == Some("private") {
+                None
+            } else {
+                Some(calculate_jittered_pos(lat, lon, radius_m, &id))
+            }
+        }
     };
 
     Some(AccountPublic {
@@ -374,8 +381,8 @@ mod tests {
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        // GUARD: Legacy private accounts are safely mapped to Ron (no public location)
-        assert_eq!(account.mode, AccountMode::Ron);
+        // GUARD: Legacy private accounts retain Verortet but suppress public_pos
+        assert_eq!(account.mode, AccountMode::Verortet);
         assert!(account.public_pos.is_none());
     }
 
@@ -570,7 +577,7 @@ mod additional_tests {
 
     #[test]
     fn test_ron_without_location_succeeds() {
-        let input = json!({
+        let input = serde_json::json!({
             "id": "test-ron-no-loc",
             "type": "ron",
             "title": "No Loc Ron",
