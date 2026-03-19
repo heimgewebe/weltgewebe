@@ -45,7 +45,9 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 - **Einfaches UI**: Zwei Wege bei der Accounterstellung ("genaue Adresse" vs. "keine Angaben"). Für verortete Garnrollen existiert ein **Slider** (Meter) für den Ungenauigkeitsradius.
 - **Konsistente Darstellung**: Verortete Garnrollen werden am exakten oder (bei Radius > 0) verfremdeten Ort angezeigt. RoN-Zuordnungen haben keine individuelle öffentliche Verortung (`public_pos = None`), sind aber nicht ortlos. Ihre öffentliche Wirksamkeit (das Weben von Fäden) erfolgt kollektiv über die Rolle ohne Namen des jeweiligen Stadtteils (technisch eine spätere Gruppierungs-/Darstellungsoption im Zentrum).
 - **Einfacher Contract**: Der Contract trägt nur noch die Modusunterscheidung (Verortet vs. RoN) und den Ungenauigkeitsradius.
+
 - **Legacy-Kompatibilität:** Alte Datensätze mit `visibility = "private"` werden sicher in das neue System projiziert. Sie werden auf `mode = "verortet"` gemappt (behalten ihre individuelle Identität und interne Adresse), erhalten aber strikt keine öffentliche Position (`public_pos = None`), um nicht versehentlich ihre alte Privatsphäre-Stufe zu verletzen.
+- **Runtime-Mapping vs. Zielzustand:** Die Schema-Invarianten (`type="garnrolle" => mode="verortet"`) definieren den strikten kanonischen Zielzustand. Das API-Runtime-Mapping toleriert Legacy-Daten und projiziert diese sicher in diesen Zielzustand.
 
 ## Schnittstellen
 

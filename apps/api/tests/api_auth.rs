@@ -865,7 +865,14 @@ async fn request_login_provisioning_enabled_success() -> Result<()> {
         assert!(found.is_some());
         let acc = found.unwrap();
         assert_eq!(acc.role, Role::Gast);
-        // Auto-provisioned account title
+        // Verify auto-provisioning privacy invariants
+        assert_eq!(acc.public.title, "Rolle ohne Namen");
+        assert_eq!(acc.public.kind, "ron");
+        assert_eq!(
+            acc.public.mode,
+            weltgewebe_api::routes::accounts::AccountMode::Ron
+        );
+        assert!(acc.public.public_pos.is_none());
     }
 
     // Should have created a token
