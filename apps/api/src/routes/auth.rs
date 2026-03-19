@@ -334,8 +334,8 @@ async fn provision_account(
     let new_account = AccountInternal {
         public: AccountPublic {
             id: new_id.clone(),
-            kind: "garnrolle".to_string(), // Default type
-            title: email_norm.split('@').next().unwrap_or("User").to_string(),
+            kind: "ron".to_string(),               // Consistent with mode=Ron
+            title: "Rolle ohne Namen".to_string(), // Neutral default to prevent PII leak
             summary: None,
             public_pos: None,
             mode: crate::routes::accounts::AccountMode::Ron, // Minimal default

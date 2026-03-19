@@ -25,7 +25,6 @@ export interface Node {
 
 export interface AccountBase {
   id: string;
-  type: string; // 'garnrolle' | 'ron'
   title: string;
   summary?: string | null;
   created_at: string;
@@ -34,6 +33,7 @@ export interface AccountBase {
 }
 
 export interface AccountVerortet extends AccountBase {
+  type: "garnrolle";
   mode: "verortet";
   location: Location; // internal
   public_pos?: Location; // projected
@@ -41,6 +41,7 @@ export interface AccountVerortet extends AccountBase {
 }
 
 export interface AccountRon extends AccountBase {
+  type: "ron";
   mode: "ron";
   location?: never;
   public_pos?: never;

@@ -122,6 +122,38 @@
           ]
         }
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "garnrolle"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "const": "verortet"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ron"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "const": "ron"
+          }
+        }
+      }
     }
   ]
 }
