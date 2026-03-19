@@ -13,6 +13,13 @@ weltgewebe.home.arpa {
     file_server
   }
 
+  # Phase B: Diagnose Contract (never cache)
+  handle /_app/version.json {
+    root * /srv/weltgewebe-web
+    header Cache-Control "no-store"
+    file_server
+  }
+
   # Phase B: HTML & mutable assets (revalidating caching)
   handle {
     root * /srv/weltgewebe-web
