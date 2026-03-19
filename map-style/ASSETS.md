@@ -10,7 +10,7 @@ Um echte **Style-Souveränität** (Phase 2) zu erreichen, dürfen wir keine exte
 
 Daher ist die Strategie für alle visuell benötigten Assets:
 
-1. **Lokales Hosting**: Alle Assets liegen physisch in diesem Repository (`map-style/`).
+1. **Lokales Hosting**: Alle benötigten Assets sollen physisch in diesem Verzeichnis (`map-style/`) abgelegt und lokal ausgeliefert werden.
 2. **Pfad-Integration**: In der `style.json` verweisen `sprite` und `glyphs` auf relative Pfade (`./sprites/sprite`, `./glyphs/{fontstack}/{range}.pbf`).
 3. **Klare Lizenzen**: Jedes Asset muss mit einer kompatiblen, dokumentierten Open-Source-Lizenz versehen sein.
 
