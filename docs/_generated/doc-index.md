@@ -47,8 +47,8 @@ Generated automatically. Do not edit.
 | edge.systemd.README | Readme | reference | active | derived | docs/edge/systemd/README.md |
 | geist-und-plan | Geist Und Plan | reference | active | derived | docs/geist-und-plan.md |
 | inhalt | Inhalt | reference | active | canonical | docs/inhalt.md |
-| konzepte.garnrolle | Garnrolle | reference | deprecated | derived | docs/konzepte/garnrolle.md |
-| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | canonical | docs/konzepte/garnrolle-und-verortung.md |
+| konzepte.garnrolle | Garnrolle | reference | active | derived | docs/konzepte/garnrolle.md |
+| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen | concept | active | canonical | docs/konzepte/garnrolle-und-verortung.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | canonical | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | canonical | docs/blueprints/map-roadmap.md |
 | overview.inhalt | Inhalt | reference | active | canonical | docs/overview/inhalt.md |
@@ -73,7 +73,6 @@ Generated automatically. Do not edit.
 | ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | This document is the canonical source of truth for the UI implementation roadmap. | docs/blueprints/ui-roadmap.md |
 | ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | state-machine-contract | docs/blueprints/ui-state-machine.md |
 | versionierungs-blaupause | Weltgewebe Deploy-Versionierung und Browser-Aktualität | blueprint | draft | normative | docs/blueprints/versionierungs-blaupause.md |
-| versionierungs-statusgrundlage | Weltgewebe – Versionierungs-Statusgrundlage | blueprint | active | normative | docs/blueprints/versionierungs-statusgrundlage.md |
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | derived | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | derived | docs/x-repo/peers-learnings.md |
 | x-repo.semantAH | Semantah | reference | active | derived | docs/x-repo/semantAH.md |
