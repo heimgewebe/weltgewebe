@@ -35,7 +35,7 @@ export interface AccountBase {
 export interface AccountVerortet extends AccountBase {
   type: "garnrolle";
   mode: "verortet";
-  location: Location; // internal
+  location?: Location; // internal (omitted in public API responses)
   public_pos?: Location; // projected
   radius_m: number;
 }
