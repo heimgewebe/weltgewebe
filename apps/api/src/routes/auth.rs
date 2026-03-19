@@ -17,7 +17,7 @@ use uuid::Uuid;
 use crate::{
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
-    routes::accounts::{AccountInternal, AccountPublic, Visibility},
+    routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
 };
 
@@ -334,13 +334,12 @@ async fn provision_account(
     let new_account = AccountInternal {
         public: AccountPublic {
             id: new_id.clone(),
-            kind: "garnrolle".to_string(), // Default type
-            title: email_norm.split('@').next().unwrap_or("User").to_string(),
+            kind: "ron".to_string(),               // Consistent with mode=Ron
+            title: "Rolle ohne Namen".to_string(), // Neutral default to prevent PII leak
             summary: None,
             public_pos: None,
-            visibility: Visibility::Private, // Safe default
+            mode: crate::routes::accounts::AccountMode::Ron, // Minimal default
             radius_m: 0,
-            ron_flag: false,
             disabled: false,
             tags: vec![],
         },

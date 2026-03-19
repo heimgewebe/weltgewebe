@@ -18,10 +18,7 @@
       <span>0m (exakt)</span>
     </div>
 
-    <div class="setting-row disabled">
-      <label for="ron">Als RoN (Rolle ohne Namen) anzeigen</label>
-      <input type="checkbox" id="ron" disabled />
-    </div>
+
 
     <p class="coming-soon">🚧 Diese Einstellungen werden bald verfügbar sein.</p>
   </div>

@@ -15,7 +15,7 @@ mod tests {
         auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
         config::AppConfig,
         routes::{
-            accounts::{AccountInternal, AccountPublic, Visibility},
+            accounts::{AccountInternal, AccountPublic},
             api_router,
         },
         state::ApiState,
@@ -62,9 +62,9 @@ mod tests {
                 title: "User".to_string(),
                 summary: None,
                 public_pos: None,
-                visibility: Visibility::Public,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
                 radius_m: 0,
-                ron_flag: false,
+
                 disabled: false,
                 tags: vec![],
             },

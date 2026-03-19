@@ -17,7 +17,7 @@ use weltgewebe_api::{
     config::AppConfig,
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
-        accounts::{AccountInternal, AccountPublic, Visibility},
+        accounts::{AccountInternal, AccountPublic},
         api_router,
     },
     state::ApiState,
@@ -196,9 +196,9 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        visibility: Visibility::Public,
+        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
         radius_m: 0,
-        ron_flag: false,
+
         disabled: false,
         tags: vec![],
     };
@@ -382,9 +382,9 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         title: "Weber".to_string(),
         summary: None,
         public_pos: None,
-        visibility: Visibility::Public,
+        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
         radius_m: 0,
-        ron_flag: false,
+
         disabled: false,
         tags: vec![],
     };
