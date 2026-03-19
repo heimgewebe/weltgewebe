@@ -78,6 +78,53 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
     ).toHaveCount(0);
   });
 
+  test("shows update banner when bfcache is restored (pageshow with persisted)", async ({
+    page,
+  }) => {
+    let checkCount = 0;
+
+    // Intercept version.json and mock a new server version ONLY on the second check (pageshow)
+    await page.route("**/_app/version.json", async (route) => {
+      checkCount++;
+      if (checkCount === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ version: localVersionData.version }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            version: "a-completely-new-version-from-bfcache",
+          }),
+        });
+      }
+    });
+
+    await page.goto("/map");
+
+    // Banner should not be visible initially
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+
+    // Wait slightly
+    await page.waitForTimeout(500);
+
+    // We manually simulate a pageshow event with `persisted: true` to mimic a back-forward cache return
+    await page.evaluate(() => {
+      const event = new PageTransitionEvent("pageshow", { persisted: true });
+      window.dispatchEvent(event);
+    });
+
+    // Banner should appear
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toBeVisible();
+  });
+
   test("does not show update banner when fetch fails", async ({ page }) => {
     await page.route("**/_app/version.json", async (route) => {
       await route.fulfill({
