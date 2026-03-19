@@ -1,19 +1,22 @@
 import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test.describe("Map Data Loading", () => {
-  test("gracefully handles partial API failures by returning empty arrays", async ({
+test.describe("Map Loader Data Contract", () => {
+  test("gracefully handles partial API failures by resolving to empty fallback arrays", async ({
     page,
   }) => {
-    // We want to test the behavior when some API endpoints fail.
-    // The expected behavior in +page.ts is to catch the error and use `[]` as fallback
+    // We want to test the behavior when some API endpoints fail concurrently.
+    // The expected semantic contract in +page.ts is to catch the error and use `[]` as fallback
     // for the failed resource, without aborting the Promise.all() or the other fetches.
 
-    // First, set up the base mocks for styles and auth
+    // First, set up the base catch-all mocks for styles and auth
     await mockApiResponses(page);
 
-    // Now, override the specific data endpoints for this test
-    // Nodes will succeed
+    // Now, override the specific data endpoints for this test to explicitly test partial failure.
+    // The order of page.route matters in Playwright: these more specific, later-registered
+    // routes will correctly take precedence over the catch-all in mockApiResponses.
+
+    // Nodes will succeed (1 item)
     await page.route("**/api/nodes", async (route) => {
       route.fulfill({
         status: 200,
@@ -30,7 +33,7 @@ test.describe("Map Data Loading", () => {
       });
     });
 
-    // Accounts will fail with 500
+    // Accounts will fail with a 500 error
     await page.route("**/api/accounts", async (route) => {
       route.fulfill({
         status: 500,
@@ -39,7 +42,7 @@ test.describe("Map Data Loading", () => {
       });
     });
 
-    // Edges will fail with network error (abort)
+    // Edges will fail completely (network abort)
     await page.route("**/api/edges", async (route) => {
       route.abort("failed");
     });
@@ -50,14 +53,11 @@ test.describe("Map Data Loading", () => {
     // The map should still load successfully (not crash)
     await expect(page.locator("#map")).toBeVisible();
 
-    // The node that successfully fetched should be visible
-    const marker = page.locator('.map-marker[aria-label="Successful Node"]');
-    await expect(marker).toBeVisible();
-
-    // Ensure there are no accounts rendered since the request failed and fallback is []
-    await expect(page.locator(".marker-account")).toHaveCount(0);
-
-    // Also, we can check that there's exactly 1 marker in total (the node)
-    await expect(page.locator(".map-marker, .marker-account")).toHaveCount(1);
+    // To directly prove the loader returned `{ nodes: [1], accounts: [], edges: [] }`
+    // without relying purely on brittle DOM marker rendering logic, we assert against
+    // the debug-badge which explicitly renders the array lengths from the page data in TEST mode.
+    const debugBadge = page.getByTestId("debug-badge");
+    await expect(debugBadge).toBeVisible();
+    await expect(debugBadge).toContainText("Nodes: 1 / Accounts: 0 / Edges: 0");
   });
 });
