@@ -12,8 +12,6 @@ Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf da
 
 ---
 
-
-
 ## 2026-03-08 - NATS Healthcheck & JetStream-Persistenz korrigiert
 
 **Ursprung / Referenz:** Heimserver-Entscheidung (vollwertiger Stack)

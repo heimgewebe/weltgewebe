@@ -9,7 +9,8 @@ weltgewebe.home.arpa {
     root * /srv/weltgewebe-basemap
     header Access-Control-Allow-Origin "*"
     header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-    header Access-Control-Expose-Headers "Content-Range"
+    header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
+    header Access-Control-Allow-Headers "Range, If-None-Match"
     file_server {
       precompressed gzip zstd
     }
@@ -36,7 +37,7 @@ weltgewebe.home.arpa {
 
   header {
     # Security headers (Heim-first specific)
-    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://basemaps.cartocdn.com http://localhost:* https://localhost:*; img-src 'self' data: blob: https://basemaps.cartocdn.com; worker-src 'self' blob:; object-src 'none';"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://basemaps.cartocdn.com; img-src 'self' data: blob: https://basemaps.cartocdn.com; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
   }
