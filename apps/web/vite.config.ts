@@ -77,13 +77,11 @@ export default defineConfig({
           }
 
           if (!fs.existsSync(targetPath)) {
-            console.log("404 Not Found at:", targetPath);
             res.statusCode = 404;
             res.end("Not found");
             return;
           }
 
-          console.log("Found targetPath:", targetPath);
           res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
           res.setHeader("Access-Control-Allow-Headers", "Range, If-None-Match");
