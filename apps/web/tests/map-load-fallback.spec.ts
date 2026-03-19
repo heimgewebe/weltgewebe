@@ -1,20 +1,18 @@
 import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test.describe("Map Loader Data Contract", () => {
-  test("gracefully handles partial API failures by resolving to empty fallback arrays", async ({
+test.describe("Map Loader Data Resilience", () => {
+  test("gracefully handles partial API failures and displays fallback data via debug badge", async ({
     page,
   }) => {
     // We want to test the behavior when some API endpoints fail concurrently.
-    // The expected semantic contract in +page.ts is to catch the error and use `[]` as fallback
-    // for the failed resource, without aborting the Promise.all() or the other fetches.
+    // The expected behavior in +page.ts is to catch the error and use `[]` as fallback
+    // for the failed resource, ensuring the map load completes without a full page crash.
 
-    // First, set up the base catch-all mocks for styles and auth
+    // Base catch-all mocks for styles and auth
     await mockApiResponses(page);
 
-    // Now, override the specific data endpoints for this test to explicitly test partial failure.
-    // The order of page.route matters in Playwright: these more specific, later-registered
-    // routes will correctly take precedence over the catch-all in mockApiResponses.
+    // Override specific endpoints to simulate partial failure:
 
     // Nodes will succeed (1 item)
     await page.route("**/api/nodes", async (route) => {
@@ -50,12 +48,12 @@ test.describe("Map Loader Data Contract", () => {
     // Navigate to the map page
     await page.goto("/map");
 
-    // The map should still load successfully (not crash)
+    // The map container should still render (no crash)
     await expect(page.locator("#map")).toBeVisible();
 
-    // To directly prove the loader returned `{ nodes: [1], accounts: [], edges: [] }`
-    // without relying purely on brittle DOM marker rendering logic, we assert against
-    // the debug-badge which explicitly renders the array lengths from the page data in TEST mode.
+    // Verify the data output directly via the debug badge.
+    // This stable test signal confirms the loader returned:
+    // { nodes: [1 item], accounts: [], edges: [] }
     const debugBadge = page.getByTestId("debug-badge");
     await expect(debugBadge).toBeVisible();
     await expect(debugBadge).toContainText("Nodes: 1 / Accounts: 0 / Edges: 0");
