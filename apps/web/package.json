@@ -31,7 +31,7 @@
     "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
-    "sync": "svelte-kit sync",
+    "sync": "node scripts/generate-version.js && svelte-kit sync",
     "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
     "dev:cs": "vite dev --host 0.0.0.0 --port 5173",
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
