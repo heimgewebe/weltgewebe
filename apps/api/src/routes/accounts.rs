@@ -589,4 +589,33 @@ mod additional_tests {
         assert_eq!(account.mode, AccountMode::Ron);
         assert!(account.public_pos.is_none());
     }
+
+    #[test]
+    fn test_legacy_type_ron_maps_correctly() {
+        let input = json!({
+            "id": "test-legacy-type-ron",
+            "type": "ron",
+            "title": "Legacy Type Ron",
+            // Notice: no "mode" field here
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
+    }
+
+    #[test]
+    fn test_legacy_ron_flag_maps_correctly() {
+        let input = json!({
+            "id": "test-legacy-ron-flag",
+            "type": "garnrolle",
+            "title": "Legacy Ron Flag",
+            "ron_flag": true
+            // Notice: no "mode" field here
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
+    }
 }
