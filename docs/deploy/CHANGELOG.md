@@ -10,7 +10,7 @@ summary: Automatisch hinzugefügtes Frontmatter.
 
 ## 2026-03-18
 
-- `infra/caddy/Caddyfile.heim`: Added explicit `Cache-Control: no-store` header for `/_app/version.json` to enforce deterministic cache busting and enforce the diagnostic deployment contract.
+- `infra/caddy/Caddyfile.heim`: Added explicit `Cache-Control: no-store` header for `/_app/version.json` to enforce the no-store version.json delivery contract.
 
 Dieses Dokument protokolliert Infrastruktur-Änderungen, die Auswirkungen auf das Deployment haben.
 

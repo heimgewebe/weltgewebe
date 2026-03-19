@@ -1031,7 +1031,7 @@ if [[ "$*" == *"-D"* && "$*" == *".js"* ]]; then
     echo "200"
     exit 0
 fi
-# Mock /_app/version.json (make it fail by providing invalid json/missing canonical version)
+# Mock /_app/version.json (make it fail by providing valid JSON without canonical version)
 if [[ "$*" == *"/_app/version.json"* ]]; then
     O_FILE=""
     D_FILE=""
