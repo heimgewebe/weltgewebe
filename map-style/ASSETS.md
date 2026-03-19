@@ -7,6 +7,7 @@ Dieses Verzeichnis dokumentiert die Herkunft, Lizenzierung und Integration der v
 Um echte **Style-Souveränität** (Phase 2) zu erreichen, dürfen wir keine externen Abhängigkeiten (wie CartoCDN oder Mapbox-Server) für Schriften (Glyphs) oder Icons (Sprites) verwenden. Diese externen Aufrufe gefährden Offline-Fähigkeit, Caching und führen zu stillen Tracking-Risiken durch Dritte.
 
 Daher ist die Strategie für alle visuell benötigten Assets:
+
 1. **Lokales Hosting**: Alle Assets liegen physisch in diesem Repository (`map-style/`).
 2. **Pfad-Integration**: In der `style.json` verweisen `sprite` und `glyphs` auf relative Pfade (`./sprites/sprite`, `./glyphs/{fontstack}/{range}.pbf`).
 3. **Klare Lizenzen**: Jedes Asset muss mit einer kompatiblen, dokumentierten Open-Source-Lizenz versehen sein.
