@@ -35,6 +35,11 @@ Das Konzept wird vereinfacht und kanonisiert. Es gibt nun genau zwei klare Ident
    Wer keine Personenangaben macht, wird vorab informiert, dass er der Rolle ohne Namen zugeordnet wird.
    RoN ist *kein* bloßer nachträglicher Privacy-Toggle für verortete Garnrollen, sondern ein eigenständiger, kanonischer Identitätsmodus, der aus fehlenden Personenangaben folgt.
 
+- Alle Nutzer starten im System im RoN-Modus als sicherem Initialzustand.
+- Dieser Startzustand ist nicht als Entscheidung zu interpretieren,
+  sondern als vorbereitender Zustand vor einer möglichen Verortung.
+- Die Verortung ist ein expliziter Übergang, kein impliziter Default.
+
 ## Alternativen
 
 Weitere Modi (z. B. "nur Stadtteil", "ohne Hausnummer") werden **nicht** eingeführt, da diese Zwischenstufen zu viele Grenzfälle und Widersprüche in der Dokumentation und Implementierung erzeugen.
@@ -42,6 +47,9 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 
 ## Konsequenzen
 
+- Die UI darf keinen verpflichtenden Zwei-Wege-Onboarding-Screen erzwingen.
+- Stattdessen muss der aktuelle Identitätszustand sichtbar gemacht werden.
+- Der Übergang zu einer verorteten Garnrolle muss als bewusste Handlung gestaltet werden.
 - **Einfaches UI**: Zwei Wege bei der Accounterstellung ("genaue Adresse" vs. "keine Angaben"). Für verortete Garnrollen existiert ein **Slider** (Meter) für den Ungenauigkeitsradius.
 - **Konsistente Darstellung**: Verortete Garnrollen werden am exakten oder (bei Radius > 0) verfremdeten Ort angezeigt. RoN-Zuordnungen haben keine individuelle öffentliche Verortung (`public_pos = None`), sind aber nicht ortlos. Ihre öffentliche Wirksamkeit (das Weben von Fäden) erfolgt kollektiv über die Rolle ohne Namen des jeweiligen Stadtteils (technisch eine spätere Gruppierungs-/Darstellungsoption im Zentrum).
 - **Einfacher Contract**: Der Contract trägt nur noch die Modusunterscheidung (Verortet vs. RoN) und den Ungenauigkeitsradius.

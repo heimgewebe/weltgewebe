@@ -100,11 +100,60 @@ Teilmodelle mit halber Adressschärfe werden bewusst verworfen.
 
 ---
 
-## 4. Accounterstellung
+## 4. Startzustand und Übergang (kanonisch)
+
+Alle Nutzer beginnen im System im **Startmodus**.
+
+Dieser entspricht technisch dem Modus:
+→ Rolle ohne Namen (RoN)
+
+Wichtig:
+Dieser Zustand ist **keine bewusste Entscheidung**, sondern ein
+vorläufiger, sicherer Initialzustand ohne personenbezogene Angaben.
+
+Der Startmodus dient dazu:
+
+- Einstiegshürden zu minimieren
+- sofortige Teilnahme zu ermöglichen
+- keine impliziten Entscheidungen zu erzwingen
+
+### Übergang zu verorteter Garnrolle
+
+Die Erstellung einer verorteten Garnrolle ist ein
+**bewusster Transformationsschritt**.
+
+Er erfordert zwingend:
+
+- Personenangaben
+- eine konkrete Adresse
+
+Optional:
+
+- Ungenauigkeitsradius für die öffentliche Anzeige
+
+Der Übergang ist:
+
+- jederzeit möglich
+- explizit
+- nicht reversibel ohne Bedeutungsverlust
+
+### Semantische Klarstellung
+
+RoN ist:
+
+- kein „anonymer Modus“
+- keine reduzierte Version der verorteten Garnrolle
+
+RoN ist:
+→ eine eigenständige Rolle im System ohne individuelle räumliche Verankerung
+
+---
+
+## 5. Accounterstellung
 
 Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus. (Technisch beginnen automatisch provisionierte Accounts immer sicher als RoN, bis der Nutzer seine Angaben ergänzt.)
 
-### 4.1 Verortete Garnrolle
+### 5.1 Verortete Garnrolle
 
 Wenn ein Nutzer die erforderlichen Personen- und Adressangaben macht, erhält er eine verortete Garnrolle.
 
@@ -128,7 +177,7 @@ Bedeutung:
 
 ---
 
-### 4.2 Rolle ohne Namen (RoN)
+### 5.2 Rolle ohne Namen (RoN)
 
 Wenn ein Nutzer **keine Angaben zur Person** macht, wird er der **Rolle ohne Namen** zugeordnet.
 
@@ -154,7 +203,7 @@ RoN ist damit:
 
 ---
 
-## 5. Anzeige-Logik
+## 6. Anzeige-Logik
 
 Die Anzeige folgt aus den gemachten Angaben.
 
@@ -178,9 +227,9 @@ Ergebnis:
 
 ---
 
-## 6. Sichtbarkeit und Wahrheit
+## 7. Sichtbarkeit und Wahrheit
 
-### 6.1 Kanonisches Modell vs. Legacy-Kompatibilität
+### 7.1 Kanonisches Modell vs. Legacy-Kompatibilität
 
 Das oben beschriebene Zwei-Modi-Modell (verortet vs. RoN) ist der kanonische Zielzustand.
 Für bestehende Datensätze aus dem alten `visibility`-Modell gilt eine sichere Kompatibilitätsregel:
@@ -206,7 +255,7 @@ Für RoN gilt:
 
 ---
 
-## 7. Vertrauen
+## 8. Vertrauen
 
 Vertrauen ist kein Systemwert.
 
@@ -232,7 +281,7 @@ Diese Differenz ist keine Sanktion, sondern Folge der gewählten Sichtbarkeit.
 
 ---
 
-## 8. Architekturprinzip
+## 9. Architekturprinzip
 
 Das Weltgewebe implementiert bewusst nicht:
 
@@ -249,7 +298,7 @@ Es implementiert stattdessen:
 
 ---
 
-## 9. Risiken und Grenzen
+## 10. Risiken und Grenzen
 
 ### Risiken
 
@@ -267,7 +316,7 @@ Es implementiert stattdessen:
 
 ---
 
-## 10. Implikationen für UI und API
+## 11. Implikationen für UI und API
 
 ### UI
 
@@ -297,7 +346,7 @@ Der Ungenauigkeitsradius bleibt ein eigener Parameter der öffentlichen Anzeige.
 
 ---
 
-## 11. Basale Contract-Folgen
+## 12. Basale Contract-Folgen
 
 Der Contract soll basal bleiben.
 
@@ -315,7 +364,7 @@ Nicht in den basalen Contract gehören:
 
 ---
 
-## 12. Essenz
+## 13. Essenz
 
 Das Weltgewebe kennt künftig zwei klare Modi:
 
@@ -329,7 +378,7 @@ Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
 
 ---
 
-## 13. Unsicherheitsgrad
+## 14. Unsicherheitsgrad
 
 0.12
 
@@ -340,7 +389,7 @@ Ursachen:
 
 ---
 
-## 14. Interpolationsgrad
+## 15. Interpolationsgrad
 
 0.14
 
@@ -351,7 +400,7 @@ Annahmen:
 
 ---
 
-## 15. Schlussbemerkung
+## 16. Schlussbemerkung
 
 Das Weltgewebe fragt nicht:
 „Wie vertrauenswürdig bist du?“
