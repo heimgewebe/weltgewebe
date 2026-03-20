@@ -148,6 +148,23 @@ Response:
 
 ## Passkeys
 
+### Passkeys auflisten
+
+`GET /auth/passkeys`
+
+Response:
+
+```json
+[
+  {
+    "id": "...",
+    "label": "iPhone",
+    "created_at": "...",
+    "last_used_at": "..."
+  }
+]
+```
+
 ### Registrierung starten
 
 `POST /auth/passkeys/register/options`
@@ -163,6 +180,10 @@ Response:
 ### Login abschließen
 
 `POST /auth/passkeys/auth/verify`
+
+### Passkey entfernen
+
+`DELETE /auth/passkeys/:id`
 
 ## Step-up Auth
 
@@ -182,10 +203,41 @@ Möglichkeiten zur Auflösung:
 - Passkey (bevorzugt, falls registriert)
 - frischer Magic Link (als Step-up-Magic-Link)
 
-**Mechanik des Step-up-Magic-Links:**
-Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch, dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist. Die Konsumierung dieses Links etabliert keine neue Session, sondern berechtigt ausschließlich zur Ausführung des ausstehenden Intents.
+### Step-up-Magic-Link anfordern
 
-**Wichtig:** Ein erfolgreicher Step-up hebt nicht dauerhaft das Sicherheitsniveau der gesamten Session an. Er dient ausschließlich der Freigabe der explizit angeforderten sensiblen Aktion oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten), um keinen impliziten "Superuser"-Zustand zu erzeugen.
+`POST /auth/step-up/magic-link/request`
+
+Request:
+
+```json
+{
+  "challenge_id": "..."
+}
+```
+
+Response:
+
+`204 No Content`
+
+### Step-up-Magic-Link konsumieren
+
+`POST /auth/step-up/magic-link/consume`
+
+Request:
+
+```json
+{
+  "token": "...",
+  "challenge_id": "..."
+}
+```
+
+Response:
+
+`204 No Content` (Freigabe erteilt)
+
+**Mechanik des Step-up-Magic-Links:**
+Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch, dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist. Die Konsumierung dieses Links **etabliert keine neue Session**, sondern berechtigt ausschließlich zur Ausführung des ausstehenden Intents oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten). Es entsteht kein impliziter "Superuser"-Zustand. Ungültige oder abgelaufene Step-up-Links werfen ein `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`).
 
 ## Magic Link Details
 

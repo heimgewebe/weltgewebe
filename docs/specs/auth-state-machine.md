@@ -38,8 +38,8 @@ canonicality: canonical
   - *Aktion*: System antwortet mit `403` und Payload `{"error": "STEP_UP_REQUIRED", "challenge_id": "..."}`.
 
 - **`step_up_required` -> `authenticated_session`:**
-  - *Trigger*: User validiert erfolgreich über Passkey oder einen frischen Magic Link.
-  - *Aktion*: Aktion wird freigegeben (bzw. ein sehr kurzes Zeitfenster für sensible Aktionen geöffnet). Das System notiert ein Step-up-Event, ohne die Basis-Session dauerhaft in ein höheres Sicherheitsniveau zu heben.
+  - *Trigger*: User validiert erfolgreich über Passkey oder einen frischen Step-up-Magic-Link.
+  - *Aktion*: Die an die `challenge_id` gebundene Aktion wird freigegeben (bzw. ein sehr kurzes Zeitfenster für sensible Aktionen geöffnet). Es wird explizit **keine** neue Session etabliert und das System notiert das Step-up-Event, ohne die Basis-Session dauerhaft anzuheben.
 
 - **`authenticated_session` -> `unauthenticated`:**
   - *Trigger*: Zeitlicher Ablauf des `session_refresh_token` ODER manueller/serverseitiger Widerruf (Logout, Session-Invalidierung).
@@ -52,5 +52,5 @@ canonicality: canonical
   - *Ergebnis*: Token-Konsumierung scheitert mit `401 Unauthorized` und `TOKEN_INVALID` / `TOKEN_EXPIRED`.
 
 - **`step_up_required` -> `unauthenticated`:**
-  - *Fehler*: Step-up schlägt mehrfach fehl oder wurde vom Admin als verdächtig eingestuft.
-  - *Ergebnis*: Serverseitiger Widerruf der Session. Fallback zu `unauthenticated` (erfordert vollständigen Re-Login).
+  - *Fehler*: Extrem fehlerhafte Step-up-Versuche (Missbrauchsverdacht, Admin-Eingriff).
+  - *Ergebnis*: Möglicher Sicherheits-Fallback durch serverseitigen Widerruf der Session. Fallback zu `unauthenticated` (erfordert vollständigen Re-Login). **Hinweis:** Ein einzelner abgelaufener Step-up-Link bricht die Session nicht ab.

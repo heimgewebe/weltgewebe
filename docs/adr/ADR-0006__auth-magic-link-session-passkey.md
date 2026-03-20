@@ -49,6 +49,7 @@ Zweck:
 
 - komfortable und sichere Wiederanmeldung
 - step-up authentication bei sensiblen Aktionen
+- vollständiges Passkey-Management (hinzufügen, auflisten, entfernen)
 
 ## Prinzipien
 
@@ -61,7 +62,7 @@ Zweck:
 
 - Magic Link ist single-use und serverseitig nicht replaybar.
 - Jede Session ist eindeutig einer `device_id` zugeordnet.
-- Jede sensitive Aktion erfordert zwingend Step-up Auth.
+- Jede sensitive Aktion erfordert zwingend Step-up Auth. Ein Step-up-Magic-Link ist strikt aktionsgebunden und session-neutral.
 - Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus (Bin ich RoN oder verortet?).
 
 ## Zustandsmodell
