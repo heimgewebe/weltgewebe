@@ -62,7 +62,7 @@ vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
   - _Die Anbindung in MapLibre ist für den Dev-Modus erprobt. Ein Produktions-Rollout
     bleibt offen, da die operative Bereitstellung des Artefakts noch nicht
-    als harte Abhängigkeit (`hard requirement`) durchgesetzt ist._
+    als zwingende Betriebsanforderung durchgesetzt ist._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

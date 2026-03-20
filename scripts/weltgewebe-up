@@ -710,7 +710,7 @@ if [[ ! -f "$BASEMAP_ARTIFACT" ]]; then
     fi
 else
     echo
-    echo ">> Basemap Artifact present ($BASEMAP_ARTIFACT)."
+    echo ">> Basemap artifact present ($BASEMAP_ARTIFACT)."
 fi
 
 # 6c. Static UI Runtime Guard & Edge Caddy Recreate
