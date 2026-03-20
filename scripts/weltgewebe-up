@@ -705,6 +705,11 @@ if ! compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
     echo ">> Basemap artifact missing. Attempting PMTiles build..."
     if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
         bash scripts/basemap/build-hamburg-pmtiles.sh
+        if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
+            echo ">> Basemap artifact build succeeded."
+        else
+            echo "WARNING: Basemap artifact still missing after build attempt."
+        fi
     else
         echo "WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable."
     fi
