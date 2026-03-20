@@ -49,7 +49,9 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _Hinweis: Die Laufzeitanbindung im lokalen Dev-Client ist hiermit belegt. Ein vollautomatisches Produktion-Hosting-Setup auf dem Heimserver steht in Phase 1 und 4 weiterhin teilweise aus._
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
+
+_Hinweis: Die Laufzeitanbindung im lokalen Dev-Client ist hiermit belegt. Ein vollautomatisches Produktion-Hosting-Setup auf dem Heimserver steht in Phase 1 und 4 weiterhin teilweise aus._
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
 - [x] Externe Style-Abhängigkeiten entfernen
