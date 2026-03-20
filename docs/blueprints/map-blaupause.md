@@ -23,10 +23,11 @@ Die Karte wird als Kerninfrastruktur und nicht als UI-Service betrachtet.
 
 ## Ist-Zustand
 
-Die Implementierung nutzt im lokalen Entwicklungsbetrieb nun standardmäßig die lokale
-souveräne Basemap-Pipeline (`local-sovereign`).
+Die Implementierung nutzt im lokalen Entwicklungsbetrieb nun standardmäßig den lokalen
+souveränen Basemap-Modus (`local-sovereign`).
 
-Das Dev-Setup ist über Vite angebunden und im aktuellen Entwicklungsfluss verifiziert.
+Das Dev-Setup ist über Vite angebunden und für die lokale Style-Auslieferung im
+aktuellen Entwicklungsfluss verifiziert.
 
 Produktionshosting und die vollständige Betriebsreife des finalen PMTiles-Artefakts
 bleiben jedoch ausstehend und sind weiterhin offen.
