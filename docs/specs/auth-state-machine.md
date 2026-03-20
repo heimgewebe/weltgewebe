@@ -29,9 +29,13 @@ canonicality: canonical
   - *Trigger*: User authentifiziert sich via Passkey.
   - *Aktion*: System validiert Passkey Response und etabliert Session.
 
+- **`authenticated_session` -> `authenticated_session` (Refresh):**
+  - *Trigger*: Gültiger Session-Refresh (`POST /auth/session/refresh`).
+  - *Aktion*: Der Access-Token wird erneuert, der Refresh-Token wird rotiert und die alte Instanz invalidiert. Das Gerät behält seinen authentifizierten Status.
+
 - **`authenticated_session` -> `step_up_required`:**
-  - *Trigger*: User versucht eine sensible Aktion (z.B. Verortung, E-Mail-Änderung) auszuführen.
-  - *Aktion*: System antwortet mit `403` und Payload `{"error": "STEP_UP_REQUIRED"}`.
+  - *Trigger*: User versucht eine sensible Aktion (z.B. Verortung, E-Mail-Änderung, Geräteentfernung) auszuführen.
+  - *Aktion*: System antwortet mit `403` und Payload `{"error": "STEP_UP_REQUIRED", "challenge_id": "..."}`.
 
 - **`step_up_required` -> `authenticated_session`:**
   - *Trigger*: User validiert erfolgreich über Passkey oder einen frischen Magic Link.

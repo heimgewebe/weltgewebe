@@ -1,6 +1,6 @@
 ---
 id: adr.ADR-0006-auth-magic-link-session-passkey
-title: Adr 0006 Auth Magic Link Session Passkey
+title: ADR-0006 — Auth: Magic Link, Session und optionaler Passkey
 doc_type: reference
 status: active
 canonicality: canonical

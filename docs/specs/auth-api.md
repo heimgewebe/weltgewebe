@@ -1,6 +1,6 @@
 ---
 id: specs.auth-api
-title: Auth Api Spec
+title: Auth API Spec
 doc_type: reference
 status: active
 canonicality: derived
@@ -170,15 +170,19 @@ Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 - `PUT /me/visibility` (Verortung hinzufügen/ändern)
 - `POST /me/email` (E-Mail ändern)
 - `POST /auth/passkeys/register/*` und `DELETE /auth/passkeys/:id` (Passkey hinzufügen/entfernen)
+- `DELETE /auth/devices/:id` (sofern es sich **nicht** um das aktuell anfragende Gerät handelt)
 - `POST /auth/logout-all` (alle Sessions widerrufen)
 
 API Response bei fehlender Berechtigung für diese Endpunkte:
-`403 Forbidden` mit Payload: `{"error": "STEP_UP_REQUIRED"}`
+`403 Forbidden` mit Payload: `{"error": "STEP_UP_REQUIRED", "challenge_id": "..."}`
 
 Möglichkeiten zur Auflösung:
 
 - Passkey (bevorzugt, falls registriert)
-- frischer Magic Link
+- frischer Magic Link (als Step-up-Magic-Link)
+
+**Mechanik des Step-up-Magic-Links:**
+Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch, dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist. Die Konsumierung dieses Links etabliert keine neue Session, sondern berechtigt ausschließlich zur Ausführung des ausstehenden Intents.
 
 **Wichtig:** Ein erfolgreicher Step-up hebt nicht dauerhaft das Sicherheitsniveau der gesamten Session an. Er dient ausschließlich der Freigabe der explizit angeforderten sensiblen Aktion oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten), um keinen impliziten "Superuser"-Zustand zu erzeugen.
 

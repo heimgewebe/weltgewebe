@@ -1,6 +1,6 @@
 ---
 id: specs.auth-ui
-title: Auth Ui Spec
+title: Auth UI Spec
 doc_type: reference
 status: active
 canonicality: derived
@@ -31,7 +31,7 @@ Text:
 "Wir haben dir einen Link geschickt."
 
 Hinweis:
-"Öffne deine E-Mail auf diesem Gerät."
+"Öffne den Link idealerweise auf diesem Gerät. Öffnest du ihn auf einem anderen Gerät, wird dort eine neue Sitzung erstellt."
 
 ## Klare UI-Zustände
 
