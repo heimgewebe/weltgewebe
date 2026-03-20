@@ -56,9 +56,13 @@ vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
-  - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`) als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
+  - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
+    als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Im Dev-Hosting über Vite verifiziert und angebunden. Der Nachweis gegen ein vollautomatisches Produktions-Artefakt (echtes .pmtiles) über Caddy bleibt für die Betriebsreife formal noch offen._
+  - _Im Dev-Hosting über Vite technisch erprobt und provisorisch angebunden; die
+    verbindliche Anbindung gegen ein vollautomatisches Produktions-Artefakt (echtes
+    .pmtiles) über Caddy steht noch aus. Die Betriebsreife ist damit nicht erreicht,
+    das Checklist-Item bleibt bewusst offen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
