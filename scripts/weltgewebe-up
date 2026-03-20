@@ -699,8 +699,8 @@ fi
 
 # 6b. Basemap Artifact Guard (best effort)
 # Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
-BASEMAP_ARTIFACT="build/basemap/basemap-hamburg.pmtiles"
-if [[ ! -f "$BASEMAP_ARTIFACT" ]]; then
+BASEMAP_DIR="build/basemap"
+if ! compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
     echo
     echo ">> Basemap artifact missing. Attempting PMTiles build..."
     if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
@@ -710,7 +710,7 @@ if [[ ! -f "$BASEMAP_ARTIFACT" ]]; then
     fi
 else
     echo
-    echo ">> Basemap artifact present ($BASEMAP_ARTIFACT)."
+    echo ">> Basemap artifact present in $BASEMAP_DIR."
 fi
 
 # 6c. Static UI Runtime Guard & Edge Caddy Recreate

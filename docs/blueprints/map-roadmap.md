@@ -60,8 +60,9 @@ vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
   - _Die Anbindung in MapLibre ist für den Dev-Modus erprobt. Der produktive
-    Rollout bleibt offen, weil `local-sovereign` in der Produktionskonfiguration
-    noch nicht als Standardpfad aktiviert und betrieblich abgesichert ist._
+    Rollout bleibt offen, weil der produktive Artefaktpfad und die
+    Standardschaltung von `local-sovereign` noch nicht als verbindlicher
+    Betriebsweg durchgesetzt sind._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
