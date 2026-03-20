@@ -25,7 +25,7 @@ Das Auth-System basiert auf:
 ## Token-Typen
 
 - `magic_link_token`: Einmal-Token für den Login via E-Mail.
-- `session_access_token`: Kurzlebiger Token (z.B. JWT in HttpOnly-Cookie) für API-Anfragen.
+- `session_access_token`: Kurzlebiger Access-Token, bevorzugt über einen sicheren HttpOnly-Mechanismus transportiert, für API-Anfragen.
 - `session_refresh_token`: Langlebiger Token für die Erneuerung der Session ohne erneuten Login.
 
 ## Fehlercodes
@@ -92,6 +92,31 @@ Response:
 }
 ```
 
+### Session erneuern
+
+`POST /auth/session/refresh`
+
+Request:
+
+Der Request enthält den `session_refresh_token` (typischerweise über ein HttpOnly-Cookie).
+
+Response:
+
+```json
+{
+  "session": {
+    "expires_at": "...",
+    "device_id": "..."
+  }
+}
+```
+
+Verhalten:
+
+- Ein erfolgreicher Refresh generiert einen neuen `session_access_token` und rotiert den `session_refresh_token`.
+- Der alte `session_refresh_token` wird serverseitig invalidiert.
+- Bei einem ungültigen oder abgelaufenen Refresh-Token antwortet die API mit `401 Unauthorized` und dem Fehlercode `SESSION_EXPIRED`.
+
 ### Logout
 
 `POST /auth/logout`
@@ -140,12 +165,12 @@ Response:
 
 ## Step-up Auth
 
-Step-up Auth wird erzwungen für folgende Aktionen:
+Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 
-- Verortung hinzufügen
-- E-Mail ändern
-- Passkey hinzufügen/entfernen
-- alle Sessions widerrufen
+- `PUT /me/visibility` (Verortung hinzufügen/ändern)
+- `POST /me/email` (E-Mail ändern)
+- `POST /auth/passkeys/register/*` und `DELETE /auth/passkeys/:id` (Passkey hinzufügen/entfernen)
+- `POST /auth/logout-all` (alle Sessions widerrufen)
 
 API Response bei fehlender Berechtigung für diese Endpunkte:
 `403 Forbidden` mit Payload: `{"error": "STEP_UP_REQUIRED"}`
@@ -154,6 +179,8 @@ Möglichkeiten zur Auflösung:
 
 - Passkey (bevorzugt, falls registriert)
 - frischer Magic Link
+
+**Wichtig:** Ein erfolgreicher Step-up hebt nicht dauerhaft das Sicherheitsniveau der gesamten Session an. Er dient ausschließlich der Freigabe der explizit angeforderten sensiblen Aktion oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten), um keinen impliziten "Superuser"-Zustand zu erzeugen.
 
 ## Magic Link Details
 

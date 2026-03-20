@@ -68,12 +68,10 @@ Zweck:
 
 Das System basiert auf folgenden expliziten Zuständen:
 
-- `unauthenticated`: Kein gültiger Zugang vorhanden.
-- `link_requested`: Magic Link wurde angefordert, System wartet auf Bestätigung.
+- `unauthenticated`: Kein gültiger Zugang vorhanden (Startzustand oder nach Logout/Ablauf).
+- `link_requested`: Magic Link wurde angefordert (für Erstlogin, Recovery oder Neugerät), System wartet auf Bestätigung.
 - `authenticated_session`: Gültige, aktive Session für das aktuelle Gerät.
-- `session_expired`: Session abgelaufen, Erneuerung (via Passkey oder Magic Link) nötig.
-- `step_up_required`: Aktive Session, aber anstehende Aktion erfordert höhere Vertrauensstufe.
-- `recovery_pending`: Versuch der Wiederherstellung über Magic Link auf neuem/unbekanntem Gerät.
+- `step_up_required`: Aktive Session, aber die anstehende Aktion erfordert eine kurzzeitige höhere Vertrauensstufe.
 
 ## Konsequenzen
 

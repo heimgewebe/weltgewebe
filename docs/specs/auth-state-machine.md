@@ -10,12 +10,10 @@ canonicality: canonical
 
 ## Zustände
 
-- `unauthenticated`: Kein gültiger Zugang auf dem Gerät.
-- `link_requested`: Ein Magic Link wurde erfolgreich angefordert und per E-Mail versendet.
-- `authenticated_session`: Eine gültige `session` ist etabliert (sowohl access_token als auch refresh_token sind aktiv).
-- `session_expired`: Die Session ist nicht mehr gültig. Eine Neuanmeldung ist notwendig.
-- `step_up_required`: Eine aktive Session liegt vor, jedoch wurde eine geschützte Route oder Aktion angefragt.
-- `recovery_pending`: Wiederherstellung oder erster Login auf neuem Gerät gestartet.
+- `unauthenticated`: Kein gültiger Zugang auf dem Gerät. (Startzustand oder nach Logout/Ablauf)
+- `link_requested`: Ein Magic Link wurde erfolgreich angefordert (für Erstlogin, Wiederherstellung oder neues Gerät) und per E-Mail versendet.
+- `authenticated_session`: Eine gültige Session ist etabliert (sowohl `session_access_token` als auch `session_refresh_token` sind aktiv).
+- `step_up_required`: Eine aktive Session liegt vor, jedoch erfordert die angefragte Aktion eine zusätzliche Bestätigung.
 
 ## Transitionen (Trigger -> Pfad)
 
@@ -37,15 +35,11 @@ canonicality: canonical
 
 - **`step_up_required` -> `authenticated_session`:**
   - *Trigger*: User validiert erfolgreich über Passkey oder einen frischen Magic Link.
-  - *Aktion*: Aktion wird freigegeben, System notiert Step-up Event.
+  - *Aktion*: Aktion wird freigegeben (bzw. ein sehr kurzes Zeitfenster für sensible Aktionen geöffnet). Das System notiert ein Step-up-Event, ohne die Basis-Session dauerhaft in ein höheres Sicherheitsniveau zu heben.
 
-- **`authenticated_session` -> `session_expired`:**
-  - *Trigger*: Zeitlicher Ablauf des refresh_tokens ODER manueller / serverseitiger Widerruf (Logout / Invalidierung).
-  - *Aktion*: Sämtliche zugehörigen Access Tokens auf dem Gerät werden ungültig.
-
-- **`session_expired` -> `link_requested` / `unauthenticated`:**
-  - *Trigger*: Nächster Nutzer-Interaktionsversuch (z.B. App öffnen).
-  - *Aktion*: Prompt zur Anmeldung (Magic Link oder Passkey, falls konfiguriert).
+- **`authenticated_session` -> `unauthenticated`:**
+  - *Trigger*: Zeitlicher Ablauf des `session_refresh_token` ODER manueller/serverseitiger Widerruf (Logout, Session-Invalidierung).
+  - *Aktion*: Die Session wird serverseitig ungültig. Clientseitige Tokens verfallen. Der Nutzer erhält beim nächsten App-Start oder der nächsten Aktion einen Prompt zur Neuanmeldung (Magic Link oder optionaler Passkey).
 
 ## Fehlerpfade
 
@@ -53,6 +47,6 @@ canonicality: canonical
   - *Fehler*: Link abgelaufen (TTL > 15m), bereits genutzt, oder strukturell invalid.
   - *Ergebnis*: Token-Konsumierung scheitert mit `401 Unauthorized` und `TOKEN_INVALID` / `TOKEN_EXPIRED`.
 
-- **`step_up_required` -> `session_expired`:**
+- **`step_up_required` -> `unauthenticated`:**
   - *Fehler*: Step-up schlägt mehrfach fehl oder wurde vom Admin als verdächtig eingestuft.
-  - *Ergebnis*: Session-Widerruf, Fallback zu `unauthenticated` via Neuanmeldung.
+  - *Ergebnis*: Serverseitiger Widerruf der Session. Fallback zu `unauthenticated` (erfordert vollständigen Re-Login).
