@@ -681,7 +681,17 @@ else
   esac
 fi
 
-echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND"
+EDGE_RUNTIME_DETECTED=0
+if docker ps --format '{{.Names}}' | grep -q "^edge-caddy$"; then
+  EDGE_RUNTIME_DETECTED=1
+fi
+
+echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
+
+if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" != "edge" ]]; then
+  echo "[WARN] edge-caddy detected but DEPLOY_FRONTEND_MODE=$DEPLOY_FRONTEND_MODE"
+  echo "[WARN] consider setting DEPLOY_FRONTEND_MODE=edge"
+fi
 
 # 6b. Frontend Build
 if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" ) ]]; then
@@ -733,7 +743,7 @@ EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 EDGE_CADDY_CONTAINER="edge-caddy"
 
 # Only attempt this if frontend delivery is required for this run
-if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]] && [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+if [[ "$REQUIRE_FRONTEND" == "1" ]] && [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
     EDGE_NEEDS_RECREATE=0
 
     if [[ "$REFRESH_EDGE" == "1" ]]; then
