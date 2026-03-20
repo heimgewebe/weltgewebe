@@ -27,10 +27,8 @@ Die Implementierung nutzt im lokalen Entwicklungsbetrieb nun standardmäßig den
 souveränen Basemap-Modus (`local-sovereign`).
 
 Das Dev-Setup ist über Vite angebunden und für die lokale Style-Auslieferung im
-Entwicklungsfluss verifiziert; Prod-Serving der Basemap bleibt offen.
-
-Produktionshosting und die vollständige Betriebsreife des finalen PMTiles-Artefakts
-bleiben jedoch ausstehend und sind weiterhin offen.
+Entwicklungsfluss verifiziert. Produktionshosting und produktive
+Standardschaltung des finalen PMTiles-Artefakts bleiben jedoch ausstehend.
 
 ## Abwägungen
 
