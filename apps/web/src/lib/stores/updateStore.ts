@@ -33,7 +33,18 @@ function createUpdateStore() {
     if (!browser) return;
 
     const serverData = await fetchServerVersion();
-    if (!serverData || typeof serverData.version !== "string") {
+
+    if (!serverData) {
+      if (dev) {
+        console.debug("[update-check] no server payload received");
+      }
+      return;
+    }
+
+    if (
+      typeof serverData.version !== "string" ||
+      serverData.version.trim() === ""
+    ) {
       console.warn("[update-check] invalid server payload", serverData);
       return;
     }

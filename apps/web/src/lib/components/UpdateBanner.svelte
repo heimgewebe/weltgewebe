@@ -4,7 +4,7 @@
 
   function reload() {
     if (dev) {
-      console.debug("[update-reload-click]");
+      console.debug('[update-reload-click]');
     }
     window.location.reload();
   }
