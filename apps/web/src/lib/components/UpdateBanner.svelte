@@ -2,6 +2,7 @@
   import { updateStore } from '$lib/stores/updateStore';
 
   function reload() {
+    console.debug("[update-reload-click]");
     window.location.reload();
   }
 </script>

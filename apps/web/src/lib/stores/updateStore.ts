@@ -33,9 +33,20 @@ function createUpdateStore() {
     if (!browser) return;
 
     const serverData = await fetchServerVersion();
-    if (!serverData || !serverData.version) return;
+    if (!serverData || typeof serverData.version !== "string") {
+      console.warn("[update-check] invalid server payload", serverData);
+      return;
+    }
+
+    console.debug(
+      `[update-check] local=${localVersion} server=${serverData.version}`,
+    );
 
     if (serverData.version !== localVersion) {
+      console.debug("[update-detected]", {
+        localVersion,
+        serverVersion: serverData.version,
+      });
       set(true);
     }
   }
