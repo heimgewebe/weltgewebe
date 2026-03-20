@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
   let localVersionData: any;
@@ -20,10 +21,18 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
     }
   });
 
+  test.beforeEach(async ({ page }) => {
+    // Ensure all standard /map endpoints (nodes, accounts, etc.) are mocked
+    // so the environment is stable and doesn't timeout waiting for a backend.
+    await mockApiResponses(page);
+  });
+
   test("shows update banner when server version differs from local bundle version", async ({
     page,
   }) => {
     // Intercept version.json and mock a new server version
+    // Playwright route matching is last-in-first-out, so this correctly overrides
+    // the generic mock inside mockApiResponses for this specific test.
     await page.route("**/_app/version.json", async (route) => {
       await route.fulfill({
         status: 200,
