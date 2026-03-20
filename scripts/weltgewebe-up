@@ -745,8 +745,11 @@ echo ">> Edge Caddy Guard:"
 EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 EDGE_CADDY_CONTAINER="edge-caddy"
 
-# Only attempt this if frontend delivery is required for this run
-if [[ "$REQUIRE_FRONTEND" == "1" ]] && [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
+# Only attempt this if frontend delivery is required for this run.
+# edge = explicit external frontdoor
+# auto = heuristic runtime detection
+# internal/off = no edge-refresh path
+if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]] || { [[ "$DEPLOY_FRONTEND_MODE" == "auto" ]] && [[ "$EDGE_RUNTIME_DETECTED" == "1" ]]; }; }; then
     EDGE_NEEDS_RECREATE=0
 
     if [[ "$REFRESH_EDGE" == "1" ]]; then
