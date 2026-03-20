@@ -29,11 +29,7 @@ export function resolveBasemapStyle(config: BasemapConfig): string {
         throw new Error("styleUrl required for remote-style");
       return config.styleUrl;
     case "local-sovereign":
-      // Dev infrastructure exists, but real local artifact proof is missing,
-      // therefore mode stays blocked.
-      throw new Error(
-        "Basemap mode 'local-sovereign' is prepared but not yet enabled: a real local .pmtiles artifact is required.",
-      );
+      return "/local-basemap/style.json";
     default:
       return assertNever(config);
   }

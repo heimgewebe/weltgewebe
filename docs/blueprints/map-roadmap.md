@@ -22,7 +22,7 @@ summary: >
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in
-      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis fehlt)_
+      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis in Produktion fehlt)_
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -54,15 +54,15 @@ Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ei
 gehostet ist._ _(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene
 vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
 
-- [ ] PMTiles-Protokoll in MapLibre registrieren
-  - _Anmerkung: Laufzeit-Infrastruktur (`apps/web/src/routes/map/+page.svelte`) und Protokoll-Registrierung sind
-    implementiert, aber auf den Modus `local-sovereign` beschränkt, der ohne reales `.pmtiles`-Artefakt noch blockiert
-    ist._
-- [ ] Externe Style-Abhängigkeiten entfernen
-  - _Offen: CartoCDN ist weiterhin Default._
+- [x] PMTiles-Protokoll in MapLibre registrieren
+- [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
+  - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
+    als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Anmerkung: Pfade auf Infra-Ebene vorbereitet, aber lokaler Lauf gegen echtes `.pmtiles`-Artefakt noch nicht
-    vollzogen._
+  - _Im Dev-Hosting über Vite technisch erprobt und provisorisch angebunden; die
+    verbindliche Anbindung gegen ein vollautomatisches Produktions-Artefakt (echtes
+    .pmtiles) über Caddy steht noch aus. Die Betriebsreife ist damit nicht erreicht,
+    das Checklist-Item bleibt bewusst offen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
