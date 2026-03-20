@@ -1,4 +1,5 @@
-// "local-sovereign" mode is architecturally prepared, but assets are not yet integrated into the build/serving pipeline.
+// "local-sovereign" mode uses the locally served map style and PMTiles artifact.
+// Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
 export type BasemapMode = "remote-style" | "local-sovereign";
 
 type BaseBasemapConfig = {
@@ -29,13 +30,21 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-export const currentBasemap: BasemapConfig = {
-  mode: "remote-style",
-  styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
-  zoom: 15,
-  minZoom: 10,
-  maxZoom: 18,
-  pitch: 0,
-  bearing: 0,
-};
+const isLocal = import.meta.env.DEV || import.meta.env.MODE === "test";
+
+export const currentBasemap: BasemapConfig = isLocal
+  ? {
+      mode: "local-sovereign",
+      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+      zoom: 15,
+      minZoom: 10,
+      maxZoom: 18,
+    }
+  : {
+      mode: "remote-style",
+      styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+      zoom: 15,
+      minZoom: 10,
+      maxZoom: 18,
+    };
