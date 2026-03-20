@@ -12,7 +12,7 @@ Slider (r Meter) für verortete Garnrollen.
 
 ## Startzustand
 
-Beim Einstieg befindet sich der Nutzer im RoN-Startmodus.
+Beim ersten Einstieg (Onboarding neuer Accounts) befindet sich der Nutzer im RoN-Startmodus.
 
 Die UI muss sichtbar machen:
 

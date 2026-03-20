@@ -100,10 +100,9 @@ Teilmodelle mit halber Adressschärfe werden bewusst verworfen.
 
 ## 4. Startzustand und Übergang (kanonisch)
 
-Alle Nutzer beginnen im System im **Startmodus**.
+Alle neu erstellten Accounts beginnen im System im **Startmodus**.
 
-Dieser entspricht technisch dem Modus:
-→ Rolle ohne Namen (RoN)
+Technisch entspricht dieser dem Modus **Rolle ohne Namen (RoN)**.
 
 Wichtig:
 Dieser Zustand ist **keine bewusste Entscheidung**, sondern ein
@@ -123,7 +122,7 @@ Die Erstellung einer verorteten Garnrolle ist ein
 Er erfordert zwingend:
 
 - Personenangaben
-- eine konkrete Adresse
+- eine genaue Adresse
 
 Optional:
 
