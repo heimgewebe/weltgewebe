@@ -141,8 +141,7 @@ RoN ist:
 - kein „anonymer Modus“
 - keine reduzierte Version der verorteten Garnrolle
 
-RoN ist:
-→ eine eigenständige Rolle im System ohne individuelle räumliche Verankerung
+RoN ist eine eigenständige Rolle im System ohne individuelle räumliche Verankerung.
 
 ---
 
@@ -152,7 +151,7 @@ Der Account beginnt im Startzustand RoN.
 
 ### 5.1 Rolle ohne Namen (RoN) als Startzustand
 
-Alle starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
+Alle neu erstellten Accounts starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
 
 Im Startzustand gilt für RoN:
 
@@ -358,7 +357,7 @@ Das Weltgewebe kennt zwei klare Modi:
 - **verortete Garnrolle**
 - **Rolle ohne Namen**
 
-Alle beginnen in der Rolle ohne Namen. Die Verortung ist ein expliziter Übergang durch Ergänzung der Angaben.
+Alle neu erstellten Accounts beginnen in der Rolle ohne Namen. Die Verortung ist ein expliziter Übergang durch Ergänzung der Angaben.
 
 Der Ungenauigkeitsradius verfeinert nur die öffentliche Anzeige verorteter Garnrollen.
 Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
