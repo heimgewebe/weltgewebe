@@ -33,37 +33,24 @@ Text:
 Hinweis:
 "Öffne deine E-Mail auf diesem Gerät."
 
+## Klare UI-Zustände
+
+- **Du bist eingeloggt:** Ansicht des Gewebes. Option zum Aufrufen der Konto-Einstellungen / Geräteverwaltung.
+- **Deine Sitzung ist abgelaufen:** "Bitte melde dich erneut an, um fortzufahren."
+- **Bitte bestätige deine Identität:** "Für diese Aktion benötigen wir eine zusätzliche Bestätigung." (Step-up Auth Trigger)
+
 ## Erfolgreicher Login
 
 - Weiterleitung in App
-- Session wird erstellt
-
-Optionaler Hinweis:
-"Schnellere Anmeldung aktivieren"
+- **Nur nach** erfolgreichem Login wird der Passkey als Option ("Schnellere Anmeldung aktivieren") angeboten, falls noch nicht auf dem aktuellen Gerät vorhanden.
 
 CTA:
-"Auf diesem Gerät merken" (Passkey)
+"Auf diesem Gerät merken" (Passkey Registrierung)
 
 ## Wiederkehr
 
-### Session aktiv
-
-→ direkter Einstieg
-
-### Session abgelaufen
-
-Optionen:
-
-- Passkey
-- Magic Link
-
-## Neues Gerät
-
-Flow:
-
-- E-Mail eingeben
-- Magic Link
-- optional Passkey aktivieren
+Wenn eine gültige Session vorhanden ist, erfolgt der direkte Einstieg ohne weitere Prompts.
+Wenn die Session abgelaufen ist oder fehlt, greifen die Authentifizierungs-Flows (Magic Link oder, falls vorhanden, Passkey).
 
 ## Step-up Auth UI
 

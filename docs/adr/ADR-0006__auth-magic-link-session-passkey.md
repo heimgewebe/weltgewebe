@@ -3,14 +3,14 @@ id: adr.ADR-0006-auth-magic-link-session-passkey
 title: Adr 0006 Auth Magic Link Session Passkey
 doc_type: reference
 status: active
-canonicality: derived
+canonicality: canonical
 ---
 
 # ADR-0006 — Auth: Magic Link + Session + optionaler Passkey
 
 ## Status
 
-Proposed
+Accepted
 
 ## Kontext
 
@@ -56,6 +56,24 @@ Zweck:
 - Authentifizierung ist getrennt vom Identitätsmodus (RoN vs. verortet)
 - Recovery muss immer möglich bleiben
 - Sicherheit wird kontextuell erhöht (step-up auth)
+
+## System-Invarianten
+
+- Magic Link ist single-use und serverseitig nicht replaybar.
+- Jede Session ist eindeutig einer `device_id` zugeordnet.
+- Jede sensitive Aktion erfordert zwingend Step-up Auth.
+- Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus (Bin ich RoN oder verortet?).
+
+## Zustandsmodell
+
+Das System basiert auf folgenden expliziten Zuständen:
+
+- `unauthenticated`: Kein gültiger Zugang vorhanden.
+- `link_requested`: Magic Link wurde angefordert, System wartet auf Bestätigung.
+- `authenticated_session`: Gültige, aktive Session für das aktuelle Gerät.
+- `session_expired`: Session abgelaufen, Erneuerung (via Passkey oder Magic Link) nötig.
+- `step_up_required`: Aktive Session, aber anstehende Aktion erfordert höhere Vertrauensstufe.
+- `recovery_pending`: Versuch der Wiederherstellung über Magic Link auf neuem/unbekanntem Gerät.
 
 ## Konsequenzen
 
