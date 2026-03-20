@@ -97,18 +97,6 @@ export default defineConfig({
             return;
           }
 
-          // Implement dynamic path rewriting for style.json
-          if (safeRelPath === "style.json") {
-            res.setHeader("Content-Type", "application/json");
-            let content = fs.readFileSync(targetPath, "utf-8");
-            content = content.replace(
-              /"\.\/sprites/g,
-              '"/local-basemap/sprites',
-            );
-            content = content.replace(/"\.\/glyphs/g, '"/local-basemap/glyphs');
-            return res.end(content);
-          }
-
           // Map obvious asset content types
           if (safeRelPath.endsWith(".pmtiles")) {
             res.setHeader("Content-Type", "application/octet-stream");
