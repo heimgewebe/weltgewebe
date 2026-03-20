@@ -49,6 +49,17 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 ## 2. Reverse-Proxy-Vertrag
 
+### Frontend-Auslieferung im Heimserver-Betrieb
+
+* Die UI wird im Heimserver-Betrieb nicht durch den internen Stack-Caddy ausgeliefert
+* Stattdessen erfolgt die Auslieferung über einen externen Edge-Gateway (z. B. edge-caddy)
+* Das Weltgewebe-Repo stellt:
+  * Build-Artefakte (`apps/web/build`)
+  * Referenzkonfigurationen (`infra/caddy/...`)
+* Die operative Frontdoor liegt außerhalb des Repos
+
+**Kritisch:** Ein erfolgreicher Build im Repo ist nicht ausreichend. Der neue Frontend-Stand wird erst wirksam, wenn die externe Edge-Instanz den aktualisierten Build neu einliest (z. B. durch Container-Recreate oder Reload).
+
 Der Reverse-Proxy (Edge-Caddy) läuft im Heimserver-Betrieb außerhalb des Weltgewebe-Stacks.
 `docs/reference/caddy.heimserver.caddy` und `infra/caddy/Caddyfile.heim` dienen hierbei primär
 als Referenzkonfigurationen für das Routing. Die operativ wirksame Frontdoor wird im Heimserver-Repository

@@ -1,3 +1,8 @@
+> Hinweis:
+> Dieses Dokument beschreibt eine minimale API-Referenz für Heimserver-Caddy.
+> Die tatsächliche UI-Frontdoor-Konfiguration (inkl. Cache-Semantik und Versionierung)
+> liegt im Heimserver-Edge-Stack (z. B. /opt/heimgewebe/edge/Caddyfile).
+
 # Reference only; not deployed from this repo. Source of truth: ops/heimserver
 
 # Reference for Weltgewebe API (internal access)
