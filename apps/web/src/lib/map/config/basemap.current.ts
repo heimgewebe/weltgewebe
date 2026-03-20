@@ -30,12 +30,21 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-export const currentBasemap: BasemapConfig = {
-  mode: "local-sovereign",
-  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
-  zoom: 15,
-  minZoom: 10,
-  maxZoom: 18,
-  pitch: 0,
-  bearing: 0,
-};
+const isLocal = import.meta.env.DEV || import.meta.env.MODE === "test";
+
+export const currentBasemap: BasemapConfig = isLocal
+  ? {
+      mode: "local-sovereign",
+      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+      zoom: 15,
+      minZoom: 10,
+      maxZoom: 18,
+    }
+  : {
+      mode: "remote-style",
+      styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+      zoom: 15,
+      minZoom: 10,
+      maxZoom: 18,
+    };
