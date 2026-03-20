@@ -54,7 +54,7 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 _Hinweis: Die Laufzeitanbindung im lokalen Dev-Client ist hiermit belegt. Ein vollautomatisches Produktion-Hosting-Setup auf dem Heimserver steht in Phase 1 und 4 weiterhin teilweise aus._
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
-- [x] Externe Style-Abhängigkeiten entfernen
+- [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`) als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
   - _Im Dev-Hosting über Vite verifiziert und angebunden. Der Nachweis gegen ein vollautomatisches Produktions-Artefakt (echtes .pmtiles) über Caddy bleibt für die Betriebsreife formal noch offen._
