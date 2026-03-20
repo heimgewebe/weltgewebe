@@ -21,6 +21,7 @@ Das Auth-System basiert auf:
 - Session: langlebiger Zugangszustand
 - Magic Link Token: einmaliger Login-Token
 - Step-up Auth: erneute Verifikation bei sensiblen Aktionen
+- `challenge_id`: serverseitig erzeugte Kennung einer ausstehenden sensiblen Aktion, an die eine Step-up-Bestätigung gebunden wird
 
 ## Token-Typen
 
@@ -168,7 +169,7 @@ Response:
 Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 
 - `PUT /me/visibility` (Verortung hinzufügen/ändern)
-- `POST /me/email` (E-Mail ändern)
+- `POST|PUT|PATCH /me/email` (E-Mail ändern – genaue HTTP-Methode gem. finaler Repo-Konvention)
 - `POST /auth/passkeys/register/*` und `DELETE /auth/passkeys/:id` (Passkey hinzufügen/entfernen)
 - `DELETE /auth/devices/:id` (sofern es sich **nicht** um das aktuell anfragende Gerät handelt)
 - `POST /auth/logout-all` (alle Sessions widerrufen)

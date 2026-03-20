@@ -57,6 +57,9 @@ Wenn die Session abgelaufen ist oder fehlt, greifen die Authentifizierungs-Flows
 Text:
 "Bitte bestätige kurz deine Identität"
 
+Hinweis bei E-Mail-Option:
+"Der per E-Mail gesendete Link bestätigt nur diese angefragte Aktion."
+
 Optionen:
 
 - Face ID / Fingerabdruck (Passkey)
