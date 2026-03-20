@@ -656,7 +656,8 @@ if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
       elif [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
         export REQUIRE_FRONTEND=1
       else
-        # Fallback: wenn Web vorhanden -> Frontend relevant
+        # Fallback: if web workspace exists, treat frontend as deploy-relevant,
+        # even if delivery topology is external.
         if [[ -d "apps/web" ]]; then
           export REQUIRE_FRONTEND=1
         else
@@ -681,6 +682,8 @@ else
   esac
 fi
 
+# Heuristic: detect known external edge gateway container used on heimserver.
+# This is runtime-aware, but still naming-dependent.
 EDGE_RUNTIME_DETECTED=0
 if docker ps --format '{{.Names}}' | grep -q "^edge-caddy$"; then
   EDGE_RUNTIME_DETECTED=1
@@ -688,9 +691,9 @@ fi
 
 echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
 
-if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" != "edge" ]]; then
+if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
   echo "[WARN] edge-caddy detected but DEPLOY_FRONTEND_MODE=$DEPLOY_FRONTEND_MODE"
-  echo "[WARN] consider setting DEPLOY_FRONTEND_MODE=edge"
+  echo "[WARN] consider explicitly setting DEPLOY_FRONTEND_MODE=edge"
 fi
 
 # 6b. Frontend Build
