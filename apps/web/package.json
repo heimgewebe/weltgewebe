@@ -21,7 +21,6 @@
     "check": "cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-check --tsconfig ./tsconfig.json",
     "precheck:ci": "pnpm run sync",
     "check:ci": "cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-check --tsconfig ./tsconfig.json",
-    "build:ci": "cross-env PUBLIC_ENABLE_TEST_MAP=false vite build",
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
