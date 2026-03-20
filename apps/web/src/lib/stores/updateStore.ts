@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { browser } from "$app/environment";
+import { browser, dev } from "$app/environment";
 import buildVersion from "$lib/generated/buildVersion.json";
 
 export interface VersionData {
@@ -33,9 +33,35 @@ function createUpdateStore() {
     if (!browser) return;
 
     const serverData = await fetchServerVersion();
-    if (!serverData || !serverData.version) return;
+
+    if (!serverData) {
+      if (dev) {
+        console.debug("[update-check] no server payload received");
+      }
+      return;
+    }
+
+    if (
+      typeof serverData.version !== "string" ||
+      serverData.version.trim() === ""
+    ) {
+      console.warn("[update-check] invalid server payload", serverData);
+      return;
+    }
+
+    if (dev) {
+      console.debug(
+        `[update-check] local=${localVersion} server=${serverData.version}`,
+      );
+    }
 
     if (serverData.version !== localVersion) {
+      if (dev) {
+        console.debug("[update-detected]", {
+          localVersion,
+          serverVersion: serverData.version,
+        });
+      }
       set(true);
     }
   }

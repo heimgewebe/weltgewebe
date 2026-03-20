@@ -1,7 +1,11 @@
 <script lang="ts">
   import { updateStore } from '$lib/stores/updateStore';
+  import { dev } from '$app/environment';
 
   function reload() {
+    if (dev) {
+      console.debug('[update-reload-click]');
+    }
     window.location.reload();
   }
 </script>
