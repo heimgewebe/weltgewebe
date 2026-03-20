@@ -1,0 +1,179 @@
+import { test, expect } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { mockApiResponses } from "./fixtures/mockApi";
+
+test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
+  let localVersionData: any;
+
+  test.beforeAll(() => {
+    // Read the true buildVersion that was bundled into the client app.
+    // This file acts as the local build input for the bundle, not a runtime extraction,
+    // thereby correctly modeling the statically bundled "old" version logic.
+    const versionFilePath = path.resolve(
+      process.cwd(),
+      "src/lib/generated/buildVersion.json",
+    );
+    if (fs.existsSync(versionFilePath)) {
+      localVersionData = JSON.parse(fs.readFileSync(versionFilePath, "utf8"));
+    } else {
+      localVersionData = { version: "unknown" };
+    }
+  });
+
+  test.beforeEach(async ({ page }) => {
+    // Ensure all standard /map endpoints (nodes, accounts, etc.) are mocked
+    // so the environment is stable and doesn't timeout waiting for a backend.
+    await mockApiResponses(page);
+  });
+
+  test("shows update banner when server version differs from local bundle version", async ({
+    page,
+  }) => {
+    // Intercept version.json and mock a new server version
+    // Playwright route matching is last-in-first-out, so this correctly overrides
+    // the generic mock inside mockApiResponses for this specific test.
+    await page.route("**/_app/version.json", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ version: "a-completely-new-version" }),
+      });
+    });
+
+    // On initial page load, the app fetches the server version and compares it
+    // against its bundled localVersion. Since it's different, the banner should appear.
+    await page.goto("/map");
+
+    // Banner should appear immediately without needing a second check
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toBeVisible();
+    await expect(page.locator("button:has-text('Neu laden')")).toBeVisible();
+  });
+
+  test("does not show update banner when server version is identical to local bundle version", async ({
+    page,
+  }) => {
+    // Intercept version.json and return the EXACT same version as the bundle
+    await page.route("**/_app/version.json", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ version: localVersionData.version }),
+      });
+    });
+
+    await page.goto("/map");
+
+    // Banner should not be visible initially
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+
+    // Wait slightly just to ensure async checks completed
+    await page.waitForTimeout(500);
+
+    // Trigger visibilitychange to simulate the user returning to the tab
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        get: () => "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    // Banner should STILL not be visible
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+  });
+
+  test("shows update banner when bfcache is restored (pageshow with persisted)", async ({
+    page,
+  }) => {
+    // This specifically tests the scenario where a user leaves a tab open,
+    // a new deployment occurs, and they hit 'Back' returning them via bfcache,
+    // where the client is completely stale without a hard page reload.
+    let checkCount = 0;
+
+    // Intercept version.json and mock a new server version ONLY on the second check (pageshow)
+    await page.route("**/_app/version.json", async (route) => {
+      checkCount++;
+      if (checkCount === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ version: localVersionData.version }),
+        });
+      } else {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            version: "a-completely-new-version-from-bfcache",
+          }),
+        });
+      }
+    });
+
+    await page.goto("/map");
+
+    // Banner should not be visible initially
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+
+    // Wait slightly
+    await page.waitForTimeout(500);
+
+    // We manually simulate a pageshow event with `persisted: true` to mimic a back-forward cache return
+    await page.evaluate(() => {
+      const event = new PageTransitionEvent("pageshow", { persisted: true });
+      window.dispatchEvent(event);
+    });
+
+    // Banner should appear
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toBeVisible();
+
+    // Verify the reload button is accessible
+    const reloadBtn = page.locator("button:has-text('Neu laden')");
+    await expect(reloadBtn).toBeVisible();
+    await expect(reloadBtn).toBeEnabled();
+  });
+
+  test("does not show update banner when fetch fails", async ({ page }) => {
+    await page.route("**/_app/version.json", async (route) => {
+      await route.fulfill({
+        status: 500,
+        body: "Internal Server Error",
+      });
+    });
+
+    await page.goto("/map");
+
+    // Banner should not be visible initially
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+
+    // Wait slightly
+    await page.waitForTimeout(500);
+
+    // Trigger visibilitychange to force another check (which fails)
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        get: () => "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+
+    // Banner should not appear
+    await expect(
+      page.locator("text=Eine neue Version ist verfügbar."),
+    ).toHaveCount(0);
+  });
+});
