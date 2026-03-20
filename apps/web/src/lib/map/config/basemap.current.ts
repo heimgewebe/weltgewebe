@@ -32,19 +32,20 @@ export const HAMMER_PARK_CENTER = {
 
 const isLocal = import.meta.env.DEV || import.meta.env.MODE === "test";
 
+const baseConfig: BaseBasemapConfig = {
+  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+  zoom: 15,
+  minZoom: 10,
+  maxZoom: 18,
+};
+
 export const currentBasemap: BasemapConfig = isLocal
   ? {
+      ...baseConfig,
       mode: "local-sovereign",
-      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
-      zoom: 15,
-      minZoom: 10,
-      maxZoom: 18,
     }
   : {
+      ...baseConfig,
       mode: "remote-style",
       styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-      center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
-      zoom: 15,
-      minZoom: 10,
-      maxZoom: 18,
     };
