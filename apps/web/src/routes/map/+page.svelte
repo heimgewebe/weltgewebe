@@ -19,7 +19,6 @@
   import { isRecord } from '$lib/utils/guards';
 
   import { get } from 'svelte/store';
-  import { PUBLIC_ENABLE_TEST_MAP } from '$env/static/public';
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
   import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
@@ -354,7 +353,7 @@
       });
 
       // Expose map for testing
-      if (PUBLIC_ENABLE_TEST_MAP === 'true') {
+      if (import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true') {
         (window as any).__TEST_MAP__ = map;
       }
     })();
@@ -364,7 +363,7 @@
         window.clearTimeout(filterTooltipTimeout);
         filterTooltipTimeout = null;
       }
-      if (PUBLIC_ENABLE_TEST_MAP === 'true') {
+      if (import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true') {
         delete (window as any).__TEST_MAP__;
       }
       cleanupKomposition?.();
