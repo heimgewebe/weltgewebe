@@ -38,5 +38,5 @@ Dabei wird erklärt:
 - nachträglicher RoN-Toggle
 - Vermischung von Identität und Sichtbarkeit
 
-Texte: Transparenz = Standard.
+Texte: Sicherer Einstieg im RoN-Startzustand ist Standard; Verortung ist optional und bewusst.
 Vorschau public_pos.

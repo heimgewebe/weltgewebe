@@ -68,5 +68,5 @@ Auch Vertrauensbewertungen, Trust-Scores oder Pflichtverifikationen als Grundvor
 
 ## Rollout
 
-- **Web**: Start-UI anpassen (RoN als Default-Sichtbarkeit), Zwei-Wege-Screen entfernen, RoN-Toggle aus den nachträglichen Privatsphäre-Einstellungen entfernen, Slider für verortete Rollen beibehalten.
+- **Web**: Start-UI anpassen (RoN als kanonischer Startzustand), Zwei-Wege-Screen entfernen, RoN-Toggle aus den nachträglichen Privatsphäre-Einstellungen entfernen, Slider für verortete Rollen beibehalten.
 - **API**: Schema-Anpassung, Ersetzung von `visibility` und dem RoN-Toggle durch ein modusbasiertes Modell (`mode: "verortet" | "ron"`).
