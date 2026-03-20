@@ -14,11 +14,6 @@ test("map centers on hammer park by default", async ({ page }) => {
     undefined,
     { timeout: 15000 },
   );
-  await page.waitForFunction(
-    () => (window as any).__TEST_MAP__.loaded(),
-    undefined,
-    { timeout: 15000 },
-  );
 
   // Let map do the initial flyTo transition
   await page.waitForFunction(
