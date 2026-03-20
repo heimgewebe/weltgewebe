@@ -89,8 +89,6 @@ Grundsatz:
 > oder
 > 2. der Rolle ohne Namen zugeordnet.
 
-Diese Unterscheidung ergibt sich aus den Angaben bei der Accounterstellung.
-
 Das Weltgewebe kennt damit zwei klare Grundmodi:
 
 - **verortete Garnrolle**
@@ -100,13 +98,82 @@ Teilmodelle mit halber Adressschärfe werden bewusst verworfen.
 
 ---
 
-## 4. Accounterstellung
+## 4. Startzustand und Übergang (kanonisch)
 
-Bei der Accounterstellung entscheidet die Eingabe des Nutzers über den Modus. (Technisch beginnen automatisch provisionierte Accounts immer sicher als RoN, bis der Nutzer seine Angaben ergänzt.)
+Alle neu erstellten Accounts beginnen im System im **Startmodus**.
 
-### 4.1 Verortete Garnrolle
+Technisch entspricht dieser dem Modus **Rolle ohne Namen (RoN)**.
 
-Wenn ein Nutzer die erforderlichen Personen- und Adressangaben macht, erhält er eine verortete Garnrolle.
+Wichtig:
+Dieser Zustand ist **keine bewusste Entscheidung**, sondern ein
+vorläufiger, sicherer Initialzustand ohne personenbezogene Angaben.
+
+Der Startmodus dient dazu:
+
+- Einstiegshürden zu minimieren
+- sofortige Teilnahme zu ermöglichen
+- keine impliziten Entscheidungen zu erzwingen
+
+### Übergang zu verorteter Garnrolle
+
+Die Erstellung einer verorteten Garnrolle ist ein
+**bewusster Transformationsschritt**.
+
+Er erfordert zwingend:
+
+- Personenangaben
+- eine genaue Adresse
+
+Optional:
+
+- Ungenauigkeitsradius für die öffentliche Anzeige
+
+Der Übergang ist:
+
+- jederzeit möglich
+- explizit
+- nicht ohne semantische Verschiebung reversibel
+
+### Semantische Klarstellung
+
+RoN ist:
+
+- kein „anonymer Modus“
+- keine reduzierte Version der verorteten Garnrolle
+
+RoN ist eine eigenständige Rolle im System ohne individuelle räumliche Verankerung.
+
+---
+
+## 5. Start und Ergänzung von Angaben
+
+Der Account beginnt im Startzustand RoN.
+
+### 5.1 Rolle ohne Namen (RoN) als Startzustand
+
+Alle neu erstellten Accounts starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
+
+Im Startzustand gilt für RoN:
+
+- noch kein Name hinterlegt
+- noch keine Personenangaben ergänzt
+- noch keine Adresse angegeben
+- noch keine individuelle Verortung
+
+Wird dies nicht geändert, wird RoN zum dauerhaften Modus.
+
+RoN ist damit:
+
+- der kanonische Startmodus
+- ein valider Dauerzustand, keine Strafe
+- keine verdeckte Anonymisierung
+- keine bloße nachträgliche Privacy-Einstellung
+
+---
+
+### 5.2 Übergang zur verorteten Garnrolle
+
+Wenn Personen- und Adressangaben ergänzt werden, erfolgt ein expliziter Übergang zur verorteten Garnrolle.
 
 Minimal dafür erforderlich:
 
@@ -128,37 +195,11 @@ Bedeutung:
 
 ---
 
-### 4.2 Rolle ohne Namen (RoN)
+## 6. Anzeige-Logik
 
-Wenn ein Nutzer **keine Angaben zur Person** macht, wird er der **Rolle ohne Namen** zugeordnet.
+Die Anzeige folgt aus dem aktuellen Modus der Garnrolle.
 
-Dabei gilt:
-
-- kein Name
-- keine Personenangaben
-- keine Adresse
-- keine individuelle Verortung
-
-Vor Abschluss der Accounterstellung wird der Nutzer explizit informiert:
-
-> Wenn du keine Angaben zu deiner Person machst, wirst du der Rolle ohne Namen zugeordnet.
-> Deine Identität erscheint dann nicht als individuell verortete Garnrolle, sondern als Teil der
-> Rolle ohne Namen ohne individuelle Position auf der Karte, aber mit öffentlicher Wirksamkeit über die RoN des Stadtteils (kollektive Stellvertretung).
-
-RoN ist damit:
-
-- ein bewusster Einstiegsmodus
-- keine Strafe
-- keine verdeckte Anonymisierung
-- keine bloße nachträgliche Privacy-Einstellung
-
----
-
-## 5. Anzeige-Logik
-
-Die Anzeige folgt aus den gemachten Angaben.
-
-### Fall A: Genaue Adresse angegeben
+### Fall A: Verortung vorgenommen
 
 Ergebnis:
 
@@ -167,20 +208,20 @@ Ergebnis:
   - exakt bei 0 m
   - ungenauer bei Radius > 0 m
 
-### Fall B: Keine Personenangaben gemacht
+### Fall B: Keine Verortung vorgenommen (im RoN-Startmodus verblieben)
 
 Ergebnis:
 
-- Zuordnung zur Rolle ohne Namen
+- Verbleib in der Rolle ohne Namen
 - öffentliche Anzeige:
   - nicht individuelle Adresse
   - stattdessen Rolle ohne Namen. Keine individuelle öffentliche Verortung, sondern kollektive Stellvertretung (Weben von der RoN des Stadtteils aus).
 
 ---
 
-## 6. Sichtbarkeit und Wahrheit
+## 7. Sichtbarkeit und Wahrheit
 
-### 6.1 Kanonisches Modell vs. Legacy-Kompatibilität
+### 7.1 Kanonisches Modell vs. Legacy-Kompatibilität
 
 Das oben beschriebene Zwei-Modi-Modell (verortet vs. RoN) ist der kanonische Zielzustand.
 Für bestehende Datensätze aus dem alten `visibility`-Modell gilt eine sichere Kompatibilitätsregel:
@@ -206,7 +247,7 @@ Für RoN gilt:
 
 ---
 
-## 7. Vertrauen
+## 8. Vertrauen
 
 Vertrauen ist kein Systemwert.
 
@@ -232,7 +273,7 @@ Diese Differenz ist keine Sanktion, sondern Folge der gewählten Sichtbarkeit.
 
 ---
 
-## 8. Architekturprinzip
+## 9. Architekturprinzip
 
 Das Weltgewebe implementiert bewusst nicht:
 
@@ -249,7 +290,7 @@ Es implementiert stattdessen:
 
 ---
 
-## 9. Risiken und Grenzen
+## 10. Risiken und Grenzen
 
 ### Risiken
 
@@ -267,22 +308,16 @@ Es implementiert stattdessen:
 
 ---
 
-## 10. Implikationen für UI und API
+## 11. Implikationen für UI und API
 
 ### UI
 
-Die UI der Accounterstellung muss klar zwischen zwei Wegen unterscheiden:
+Die UI darf keinen Zwei-Wege-Onboarding-Screen erzwingen.
 
-1. **Verortete Garnrolle erstellen**
-   - Personenangaben
-   - genaue Adresse
-   - Ungenauigkeitsradius einstellen
+- Der Startzustand (RoN) wird sichtbar kommuniziert.
+- Die Verortung (Eingabe von Personenangaben, genauer Adresse und Ungenauigkeitsradius) wird als bewusster späterer Transformationsschritt angeboten.
 
-2. **Ohne Personenangaben fortfahren**
-   - Hinweis vor Abschluss:
-     Zuordnung zur Rolle ohne Namen. Keine individuelle öffentliche Verortung, sondern kollektive Stellvertretung (Weben von der RoN des Stadtteils aus).
-
-Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären.
+Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären, sondern als den sicheren Initialzustand.
 
 ---
 
@@ -297,7 +332,7 @@ Der Ungenauigkeitsradius bleibt ein eigener Parameter der öffentlichen Anzeige.
 
 ---
 
-## 11. Basale Contract-Folgen
+## 12. Basale Contract-Folgen
 
 Der Contract soll basal bleiben.
 
@@ -315,21 +350,21 @@ Nicht in den basalen Contract gehören:
 
 ---
 
-## 12. Essenz
+## 13. Essenz
 
-Das Weltgewebe kennt künftig zwei klare Modi:
+Das Weltgewebe kennt zwei klare Modi:
 
 - **verortete Garnrolle**
 - **Rolle ohne Namen**
 
-Die Entscheidung ergibt sich aus den Angaben bei der Accounterstellung.
+Alle neu erstellten Accounts beginnen in der Rolle ohne Namen. Die Verortung ist ein expliziter Übergang durch Ergänzung der Angaben.
 
 Der Ungenauigkeitsradius verfeinert nur die öffentliche Anzeige verorteter Garnrollen.
 Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
 
 ---
 
-## 13. Unsicherheitsgrad
+## 14. Unsicherheitsgrad
 
 0.12
 
@@ -340,7 +375,7 @@ Ursachen:
 
 ---
 
-## 14. Interpolationsgrad
+## 15. Interpolationsgrad
 
 0.14
 
@@ -351,13 +386,13 @@ Annahmen:
 
 ---
 
-## 15. Schlussbemerkung
+## 16. Schlussbemerkung
 
 Das Weltgewebe fragt nicht:
 „Wie vertrauenswürdig bist du?“
 
-Es fragt:
-„Willst du hier als verortete Person erscheinen oder ohne Namen teilnehmen?“
+Es bietet an:
+„Du kannst hier als verortete Person erscheinen, oder sicher in der Rolle ohne Namen bleiben.“
 
 Und die Nachbarschaft beantwortet den Rest mit der einzigen Währung, die dafür taugt:
 Zeit.
