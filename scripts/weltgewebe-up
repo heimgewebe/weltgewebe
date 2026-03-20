@@ -692,8 +692,8 @@ fi
 echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
 
 if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
-  echo "[WARN] edge-caddy detected but DEPLOY_FRONTEND_MODE=$DEPLOY_FRONTEND_MODE"
-  echo "[WARN] consider explicitly setting DEPLOY_FRONTEND_MODE=edge"
+  echo "[WARN] edge-caddy runtime detected while DEPLOY_FRONTEND_MODE=auto"
+  echo "[WARN] consider setting DEPLOY_FRONTEND_MODE=edge for explicit frontend delivery semantics"
 fi
 
 # 6b. Frontend Build
