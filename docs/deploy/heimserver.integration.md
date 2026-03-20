@@ -60,6 +60,15 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 **Kritisch:** Ein erfolgreicher Build im Repo ist nicht ausreichend. Der neue Frontend-Stand wird erst wirksam, wenn die externe Edge-Instanz den aktualisierten Build neu einliest (z. B. durch Container-Recreate oder Reload).
 
+#### Konfigurationsvertrag: `DEPLOY_FRONTEND_MODE`
+
+Zur Steuerung der Frontend-Relevanz und der Edge-Aktualisierung wertet das Deploy-Skript die Variable `DEPLOY_FRONTEND_MODE` aus. Zulässige Werte:
+
+* **`auto` (Default):** Nutzt eine Heuristik. Das Frontend gilt als deploy-relevant (`REQUIRE_FRONTEND=1`), wenn das Verzeichnis `apps/web` existiert oder der interne Caddy aktiv ist. Zusätzlich wird heuristisch geprüft, ob ein externer Container namens `edge-caddy` läuft; ist dies der Fall, werden Edge-Aktualisierungs-Checks ausgelöst (mit Warnung zur expliziten Konfiguration).
+* **`edge`:** Explizite Deklaration der externen Liefertopologie. Das Frontend ist relevant, und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend ausgeführt.
+* **`internal`:** Die UI wird durch den Stack-internen Caddy ausgeliefert. Das Frontend ist relevant, Edge-Checks werden übersprungen.
+* **`off`:** Das Frontend ist für diesen Deploy irrelevant (z. B. reine API-Umgebung). Frontend-Build und Edge-Checks werden übersprungen.
+
 Der Reverse-Proxy (Edge-Caddy) läuft im Heimserver-Betrieb außerhalb des Weltgewebe-Stacks.
 `docs/reference/caddy.heimserver.caddy` und `infra/caddy/Caddyfile.heim` dienen hierbei primär
 als Referenzkonfigurationen für das Routing. Die operativ wirksame Frontdoor wird im Heimserver-Repository
