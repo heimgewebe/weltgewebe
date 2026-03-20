@@ -77,7 +77,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `PUBLIC_ENABLE_TEST_MAP=true pnpm build && PUBLIC_ENABLE_TEST_MAP=true pnpm preview --host 0.0.0.0 --port ${PORT}`,
+          command: `pnpm build && pnpm preview --host 0.0.0.0 --port ${PORT}`,
           env: {
             PUBLIC_ENABLE_TEST_MAP: "true",
           },

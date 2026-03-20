@@ -1,55 +1,55 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-import { execSync } from "child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { execSync } from "node:child_process";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const rootDir = path.resolve(__dirname, "..");
-const clientTargetDir = path.resolve(rootDir, "src/lib/generated");
-const serverTargetDir = path.resolve(rootDir, "build/_app");
+// Ensure we output to build/_app/version.json
+const targetFile = path.resolve(process.cwd(), "build/_app/version.json");
+const targetDir = path.dirname(targetFile);
 
-let shortSha = "dev";
-try {
-  shortSha = execSync("git rev-parse --short HEAD", {
-    cwd: rootDir,
-    stdio: "pipe",
-  })
-    .toString()
-    .trim();
-} catch {
-  // Ignore
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
 }
 
-const versionData = {
-  version: shortSha,
-  built_at: new Date().toISOString(),
+let commit = null;
+let shortSha = null;
+try {
+  commit = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+  shortSha = execSync("git rev-parse --short HEAD", {
+    encoding: "utf8",
+  }).trim();
+} catch {
+  console.warn(
+    "WARNING: Could not determine git commit. Using non-deterministic fallback.",
+  );
+}
+
+let now = new Date();
+if (process.env.SOURCE_DATE_EPOCH) {
+  const epoch = parseInt(process.env.SOURCE_DATE_EPOCH, 10);
+  if (!isNaN(epoch)) {
+    now = new Date(epoch * 1000);
+  }
+}
+const epochMs = now.getTime();
+const builtAt = now.toISOString();
+
+// Canonical artifact ID (deterministic). Cannot depend on time.
+const version = shortSha || commit || "unknown";
+
+// CI run ID (volatile context)
+const buildId = shortSha ? `${shortSha}-${epochMs}` : `unknown-${epochMs}`;
+
+const payload = {
+  version,
+  build_id: buildId,
+  built_at: builtAt,
 };
 
-const args = process.argv.slice(2);
-const isClient = args.includes("--client");
-const isServer = args.includes("--server") || (!isClient && args.length === 0);
-
-if (isClient) {
-  if (!fs.existsSync(clientTargetDir)) {
-    fs.mkdirSync(clientTargetDir, { recursive: true });
-  }
-  fs.writeFileSync(
-    path.join(clientTargetDir, "buildVersion.json"),
-    JSON.stringify(versionData, null, 2) + "\n",
-  );
-  console.log(`Generated client build identity: ${shortSha}`);
+if (commit) {
+  payload.commit = commit;
 }
 
-if (isServer) {
-  if (!fs.existsSync(serverTargetDir)) {
-    fs.mkdirSync(serverTargetDir, { recursive: true });
-  }
-  fs.writeFileSync(
-    path.join(serverTargetDir, "version.json"),
-    JSON.stringify(versionData, null, 2) + "\n",
-  );
-  console.log(
-    `Generated build identity: ${shortSha} at ${path.join(serverTargetDir, "version.json")}`,
-  );
-}
+// Write the file
+fs.writeFileSync(targetFile, JSON.stringify(payload, null, 2), "utf8");
+
+console.log(`Generated build identity: ${version} at ${targetFile}`);

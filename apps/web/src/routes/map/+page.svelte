@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
-  import { env } from '$env/dynamic/public';
+  import { PUBLIC_ENABLE_TEST_MAP } from '$env/static/public';
   import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
@@ -109,7 +109,7 @@
   let map: MapLibreMap | null = null;
   let isLoading = true;
 
-  const shouldExposeTestMap = import.meta.env.DEV || env.PUBLIC_ENABLE_TEST_MAP === 'true';
+  const shouldExposeTestMap = import.meta.env.DEV || PUBLIC_ENABLE_TEST_MAP === 'true';
   let lastFocusedElement: HTMLElement | null = null;
   let showFilterTooltip = false;
   let filterTooltipTimeout: number | null = null;
