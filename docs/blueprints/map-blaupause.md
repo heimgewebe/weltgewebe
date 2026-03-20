@@ -26,7 +26,7 @@ Die Karte wird als Kerninfrastruktur und nicht als UI-Service betrachtet.
 Die Implementierung nutzt im lokalen Entwicklungsbetrieb nun standardmäßig die lokale
 souveräne Basemap-Pipeline (`local-sovereign`).
 
-Das Dev-Setup ist über Vite angebunden und verifiziert.
+Das Dev-Setup ist über Vite angebunden und im aktuellen Entwicklungsfluss verifiziert.
 
 Produktionshosting und die vollständige Betriebsreife des finalen PMTiles-Artefakts
 bleiben jedoch ausstehend und sind weiterhin offen.
