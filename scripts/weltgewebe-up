@@ -697,12 +697,12 @@ elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/inde
   echo "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
 fi
 
-# 6b. Basemap Artifact Guard (Phase 1 Fulfillment)
-# Ensure the PMTiles artifact exists for Heimserver Caddy to serve
+# 6b. Basemap Artifact Guard (best effort)
+# Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
 BASEMAP_ARTIFACT="build/basemap/basemap-hamburg.pmtiles"
 if [[ ! -f "$BASEMAP_ARTIFACT" ]]; then
     echo
-    echo ">> Basemap Artifact missing. Building sovereign PMTiles..."
+    echo ">> Basemap artifact missing. Attempting PMTiles build..."
     if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
         bash scripts/basemap/build-hamburg-pmtiles.sh
     else
