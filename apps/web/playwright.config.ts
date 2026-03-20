@@ -77,7 +77,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `pnpm run build:testmap && pnpm preview --host 0.0.0.0 --port ${PORT}`,
+          command: `PUBLIC_ENABLE_TEST_MAP=true pnpm build && pnpm preview --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 120_000,
           reuseExistingServer: !process.env.CI,
