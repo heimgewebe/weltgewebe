@@ -133,7 +133,7 @@ Der Übergang ist:
 
 - jederzeit möglich
 - explizit
-- nicht reversibel ohne Bedeutungsverlust
+- nicht ohne semantische Verschiebung reversibel
 
 ### Semantische Klarstellung
 
@@ -155,12 +155,14 @@ Der Account beginnt im Startzustand RoN.
 
 Alle starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
 
-Dabei gilt für RoN:
+Im Startzustand gilt für RoN:
 
-- kein Name
-- keine Personenangaben
-- keine Adresse
-- keine individuelle Verortung
+- noch kein Name hinterlegt
+- noch keine Personenangaben ergänzt
+- noch keine Adresse angegeben
+- noch keine individuelle Verortung
+
+Wird dies nicht geändert, wird RoN zum dauerhaften Modus.
 
 RoN ist damit:
 
