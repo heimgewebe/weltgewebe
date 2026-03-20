@@ -36,17 +36,15 @@ pub struct Location {
     pub lon: f64,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum Visibility {
-    Public,
-    Private,
-    Approximate,
-}
-
 /// Public view of an Account.
 /// STRICTLY does not contain the internal 'location' (residence).
-/// Only exposes 'public_pos' which is calculated based on visibility settings.
+/// Only exposes 'public_pos' which is calculated based on the account mode (verortet vs ron).
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "lowercase")]
+pub enum AccountMode {
+    Verortet,
+    Ron,
+}
 #[derive(Serialize, Clone, Debug)]
 pub struct AccountPublic {
     pub id: String,
@@ -61,9 +59,9 @@ pub struct AccountPublic {
     #[serde(skip_serializing_if = "Option::is_none", rename = "public_pos")]
     pub public_pos: Option<Location>,
 
-    pub visibility: Visibility,
+    pub mode: AccountMode,
     pub radius_m: u32,
-    pub ron_flag: bool,
+
     #[serde(default, skip_serializing)]
     pub disabled: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -151,53 +149,72 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
-    let location_obj = match v.get("location") {
-        Some(obj) => obj,
-        None => {
-            tracing::debug!(%id, "Skipping account with missing location");
-            return None;
-        }
-    };
+    let mut lat = None;
+    let mut lon = None;
 
-    let lon = location_obj
-        .get("lon")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
-    let lat = location_obj
-        .get("lat")
-        .and_then(|val| val.as_f64().or_else(|| val.as_str()?.parse().ok()));
-
-    let (lat, lon) = match (lat, lon) {
-        (Some(lat), Some(lon)) => (lat, lon),
-        _ => {
-            tracing::debug!(%id, "Skipping account with invalid lat/lon");
-            return None;
-        }
-    };
-
-    // Robust enum parsing with default fallback
-    let visibility_str = v
-        .get("visibility")
-        .and_then(|v| v.as_str())
-        .unwrap_or("public");
-
-    let visibility = match visibility_str {
-        "private" => Visibility::Private,
-        "approximate" => Visibility::Approximate,
-        "public" => Visibility::Public,
-        _ => {
-            // Warn about unknown visibility and default to Public
-            tracing::warn!(
-                ?id,
-                ?visibility_str,
-                "Unknown visibility, defaulting to Public"
-            );
-            Visibility::Public
-        }
-    };
+    if let Some(location_obj) = v.get("location") {
+        lon = location_obj.get("lon").and_then(|val| {
+            val.as_f64()
+                .or_else(|| val.as_str().and_then(|s| s.parse().ok()))
+        });
+        lat = location_obj.get("lat").and_then(|val| {
+            val.as_f64()
+                .or_else(|| val.as_str().and_then(|s| s.parse().ok()))
+        });
+    }
 
     let mut radius_m = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
-    let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+    // Legacy fallback mapping
+    let has_ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+    let legacy_visibility = v.get("visibility").and_then(|v| v.as_str());
+
+    let mode = v
+        .get("mode")
+        .and_then(|v| serde_json::from_value::<AccountMode>(v.clone()).ok())
+        .or_else(|| {
+            if kind == "ron" || has_ron_flag {
+                Some(AccountMode::Ron)
+            } else if let Some(vis) = legacy_visibility {
+                match vis {
+                    "private" => {
+                        // Legacy private records had an individual residence but were not projected publicly.
+                        // We map them to Verortet to preserve their ontological identity (they are not a collective RoN),
+                        // but we will suppress their public_pos calculation below.
+                        Some(AccountMode::Verortet)
+                    }
+                    "approximate" => {
+                        if radius_m == 0 {
+                            radius_m = 250;
+                        }
+                        Some(AccountMode::Verortet)
+                    }
+                    _ => Some(AccountMode::Verortet),
+                }
+            } else {
+                // If neither mode, ron_flag, nor visibility exists, default safely
+                if lat.is_some() && lon.is_some() {
+                    Some(AccountMode::Verortet)
+                } else {
+                    Some(AccountMode::Ron)
+                }
+            }
+        })
+        .unwrap_or(AccountMode::Ron);
+
+    // Validate requirements
+    let (lat, lon) = match mode {
+        AccountMode::Verortet => {
+            if let (Some(la), Some(lo)) = (lat, lon) {
+                (la, lo)
+            } else {
+                tracing::debug!(%id, "Skipping 'verortet' account missing exact location");
+                return None;
+            }
+        }
+        AccountMode::Ron => (0.0, 0.0), // RoN has no individual location
+    };
+
     let disabled = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
     let tags = v
@@ -210,18 +227,17 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         })
         .unwrap_or_default();
 
-    // Calculate public position based on visibility policy
-    let public_pos = match visibility {
-        Visibility::Private => None,
-        Visibility::Approximate => {
-            // If approximate is requested but radius is 0, enforce a default fuzziness
-            // to avoid "approximate but exact" semantic contradiction.
-            if radius_m == 0 {
-                radius_m = 250;
+    let public_pos = match mode {
+        AccountMode::Ron => None, // RoN accounts have no individual public position.
+        AccountMode::Verortet => {
+            // Legacy compatibility: If this was explicitly a "private" account,
+            // it retains its individual Verortet identity but its public position is suppressed.
+            if legacy_visibility == Some("private") {
+                None
+            } else {
+                Some(calculate_jittered_pos(lat, lon, radius_m, &id))
             }
-            Some(calculate_jittered_pos(lat, lon, radius_m, &id))
         }
-        Visibility::Public => Some(Location { lat, lon }),
     };
 
     Some(AccountPublic {
@@ -230,9 +246,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
         title,
         summary,
         public_pos,
-        visibility,
+        mode,
         radius_m,
-        ron_flag,
         disabled,
         tags,
     })
@@ -356,35 +371,35 @@ mod tests {
 
     #[test]
     fn test_guard_private_hides_public_pos() {
-        let input = json!({
+        let input = serde_json::json!({
             "id": "test-private",
             "type": "garnrolle",
             "title": "Private Test",
             "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "private"
+            "visibility": "private" // Legacy field
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        // GUARD: Private accounts have no public_pos
+        // GUARD: Legacy private accounts retain Verortet but suppress public_pos
+        assert_eq!(account.mode, AccountMode::Verortet);
         assert!(account.public_pos.is_none());
     }
 
     #[test]
-    fn test_guard_approximate_enforces_minimum_radius() {
-        let input = json!({
-            "id": "test-approx-zero",
+    fn test_guard_verortet_preserves_radius() {
+        let input = serde_json::json!({
+            "id": "test-verortet-zero",
             "type": "garnrolle",
-            "title": "Approx Zero",
+            "title": "Verortet Zero",
             "location": { "lat": 53.5, "lon": 10.0 },
-            "visibility": "approximate",
+            "mode": "verortet",
             "radius_m": 0
         });
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        // GUARD: Radius must be bumped to default (250) if 0
-        assert_eq!(account.radius_m, 250);
+        assert_eq!(account.radius_m, 0);
         assert!(account.public_pos.is_some());
     }
 
@@ -400,7 +415,7 @@ mod tests {
 
         let account = map_json_to_public_account(&input).expect("Mapping failed");
 
-        assert_eq!(account.visibility, Visibility::Public);
+        assert_eq!(account.mode, AccountMode::Verortet);
         assert!(account.public_pos.is_some());
     }
 
@@ -536,5 +551,71 @@ mod tests {
         }
 
         assert!(wrapped, "Jitter should be able to wrap around the dateline");
+    }
+}
+
+#[cfg(test)]
+mod additional_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_verortet_without_location_fails() {
+        let input = json!({
+            "id": "test-verortet-no-loc",
+            "type": "garnrolle",
+            "title": "No Loc",
+            "mode": "verortet",
+        });
+
+        let account = map_json_to_public_account(&input);
+        assert!(
+            account.is_none(),
+            "Verortet account without location must fail mapping"
+        );
+    }
+
+    #[test]
+    fn test_ron_without_location_succeeds() {
+        let input = serde_json::json!({
+            "id": "test-ron-no-loc",
+            "type": "ron",
+            "title": "No Loc Ron",
+            "mode": "ron",
+        });
+
+        let account =
+            map_json_to_public_account(&input).expect("Ron without location should succeed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
+    }
+
+    #[test]
+    fn test_legacy_type_ron_maps_correctly() {
+        let input = json!({
+            "id": "test-legacy-type-ron",
+            "type": "ron",
+            "title": "Legacy Type Ron",
+            // Notice: no "mode" field here
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
+    }
+
+    #[test]
+    fn test_legacy_ron_flag_maps_correctly() {
+        let input = json!({
+            "id": "test-legacy-ron-flag",
+            "type": "garnrolle",
+            "title": "Legacy Ron Flag",
+            "ron_flag": true
+            // Notice: no "mode" field here
+        });
+
+        let account = map_json_to_public_account(&input).expect("Mapping failed");
+        assert_eq!(account.mode, AccountMode::Ron);
+        assert!(account.public_pos.is_none());
     }
 }

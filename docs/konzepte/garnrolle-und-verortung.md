@@ -1,234 +1,398 @@
 ---
 id: konzepte.garnrolle-und-verortung
-title: "Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen"
+title: "Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen"
 doc_type: concept
 status: active
 canonicality: canonical
-summary: "Konzept der Garnrolle als persistentem Akteur, ihrer Verortung sowie der Beziehung zwischen Wohnsitz und emergentem Vertrauen im Weltgewebe."
+summary: "Kanonisches Konzept für Garnrolle, Verortung, Ungenauigkeitsradius und Rolle ohne Namen bei der Accounterstellung im Weltgewebe."
 ---
 
-# Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen
+# Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen
 
 ## 1. Dialektische Grundlegung
 
 ### These
 
-Vertrauen im Weltgewebe entsteht ausschließlich sozial:
+Vertrauen im Weltgewebe entsteht sozial:
 durch Zeit, Wiedererkennung und tatsächliche Nachbarschaftsinteraktion.
 Das System darf dieses Vertrauen weder berechnen noch simulieren.
 
 ### Antithese
 
-Ohne systemische Absicherung (Verifikation, Scores, Indikatoren) bleibt Vertrauen anfällig für Täuschung, Unsichtbarkeit und strukturelle Verzerrung.
+Ohne jede formale Struktur drohen Unklarheit, Täuschung und ein Mangel an lokaler Anschlussfähigkeit.
+Ein rein offenes System ohne Verortungslogik würde den nachbarschaftlichen Kern des Weltgewebes schwächen.
 
 ### Synthese
 
-Das Weltgewebe verzichtet bewusst auf Vertrauensberechnung und Verifikation.
-Stattdessen setzt es auf eine strukturelle Asymmetrie:
+Das Weltgewebe setzt weder auf Vertrauensbewertung noch auf Verifikationszwang,
+sondern auf eine einfache Identitäts- und Verortungsordnung:
 
-> Korrekte Verortung erzeugt Nutzen.
-> Inkonsistente oder fehlende Verortung erzeugt keinen vergleichbaren Nutzen.
+- genaue Adresse angegeben → verortete Garnrolle
+- keine Personenangaben gemacht → Zuordnung zur Rolle ohne Namen
+- Ungenauigkeitsradius → steuert nur die öffentliche Darstellung
 
-Damit wird Vertrauen nicht erzwungen, sondern ökologisch begünstigt.
+So bleibt die Logik einfach, sichtbar und sozial verständlich.
 
-## 2. Ontologischer Kern
+---
+
+## 2. Begriffe
 
 ### Garnrolle
 
-Eine Garnrolle ist ein persistenter Akteur im Weltgewebe.
+**Garnrolle** ist die persistente Rolle eines Akteurs im Weltgewebe.
+
+Im Weltgewebe ist die Garnrolle die Spule, von der Fäden ausgehen.
 
 Eigenschaften:
 
-* stabil wiedererkennbar
-* kontextuell verortbar
-* optional identifizierbar
+- persistent
+- wiedererkennbar
+- handlungsfähig
+- entweder verortet oder der Rolle ohne Namen zugeordnet
 
-### Wohnsitz-Korrelation
+---
+
+### Verortung
+
+**Verortung** bezeichnet die Bindung einer Garnrolle an einen konkreten Wohnsitz.
+
+Im Weltgewebe bedeutet Verortung:
+> Eine Garnrolle ist intern an einen realen Wohnsitz gebunden.
+
+---
+
+### Rolle ohne Namen (RoN)
+
+**RoN** bedeutet **Rolle ohne Namen**.
+
+RoN ist kein bloßer Tarnmodus, sondern ein eigenständiger Identitätsmodus für Nutzer,
+die keine Personenangaben machen.
+
+---
+
+### Ungenauigkeitsradius
+
+**Ungenauigkeitsradius** bezeichnet den Radius in Metern, innerhalb dessen die öffentliche
+Position einer verorteten Garnrolle angezeigt wird.
+
+Er betrifft nur die **öffentliche Anzeige**, nicht die interne Verortung.
+
+---
+
+## 3. Ontologischer Kern
 
 Grundsatz:
 
-> Eine Garnrolle soll mit dem tatsächlichen Wohnsitz korrelieren.
+> Eine Garnrolle ist entweder
+>
+> 1. an einen konkreten Wohnsitz verortet
+> oder
+> 2. der Rolle ohne Namen zugeordnet.
 
-Diese Korrelation ist kein Zwang, sondern ein struktureller Vorteil:
+Das Weltgewebe kennt damit zwei klare Grundmodi:
 
-* hohe Korrelation → hohe Anschlussfähigkeit
-* geringe oder keine Korrelation → geringe Anschlussfähigkeit
+- **verortete Garnrolle**
+- **Rolle ohne Namen**
 
-## 3. Architekturprinzip
+Teilmodelle mit halber Adressschärfe werden bewusst verworfen.
 
-### Kein Verifikationssystem
+---
 
-Das Weltgewebe implementiert:
+## 4. Startzustand und Übergang (kanonisch)
 
-* ❌ keine Identitätsprüfung
-* ❌ keine Adressvalidierung
-* ❌ keine algorithmische Vertrauensbewertung
+Alle neu erstellten Accounts beginnen im System im **Startmodus**.
 
-Begründung:
+Technisch entspricht dieser dem Modus **Rolle ohne Namen (RoN)**.
 
-* Verifikation erzeugt Machtzentren
-* Bewertung erzeugt Spielbarkeit
-* beides widerspricht der Weltweberei
+Wichtig:
+Dieser Zustand ist **keine bewusste Entscheidung**, sondern ein
+vorläufiger, sicherer Initialzustand ohne personenbezogene Angaben.
 
-### Stattdessen: Nutzen-Asymmetrie
+Der Startmodus dient dazu:
 
-Das System erzeugt folgende Dynamik:
+- Einstiegshürden zu minimieren
+- sofortige Teilnahme zu ermöglichen
+- keine impliziten Entscheidungen zu erzwingen
 
-| Verhalten | Systemwirkung |
-|---|---|
-| Garnrolle nahe Wohnsitz | hohe lokale Sichtbarkeit |
-| Garnrolle fern vom Wohnsitz | geringe lokale Relevanz |
-| konsistente Präsenz | steigende Wiedererkennbarkeit |
-| inkonsistente Präsenz | sinkende Anschlussfähigkeit |
+### Übergang zu verorteter Garnrolle
 
-## 4. Accounterstellung und Verortungsoptionen
+Die Erstellung einer verorteten Garnrolle ist ein
+**bewusster Transformationsschritt**.
 
-Bei der Erstellung einer Garnrolle bestehen zwei grundlegende Wege:
+Er erfordert zwingend:
 
-### 4.1 Verortete Garnrolle
+- Personenangaben
+- eine genaue Adresse
 
-Der Nutzer kann einen Wohnsitz angeben.
+Optional:
 
-Optionen:
+- Ungenauigkeitsradius für die öffentliche Anzeige
 
-* genaue Adresse
-* Adresse ohne Hausnummer
-* nur Straße
-* nur Stadtteil
-* freier Verzicht auf Detailtiefe
+Der Übergang ist:
 
-Zusätzlich:
+- jederzeit möglich
+- explizit
+- nicht ohne semantische Verschiebung reversibel
 
-* optionaler Ungenauigkeitsradius
+### Semantische Klarstellung
 
-Prinzip:
+RoN ist:
 
-> Sichtbarkeit ist abstufbar, Verortung bleibt kontextuell wirksam.
+- kein „anonymer Modus“
+- keine reduzierte Version der verorteten Garnrolle
 
-### 4.2 Rolle ohne Namen (RoN)
+RoN ist eine eigenständige Rolle im System ohne individuelle räumliche Verankerung.
 
-Alternativ kann vollständig auf Angaben verzichtet werden:
+---
 
-* kein Name
-* kein Wohnsitz
-* keine Positionsangabe
+## 5. Start und Ergänzung von Angaben
 
-In diesem Fall:
+Der Account beginnt im Startzustand RoN.
 
-> Die Identität wird Teil der Rolle ohne Namen
+### 5.1 Rolle ohne Namen (RoN) als Startzustand
 
-Eigenschaften der RoN:
+Alle neu erstellten Accounts starten in der Rolle ohne Namen. Wer keine Verortung ergänzt, bleibt dauerhaft dort.
 
-* existiert im Zentrum jedes Stadtteils
-* bündelt nicht-verortete Identitäten
-* ermöglicht Teilnahme ohne Offenlegung
+Im Startzustand gilt für RoN:
 
-## 5. Mechanismus der Vertrauensbildung
+- noch kein Name hinterlegt
+- noch keine Personenangaben ergänzt
+- noch keine Adresse angegeben
+- noch keine individuelle Verortung
 
-Vertrauen entsteht ausschließlich durch:
+Wird dies nicht geändert, wird RoN zum dauerhaften Modus.
 
-1. Ko-Präsenz: wiederholte Sichtbarkeit im gleichen Raum
-2. Interaktion: Beteiligung an gemeinsamen Kontexten
-3. Zeit: Stabilität über längere Dauer
+RoN ist damit:
 
-Das System selbst:
+- der kanonische Startmodus
+- ein valider Dauerzustand, keine Strafe
+- keine verdeckte Anonymisierung
+- keine bloße nachträgliche Privacy-Einstellung
 
-> bewertet nichts, speichert kein Vertrauen, berechnet keine Reputation
+---
 
-## 6. Sichtbarkeit vs. Verortung
+### 5.2 Übergang zur verorteten Garnrolle
+
+Wenn Personen- und Adressangaben ergänzt werden, erfolgt ein expliziter Übergang zur verorteten Garnrolle.
+
+Minimal dafür erforderlich:
+
+- Personenangaben
+- genaue Adresse
+
+Zusätzlich einstellbar:
+
+- Ungenauigkeitsradius
+
+Default:
+
+- Ungenauigkeitsradius = 0 m
+
+Bedeutung:
+
+- intern: exakte Verortung am Wohnsitz
+- öffentlich: Anzeige gemäß Ungenauigkeitsradius
+
+---
+
+## 6. Anzeige-Logik
+
+Die Anzeige folgt aus dem aktuellen Modus der Garnrolle.
+
+### Fall A: Verortung vorgenommen
+
+Ergebnis:
+
+- verortete Garnrolle
+- öffentliche Anzeige:
+  - exakt bei 0 m
+  - ungenauer bei Radius > 0 m
+
+### Fall B: Keine Verortung vorgenommen (im RoN-Startmodus verblieben)
+
+Ergebnis:
+
+- Verbleib in der Rolle ohne Namen
+- öffentliche Anzeige:
+  - nicht individuelle Adresse
+  - stattdessen Rolle ohne Namen. Keine individuelle öffentliche Verortung, sondern kollektive Stellvertretung (Weben von der RoN des Stadtteils aus).
+
+---
+
+## 7. Sichtbarkeit und Wahrheit
+
+### 7.1 Kanonisches Modell vs. Legacy-Kompatibilität
+
+Das oben beschriebene Zwei-Modi-Modell (verortet vs. RoN) ist der kanonische Zielzustand.
+Für bestehende Datensätze aus dem alten `visibility`-Modell gilt eine sichere Kompatibilitätsregel:
+Alte `private`-Accounts werden **nicht** ontologisch zu RoN umgedeutet. Sie behalten ihre individuelle Garnrollen-Semantik und interne Verortung (mode = `verortet`), jedoch wird ihre öffentliche individuelle Position strikt unterdrückt (`public_pos = None`), um ihren alten Privatsphäre-Wunsch zu respektieren, bis der Nutzer explizit in das neue Modell migriert.
+
 
 Zentrale Trennung:
 
 | Ebene | Bedeutung |
 |---|---|
-| Verortung | tatsächliche Platzierung der Garnrolle |
-| Sichtbarkeit | dargestellte Position oder Abstraktion |
+| interne Verortung | exakte Wohnsitzbindung einer verorteten Garnrolle |
+| öffentliche Anzeige | sichtbare Position gemäß Ungenauigkeitsradius oder RoN-Zentrum |
 
 Prinzip:
 
-> Verortung ist wirksam.
-> Sichtbarkeit ist gestaltbar.
+> Die Wahrheit der Verortung ist intern.
+> Die Sichtbarkeit ist öffentlich gestaltet.
 
-## 7. Systemverhalten bei Inkonsistenz
+Für RoN gilt:
 
-Grundsatz:
+- keine individuelle interne Wohnsitzverortung im Sinne einer öffentlichen Rolle
+- öffentliche Darstellung über die Rolle ohne Namen
 
-> Inkonsistenz wird nicht bestraft – sie reduziert lediglich den Nutzen.
+---
 
-Konsequenzen:
+## 8. Vertrauen
 
-* keine Sanktionen
-* keine Kennzeichnung
-* keine algorithmische Erkennung
+Vertrauen ist kein Systemwert.
 
-Stattdessen:
+Es entsteht durch:
 
-* geringere lokale Vernetzung
-* reduzierte soziale Resonanz
+1. Wiedererkennbarkeit
+2. Ko-Präsenz
+3. Interaktion
+4. Zeit
 
-## 8. Alternative Sinnachse (Reflexion)
+Das Weltgewebe:
 
-Naive Zielannahme:
+- berechnet kein Vertrauen
+- speichert keine Reputation
+- vergibt keine Scores
 
-> „Menschen müssen korrekt verifiziert sein"
+Stattdessen erzeugt es eine soziale Asymmetrie:
 
-Weltgewebe-Transformation:
+- verortete Garnrollen haben höhere lokale Anschlussfähigkeit
+- RoN erlaubt Teilnahme ohne individuelle Verortung, aber mit geringerer persönlicher Wiedererkennbarkeit
 
-> „Menschen wirken dort, wo sie erscheinen und wiedererkannt werden"
+Diese Differenz ist keine Sanktion, sondern Folge der gewählten Sichtbarkeit.
 
-→ Wahrheit wird nicht geprüft, sondern durch Kontext erfahrbar
+---
 
-## 9. Risiken und Grenzen
+## 9. Architekturprinzip
+
+Das Weltgewebe implementiert bewusst nicht:
+
+- keine algorithmische Vertrauensbewertung
+- keine soziale Punktelogik
+- keine automatische Verdachtslogik
+- keine Pflichtverifikation als Grundvoraussetzung
+
+Es implementiert stattdessen:
+
+- klare Modusunterscheidung
+- klare Anzeige-Logik
+- klare soziale Konsequenzen ohne Systemstrafe
+
+---
+
+## 10. Risiken und Grenzen
 
 ### Risiken
 
-* Täuschung bleibt möglich
-* geringe Interaktion verhindert Vertrauensbildung
-* periphere Rollen bleiben unsichtbar
+- Täuschung bleibt möglich
+- RoN kann persönliche Wiedererkennbarkeit reduzieren
+- geringe Aktivität verhindert Vertrauensbildung unabhängig vom Modell
 
 ### Nutzen
 
-* keine Manipulierbarkeit durch Scores
-* keine Machtkonzentration durch Verifikation
-* hohe soziale Authentizität
+- einfache Logik
+- klare Accounterstellung
+- keine versteckte Bewertung
+- Wahrung des nachbarschaftlichen Kerns
+- Privacy ohne Ontologiebruch
 
-## 10. Essenz
+---
 
-* Vertrauen ist kein Feature
-* Vertrauen ist kein Datenpunkt
-* Vertrauen ist ein emergentes Phänomen
+## 11. Implikationen für UI und API
 
-Das Weltgewebe implementiert daher:
+### UI
 
-> keine Kontrolle von Vertrauen,
-> sondern Bedingungen für dessen Entstehung
+Die UI darf keinen Zwei-Wege-Onboarding-Screen erzwingen.
 
-## 11. Unsicherheitsgrad
+- Der Startzustand (RoN) wird sichtbar kommuniziert.
+- Die Verortung (Eingabe von Personenangaben, genauer Adresse und Ungenauigkeitsradius) wird als bewusster späterer Transformationsschritt angeboten.
 
-0.17
+Die UI darf RoN nicht mehr primär als bloßen Privacy-Toggle erklären, sondern als den sicheren Initialzustand.
+
+---
+
+### API
+
+Die API muss diese Unterscheidung ausdrücken können:
+
+- verortete Garnrolle
+- RoN-Zuordnung
+
+Der Ungenauigkeitsradius bleibt ein eigener Parameter der öffentlichen Anzeige.
+
+---
+
+## 12. Basale Contract-Folgen
+
+Der Contract soll basal bleiben.
+
+Er muss nur die Kernunterscheidung tragen:
+
+- ob eine Rolle verortet ist
+- ob sie der Rolle ohne Namen zugeordnet ist
+- welcher Ungenauigkeitsradius für die öffentliche Anzeige gilt
+
+Nicht in den basalen Contract gehören:
+
+- Vertrauenswert
+- Bewertungslogik
+- komplexe Zwischenstufen der Adressgranularität
+
+---
+
+## 13. Essenz
+
+Das Weltgewebe kennt zwei klare Modi:
+
+- **verortete Garnrolle**
+- **Rolle ohne Namen**
+
+Alle neu erstellten Accounts beginnen in der Rolle ohne Namen. Die Verortung ist ein expliziter Übergang durch Ergänzung der Angaben.
+
+Der Ungenauigkeitsradius verfeinert nur die öffentliche Anzeige verorteter Garnrollen.
+Vertrauen entsteht nicht durch das System, sondern durch die Nachbarschaft.
+
+---
+
+## 14. Unsicherheitsgrad
+
+0.12
 
 Ursachen:
 
-* reale Nutzungsdynamik unbekannt
-* Wechselwirkung zwischen RoN und verorteten Rollen nicht empirisch geprüft
+- empirische soziale Dynamiken bleiben offen
+- spätere technische Umsetzung kann neue Randfälle sichtbar machen
 
-## 12. Interpolationsgrad
+---
 
-0.22
+## 15. Interpolationsgrad
+
+0.14
 
 Annahmen:
 
-* soziale Effekte aus Strukturprinzipien abgeleitet
-* RoN als kollektiver Identitätsraum interpretiert
+- RoN wird als eigenständiger Einstiegsmodus kanonisiert
+- Stadtteilzentrum bleibt die öffentliche Raumlogik für RoN
 
-## 13. Schlussbemerkung (ironisch)
+---
 
-Das Weltgewebe erlaubt zwei Wege:
+## 16. Schlussbemerkung
 
-* „Ich bin hier"
-* oder
-* „Ich bin irgendwo hier"
+Das Weltgewebe fragt nicht:
+„Wie vertrauenswürdig bist du?“
 
-Und vertraut darauf,
-dass die Nachbarschaft den Unterschied bemerkt –
-lange bevor ein Algorithmus überhaupt auf die Idee käme, danach zu fragen.
+Es bietet an:
+„Du kannst hier als verortete Person erscheinen, oder sicher in der Rolle ohne Namen bleiben.“
+
+Und die Nachbarschaft beantwortet den Rest mit der einzigen Währung, die dafür taugt:
+Zeit.

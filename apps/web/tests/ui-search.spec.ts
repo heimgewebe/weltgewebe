@@ -50,7 +50,7 @@ test.describe("Search mode", () => {
     );
 
     // Wait until map markers render (using generic check to avoid flaky absolute counts from fixtures)
-    await expect(page.locator('.map-marker').first()).toBeVisible();
+    await expect(page.locator(".map-marker").first()).toBeVisible();
 
     // Click search button
     const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
@@ -141,7 +141,7 @@ test.describe("Search mode", () => {
     );
 
     // Wait until map markers render
-    await expect(page.locator('.map-marker').first()).toBeVisible();
+    await expect(page.locator(".map-marker").first()).toBeVisible();
 
     const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
     await searchBtn.click();

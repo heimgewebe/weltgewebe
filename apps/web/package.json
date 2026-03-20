@@ -10,15 +10,13 @@
     }
   },
   "scripts": {
-    "dev": "vite dev --host",
+    "dev": "node scripts/generate-version.js --client && vite dev --host",
     "build": "cross-env PUBLIC_ENABLE_TEST_MAP=false vite build",
-    "build:testmap": "cross-env PUBLIC_ENABLE_TEST_MAP=true vite build",
-    "postbuild": "node scripts/generate-version.js",
+    "prebuild": "cross-env PUBLIC_ENABLE_TEST_MAP=false pnpm run sync",
+    "postbuild": "node scripts/generate-version.js --server",
     "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",
-    "prebuild": "cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-kit sync",
-    "prebuild:testmap": "cross-env PUBLIC_ENABLE_TEST_MAP=true svelte-kit sync",
     "precheck": "pnpm run sync",
     "check": "cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-check --tsconfig ./tsconfig.json",
     "precheck:ci": "pnpm run sync",
@@ -31,10 +29,12 @@
     "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
-    "sync": "cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-kit sync",
+    "sync": "node scripts/generate-version.js --client && cross-env PUBLIC_ENABLE_TEST_MAP=false svelte-kit sync",
     "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
-    "dev:cs": "vite dev --host 0.0.0.0 --port 5173",
-    "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
+    "dev:cs": "node scripts/generate-version.js --client && vite dev --host 0.0.0.0 --port 5173",
+    "preview:cs": "vite preview --host 0.0.0.0 --port 4173",
+    "build:testmap": "cross-env PUBLIC_ENABLE_TEST_MAP=true vite build",
+    "prebuild:testmap": "cross-env PUBLIC_ENABLE_TEST_MAP=true pnpm run sync"
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
@@ -58,7 +58,8 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
-    "maplibre-gl": "4.7.1"
+    "maplibre-gl": "4.7.1",
+    "pmtiles": "^4.4.0"
   },
   "engines": {
     "node": ">=20.19.0"

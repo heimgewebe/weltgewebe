@@ -420,14 +420,14 @@ Referenzen:
 
 ### Phase F — Kontrollierte Selbstaktualisierung (PR 3)
 
-- [ ] Lokale Build-ID im Client vorhalten.
-- [ ] Frischen Server-Stand via `version.json` holen.
-- [ ] Vergleich bei App-Start.
-- [ ] Vergleich bei `visibilitychange`.
-- [ ] Vergleich bei `pageshow` / bfcache.
-- [ ] Hinweis bei neuer Version anzeigen.
-- [ ] Manueller Reload-Button.
-- [ ] Tests für same-build / changed-build / fetch-fail.
+- [x] Lokale Build-ID im Client vorhalten.
+- [x] Frischen Server-Stand via `version.json` holen.
+- [x] Vergleich bei App-Start.
+- [x] Vergleich bei `visibilitychange`.
+- [x] Vergleich bei `pageshow` / bfcache.
+- [x] Hinweis bei neuer Version anzeigen.
+- [x] Manueller Reload-Button.
+- [x] Tests für same-build / changed-build / fetch-fail.
 
 **Stop-Kriterium:** Neue Deploys werden erkannt, aber nicht magisch erzwungen.
 

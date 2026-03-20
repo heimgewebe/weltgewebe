@@ -15,7 +15,33 @@ import {
  * Intercepts /api/** requests and returns demo data or empty responses.
  * This prevents ECONNREFUSED errors from the Vite proxy when backend is missing.
  */
+import fs from "node:fs";
+import path from "node:path";
+
 export async function mockApiResponses(page: Page): Promise<void> {
+  // intercept version check so tests don't randomly show an UpdateBanner overlay
+  await page.route("**/_app/version.json", async (route) => {
+    let localVersion = "unknown";
+    try {
+      const versionFilePath = path.resolve(
+        process.cwd(),
+        "src/lib/generated/buildVersion.json",
+      );
+      if (fs.existsSync(versionFilePath)) {
+        const data = JSON.parse(fs.readFileSync(versionFilePath, "utf8"));
+        localVersion = data.version;
+      }
+    } catch {
+      // ignore
+    }
+
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ version: localVersion }),
+    });
+  });
+
   // intercept MapLibre styling which requires an internet connection in playwright tests
   await page.route(
     "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",

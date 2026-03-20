@@ -14,7 +14,7 @@ use weltgewebe_api::{
     auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
     config::AppConfig,
     routes::{
-        accounts::{AccountInternal, AccountPublic, Visibility},
+        accounts::{AccountInternal, AccountPublic},
         api_router,
         auth::{GENERIC_LOGIN_MSG, NONCE_COOKIE_NAME, SESSION_COOKIE_NAME},
     },
@@ -84,9 +84,9 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "User One".to_string(),
             summary: Some("Summary 1".to_string()),
             public_pos: None,
-            visibility: Visibility::Public,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
-            ron_flag: false,
+
             disabled: false,
             tags: vec![],
         },
@@ -102,9 +102,9 @@ fn test_state_with_accounts() -> Result<ApiState> {
             title: "Admin One".to_string(),
             summary: None,
             public_pos: None,
-            visibility: Visibility::Public,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
-            ron_flag: false,
+
             disabled: false,
             tags: vec![],
         },
@@ -267,9 +267,9 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
             title: "User".to_string(),
             summary: None,
             public_pos: None,
-            visibility: Visibility::Public,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
             radius_m: 0,
-            ron_flag: false,
+
             disabled: false,
             tags: vec![],
         },
@@ -865,7 +865,14 @@ async fn request_login_provisioning_enabled_success() -> Result<()> {
         assert!(found.is_some());
         let acc = found.unwrap();
         assert_eq!(acc.role, Role::Gast);
-        assert_eq!(acc.public.title, "allowed");
+        // Verify auto-provisioning privacy invariants
+        assert_eq!(acc.public.title, "Rolle ohne Namen");
+        assert_eq!(acc.public.kind, "ron");
+        assert_eq!(
+            acc.public.mode,
+            weltgewebe_api::routes::accounts::AccountMode::Ron
+        );
+        assert!(acc.public.public_pos.is_none());
     }
 
     // Should have created a token

@@ -41,7 +41,7 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
 
 1. **Revalidating Routing (HTML/Root)**: Core HTML entrypoints (e.g. `index.html`, `/map`) strictly use `Cache-Control: no-cache, must-revalidate` to ensure browsers always check for the latest application shell upon load.
 2. **Aggressive Caching (Immutable Assets)**: Hashed internal assets located under `/_app/immutable/` are served with `Cache-Control: public, max-age=31536000, immutable`.
-3. **Build Diagnosis**: When present, `/_app/version.json` provides a machine-readable build identifier capable of diagnosing client-vs-server build discrepancies.
+3. **Build Diagnosis**: `/_app/version.json` is a hard requirement for deployment and must be served with `Cache-Control: no-store`. It provides a machine-readable build identifier capable of diagnosing client-vs-server build discrepancies.
    - **Client-visible diagnostics**: The technical build identifier is also shown directly in the Settings UI.
    - **Primary use**: Enables immediate comparison of delivered versions across clients (for example, Browser A vs. Browser B).
 

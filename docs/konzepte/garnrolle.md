@@ -2,72 +2,19 @@
 id: konzepte.garnrolle
 title: Garnrolle
 doc_type: reference
-status: active
+status: deprecated
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Veraltetes Dokument. Bitte docs/konzepte/garnrolle-und-verortung.md nutzen.
 ---
-# Garnrolle (Konzept)
+# Garnrolle (Veraltet)
 
-Die **Garnrolle** repräsentiert das Konto (Account) eines Akteurs im Weltgewebe.
-Sie ist der Ursprung aller Fäden (Kanten), die der Akteur spinnt.
+> **Hinweis:** Dieses Dokument ist **veraltet**. Das Modell wurde grundlegend vereinfacht.
+> Bitte konsumiere ausschließlich das neue kanonische Konzept unter:
+> [Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen](./garnrolle-und-verortung.md)
 
-## Definition
+Die alte Logik von `visibility` (public/private/approximate) und dem nachträglichen `ron_flag` (Rolle ohne Namen als Toggle) wurde durch ein striktes Zwei-Modi-Modell abgelöst:
 
-> **Garnrolle** = Konto + private Einstellungen + öffentliche Profil-/Ressourceninfos +
-> Verortung am Wohnsitz.
+- **Verortete Garnrolle** (mit exakter interner Adresse und einem Ungenauigkeitsradius für die öffentliche Anzeige)
+- **Rolle ohne Namen (RoN)** (kanonischer Einstiegsmodus ohne Personenangaben und ohne individuelle Verortung/`location`)
 
-Semantisch ist sie die "Spule, auf der der Faden sitzt".
-
-## Privatsphäre & Verortung
-
-Da die Garnrolle fest am Wohnsitz verankert ist (**Residence-Lock**),
-gibt es strenge Mechanismen zum Schutz der Privatsphäre.
-
-### Default: Exakt
-
-Standardmäßig wird die Position **exakt** angezeigt.
-
-### Opt-in: Ungenauigkeit (Radius)
-
-Der Nutzer kann einen **Ungenauigkeitsradius** (in Metern) definieren.
-
-* **Radius = 0m**: Exakte Anzeige (Standard).
-* **Radius > 0m**: Die öffentliche Anzeige (`public_pos`) ist ein zufälliger,
-  aber stabiler Punkt innerhalb dieses Radius.
-
-### RoN (Rolle ohne Namen)
-
-Optional kann die **RoN-Flag** gesetzt werden, um die Identität zu verschleiern
-(Anonymisierung).
-
-## Technische Umsetzung
-
-### Views
-
-Es wird strikt zwischen interner und öffentlicher Sicht getrennt:
-
-* **Internal View (`roles_view`)**: Kennt die exakte `location` (Wohnsitz).
-  Nur für den Nutzer selbst sichtbar.
-* **Public View (`public_role_view`)**: Enthält **nie** die exakte `location`,
-  sondern nur die `public_pos`.
-  * `public_pos` wird aus `location` + `radius_m` berechnet (Jitter).
-  * Alle öffentlichen Fäden starten optisch an der `public_pos`.
-
-### Default-Policy bei ungültigen Visibility-Werten
-
-Wenn ein Account eine unbekannte `visibility` angibt (z. B. durch alte Clients,
-Datenfehler oder Migrationen), fällt die Public-View **bewusst auf `public` zurück**
-und schreibt eine Warnung ins Log.
-
-* **Begründung:** Im Weltgewebe ist „exakt sichtbar" ein legitimer Standard
-  (Opt-in zur Ungenauigkeit existiert). Ein fail-closed Default (`private`) würde im
-  Fehlerfall Accounts unsichtbar machen und damit Karte, Ressourcen und Fäden
-  „verschwinden lassen", ohne dass der Nutzer es versteht.
-* **Alternative (fail-closed):** Für Umgebungen mit höherem Sicherheitsbedarf
-  kann diese Policy auf `private` umgestellt werden (unknown → private), um im
-  Zweifel nichts zu zeigen. Diese Entscheidung ist eine bewusste Policy-Frage,
-  nicht ein technischer Zufall.
-
-### Normative Quelle
-
-Siehe [ADR-0003: Privacy: Ungenauigkeitsradius & RoN](../adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md).
+Für die aktuellen technischen Schnittstellen und Entscheidungen siehe [ADR-0003](../adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md).
