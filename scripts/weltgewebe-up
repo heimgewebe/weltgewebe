@@ -683,7 +683,8 @@ else
 fi
 
 # Heuristic: detect known external edge gateway container used on heimserver.
-# This is runtime-aware, but still naming-dependent.
+# This is runtime-aware, but purely naming-dependent and best-effort.
+# The canonical, explicit configuration remains DEPLOY_FRONTEND_MODE=edge.
 EDGE_RUNTIME_DETECTED=0
 if docker ps --format '{{.Names}}' | grep -q "^edge-caddy$"; then
   EDGE_RUNTIME_DETECTED=1
@@ -692,8 +693,8 @@ fi
 echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
 
 if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
-  echo "[WARN] edge-caddy runtime detected while DEPLOY_FRONTEND_MODE=auto"
-  echo "[WARN] consider setting DEPLOY_FRONTEND_MODE=edge for explicit frontend delivery semantics"
+  echo "[WARN] edge-caddy runtime heuristically detected while DEPLOY_FRONTEND_MODE=auto"
+  echo "[WARN] best-effort edge refresh path active. Consider setting DEPLOY_FRONTEND_MODE=edge for canonical delivery semantics."
 fi
 
 # 6b. Frontend Build

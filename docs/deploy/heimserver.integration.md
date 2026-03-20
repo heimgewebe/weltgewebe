@@ -64,8 +64,8 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 
 Zur Steuerung der Frontend-Relevanz und der Edge-Aktualisierung wertet das Deploy-Skript die Variable `DEPLOY_FRONTEND_MODE` aus. Zulässige Werte:
 
-* **`auto` (Default):** Nutzt eine Heuristik. Explizites `BUILD_WEB=no` deaktiviert die Frontend-Relevanz vorrangig. Andernfalls gilt das Frontend als deploy-relevant (`REQUIRE_FRONTEND=1`), wenn der interne Caddy aktiv ist oder das Verzeichnis `apps/web` existiert. Zusätzlich wird heuristisch geprüft, ob ein externer Container namens `edge-caddy` läuft; ist dies der Fall, werden Edge-Aktualisierungs-Checks ausgelöst (mit Warnung zur expliziten Konfiguration).
-* **`edge`:** Explizite Deklaration der externen Liefertopologie. Das Frontend ist relevant, und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend ausgeführt.
+* **`auto` (Default):** Nutzt eine Heuristik. Explizites `BUILD_WEB=no` deaktiviert die Frontend-Relevanz vorrangig. Andernfalls gilt das Frontend als deploy-relevant (`REQUIRE_FRONTEND=1`), wenn der interne Caddy aktiv ist oder das Verzeichnis `apps/web` existiert. Zusätzlich wird heuristisch (naming-dependent) geprüft, ob ein externer Container namens `edge-caddy` läuft; ist dies der Fall, wird ein best-effort Edge-Aktualisierungs-Pfad ausgelöst (mit Warnung zur expliziten Konfiguration).
+* **`edge`:** Explizite, bevorzugte Deklaration der externen Liefertopologie. Das Frontend ist relevant, und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend und normativ ausgeführt.
 * **`internal`:** Die UI wird durch den Stack-internen Caddy ausgeliefert. Das Frontend ist relevant, Edge-Checks werden übersprungen.
 * **`off`:** Das Frontend ist für diesen Deploy irrelevant (z. B. reine API-Umgebung). Frontend-Build und Edge-Checks werden übersprungen.
 
