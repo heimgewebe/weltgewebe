@@ -753,11 +753,12 @@ echo ">> Basemap Artifact Guard:"
 
 log_basemap_status() {
     local prefix="$1"
-    if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
-        local pmtiles_count
-        pmtiles_count=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | wc -l)
-        local first_pmtiles
-        first_pmtiles=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | head -n 1)
+    local pmtiles_files=()
+    mapfile -t pmtiles_files < <(compgen -G "$BASEMAP_DIR/*.pmtiles" || true)
+
+    local pmtiles_count="${#pmtiles_files[@]}"
+    if (( pmtiles_count > 0 )); then
+        local first_pmtiles="${pmtiles_files[0]}"
         echo "   [✓] ${prefix}. Found ${pmtiles_count} PMTiles artifact(s) in ${BASEMAP_DIR}."
         echo "       -> e.g. ${first_pmtiles}"
     else
