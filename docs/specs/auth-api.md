@@ -4,6 +4,7 @@ title: Auth API Spec
 doc_type: reference
 status: active
 canonicality: derived
+summary: Spezifiziert Endpunkte, Token-Typen, Geräteverwaltung, Passkeys und Step-up Auth für das Auth-System.
 ---
 
 # Auth API Spec
@@ -26,12 +27,14 @@ Das Auth-System basiert auf:
 ## Token-Typen
 
 - `magic_link_token`: Einmal-Token für den Login via E-Mail.
-- `session_access_token`: Kurzlebiger Access-Token, bevorzugt über einen sicheren HttpOnly-Mechanismus transportiert, für API-Anfragen.
+- `session_access_token`: Kurzlebiger Access-Token für API-Anfragen.
+  Wird bevorzugt über einen sicheren HttpOnly-Mechanismus transportiert.
 - `session_refresh_token`: Langlebiger Token für die Erneuerung der Session ohne erneuten Login.
 
 ## Fehlercodes
 
-Bei Validierungs- oder Status-Fehlern antwortet die API mit einem der folgenden Codes (z.B. als Teil eines 400, 401 oder 403 Responses):
+Bei Validierungs- oder Status-Fehlern antwortet die API mit einem der folgenden Codes
+(z.B. als Teil eines 400, 401 oder 403 Responses):
 
 - `TOKEN_EXPIRED`: Der übermittelte Token ist nicht mehr gültig.
 - `TOKEN_INVALID`: Der Token ist strukturell falsch, nicht (mehr) in der DB oder anderweitig ungültig.
@@ -116,7 +119,8 @@ Verhalten:
 
 - Ein erfolgreicher Refresh generiert einen neuen `session_access_token` und rotiert den `session_refresh_token`.
 - Der alte `session_refresh_token` wird serverseitig invalidiert.
-- Bei einem ungültigen oder abgelaufenen Refresh-Token antwortet die API mit `401 Unauthorized` und dem Fehlercode `SESSION_EXPIRED`.
+- Bei einem ungültigen oder abgelaufenen Refresh-Token antwortet die API mit `401 Unauthorized`.
+  Der Payload enthält dabei den Fehlercode `SESSION_EXPIRED`.
 
 ### Logout
 
@@ -196,6 +200,7 @@ Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 - `POST /auth/logout-all` (alle Sessions widerrufen)
 
 API Response bei fehlender Berechtigung für diese Endpunkte:
+
 `403 Forbidden` mit Payload: `{"error": "STEP_UP_REQUIRED", "challenge_id": "..."}`
 
 Möglichkeiten zur Auflösung:
@@ -237,13 +242,20 @@ Response:
 `204 No Content` (Freigabe erteilt)
 
 **Mechanik des Step-up-Magic-Links:**
-Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch, dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist. Die Konsumierung dieses Links **etabliert keine neue Session**, sondern berechtigt ausschließlich zur Ausführung des ausstehenden Intents oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten). Es entsteht kein impliziter "Superuser"-Zustand. Ungültige oder abgelaufene Step-up-Links werfen ein `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`).
+
+Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch,
+dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist.
+Die Konsumierung dieses Links **etabliert keine neue Session**, sondern berechtigt ausschließlich zur Ausführung
+des ausstehenden Intents oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten).
+Es entsteht kein impliziter "Superuser"-Zustand.
+Ungültige oder abgelaufene Step-up-Links werfen ein `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`).
 
 ## Magic Link Details
 
 - Token wird serverseitig **nur gehasht** gespeichert (Vergleich via Hash).
 - Token ist strikt **einmalig nutzbar**.
-- Mehrfachverwendung führt zu `401 Unauthorized` und einer sofortigen Invalidierung des Tokens (falls noch in der DB vermerkt).
+- Mehrfachverwendung führt zu `401 Unauthorized`.
+  Falls noch in der DB vermerkt, wird der Token sofort invalidiert.
 - TTL ≤ 15 Minuten.
 
 ## Session-Modell

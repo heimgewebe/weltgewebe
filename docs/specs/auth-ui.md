@@ -4,6 +4,7 @@ title: Auth UI Spec
 doc_type: reference
 status: active
 canonicality: derived
+summary: Beschreibt Login-, Wiederkehr-, Step-up- und Geräteverwaltungsflüsse für die Auth-UI.
 ---
 
 # Auth UI Spec
@@ -31,18 +32,22 @@ Text:
 "Wir haben dir einen Link geschickt."
 
 Hinweis:
-"Öffne den Link idealerweise auf diesem Gerät. Öffnest du ihn auf einem anderen Gerät, wird dort eine neue Sitzung erstellt."
+"Öffne den Link idealerweise auf diesem Gerät.
+Öffnest du ihn auf einem anderen Gerät, wird dort eine neue Sitzung erstellt."
 
 ## Klare UI-Zustände
 
-- **Du bist eingeloggt:** Ansicht des Gewebes. Option zum Aufrufen der Konto-Einstellungen / Geräteverwaltung.
+- **Du bist eingeloggt:** Ansicht des Gewebes.
+  Option zum Aufrufen der Konto-Einstellungen oder Geräteverwaltung.
 - **Deine Sitzung ist abgelaufen:** "Bitte melde dich erneut an, um fortzufahren."
-- **Bitte bestätige deine Identität:** "Für diese Aktion benötigen wir eine zusätzliche Bestätigung." (Step-up Auth Trigger)
+- **Bitte bestätige deine Identität:** "Für diese Aktion benötigen wir eine zusätzliche Bestätigung."
+  (Step-up Auth Trigger)
 
 ## Erfolgreicher Login
 
 - Weiterleitung in App
-- **Nur nach** erfolgreichem Login wird der Passkey als Option ("Schnellere Anmeldung aktivieren") angeboten, falls noch nicht auf dem aktuellen Gerät vorhanden.
+- **Nur nach** erfolgreichem Login wird der Passkey als Option ("Schnellere Anmeldung aktivieren") angeboten,
+  falls noch nicht auf dem aktuellen Gerät vorhanden.
 
 CTA:
 "Auf diesem Gerät merken" (Passkey Registrierung)
@@ -50,7 +55,8 @@ CTA:
 ## Wiederkehr
 
 Wenn eine gültige Session vorhanden ist, erfolgt der direkte Einstieg ohne weitere Prompts.
-Wenn die Session abgelaufen ist oder fehlt, greifen die Authentifizierungs-Flows (Magic Link oder, falls vorhanden, Passkey).
+Wenn die Session abgelaufen ist oder fehlt, greifen die Authentifizierungs-Flows
+(Magic Link oder, falls vorhanden, Passkey).
 
 ## Step-up Auth UI
 

@@ -4,6 +4,7 @@ title: ADR-0006 — Auth: Magic Link, Session und optionaler Passkey
 doc_type: reference
 status: active
 canonicality: canonical
+summary: Beschreibt das kanonische Auth-Modell aus Magic Link, persistenter Session, optionalem Passkey und Step-up Auth.
 ---
 
 # ADR-0006 — Auth: Magic Link + Session + optionaler Passkey
@@ -22,7 +23,8 @@ Weltgewebe benötigt ein Authentifizierungsmodell, das:
 - nicht auf Passwörtern basiert
 - mit dem RoN-Startmodus kompatibel ist
 
-Das bisher implizite Modell (Magic Link) ist als alleinige Lösung für den Alltag nicht ausreichend, da es zu wiederholter Interaktion zwingt.
+Das bisher implizite Modell (Magic Link) ist als alleinige Lösung für den Alltag nicht ausreichend.
+Es zwingt zu wiederholter Interaktion und erzeugt Reibung.
 
 ## Entscheidung
 
@@ -62,15 +64,17 @@ Zweck:
 
 - Magic Link ist single-use und serverseitig nicht replaybar.
 - Jede Session ist eindeutig einer `device_id` zugeordnet.
-- Jede sensitive Aktion erfordert zwingend Step-up Auth. Ein Step-up-Magic-Link ist strikt aktionsgebunden und session-neutral.
-- Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus (Bin ich RoN oder verortet?).
+- Jede sensitive Aktion erfordert zwingend Step-up Auth.
+  Ein Step-up-Magic-Link ist strikt aktionsgebunden und session-neutral.
+- Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus.
+  Der Identitätsmodus beantwortet die Frage, ob ein Nutzer RoN oder verortet ist.
 
 ## Zustandsmodell
 
 Das System basiert auf folgenden expliziten Zuständen:
 
 - `unauthenticated`: Kein gültiger Zugang vorhanden (Startzustand oder nach Logout/Ablauf).
-- `link_requested`: Magic Link wurde angefordert (für Erstlogin, Recovery oder Neugerät), System wartet auf Bestätigung.
+- `link_requested`: Magic Link wurde angefordert (für Erstlogin, Recovery oder Neugerät). System wartet auf Bestätigung.
 - `authenticated_session`: Gültige, aktive Session für das aktuelle Gerät.
 - `step_up_required`: Aktive Session, aber die anstehende Aktion erfordert eine kurzzeitige höhere Vertrauensstufe.
 
