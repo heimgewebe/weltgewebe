@@ -15,6 +15,7 @@ Letzte Aktualisierung: manuell gepflegt
 Pflegeregel: Diese Matrix ist bei jedem Auth-bezogenen PR zu aktualisieren, der Zielrahmen, Runtime-Verhalten oder Sicherheitsinvarianten verändert.
 
 > Diese Matrix dient als Diagnoseartefakt zur Roadmap.
+> Sie ersetzt nicht den normativen Zielrahmen aus ADR-0006 und den zugehörigen Specs, sondern verdichtet deren Sollzustand gegen den belegten Ist-Zustand.
 > Siehe: `docs/blueprints/auth-roadmap.md`
 
 ---
