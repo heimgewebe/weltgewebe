@@ -290,4 +290,5 @@ Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, wenn `we
 während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe
 erhalten bleibt.
 
-**Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
+
+- infra/caddy/Caddyfile.heim und compose.prod.yml: Added /local-basemap/* routing and map-style volume for sovereign basemap assets.
