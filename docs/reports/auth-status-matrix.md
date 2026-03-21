@@ -45,7 +45,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 - `docs/runbook.md`
 
-### Code- und Runtime-Belege
+### Code-, Test- und Runtime-Belege
 
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`

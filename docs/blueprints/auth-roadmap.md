@@ -334,7 +334,7 @@ Automatisierte Guards oder Smokescripts sind eine mögliche spätere Absicherung
 
 ### Stop-Kriterium für Phase 7
 
-- die wichtigsten Auth-Invarianten sind automatisiert prüfbar
+- die wichtigsten Auth-Invarianten sind reproduzierbar nachweisbar
 
 ---
 
