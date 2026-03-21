@@ -50,7 +50,7 @@ Zweck:
 Zweck:
 
 - komfortable und sichere Wiederanmeldung
-- step-up authentication bei sensiblen Aktionen
+- Step-up-Authentifizierung bei sensiblen Aktionen
 - vollständiges Passkey-Management (hinzufügen, auflisten, entfernen)
 
 ## Prinzipien
@@ -58,7 +58,7 @@ Zweck:
 - Kein Passwort als primärer Auth-Faktor
 - Authentifizierung ist getrennt vom Identitätsmodus (RoN vs. verortet)
 - Recovery muss immer möglich bleiben
-- Sicherheit wird kontextuell erhöht (step-up auth)
+- Sicherheit wird kontextuell erhöht (Step-up Auth)
 
 ## System-Invarianten
 

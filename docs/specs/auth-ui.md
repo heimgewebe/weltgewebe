@@ -50,7 +50,7 @@ Hinweis:
   falls noch nicht auf dem aktuellen Gerät vorhanden.
 
 CTA:
-"Auf diesem Gerät merken" (Passkey Registrierung)
+"Schnellere Anmeldung aktivieren" oder "Mit Face ID / Fingerabdruck anmelden" (Passkey Registrierung)
 
 ## Wiederkehr
 
