@@ -62,3 +62,13 @@ artifacts/
 /verification/map-*.png
 /verification/video/
 apps/web/src/lib/generated/
+
+# Ignore downloaded basemap assets to avoid polluting the git history with binary blobs
+
+map-style/sprites/*/
+*.pbf
+map-style/glyphs/Noto\ Sans\ Regular/
+
+map-style/glyphs/*/*/
+
+map-style/glyphs/*/*

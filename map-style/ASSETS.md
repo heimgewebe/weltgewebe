@@ -3,9 +3,7 @@
 Dieses Dokument dokumentiert die Herkunft, Lizenzierung und Integration der visuellen Assets (Schriften und Icons), die
 von der souveränen Basemap (`style.json`) genutzt werden.
 
-> **Status-Hinweis:** Derzeit dokumentiert dieses Manifest die beabsichtigte lokale Asset-Strategie. Es ist noch kein
-> vollständiges, abschließendes Lizenz- und Bestandsmanifest. Die konkrete Toolchain und die physischen Artefakte fehlen
-> noch (Scaffold-Phase).
+> **Status-Hinweis:** Dieses Manifest dokumentiert die Herkunft und Lizenz der lokal gehosteten Schriftarten (Glyphs). Die Sprite-Artefakte befinden sich noch in der Scaffold-Phase.
 
 ## Strategie
 
@@ -29,12 +27,7 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 
 - **Ausgewählte Schriftart:** Noto Sans Regular (wie in `style.json` referenziert)
 - **Lizenz:** SIL Open Font License (OFL)
-- **Geplante Herkunft / Erzeugung:** Ableitung aus quelloffenen Font-Dateien via MapLibre-kompatibler Toolchain (z. B.
-  fontmaker). Die konkrete Toolchain, Reproduktionsschritte und die genaue Version der Input-Quelle sind noch
-  verbindlich festzulegen.
-
-_Hinweis: Die `.pbf` Dateien für "Noto Sans Regular" müssen in `map-style/glyphs/Noto Sans Regular/` abgelegt werden.
-Bisher existiert das Verzeichnis nur als Platzhalter._
+- **Herkunft / Erzeugung:** Die Schriftarten (v2.0) werden über das deterministische Skript `scripts/basemap/fetch-glyphs.sh` reproduzierbar vom offiziellen [OpenMapTiles Fonts Release](https://github.com/openmaptiles/fonts/releases) geladen und über einen SHA256-Hash validiert. Da es sich um kompilierte und externe Artefakte handelt, sind die `.pbf`-Dateien selbst nicht im Git-Repository eingecheckt, sondern werden beim lokalen Setup aus der definierten Quelle bezogen.
 
 ## Sprites (Icons & Pattern)
 
