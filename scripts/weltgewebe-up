@@ -19,6 +19,8 @@ WELTGEWEBE_COMPOSE_BAKE="${WELTGEWEBE_COMPOSE_BAKE:-auto}"
 BASE_COMPOSE_FILE="infra/compose/compose.prod.yml"
 OVERRIDE_FILE="infra/compose/compose.prod.override.yml"
 
+DEPLOY_FRONTEND_MODE="${DEPLOY_FRONTEND_MODE:-auto}"
+
 # Arguments
 WITH_CADDY=0
 DO_PULL=1
@@ -636,13 +638,44 @@ else
   fi
 fi
 
+if [[ "$DEPLOY_FRONTEND_MODE" == "internal" && "${ENABLE_CADDY:-0}" != "1" ]]; then
+  echo "[ERROR] DEPLOY_FRONTEND_MODE=internal requires ENABLE_CADDY=1 (or --with-caddy)." >&2
+  exit 1
+fi
+
 # 6. Frontend Requirement Logic
 if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
-  if [[ "${BUILD_WEB:-auto}" == "no" || "${ENABLE_CADDY:-0}" == "0" ]]; then
-    export REQUIRE_FRONTEND=0
-  else
-    export REQUIRE_FRONTEND=1
-  fi
+  case "$DEPLOY_FRONTEND_MODE" in
+    off)
+      export REQUIRE_FRONTEND=0
+      ;;
+    internal)
+      export REQUIRE_FRONTEND=1
+      ;;
+    edge)
+      export REQUIRE_FRONTEND=1
+      ;;
+    auto)
+      if [[ "${BUILD_WEB:-auto}" == "no" ]]; then
+        export REQUIRE_FRONTEND=0
+      elif [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
+        export REQUIRE_FRONTEND=1
+      else
+        # Fallback: if web workspace exists, treat frontend as deploy-relevant
+        # (meaning artifacts must be built), but this does NOT guarantee
+        # local delivery by the stack itself.
+        if [[ -d "apps/web" ]]; then
+          export REQUIRE_FRONTEND=1
+        else
+          export REQUIRE_FRONTEND=0
+        fi
+      fi
+      ;;
+    *)
+      echo "[ERROR] Unknown DEPLOY_FRONTEND_MODE='${DEPLOY_FRONTEND_MODE}'. Expected one of: off|internal|edge|auto." >&2
+      exit 1
+      ;;
+  esac
 else
   case "$REQUIRE_FRONTEND" in
     0|1)
@@ -653,6 +686,21 @@ else
       exit 1
       ;;
   esac
+fi
+
+# Heuristic: detect known external edge gateway container used on heimserver.
+# This is runtime-aware, but purely naming-dependent and best-effort.
+# The canonical, explicit configuration remains DEPLOY_FRONTEND_MODE=edge.
+EDGE_RUNTIME_DETECTED=0
+if docker ps --format '{{.Names}}' | grep -q "^edge-caddy$"; then
+  EDGE_RUNTIME_DETECTED=1
+fi
+
+echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
+
+if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
+  echo "[WARN] edge-caddy runtime heuristically detected while DEPLOY_FRONTEND_MODE=auto"
+  echo "[WARN] best-effort edge refresh path active. Consider setting DEPLOY_FRONTEND_MODE=edge for canonical delivery semantics."
 fi
 
 # 6b. Frontend Build
@@ -728,8 +776,11 @@ echo ">> Edge Caddy Guard:"
 EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 EDGE_CADDY_CONTAINER="edge-caddy"
 
-# Only attempt this if frontend delivery is required for this run
-if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+# Only attempt this if frontend delivery is required for this run.
+# edge = explicit external frontdoor
+# auto = heuristic runtime detection
+# internal/off = no edge-refresh path
+if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]] || { [[ "$DEPLOY_FRONTEND_MODE" == "auto" ]] && [[ "$EDGE_RUNTIME_DETECTED" == "1" ]]; }; }; then
     EDGE_NEEDS_RECREATE=0
 
     if [[ "$REFRESH_EDGE" == "1" ]]; then
