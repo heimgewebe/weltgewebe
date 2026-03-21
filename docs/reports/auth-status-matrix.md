@@ -79,9 +79,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** Magic-Link-Funktionalität ist implementiert, aber die belegte Runtime nutzt derzeit `/auth/login/request` und `/auth/login/consume` statt der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume`. Dies ist kein Funktionsausfall, sondern ein Contract-Angleichungspunkt.
+**Ist:** Magic-Link-Funktionalität ist implementiert, aber die belegte Routing-/Runtime-Linie nutzt derzeit `/auth/login/request` und `/auth/login/consume` statt der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume`. Dies ist kein Funktionsausfall, sondern ein Contract-Angleichungspunkt.
 **Dokumentationsbelege:** `docs/runbook.md`
-**Code-/Runtime-Belege:** `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
+**Code-, Test- und Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
 **Fehlende Belege:** Nachweis der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume` oder explizite Alias-/Migrationsbrücke auf diese Zielrouten.
 **Status:** Teil
 **Risiko:** mittel

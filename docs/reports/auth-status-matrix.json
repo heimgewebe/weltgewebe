@@ -17,10 +17,10 @@
   "areas": {
     "magic_link": {
       "soll": "POST /auth/magic-link/request, POST /auth/magic-link/consume",
-      "ist": "Magic-Link-Funktionalität ist implementiert, aber die belegte Runtime nutzt derzeit /auth/login/request und /auth/login/consume statt der Zielrouten /auth/magic-link/request und /auth/magic-link/consume.",
+      "ist": "Magic-Link-Funktionalität ist implementiert, aber die belegte Routing-/Runtime-Linie nutzt derzeit /auth/login/request und /auth/login/consume statt der Zielrouten /auth/magic-link/request und /auth/magic-link/consume.",
       "status": "Teil",
       "documentation_evidence": ["docs/runbook.md"],
-      "code_runtime_evidence": ["apps/web/src/routes/login/+page.svelte", "verification/verify_magic_link.py"],
+      "code_runtime_evidence": ["apps/api/src/routes/auth.rs", "apps/web/src/routes/login/+page.svelte", "verification/verify_magic_link.py"],
       "missing_evidence": ["Nachweis der Zielrouten /auth/magic-link/request und /auth/magic-link/consume oder explizite Alias-/Migrationsbrücke auf diese Zielrouten"],
       "risk": "mittel"
     },
