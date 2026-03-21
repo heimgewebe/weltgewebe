@@ -59,6 +59,12 @@ Response:
 
 `204 No Content`
 
+*Anti-Enumeration:*
+Die Antwort ist stets generisch (`204 No Content`), unabhängig davon, ob zur E-Mail ein Account existiert,
+neu provisioniert wird oder die Anfrage ignoriert wurde.
+Dies verhindert, dass die API zur Benutzer-Existenzprüfung (Enumeration) missbraucht werden kann.
+Rate Limiting ist hierbei ein integraler Bestandteil des Abuse-Schutzes.
+
 ### Magic Link konsumieren
 
 `POST /auth/magic-link/consume`
@@ -245,10 +251,13 @@ Response:
 
 Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch,
 dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist.
+Ein Step-up-Request ist nur aus einer aktiven Session heraus zulässig.
+Die `challenge_id` ist kurzlebig, strikt single-use und an die aktuelle Session und den Intent gebunden.
 Die Konsumierung dieses Links **etabliert keine neue Session**, sondern berechtigt ausschließlich zur Ausführung
 des ausstehenden Intents oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten).
 Es entsteht kein impliziter "Superuser"-Zustand.
-Ungültige oder abgelaufene Step-up-Links werfen ein `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`).
+Ungültige oder abgelaufene Step-up-Links werfen ein generisches `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`),
+um keine semantisch reichhaltigen Fehlerdetails über abgelaufene oder fremde Challenges preiszugeben.
 
 ## Magic Link Details
 
@@ -275,10 +284,22 @@ Ungültige oder abgelaufene Step-up-Links werfen ein `401 Unauthorized` (`TOKEN_
   - `created_at`
 - Beim Logout wird primär die dem anfragenden `device_id` zugehörige Session (inkl. Refresh Token) gelöscht.
 
+## Session-Transport und Request-Schutz
+
+Sobald die Session (speziell der `session_refresh_token` oder `session_access_token`)
+über HttpOnly-Cookies transportiert wird, muss die API zwingend vor Cross-Site-Angriffen geschützt werden:
+
+- Mutierende Auth-Endpunkte (wie `/auth/logout`, `/auth/logout-all`, `/auth/session/refresh`, `/auth/step-up/...`)
+  und alle entsprechenden `/me/...`-Änderungen dürfen nicht ausschließlich auf die Präsenz eines Cookies vertrauen.
+- Der Schutz erfolgt architekturkonform (z.B. durch SameSite-Policy `Strict`/`Lax` kombiniert mit
+  expliziten CSRF-Tokens oder strengen Origin/Referer-Checks).
+- Die konkrete technische Festlegung dieses Schutzes ist eine offene Architekturentscheidung,
+  die zwingende Invariante lautet jedoch: Eine cookiebasierte Session ohne Request-Schutz ist unzulässig.
+
 ## Sicherheitsregeln
 
-- Rate limiting:
-  - auf `/auth/magic-link/request`
+- Rate Limiting:
+  - auf `/auth/magic-link/request` (als integraler Abuse- und Enumeration-Schutz)
 - Logging:
   - Login-Versuche (Erfolg, Fehler)
   - Geräteänderungen

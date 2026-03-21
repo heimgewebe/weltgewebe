@@ -63,7 +63,9 @@ Zweck:
 ## System-Invarianten
 
 - Magic Link ist single-use und serverseitig nicht replaybar.
+  Link-Anforderungen (Login/Step-up) geben keine Auskunft über die Existenz eines Kontos (Anti-Enumeration).
 - Jede Session ist eindeutig einer `device_id` zugeordnet.
+  Cookie-basierte Sitzungen erfordern zwingenden Schutz vor Cross-Site-Angriffen (CSRF/Origin-Checks).
 - Jede sensitive Aktion erfordert zwingend Step-up Auth.
   Ein Step-up-Magic-Link ist strikt aktionsgebunden und session-neutral.
 - Auth (Wie komme ich rein?) ist strikt getrennt vom Identitätsmodus.
