@@ -76,7 +76,7 @@ Zulässige Werte für `DEPLOY_FRONTEND_MODE`:
   entsprechend `EDGE_GATEWAY_CONTAINER` läuft; ist dies der Fall, wird ein best-effort Edge-Aktualisierungs-Pfad
   ausgelöst (mit Warnung, dass eine explizite Konfiguration bevorzugt wird).
 * **`edge`:** Explizite, kanonische Deklaration der externen Liefertopologie. Das Frontend ist relevant,
-  und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend und normativ ausgeführt. **Wichtig:** Schlägt in diesem Modus die Container-Erkennung für den konfigurierten `EDGE_GATEWAY_CONTAINER` fehl, bricht das Deployment mit einem Fehler ab (Fail-Fast).
+  und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend und normativ ausgeführt. **Wichtig:** Der Edge-Gateway wird in diesem Modus verbindlich erwartet. Falls der Container fehlt oder ein Mount-Drift festgestellt wird, versucht der Guard zunächst aktiv einen Reparaturpfad (Recreate). Erst wenn dieser Reparaturpfad scheitert, schlägt das Deployment mit einem Fehler fehl.
 * **`internal`:** Die UI wird durch den Stack-internen Caddy ausgeliefert. Das Frontend ist relevant,
   Edge-Checks werden übersprungen.
 * **`off`:** Das Frontend ist für diesen Deploy irrelevant (z. B. reine API-Umgebung).

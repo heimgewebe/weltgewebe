@@ -693,7 +693,7 @@ fi
 # This is runtime-aware, but purely naming-dependent and best-effort.
 # The canonical, explicit configuration remains DEPLOY_FRONTEND_MODE=edge.
 EDGE_RUNTIME_DETECTED=0
-if docker ps --format '{{.Names}}' | grep -q "^${EDGE_GATEWAY_CONTAINER}$"; then
+if docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
   EDGE_RUNTIME_DETECTED=1
 fi
 
@@ -707,9 +707,7 @@ fi
 if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
   echo "[INFO] Expected canonical edge gateway container: ${EDGE_GATEWAY_CONTAINER}"
   if [[ "$EDGE_RUNTIME_DETECTED" == "0" ]]; then
-    echo "[ERROR] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running." >&2
-    echo "        Diagnostic hint: Ensure the edge stack is up, or configure EDGE_GATEWAY_CONTAINER to the correct name." >&2
-    exit 1
+    echo "[WARN] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running. Will attempt to recreate."
   fi
 fi
 
@@ -806,7 +804,13 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
             echo "   Static UI mount is valid."
         fi
     else
-        echo "   Container $EDGE_GATEWAY_CONTAINER is not running. Skipping runtime check."
+        echo "   Container $EDGE_GATEWAY_CONTAINER is not running."
+        if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+            echo "   Expected by edge mode. Forcing recreate attempt."
+            EDGE_NEEDS_RECREATE=1
+        else
+            echo "   Skipping runtime check."
+        fi
     fi
 
     if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
