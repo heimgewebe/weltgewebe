@@ -751,28 +751,38 @@ BASEMAP_DIR="build/basemap"
 echo
 echo ">> Basemap Artifact Guard:"
 
+log_basemap_status() {
+    local prefix="$1"
+    if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
+        local pmtiles_count
+        pmtiles_count=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | wc -l)
+        local first_pmtiles
+        first_pmtiles=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | head -n 1)
+        echo "   [✓] ${prefix}. Found ${pmtiles_count} PMTiles artifact(s) in ${BASEMAP_DIR}."
+        echo "       -> e.g. ${first_pmtiles}"
+    else
+        echo "   [X] WARNING: ${prefix}. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+    fi
+}
+
 if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
-    pmtiles_count=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | wc -l)
-    first_pmtiles=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | head -n 1)
-    echo "   [✓] Found ${pmtiles_count} PMTiles artifact(s) in ${BASEMAP_DIR}."
-    echo "       -> e.g. ${first_pmtiles}"
+    log_basemap_status "Artifacts already present"
 else
     echo "   [!] Basemap artifact missing. Attempting best-effort PMTiles build..."
     if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
         if bash scripts/basemap/build-hamburg-pmtiles.sh; then
             if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
-                pmtiles_count=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | wc -l)
-                first_pmtiles=$(compgen -G "$BASEMAP_DIR/*.pmtiles" | head -n 1)
-                echo "   [✓] Basemap build succeeded. Generated ${pmtiles_count} PMTiles artifact(s)."
-                echo "       -> e.g. ${first_pmtiles}"
+                log_basemap_status "Basemap build succeeded"
             else
-                echo "   [X] WARNING: Basemap artifact still missing after build attempt."
+                log_basemap_status "Basemap artifact still missing after build attempt"
             fi
         else
             echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort)."
+            log_basemap_status "Build failed"
         fi
     else
         echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable."
+        log_basemap_status "Build script missing"
     fi
 fi
 # 6d. Static UI Runtime Guard & Edge Caddy Recreate

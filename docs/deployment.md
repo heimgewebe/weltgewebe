@@ -49,14 +49,12 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
 
 ### Basemap Artifact Deployment (Best Effort)
 
-The deployment script (`weltgewebe-up`) attempts to provide the sovereign PMTiles basemap artifact in the `build/basemap/` directory as a best-effort guard before stack initialization. This allows the internal routing layer to access and mount the tiles if required.
-
-**Bedeutung:** Artefakt vorhanden ≠ automatisch produktiv aktiv. The presence of the PMTiles artifact in `build/basemap/` ensures the infrastructure *can* serve it, but the application runtime must still be configured to consume it (e.g. switching the frontend mode to `local-sovereign`).
+The deployment script (`weltgewebe-up`) attempts to provide the sovereign PMTiles basemap artifact in the `build/basemap/` directory as a best-effort guard before stack initialization. The deploy/serve path can mount and serve it, but this does not imply the frontend is configured to consume it in production.
 
 To locally verify the artifact state:
 
 ```bash
-ls build/basemap/*.pmtiles
+find build/basemap -maxdepth 1 -name "*.pmtiles" -print
 ```
 
 ## Preflight guard
