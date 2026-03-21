@@ -46,6 +46,9 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`
 - `docs/runbook.md`
+- `apps/api/src/routes/auth.rs`
+- `apps/api/src/auth/session.rs`
+- `apps/web/src/lib/auth/store.ts`
 
 ---
 

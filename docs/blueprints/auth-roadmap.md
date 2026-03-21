@@ -370,7 +370,7 @@ Automatisierte Guards oder Smokescripts sind eine mögliche spätere Absicherung
 5. Passkeys
 6. UI-Wiederkehr
 7. Sensitive Intents finalisieren
-8. Guards / Smokes
+8. Reproduzierbare Sicherheits- und Betriebsnachweise
 9. Dokumentations-Sync
 
 ---
