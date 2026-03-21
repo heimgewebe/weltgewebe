@@ -19,6 +19,7 @@ BASEMAP_DIR="$REPO_ROOT/build/basemap"
 # We use a stable, historical OSM snapshot from Geofabrik instead of the daily latest.
 OSM_FILE="hamburg-250101.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-250101.osm.pbf"
+OSM_SHA256="e9beba6f27594a3abe571dd632e752fb43c8a136b2517fa162988fd641f8cdc9"
 
 # Versioning
 BASEMAP_VERSION="0.1.0"
@@ -33,7 +34,7 @@ echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
 echo "Version: ${BASEMAP_VERSION} (Tag: ${BASEMAP_TAG})"
 echo "Tool:    Planetiler (Pinned: 0.8.2 @ sha256:10e4...)"
-echo "Input:   $OSM_FILE (Pinned)"
+echo "Input:   $OSM_FILE (Pinned & Hash-Verified)"
 echo "Format:  PMTiles"
 echo "=================================="
 
@@ -57,7 +58,7 @@ fi
 mkdir -p "$BASEMAP_DIR"
 cd "$BASEMAP_DIR"
 
-# 5. Fetch input data
+# 5. Fetch and verify input data
 if [ ! -f "$OSM_FILE" ]; then
   echo "=> Downloading OSM data for Hamburg ($OSM_FILE)..."
   if [ "$DOWNLOADER" = "wget" ]; then
@@ -68,6 +69,21 @@ if [ ! -f "$OSM_FILE" ]; then
 else
   echo "=> OSM data '$OSM_FILE' already exists locally, skipping download."
 fi
+
+echo "=> Verifying integrity of $OSM_FILE..."
+if ! command -v sha256sum >/dev/null 2>&1; then
+  echo "Error: 'sha256sum' is required for artifact verification but not installed." >&2
+  exit 1
+fi
+ACTUAL_SHA256="$(sha256sum "$OSM_FILE" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
+  echo "Error: Checksum mismatch for $OSM_FILE!" >&2
+  echo "Expected: $OSM_SHA256" >&2
+  echo "Actual:   $ACTUAL_SHA256" >&2
+  echo "The file may be corrupted or modified. Aborting to preserve reproducibility." >&2
+  exit 1
+fi
+echo "   [✓] Integrity verified (SHA256 match)."
 
 # 6. Build the artifact
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
@@ -119,7 +135,8 @@ ${BUILD_TIMESTAMP_JSON}
   },
   "input": {
     "url": "${OSM_URL}",
-    "note": "Pinned historical snapshot for full artifact reproducibility"
+    "sha256": "${OSM_SHA256}",
+    "note": "Pinned historical snapshot with verified SHA256 integrity"
   },
   "artifact": "${OUTPUT_PMTILES}"
 }
