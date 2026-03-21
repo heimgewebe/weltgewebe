@@ -1,0 +1,99 @@
+{
+  "generated_from": [
+    "docs/adr/ADR-0006__auth-magic-link-session-passkey.md",
+    "docs/specs/auth-api.md",
+    "docs/specs/auth-state-machine.md",
+    "docs/specs/auth-ui.md",
+    "docs/adr/ADR-0005-auth.md",
+    "docs/specs/auth-blueprint.md",
+    "docs/runbook.md",
+    "verification/verify_magic_link.py",
+    "apps/web/src/routes/login/+page.svelte"
+  ],
+  "areas": {
+    "magic_link": {
+      "soll": "POST /auth/magic-link/request, POST /auth/magic-link/consume",
+      "ist": "implementiert",
+      "status": "OK",
+      "documentation_evidence": ["docs/runbook.md"],
+      "code_runtime_evidence": ["apps/web/src/routes/login/+page.svelte", "verification/verify_magic_link.py"],
+      "missing_evidence": [],
+      "risk": "niedrig"
+    },
+    "session": {
+      "soll": "GET /auth/session, Cookie, Persistenz",
+      "ist": "ältere Dokumentationslinie beschreibt Session-Kern und Middleware als implementiert; gegen ADR-0006-Zielrahmen und aktuelle Runtime noch nicht end-to-end verifiziert",
+      "status": "Teil",
+      "documentation_evidence": ["docs/specs/auth-blueprint.md", "docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Echte Persistenz (nicht In-Memory)", "Cookie-Verhalten", "Routen-Tests"],
+      "risk": "hoch"
+    },
+    "session_refresh": {
+      "soll": "POST /auth/session/refresh",
+      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "status": "Offen",
+      "documentation_evidence": [],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Routen-Code", "Test-Case"],
+      "risk": "hoch"
+    },
+    "logout": {
+      "soll": "POST /auth/logout",
+      "ist": "im älteren MVP-/Routing-Kontext dokumentiert; ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt",
+      "status": "Teil",
+      "documentation_evidence": ["docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["End-to-End-Test"],
+      "risk": "mittel"
+    },
+    "logout_all": {
+      "soll": "POST /auth/logout-all",
+      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "status": "Offen",
+      "documentation_evidence": [],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Routen-Code", "Test-Case"],
+      "risk": "hoch"
+    },
+    "devices": {
+      "soll": "GET /auth/devices, DELETE /auth/devices/:id",
+      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "status": "Offen",
+      "documentation_evidence": [],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Routen-Code", "Test-Case"],
+      "risk": "hoch"
+    },
+    "step_up_auth": {
+      "soll": "Challenge, TTL, Intent",
+      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "status": "Offen",
+      "documentation_evidence": [],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Routen-Code", "Test-Case"],
+      "risk": "sehr hoch"
+    },
+    "passkeys": {
+      "soll": "register, auth, list, remove",
+      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "status": "Offen",
+      "documentation_evidence": [],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Routen-Code", "Test-Case"],
+      "risk": "mittel"
+    },
+    "security_invariants": {
+      "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
+      "ist": "teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte",
+      "status": "Teil",
+      "documentation_evidence": ["docs/runbook.md", "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"],
+      "code_runtime_evidence": [],
+      "missing_evidence": ["Automatisierte Tests für CSRF, Anti-Enumeration"],
+      "risk": "hoch"
+    }
+  },
+  "open_architectural_decisions": {
+    "/me/email": "Offen"
+  }
+}
