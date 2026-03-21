@@ -151,7 +151,7 @@
 <style>
   .search-overlay {
     position: fixed;
-    bottom: 60px; /* above ActionBar */
+    bottom: var(--map-bottom-ui-offset, 60px); /* strictly bound to ActionBar + safe-area */
     left: 0;
     right: 0;
     background: var(--panel, #fff);

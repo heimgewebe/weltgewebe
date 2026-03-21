@@ -35,7 +35,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
+    height: var(--actionbar-height, 60px);
     background: var(--panel, #fff);
     border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
     display: flex;
@@ -43,7 +43,9 @@
     align-items: center;
     z-index: 40;
     padding: 0 1rem;
+    padding-bottom: env(safe-area-inset-bottom);
     box-shadow: var(--shadow, 0 -2px 10px rgba(0,0,0,0.05));
+    box-sizing: content-box;
   }
 
   .action-btn {
