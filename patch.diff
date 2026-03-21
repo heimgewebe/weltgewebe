@@ -1,0 +1,16 @@
+--- scripts/weltgewebe-up
++++ scripts/weltgewebe-up
+@@ -829,6 +829,13 @@
+     else
+         echo "   Guard passed. Existing static artifact maps safely to the edge caddy host."
+     fi
++
++    if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]] && ! docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
++        msg="DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running even after a potential refresh attempt."
++        echo "ERROR: $msg"
++        generate_failure_bundle "$msg"
++        exit 1
++    fi
+ else
+     echo "   Skipped (Edge Guard runs only in edge/auto frontend modes with required artifacts)."
+ fi
