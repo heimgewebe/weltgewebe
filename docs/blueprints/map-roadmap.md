@@ -48,20 +48,14 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _Blockiert durch: Phase 1 (Hosting) und
-Phase 4 (Versionierung). PMTiles-Protokoll darf erst registriert werden, wenn ein konsumierbares Artefakt sauber
-gehostet ist._ _(Update: Dev-Infrastruktur im Vite-Server vorbereitet; Prod-Hosting in Caddy/Heimserver auf Infra-Ebene
-vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _(Update: Dev-Infrastruktur im Vite-Server bereitet vor; Prod-Hosting in Caddy für Style und PMTiles unter `/local-basemap/` vorbereitet; produktiver Rollout steht noch aus.)_
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Die Anbindung in MapLibre ist für den Dev-Modus erprobt. Der produktive
-    Rollout bleibt offen, weil der produktive Artefaktpfad und die
-    Standardschaltung von `local-sovereign` noch nicht als verbindlicher
-    Betriebsweg durchgesetzt sind._
+  - _Teilweise umgesetzt: Im Dev-Modus erprobt, in Prod ist Style-/Asset-Hosting und PMTiles-Routing unter `/local-basemap/` vorbereitet. Produktiver `local-sovereign` Default-Rollout bleibt offen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

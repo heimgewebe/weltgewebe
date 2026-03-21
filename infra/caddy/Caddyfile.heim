@@ -22,6 +22,35 @@ weltgewebe.home.arpa {
     }
   }
 
+  # Phase 2/3: Sovereign Basemap Style & Assets Routing
+  # Mirrored from Vite dev-server: `.pmtiles` and `.meta.json` from basemap dir, others from map-style dir
+  handle_path /local-basemap/* {
+    @pmtiles path_regexp \.pmtiles$
+    handle @pmtiles {
+      root * /srv/weltgewebe-basemap
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+      header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
+      header Access-Control-Allow-Headers "Range, If-None-Match"
+      @options {
+        method OPTIONS
+      }
+      respond @options 204
+      file_server
+    }
+
+    @meta path_regexp \.meta\.json$
+    handle @meta {
+      root * /srv/weltgewebe-basemap
+      file_server
+    }
+
+    handle {
+      root * /srv/weltgewebe-map-style
+      file_server
+    }
+  }
+
   handle_path /api/* {
     reverse_proxy api:8080
   }

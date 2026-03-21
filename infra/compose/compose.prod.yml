@@ -83,6 +83,7 @@ services:
     volumes:
       - ../caddy/Caddyfile.heim:/etc/caddy/Caddyfile:ro
       - ../../build/basemap:/srv/weltgewebe-basemap:ro
+      - ../../map-style:/srv/weltgewebe-map-style:ro
       - ../../apps/web/build:/srv/weltgewebe-web:ro
       - caddy_data:/data
       - caddy_config:/config

@@ -8,6 +8,10 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-03-21
+
+- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Routing für `/local-basemap/*` (inklusive `.pmtiles` und `.meta.json`) sowie Volume-Mount für `map-style` ergänzt, um produktiv souveräne Basemap-Assets auszuliefern.
+
 ## 2026-03-18
 
 - `infra/caddy/Caddyfile.heim`: Added explicit `Cache-Control: no-store` header for `/_app/version.json` to enforce the no-store version.json delivery contract.
