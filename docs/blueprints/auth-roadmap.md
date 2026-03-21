@@ -177,7 +177,7 @@ Jeder relevante Bereich ist entweder:
 
 **Ziel:** Vom Magic-Link-MVP zur alltagstauglichen Auth.
 
-> **Wichtig ab Phase 2:** Für jeden Teilbereich gilt ab hier „Diagnose vor Umsetzung“. Es wird immer zuerst die Statusmatrix befragt, ob Code-Belege existieren. Erst danach wird implementiert oder verfeinert.
+> **Wichtig ab Phase 2:** Für jeden Teilbereich gilt ab hier „Diagnose vor Umsetzung“. Ab Phase 2 wird die Statusmatrix zunächst zur Orientierung herangezogen. Maßgeblich für jede Umsetzung bleiben jedoch die konkreten Repo-, Code-, Test- und Runtime-Belege. Erst nach diesem Abgleich wird implementiert oder verfeinert.
 
 ### Arbeitspakete Phase 2
 

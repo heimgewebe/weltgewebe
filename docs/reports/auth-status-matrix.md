@@ -41,7 +41,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 - `docs/adr/ADR-0005-auth.md`
 - `docs/specs/auth-blueprint.md`
 
-### Runtime-Belege
+### Code- und Runtime-Belege
 
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`
@@ -57,9 +57,9 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | ✔ belegt    | OK     | niedrig |
-| Session               | required    | Code angelegt, E2E offen | Teil   | hoch    |
+| Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
-| Logout                | required    | Code angelegt, E2E offen | Teil   | mittel  |
+| Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
@@ -83,7 +83,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store; Zielarchitektur (`GET /auth/session` mit echter Persistenz) ist noch nicht end-to-end nachgewiesen.
+**Ist:** Die heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus `GET /auth/session` plus belastbarem Persistenzmodell.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
 **Fehlende Belege:** Echte Persistenz (nicht In-Memory), sauber verifizierbarer Session-Check (`GET /auth/session`), Cookie-Verhalten, Routen-Tests.
@@ -103,7 +103,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.4 Logout
 
 **Soll:** POST `/auth/logout`
-**Ist:** im Code angelegt (`/auth/logout` Route); ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt jedoch.
+**Ist:** Ein Logout-Codepfad ist im aktuellen Code vorhanden (`/auth/logout`). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.
 **Dokumentationsbelege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`
 **Fehlende Belege:** End-to-End-Test
