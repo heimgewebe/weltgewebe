@@ -7,7 +7,6 @@
     "docs/adr/ADR-0005-auth.md",
     "docs/specs/auth-blueprint.md",
     "docs/blueprints/weltgewebe.auth-and-ui-routing.md",
-    "docs/blueprints/auth-roadmap.md",
     "docs/runbook.md",
     "verification/verify_magic_link.py",
     "apps/web/src/routes/login/+page.svelte"
@@ -23,12 +22,12 @@
       "risk": "niedrig"
     },
     "session": {
-      "soll": "GET /auth/session, Cookie, Persistenz",
-      "ist": "In-Memory Session-Store und /auth/me Store-Anbindung existieren im Code; gegen ADR-0006-Zielrahmen (echte Persistenz) jedoch noch nicht end-to-end verifiziert",
+      "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
+      "ist": "heutige MVP-/Runtime-Linie nutzt /auth/me und einen In-Memory Session-Store; Zielarchitektur (GET /auth/session mit echter Persistenz) ist noch nicht end-to-end nachgewiesen",
       "status": "Teil",
       "documentation_evidence": ["docs/specs/auth-blueprint.md", "docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
       "code_runtime_evidence": ["apps/api/src/routes/auth.rs", "apps/api/src/auth/session.rs", "apps/web/src/lib/auth/store.ts"],
-      "missing_evidence": ["Echte Persistenz (nicht In-Memory)", "Cookie-Verhalten", "Routen-Tests"],
+      "missing_evidence": ["Echte Persistenz (nicht In-Memory)", "sauber verifizierbarer Session-Check (GET /auth/session)", "Cookie-Verhalten", "Routen-Tests"],
       "risk": "hoch"
     },
     "session_refresh": {
@@ -91,7 +90,7 @@
       "status": "Teil",
       "documentation_evidence": ["docs/runbook.md", "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"],
       "code_runtime_evidence": [],
-      "missing_evidence": ["Automatisierte Tests für CSRF, Anti-Enumeration"],
+      "missing_evidence": ["Anti-Enumeration-Nachweis fehlt", "CSRF-/Origin-Nachweis fehlt", "Token-Leak-Prevention nicht separat verifiziert", "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"],
       "risk": "hoch"
     }
   },

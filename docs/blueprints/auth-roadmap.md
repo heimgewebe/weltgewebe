@@ -313,7 +313,7 @@ Sie muss auch wissen:
 
 ---
 
-## 11. Phase 7 — Sicherheits- und Betriebsnachweise als Guard / Smoke etablieren
+## 11. Phase 7 — Reproduzierbare Sicherheits- und Betriebsnachweise aufbauen
 
 **Ziel:** Sicherheit nicht nur besitzen, sondern reproduzierbar beweisen.
 

@@ -79,11 +79,11 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 ### 2.2 Session
 
-**Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), Persistenz.
-**Ist:** In-Memory Session-Store und `/auth/me` Store-Anbindung existieren im Code; gegen ADR-0006-Zielrahmen (echte Persistenz) jedoch noch nicht end-to-end verifiziert.
+**Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
+**Ist:** heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store; Zielarchitektur (`GET /auth/session` mit echter Persistenz) ist noch nicht end-to-end nachgewiesen.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
-**Fehlende Belege:** Echte Persistenz (nicht In-Memory), Cookie-Verhalten, Routen-Tests.
+**Fehlende Belege:** Echte Persistenz (nicht In-Memory), sauber verifizierbarer Session-Check (`GET /auth/session`), Cookie-Verhalten, Routen-Tests.
 **Status:** Teil
 **Risiko:** hoch
 
@@ -153,7 +153,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Ist:** teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
 **Code-/Runtime-Belege:** keine
-**Fehlende Belege:** Automatisierte Tests für CSRF, Anti-Enumeration.
+**Fehlende Belege:** Anti-Enumeration-Nachweis fehlt, CSRF-/Origin-Nachweis fehlt, Token-Leak-Prevention nicht separat verifiziert, Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt.
 **Status:** Teil
 **Risiko:** hoch
 
@@ -172,4 +172,4 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ## 4. Entscheidungsregel
 
 Kein Feature darf implementiert werden, wenn die Basis (Session) nicht stabil ist oder Step-up/API unklar ist.
-Diese Matrix blockiert Drift. Alles, was nicht grün (OK) ist, darf nicht stillschweigend als voll implementiert behandelt werden.
+Diese Matrix macht Drift sichtbar und verhindert, dass offene Punkte stillschweigend als voll implementiert behandelt werden.
