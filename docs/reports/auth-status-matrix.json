@@ -9,7 +9,10 @@
     "docs/blueprints/weltgewebe.auth-and-ui-routing.md",
     "docs/runbook.md",
     "verification/verify_magic_link.py",
-    "apps/web/src/routes/login/+page.svelte"
+    "apps/web/src/routes/login/+page.svelte",
+    "apps/api/src/routes/auth.rs",
+    "apps/api/src/auth/session.rs",
+    "apps/web/src/lib/auth/store.ts"
   ],
   "areas": {
     "magic_link": {
