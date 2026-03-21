@@ -18,18 +18,23 @@ Letzte Aktualisierung: 2023-10-24
 ## 0. Referenzen & Wahrheitslinien
 
 ### Ziel-/Soll-Linie (Kanonischer Zielzustand)
+
 Diese Dokumente beschreiben die finale Architektur, auf die hingearbeitet wird:
+
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
 
 ### Alt-/Ist-Linie (Historische / Implementierte Basis)
+
 Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritte:
+
 - `docs/adr/ADR-0005-auth.md`
 - `docs/specs/auth-blueprint.md`
 
 ### Runtime-Belege
+
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`
 - `docs/runbook.md`
@@ -55,6 +60,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ## 2. Detailprüfung
 
 ### 2.1 Magic Link
+
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
 **Ist:** implementiert
 **Belege:** `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`, `docs/runbook.md`
@@ -63,6 +69,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** niedrig
 
 ### 2.2 Session
+
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), Persistenz.
 **Ist:** teilweise / unbekannt
 **Belege:** -
@@ -71,6 +78,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** hoch
 
 ### 2.3 Session Refresh
+
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
 **Ist:** unbekannt
 **Belege:** -
@@ -79,6 +87,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** hoch
 
 ### 2.4 Logout
+
 **Soll:** POST `/auth/logout`
 **Ist:** unbekannt
 **Belege:** -
@@ -87,6 +96,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** mittel
 
 ### 2.5 Logout All
+
 **Soll:** POST `/auth/logout-all`
 **Ist:** unbekannt
 **Belege:** -
@@ -95,6 +105,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** hoch
 
 ### 2.6 Devices
+
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
 **Ist:** unbekannt
 **Belege:** -
@@ -103,6 +114,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** hoch
 
 ### 2.7 Step-up Auth
+
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
 **Ist:** unbekannt
 **Belege:** -
@@ -111,6 +123,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** sehr hoch
 
 ### 2.8 Passkeys
+
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:** unbekannt
 **Belege:** -
@@ -119,6 +132,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 **Risiko:** mittel
 
 ### 2.9 Sicherheitsinvarianten
+
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
 **Ist:** Teilweise in Runbook dokumentiert, aber Laufzeitnachweise fehlen für alle Aspekte.
 **Belege:** `docs/runbook.md` (Rate Limits, Trusted Proxies)
@@ -131,6 +145,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ## 3. Offene Architekturentscheidungen
 
 ### /me/email
+
 **Soll:** Route, Methode, Step-up Pflicht, Session-Verhalten danach.
 **Ist:** nicht final festgelegt.
 **Status:** Offen
