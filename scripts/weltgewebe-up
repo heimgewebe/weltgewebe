@@ -79,6 +79,7 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
+EDGE_GATEWAY_CONTAINER="${EDGE_GATEWAY_CONTAINER:-edge-caddy}"
 EDGE_CA="${EDGE_CA:-/opt/heimgewebe/edge/edge-ca.crt}"
 
 # --- REPO_DIR Resolution ---
@@ -692,15 +693,24 @@ fi
 # This is runtime-aware, but purely naming-dependent and best-effort.
 # The canonical, explicit configuration remains DEPLOY_FRONTEND_MODE=edge.
 EDGE_RUNTIME_DETECTED=0
-if docker ps --format '{{.Names}}' | grep -q "^edge-caddy$"; then
+if docker ps --format '{{.Names}}' | grep -q "^${EDGE_GATEWAY_CONTAINER}$"; then
   EDGE_RUNTIME_DETECTED=1
 fi
 
 echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
 
 if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
-  echo "[WARN] edge-caddy runtime heuristically detected while DEPLOY_FRONTEND_MODE=auto"
+  echo "[WARN] ${EDGE_GATEWAY_CONTAINER} runtime heuristically detected while DEPLOY_FRONTEND_MODE=auto"
   echo "[WARN] best-effort edge refresh path active. Consider setting DEPLOY_FRONTEND_MODE=edge for canonical delivery semantics."
+fi
+
+if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+  echo "[INFO] Expected canonical edge gateway container: ${EDGE_GATEWAY_CONTAINER}"
+  if [[ "$EDGE_RUNTIME_DETECTED" == "0" ]]; then
+    echo "[ERROR] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running." >&2
+    echo "        Diagnostic hint: Ensure the edge stack is up, or configure EDGE_GATEWAY_CONTAINER to the correct name." >&2
+    exit 1
+  fi
 fi
 
 # 6b. Frontend Build
@@ -774,7 +784,6 @@ echo
 echo ">> Edge Caddy Guard:"
 
 EDGE_CADDY_DIR="/opt/heimgewebe/edge"
-EDGE_CADDY_CONTAINER="edge-caddy"
 
 # Only attempt this if frontend delivery is required for this run.
 # edge = explicit external frontdoor
@@ -786,18 +795,18 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
     if [[ "$REFRESH_EDGE" == "1" ]]; then
         echo "   Recreation forced by --refresh-edge flag."
         EDGE_NEEDS_RECREATE=1
-    elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_CADDY_CONTAINER"; then
+    elif docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
         # Check if running container sees the static artifacts properly
-        echo "   Checking static UI mount in $EDGE_CADDY_CONTAINER..."
-        if ! docker exec "$EDGE_CADDY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
-            echo "WARNING: Static UI artifacts invisible in $EDGE_CADDY_CONTAINER."
+        echo "   Checking static UI mount in $EDGE_GATEWAY_CONTAINER..."
+        if ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+            echo "WARNING: Static UI artifacts invisible in $EDGE_GATEWAY_CONTAINER."
             echo "         Container mount state drift detected."
             EDGE_NEEDS_RECREATE=1
         else
             echo "   Static UI mount is valid."
         fi
     else
-        echo "   Container $EDGE_CADDY_CONTAINER is not running. Skipping runtime check."
+        echo "   Container $EDGE_GATEWAY_CONTAINER is not running. Skipping runtime check."
     fi
 
     if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
@@ -805,14 +814,14 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
             echo "   Refreshing edge deployment to restore static UI mount..."
 
             # Safe recreate logic
-            docker rm -f "$EDGE_CADDY_CONTAINER" >/dev/null 2>&1 || true
+            docker rm -f "$EDGE_GATEWAY_CONTAINER" >/dev/null 2>&1 || true
 
             RECREATE_ERR_FILE=$(mktemp)
             # We omit a specific service name here because the edge deployment configuration is external to this repository.
             # We cannot reliably assume the exact service name (e.g., whether it is 'caddy' or 'edge-caddy').
             # Recreating the whole stack with --force-recreate ensures all linked services are properly refreshed.
             if ! ( cd "$EDGE_CADDY_DIR" && docker compose -p edge -f docker-compose.yml up -d --force-recreate ) > "$RECREATE_ERR_FILE" 2>&1; then
-                msg="Failed to recreate edge-caddy stack. The edge deployment is broken."
+                msg="Failed to recreate edge stack. The edge deployment is broken."
                 echo "ERROR: $msg"
                 generate_failure_bundle "$msg" "$RECREATE_ERR_FILE"
                 rm -f "$RECREATE_ERR_FILE"
@@ -820,7 +829,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
             fi
             rm -f "$RECREATE_ERR_FILE"
 
-            echo "   Edge deployment refreshed; edge-caddy should now see static artifacts."
+            echo "   Edge deployment refreshed; ${EDGE_GATEWAY_CONTAINER} should now see static artifacts."
         else
             msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
             echo "ERROR: $msg"
