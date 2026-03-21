@@ -80,6 +80,11 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 EDGE_GATEWAY_CONTAINER="${EDGE_GATEWAY_CONTAINER:-edge-caddy}"
+if [[ -z "$EDGE_GATEWAY_CONTAINER" || "$EDGE_GATEWAY_CONTAINER" =~ [[:space:]] ]]; then
+  echo "[ERROR] EDGE_GATEWAY_CONTAINER must be non-empty and contain no whitespace. Current value: '$EDGE_GATEWAY_CONTAINER'." >&2
+  exit 1
+fi
+
 EDGE_CA="${EDGE_CA:-/opt/heimgewebe/edge/edge-ca.crt}"
 
 # --- REPO_DIR Resolution ---
@@ -708,7 +713,8 @@ fi
 if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
   echo "[INFO] Expected canonical edge gateway container: ${EDGE_GATEWAY_CONTAINER}"
   if [[ "$EDGE_RUNTIME_DETECTED" == "0" ]]; then
-    echo "[WARN] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running. Will attempt to recreate."
+    echo "[WARN] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running."
+    echo "[WARN] A recreate will only be attempted if frontend delivery remains required for this run."
   fi
 fi
 
@@ -837,7 +843,28 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
             fi
             rm -f "$RECREATE_ERR_FILE"
 
-            echo "   Edge deployment refreshed; ${EDGE_GATEWAY_CONTAINER} should now see static artifacts."
+            echo "   Edge deployment refreshed; verifying ${EDGE_GATEWAY_CONTAINER}..."
+            if ! docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
+                msg="Post-recreate verification failed: $EDGE_GATEWAY_CONTAINER is not running."
+                if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+                    echo "ERROR: $msg"
+                    generate_failure_bundle "$msg"
+                    exit 1
+                else
+                    echo "WARNING: $msg"
+                fi
+            elif ! docker exec "$EDGE_GATEWAY_CONTAINER" sh -c 'test -s /srv/weltgewebe-web/index.html && test -d /srv/weltgewebe-web/_app'; then
+                msg="Post-recreate verification failed: static UI artifacts still invisible in $EDGE_GATEWAY_CONTAINER."
+                if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
+                    echo "ERROR: $msg"
+                    generate_failure_bundle "$msg"
+                    exit 1
+                else
+                    echo "WARNING: $msg"
+                fi
+            else
+                echo "   Verified: ${EDGE_GATEWAY_CONTAINER} is running and UI mount is valid."
+            fi
         else
             msg="Could not refresh edge deployment. Directory $EDGE_CADDY_DIR not found."
             echo "ERROR: $msg"
