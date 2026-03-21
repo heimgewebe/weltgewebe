@@ -11,7 +11,10 @@ summary: Wahrheitsfilter und Statusmatrix der Auth-Architektur (Alt-/Ist-Linie v
 
 Status: aktiv
 Zweck: Verifikation der Auth-Architektur gegen ADR-0006 + Specs
-Letzte Aktualisierung: 2023-10-24
+Letzte Aktualisierung: aktuell (geprüft über CI-Guard)
+
+> Diese Matrix dient als Diagnoseartefakt zur Roadmap.
+> Siehe: `docs/blueprints/auth-roadmap.md`
 
 ---
 
@@ -25,6 +28,10 @@ Diese Dokumente beschreiben die finale Architektur, auf die hingearbeitet wird:
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
+
+### Brückendokumente / Alt-MVP-Linie
+
+- `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 
 ### Alt-/Ist-Linie (Historische / Implementierte Basis)
 
@@ -46,14 +53,14 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | ✔ belegt    | OK     | niedrig |
-| Session               | required    | ?           | Offen  | hoch    |
-| Session Refresh       | required    | ?           | Offen  | hoch    |
-| Logout                | required    | ?           | Offen  | mittel  |
-| Logout All            | required    | ?           | Offen  | hoch    |
-| Devices               | required    | ?           | Offen  | hoch    |
-| Step-up Auth          | required    | ?           | Offen  | sehr hoch |
-| Passkeys              | optional    | ?           | Offen  | mittel  |
-| Sicherheitsinvarianten| required    | ?           | Offen  | hoch    |
+| Session               | required    | MVP in-memory | Teil   | hoch    |
+| Session Refresh       | required    | unbekannt   | Offen  | hoch    |
+| Logout                | required    | MVP Code    | Teil   | mittel  |
+| Logout All            | required    | unbekannt   | Offen  | hoch    |
+| Devices               | required    | unbekannt   | Offen  | hoch    |
+| Step-up Auth          | required    | unbekannt   | Offen  | sehr hoch |
+| Passkeys              | optional    | unbekannt   | Offen  | mittel  |
+| Sicherheitsinvarianten| required    | tlw. belegt | Teil   | hoch    |
 
 ---
 
@@ -71,10 +78,10 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), Persistenz.
-**Ist:** teilweise / unbekannt
-**Belege:** -
-**Fehlende Belege:** Routen-Code, Cookie-Verhalten, Persistenzmodell
-**Status:** Offen
+**Ist:** laut `auth-blueprint.md` abgeschlossen (Phase 3 Session Kern, Phase 4 Middleware), laut `auth-and-ui-routing.md` existiert ein In-Memory MVP. Eine End-to-End-Verifikation fehlt.
+**Belege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
+**Fehlende Belege:** Echte Persistenz (nicht In-Memory), Cookie-Verhalten, Routen-Tests.
+**Status:** Teil
 **Risiko:** hoch
 
 ### 2.3 Session Refresh
@@ -89,10 +96,10 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.4 Logout
 
 **Soll:** POST `/auth/logout`
-**Ist:** unbekannt
-**Belege:** -
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
+**Ist:** im MVP dokumentiert als implementiert.
+**Belege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
+**Fehlende Belege:** End-to-End-Test
+**Status:** Teil
 **Risiko:** mittel
 
 ### 2.5 Logout All
@@ -134,10 +141,10 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.9 Sicherheitsinvarianten
 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
-**Ist:** Teilweise in Runbook dokumentiert, aber Laufzeitnachweise fehlen für alle Aspekte.
-**Belege:** `docs/runbook.md` (Rate Limits, Trusted Proxies)
+**Ist:** Teilweise in Runbook dokumentiert (Rate Limits, Proxies) und laut ADR-0006 vorgesehen, aber Laufzeitnachweise fehlen für alle Aspekte.
+**Belege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `ADR-0006`
 **Fehlende Belege:** Automatisierte Tests für CSRF, Anti-Enumeration.
-**Status:** Offen
+**Status:** Teil
 **Risiko:** hoch
 
 ---
