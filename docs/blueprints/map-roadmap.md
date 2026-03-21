@@ -21,8 +21,8 @@ summary: >
 - [x] Zielregion für ersten Build festlegen (Entscheidung: Hamburg für schnelle Iteration)
 - [x] Tile-Generator festlegen (Entscheidung: planetiler)
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
-- [ ] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Teilweise: Vite Dev-Server implementiert, Prod-Hosting in
-      Caddy/Heimserver auf Infra-Ebene vorbereitet, echter End-to-End-Nachweis in Produktion fehlt)_
+- [x] Hosting-Ziel festlegen (z. B. Heimserver / S3 / R2) _(Entscheidung:
+      Heimserver/Caddy für Produktion, Vite für Dev-Hosting.)_
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
 - [ ] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts noch offen
 
@@ -59,10 +59,10 @@ vorbereitet; echter lokaler Lauf gegen reales .pmtiles weiterhin unbelegt.)_
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Im Dev-Hosting über Vite technisch erprobt und provisorisch angebunden; die
-    verbindliche Anbindung gegen ein vollautomatisches Produktions-Artefakt (echtes
-    .pmtiles) über Caddy steht noch aus. Die Betriebsreife ist damit nicht erreicht,
-    das Checklist-Item bleibt bewusst offen._
+  - _Die Anbindung in MapLibre ist für den Dev-Modus erprobt. Der produktive
+    Rollout bleibt offen, weil der produktive Artefaktpfad und die
+    Standardschaltung von `local-sovereign` noch nicht als verbindlicher
+    Betriebsweg durchgesetzt sind._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

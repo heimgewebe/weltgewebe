@@ -697,7 +697,31 @@ elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/inde
   echo "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
 fi
 
-# 6c. Static UI Runtime Guard & Edge Caddy Recreate
+# 6c. Basemap Artifact Guard (best effort)
+# Try to ensure the PMTiles artifact exists for Heimserver Caddy to serve
+BASEMAP_DIR="build/basemap"
+if ! compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
+    echo
+    echo ">> Basemap artifact missing. Attempting PMTiles build..."
+    if [[ -x "scripts/basemap/build-hamburg-pmtiles.sh" ]]; then
+        if bash scripts/basemap/build-hamburg-pmtiles.sh; then
+            if compgen -G "$BASEMAP_DIR/*.pmtiles" > /dev/null; then
+                echo ">> Basemap artifact build succeeded."
+            else
+                echo "WARNING: Basemap artifact still missing after build attempt."
+            fi
+        else
+            echo "WARNING: PMTiles build script failed. Continuing deployment (best effort)."
+        fi
+    else
+        echo "WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable."
+    fi
+else
+    echo
+    echo ">> Basemap artifact present in $BASEMAP_DIR."
+fi
+
+# 6d. Static UI Runtime Guard & Edge Caddy Recreate
 echo
 echo ">> Edge Caddy Guard:"
 
