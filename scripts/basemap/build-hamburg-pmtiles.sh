@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
 BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
-# 2. Pin tools and OSM input for full reproducibility
+# 2. Pin tools and OSM input for reproducible input provenance
 # We use a stable, historical OSM snapshot from Geofabrik instead of the daily latest.
 OSM_FILE="hamburg-250101.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-250101.osm.pbf"
