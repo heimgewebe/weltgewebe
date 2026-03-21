@@ -8,6 +8,11 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Deployment-Änderungsprotokoll
 
+
+## 2026-03-21
+
+- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Added `/local-basemap/*` routing (including `.pmtiles` and `.meta.json`) and map-style volume for sovereign basemap assets.
+
 ## 2026-03-18
 
 - `infra/caddy/Caddyfile.heim`: Added explicit `Cache-Control: no-store` header for `/_app/version.json` to enforce the no-store version.json delivery contract.
@@ -290,5 +295,3 @@ Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, wenn `we
 während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe
 erhalten bleibt.
 
-
-- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Added `/local-basemap/*` routing (including `.pmtiles` and `.meta.json`) and map-style volume for sovereign basemap assets.
