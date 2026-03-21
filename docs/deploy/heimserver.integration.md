@@ -62,24 +62,36 @@ Dieses Dokument ist ein normativer Contract; die Heimserver-Enforcement-Details 
 wird erst wirksam, wenn die externe Edge-Instanz den aktualisierten Build neu einliest
 (z. B. durch Container-Recreate oder Reload).
 
-#### Konfigurationsvertrag: `DEPLOY_FRONTEND_MODE`
+#### Konfigurationsvertrag: `DEPLOY_FRONTEND_MODE` und `EDGE_GATEWAY_CONTAINER`
 
-Zur Steuerung der Frontend-Relevanz und der Edge-Aktualisierung wertet das Deploy-Skript die Variable
-`DEPLOY_FRONTEND_MODE` aus. Zulässige Werte:
+Zur Steuerung der Frontend-Relevanz und der Edge-Aktualisierung wertet das Deploy-Skript
+die Variablen `DEPLOY_FRONTEND_MODE` und `EDGE_GATEWAY_CONTAINER` (Default: `edge-caddy`) aus.
+
+Zulässige Werte für `DEPLOY_FRONTEND_MODE`:
 
 * **`auto` (Default):** Nutzt eine Heuristik. Explizites `BUILD_WEB=no` deaktiviert die
   Frontend-Relevanz vorrangig. Andernfalls gilt das Frontend als deploy-relevant (`REQUIRE_FRONTEND=1`),
   wenn der interne Caddy aktiv ist oder das Verzeichnis `apps/web` existiert. Dies bedeutet lediglich,
   dass Build-Artefakte erzeugt werden müssen, garantiert aber nicht die operative Auslieferung durch
   den Stack selbst. Zusätzlich wird heuristisch (naming-dependent) geprüft, ob ein externer Container
-  namens `edge-caddy` läuft; ist dies der Fall, wird ein best-effort Edge-Aktualisierungs-Pfad
+  entsprechend `EDGE_GATEWAY_CONTAINER` läuft; ist dies der Fall, wird ein best-effort Edge-Aktualisierungs-Pfad
   ausgelöst (mit Warnung, dass eine explizite Konfiguration bevorzugt wird).
 * **`edge`:** Explizite, kanonische Deklaration der externen Liefertopologie. Das Frontend ist relevant,
   und Edge-Aktualisierungs-Checks (inklusive Recreate-Guard) werden zwingend und normativ ausgeführt.
+  **Wichtig:** Der Edge-Gateway wird in diesem Modus verbindlich erwartet. Falls der Container fehlt oder
+  ein Mount-Drift festgestellt wird, versucht der Guard zunächst aktiv einen Reparaturpfad (Recreate).
+  Erst wenn dieser Reparaturpfad scheitert, schlägt das Deployment mit einem Fehler fehl.
 * **`internal`:** Die UI wird durch den Stack-internen Caddy ausgeliefert. Das Frontend ist relevant,
-  Edge-Checks werden übersprungen.
+  Edge-Checks werden übersprungen. Setzt zwingend voraus, dass der stack-interne Caddy aktiviert ist
+  (`ENABLE_CADDY=1` oder `--with-caddy`); andernfalls bricht das Deployment mit einem Fehler ab.
 * **`off`:** Das Frontend ist für diesen Deploy irrelevant (z. B. reine API-Umgebung).
   Frontend-Build und Edge-Checks werden übersprungen.
+
+**Hinweis zum Edge-Refresh-Pfad:**
+Die Variable `EDGE_GATEWAY_CONTAINER` parametrisiert lediglich die Runtime-Erkennung und Mount-Prüfung
+des Edge-Gateways. Der automatische Reparaturpfad (Recreate) bleibt jedoch weiterhin fest an die kanonische
+Heimserver-Edge-Topologie unter `/opt/heimgewebe/edge` gebunden und macht nicht den gesamten Edge-Stack
+beliebig konfigurierbar.
 
 Der Reverse-Proxy (Edge-Caddy) läuft im Heimserver-Betrieb außerhalb des Weltgewebe-Stacks.
 `docs/reference/caddy.heimserver.caddy` und `infra/caddy/Caddyfile.heim` dienen hierbei primär
