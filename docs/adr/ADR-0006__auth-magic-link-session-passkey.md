@@ -50,7 +50,7 @@ Zweck:
 Zweck:
 
 - komfortable und sichere Wiederanmeldung
-- Step-up-Authentifizierung bei sensiblen Aktionen
+- Step-up Auth bei sensiblen Aktionen
 - vollständiges Passkey-Management (hinzufügen, auflisten, entfernen)
 
 ## Prinzipien

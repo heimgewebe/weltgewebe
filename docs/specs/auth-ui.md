@@ -32,7 +32,7 @@ Text:
 "Wir haben dir einen Link geschickt."
 
 Hinweis:
-"Öffne den Link idealerweise auf diesem Gerät.
+"Öffne den Link möglichst auf diesem Gerät.
 Öffnest du ihn auf einem anderen Gerät, wird dort eine neue Sitzung erstellt."
 
 ## Klare UI-Zustände
@@ -46,11 +46,14 @@ Hinweis:
 ## Erfolgreicher Login
 
 - Weiterleitung in App
-- **Nur nach** erfolgreichem Login wird der Passkey als Option ("Schnellere Anmeldung aktivieren") angeboten,
+- **Nur nach** erfolgreichem Login wird der Passkey als Option angeboten,
   falls noch nicht auf dem aktuellen Gerät vorhanden.
 
 CTA:
-"Schnellere Anmeldung aktivieren" oder "Mit Face ID / Fingerabdruck anmelden" (Passkey Registrierung)
+"Schnellere Anmeldung aktivieren" (Passkey Registrierung)
+
+Erklärender Text:
+"Danach kannst du dich auf unterstützten Geräten mit Face ID oder Fingerabdruck anmelden."
 
 ## Wiederkehr
 
