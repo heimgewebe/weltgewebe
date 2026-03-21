@@ -47,6 +47,18 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
 
 *Note (Phase C Preparation): Future Evaluation: The current bind-mount model could theoretically be replaced by a dedicated Web-Container architecture to eliminate host-mount drift entirely.*
 
+### Basemap Artifact Deployment (Best Effort)
+
+The deployment script (`weltgewebe-up`) attempts to provide the sovereign PMTiles basemap artifact in the `build/basemap/` directory as a best-effort guard before stack initialization. This allows the internal routing layer to access and mount the tiles if required.
+
+**Bedeutung:** Artefakt vorhanden ≠ automatisch produktiv aktiv. The presence of the PMTiles artifact in `build/basemap/` ensures the infrastructure *can* serve it, but the application runtime must still be configured to consume it (e.g. switching the frontend mode to `local-sovereign`).
+
+To locally verify the artifact state:
+
+```bash
+ls build/basemap/*.pmtiles
+```
+
 ## Preflight guard
 
 `scripts/weltgewebe-up` runs `scripts/preflight/runtime_contract.sh` before `docker compose up`.
