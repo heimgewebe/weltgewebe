@@ -34,13 +34,13 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
 
 - [x] Eigenes `style.json` im `map-style`-Verzeichnis anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
-  - _Teilweise umgesetzt: Verzeichnisstruktur und `ASSETS.md` angelegt, aber die konkrete Reproduktions- und Lieferkette (z.B. pbf-Generierung) fehlt im Repo._
+  - _Teilweise dokumentiert: lokale Auslieferung über Repo-Pfade vorgesehen; konkrete Reproduktions- und Lieferkette
+    noch zu finalisieren._
 - [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
-  - _Teilweise umgesetzt: `ASSETS.md` listet Noto Sans Regular (OFL), aber konkrete Sprite-Lizenzen und physische Assets fehlen noch._
+  - _Teilweise dokumentiert: Font-Richtung beschrieben; Sprite-Lizenz und konkrete Asset-Bestückung noch offen (siehe
+    `map-style/ASSETS.md`)._
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
-  - _Noch offen: Abwarten der fertigen Asset-Pipeline für das finale Styling._
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
-  - _Noch offen._
 
 **Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert und sind
 lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
@@ -48,13 +48,14 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt.
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _(Update: Dev-Infrastruktur im Vite-Server bereitet vor; Prod-Hosting in Caddy für Style und PMTiles unter `/local-basemap/` vorbereitet; produktiver Rollout steht noch aus.)_
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
-  - _Hinweis: Vite nutzt im Dev-Modus (`local-sovereign`) ein Middleware-Routing ohne CDN-Zugriffe._
+  - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
+    als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Teilweise umgesetzt:_ Im Dev-Modus erprobt, in Prod ist Style-/Asset-Hosting und PMTiles-Routing unter `/local-basemap/` vorbereitet. Produktiver `local-sovereign` Default-Rollout bleibt offen.
+  - _Teilweise umgesetzt: Im Dev-Modus erprobt, in Prod ist Style-/Asset-Hosting und PMTiles-Routing unter `/local-basemap/` vorbereitet. Produktiver `local-sovereign` Default-Rollout bleibt offen._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
@@ -68,10 +69,8 @@ Requests. **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Kn
 - [x] Versioniertes Artefakt-Schema definieren (z. B. `basemap-vX.pmtiles`)
 - [x] Stabiler Alias-/Current-Pfad für das versionierte Artefakt bereitstellen
 - [ ] Update-Zyklus definieren (z. B. monatliche OSM-Updates)
-  - _Noch offen: Cronjobs oder CI-Pläne fehlen._
 - [ ] Publish- und Rollback-Strategie festlegen
-  - _Noch offen._
-- [x] Basemap-Metadaten dokumentieren (`basemap-hamburg.meta.json` wird vom Skript erzeugt)
+- [x] Basemap-Metadaten dokumentieren
 
 **Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne
 Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches Deployment ohne Review.

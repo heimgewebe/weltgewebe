@@ -8,10 +8,9 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Deployment-Änderungsprotokoll
 
-
 ## 2026-03-21
 
-- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Added `/local-basemap/*` routing (including `.pmtiles` and `.meta.json`) and map-style volume for sovereign basemap assets.
+- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Routing für `/local-basemap/*` (inklusive `.pmtiles` und `.meta.json`) sowie Volume-Mount für `map-style` ergänzt, um produktiv souveräne Basemap-Assets auszuliefern.
 
 ## 2026-03-18
 
@@ -295,3 +294,4 @@ Dies ermöglicht ein flexibles Deployment in beliebigen Verzeichnissen, wenn `we
 während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltgewebe`) für native Docker Compose Aufrufe
 erhalten bleibt.
 
+**Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
