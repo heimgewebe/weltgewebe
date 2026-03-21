@@ -778,10 +778,22 @@ else
                 echo "   [X] WARNING: Basemap artifact still missing after build attempt. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
             fi
         else
-            echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+            evaluate_basemap_state
+            if (( PMTILES_COUNT > 0 )); then
+                echo "   [X] WARNING: PMTiles build script failed, but ${PMTILES_COUNT} PMTiles artifact(s) are present. Continuing deployment (best effort)."
+                echo "       -> e.g. ${FIRST_PMTILES}"
+            else
+                echo "   [X] WARNING: PMTiles build script failed. Continuing deployment (best effort). 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+            fi
         fi
     else
-        echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+        evaluate_basemap_state
+        if (( PMTILES_COUNT > 0 )); then
+            echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable, but ${PMTILES_COUNT} PMTiles artifact(s) are present in ${BASEMAP_DIR}."
+            echo "       -> e.g. ${FIRST_PMTILES}"
+        else
+            echo "   [X] WARNING: scripts/basemap/build-hamburg-pmtiles.sh not found or not executable. 0 PMTiles artifacts present in ${BASEMAP_DIR}."
+        fi
     fi
 fi
 # 6d. Static UI Runtime Guard & Edge Caddy Recreate
