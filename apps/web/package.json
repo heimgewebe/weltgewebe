@@ -24,6 +24,7 @@
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
+    "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
     "test": "playwright test",
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=dot,html,junit",
