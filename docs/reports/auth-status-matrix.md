@@ -60,7 +60,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
-| Magic Link            | vorhanden   | ✔ belegt    | OK     | niedrig |
+| Magic Link            | vorhanden   | alte Routen belegt, Ziel-Contract offen | Teil   | mittel  |
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
@@ -77,12 +77,12 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** implementiert
+**Ist:** Magic-Link-Funktionalität ist implementiert, aber die belegte Runtime nutzt derzeit `/auth/login/request` und `/auth/login/consume` statt der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume`. Dies ist kein Funktionsausfall, sondern ein Contract-Angleichungspunkt.
 **Dokumentationsbelege:** `docs/runbook.md`
 **Code-/Runtime-Belege:** `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
-**Fehlende Belege:** keine
-**Status:** OK
-**Risiko:** niedrig
+**Fehlende Belege:** Nachweis der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume` oder explizite Alias-/Migrationsbrücke auf diese Zielrouten.
+**Status:** Teil
+**Risiko:** mittel
 
 ### 2.2 Session
 
