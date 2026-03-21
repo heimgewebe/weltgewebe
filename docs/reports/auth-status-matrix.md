@@ -171,4 +171,4 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ## 4. Entscheidungsregel
 
 Kein Feature darf implementiert werden, wenn die Basis (Session) nicht stabil ist oder Step-up/API unklar ist.
-Diese Matrix blockiert Drift. Alles was nicht grün (OK) ist, existiert nur als Annahme.
+Diese Matrix blockiert Drift. Alles, was nicht grün (OK) ist, darf nicht stillschweigend als voll implementiert behandelt werden.

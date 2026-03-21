@@ -6,6 +6,7 @@
     "docs/specs/auth-ui.md",
     "docs/adr/ADR-0005-auth.md",
     "docs/specs/auth-blueprint.md",
+    "docs/blueprints/weltgewebe.auth-and-ui-routing.md",
     "docs/runbook.md",
     "verification/verify_magic_link.py",
     "apps/web/src/routes/login/+page.svelte"

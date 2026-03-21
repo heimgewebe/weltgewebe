@@ -49,14 +49,17 @@ Diese Dokumente bleiben relevant, sind aber nicht mehr alleiniger Zielrahmen:
 - `docs/adr/ADR-0005-auth.md`
 - `docs/specs/auth-blueprint.md`
 
-### Brückendokumente / Betriebs- und Routing-Kontext
+### Brückendokumente
 
 Diese Dokumente müssen berücksichtigt, aber nicht mit der Zielarchitektur verwechselt werden:
 
 - `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
+- `docs/index.md`
+
+### Betriebs- und Kontextbelege
+
 - `docs/runbook.md`
 - `apps/api/README.md`
-- `docs/index.md`
 
 ### Runtime- / Belegquellen
 
@@ -323,11 +326,9 @@ Sie muss auch wissen:
 - Devices / Logout-All
 - Passkey-Smoke (sobald vorhanden)
 
-### Artefakte für Phase 7
+### Optionale spätere Absicherung
 
-- `scripts/guards/auth_status_guard.py`
-- `verification/verify_auth_status.py`
-- ggf. zusätzliche Smoke-/Guard-Hooks
+Automatisierte Guards oder Smokescripts sind eine mögliche spätere Absicherung (falls die manuelle Matrixpflege und Review-Praxis nicht mehr ausreichen), aber noch nicht zwingend als Architektur-Artefakt beschlossen.
 
 ### Stop-Kriterium für Phase 7
 
