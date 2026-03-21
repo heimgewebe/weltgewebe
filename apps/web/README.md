@@ -33,7 +33,7 @@ pnpm preview -- --host 0.0.0.0 --port 4173
 
 - **Port:** 4173
 - **URL:** [http://localhost:4173/map](http://localhost:4173/map)
-- **Hinweis:** Playwright-Tests nutzen lokal standardmäßig diesen Port. Alternativ: `pnpm preview:cs`.
+- **Hinweis:** Playwright-Tests nutzen lokal standardmäßig diesen Port. Wenn Playwright-Tests manuell gegen diesen Server laufen sollen (z.B. über `PLAYWRIGHT_SKIP_WEBSERVER=1`), muss der Server mit `pnpm run build:e2e` anstelle von `pnpm build` gebaut werden. Alternativ: `pnpm preview:cs`.
 
 <!-- prettier-ignore-start -->
 > [!TIP]
