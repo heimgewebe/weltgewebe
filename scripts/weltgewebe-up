@@ -641,6 +641,7 @@ fi
 
 if [[ "$DEPLOY_FRONTEND_MODE" == "internal" && "${ENABLE_CADDY:-0}" != "1" ]]; then
   echo "[ERROR] DEPLOY_FRONTEND_MODE=internal requires ENABLE_CADDY=1 (or --with-caddy)." >&2
+  echo "        Diagnostic hint: Ensure the stack-internal Caddy is enabled, otherwise the UI cannot be served." >&2
   exit 1
 fi
 
