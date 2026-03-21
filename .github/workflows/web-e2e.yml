@@ -44,7 +44,7 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter weltgewebe-web exec playwright install --with-deps
       - name: Build app
-        run: pnpm --filter weltgewebe-web build
+        run: pnpm --filter weltgewebe-web build:e2e
 
       - name: Generate demo data
         run: scripts/dev/generate-demo-data.sh
