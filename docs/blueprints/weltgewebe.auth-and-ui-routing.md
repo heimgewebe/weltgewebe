@@ -8,6 +8,8 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Blueprint: Heim-first Auth & UI Routing
 
+> **Hinweis:** Dieser Blueprint dient primär als Routing-/Diagnose-Werkzeug zur Auflösung historischer Split-Brain-Zustände und ist **kein** Bestandteil der Endarchitektur für Authentifizierung. Maßgeblich für Auth ist [ADR-0006](../adr/ADR-0006__auth-magic-link-session-passkey.md).
+
 ## Historischer Kontext (Split-Brain)
 
 Dieser Blueprint löst einen historischen "Split-Brain"-Zustand auf, bei dem die UI
@@ -40,13 +42,13 @@ Die Identität wird heimisch verwaltet.
   - **404 Not Found:** Symptom für `/api/auth/*` Pfade, wenn der Reverse-Proxy korrekt ist
     (Header `server: Caddy`), aber die Route im Backend fehlt.
     *Hinweis: Proxy/Upstream kann mit `/api/health/ready` (200 OK) gegengeprüft werden; betroffen sind spezifisch die Auth-Routen.*
-  - **Zielzustand:** POST `/api/auth/login/request` liefert **200 OK** oder **429 Too Many Requests**.
+  - **Zielzustand:** POST `/api/auth/magic-link/request` liefert **200 OK** oder **429 Too Many Requests**.
 
 - **Auth-Endpunkte (Soll):** Müssen explizit exposed sein.
   *Hinweis: Exakte Auth-Routen im Backend sind gegen `apps/api/src/routes/auth.rs` zu verifizieren (rg),*
   *bevor UI implementiert wird.*
-  - `POST /api/auth/login/request` (Magic Link anfordern)
-  - `GET/POST /api/auth/login/consume` (Magic Link einlösen)
+  - `POST /api/auth/magic-link/request` (Magic Link anfordern)
+  - `GET/POST /api/auth/magic-link/consume` (Magic Link einlösen)
   - `POST /api/auth/logout`
   - `GET /api/auth/me` (Session-Check)
 - **Session-Management:**

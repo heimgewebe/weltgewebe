@@ -44,7 +44,7 @@ def run():
         # 5. Consume Token
         # Access via frontend proxy to ensure cookie path matches frontend domain if relevant (though path=/ usually works)
         # and to verify proxy behavior.
-        consume_url_proxied = f"http://localhost:5173/api/auth/login/consume?token={token}"
+        consume_url_proxied = f"http://localhost:5173/api/auth/magic-link/consume?token={token}"
         print(f"Consuming token via {consume_url_proxied}...")
 
         page.goto(consume_url_proxied)
