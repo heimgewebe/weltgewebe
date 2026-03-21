@@ -23,7 +23,7 @@ summary: >
 - [x] Artefaktformat festlegen (Entscheidung: PMTiles)
 - [x] Hosting-Ziel festlegen (Entscheidung: Heimserver/Caddy für Produktion, Vite für Dev-Hosting)
 - [x] Deterministische Build-Basis für Basemap-Artefakt herstellen (Tool-Basis gepinnt)
-- [x] OSM-Input-Pin für volle Reproduzierbarkeit des Artefakts herstellen (Integritätsgeprüfte Snapshots statt "latest")
+- [x] OSM-Input-Pin herstellen (historischer Snapshot mit SHA256-Prüfung statt "latest")
 
 **Abnahmekriterium:** Ein lokal generiertes `.pmtiles`-Artefakt kann über einen HTTP-Endpunkt aufgerufen und gerendert
 werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Artefakte.
