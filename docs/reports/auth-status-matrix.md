@@ -12,6 +12,7 @@ summary: Wahrheitsfilter und Statusmatrix der Auth-Architektur (Alt-/Ist-Linie v
 Status: aktiv
 Zweck: Verifikation der Auth-Architektur gegen ADR-0006 + Specs
 Letzte Aktualisierung: manuell gepflegt
+Pflegeregel: Diese Matrix ist bei jedem Auth-bezogenen PR zu aktualisieren, der Zielrahmen, Runtime-Verhalten oder Sicherheitsinvarianten verändert.
 
 > Diese Matrix dient als Diagnoseartefakt zur Roadmap.
 > Siehe: `docs/blueprints/auth-roadmap.md`
@@ -53,9 +54,9 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | ✔ belegt    | OK     | niedrig |
-| Session               | required    | durch Alt-Doku behauptet | Teil   | hoch    |
+| Session               | required    | Code angelegt, E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
-| Logout                | required    | durch Alt-Doku behauptet | Teil   | mittel  |
+| Logout                | required    | Code angelegt, E2E offen | Teil   | mittel  |
 | Logout All            | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
@@ -79,9 +80,9 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), Persistenz.
-**Ist:** ältere Dokumentationslinie beschreibt Session-Kern und Middleware als implementiert; gegen ADR-0006-Zielrahmen und aktuelle Runtime noch nicht end-to-end verifiziert.
+**Ist:** In-Memory Session-Store und `/auth/me` Store-Anbindung existieren im Code; gegen ADR-0006-Zielrahmen (echte Persistenz) jedoch noch nicht end-to-end verifiziert.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** keine
+**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
 **Fehlende Belege:** Echte Persistenz (nicht In-Memory), Cookie-Verhalten, Routen-Tests.
 **Status:** Teil
 **Risiko:** hoch
@@ -99,9 +100,9 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 ### 2.4 Logout
 
 **Soll:** POST `/auth/logout`
-**Ist:** im älteren MVP-/Routing-Kontext dokumentiert; ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt.
+**Ist:** im Code angelegt (`/auth/logout` Route); ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt jedoch.
 **Dokumentationsbelege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** keine
+**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`
 **Fehlende Belege:** End-to-End-Test
 **Status:** Teil
 **Risiko:** mittel

@@ -7,6 +7,7 @@
     "docs/adr/ADR-0005-auth.md",
     "docs/specs/auth-blueprint.md",
     "docs/blueprints/weltgewebe.auth-and-ui-routing.md",
+    "docs/blueprints/auth-roadmap.md",
     "docs/runbook.md",
     "verification/verify_magic_link.py",
     "apps/web/src/routes/login/+page.svelte"
@@ -23,10 +24,10 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, Persistenz",
-      "ist": "ältere Dokumentationslinie beschreibt Session-Kern und Middleware als implementiert; gegen ADR-0006-Zielrahmen und aktuelle Runtime noch nicht end-to-end verifiziert",
+      "ist": "In-Memory Session-Store und /auth/me Store-Anbindung existieren im Code; gegen ADR-0006-Zielrahmen (echte Persistenz) jedoch noch nicht end-to-end verifiziert",
       "status": "Teil",
       "documentation_evidence": ["docs/specs/auth-blueprint.md", "docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
-      "code_runtime_evidence": [],
+      "code_runtime_evidence": ["apps/api/src/routes/auth.rs", "apps/api/src/auth/session.rs", "apps/web/src/lib/auth/store.ts"],
       "missing_evidence": ["Echte Persistenz (nicht In-Memory)", "Cookie-Verhalten", "Routen-Tests"],
       "risk": "hoch"
     },
@@ -41,10 +42,10 @@
     },
     "logout": {
       "soll": "POST /auth/logout",
-      "ist": "im älteren MVP-/Routing-Kontext dokumentiert; ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt",
+      "ist": "im Code angelegt (/auth/logout Route); ein aktueller End-to-End-Beleg gegen den neuen Zielrahmen fehlt jedoch",
       "status": "Teil",
       "documentation_evidence": ["docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
-      "code_runtime_evidence": [],
+      "code_runtime_evidence": ["apps/api/src/routes/auth.rs"],
       "missing_evidence": ["End-to-End-Test"],
       "risk": "mittel"
     },

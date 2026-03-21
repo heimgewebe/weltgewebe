@@ -177,6 +177,8 @@ Jeder relevante Bereich ist entweder:
 
 **Ziel:** Vom Magic-Link-MVP zur alltagstauglichen Auth.
 
+> **Wichtig ab Phase 2:** Für jeden Teilbereich gilt ab hier „Diagnose vor Umsetzung“. Es wird immer zuerst die Statusmatrix befragt, ob Code-Belege existieren. Erst danach wird implementiert oder verfeinert.
+
 ### Arbeitspakete Phase 2
 
 1. `GET /auth/session` belegen oder implementieren
