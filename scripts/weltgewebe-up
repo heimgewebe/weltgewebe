@@ -698,7 +698,7 @@ if docker ps --format '{{.Names}}' | grep -qFx "$EDGE_GATEWAY_CONTAINER"; then
   EDGE_RUNTIME_DETECTED=1
 fi
 
-echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime=$EDGE_RUNTIME_DETECTED"
+echo "[frontend] mode=$DEPLOY_FRONTEND_MODE require=$REQUIRE_FRONTEND edge_runtime_detected=$EDGE_RUNTIME_DETECTED"
 
 if [[ "$EDGE_RUNTIME_DETECTED" == "1" && "$DEPLOY_FRONTEND_MODE" == "auto" ]]; then
   echo "[WARN] ${EDGE_GATEWAY_CONTAINER} runtime heuristically detected while DEPLOY_FRONTEND_MODE=auto"
