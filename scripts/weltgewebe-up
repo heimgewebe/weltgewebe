@@ -656,8 +656,9 @@ if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
       elif [[ "${ENABLE_CADDY:-0}" == "1" ]]; then
         export REQUIRE_FRONTEND=1
       else
-        # Fallback: if web workspace exists, treat frontend as deploy-relevant,
-        # even if delivery topology is external.
+        # Fallback: if web workspace exists, treat frontend as deploy-relevant
+        # (meaning artifacts must be built), but this does NOT guarantee
+        # local delivery by the stack itself.
         if [[ -d "apps/web" ]]; then
           export REQUIRE_FRONTEND=1
         else
