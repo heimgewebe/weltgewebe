@@ -71,11 +71,16 @@ else
 fi
 
 echo "=> Verifying integrity of $OSM_FILE..."
-if ! command -v sha256sum >/dev/null 2>&1; then
-  echo "Error: 'sha256sum' is required for artifact verification but not installed." >&2
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA256_CMD=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  SHA256_CMD=(shasum -a 256)
+else
+  echo "Error: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
   exit 1
 fi
-ACTUAL_SHA256="$(sha256sum "$OSM_FILE" | awk '{print $1}')"
+
+ACTUAL_SHA256="$("${SHA256_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
 if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
   echo "Error: Checksum mismatch for $OSM_FILE!" >&2
   echo "Expected: $OSM_SHA256" >&2
