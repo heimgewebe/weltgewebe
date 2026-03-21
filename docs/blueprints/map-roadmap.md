@@ -54,7 +54,7 @@ lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Laye
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Vite nutzt im Dev-Modus (`local-sovereign`) ein Middleware-Routing ohne CDN-Zugriffe._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Teilweise umgesetzt: Im Dev-Modus erprobt, aber in der Prod-Konfiguration (`apps/web/src/lib/map/config/basemap.current.ts`) ist `remote-style` noch die Fallback/Standard-Einstellung. Das operative Caddy-Hosting für `style.json` muss noch nachgezogen werden._
+  - _Teilweise umgesetzt:_ Im Dev-Modus erprobt, in Prod ist Style-/Asset-Hosting und PMTiles-Routing unter `/local-basemap/` vorbereitet. Produktiver `local-sovereign` Default-Rollout bleibt offen.
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

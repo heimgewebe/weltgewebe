@@ -291,4 +291,4 @@ während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltg
 erhalten bleibt.
 
 
-- infra/caddy/Caddyfile.heim und compose.prod.yml: Added /local-basemap/* routing and map-style volume for sovereign basemap assets.
+- `infra/caddy/Caddyfile.heim` und `compose.prod.yml`: Added `/local-basemap/*` routing (including `.pmtiles` and `.meta.json`) and map-style volume for sovereign basemap assets.
