@@ -22,6 +22,12 @@ weltgewebe.home.arpa {
     }
   }
 
+  # Phase 2/3: Sovereign Basemap Style & Assets Routing
+  handle_path /local-basemap/* {
+    root * /srv/weltgewebe-map-style
+    file_server
+  }
+
   handle_path /api/* {
     reverse_proxy api:8080
   }
