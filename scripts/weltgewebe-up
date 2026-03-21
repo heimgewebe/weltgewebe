@@ -638,6 +638,11 @@ else
   fi
 fi
 
+if [[ "$DEPLOY_FRONTEND_MODE" == "internal" && "${ENABLE_CADDY:-0}" != "1" ]]; then
+  echo "[ERROR] DEPLOY_FRONTEND_MODE=internal requires ENABLE_CADDY=1 (or --with-caddy)." >&2
+  exit 1
+fi
+
 # 6. Frontend Requirement Logic
 if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
   case "$DEPLOY_FRONTEND_MODE" in
@@ -667,7 +672,7 @@ if [[ -z "${REQUIRE_FRONTEND:-}" ]]; then
       fi
       ;;
     *)
-      echo "[ERROR] Unknown DEPLOY_FRONTEND_MODE=$DEPLOY_FRONTEND_MODE"
+      echo "[ERROR] Unknown DEPLOY_FRONTEND_MODE='${DEPLOY_FRONTEND_MODE}'. Expected one of: off|internal|edge|auto." >&2
       exit 1
       ;;
   esac
