@@ -811,6 +811,49 @@ else
         fi
     fi
 fi
+# 6c2. Basemap Glyphs Guard (best effort)
+# Try to ensure the local glyphs (fonts) exist for offline rendering
+GLYPHS_DIR="map-style/glyphs/Noto Sans Regular"
+echo
+echo ">> Basemap Glyphs Guard:"
+
+evaluate_glyphs_state() {
+    local pbf_files=()
+    mapfile -t pbf_files < <(compgen -G "$GLYPHS_DIR/*.pbf" || true)
+    GLYPHS_COUNT="${#pbf_files[@]}"
+}
+
+evaluate_glyphs_state
+if (( GLYPHS_COUNT > 0 )); then
+    echo "   [✓] Artifacts already present. Found ${GLYPHS_COUNT} PBF glyphs in ${GLYPHS_DIR}."
+else
+    echo "   [!] Glyphs missing. Attempting best-effort download..."
+    if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
+        if bash scripts/basemap/fetch-glyphs.sh >/dev/null 2>&1; then
+            evaluate_glyphs_state
+            if (( GLYPHS_COUNT > 0 )); then
+                echo "   [✓] Glyph fetch succeeded. Found ${GLYPHS_COUNT} PBF glyphs."
+            else
+                echo "   [X] WARNING: Glyphs still missing after fetch attempt. 0 PBF files present."
+            fi
+        else
+            evaluate_glyphs_state
+            if (( GLYPHS_COUNT > 0 )); then
+                echo "   [X] WARNING: Fetch script failed, but ${GLYPHS_COUNT} PBF files are present. Continuing (best effort)."
+            else
+                echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 PBF files present."
+            fi
+        fi
+    else
+        evaluate_glyphs_state
+        if (( GLYPHS_COUNT > 0 )); then
+            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but ${GLYPHS_COUNT} PBF files are present."
+        else
+            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 PBF files present."
+        fi
+    fi
+fi
+
 # 6d. Static UI Runtime Guard & Edge Caddy Recreate
 echo
 echo ">> Edge Caddy Guard:"

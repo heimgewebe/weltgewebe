@@ -34,7 +34,7 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
 
 - [x] Eigenes `style.json` im `map-style`-Verzeichnis anlegen
 - [ ] Glyph- und Sprite-Strategie festlegen
-  - _Teilweise umgesetzt: Lokales Asset-Hosting für Glyphs ist per reproduzierbarem Download-Skript (fetch-glyphs.sh) aus OpenMapTiles gelöst. Sprites sind weiterhin offen._
+  - _Teilweise umgesetzt: Lokales Asset-Hosting für Glyphs ist per reproduzierbarem Download-Skript (`fetch-glyphs.sh`) vorbereitet und in den `weltgewebe-up` Deployment-Guard eingebunden. Sprites sind weiterhin offen._
 - [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
   - _Teilweise umgesetzt: OFL-Lizenz und Herkunft für Noto Sans Glyphs im ASSETS.md dokumentiert. Sprite-Manifest noch offen._
 - [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
