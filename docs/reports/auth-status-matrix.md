@@ -58,6 +58,8 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 ## 1. Gesamtübersicht
 
+Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter Alt-/MVP- oder Codepfad existiert, der Zielcontract aus ADR-0006/Specs aber noch nicht deckungsgleich nachgewiesen ist.
+
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | alte Routen belegt, Ziel-Contract offen | Teil   | mittel  |
