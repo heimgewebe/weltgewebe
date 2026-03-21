@@ -254,6 +254,8 @@
   let cleanupActivity: (() => void) | undefined = undefined;
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
+  const shouldExposeTestMap = import.meta.env.DEV || import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true';
+
   onMount(() => {
     let maplibreModule: any = null;
     const handleMarkerClick = (e: Event) => {
@@ -353,7 +355,7 @@
       });
 
       // Expose map for testing
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
       }
     })();
@@ -363,7 +365,7 @@
         window.clearTimeout(filterTooltipTimeout);
         filterTooltipTimeout = null;
       }
-      if (import.meta.env.MODE === 'test' || import.meta.env.DEV) {
+      if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
       }
       cleanupKomposition?.();

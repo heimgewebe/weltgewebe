@@ -134,7 +134,9 @@ Schritten – zusätzliche Details findest du bei Bedarf in der Workflowdatei:
     ```
 
 Optional kannst du `PLAYWRIGHT_SKIP_WEBSERVER=1` setzen, wenn bereits ein lokaler
-`pnpm preview` läuft. Den HTML-Report findest du nach den Läufen unter
+`pnpm preview` läuft. **Wichtig:** Für externe Previews muss der Test-Server
+zuvor explizit via `pnpm run build:e2e` gebaut werden, damit die Map-Instanz für die Tests
+korrekt bereitgestellt wird. Den HTML-Report findest du nach den Läufen unter
 `apps/web/playwright-report/`.
 
 ### Build-Zeit-Metadaten (Version/Commit/Zeitstempel)
