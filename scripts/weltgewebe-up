@@ -781,6 +781,9 @@ fi
 echo
 echo ">> Edge Caddy Guard:"
 
+# Note: While EDGE_GATEWAY_CONTAINER parametrizes the runtime detection and mount
+# verification, the recreate/repair path continues to rely on the canonical Heimserver
+# edge stack at /opt/heimgewebe/edge. The entire edge topology is not freely configurable here.
 EDGE_CADDY_DIR="/opt/heimgewebe/edge"
 
 # Only attempt this if frontend delivery is required for this run.
@@ -815,7 +818,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]] && { [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]
 
     if [[ "$EDGE_NEEDS_RECREATE" == "1" ]]; then
         if [[ -d "$EDGE_CADDY_DIR" ]]; then
-            echo "   Refreshing edge deployment to restore static UI mount..."
+            echo "   Refreshing canonical edge stack at $EDGE_CADDY_DIR..."
 
             # Safe recreate logic
             docker rm -f "$EDGE_GATEWAY_CONTAINER" >/dev/null 2>&1 || true

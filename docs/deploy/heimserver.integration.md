@@ -82,6 +82,9 @@ Zulässige Werte für `DEPLOY_FRONTEND_MODE`:
 * **`off`:** Das Frontend ist für diesen Deploy irrelevant (z. B. reine API-Umgebung).
   Frontend-Build und Edge-Checks werden übersprungen.
 
+**Hinweis zum Edge-Refresh-Pfad:**
+Die Variable `EDGE_GATEWAY_CONTAINER` parametrisiert lediglich die Runtime-Erkennung und Mount-Prüfung des Edge-Gateways. Der automatische Reparaturpfad (Recreate) bleibt jedoch weiterhin fest an die kanonische Heimserver-Edge-Topologie unter `/opt/heimgewebe/edge` gebunden und macht nicht den gesamten Edge-Stack beliebig konfigurierbar.
+
 Der Reverse-Proxy (Edge-Caddy) läuft im Heimserver-Betrieb außerhalb des Weltgewebe-Stacks.
 `docs/reference/caddy.heimserver.caddy` und `infra/caddy/Caddyfile.heim` dienen hierbei primär
 als Referenzkonfigurationen für das Routing. Die operativ wirksame Frontdoor wird im Heimserver-Repository
