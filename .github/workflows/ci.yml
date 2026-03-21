@@ -97,7 +97,7 @@ jobs:
           get_version() {
             local key=$1
             local val
-            val=$("$HOME/.local/bin/yq" -r ".${key} // \"\"" toolchain.versions.yml | xargs)
+            val=$(yq -r ".${key} // \"\"" toolchain.versions.yml | xargs)
             if [ -z "$val" ] || [ "$val" == "null" ]; then
               echo "failed to parse ${key} version from toolchain.versions.yml" >&2
               exit 1

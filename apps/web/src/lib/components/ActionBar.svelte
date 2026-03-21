@@ -35,7 +35,7 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--actionbar-height, 60px);
+    height: var(--actionbar-base-height, 60px);
     background: var(--panel, #fff);
     border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
     display: flex;
