@@ -15,11 +15,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
 BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
-# 2. Pin tools (OSM input pin is currently missing / volatile)
-# TODO: To guarantee reproducible output hashes, we need a stable OSM snapshot
-# mirror. Currently, Geofabrik's latest URL redirects daily, breaking reproducible builds.
-OSM_FILE="hamburg-latest.osm.pbf"
-OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-latest.osm.pbf"
+# 2. Pin tools and OSM input for full reproducibility
+# We use a stable, historical OSM snapshot from Geofabrik instead of the daily latest.
+OSM_FILE="hamburg-250101.osm.pbf"
+OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-250101.osm.pbf"
 
 # Versioning
 BASEMAP_VERSION="0.1.0"
@@ -34,7 +33,7 @@ echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
 echo "Version: ${BASEMAP_VERSION} (Tag: ${BASEMAP_TAG})"
 echo "Tool:    Planetiler (Pinned: 0.8.2 @ sha256:10e4...)"
-echo "Input:   $OSM_FILE (Volatile)"
+echo "Input:   $OSM_FILE (Pinned)"
 echo "Format:  PMTiles"
 echo "=================================="
 
@@ -120,7 +119,7 @@ ${BUILD_TIMESTAMP_JSON}
   },
   "input": {
     "url": "${OSM_URL}",
-    "note": "Volatile input, exact reproducibility not guaranteed"
+    "note": "Pinned historical snapshot for full artifact reproducibility"
   },
   "artifact": "${OUTPUT_PMTILES}"
 }
