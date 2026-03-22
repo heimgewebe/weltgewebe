@@ -59,12 +59,4 @@ export function leaveToNavigation() {
   systemState.set("navigation");
 }
 
-export function canCloseContextPanelWithEscape(
-  isContextPanelOpen: boolean,
-  isSearchOpen: boolean,
-  isFilterOpen: boolean,
-): boolean {
-  return isContextPanelOpen && !isSearchOpen && !isFilterOpen;
-}
-
 setupUiInvariantWatcher(systemState, selection, kompositionDraft);
