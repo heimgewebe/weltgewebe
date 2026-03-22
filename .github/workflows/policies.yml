@@ -11,9 +11,6 @@ permissions:
 concurrency:
   group: policies-${{ github.ref }}
   cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   limits-file-and-yaml:
     runs-on: ubuntu-latest

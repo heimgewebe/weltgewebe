@@ -1,17 +1,12 @@
 <script lang="ts">
-  import {
-    selection,
-    systemState,
-    contextPanelOpen,
-    leaveToNavigation,
-  } from "$lib/stores/uiView";
-  import { isSearchOpen } from "$lib/stores/searchStore";
-  import { isFilterOpen } from "$lib/stores/filterStore";
+  import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
+  import { isSearchOpen } from '$lib/stores/searchStore';
+  import { isFilterOpen } from '$lib/stores/filterStore';
 
-  import NodePanel from "./panels/NodePanel.svelte";
-  import AccountPanel from "./panels/AccountPanel.svelte";
-  import EdgePanel from "./panels/EdgePanel.svelte";
-  import KompositionPanel from "./panels/KompositionPanel.svelte";
+  import NodePanel from './panels/NodePanel.svelte';
+  import AccountPanel from './panels/AccountPanel.svelte';
+  import EdgePanel from './panels/EdgePanel.svelte';
+  import KompositionPanel from './panels/KompositionPanel.svelte';
 
   function closePanel() {
     leaveToNavigation();
@@ -19,12 +14,7 @@
 
   function handleKeydown(event: KeyboardEvent) {
     // Escape closes the panel only when no foreground overlay (search/filter) owns the interaction
-    if (
-      event.key === "Escape" &&
-      $contextPanelOpen &&
-      !$isSearchOpen &&
-      !$isFilterOpen
-    ) {
+    if (event.key === 'Escape' && $contextPanelOpen && !$isSearchOpen && !$isFilterOpen) {
       closePanel();
     }
   }
@@ -35,33 +25,31 @@
 {#if $contextPanelOpen}
   <aside class="context-panel" data-testid="context-panel">
     <header class="panel-header">
-      {#if $systemState === "komposition"}
+      {#if $systemState === 'komposition'}
         <h2>Neuer Knoten</h2>
       {:else if $selection}
-        {#if $selection.type === "node"}
+        {#if $selection.type === 'node'}
           <h2>Knoten</h2>
-        {:else if $selection.type === "account" || $selection.type === "garnrolle"}
+        {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
           <h2>Garnrolle</h2>
-        {:else if $selection.type === "edge"}
+        {:else if $selection.type === 'edge'}
           <h2>Faden</h2>
         {/if}
       {:else}
         <h2>Details</h2>
       {/if}
-      <button class="close-btn" on:click={closePanel} aria-label="Schließen"
-        >✕</button
-      >
+      <button class="close-btn" on:click={closePanel} aria-label="Schließen">✕</button>
     </header>
 
     <div class="panel-content">
-      {#if $systemState === "komposition"}
+      {#if $systemState === 'komposition'}
         <KompositionPanel />
       {:else if $selection}
-        {#if $selection.type === "node"}
+        {#if $selection.type === 'node'}
           <NodePanel />
-        {:else if $selection.type === "account" || $selection.type === "garnrolle"}
+        {:else if $selection.type === 'account' || $selection.type === 'garnrolle'}
           <AccountPanel />
-        {:else if $selection.type === "edge"}
+        {:else if $selection.type === 'edge'}
           <EdgePanel />
         {/if}
       {:else}
@@ -79,7 +67,7 @@
     z-index: 50;
     background: var(--panel, #fff);
     color: var(--text, #333);
-    box-shadow: var(--shadow, 0 -4px 16px rgba(0, 0, 0, 0.1));
+    box-shadow: var(--shadow, 0 -4px 16px rgba(0,0,0,0.1));
     display: flex;
     flex-direction: column;
     overflow-y: auto;
@@ -90,7 +78,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    border-bottom: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+    border-bottom: 1px solid var(--panel-border, rgba(0,0,0,0.1));
   }
 
   .panel-header h2 {
@@ -129,7 +117,7 @@
       right: 0;
       bottom: 0;
       width: var(--context-panel-width, 400px);
-      box-shadow: var(--shadow, -4px 0 16px rgba(0, 0, 0, 0.1));
+      box-shadow: var(--shadow, -4px 0 16px rgba(0,0,0,0.1));
     }
   }
 </style>

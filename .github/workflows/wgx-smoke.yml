@@ -10,9 +10,6 @@ permissions:
       - ".wgx/**"
       - "docs/wgx-konzept.md"
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   smoke:
     # auch hier: statt eigener CI-Logik nur noch Forwarder auf das
