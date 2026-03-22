@@ -1146,7 +1146,10 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
 
     assert_eq!(body_json["authenticated"], false);
     assert!(body_json.get("expires_at").is_none() || body_json["expires_at"].is_null());
-    assert!(body_json.get("device_id").is_none() || body_json["device_id"].is_null());
+    assert!(
+        body_json.get("device_id").is_none(),
+        "device_id must be completely omitted"
+    );
 
     Ok(())
 }
@@ -1191,7 +1194,10 @@ async fn session_endpoint_authenticated() -> Result<()> {
 
     assert_eq!(body_json["authenticated"], true);
     assert!(body_json.get("expires_at").is_some());
-    assert!(body_json.get("device_id").is_none() || body_json["device_id"].is_null());
+    assert!(
+        body_json.get("device_id").is_none(),
+        "device_id must be completely omitted"
+    );
 
     Ok(())
 }
