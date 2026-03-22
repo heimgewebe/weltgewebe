@@ -9,9 +9,6 @@ permissions:
       - 'infra/compose/**'
       - 'infra/caddy/**'
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   drift-check:
     runs-on: ubuntu-latest

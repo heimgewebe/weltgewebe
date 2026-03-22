@@ -10,9 +10,6 @@ permissions:
 concurrency:
   group: links-${{ github.ref }}
   cancel-in-progress: true
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   lychee:
     runs-on: ubuntu-latest

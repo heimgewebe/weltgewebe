@@ -6,9 +6,6 @@ permissions:
 "on":
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   snapshot:
     runs-on: ubuntu-latest
