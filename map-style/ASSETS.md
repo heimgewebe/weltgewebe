@@ -30,4 +30,4 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 
 ## Sprites (Icons & Pattern)
 
-*Entfällt.* Da die Weltgewebe-Basemap gemäß Architektur-Blaupause eine streng visuell beruhigte Infrastrukturebene ohne POIs, Highway-Shields oder komplexe Füllmuster darstellt, werden aktuell keine Sprites in der `style.json` genutzt oder benötigt. Sollten in Zukunft spezifische Basemap-Icons (außerhalb der Weltgewebe-Overlays) notwendig werden, müssen diese lokal gehostet und deren Lizenz hier dokumentiert werden.
+*Entfällt (bewusst).* Sprites sind nicht vergessen, sondern im aktuellen MVP-Architekturziel bewusst nicht Bestandteil der Basemap. Da die Weltgewebe-Basemap gemäß Architektur-Blaupause eine streng visuell beruhigte Infrastrukturebene ohne POIs oder komplexe Füllmuster darstellt, werden keine Sprites in der `style.json` referenziert oder benötigt. Das Weltgewebe-Overlay bleibt der exklusive Ort für ikonische und semantische Darstellungen (Nodes, Edges, Activity).
