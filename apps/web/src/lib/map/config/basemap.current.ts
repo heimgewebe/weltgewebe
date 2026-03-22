@@ -30,16 +30,28 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-const isLocal = import.meta.env.DEV || import.meta.env.MODE === "test";
+// Safely access env vars in test context
+const isLocal =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.DEV || import.meta.env.MODE === "test"
+    : false;
 
 // Allow explicitly overriding the basemap mode for production deployments (like Caddyfile.heim)
-const envMode = import.meta.env.PUBLIC_BASEMAP_MODE as BasemapMode | undefined;
-const resolvedMode: BasemapMode =
-  envMode === "local-sovereign" || envMode === "remote-style"
-    ? envMode
-    : isLocal
-      ? "local-sovereign"
-      : "remote-style";
+export function resolveBasemapMode(
+  envMode: string | undefined,
+  isLocalContext: boolean,
+): BasemapMode {
+  if (envMode === "local-sovereign" || envMode === "remote-style") {
+    return envMode;
+  }
+  return isLocalContext ? "local-sovereign" : "remote-style";
+}
+
+const envMode =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.PUBLIC_BASEMAP_MODE
+    : undefined;
+const resolvedMode = resolveBasemapMode(envMode, isLocal);
 
 const baseConfig: BaseBasemapConfig = {
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
