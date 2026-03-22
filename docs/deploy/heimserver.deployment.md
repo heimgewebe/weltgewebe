@@ -117,7 +117,7 @@ docker exec edge-caddy cat /data/caddy/pki/authorities/local/root.crt \
 
   ```sh
   curl --cacert /opt/heimgewebe/edge/edge-ca.crt -fsS \
-    -X POST https://weltgewebe.home.arpa/api/auth/login/request \
+    -X POST https://weltgewebe.home.arpa/api/auth/magic-link/request \
     -H 'content-type: application/json' -d '{"email":"..."}'
   ```
 

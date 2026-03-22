@@ -76,7 +76,7 @@ curl -fsS https://weltgewebe.home.arpa/api/health/ready
 
 ```bash
 # Request Magic Link
-curl -i -X POST https://weltgewebe.home.arpa/api/auth/login/request \
+curl -i -X POST https://weltgewebe.home.arpa/api/auth/magic-link/request \
   -H "Content-Type: application/json" \
   -d '{"email": "test@example.com"}'
 

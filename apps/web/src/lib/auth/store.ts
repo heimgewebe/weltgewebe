@@ -85,7 +85,7 @@ const createAuthStore = () => {
     requestLogin: async (email: string) => {
       if (!browser) return;
       try {
-        const res = await fetch("/api/auth/login/request", {
+        const res = await fetch("/api/auth/magic-link/request", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),

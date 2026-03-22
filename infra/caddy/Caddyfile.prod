@@ -41,24 +41,24 @@ weltgewebe.net {
 
 	# Handle API requests (stripping the prefix implies using handle_path)
 	handle_path /api/* {
-		# Note: /api prefix is stripped here, so we match /auth/login/request directly
+		# Note: /api prefix is stripped here, so we match /auth/magic-link/request directly
 		@login_request {
 			method POST
-			path /auth/login/request
+			path /auth/magic-link/request
 		}
 # 		rate_limit @login_request login_limit
 
 		@login_consume {
 			method POST
-			path /auth/login/consume
+			path /auth/magic-link/consume
 		}
 # 		rate_limit @login_consume login_consume_limit
 
-		# GET /auth/login/consume may be triggered by link scanners or prefetchers.
+		# GET /auth/magic-link/consume may be triggered by link scanners or prefetchers.
 		# A relaxed rate limit prevents abuse without impacting normal login flows.
 		@login_consume_get {
 			method GET
-			path /auth/login/consume
+			path /auth/magic-link/consume
 		}
 # 		rate_limit @login_consume_get login_consume_get_limit
 

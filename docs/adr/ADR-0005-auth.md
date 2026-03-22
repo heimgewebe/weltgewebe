@@ -6,7 +6,9 @@ status: active
 canonicality: derived
 summary: Automatisch hinzugefügtes Frontmatter.
 ---
-# ADR-0005: Minimales Authentifizierungskonzept
+# ADR-0005: Minimales Authentifizierungskonzept (Historisches Fundament)
+
+> **Hinweis:** Dieses ADR stellt die Minimalbasis (MVP) dar und wurde durch [ADR-0006](ADR-0006__auth-magic-link-session-passkey.md) als kanonisches Zielbild abgelöst.
 
 ## Status
 

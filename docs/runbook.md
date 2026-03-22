@@ -272,13 +272,13 @@ Before enforcing strict limits, verify that the API sees the correct client IP:
 
 - **Rate:** 5 requests per minute (per IP)
 - **Window:** 1 minute
-- **Endpoint:** `POST /api/auth/login/request`
+- **Endpoint:** `POST /api/auth/magic-link/request`
 
 #### Consume Endpoint (`login_consume_limit`)
 
 - **Rate:** 30 requests per minute (per IP)
 - **Window:** 1 minute
-- **Endpoint:** `POST /api/auth/login/consume`
+- **Endpoint:** `POST /api/auth/magic-link/consume`
 - **Note:** The consume endpoint is typically called once per flow. Frequent
   429s here indicate abuse or incorrect client IP resolution.
 
@@ -312,7 +312,7 @@ for i in {1..10}; do \
     -X POST \
     -H "Content-Type: application/json" \
     -d '{"email":"test@example.com"}' \
-    https://weltgewebe.net/api/auth/login/request; \
+    https://weltgewebe.net/api/auth/magic-link/request; \
 done
 ```
 

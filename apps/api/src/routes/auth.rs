@@ -411,7 +411,7 @@ async fn process_magic_link_delivery(
         "APP_BASE_URL must be set when AUTH_PUBLIC_LOGIN is enabled (validated at startup)",
     );
     let base_url = base_url.trim_end_matches('/');
-    let link = format!("{}/api/auth/login/consume?token={}", base_url, token);
+    let link = format!("{}/api/auth/magic-link/consume?token={}", base_url, token);
 
     if let Some(mailer) = &state.mailer {
         match mailer.send_magic_link(email_norm, &link).await {
@@ -704,7 +704,7 @@ pub async fn consume_login_get(
         .unwrap_or(true);
 
     let cookie = Cookie::build((NONCE_COOKIE_NAME, cookie_value))
-        .path("/api/auth/login/consume")
+        .path("/api/auth/magic-link/consume")
         .http_only(true)
         .same_site(SameSite::Lax)
         .secure(secure_cookies)
@@ -729,7 +729,7 @@ pub async fn consume_login_get(
     <div class="card">
         <h2>Confirm Sign In</h2>
         <p>Click below to complete your login.</p>
-        <form method="POST" action="/api/auth/login/consume">
+        <form method="POST" action="/api/auth/magic-link/consume">
             <input type="hidden" name="token" value="{}">
             <input type="hidden" name="nonce" value="{}">
             <button type="submit">Sign In</button>
@@ -833,7 +833,7 @@ pub async fn consume_login_post(
                 .unwrap_or(true);
 
             let nonce_cleanup = Cookie::build((NONCE_COOKIE_NAME, ""))
-                .path("/api/auth/login/consume")
+                .path("/api/auth/magic-link/consume")
                 .http_only(true)
                 .same_site(SameSite::Lax)
                 .secure(secure_cookies)

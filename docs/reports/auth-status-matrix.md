@@ -62,7 +62,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
-| Magic Link            | vorhanden   | alte Routen belegt, Ziel-Contract offen | Teil   | mittel  |
+| Magic Link            | vorhanden   | Ziel-Contract belegt                  | OK     | niedrig |
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
@@ -79,12 +79,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** Magic-Link-Funktionalität ist implementiert, aber die belegte Routing-/Runtime-Linie nutzt derzeit `/auth/login/request` und `/auth/login/consume` statt der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume`. Dies ist kein Funktionsausfall, sondern ein Contract-Angleichungspunkt.
+**Ist:** Ziel-Contract (`/auth/magic-link/request` und `/auth/magic-link/consume`) ist vollständig implementiert und durch E2E belegt.
 **Dokumentationsbelege:** `docs/runbook.md`
 **Code-, Test- und Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
-**Fehlende Belege:** Nachweis der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume` oder explizite Alias-/Migrationsbrücke auf diese Zielrouten.
-**Status:** Teil
-**Risiko:** mittel
+**Fehlende Belege:** keine
+**Status:** OK
+**Risiko:** niedrig
 
 ### 2.2 Session
 

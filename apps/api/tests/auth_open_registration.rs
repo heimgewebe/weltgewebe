@@ -93,7 +93,7 @@ async fn test_open_registration_flow_auto_provisions_unknown_email() -> Result<(
     let app = app(state.clone());
 
     let email = "unknown_user@example.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
