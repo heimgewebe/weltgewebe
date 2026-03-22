@@ -111,6 +111,29 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeVisible();
   });
 
+  test("Escape does NOT close ContextPanel when filter is open", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+
+    // Enter komposition mode to open panel
+    await page.locator('button:has-text("Neuer Knoten")').click();
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Open filter
+    await page.locator('.action-bar button[aria-label="Filter"]').click();
+    const filterOverlay = page.locator('[data-testid="filter-overlay"]');
+    await expect(filterOverlay).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+
+    // Panel should STILL be visible (while filter would close based on its own logic)
+    await expect(panel).toBeVisible();
+  });
+
   test("Clicking empty map area closes the context panel", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
