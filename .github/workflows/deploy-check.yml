@@ -21,6 +21,9 @@ permissions:
       - '.github/workflows/deploy-check.yml'
       - '.node-version'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   csp-contract-check:
     runs-on: ubuntu-latest

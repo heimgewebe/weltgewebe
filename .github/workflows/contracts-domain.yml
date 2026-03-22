@@ -14,6 +14,9 @@ permissions:
       - 'contracts/domain/examples/**.json'
       - '.node-version'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   validate-schemas:
     runs-on: ubuntu-latest
