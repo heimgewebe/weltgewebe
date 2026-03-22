@@ -35,7 +35,7 @@ jobs:
           mkdir -p .ci
           curl -fsSL --retry 3 --retry-delay 2 "$METRICS_SCHEMA_URL" -o .ci/metrics.schema.json
           # ajv-cli@5 supports up to draft-2019-09; the canonical schema uses
-          # 2020-12 but no 2020-12–specific features.  Normalise the $schema
+          # 2020-12 but no 2020-12–specific features.  Normalize the $schema
           # identifier so the validator accepts it without forking the contract.
           tmp=$(mktemp)
           jq '."$schema" = "http://json-schema.org/draft-07/schema#"' \
