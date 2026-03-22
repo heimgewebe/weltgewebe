@@ -53,8 +53,8 @@ lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons),
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
-- [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Teilweise umgesetzt: Im Dev-Modus erprobt, in Prod ist Style-/Asset-Hosting und PMTiles-Routing unter `/local-basemap/` vorbereitet. Produktiver `local-sovereign` Default-Rollout bleibt offen._
+- [x] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - _Umgesetzt: Im Dev-Modus erprobt und in Prod (Heimserver) durch Caddy (`/local-basemap/`) sowie das Frontend-Flag `PUBLIC_BASEMAP_MODE=local-sovereign` nun durchgängig auch für produktive Builds voll anbindbar. Die souveräne Basemap kann somit für Zielumgebungen wie `weltgewebe.home.arpa` dediziert freigeschaltet werden._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 

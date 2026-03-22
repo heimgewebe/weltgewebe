@@ -32,6 +32,15 @@ export const HAMMER_PARK_CENTER = {
 
 const isLocal = import.meta.env.DEV || import.meta.env.MODE === "test";
 
+// Allow explicitly overriding the basemap mode for production deployments (like Caddyfile.heim)
+const envMode = import.meta.env.PUBLIC_BASEMAP_MODE as BasemapMode | undefined;
+const resolvedMode: BasemapMode =
+  envMode === "local-sovereign" || envMode === "remote-style"
+    ? envMode
+    : isLocal
+      ? "local-sovereign"
+      : "remote-style";
+
 const baseConfig: BaseBasemapConfig = {
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
   zoom: 15,
@@ -39,13 +48,15 @@ const baseConfig: BaseBasemapConfig = {
   maxZoom: 18,
 };
 
-export const currentBasemap: BasemapConfig = isLocal
-  ? {
-      ...baseConfig,
-      mode: "local-sovereign",
-    }
-  : {
-      ...baseConfig,
-      mode: "remote-style",
-      styleUrl: "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-    };
+export const currentBasemap: BasemapConfig =
+  resolvedMode === "local-sovereign"
+    ? {
+        ...baseConfig,
+        mode: "local-sovereign",
+      }
+    : {
+        ...baseConfig,
+        mode: "remote-style",
+        styleUrl:
+          "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
+      };
