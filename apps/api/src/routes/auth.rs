@@ -901,11 +901,7 @@ pub async fn session(Extension(ctx): Extension<AuthContext>) -> impl IntoRespons
         authenticated: ctx.authenticated,
         expires_at: ctx.expires_at,
         // TODO: Map to actual device ID once Device Management is implemented (Roadmap Phase 2, Step 3)
-        device_id: if ctx.authenticated {
-            Some("current-device-placeholder".to_string())
-        } else {
-            None
-        },
+        device_id: None,
     })
 }
 
