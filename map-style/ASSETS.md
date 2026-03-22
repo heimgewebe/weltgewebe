@@ -27,7 +27,7 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 
 - **Ausgewählte Schriftart:** Noto Sans Regular (wie in `style.json` referenziert)
 - **Lizenz:** SIL Open Font License (OFL)
-- **Herkunft / Erzeugung:** Die Schriftarten (v2.0) werden über das deterministische Skript `scripts/basemap/fetch-glyphs.sh` reproduzierbar vom offiziellen [OpenMapTiles Fonts Release](https://github.com/openmaptiles/fonts/releases) geladen und über einen SHA256-Hash validiert. Da es sich um kompilierte Artefakte handelt, sind die `.pbf`-Dateien nicht im Repo eingecheckt. Das Deployment-Skript `weltgewebe-up` stellt als "Best Effort Guard" sicher, dass fehlende Fonts beim Stack-Start aus der definierten Quelle bezogen und bereitgestellt werden.
+- **Herkunft / Erzeugung:** Die Schriftarten (v2.0) werden über das deterministische Skript `scripts/basemap/fetch-glyphs.sh` reproduzierbar vom offiziellen [OpenMapTiles Fonts Release](https://github.com/openmaptiles/fonts/releases) geladen und über einen SHA256-Hash validiert. Da es sich um kompilierte Artefakte handelt, sind die `.pbf`-Dateien nicht im Repo eingecheckt. Das Deployment-Skript `weltgewebe-up` versucht als "Best Effort Guard", fehlende Fonts beim Stack-Start aus der definierten Quelle zu beziehen und bereitzustellen.
 
 ## Sprites (Icons & Pattern)
 

@@ -829,7 +829,7 @@ if (( GLYPHS_COUNT > 0 )); then
 else
     echo "   [!] Glyphs missing. Attempting best-effort download..."
     if [[ -x "scripts/basemap/fetch-glyphs.sh" ]]; then
-        if bash scripts/basemap/fetch-glyphs.sh >/dev/null 2>&1; then
+        if bash scripts/basemap/fetch-glyphs.sh; then
             evaluate_glyphs_state
             if (( GLYPHS_COUNT > 0 )); then
                 echo "   [✓] Glyph fetch succeeded. Found ${GLYPHS_COUNT} PBF glyphs."
