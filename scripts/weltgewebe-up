@@ -1336,16 +1336,26 @@ fi
 
 echo
 
-echo ">> Guard 5b: Sovereign Basemap Route..."
+echo ">> Guard 5b: Sovereign Basemap Route (Infrastructure Readiness)..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). This breaks local-sovereign frontend mode."
+        msg="Sovereign Basemap Guard failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
         echo "ERROR: $msg"
         generate_failure_bundle "$msg"
         exit 1
     else
         echo "OK (sovereign style.json reachable)"
     fi
+
+    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap.meta.json >/dev/null 2>&1; then
+        msg="Sovereign Basemap Guard failed: Could not fetch basemap.meta.json via Edge Route (/local-basemap/basemap.meta.json). PMTiles artifact volume or route is missing."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        exit 1
+    else
+        echo "OK (sovereign basemap.meta.json reachable)"
+    fi
+    echo "   (Note: This proves edge routing readiness, not E2E client usage)"
 fi
 echo
 echo ">> Guard 5: Frontend Reachability..."
