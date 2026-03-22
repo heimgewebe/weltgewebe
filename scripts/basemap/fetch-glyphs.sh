@@ -17,8 +17,9 @@ TARGET_FONT_DIR="$GLYPHS_DIR/Noto Sans Regular"
 # Pin OpenMapTiles fonts v2.0 (Noto Sans)
 ASSET_URL="https://github.com/openmaptiles/fonts/releases/download/v2.0/noto-sans.zip"
 ASSET_SHA256="d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34"
-TMP_ARCHIVE="/tmp/noto-sans-$$.zip"
-trap 'rm -f "$TMP_ARCHIVE"' EXIT
+TMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/noto-sans.XXXXXX")"
+TMP_ARCHIVE="$TMP_DIR/noto-sans.zip"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Glyphs (Fonts)"
@@ -55,10 +56,16 @@ fi
 echo "=> Preparing target directory ($TARGET_FONT_DIR)..."
 mkdir -p "$TARGET_FONT_DIR"
 
-echo "=> Checking if glyphs are already present..."
-if [ -n "$(find "$TARGET_FONT_DIR" -maxdepth 1 -name '*.pbf' -print -quit 2>/dev/null)" ]; then
-  echo "   [✓] Glyphs already found in target directory. Skipping download."
-  exit 0
+echo "=> Checking if glyphs are already present and verified..."
+if [ -f "$TARGET_FONT_DIR/.complete" ]; then
+  STORED_HASH="$(cat "$TARGET_FONT_DIR/.complete" | tr -d '
+')"
+  if [ "$STORED_HASH" = "$ASSET_SHA256" ]; then
+    echo "   [✓] Verified glyphs already found in target directory. Skipping download."
+    exit 0
+  else
+    echo "   [!] Existing glyphs failed hash verification (or version changed). Re-fetching..."
+  fi
 fi
 
 echo "=> Downloading font archive from OpenMapTiles..."
@@ -78,12 +85,25 @@ if [ "$ACTUAL_SHA256" != "$ASSET_SHA256" ]; then
 fi
 echo "   [✓] Integrity verified (SHA256 match)."
 
-echo "=> Extracting 'Noto Sans Regular' glyphs..."
-# Extract only the "Noto Sans Regular" directory, and place its contents directly into the TARGET_FONT_DIR
-unzip -o -q -j "$TMP_ARCHIVE" "Noto Sans Regular/*" -d "$TARGET_FONT_DIR" || {
+echo "=> Extracting 'Noto Sans Regular' glyphs atomically..."
+EXTRACT_DIR="$TMP_DIR/extracted"
+mkdir -p "$EXTRACT_DIR"
+
+unzip -o -q -j "$TMP_ARCHIVE" "Noto Sans Regular/*" -d "$EXTRACT_DIR" || {
   echo "Error: Failed to extract 'Noto Sans Regular' from archive." >&2
   exit 1
 }
+
+# Atomically move extracted files and write sentinel
+mkdir -p "$TARGET_FONT_DIR"
+# Copy contents forcefully, then write the sentinel. We use cp and rm instead of mv to avoid cross-device issues or directory replace limits.
+cp -f "$EXTRACT_DIR"/*.pbf "$TARGET_FONT_DIR/" || {
+  echo "Error: Failed to move extracted glyphs to target directory." >&2
+  exit 1
+}
+
+echo -n "$ASSET_SHA256" > "$TARGET_FONT_DIR/.complete"
+
 
 
 echo "=> Glyph fetching complete!"
