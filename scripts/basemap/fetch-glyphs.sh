@@ -112,6 +112,9 @@ echo "   [✓] Extracted $EXTRACTED_COUNT .pbf files."
 
 # Safely copy extracted files and write sentinel
 mkdir -p "$TARGET_FONT_DIR"
+# Remove stale .pbf and sentinel to ensure a clean target state before copying new set
+rm -f "$TARGET_FONT_DIR"/*.pbf "$TARGET_FONT_DIR/.complete"
+
 # Copy contents forcefully, then write the sentinel. We use cp instead of mv to avoid cross-device issues.
 cp -f "$EXTRACT_DIR"/*.pbf "$TARGET_FONT_DIR/" || {
   echo "Error: Failed to move extracted glyphs to target directory." >&2

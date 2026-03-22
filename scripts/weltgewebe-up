@@ -814,6 +814,7 @@ fi
 # 6c2. Basemap Glyphs Guard (best effort)
 # Try to ensure the local glyphs (fonts) exist for offline rendering
 GLYPHS_DIR="map-style/glyphs/Noto Sans Regular"
+EXPECTED_GLYPHS_HASH="d117316544b43a5dde7ee761b36e17701e9f85574e181d76a74814240fdbaf34"
 echo
 echo ">> Basemap Glyphs Guard:"
 
@@ -823,12 +824,10 @@ evaluate_glyphs_state() {
     if [ -f "$GLYPHS_DIR/.complete" ]; then
         local stored_hash
         local stored_count
-        stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d '
-' || true)"
-        stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d '
-' || true)"
+        stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+        stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
 
-        if [ -n "$stored_hash" ] && [ -n "$stored_count" ]; then
+        if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ -n "$stored_count" ]; then
             GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
             if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
                 GLYPHS_READY=1
@@ -853,7 +852,7 @@ else
         else
             evaluate_glyphs_state
             if (( GLYPHS_READY == 1 )); then
-                echo "   [X] WARNING: Fetch script failed, but unverified glyphs are present. Continuing (best effort)."
+                echo "   [X] WARNING: Fetch script failed, but a verified glyph set is present. Continuing (best effort)."
             else
                 echo "   [X] WARNING: Fetch script failed. Continuing deployment (best effort). 0 verified glyph set present."
             fi
@@ -861,7 +860,7 @@ else
     else
         evaluate_glyphs_state
         if (( GLYPHS_READY == 1 )); then
-            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but unverified glyphs are present."
+            echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable, but a verified glyph set is present."
         else
             echo "   [X] WARNING: scripts/basemap/fetch-glyphs.sh not found or not executable. 0 verified glyph set present."
         fi
