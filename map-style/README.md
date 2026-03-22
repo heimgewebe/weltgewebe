@@ -16,10 +16,10 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 
 * `style.json`: The standard MapLibre style document.
 * `colors.json`: High-level color definitions and palette.
-* `glyphs/`: (Placeholder) Local, self-hosted font stacks in PBF format to prevent external font service dependencies.
-* `sprites/`: (Removed) The basemap is intentionally sprite-free.
+* `glyphs/`: Local, self-hosted font stacks in PBF format to prevent external font service dependencies. (Fetched via `scripts/basemap/fetch-glyphs.sh`)
+
+> **Note on Sprites:** To maintain a visually calmed infrastructure basemap, sprites (icons/patterns) are intentionally omitted from this map style MVP. Visual semantics belong in the Weltgewebe overlay.
 
 ## Next Steps
 
-1. Generate and store sovereign fonts (glyphs) to replace default remote font stacks.
-2. Load this `style.json` natively in the MapLibre client once the PMTiles protocol is registered.
+1. Load this `style.json` natively in the MapLibre client once the PMTiles protocol is registered.
