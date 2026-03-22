@@ -28,6 +28,6 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 - **Lizenz:** SIL Open Font License (OFL)
 - **Herkunft / Erzeugung:** Die Schriftarten (v2.0) werden über das deterministische Skript `scripts/basemap/fetch-glyphs.sh` reproduzierbar vom offiziellen [OpenMapTiles Fonts Release](https://github.com/openmaptiles/fonts/releases) geladen und über einen SHA256-Hash validiert. Da es sich um kompilierte Artefakte handelt, sind die `.pbf`-Dateien nicht im Repo eingecheckt. Das Deployment-Skript `weltgewebe-up` versucht als "Best Effort Guard", fehlende Fonts beim Stack-Start aus der definierten Quelle zu beziehen. Für die lokale Entwicklung (ohne `weltgewebe-up`) muss das Skript einmalig manuell ausgeführt werden (siehe `map-style/glyphs/README.md`).
 
-## Sprites (Icons & Pattern)
+## Sprites (entfallen)
 
 *Entfällt (bewusst).* Sprites sind nicht vergessen, sondern im aktuellen MVP-Architekturziel bewusst nicht Bestandteil der Basemap. Da die Weltgewebe-Basemap gemäß Architektur-Blaupause eine streng visuell beruhigte Infrastrukturebene ohne POIs oder komplexe Füllmuster darstellt, werden keine Sprites in der `style.json` referenziert oder benötigt. Das Weltgewebe-Overlay bleibt der exklusive Ort für ikonische und semantische Darstellungen (Nodes, Edges, Activity).

@@ -231,7 +231,6 @@ MapLibre `style.json` ist Teil des `map-style` repositories.
 Style-Ownership ist wichtig, weil:
 
 - Glyphs
-- Sprites
 - Layer order
 - Color palette
 
@@ -240,7 +239,6 @@ sonst wieder fremd kontrolliert werden.
 ```text
 weltgewebe-map-style
  ├─ style.json
- ├─ sprites/
  ├─ glyphs/
  └─ colors.json
 ```
@@ -252,7 +250,7 @@ weltgewebe-map-style
 Souveränität umfasst nicht nur das Hosting, sondern auch eine lückenlos nachvollziehbare Rechtekette für alle Assets.
 
 - **Karten-Attribution:** Die OSM-/ODbL-Pflichten müssen im Client (MapLibre UI) jederzeit korrekt und sichtbar erfüllt sein.
-- **Style-Assets:** Herkunft und Lizenz von Glyphs, Sprites und Fonts müssen im `map-style` Repository dokumentiert sein.
+- **Style-Assets:** Herkunft und Lizenz von Glyphs (Fonts) müssen im `map-style` Repository dokumentiert sein. (Sprites sind im aktuellen Architekturziel bewusst nicht Bestandteil der Basemap, da die Semantik im Overlay liegt).
 - **Keine stillen Abhängigkeiten:** Das finale Kartenprodukt darf nicht stillschweigend von fremden Diensten oder unklaren Fremdlizenzen abhängen.
 
 ---
