@@ -43,12 +43,12 @@
       "missing_evidence": [
         "Echte Persistenz (nicht In-Memory)",
         "dynamische device_id-Integration",
-        "Cookie-Sicherheits-Verifikation",
         "vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests)"
       ],
       "risk": "hoch",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
+        "apps/api/tests/api_auth.rs",
         "apps/api/src/auth/session.rs",
         "apps/web/src/lib/auth/store.ts"
       ]
