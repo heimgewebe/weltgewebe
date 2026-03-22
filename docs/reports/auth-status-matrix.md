@@ -91,7 +91,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
 **Ist:** Die heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus `GET /auth/session` plus belastbarem Persistenzmodell.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
 **Fehlende Belege:** Echte Persistenz (nicht In-Memory), sauber verifizierbarer Session-Check (`GET /auth/session`), Cookie-Verhalten, Routen-Tests.
 **Status:** Teil
 **Risiko:** hoch
@@ -101,7 +101,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -111,7 +111,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/logout`
 **Ist:** Ein Logout-Codepfad ist im aktuellen Code vorhanden (`/auth/logout`). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.
 **Dokumentationsbelege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`
 **Fehlende Belege:** End-to-End-Test
 **Status:** Teil
 **Risiko:** mittel
@@ -121,7 +121,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/logout-all`
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -131,7 +131,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -141,7 +141,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** sehr hoch
@@ -151,7 +151,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** mittel
@@ -161,7 +161,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
 **Ist:** teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Anti-Enumeration-Nachweis fehlt, CSRF-/Origin-Nachweis fehlt, Token-Leak-Prevention nicht separat verifiziert, Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt.
 **Status:** Teil
 **Risiko:** hoch
