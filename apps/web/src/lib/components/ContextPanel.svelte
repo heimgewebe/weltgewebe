@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
+  import { selection, systemState, contextPanelOpen, leaveToNavigation, canCloseContextPanelWithEscape } from '$lib/stores/uiView';
   import { isSearchOpen } from '$lib/stores/searchStore';
   import { isFilterOpen } from '$lib/stores/filterStore';
 
@@ -13,7 +13,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if ($contextPanelOpen && event.key === 'Escape' && !$isSearchOpen && !$isFilterOpen) {
+    if (event.key === 'Escape' && canCloseContextPanelWithEscape($contextPanelOpen, $isSearchOpen, $isFilterOpen)) {
       closePanel();
     }
   }
