@@ -88,7 +88,9 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel).toBeHidden();
   });
 
-  test("Escape does NOT close ContextPanel when search is open", async ({ page }) => {
+  test("Escape does NOT close ContextPanel when search is open", async ({
+    page,
+  }) => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
 
     // Enter komposition mode to open panel
