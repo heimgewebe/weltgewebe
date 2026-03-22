@@ -29,6 +29,7 @@ defaults:
     shell: bash --noprofile --norc -euo pipefail {0}
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   FAIL_ON_NO_BASE: true
   ALLOW_REMOVALS: false
 

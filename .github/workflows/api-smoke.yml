@@ -21,6 +21,9 @@ permissions:
 concurrency:
   group: api-smoke-${{ github.ref }}
   cancel-in-progress: true
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   ultra_light_health:
     name: API – ultra-light smoke (health endpoints)

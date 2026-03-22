@@ -18,6 +18,9 @@ permissions:
       - .github/workflows/web.yml
       - .node-version
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Build & Lint

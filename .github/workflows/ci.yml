@@ -19,6 +19,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   docs-changes:
     name: Detect docs updates
@@ -49,6 +52,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
       NODE_OPTIONS: --max-old-space-size=4096
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
     if: github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true'
@@ -121,6 +127,8 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt, clippy
         env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
           CARGO_TERM_COLOR: always
 
       - name: Cache Cargo artifacts
@@ -199,6 +207,8 @@ jobs:
 
       - name: Validate project
         env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
           CARGO_TERM_COLOR: always
         run: just ci
 
@@ -208,6 +218,8 @@ jobs:
     needs: ci
     timeout-minutes: 20
     env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
       HEADLESS: "1"
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
@@ -267,6 +279,8 @@ jobs:
 
       - name: Run Playwright tests
         env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
           PLAYWRIGHT_HTML_REPORT: playwright-report
         run: pnpm test:ci
 
@@ -330,6 +344,8 @@ jobs:
             --cache
             '**/*.md'
         env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Link check (lychee - verbose retry)
@@ -354,6 +370,8 @@ jobs:
             --max-cache-age 1d
             '**/*.md'
         env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NODE_OPTIONS: --max-old-space-size=4096
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Lint YAML and JSON files
