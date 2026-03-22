@@ -34,7 +34,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "Die heutige MVP-/Runtime-Linie nutzt /auth/me und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus GET /auth/session plus belastbarem Persistenzmodell",
+      "ist": "Die MVP-Linie nutzt einen In-Memory Session-Store. GET /auth/session wurde implementiert (inklusive expires_at), deckt aber die Persistenzanforderungen, Session Refresh und dynamische device_id noch nicht vollständig ab",
       "status": "Teil",
       "documentation_evidence": [
         "docs/specs/auth-blueprint.md",
@@ -42,9 +42,9 @@
       ],
       "missing_evidence": [
         "Echte Persistenz (nicht In-Memory)",
-        "sauber verifizierbarer Session-Check (GET /auth/session)",
-        "Cookie-Verhalten",
-        "Routen-Tests"
+        "dynamische device_id-Integration",
+        "Cookie-Sicherheits-Verifikation",
+        "Routen-Tests über Unit-Tests hinaus"
       ],
       "risk": "hoch",
       "code_runtime_evidence": [

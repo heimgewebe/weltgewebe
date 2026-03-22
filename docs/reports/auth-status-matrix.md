@@ -89,10 +89,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** Die heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus `GET /auth/session` plus belastbarem Persistenzmodell.
+**Ist:** Die MVP-Linie nutzt einen In-Memory Session-Store. `GET /auth/session` wurde implementiert (inklusive `expires_at`), deckt aber die Persistenzanforderungen, Session Refresh und dynamische `device_id` noch nicht vollständig ab.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
-**Fehlende Belege:** Echte Persistenz (nicht In-Memory), sauber verifizierbarer Session-Check (`GET /auth/session`), Cookie-Verhalten, Routen-Tests.
+**Fehlende Belege:** Echte Persistenz (nicht In-Memory), dynamische `device_id`-Integration, Cookie-Sicherheits-Verifikation, Routen-Tests über Unit-Tests hinaus.
 **Status:** Teil
 **Risiko:** hoch
 
