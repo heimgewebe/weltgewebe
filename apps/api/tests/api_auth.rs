@@ -582,8 +582,8 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     })
 }
 
-#[serial]
 #[tokio::test]
+#[serial]
 async fn consume_legacy_alias_flow_succeeds() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
@@ -641,6 +641,7 @@ async fn consume_legacy_alias_flow_succeeds() -> Result<()> {
 }
 
 #[tokio::test]
+#[serial]
 async fn consume_login_flow_succeeds() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
