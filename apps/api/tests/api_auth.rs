@@ -175,7 +175,7 @@ async fn request_login_denied_if_account_disabled() -> Result<()> {
 
     let app = app(state.clone());
 
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
 
@@ -218,7 +218,7 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
     let nonce_val = {
         // Helper to get nonce without full request flow
         // Or just do the GET request
-        let uri = format!("/auth/login/consume?token={}", token);
+        let uri = format!("/auth/magic-link/consume?token={}", token);
         let req_get = Request::get(&uri).body(body::Body::empty())?;
         let res_get = app.clone().oneshot(req_get).await?;
         assert_eq!(res_get.status(), StatusCode::OK);
@@ -231,7 +231,7 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
 
     // 2. POST (Consume)
     let body_str = format!("token={}&nonce={}", token, nonce);
-    let req_post = Request::post("/auth/login/consume")
+    let req_post = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
@@ -491,7 +491,7 @@ async fn request_login_fails_when_public_login_disabled() -> Result<()> {
     state.config.auth_public_login = false;
     let app = app(state);
 
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
 
@@ -509,7 +509,7 @@ async fn request_login_succeeds_when_public_login_enabled() -> Result<()> {
 
     let app = app(state);
 
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
 
@@ -541,7 +541,7 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
 
     let app = app(state);
 
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"email":"unknown@example.com"}"#))?;
 
@@ -584,6 +584,64 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
 
 #[tokio::test]
 #[serial]
+async fn consume_legacy_alias_flow_succeeds() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let token = state.tokens.create("u1@example.com".to_string());
+    let app = app(state);
+
+    // 1. GET (Confirm Page via Legacy Alias)
+    let uri = format!("/auth/login/consume?token={}", token);
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+
+    assert_eq!(res_get.status(), StatusCode::OK);
+
+    // Extract nonce for POST
+    let set_cookies = res_get.headers().get_all("set-cookie");
+    let mut nonce_val = String::new();
+    for c in set_cookies.iter() {
+        let cookie_str = c.to_str()?;
+        if cookie_str.starts_with(NONCE_COOKIE_NAME) {
+            let parts: Vec<&str> = cookie_str.split('=').collect();
+            if parts.len() > 1 {
+                let val_part = parts[1].split(';').next().unwrap_or("");
+                nonce_val = val_part.to_string();
+            }
+        }
+    }
+    assert!(!nonce_val.is_empty(), "Nonce cookie missing on GET");
+    let nonce = nonce_val.split('.').next_back().unwrap_or("").to_string();
+
+    // 2. POST (Consume via Legacy Alias)
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res_post = app.oneshot(req_post).await?;
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+
+    // Should set session cookie on success
+    let mut session_found = false;
+    for c in res_post.headers().get_all("set-cookie").iter() {
+        if c.to_str()?.starts_with(SESSION_COOKIE_NAME) {
+            session_found = true;
+        }
+    }
+    assert!(
+        session_found,
+        "Session cookie not set after successful legacy POST"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn consume_login_flow_succeeds() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
@@ -594,7 +652,7 @@ async fn consume_login_flow_succeeds() -> Result<()> {
     let app = app(state);
 
     // 1. GET (Confirm Page)
-    let uri = format!("/auth/login/consume?token={}", token);
+    let uri = format!("/auth/magic-link/consume?token={}", token);
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
@@ -614,7 +672,7 @@ async fn consume_login_flow_succeeds() -> Result<()> {
 
     // 2. POST (Consume)
     let body_str = format!("token={}&nonce={}", token, nonce);
-    let req_post = Request::post("/auth/login/consume")
+    let req_post = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
@@ -652,8 +710,8 @@ async fn consume_login_fails_invalid_token() -> Result<()> {
 
     let app = app(state);
 
-    let req =
-        Request::get("/auth/login/consume?token=invalid_token_123").body(body::Body::empty())?;
+    let req = Request::get("/auth/magic-link/consume?token=invalid_token_123")
+        .body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
@@ -676,7 +734,7 @@ async fn consume_login_fails_reuse() -> Result<()> {
     let app = app(state);
 
     // 1. GET (Confirm Page)
-    let uri = format!("/auth/login/consume?token={}", token);
+    let uri = format!("/auth/magic-link/consume?token={}", token);
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
 
@@ -691,7 +749,7 @@ async fn consume_login_fails_reuse() -> Result<()> {
 
     // 2. POST (Consume)
     let body_str = format!("token={}&nonce={}", token, nonce);
-    let req_post = Request::post("/auth/login/consume")
+    let req_post = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
@@ -729,7 +787,7 @@ async fn consume_login_fails_expired_token() -> Result<()> {
     let app = app(state);
 
     // GET should fail
-    let uri = format!("/auth/login/consume?token={}", token);
+    let uri = format!("/auth/magic-link/consume?token={}", token);
     let req = Request::get(uri).body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
@@ -759,7 +817,7 @@ async fn consume_login_fails_bad_nonce() -> Result<()> {
     let cookie_val = format!("{}.{}", token_hash, nonce_cookie);
     let body_str = format!("token={}&nonce={}", token, nonce_form);
 
-    let req = Request::post("/auth/login/consume")
+    let req = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
         .body(body::Body::from(body_str))?;
@@ -792,7 +850,7 @@ async fn consume_login_fails_bad_token_binding() -> Result<()> {
     let cookie_val = format!("{}.{}", token_hash, nonce);
     let body_str = format!("token={}&nonce={}", token, nonce); // Correct token in form
 
-    let req = Request::post("/auth/login/consume")
+    let req = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, cookie_val))
         .body(body::Body::from(body_str))?;
@@ -820,7 +878,7 @@ async fn request_login_provisioning_disabled_for_unknown() -> Result<()> {
     let app = app(state.clone());
 
     let email = "newuser@example.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -849,7 +907,7 @@ async fn request_login_provisioning_enabled_success() -> Result<()> {
     let app = app(state.clone());
 
     let email = "allowed@example.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -897,7 +955,7 @@ async fn request_login_provisioning_enabled_denied() -> Result<()> {
     let app = app(state.clone());
 
     let email = "denied@example.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -928,7 +986,7 @@ async fn request_login_provisioning_enabled_domain_allowlist() -> Result<()> {
     let app = app(state.clone());
 
     let email = "user@allowed.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -961,7 +1019,7 @@ async fn request_login_provisioning_domain_allowlist_rejects_multi_at_attack() -
     let app = app(state.clone());
 
     let email = "attacker@allowed.com@evil.com";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -999,7 +1057,7 @@ async fn request_login_provisioning_empty_domain_rejected() -> Result<()> {
     let app = app(state.clone());
 
     let email = "user@";
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(r#"{{"email":"{}"}}"#, email)))?;
 
@@ -1035,7 +1093,7 @@ async fn request_login_provisioning_email_normalization_works() -> Result<()> {
     let input_email = "  Allowed@EXAMPLE.com  ";
     let normalized_email = "allowed@example.com";
 
-    let req = Request::post("/auth/login/request")
+    let req = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(format!(
             r#"{{"email":"{}"}}"#,

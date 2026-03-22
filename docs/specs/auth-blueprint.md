@@ -8,6 +8,11 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Blaupause: Schrittweise Implementierung von Account- und Login-Logik im Weltgewebe
 
+> **Hinweis:** Diese Blaupause ist eine ältere, an [ADR-0005](../adr/ADR-0005-auth.md)
+> gebundene Implementierungslinie und nicht mehr das kanonische Zieldokument.
+> Siehe [ADR-0006](../adr/ADR-0006__auth-magic-link-session-passkey.md) und die
+> [Auth Roadmap](../blueprints/auth-roadmap.md) für die aktuelle Architektur.
+>
 > Ziel dieses Dokuments ist eine **dump- und ADR-konforme**, schrittweise Abarbeitung
 > von **Account → Auth → Login → Rollen → Schutzmechanismen**.
 >

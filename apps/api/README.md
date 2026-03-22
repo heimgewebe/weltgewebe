@@ -62,8 +62,10 @@ you can whitelist origins:
 - `CSRF_ALLOWED_ORIGINS` &mdash; Comma-separated list of allowed origins
   (e.g., `http://localhost:5173,https://my-dev-env.com`).
 
-**Note:** The `/auth/dev/login` and `/auth/login/request` endpoints are exempted from CSRF checks to facilitate initial
-session creation.
+**Note:** Initial authentication flows (such as `/auth/magic-link/request` or `/auth/dev/login`) typically do not
+carry an authenticated session cookie and therefore bypass the session-bound CSRF checks. Additional route-specific
+bypass behavior (e.g., for `/auth/logout`) is defined by the backend middleware and should be verified against
+the implementation.
 
 ## Developer Login (Security Warning)
 
@@ -82,7 +84,7 @@ By default, dev-login is restricted to requests originating from **localhost**.
 
 - **`AUTH_DEV_LOGIN_ALLOW_REMOTE`**: Set to `1` to allow requests from non-localhost IPs (e.g., LAN devices).
   **Use with extreme caution.**
-- **`AUTH_PUBLIC_LOGIN`**: Set to `1` to enable public Magic Link login flow (`/auth/login/request`).
+- **`AUTH_PUBLIC_LOGIN`**: Set to `1` to enable public Magic Link login flow (`/auth/magic-link/request`).
   Defaults to `0` (disabled).
 - **`APP_BASE_URL`**: Base URL for constructing Magic Links sent via email/log.
   Defaults to `http://localhost:5173`.

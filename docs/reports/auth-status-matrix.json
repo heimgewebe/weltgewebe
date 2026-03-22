@@ -17,84 +17,133 @@
   "areas": {
     "magic_link": {
       "soll": "POST /auth/magic-link/request, POST /auth/magic-link/consume",
-      "ist": "Magic-Link-Funktionalität ist implementiert, aber die belegte Routing-/Runtime-Linie nutzt derzeit /auth/login/request und /auth/login/consume statt der Zielrouten /auth/magic-link/request und /auth/magic-link/consume.",
+      "ist": "Kanonischer Zielcontract ist auf /auth/magic-link/* migriert. Der Legacy-Consume-Pfad /auth/login/consume bleibt temporär als Rollout-Migrationsbrücke für in-flight Tokens bestehen. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.",
       "status": "Teil",
-      "documentation_evidence": ["docs/runbook.md"],
-      "code_runtime_evidence": ["apps/api/src/routes/auth.rs", "apps/web/src/routes/login/+page.svelte", "verification/verify_magic_link.py"],
-      "missing_evidence": ["Nachweis der Zielrouten /auth/magic-link/request und /auth/magic-link/consume oder explizite Alias-/Migrationsbrücke auf diese Zielrouten"],
-      "risk": "mittel"
+      "documentation_evidence": [
+        "docs/runbook.md"
+      ],
+      "missing_evidence": [
+        "erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/web/src/routes/login/+page.svelte",
+        "verification/verify_magic_link.py"
+      ]
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
       "ist": "Die heutige MVP-/Runtime-Linie nutzt /auth/me und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus GET /auth/session plus belastbarem Persistenzmodell",
       "status": "Teil",
-      "documentation_evidence": ["docs/specs/auth-blueprint.md", "docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
-      "code_runtime_evidence": ["apps/api/src/routes/auth.rs", "apps/api/src/auth/session.rs", "apps/web/src/lib/auth/store.ts"],
-      "missing_evidence": ["Echte Persistenz (nicht In-Memory)", "sauber verifizierbarer Session-Check (GET /auth/session)", "Cookie-Verhalten", "Routen-Tests"],
-      "risk": "hoch"
+      "documentation_evidence": [
+        "docs/specs/auth-blueprint.md",
+        "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
+      ],
+      "missing_evidence": [
+        "Echte Persistenz (nicht In-Memory)",
+        "sauber verifizierbarer Session-Check (GET /auth/session)",
+        "Cookie-Verhalten",
+        "Routen-Tests"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/auth/session.rs",
+        "apps/web/src/lib/auth/store.ts"
+      ]
     },
     "session_refresh": {
       "soll": "POST /auth/session/refresh",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Routen-Code", "Test-Case"],
-      "risk": "hoch"
+      "missing_evidence": [
+        "Routen-Code",
+        "Test-Case"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": []
     },
     "logout": {
       "soll": "POST /auth/logout",
       "ist": "Ein Logout-Codepfad ist im aktuellen Code vorhanden (/auth/logout). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch",
       "status": "Teil",
-      "documentation_evidence": ["docs/blueprints/weltgewebe.auth-and-ui-routing.md"],
-      "code_runtime_evidence": ["apps/api/src/routes/auth.rs"],
-      "missing_evidence": ["End-to-End-Test"],
-      "risk": "mittel"
+      "documentation_evidence": [
+        "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
+      ],
+      "missing_evidence": [
+        "End-to-End-Test"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs"
+      ]
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Routen-Code", "Test-Case"],
-      "risk": "hoch"
+      "missing_evidence": [
+        "Routen-Code",
+        "Test-Case"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": []
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Routen-Code", "Test-Case"],
-      "risk": "hoch"
+      "missing_evidence": [
+        "Routen-Code",
+        "Test-Case"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": []
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Routen-Code", "Test-Case"],
-      "risk": "sehr hoch"
+      "missing_evidence": [
+        "Routen-Code",
+        "Test-Case"
+      ],
+      "risk": "sehr hoch",
+      "code_runtime_evidence": []
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Routen-Code", "Test-Case"],
-      "risk": "mittel"
+      "missing_evidence": [
+        "Routen-Code",
+        "Test-Case"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": []
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
       "ist": "teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte",
       "status": "Teil",
-      "documentation_evidence": ["docs/runbook.md", "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"],
-      "code_runtime_evidence": [],
-      "missing_evidence": ["Anti-Enumeration-Nachweis fehlt", "CSRF-/Origin-Nachweis fehlt", "Token-Leak-Prevention nicht separat verifiziert", "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"],
-      "risk": "hoch"
+      "documentation_evidence": [
+        "docs/runbook.md",
+        "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"
+      ],
+      "missing_evidence": [
+        "Anti-Enumeration-Nachweis fehlt",
+        "CSRF-/Origin-Nachweis fehlt",
+        "Token-Leak-Prevention nicht separat verifiziert",
+        "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": []
     }
   },
   "open_architectural_decisions": {

@@ -94,7 +94,7 @@ async fn rate_limit_ignores_forwarded_header_when_untrusted() -> Result<()> {
 
     // 2. Client A claims to be 1.2.3.4
     let req_client_a = || {
-        Request::post("/auth/login/request")
+        Request::post("/auth/magic-link/request")
             .header("Content-Type", "application/json")
             .header("X-Forwarded-For", "1.2.3.4")
             .body(body::Body::from(r#"{"email":"u1@example.com"}"#))
@@ -102,7 +102,7 @@ async fn rate_limit_ignores_forwarded_header_when_untrusted() -> Result<()> {
 
     // 3. Client B claims to be 5.6.7.8
     let req_client_b = || {
-        Request::post("/auth/login/request")
+        Request::post("/auth/magic-link/request")
             .header("Content-Type", "application/json")
             .header("X-Forwarded-For", "5.6.7.8")
             .body(body::Body::from(r#"{"email":"u2@example.com"}"#))

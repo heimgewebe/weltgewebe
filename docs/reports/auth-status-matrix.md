@@ -46,7 +46,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 - `docs/runbook.md`
 
-### Code-, Test- und Runtime-Belege
+### Code-, Test- und Verifikationsbelege
 
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`
@@ -62,7 +62,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
-| Magic Link            | vorhanden   | alte Routen belegt, Ziel-Contract offen | Teil   | mittel  |
+| Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
@@ -79,10 +79,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** Magic-Link-Funktionalität ist implementiert, aber die belegte Routing-/Runtime-Linie nutzt derzeit `/auth/login/request` und `/auth/login/consume` statt der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume`. Dies ist kein Funktionsausfall, sondern ein Contract-Angleichungspunkt.
+**Ist:** Kanonischer Zielcontract ist auf `/auth/magic-link/*` migriert. Der Legacy-Consume-Pfad `/auth/login/consume` bleibt temporär als Rollout-Migrationsbrücke für in-flight Tokens bestehen. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.
 **Dokumentationsbelege:** `docs/runbook.md`
-**Code-, Test- und Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
-**Fehlende Belege:** Nachweis der Zielrouten `/auth/magic-link/request` und `/auth/magic-link/consume` oder explizite Alias-/Migrationsbrücke auf diese Zielrouten.
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
+**Fehlende Belege:** erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten
 **Status:** Teil
 **Risiko:** mittel
 
@@ -91,7 +91,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
 **Ist:** Die heutige MVP-/Runtime-Linie nutzt `/auth/me` und einen In-Memory Session-Store. Das liefert einen funktional verwandten Session-Check, ist aber noch nicht deckungsgleich mit dem Zielrahmen aus `GET /auth/session` plus belastbarem Persistenzmodell.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/web/src/lib/auth/store.ts`
 **Fehlende Belege:** Echte Persistenz (nicht In-Memory), sauber verifizierbarer Session-Check (`GET /auth/session`), Cookie-Verhalten, Routen-Tests.
 **Status:** Teil
 **Risiko:** hoch
@@ -101,7 +101,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -111,7 +111,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/logout`
 **Ist:** Ein Logout-Codepfad ist im aktuellen Code vorhanden (`/auth/logout`). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.
 **Dokumentationsbelege:** `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-/Runtime-Belege:** `apps/api/src/routes/auth.rs`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`
 **Fehlende Belege:** End-to-End-Test
 **Status:** Teil
 **Risiko:** mittel
@@ -121,7 +121,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/logout-all`
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -131,7 +131,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** hoch
@@ -141,7 +141,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** sehr hoch
@@ -151,7 +151,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
 **Status:** Offen
 **Risiko:** mittel
@@ -161,7 +161,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
 **Ist:** teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-**Code-/Runtime-Belege:** keine
+**Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Anti-Enumeration-Nachweis fehlt, CSRF-/Origin-Nachweis fehlt, Token-Leak-Prevention nicht separat verifiziert, Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt.
 **Status:** Teil
 **Risiko:** hoch

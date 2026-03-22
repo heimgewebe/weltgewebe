@@ -87,7 +87,7 @@ async fn rate_limit_enforced_by_ip() -> Result<()> {
     let app = app(state);
 
     let req = || {
-        Request::post("/auth/login/request")
+        Request::post("/auth/magic-link/request")
             .header("Content-Type", "application/json")
             .body(body::Body::from(r#"{"email":"u1@example.com"}"#))
     };
@@ -119,7 +119,7 @@ async fn rate_limit_enforced_by_email() -> Result<()> {
     let app = app(state);
 
     let req = || {
-        Request::post("/auth/login/request")
+        Request::post("/auth/magic-link/request")
             .header("Content-Type", "application/json")
             .body(body::Body::from(r#"{"email":"u1@example.com"}"#))
     };
@@ -137,7 +137,7 @@ async fn rate_limit_enforced_by_email() -> Result<()> {
     assert_eq!(res.status(), StatusCode::TOO_MANY_REQUESTS);
 
     // Using different email from same IP -> OK
-    let req2 = Request::post("/auth/login/request")
+    let req2 = Request::post("/auth/magic-link/request")
         .header("Content-Type", "application/json")
         .body(body::Body::from(r#"{"email":"other@example.com"}"#))?;
     let res = app.clone().oneshot(req2).await?;

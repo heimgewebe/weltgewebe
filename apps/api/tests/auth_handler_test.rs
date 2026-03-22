@@ -104,7 +104,7 @@ mod tests {
         let state = test_state_undeliverable()?;
         let app = app(state);
 
-        let req = Request::post("/auth/login/request")
+        let req = Request::post("/auth/magic-link/request")
             .header("Content-Type", "application/json")
             .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
 
