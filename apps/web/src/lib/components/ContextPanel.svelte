@@ -1,5 +1,7 @@
 <script lang="ts">
   import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
+  import { isSearchOpen } from '$lib/stores/searchStore';
+  import { isFilterOpen } from '$lib/stores/filterStore';
 
   import NodePanel from './panels/NodePanel.svelte';
   import AccountPanel from './panels/AccountPanel.svelte';
@@ -11,7 +13,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if ($contextPanelOpen && event.key === 'Escape') {
+    if ($contextPanelOpen && event.key === 'Escape' && !$isSearchOpen && !$isFilterOpen) {
       closePanel();
     }
   }
