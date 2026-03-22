@@ -70,11 +70,6 @@
       "default": 0,
       "description": "Fuzziness radius in meters for the public display of a verortete Garnrolle."
     },
-    "disabled": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether this account is disabled. Disabled accounts are denied login."
-    },
     "tags": {
       "type": "array",
       "items": {
