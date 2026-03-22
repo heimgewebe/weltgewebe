@@ -613,7 +613,7 @@ async fn consume_legacy_alias_flow_succeeds() -> Result<()> {
         }
     }
     assert!(!nonce_val.is_empty(), "Nonce cookie missing on GET");
-    let nonce = nonce_val.split('.').last().unwrap_or("").to_string();
+    let nonce = nonce_val.split('.').next_back().unwrap_or("").to_string();
 
     // 2. POST (Consume via Legacy Alias)
     let body_str = format!("token={}&nonce={}", token, nonce);
