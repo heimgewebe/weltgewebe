@@ -22,7 +22,6 @@ target/
 .DS_Store
 Thumbs.db
 metrics.json
-.ci/
 
 # Python bytecode
 __pycache__/
