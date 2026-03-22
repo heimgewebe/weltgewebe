@@ -22,16 +22,15 @@
       "documentation_evidence": [
         "docs/runbook.md"
       ],
-      "code_runtime_evidence": [
+      "missing_evidence": [
+        "erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten"
+      ],
+      "risk": "mittel",
+      "code_test_verification_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/web/src/routes/login/+page.svelte",
         "verification/verify_magic_link.py"
-      ],
-      "missing_evidence": [
-        "erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten",
-        "Nachweis, dass keine Altpfade mehr produktiv relevant sind"
-      ],
-      "risk": "mittel"
+      ]
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
@@ -41,30 +40,30 @@
         "docs/specs/auth-blueprint.md",
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
       ],
-      "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs",
-        "apps/api/src/auth/session.rs",
-        "apps/web/src/lib/auth/store.ts"
-      ],
       "missing_evidence": [
         "Echte Persistenz (nicht In-Memory)",
         "sauber verifizierbarer Session-Check (GET /auth/session)",
         "Cookie-Verhalten",
         "Routen-Tests"
       ],
-      "risk": "hoch"
+      "risk": "hoch",
+      "code_test_verification_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/auth/session.rs",
+        "apps/web/src/lib/auth/store.ts"
+      ]
     },
     "session_refresh": {
       "soll": "POST /auth/session/refresh",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Routen-Code",
         "Test-Case"
       ],
-      "risk": "hoch"
+      "risk": "hoch",
+      "code_test_verification_evidence": []
     },
     "logout": {
       "soll": "POST /auth/logout",
@@ -73,61 +72,61 @@
       "documentation_evidence": [
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
       ],
-      "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs"
-      ],
       "missing_evidence": [
         "End-to-End-Test"
       ],
-      "risk": "mittel"
+      "risk": "mittel",
+      "code_test_verification_evidence": [
+        "apps/api/src/routes/auth.rs"
+      ]
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Routen-Code",
         "Test-Case"
       ],
-      "risk": "hoch"
+      "risk": "hoch",
+      "code_test_verification_evidence": []
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Routen-Code",
         "Test-Case"
       ],
-      "risk": "hoch"
+      "risk": "hoch",
+      "code_test_verification_evidence": []
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Routen-Code",
         "Test-Case"
       ],
-      "risk": "sehr hoch"
+      "risk": "sehr hoch",
+      "code_test_verification_evidence": []
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
       "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
       "status": "Offen",
       "documentation_evidence": [],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Routen-Code",
         "Test-Case"
       ],
-      "risk": "mittel"
+      "risk": "mittel",
+      "code_test_verification_evidence": []
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
@@ -137,14 +136,14 @@
         "docs/runbook.md",
         "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"
       ],
-      "code_runtime_evidence": [],
       "missing_evidence": [
         "Anti-Enumeration-Nachweis fehlt",
         "CSRF-/Origin-Nachweis fehlt",
         "Token-Leak-Prevention nicht separat verifiziert",
         "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"
       ],
-      "risk": "hoch"
+      "risk": "hoch",
+      "code_test_verification_evidence": []
     }
   },
   "open_architectural_decisions": {

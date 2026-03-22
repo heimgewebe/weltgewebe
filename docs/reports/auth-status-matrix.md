@@ -46,7 +46,7 @@ Diese Dokumente beschreiben das minimale Fundament und bisher umgesetzte Schritt
 
 - `docs/runbook.md`
 
-### Code-, Test- und Runtime-Belege
+### Code-, Test- und Verifikationsbelege
 
 - `apps/web/src/routes/login/+page.svelte`
 - `verification/verify_magic_link.py`
@@ -81,8 +81,8 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
 **Ist:** Zielrouten (`/auth/magic-link/request` und `/auth/magic-link/consume`) sind im Code, in Tests und in begleitender Doku/Verifikation artefaktisch angeglichen; ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.
 **Dokumentationsbelege:** `docs/runbook.md`
-**Code-, Test- und Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
-**Fehlende Belege:** erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten, Nachweis, dass keine Altpfade mehr produktiv relevant sind
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
+**Fehlende Belege:** erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten
 **Status:** Teil
 **Risiko:** mittel
 
