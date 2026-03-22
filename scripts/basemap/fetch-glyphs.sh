@@ -58,7 +58,7 @@ mkdir -p "$TARGET_FONT_DIR"
 echo "=> Checking if glyphs are already present..."
 if [ -n "$(find "$TARGET_FONT_DIR" -maxdepth 1 -name '*.pbf' -print -quit 2>/dev/null)" ]; then
   echo "   [✓] Glyphs already found in target directory. Skipping download."
-  exit 0 # Avoid raw exit keyword to not trigger the sandbox interceptor
+  exit 0
 fi
 
 echo "=> Downloading font archive from OpenMapTiles..."
