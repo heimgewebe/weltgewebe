@@ -17,8 +17,8 @@
   "areas": {
     "magic_link": {
       "soll": "POST /auth/magic-link/request, POST /auth/magic-link/consume",
-      "ist": "Ziel-Contract (/auth/magic-link/request und consume) ist vollständig implementiert und belegt.",
-      "status": "OK",
+      "ist": "Zielrouten /auth/magic-link/request und /auth/magic-link/consume sind im Code, in Tests und in begleitender Doku/Verifikation artefaktisch angeglichen; ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.",
+      "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md"
       ],
@@ -27,8 +27,11 @@
         "apps/web/src/routes/login/+page.svelte",
         "verification/verify_magic_link.py"
       ],
-      "missing_evidence": [],
-      "risk": "niedrig"
+      "missing_evidence": [
+        "erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten",
+        "Nachweis, dass keine Altpfade mehr produktiv relevant sind"
+      ],
+      "risk": "mittel"
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",

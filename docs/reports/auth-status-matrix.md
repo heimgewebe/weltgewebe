@@ -62,7 +62,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
-| Magic Link            | vorhanden   | Ziel-Contract belegt                  | OK     | niedrig |
+| Magic Link            | vorhanden   | Ziel-Contract angeglichen, Runtime-Beleg offen | Teil   | mittel  |
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
@@ -79,12 +79,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** Ziel-Contract (`/auth/magic-link/request` und `/auth/magic-link/consume`) ist vollständig implementiert und durch E2E belegt.
+**Ist:** Zielrouten (`/auth/magic-link/request` und `/auth/magic-link/consume`) sind im Code, in Tests und in begleitender Doku/Verifikation artefaktisch angeglichen; ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.
 **Dokumentationsbelege:** `docs/runbook.md`
 **Code-, Test- und Runtime-Belege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
-**Fehlende Belege:** keine
-**Status:** OK
-**Risiko:** niedrig
+**Fehlende Belege:** erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten, Nachweis, dass keine Altpfade mehr produktiv relevant sind
+**Status:** Teil
+**Risiko:** mittel
 
 ### 2.2 Session
 
