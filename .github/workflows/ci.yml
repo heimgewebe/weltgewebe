@@ -83,8 +83,8 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
-          if ! command -v yq >/dev/null 2>&1; then
-            echo "yq is not installed or not in PATH" >&2
+          if [ ! -x "$HOME/.local/bin/yq" ]; then
+            echo "yq is not installed or not executable at $HOME/.local/bin/yq" >&2
             exit 1
           fi
 
@@ -97,7 +97,7 @@ jobs:
           get_version() {
             local key=$1
             local val
-            val=$(yq -r ".${key} // \"\"" toolchain.versions.yml | xargs)
+            val=$("$HOME/.local/bin/yq" -r ".${key} // \"\"" toolchain.versions.yml | xargs)
             if [ -z "$val" ] || [ "$val" == "null" ]; then
               echo "failed to parse ${key} version from toolchain.versions.yml" >&2
               exit 1

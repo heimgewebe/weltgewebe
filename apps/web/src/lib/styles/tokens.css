@@ -11,6 +11,12 @@
   /* Layout-Defaults */
   --toolbar-offset: 52px;
   --context-panel-width: 400px;
+  --actionbar-base-height: 60px;
+  --actionbar-border-width: 1px;
+  --map-bottom-ui-offset: calc(
+    var(--actionbar-base-height) + var(--actionbar-border-width) +
+      env(safe-area-inset-bottom)
+  );
 
   /* Swipe-Edge Defaults (innenliegende Greifzonen, kollisionsarm mit OS-Gesten) */
   --edge-inset-x: 24px; /* Abstand von links/rechts */

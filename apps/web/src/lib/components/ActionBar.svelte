@@ -35,15 +35,17 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 60px;
+    height: var(--actionbar-base-height, 60px);
     background: var(--panel, #fff);
-    border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+    border-top: var(--actionbar-border-width, 1px) solid var(--panel-border, rgba(0,0,0,0.1));
     display: flex;
     justify-content: space-around;
     align-items: center;
     z-index: 40;
     padding: 0 1rem;
+    padding-bottom: env(safe-area-inset-bottom);
     box-shadow: var(--shadow, 0 -2px 10px rgba(0,0,0,0.05));
+    box-sizing: content-box;
   }
 
   .action-btn {
