@@ -11,7 +11,6 @@
       "url": "pmtiles://basemap-hamburg.pmtiles"
     }
   },
-  "sprite": "./sprites/sprite",
   "glyphs": "./glyphs/{fontstack}/{range}.pbf",
   "layers": [
     {
