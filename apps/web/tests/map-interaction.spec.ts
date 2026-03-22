@@ -102,8 +102,12 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Press Escape key
     await page.keyboard.press("Escape");
-    await expect(searchOverlay).toBeHidden();
+    await expect(searchOverlay).toHaveCount(0);
     await expect(panel).toBeVisible();
+
+    // Press Escape again
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
   });
 
   test("Escape does NOT close ContextPanel when filter is open", async ({
@@ -117,8 +121,12 @@ test.describe("Map Interaction & Context Panel", () => {
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(filterOverlay).toBeHidden();
+    await expect(filterOverlay).toHaveCount(0);
     await expect(panel).toBeVisible();
+
+    // Press Escape again
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
   });
 
   test("Clicking empty map area closes the context panel", async ({ page }) => {
