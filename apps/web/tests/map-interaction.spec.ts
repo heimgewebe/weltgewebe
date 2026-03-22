@@ -53,9 +53,6 @@ test.describe("Map Interaction & Context Panel", () => {
 
   test("Escape closes ContextPanel when in focus mode", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
-
-    // Open panel first
-    // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
     await page.evaluate(() => {
       (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
         new MouseEvent("click", { bubbles: true }),
@@ -95,7 +92,6 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Enter komposition mode to open panel
     await page.locator('button:has-text("Neuer Knoten")').click();
-
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
 
@@ -106,8 +102,6 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Press Escape key
     await page.keyboard.press("Escape");
-
-    // Panel should STILL be visible (while search would close based on its own logic)
     await expect(panel).toBeVisible();
   });
 
@@ -115,22 +109,13 @@ test.describe("Map Interaction & Context Panel", () => {
     page,
   }) => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
-
-    // Enter komposition mode to open panel
     await page.locator('button:has-text("Neuer Knoten")').click();
-
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
-
-    // Open filter
     await page.locator('.action-bar button[aria-label="Filter"]').click();
     const filterOverlay = page.locator('[data-testid="filter-overlay"]');
     await expect(filterOverlay).toBeVisible();
-
-    // Press Escape key
     await page.keyboard.press("Escape");
-
-    // Panel should STILL be visible (while filter would close based on its own logic)
     await expect(panel).toBeVisible();
   });
 
