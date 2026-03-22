@@ -26,7 +26,7 @@
         "erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten"
       ],
       "risk": "mittel",
-      "code_test_verification_evidence": [
+      "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/web/src/routes/login/+page.svelte",
         "verification/verify_magic_link.py"
@@ -47,7 +47,7 @@
         "Routen-Tests"
       ],
       "risk": "hoch",
-      "code_test_verification_evidence": [
+      "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/auth/session.rs",
         "apps/web/src/lib/auth/store.ts"
@@ -63,7 +63,7 @@
         "Test-Case"
       ],
       "risk": "hoch",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     },
     "logout": {
       "soll": "POST /auth/logout",
@@ -76,7 +76,7 @@
         "End-to-End-Test"
       ],
       "risk": "mittel",
-      "code_test_verification_evidence": [
+      "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs"
       ]
     },
@@ -90,7 +90,7 @@
         "Test-Case"
       ],
       "risk": "hoch",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
@@ -102,7 +102,7 @@
         "Test-Case"
       ],
       "risk": "hoch",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
@@ -114,7 +114,7 @@
         "Test-Case"
       ],
       "risk": "sehr hoch",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
@@ -126,7 +126,7 @@
         "Test-Case"
       ],
       "risk": "mittel",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
@@ -143,7 +143,7 @@
         "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"
       ],
       "risk": "hoch",
-      "code_test_verification_evidence": []
+      "code_runtime_evidence": []
     }
   },
   "open_architectural_decisions": {
