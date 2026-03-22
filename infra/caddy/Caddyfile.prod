@@ -50,7 +50,7 @@ weltgewebe.net {
 
 		@login_consume {
 			method POST
-			path /auth/magic-link/consume
+			path /auth/magic-link/consume /auth/login/consume
 		}
 # 		rate_limit @login_consume login_consume_limit
 
@@ -58,7 +58,7 @@ weltgewebe.net {
 		# A relaxed rate limit prevents abuse without impacting normal login flows.
 		@login_consume_get {
 			method GET
-			path /auth/magic-link/consume
+			path /auth/magic-link/consume /auth/login/consume
 		}
 # 		rate_limit @login_consume_get login_consume_get_limit
 

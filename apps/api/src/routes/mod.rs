@@ -44,6 +44,11 @@ pub fn api_router() -> Router<ApiState> {
             "/auth/magic-link/consume",
             get(consume_login_get).post(consume_login_post),
         )
+        // Temporary legacy alias for already dispatched magic links
+        .route(
+            "/auth/login/consume",
+            get(consume_login_get).post(consume_login_post),
+        )
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
 }

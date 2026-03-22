@@ -8,7 +8,10 @@ summary: Automatisch hinzugefügtes Frontmatter.
 ---
 # Blueprint: Heim-first Auth & UI Routing
 
-> **Hinweis:** Dieser Blueprint dient primär als Routing-/Diagnose-Werkzeug zur Auflösung historischer Split-Brain-Zustände und ist **kein** Bestandteil der Endarchitektur für Authentifizierung. Maßgeblich für Auth ist [ADR-0006](../adr/ADR-0006__auth-magic-link-session-passkey.md).
+> **Hinweis:** Dieser Blueprint dient primär als Routing-/Diagnose-Werkzeug zur
+> Auflösung historischer Split-Brain-Zustände und ist **kein** Bestandteil der
+> Endarchitektur für Authentifizierung. Maßgeblich für Auth ist
+> [ADR-0006](../adr/ADR-0006__auth-magic-link-session-passkey.md).
 
 ## Historischer Kontext (Split-Brain)
 
