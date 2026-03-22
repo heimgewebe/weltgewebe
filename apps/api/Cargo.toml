@@ -9,7 +9,7 @@ license = "MIT"
 [dependencies]
 anyhow = "1"
 axum = { version = "0.7", features = ["macros"] }
-async-nats = "0.46"
+async-nats = "0.35"
 dotenvy = "0.15"
 prometheus = "0.14.0"
 serde = { version = "1", features = ["derive"] }
