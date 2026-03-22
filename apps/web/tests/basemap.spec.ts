@@ -1,3 +1,4 @@
+import { resolveBasemapMode } from "../src/lib/map/config/basemap.current";
 import { test, expect } from "@playwright/test";
 import { resolveBasemapStyle, rewritePmtilesUrl } from "../src/lib/map/basemap";
 import type { BasemapConfig } from "../src/lib/map/config/basemap.current";
@@ -21,6 +22,30 @@ test.describe("rewritePmtilesUrl", () => {
     const origin = "http://localhost:5173";
     const url = "https://example.com/style.json";
     expect(rewritePmtilesUrl(url, origin)).toBe(url);
+  });
+});
+
+test.describe("resolveBasemapMode", () => {
+  test("returns 'local-sovereign' when envMode is explicitly 'local-sovereign'", () => {
+    expect(resolveBasemapMode("local-sovereign", false)).toBe(
+      "local-sovereign",
+    );
+    expect(resolveBasemapMode("local-sovereign", true)).toBe("local-sovereign");
+  });
+
+  test("returns 'remote-style' when envMode is explicitly 'remote-style'", () => {
+    expect(resolveBasemapMode("remote-style", false)).toBe("remote-style");
+    expect(resolveBasemapMode("remote-style", true)).toBe("remote-style");
+  });
+
+  test("falls back to 'local-sovereign' in local context if envMode is missing or invalid", () => {
+    expect(resolveBasemapMode(undefined, true)).toBe("local-sovereign");
+    expect(resolveBasemapMode("invalid-mode", true)).toBe("local-sovereign");
+  });
+
+  test("falls back to 'remote-style' in production context if envMode is missing or invalid", () => {
+    expect(resolveBasemapMode(undefined, false)).toBe("remote-style");
+    expect(resolveBasemapMode("invalid-mode", false)).toBe("remote-style");
   });
 });
 
