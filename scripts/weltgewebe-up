@@ -1335,6 +1335,19 @@ else
 fi
 
 echo
+
+echo ">> Guard 5b: Sovereign Basemap Route..."
+if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
+        msg="Sovereign Basemap Guard failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). This breaks local-sovereign frontend mode."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        exit 1
+    else
+        echo "OK (sovereign style.json reachable)"
+    fi
+fi
+echo
 echo ">> Guard 5: Frontend Reachability..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     # Explicitly verify HTTP 200 and the presence of SvelteKit structural elements like _app
