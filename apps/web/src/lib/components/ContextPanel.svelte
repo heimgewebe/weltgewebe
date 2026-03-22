@@ -13,6 +13,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    // Escape closes the panel only when no foreground overlay (search/filter) owns the interaction
     if (event.key === 'Escape' && $contextPanelOpen && !$isSearchOpen && !$isFilterOpen) {
       closePanel();
     }
