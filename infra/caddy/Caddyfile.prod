@@ -48,6 +48,8 @@ weltgewebe.net {
 		}
 # 		rate_limit @login_request login_limit
 
+		# /auth/login/consume is maintained temporarily alongside the canonical /auth/magic-link/consume
+		# as a legacy rollout alias to support in-flight tokens.
 		@login_consume {
 			method POST
 			path /auth/magic-link/consume /auth/login/consume
@@ -56,6 +58,7 @@ weltgewebe.net {
 
 		# GET /auth/magic-link/consume may be triggered by link scanners or prefetchers.
 		# A relaxed rate limit prevents abuse without impacting normal login flows.
+		# (Includes the temporary /auth/login/consume legacy alias for in-flight tokens)
 		@login_consume_get {
 			method GET
 			path /auth/magic-link/consume /auth/login/consume

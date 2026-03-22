@@ -62,7 +62,7 @@ you can whitelist origins:
 - `CSRF_ALLOWED_ORIGINS` &mdash; Comma-separated list of allowed origins
   (e.g., `http://localhost:5173,https://my-dev-env.com`).
 
-**Note:** CSRF checks are completely skipped for any request if no valid session cookie is present (facilitating initial flows like `/auth/magic-link/request` and `/auth/dev/login`). Additionally, there are explicit hardcoded route bypasses for paths ending in `/auth/login` (legacy login) and `/auth/logout` (which requires bypassing CSRF to clear an existing cookie).
+**Note:** Initial authentication flows (such as `/auth/magic-link/request` or `/auth/dev/login`) typically do not carry an authenticated session cookie and therefore bypass the session-bound CSRF checks. Additional route-specific bypass behavior (e.g., for `/auth/logout`) is defined by the backend middleware and should be verified against the implementation.
 
 ## Developer Login (Security Warning)
 

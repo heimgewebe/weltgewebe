@@ -44,7 +44,8 @@ pub fn api_router() -> Router<ApiState> {
             "/auth/magic-link/consume",
             get(consume_login_get).post(consume_login_post),
         )
-        // Temporary legacy alias for already dispatched magic links
+        // TODO: Temporary legacy alias for already dispatched magic links.
+        // Remove once in-flight tokens from before the /magic-link/ migration have expired.
         .route(
             "/auth/login/consume",
             get(consume_login_get).post(consume_login_post),
