@@ -51,7 +51,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
   });
 
-  test("Escape closes ContextPanel when in focus mode", async ({ page }) => {
+  test("Escape closes ContextPanel when in fokus mode", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
     await page.evaluate(() => {
       (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
