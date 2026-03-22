@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CARGO_TERM_COLOR: always  # keep cargo output colorized in CI logs
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

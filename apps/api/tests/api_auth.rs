@@ -652,8 +652,8 @@ async fn consume_login_fails_invalid_token() -> Result<()> {
 
     let app = app(state);
 
-    let req =
-        Request::get("/auth/magic-link/consume?token=invalid_token_123").body(body::Body::empty())?;
+    let req = Request::get("/auth/magic-link/consume?token=invalid_token_123")
+        .body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::SEE_OTHER);
