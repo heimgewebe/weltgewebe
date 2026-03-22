@@ -52,6 +52,7 @@ Server-side correctness does not intrinsically prevent browsers from rendering s
 The deployment script (`weltgewebe-up`) attempts to provide the sovereign PMTiles basemap artifact in the `build/basemap/` directory as a best-effort guard before stack initialization. The deploy/serve path can mount and serve it, but this does not imply the frontend is configured to consume it in production.
 
 #### `PUBLIC_BASEMAP_MODE` Contract
+
 To instruct the production frontend to actually consume the locally hosted sovereign basemap artifact (instead of falling back to external remote styles), the `PUBLIC_BASEMAP_MODE` environment variable must be explicitly set during the frontend build step.
 
 - **Name:** `PUBLIC_BASEMAP_MODE`
