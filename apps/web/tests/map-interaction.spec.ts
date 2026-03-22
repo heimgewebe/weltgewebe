@@ -284,4 +284,45 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(knotenTab).toBeFocused();
     await expect(knotenTab).toHaveAttribute("aria-selected", "true");
   });
+
+  test("Escape closes ContextPanel only if Search and Filter are closed", async ({
+    page,
+  }) => {
+    // 1. Open the ContextPanel by clicking a marker
+    const marker = page.locator(".map-marker").first();
+    await marker.click();
+    await expect(page.locator(".context-panel")).toBeVisible();
+
+    // 2. Open Search
+    const searchBtn = page.getByRole("button", { name: "Suche" });
+    await searchBtn.click();
+    await expect(page.locator(".search-overlay")).toBeVisible();
+
+    // 3. Press Escape. Search should close, ContextPanel should stay open.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".search-overlay")).not.toBeVisible();
+    await expect(page.locator(".context-panel")).toBeVisible();
+
+    // 4. Press Escape again. ContextPanel should close.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".context-panel")).not.toBeVisible();
+
+    // 5. Open ContextPanel again
+    await marker.click();
+    await expect(page.locator(".context-panel")).toBeVisible();
+
+    // 6. Open Filter
+    const filterBtn = page.getByRole("button", { name: "Filter" });
+    await filterBtn.click();
+    await expect(page.locator(".filter-overlay")).toBeVisible();
+
+    // 7. Press Escape. Filter should close, ContextPanel should stay open.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".filter-overlay")).not.toBeVisible();
+    await expect(page.locator(".context-panel")).toBeVisible();
+
+    // 8. Press Escape again. ContextPanel should close.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".context-panel")).not.toBeVisible();
+  });
 });
