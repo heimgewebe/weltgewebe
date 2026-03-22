@@ -58,13 +58,21 @@ mkdir -p "$TARGET_FONT_DIR"
 
 echo "=> Checking if glyphs are already present and verified..."
 if [ -f "$TARGET_FONT_DIR/.complete" ]; then
-  STORED_HASH="$(cat "$TARGET_FONT_DIR/.complete" | tr -d '
-')"
-  if [ "$STORED_HASH" = "$ASSET_SHA256" ]; then
-    echo "   [✓] Verified glyphs already found in target directory. Skipping download."
-    exit 0
+  # Parse key-value sentinel
+  STORED_HASH="$(grep '^HASH=' "$TARGET_FONT_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+  STORED_COUNT="$(grep '^COUNT=' "$TARGET_FONT_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
+
+  if [ "$STORED_HASH" = "$ASSET_SHA256" ] && [ -n "$STORED_COUNT" ]; then
+    # Verify the actual count in the target directory matches the expected count
+    ACTUAL_COUNT="$(find "$TARGET_FONT_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
+    if [ "$ACTUAL_COUNT" -eq "$STORED_COUNT" ]; then
+      echo "   [✓] Verified glyphs ($ACTUAL_COUNT files) already found in target directory. Skipping download."
+      exit 0
+    else
+      echo "   [!] Existing glyphs failed completeness check ($ACTUAL_COUNT of $STORED_COUNT found). Re-fetching..."
+    fi
   else
-    echo "   [!] Existing glyphs failed hash verification (or version changed). Re-fetching..."
+    echo "   [!] Existing glyphs failed hash/format verification (or version changed). Re-fetching..."
   fi
 fi
 
@@ -85,7 +93,7 @@ if [ "$ACTUAL_SHA256" != "$ASSET_SHA256" ]; then
 fi
 echo "   [✓] Integrity verified (SHA256 match)."
 
-echo "=> Extracting 'Noto Sans Regular' glyphs atomically..."
+echo "=> Extracting 'Noto Sans Regular' glyphs safely..."
 EXTRACT_DIR="$TMP_DIR/extracted"
 mkdir -p "$EXTRACT_DIR"
 
@@ -94,15 +102,28 @@ unzip -o -q -j "$TMP_ARCHIVE" "Noto Sans Regular/*" -d "$EXTRACT_DIR" || {
   exit 1
 }
 
-# Atomically move extracted files and write sentinel
+# Count extracted files
+EXTRACTED_COUNT="$(find "$EXTRACT_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
+if [ "$EXTRACTED_COUNT" -eq 0 ]; then
+  echo "Error: No .pbf files found in the extracted archive." >&2
+  exit 1
+fi
+echo "   [✓] Extracted $EXTRACTED_COUNT .pbf files."
+
+# Safely copy extracted files and write sentinel
 mkdir -p "$TARGET_FONT_DIR"
-# Copy contents forcefully, then write the sentinel. We use cp and rm instead of mv to avoid cross-device issues or directory replace limits.
+# Copy contents forcefully, then write the sentinel. We use cp instead of mv to avoid cross-device issues.
 cp -f "$EXTRACT_DIR"/*.pbf "$TARGET_FONT_DIR/" || {
   echo "Error: Failed to move extracted glyphs to target directory." >&2
   exit 1
 }
 
-echo -n "$ASSET_SHA256" > "$TARGET_FONT_DIR/.complete"
+# Write multi-line sentinel file
+cat << EOF_SENTINEL > "$TARGET_FONT_DIR/.complete"
+HASH=$ASSET_SHA256
+COUNT=$EXTRACTED_COUNT
+EOF_SENTINEL
+
 
 
 
