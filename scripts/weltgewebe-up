@@ -827,8 +827,12 @@ evaluate_glyphs_state() {
         stored_hash="$(grep '^HASH=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
         stored_count="$(grep '^COUNT=' "$GLYPHS_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
 
-        if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ -n "$stored_count" ]; then
-            GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
+        case "$stored_count" in
+            ''|*[!0-9]*) stored_count=-1 ;;
+        esac
+
+        if [ "$stored_hash" = "$EXPECTED_GLYPHS_HASH" ] && [ "$stored_count" -ge 0 ]; then
+            GLYPHS_ACTUAL_COUNT="$(find "$GLYPHS_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
             if [ "$GLYPHS_ACTUAL_COUNT" -eq "$stored_count" ]; then
                 GLYPHS_READY=1
             fi

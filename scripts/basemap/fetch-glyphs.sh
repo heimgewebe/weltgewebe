@@ -62,9 +62,14 @@ if [ -f "$TARGET_FONT_DIR/.complete" ]; then
   STORED_HASH="$(grep '^HASH=' "$TARGET_FONT_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
   STORED_COUNT="$(grep '^COUNT=' "$TARGET_FONT_DIR/.complete" | cut -d= -f2 | tr -d ' \n\r' || true)"
 
-  if [ "$STORED_HASH" = "$ASSET_SHA256" ] && [ -n "$STORED_COUNT" ]; then
+  # Validate that STORED_COUNT is strictly numeric to safely use -eq
+  case "$STORED_COUNT" in
+    ''|*[!0-9]*) STORED_COUNT=-1 ;;
+  esac
+
+  if [ "$STORED_HASH" = "$ASSET_SHA256" ] && [ "$STORED_COUNT" -ge 0 ]; then
     # Verify the actual count in the target directory matches the expected count
-    ACTUAL_COUNT="$(find "$TARGET_FONT_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
+    ACTUAL_COUNT="$(find "$TARGET_FONT_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
     if [ "$ACTUAL_COUNT" -eq "$STORED_COUNT" ]; then
       echo "   [✓] Verified glyphs ($ACTUAL_COUNT files) already found in target directory. Skipping download."
       exit 0
@@ -103,7 +108,7 @@ unzip -o -q -j "$TMP_ARCHIVE" "Noto Sans Regular/*" -d "$EXTRACT_DIR" || {
 }
 
 # Count extracted files
-EXTRACTED_COUNT="$(find "$EXTRACT_DIR" -maxdepth 1 -name '*.pbf' | wc -l)"
+EXTRACTED_COUNT="$(find "$EXTRACT_DIR" -maxdepth 1 -name '*.pbf' | wc -l | tr -d '[:space:]')"
 if [ "$EXTRACTED_COUNT" -eq 0 ]; then
   echo "Error: No .pbf files found in the extracted archive." >&2
   exit 1
