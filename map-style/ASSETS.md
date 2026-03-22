@@ -3,7 +3,7 @@
 Dieses Dokument dokumentiert die Herkunft, Lizenzierung und Integration der visuellen Assets (Schriften und Icons), die
 von der souveränen Basemap (`style.json`) genutzt werden.
 
-> **Status-Hinweis:** Dieses Manifest dokumentiert die Herkunft und Lizenz der lokal gehosteten Schriftarten (Glyphs). Die Sprite-Artefakte befinden sich noch in der Scaffold-Phase.
+> **Status-Hinweis:** Dieses Manifest dokumentiert die Herkunft und Lizenz der lokal gehosteten Schriftarten (Glyphs). Da die Basemap visuell beruhigt ist und nur Infrastruktur darstellt, sind aktuell keine Sprites (Icons) erforderlich.
 
 ## Strategie
 
@@ -15,8 +15,7 @@ Daher ist die Strategie für alle visuell benötigten Assets:
 
 1. **Lokales Hosting**: Alle benötigten Assets sollen physisch in diesem Verzeichnis (`map-style/`) abgelegt und lokal
    ausgeliefert werden.
-2. **Pfad-Integration**: In der `style.json` verweisen `sprite` und `glyphs` auf relative Pfade (`./sprites/sprite`,
-   `./glyphs/{fontstack}/{range}.pbf`).
+2. **Pfad-Integration**: In der `style.json` verweisen `glyphs` auf relative Pfade (`./glyphs/{fontstack}/{range}.pbf`). Die `sprite` Eigenschaft entfällt.
 3. **Klare Lizenzen**: Jedes Asset muss mit einer kompatiblen, dokumentierten Open-Source-Lizenz versehen sein.
 
 ## Glyphs (Schriften)
@@ -29,16 +28,6 @@ MapLibre benötigt Schriften im Protocol Buffer Format (PBF), gesplittet in Unic
 - **Lizenz:** SIL Open Font License (OFL)
 - **Herkunft / Erzeugung:** Die Schriftarten (v2.0) werden über das deterministische Skript `scripts/basemap/fetch-glyphs.sh` reproduzierbar vom offiziellen [OpenMapTiles Fonts Release](https://github.com/openmaptiles/fonts/releases) geladen und über einen SHA256-Hash validiert. Da es sich um kompilierte Artefakte handelt, sind die `.pbf`-Dateien nicht im Repo eingecheckt. Das Deployment-Skript `weltgewebe-up` versucht als "Best Effort Guard", fehlende Fonts beim Stack-Start aus der definierten Quelle zu beziehen. Für die lokale Entwicklung (ohne `weltgewebe-up`) muss das Skript einmalig manuell ausgeführt werden (siehe `map-style/glyphs/README.md`).
 
-## Sprites (Icons & Pattern)
+## Sprites (entfallen)
 
-Verzeichnis: `map-style/sprites/`
-
-MapLibre nutzt Spritesheets (`sprite.png`, `sprite@2x.png` und `sprite.json`), um POI-Icons, Highway-Shields oder
-Füllmuster (Background Patterns) zu rendern.
-
-- **Lizenz:** (noch festzulegen, z. B. CC0 / Public Domain / OpenStreetMap kompatibel). Lizenz und Herkunft sind derzeit
-  unvollständig.
-- **Inhalt:** Minimalistisches Set, abgestimmt auf eine beruhigte Infrastruktur-Basemap. Konkreter Inhaltsumfang ist
-  noch offen.
-
-_Hinweis: Die Sprite-Dateien (`sprite.json`, `sprite.png`, etc.) müssen hier noch generiert und abgelegt werden._
+*Entfällt (bewusst).* Sprites sind nicht vergessen, sondern im aktuellen MVP-Architekturziel bewusst nicht Bestandteil der Basemap. Da die Weltgewebe-Basemap gemäß Architektur-Blaupause eine streng visuell beruhigte Infrastrukturebene ohne POIs oder komplexe Füllmuster darstellt, werden keine Sprites in der `style.json` referenziert oder benötigt. Das Weltgewebe-Overlay bleibt der exklusive Ort für ikonische und semantische Darstellungen (Nodes, Edges, Activity).

@@ -33,15 +33,16 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
 **Ziel:** Vollständige Kontrolle über die visuelle Präsentation der Basemap im eigenen Repository.
 
 - [x] Eigenes `style.json` im `map-style`-Verzeichnis anlegen
-- [ ] Glyph- und Sprite-Strategie festlegen
-  - _Teilweise umgesetzt: Lokales Asset-Hosting für Glyphs ist per reproduzierbarem Download-Skript (`fetch-glyphs.sh`) vorbereitet und best-effort in den `weltgewebe-up` Deployment-Guard eingebunden. Sprites sind weiterhin offen._
-- [ ] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
-  - _Teilweise umgesetzt: OFL-Lizenz und Herkunft für Noto Sans Glyphs im ASSETS.md dokumentiert. Sprite-Manifest noch offen._
-- [ ] Basemap visuell beruhigen (Fokus auf Infrastruktur)
+- [x] Glyph- und Sprite-Strategie festlegen
+  - _Umgesetzt (für das aktuelle MVP abgeschlossen): Lokales Asset-Hosting für Glyphs ist per reproduzierbarem Download-Skript (`fetch-glyphs.sh`) vorbereitet und best-effort in den `weltgewebe-up` Deployment-Guard eingebunden. Sprites sind im aktuellen Architekturziel bewusst nicht Teil der Basemap, da sie in einer beruhigten Infrastruktur-Basemap nicht benötigt werden._
+- [x] Lizenz-/Asset-Manifest für Glyphs, Sprites und Fonts dokumentieren
+  - _Umgesetzt: OFL-Lizenz und Herkunft für Noto Sans Glyphs im ASSETS.md dokumentiert. Das Fehlen der Sprites ist dort explizit architekturell begründet._
+- [x] Basemap visuell beruhigen (Fokus auf Infrastruktur)
+  - _Erledigt: Style ist minimalistisch und enthält keine POI-Icons. Visuelle Semantik liegt im Overlay._
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
 
-**Abnahmekriterium:** Ein eigenes `style.json` wird geladen, Schriften und Icons werden lokal/souverän serviert und sind
-lizenzrechtlich dokumentiert. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
+**Abnahmekriterium:** Ein eigenes `style.json` wird geladen und Schriften (Glyphs) werden lokal/souverän serviert und sind
+lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons), da die visuelle Semantik vollständig in den Overlays (Nodes/Edges) liegt. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
 (Light/Dark).
 
 ## Phase 3 — Runtime-Integration
