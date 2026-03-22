@@ -83,7 +83,7 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/.local/bin:$PATH"
 
-          if ! command -v "$HOME/.local/bin/yq" >/dev/null 2>&1; then
+          if ! [ -x "$HOME/.local/bin/yq" ]; then
             echo "yq is not installed or not in PATH" >&2
             exit 1
           fi
