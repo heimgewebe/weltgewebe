@@ -16,8 +16,8 @@ permissions:
 
 jobs:
   metrics:
-    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@main
+    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@77b9fc21be6a9eaf2126931ede60232e53e74bcc
     with:
-      schema_ref: main
+      metarepo_ref: "77b9fc21be6a9eaf2126931ede60232e53e74bcc"
       post_url: ${{ secrets.HAUSKI_METRICS_URL }}
     secrets: inherit
