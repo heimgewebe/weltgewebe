@@ -3,10 +3,9 @@ id: map-roadmap
 title: Basemap-Umsetzungsroadmap
 doc_type: roadmap
 status: draft
-canonicality: canonical
 summary: >
   Roadmap zur schrittweisen operativen Umsetzung der souveränen Basemap-Architektur.
-related_docs:
+relates_to:
   - docs/blueprints/map-blaupause.md
 ---
 

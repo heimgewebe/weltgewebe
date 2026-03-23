@@ -3,9 +3,8 @@ id: x-repo.peers-learnings
 title: Peers Learnings
 doc_type: reference
 status: active
-canonicality: derived
 summary: Erkenntnisse und Learnings aus verwandten Peer-Projekten.
-related_docs:
+relates_to:
   - docs/x-repo/semantAH.md
 ---
 

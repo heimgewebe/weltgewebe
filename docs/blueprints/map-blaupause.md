@@ -3,12 +3,11 @@ id: map-blaupause
 title: Basemap-Architektur-Blaupause
 doc_type: blueprint
 status: draft
-canonicality: canonical
 summary: >
   Architektur-Blaupause für einen souveränen Basemap-Stack basierend auf
   MapLibre, PMTiles und einer reproduzierbaren Tile-Generierungs-Pipeline
   für Weltgewebe-Overlays.
-related_docs:
+relates_to:
   - docs/blueprints/map-roadmap.md
 ---
 

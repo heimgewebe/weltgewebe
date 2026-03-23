@@ -3,9 +3,8 @@ id: specs.auth-blueprint
 title: Auth Blueprint
 doc_type: reference
 status: active
-canonicality: derived
 summary: Ältere Implementierungslinie für Auth (an ADR-0005 gebunden), abgelöst durch ADR-0006.
-related_docs:
+relates_to:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/adr/ADR-0005-auth.md
   - docs/blueprints/auth-roadmap.md

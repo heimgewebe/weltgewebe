@@ -3,9 +3,8 @@ id: process.README
 title: Prozess-Übersicht
 doc_type: reference
 status: active
-canonicality: derived
 summary: Übersicht über Abläufe, Konventionen und den Fahrplan des Projekts.
-related_docs:
+relates_to:
   - docs/process/fahrplan.md
   - docs/process/sprache.md
   - docs/process/bash-tooling-guidelines.md

@@ -3,7 +3,6 @@ id: reports.cost-report
 title: Cost Report
 doc_type: reference
 status: active
-canonicality: derived
 summary: Kostenübersicht und Ressourcenverbrauch des Projekts.
 ---
 # Cost Report 2025-10

@@ -3,9 +3,8 @@ id: specs.privacy-api
 title: Privacy API
 doc_type: reference
 status: active
-canonicality: derived
 summary: API-Spezifikation für datenschutzrelevante Endpunkte.
-related_docs:
+relates_to:
   - docs/specs/privacy-ui.md
   - docs/konzepte/garnrolle-und-verortung.md
 ---

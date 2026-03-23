@@ -3,9 +3,8 @@ id: process.bash-tooling-guidelines
 title: Bash Tooling Guidelines
 doc_type: reference
 status: active
-canonicality: derived
 summary: Richtlinien für Shell-Skripting und Bash-Tooling im Projekt.
-related_docs:
+relates_to:
   - docs/process/README.md
 ---
 # Bash-Tooling-Richtlinien

@@ -3,9 +3,8 @@ id: edge.systemd.README
 title: Edge Systemd
 doc_type: reference
 status: active
-canonicality: derived
 summary: Systemd-Konfiguration für den Edge-Gateway-Dienst.
-related_docs:
+relates_to:
   - docs/deploy/README.md
 ---
 # Edge systemd units (optional)

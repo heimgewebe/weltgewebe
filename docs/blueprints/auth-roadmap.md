@@ -3,11 +3,10 @@ id: blueprints.auth-roadmap
 title: Auth Roadmap
 doc_type: roadmap
 status: active
-canonicality: canonical
 summary: >
   Exekutive Roadmap zur schrittweisen Kanonisierung, Verifikation und
   Vollendung der Auth-Architektur im Weltgewebe.
-related_docs:
+relates_to:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/reports/auth-status-matrix.md
   - docs/specs/auth-blueprint.md

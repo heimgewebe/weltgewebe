@@ -3,9 +3,8 @@ id: runbooks.README
 title: Runbooks-Übersicht
 doc_type: reference
 status: active
-canonicality: derived
 summary: Übersicht und Index der operativen Runbooks.
-related_docs:
+relates_to:
   - docs/runbook.md
   - docs/runbooks/codespaces-recovery.md
   - docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md

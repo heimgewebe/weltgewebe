@@ -3,9 +3,8 @@ id: overview.zusammenstellung
 title: Zusammenstellung (Übersicht)
 doc_type: reference
 status: active
-canonicality: canonical
 summary: Systematische Zusammenfassung aus der Übersichtsperspektive.
-related_docs:
+relates_to:
   - docs/zusammenstellung.md
   - docs/overview/inhalt.md
 ---

@@ -3,9 +3,8 @@ id: versionierungs-blaupause
 title: "Weltgewebe Deploy-Versionierung und Browser-Aktualität"
 doc_type: blueprint
 status: draft
-canonicality: normative
 summary: "Blaupause für eine saubere, beobachtbare Deploy-Identität, die konsistent von Build bis zur UI-Diagnose bleibt."
-related_docs:
+relates_to:
   - docs/blueprints/versionierungs-statusgrundlage.md
   - docs/deployment.md
 ---

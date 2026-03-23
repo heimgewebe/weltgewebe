@@ -3,9 +3,8 @@ id: adr.ADR-0003__privacy-ungenauigkeitsradius-ron
 title: ADR-0003 — Privacy-Ungenauigkeitsradius und RoN
 doc_type: reference
 status: active
-canonicality: derived
 summary: Entscheidung zum Privacy-Konzept mit Ungenauigkeitsradius und Rolle ohne Namen (RoN).
-related_docs:
+relates_to:
   - docs/konzepte/garnrolle-und-verortung.md
 ---
 # ADR-0003 — Privacy: Ungenauigkeitsradius & RoN-Identitätsmodus (v2)

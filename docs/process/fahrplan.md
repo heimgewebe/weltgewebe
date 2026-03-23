@@ -3,9 +3,8 @@ id: process.fahrplan
 title: Fahrplan
 doc_type: reference
 status: active
-canonicality: derived
 summary: Zeitlicher Ablauf und Meilensteine des Projekts (Gates A–D).
-related_docs:
+relates_to:
   - docs/process/README.md
 ---
 # Fahrplan

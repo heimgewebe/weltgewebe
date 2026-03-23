@@ -3,9 +3,8 @@ id: blueprints.weltgewebe.deploy.plan
 title: Deploy-Plan
 doc_type: reference
 status: active
-canonicality: derived
 summary: Deployment-Planungsdokument für das Weltgewebe.
-related_docs:
+relates_to:
   - docs/deployment.md
   - docs/deploy/README.md
 ---

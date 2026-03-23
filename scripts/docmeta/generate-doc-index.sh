@@ -11,7 +11,6 @@ id: docs.generated.doc-index
 title: Doc Index
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierter Dokumenten-Index.
 ---
 
@@ -19,8 +18,8 @@ summary: Automatisch generierter Dokumenten-Index.
 
 Generated automatically. Do not edit.
 
-| id | title | type | status | canonicality | path |
-| --- | --- | --- | --- | --- | --- |
+| id | title | type | status | path |
+| --- | --- | --- | --- | --- |
 HEADER
 
 # Create a temporary file to hold entries before sorting
@@ -37,10 +36,9 @@ find docs -type f -name "*.md" ! -path "docs/_generated/*" -print0 | while IFS= 
     title=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^title:" | sed 's/^title: *//' | tr -d '"'\''')
     doc_type=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^doc_type:" | sed 's/^doc_type: *//' | tr -d '"'\''')
     status=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^status:" | sed 's/^status: *//' | tr -d '"'\''')
-    canonicality=$(sed -n -e '/^---$/,/^---$/ p' "$file" | grep "^canonicality:" | sed 's/^canonicality: *//' | tr -d '"'\''')
 
     if [ -n "$id" ]; then
-        echo "| $id | $title | $doc_type | $status | $canonicality | $file |" >> "$TEMP_ENTRIES"
+        echo "| $id | $title | $doc_type | $status | $file |" >> "$TEMP_ENTRIES"
     fi
 done
 

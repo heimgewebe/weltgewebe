@@ -3,9 +3,8 @@ id: reference.glossar
 title: Glossar
 doc_type: reference
 status: active
-canonicality: derived
 summary: Schnellreferenz der zentralen Begriffe im Weltgewebe-Projekt.
-related_docs:
+relates_to:
   - docs/domain/vocabulary.md
 ---
 # Glossar

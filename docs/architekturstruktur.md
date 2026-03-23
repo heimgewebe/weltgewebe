@@ -3,10 +3,9 @@ id: docs.architecture.overview
 title: Architekturüberblick
 doc_type: architecture
 status: active
-canonicality: canonical
 summary: >
   Kurzbeschreibung der Architektur und Struktur.
-related_docs:
+relates_to:
   - docs/techstack.md
   - docs/datenmodell.md
   - docs/vision.md

@@ -3,9 +3,8 @@ id: versionierungs-statusgrundlage
 title: "Weltgewebe – Versionierungs-Statusgrundlage"
 doc_type: blueprint
 status: active
-canonicality: normative
 summary: "Belastbare Arbeitsgrundlage und Ist-Stand-Dokumentation für alle Folgeschritte zur Weltgewebe-Versionierung."
-related_docs:
+relates_to:
   - docs/blueprints/versionierungs-blaupause.md
 ---
 

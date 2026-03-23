@@ -3,9 +3,8 @@ id: deploy.heimserver.deployment
 title: Heimserver Deployment
 doc_type: reference
 status: active
-canonicality: derived
 summary: Deployment-Runbook für Weltgewebe auf dem Heimserver.
-related_docs:
+relates_to:
   - docs/deploy/README.md
   - docs/deploy/heimserver.integration.md
   - docs/deployment.md

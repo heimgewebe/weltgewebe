@@ -3,7 +3,6 @@ id: docs.generated.orphans
 title: Orphans
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierte Liste verwaister Dokumente.
 ---
 

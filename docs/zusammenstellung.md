@@ -3,9 +3,8 @@ id: zusammenstellung
 title: Zusammenstellung
 doc_type: reference
 status: active
-canonicality: canonical
 summary: Systematische Zusammenfassung von Prinzipien, Domänenmodell, Governance und UI-Architektur.
-related_docs:
+relates_to:
   - docs/vision.md
   - docs/inhalt.md
   - docs/architekturstruktur.md

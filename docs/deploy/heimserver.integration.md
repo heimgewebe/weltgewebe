@@ -3,9 +3,8 @@ id: deploy.heimserver.integration
 title: Heimserver Integration
 doc_type: reference
 status: active
-canonicality: derived
 summary: API-Integrationsdokumentation für das Heimserver-Deployment.
-related_docs:
+relates_to:
   - docs/deploy/README.md
   - docs/deploy/heimserver.deployment.md
   - docs/deployment.md

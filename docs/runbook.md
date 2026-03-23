@@ -3,10 +3,9 @@ id: docs.runbook
 title: Runbook
 doc_type: runbook
 status: active
-canonicality: canonical
 summary: >
   Allgemeines operatives Runbook.
-related_docs:
+relates_to:
   - docs/runbook.observability.md
   - docs/deployment.md
   - docs/deploy/README.md

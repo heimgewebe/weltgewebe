@@ -3,9 +3,8 @@ id: dev.codespaces
 title: Codespaces
 doc_type: reference
 status: active
-canonicality: derived
 summary: Anleitung zur Entwicklung in GitHub Codespaces.
-related_docs:
+relates_to:
   - docs/quickstart-gate-c.md
   - docs/runbooks/codespaces-recovery.md
 ---

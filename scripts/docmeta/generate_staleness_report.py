@@ -13,7 +13,6 @@ try:
         f.write("title: Staleness Report\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Markiert veraltete oder abgelöste Dokumente.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Staleness Report\n\n")

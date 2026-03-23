@@ -3,9 +3,8 @@ id: process.sprache
 title: Sprache
 doc_type: reference
 status: active
-canonicality: derived
 summary: Sprachrichtlinien und Konventionen für Dokumentation und Kommunikation.
-related_docs:
+relates_to:
   - docs/process/README.md
 ---
 # Sprache & Ton im Weltgewebe

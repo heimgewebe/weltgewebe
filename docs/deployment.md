@@ -3,10 +3,9 @@ id: deployment-contract
 title: Deployment Contract and Preflight Guard
 doc_type: guide
 status: active
-canonicality: canonical
 summary: Anleitung und Dokumentation zum Deployment.
 last_reviewed: "2026-03-05"
-related_docs:
+relates_to:
   - docs/deploy/README.md
   - docs/deployment_governance.md
   - docs/deploy/security.md

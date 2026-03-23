@@ -3,9 +3,8 @@ id: specs.contract
 title: Datenvertrag
 doc_type: reference
 status: active
-canonicality: derived
 summary: Spezifikation der Datenverträge zwischen Frontend und API.
-related_docs:
+relates_to:
   - docs/domain/vocabulary.md
   - docs/datenmodell.md
 ---

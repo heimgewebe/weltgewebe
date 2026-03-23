@@ -3,9 +3,8 @@ id: deploy.README
 title: Deployment-Übersicht
 doc_type: reference
 status: active
-canonicality: derived
 summary: Kanonischer Deployment-Stand und normative Beschreibung der Laufzeitumgebung.
-related_docs:
+relates_to:
   - docs/deployment.md
   - docs/deployment_governance.md
   - docs/deploy/heimserver.deployment.md

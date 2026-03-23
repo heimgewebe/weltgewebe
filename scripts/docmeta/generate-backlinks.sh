@@ -11,7 +11,6 @@ id: docs.generated.backlinks
 title: Backlinks Graph
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierter Graph der Rückverweise.
 ---
 
@@ -77,7 +76,7 @@ for file in sorted(doc_files):
         with open(file, 'r', encoding='utf-8') as f:
             content = f.read()
             fm = extract_relations(content)
-            for rel in ['documents', 'implemented_by', 'related_docs', 'supersedes', 'depends_on']:
+            for rel in ['relates_to', 'supersedes', 'depends_on']:
                 if rel in fm and fm[rel]:
                     targets = fm[rel]
                     for t in targets:

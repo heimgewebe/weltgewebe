@@ -3,7 +3,6 @@ id: docs.generated.supersession-map
 title: Supersession Map
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierte Karte der abgelösten Dokumente.
 ---
 

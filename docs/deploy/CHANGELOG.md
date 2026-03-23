@@ -3,9 +3,8 @@ id: deploy.CHANGELOG
 title: Deploy Changelog
 doc_type: reference
 status: active
-canonicality: derived
 summary: Änderungsprotokoll der Deployment-Konfiguration.
-related_docs:
+relates_to:
   - docs/deploy/README.md
 ---
 # Deployment-Änderungsprotokoll

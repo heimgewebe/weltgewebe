@@ -3,9 +3,8 @@ id: inhalt
 title: Inhalt
 doc_type: reference
 status: active
-canonicality: canonical
 summary: Konzeptuelle Beschreibung des Weltgewebe – Funktionsweise, UI, Organisation.
-related_docs:
+relates_to:
   - docs/vision.md
   - docs/zusammenstellung.md
 ---

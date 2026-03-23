@@ -3,9 +3,8 @@ id: quickstart-gate-c
 title: Quickstart Gate C
 doc_type: reference
 status: active
-canonicality: derived
 summary: Schnellstart-Anleitung für den Gate-C-Dev-Stack.
-related_docs:
+relates_to:
   - docs/process/fahrplan.md
   - docs/dev/codespaces.md
 ---

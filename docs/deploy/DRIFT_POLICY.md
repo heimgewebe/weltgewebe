@@ -3,9 +3,8 @@ id: deploy.DRIFT_POLICY
 title: Drift Policy
 doc_type: reference
 status: active
-canonicality: derived
 summary: Richtlinie zur Erkennung und Behandlung von Deployment-Drift.
-related_docs:
+relates_to:
   - docs/deploy/README.md
   - docs/deployment.md
 ---

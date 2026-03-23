@@ -11,7 +11,6 @@ id: docs.generated.orphans
 title: Orphans
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierte Liste verwaister Dokumente.
 ---
 
@@ -74,7 +73,7 @@ for file in all_docs:
         with open(file, 'r', encoding='utf-8') as f:
             content = f.read()
             fm = extract_relations(content)
-            for rel in ['related_docs', 'documents', 'depends_on', 'supersedes']:
+            for rel in ['relates_to', 'depends_on', 'supersedes']:
                 if rel in fm and fm[rel]:
                     targets = fm[rel]
                     for t in targets:
@@ -94,7 +93,7 @@ for file in all_docs:
         with open(file, 'r', encoding='utf-8') as f:
             content = f.read()
             fm = extract_relations(content)
-            for rel in ['related_docs', 'documents', 'depends_on', 'supersedes', 'implemented_by']:
+            for rel in ['relates_to', 'depends_on', 'supersedes']:
                 if rel in fm and fm[rel]:
                     has_outgoing = True
                     break

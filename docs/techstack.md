@@ -3,10 +3,9 @@ id: docs.techstack
 title: Techstack
 doc_type: architecture
 status: active
-canonicality: canonical
 summary: >
   Dokumentation des verwendeten Technologie-Stacks.
-related_docs:
+relates_to:
   - docs/architekturstruktur.md
   - docs/datenmodell.md
 ---

@@ -3,9 +3,8 @@ id: geist-und-plan
 title: Geist und Plan
 doc_type: reference
 status: active
-canonicality: derived
 summary: Philosophie-Extraktion und Planaufschlüsselung für das Weltgewebe-Projekt.
-related_docs:
+relates_to:
   - docs/vision.md
   - docs/inhalt.md
 ---

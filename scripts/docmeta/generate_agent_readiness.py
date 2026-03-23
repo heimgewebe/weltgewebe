@@ -13,7 +13,6 @@ try:
         f.write("title: Agent Readiness\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Zusammenfassung der agentischen Reife.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Agent Readiness\n\n")

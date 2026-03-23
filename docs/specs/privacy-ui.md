@@ -3,9 +3,8 @@ id: specs.privacy-ui
 title: Privacy UI
 doc_type: reference
 status: active
-canonicality: derived
 summary: UI-Spezifikation für datenschutzrelevante Oberflächen und Interaktionen.
-related_docs:
+relates_to:
   - docs/specs/privacy-api.md
   - docs/konzepte/garnrolle-und-verortung.md
 ---

@@ -3,9 +3,8 @@ id: deploy.vps
 title: VPS-Deployment
 doc_type: reference
 status: active
-canonicality: derived
 summary: Dokumentation zum VPS-basierten Deployment.
-related_docs:
+relates_to:
   - docs/deploy/README.md
 ---
 # VPS Deployment Runbook

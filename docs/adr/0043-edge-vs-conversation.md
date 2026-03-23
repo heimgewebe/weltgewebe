@@ -3,9 +3,8 @@ id: adr.0043-edge-vs-conversation
 title: ADR-0043 — Edge vs. Conversation
 doc_type: reference
 status: active
-canonicality: derived
 summary: Entscheidung zur Abgrenzung von Edge- und Conversation-Entitäten im Domänenmodell.
-related_docs:
+relates_to:
   - docs/domain/vocabulary.md
   - docs/datenmodell.md
 ---

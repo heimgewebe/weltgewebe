@@ -3,9 +3,8 @@ id: deployment_governance
 title: Deployment Governance
 doc_type: reference
 status: active
-canonicality: derived
 summary: Port-Ownership-Regeln und Health-Check-Strategie für Heimserver-Deployments.
-related_docs:
+relates_to:
   - docs/deployment.md
   - docs/deploy/README.md
 ---

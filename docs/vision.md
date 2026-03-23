@@ -3,10 +3,9 @@ id: docs.vision
 title: Vision
 doc_type: reference
 status: active
-canonicality: canonical
 summary: >
   Vision und Ziele des Projekts.
-related_docs:
+relates_to:
   - docs/inhalt.md
   - docs/zusammenstellung.md
   - docs/architekturstruktur.md

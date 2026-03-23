@@ -3,9 +3,8 @@ id: runbooks.codespaces-recovery
 title: Codespaces Recovery
 doc_type: reference
 status: active
-canonicality: derived
 summary: Wiederherstellungsanleitung für GitHub-Codespaces-Umgebungen.
-related_docs:
+relates_to:
   - docs/runbooks/README.md
   - docs/dev/codespaces.md
 ---

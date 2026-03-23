@@ -11,7 +11,6 @@ id: docs.generated.supersession-map
 title: Supersession Map
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierte Karte der abgelösten Dokumente.
 ---
 
@@ -73,10 +72,6 @@ for root, dirs, files in os.walk('docs'):
                         targets = fm['supersedes']
                         for t in targets:
                             relations.append((t, file_path))
-                    if 'deprecated_by' in fm and fm['deprecated_by']:
-                        targets = fm['deprecated_by']
-                        for t in targets:
-                            relations.append((file_path, t))
             except Exception:
                 pass
 

@@ -3,9 +3,8 @@ id: runbooks.uv-tooling
 title: UV-Tooling
 doc_type: reference
 status: active
-canonicality: derived
 summary: Anleitung zum Einsatz von uv als Python-Paketmanager.
-related_docs:
+relates_to:
   - docs/runbooks/README.md
 ---
 # UV Tooling – Ist-Stand & Ausbauoptionen

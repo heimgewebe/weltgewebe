@@ -3,9 +3,8 @@ id: adr.0042-consume-semantah-contracts
 title: ADR-0042 — SemanticAH-Contracts konsumieren
 doc_type: reference
 status: active
-canonicality: derived
 summary: Entscheidung zur Integration und zum Konsum von SemanticAH-Contracts.
-related_docs:
+relates_to:
   - docs/x-repo/semantAH.md
 ---
 # ADR-0042: semantAH-Contracts konsumieren

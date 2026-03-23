@@ -3,9 +3,8 @@ id: specs.auth-api
 title: Auth API Spec
 doc_type: reference
 status: active
-canonicality: derived
 summary: Spezifiziert Endpunkte, Token-Typen, Geräteverwaltung, Passkeys und Step-up Auth für das Auth-System.
-related_docs:
+relates_to:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/specs/auth-ui.md
   - docs/specs/auth-state-machine.md

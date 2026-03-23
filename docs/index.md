@@ -3,7 +3,6 @@ id: docs.index
 title: Weltgewebe - Doku-Index
 doc_type: index
 status: active
-canonicality: canonical
 summary: >
   Kanonischer Doku-Index für das Projekt Weltgewebe.
 ---

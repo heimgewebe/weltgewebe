@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "description": "Unified DocMeta schema for all repo documents (zone and docs/).",
+  "description": "Unified DocMeta schema — single canonical model for all repo documents.",
   "type": "object",
   "properties": {
     "id": {
@@ -28,11 +28,7 @@
       "type": "string",
       "minLength": 1
     },
-    "canonicality": {
-      "type": "string",
-      "description": "Legacy field. Use status instead. Will be phased out."
-    },
-    "related_docs": {
+    "relates_to": {
       "type": "array",
       "items": {
         "type": "string",
@@ -51,27 +47,6 @@
       "type": "array",
       "items": {
         "type": "string"
-      }
-    },
-    "documents": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "implemented_by": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "deprecated_by": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
       }
     },
     "role": {

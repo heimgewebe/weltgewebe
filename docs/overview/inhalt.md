@@ -3,9 +3,8 @@ id: overview.inhalt
 title: Inhalt (Übersicht)
 doc_type: reference
 status: active
-canonicality: canonical
 summary: Überblicksdarstellung des Weltgewebe-Inhalts und der Projektstruktur.
-related_docs:
+relates_to:
   - docs/inhalt.md
   - docs/vision.md
 ---

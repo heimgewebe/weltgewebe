@@ -3,9 +3,8 @@ id: deploy.heim-first-phase0
 title: Heim-First Phase 0
 doc_type: reference
 status: active
-canonicality: derived
 summary: Phase-0-Planung für den Heim-First-Deployment-Ansatz.
-related_docs:
+relates_to:
   - docs/deploy/README.md
   - docs/deploy/heimserver.deployment.md
 ---

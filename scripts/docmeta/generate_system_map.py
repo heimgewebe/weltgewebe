@@ -21,7 +21,6 @@ def main():
         "title: System Map",
         "doc_type: generated",
         "status: active",
-        "canonicality: derived",
         "summary: Automatisch generierte System Map.",
         "---",
         "## Weltgewebe System Map\n\nGenerated automatically. Do not edit.\n\nSource: scripts/docmeta/generate_system_map.py\n"

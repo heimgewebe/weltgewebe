@@ -3,9 +3,8 @@ id: blueprints.weltgewebe.config.diff
 title: Config Diff
 doc_type: reference
 status: active
-canonicality: derived
 summary: Vergleich und Dokumentation von Konfigurationsunterschieden.
-related_docs:
+relates_to:
   - docs/deployment.md
 ---
 # Blueprint Configuration Diff

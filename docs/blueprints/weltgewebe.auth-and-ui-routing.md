@@ -3,9 +3,8 @@ id: blueprints.weltgewebe.auth-and-ui-routing
 title: Auth und UI-Routing
 doc_type: reference
 status: active
-canonicality: derived
 summary: Blaupause für Auth-Integration und UI-Routing im Weltgewebe.
-related_docs:
+relates_to:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/blueprints/ui-blaupause.md
 ---

@@ -3,9 +3,8 @@ id: deploy.weltgewebe.naming
 title: Weltgewebe Naming
 doc_type: reference
 status: active
-canonicality: derived
 summary: Namenskonventionen für Deployment-Artefakte und Container.
-related_docs:
+relates_to:
   - docs/deploy/README.md
 ---
 # Weltgewebe Naming Policy

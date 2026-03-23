@@ -52,7 +52,6 @@ try:
         f.write("title: Implicit Dependencies\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Heuristische Karte impliziter Abhängigkeiten.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Implicit Dependencies\n\n")

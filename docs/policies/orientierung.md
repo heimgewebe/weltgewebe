@@ -3,9 +3,8 @@ id: policies.orientierung
 title: Orientierung
 doc_type: reference
 status: active
-canonicality: derived
 summary: Governance-Orientierung und Leitprinzipien für das Weltgewebe-Projekt.
-related_docs:
+relates_to:
   - docs/vision.md
   - docs/weltgewebe-agenten-manifest.md
 ---
