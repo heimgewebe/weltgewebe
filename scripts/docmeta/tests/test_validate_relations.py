@@ -163,6 +163,94 @@ class TestExtractRelationsFromContent(unittest.TestCase):
         self.assertEqual(len(rels), 1)
         self.assertEqual(rels[0]["target"], "docs/only-one.md")
 
+    def test_extra_keys_preserved_in_parser(self):
+        """Extra keys must survive parsing so validate_relations() can reject them."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "    label: something\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertIn("label", rels[0])
+        self.assertEqual(rels[0]["label"], "something")
+
+    def test_missing_target_preserved(self):
+        """Entry with type but no target must be returned (not silently dropped)."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertIn("type", rels[0])
+        self.assertNotIn("target", rels[0])
+
+    def test_missing_type_preserved(self):
+        """Entry with target but no type must be returned (not silently dropped)."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - target: docs/foo.md\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertIn("target", rels[0])
+        self.assertNotIn("type", rels[0])
+
+    def test_extra_keys_caught_end_to_end(self):
+        """Integration: extra keys in raw content produce validation errors."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "    note: extra\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        fm = {"relations": rels}
+        errors = validate_relations("docs/test.md", fm)
+        self.assertTrue(any("unexpected keys" in e for e in errors))
+
+    def test_missing_type_caught_end_to_end(self):
+        """Integration: entry with no type in raw content produces validation error."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - target: docs/foo.md\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        fm = {"relations": rels}
+        errors = validate_relations("docs/test.md", fm)
+        self.assertTrue(any("missing required key 'type'" in e for e in errors))
+
+    def test_missing_target_caught_end_to_end(self):
+        """Integration: entry with no target in raw content produces validation error."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        fm = {"relations": rels}
+        errors = validate_relations("docs/test.md", fm)
+        self.assertTrue(any("missing required key 'target'" in e for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()

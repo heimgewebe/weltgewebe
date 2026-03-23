@@ -103,7 +103,10 @@ def validate_relations(file_path, frontmatter):
 def extract_relations_from_content(content):
     """
     Parse structured relations[] from YAML frontmatter content string.
-    Returns list of dicts with 'type' and 'target' keys.
+
+    Returns list of dicts preserving ALL keys found per relation entry —
+    not just type/target. This ensures downstream validation can detect
+    unexpected keys, missing keys, and structural issues in real files.
     """
     relations = []
     if not content.startswith("---"):
@@ -134,21 +137,35 @@ def extract_relations_from_content(content):
                     in_relations = False
             else:
                 in_relations = False
-            current_entry = None
+            # Flush pending entry before leaving relations block
+            if current_entry:
+                relations.append(current_entry)
+                current_entry = None
             continue
 
         if in_relations:
-            if stripped.startswith("- type:"):
-                if current_entry and "type" in current_entry and "target" in current_entry:
+            if stripped.startswith("- "):
+                # New list item — flush previous entry
+                if current_entry:
                     relations.append(current_entry)
-                current_entry = {"type": stripped.split(":", 1)[1].strip()}
-            elif stripped.startswith("target:") and current_entry is not None:
-                current_entry["target"] = stripped.split(":", 1)[1].strip()
-                relations.append(current_entry)
-                current_entry = None
+                    current_entry = None
+
+                item = stripped[2:]  # strip leading "- "
+                if ":" in item:
+                    key = item.split(":", 1)[0].strip()
+                    val = item.split(":", 1)[1].strip()
+                    current_entry = {key: val}
+                else:
+                    # Bare list item (not a dict) — record as non-dict entry
+                    relations.append(item)
+            elif ":" in stripped and current_entry is not None:
+                # Continuation key within the current dict entry
+                key = stripped.split(":", 1)[0].strip()
+                val = stripped.split(":", 1)[1].strip()
+                current_entry[key] = val
 
     # Flush any pending entry
-    if current_entry and "type" in current_entry and "target" in current_entry:
+    if current_entry:
         relations.append(current_entry)
 
     return relations
@@ -157,29 +174,38 @@ def extract_relations_from_content(content):
 def main():
     errors = []
 
-    for root, dirs, files in os.walk(os.path.join(REPO_ROOT, "docs")):
-        if "_generated" in root:
+    # Validate all directories that carry relations: in their frontmatter.
+    # This matches the repo-wide relations model documented in
+    # architecture/docmeta.schema.md.
+    scan_dirs = ["docs", "architecture", "runtime", "runbooks"]
+
+    for scan_dir in scan_dirs:
+        dir_path = os.path.join(REPO_ROOT, scan_dir)
+        if not os.path.isdir(dir_path):
             continue
-        for file in files:
-            if not file.endswith(".md"):
+        for root, dirs, files in os.walk(dir_path):
+            if "_generated" in root:
                 continue
+            for file in files:
+                if not file.endswith(".md"):
+                    continue
 
-            abs_path = os.path.join(root, file)
-            rel_path = os.path.relpath(abs_path, REPO_ROOT)
+                abs_path = os.path.join(root, file)
+                rel_path = os.path.relpath(abs_path, REPO_ROOT)
 
-            try:
-                with open(abs_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except Exception as e:
-                errors.append(f"{rel_path}: cannot read file: {e}")
-                continue
+                try:
+                    with open(abs_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except Exception as e:
+                    errors.append(f"{rel_path}: cannot read file: {e}")
+                    continue
 
-            relations = extract_relations_from_content(content)
+                relations = extract_relations_from_content(content)
 
-            # Build a frontmatter-like dict for validation
-            fm = {"relations": relations}
-            file_errors = validate_relations(rel_path, fm)
-            errors.extend(file_errors)
+                # Build a frontmatter-like dict for validation
+                fm = {"relations": relations}
+                file_errors = validate_relations(rel_path, fm)
+                errors.extend(file_errors)
 
     if errors:
         print(f"\n--- Relations validation errors ({len(errors)}) ---", file=sys.stderr)
