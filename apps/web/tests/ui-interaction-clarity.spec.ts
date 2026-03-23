@@ -131,4 +131,26 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(menu).toHaveCount(0);
     await expect(searchOverlay).toBeVisible();
   });
+
+  test("Escape on Garnrolle menu does NOT close FilterOverlay", async ({
+    page,
+  }) => {
+    // Open filter overlay
+    await page.locator('.action-bar button[aria-label="Filter"]').click();
+    const filterOverlay = page.locator('[data-testid="filter-overlay"]');
+    await expect(filterOverlay).toBeVisible();
+
+    // Open Garnrolle menu while filter is open
+    const garnrolleBtn = page.locator(
+      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+    );
+    await garnrolleBtn.click();
+    const menu = page.locator(".garnrolle-container .menu");
+    await expect(menu).toBeVisible();
+
+    // Press Escape: Garnrolle menu closes, filter stays open
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(filterOverlay).toBeVisible();
+  });
 });
