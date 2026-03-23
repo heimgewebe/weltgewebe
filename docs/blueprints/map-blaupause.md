@@ -402,17 +402,19 @@ Deploy-Strategie:
 
 ---
 
-## 8. Update-Strategie
+## 8. Update- und Publish-Strategie
 
 OSM Updatezyklus:
 
-monatlich
+- **Rhythmus:** Monatlich (z.B. jeweils zum 1. des Monats).
+- **Prozess:** Ein manuell oder per CI getriggerter Build-Job (z.B. `build-hamburg-pmtiles.sh`) lädt den definierten OSM-Snapshot (gepinnt via SHA256) herunter.
 
-Pipeline:
+Publish- und Rollback-Strategie:
 
-cron → rebuild tiles → publish artifact
-
----
+- **Atomic Switch:** Neue PMTiles-Artefakte (z.B. `basemap-hamburg-v2.pmtiles`) werden zuerst vollständig neben dem aktiven Artefakt in das Zielverzeichnis (z.B. `/srv/weltgewebe-basemap/`) transferiert.
+- **Verifikation:** Die Einsatzbereitschaft wird über eine begleitende `.meta.json` (Sentinel-Datei) signalisiert, die erst nach erfolgreicher Hash-Prüfung geschrieben wird.
+- **Aktivierung:** Ein Symlink (`basemap-current.pmtiles` -> `basemap-hamburg-v2.pmtiles`) wird atomar umgebogen (`ln -sfn`), um Verbindungsabbrüche für aktive HTTP Range Requests zu verhindern.
+- **Rollback:** Bei fehlerhaftem Rendering oder Ladefehlern im Client wird der Symlink sofort auf die vorherige, im Storage verbleibende Version (z.B. `basemap-hamburg-v1.pmtiles`) zurückgesetzt. Alte Artefakte werden erst nach einer Karenzzeit (z.B. 14 Tage) gelöscht.
 
 ## 9. Performance
 
