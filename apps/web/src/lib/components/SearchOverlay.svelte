@@ -47,6 +47,8 @@
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isSearchOpen) return;
+    // Respect capture-phase handlers (e.g. Garnrolle menu) that own this Escape
+    if (e.defaultPrevented) return;
     if (e.key === 'Escape') {
       closeSearch();
     }
@@ -193,7 +195,10 @@
     font-size: 1.2rem;
     cursor: pointer;
     color: var(--text);
-    padding: 0 0.5rem;
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
   }
 
   .results {
