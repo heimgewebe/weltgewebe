@@ -398,7 +398,7 @@ Basemap ist Artefakt.
 
 Deploy-Strategie:
 
-`/tiles/basemap-current.pmtiles`
+`/tiles/basemap-hamburg.pmtiles` (Kanonischer Alias für die aktuelle Region)
 
 ---
 
@@ -419,7 +419,7 @@ Publish- und Rollback-Strategie (Contract-First):
     - `sha256`: Hash der generierten `.pmtiles` Datei
     - `size_bytes`: Dateigröße
     - `status`: `"ready"` oder `"invalid"`
-- **Aktivierung:** Der Symlink-Switch (`ln -sfn basemap-hamburg-v2.pmtiles basemap-current.pmtiles`) darf **ausschließlich** erfolgen, wenn:
+- **Aktivierung:** Der Symlink-Switch (`ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles`) darf **ausschließlich** erfolgen, wenn:
   1. Die `.meta.json` existiert und `status == "ready"` ist.
   2. Der `sha256` Hash der echten `.pmtiles` Datei lokal mit der Angabe in der `.meta.json` übereinstimmt (Integrity Check, z. B. durch `weltgewebe-up` oder CI-Job).
   3. Die Datei vollständig ist (`size_bytes` match).
