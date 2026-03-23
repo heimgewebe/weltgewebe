@@ -5,10 +5,13 @@ doc_type: runbook
 status: active
 summary: >
   Allgemeines operatives Runbook.
-relates_to:
-  - docs/runbook.observability.md
-  - docs/deployment.md
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/runbook.observability.md
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 ## Runbook
 

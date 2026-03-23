@@ -4,9 +4,11 @@ title: Inhalt (Übersicht)
 doc_type: reference
 status: active
 summary: Überblicksdarstellung des Weltgewebe-Inhalts und der Projektstruktur.
-relates_to:
-  - docs/inhalt.md
-  - docs/vision.md
+relations:
+  - type: relates_to
+    target: docs/inhalt.md
+  - type: relates_to
+    target: docs/vision.md
 ---
 # Einführung: Ethik- & UX-First-Startpunkt
 

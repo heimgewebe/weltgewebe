@@ -4,8 +4,9 @@ title: ADR-0001 — Clean Slate und Docs-Monorepo
 doc_type: reference
 status: active
 summary: Entscheidung für Clean-Slate-Ansatz und Docs-Monorepo-Struktur.
-relates_to:
-  - docs/architekturstruktur.md
+relations:
+  - type: relates_to
+    target: docs/architekturstruktur.md
 ---
 # ADR-0001 — Clean-Slate als Docs-Monorepo
 

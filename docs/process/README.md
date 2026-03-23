@@ -4,10 +4,13 @@ title: Prozess-Übersicht
 doc_type: reference
 status: active
 summary: Übersicht über Abläufe, Konventionen und den Fahrplan des Projekts.
-relates_to:
-  - docs/process/fahrplan.md
-  - docs/process/sprache.md
-  - docs/process/bash-tooling-guidelines.md
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
+  - type: relates_to
+    target: docs/process/sprache.md
+  - type: relates_to
+    target: docs/process/bash-tooling-guidelines.md
 ---
 # Prozess
 

@@ -4,8 +4,9 @@ title: ADR-0004 — Fahrplan-Verweis
 doc_type: reference
 status: active
 summary: Entscheidung zur Verknüpfung des Fahrplans mit der Architekturplanung.
-relates_to:
-  - docs/process/fahrplan.md
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
 ---
 # ADR-0004 — Fahrplan als kanonischer Verweis
 

@@ -4,8 +4,9 @@ title: Sprache
 doc_type: reference
 status: active
 summary: Sprachrichtlinien und Konventionen für Dokumentation und Kommunikation.
-relates_to:
-  - docs/process/README.md
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Sprache & Ton im Weltgewebe
 

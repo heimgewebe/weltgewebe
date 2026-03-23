@@ -4,10 +4,13 @@ title: Heimserver Integration
 doc_type: reference
 status: active
 summary: API-Integrationsdokumentation für das Heimserver-Deployment.
-relates_to:
-  - docs/deploy/README.md
-  - docs/deploy/heimserver.deployment.md
-  - docs/deployment.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Weltgewebe API – Heimserver Integration
 

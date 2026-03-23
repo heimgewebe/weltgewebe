@@ -6,10 +6,13 @@ status: active
 summary: >
   Exekutive Roadmap zur schrittweisen Kanonisierung, Verifikation und
   Vollendung der Auth-Architektur im Weltgewebe.
-relates_to:
-  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
-  - docs/reports/auth-status-matrix.md
-  - docs/specs/auth-blueprint.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/reports/auth-status-matrix.md
+  - type: relates_to
+    target: docs/specs/auth-blueprint.md
 ---
 
 # Auth Roadmap – Weltgewebe

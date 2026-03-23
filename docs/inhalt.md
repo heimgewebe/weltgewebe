@@ -4,9 +4,11 @@ title: Inhalt
 doc_type: reference
 status: active
 summary: Konzeptuelle Beschreibung des Weltgewebe – Funktionsweise, UI, Organisation.
-relates_to:
-  - docs/vision.md
-  - docs/zusammenstellung.md
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/zusammenstellung.md
 ---
 # Inhalt (MANDATORISCH)
 

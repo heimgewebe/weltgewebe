@@ -7,8 +7,9 @@ summary: >
   Architektur-Blaupause für einen souveränen Basemap-Stack basierend auf
   MapLibre, PMTiles und einer reproduzierbaren Tile-Generierungs-Pipeline
   für Weltgewebe-Overlays.
-relates_to:
-  - docs/blueprints/map-roadmap.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/map-roadmap.md
 ---
 
 # Basemap-Architektur-Blaupause

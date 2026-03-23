@@ -5,8 +5,9 @@ doc_type: roadmap
 status: draft
 summary: >
   Roadmap zur schrittweisen operativen Umsetzung der souveränen Basemap-Architektur.
-relates_to:
-  - docs/blueprints/map-blaupause.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/map-blaupause.md
 ---
 
 # Basemap-Umsetzungsroadmap

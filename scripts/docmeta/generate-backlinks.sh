@@ -23,44 +23,36 @@ HEADER
 python3 -c "
 import os
 from collections import defaultdict
-import re
 
 out_file = 'docs/_generated/backlinks.md'
 backlinks = defaultdict(list)
 
-# Poor man's YAML frontmatter parser for basic relations
 def extract_relations(content):
-    relations = {}
+    \"\"\"Parse structured relations[] from YAML frontmatter.\"\"\"
+    relations = []
     if content.startswith('---'):
         parts = content.split('---', 2)
         if len(parts) >= 3:
             fm_str = parts[1]
             lines = fm_str.strip().split('\n')
-            current_key = None
+            in_relations = False
+            current_type = None
             for line in lines:
-                line = line.strip()
-                if not line:
+                stripped = line.strip()
+                if not stripped:
                     continue
-                # Match key: value or key:
-                if ':' in line and not line.startswith('- '):
-                    key, val = line.split(':', 1)
-                    key = key.strip()
-                    val = val.strip()
-                    current_key = key
-                    if val and val != '[]':
-                        # Simplistic array parsing like [a, b]
-                        if val.startswith('[') and val.endswith(']'):
-                            items = [i.strip() for i in val[1:-1].split(',') if i.strip()]
-                            relations[key] = items
-                        else:
-                            relations[key] = [val]
-                    else:
-                        relations[key] = []
-                elif line.startswith('- ') and current_key:
-                    val = line[2:].strip()
-                    if current_key not in relations:
-                        relations[current_key] = []
-                    relations[current_key].append(val)
+                # Detect top-level key
+                if not line[0:1] in (' ', '\t') and ':' in stripped:
+                    key = stripped.split(':')[0].strip()
+                    in_relations = (key == 'relations')
+                    current_type = None
+                    continue
+                if in_relations:
+                    if stripped.startswith('- type:'):
+                        current_type = stripped.split(':', 1)[1].strip()
+                    elif stripped.startswith('target:') and current_type:
+                        target = stripped.split(':', 1)[1].strip()
+                        relations.append((current_type, target))
     return relations
 
 doc_files = []
@@ -75,12 +67,9 @@ for file in sorted(doc_files):
     try:
         with open(file, 'r', encoding='utf-8') as f:
             content = f.read()
-            fm = extract_relations(content)
-            for rel in ['relates_to', 'supersedes', 'depends_on']:
-                if rel in fm and fm[rel]:
-                    targets = fm[rel]
-                    for t in targets:
-                        backlinks[t].append((file, rel))
+            rels = extract_relations(content)
+            for rel_type, target in rels:
+                backlinks[target].append((file, rel_type))
     except Exception as e:
         pass
 

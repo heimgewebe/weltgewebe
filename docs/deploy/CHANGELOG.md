@@ -4,8 +4,9 @@ title: Deploy Changelog
 doc_type: reference
 status: active
 summary: Änderungsprotokoll der Deployment-Konfiguration.
-relates_to:
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Deployment-Änderungsprotokoll
 

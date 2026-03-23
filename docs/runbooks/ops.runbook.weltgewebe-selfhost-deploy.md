@@ -4,10 +4,13 @@ title: Selfhost-Deploy Runbook
 doc_type: reference
 status: active
 summary: Operatives Runbook für Selfhost-Deployments des Weltgewebe.
-relates_to:
-  - docs/runbooks/README.md
-  - docs/deployment.md
-  - docs/deploy/heimserver.deployment.md
+relations:
+  - type: relates_to
+    target: docs/runbooks/README.md
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
 ---
 # Ops Runbook: Weltgewebe Self-Hosted Deployment
 

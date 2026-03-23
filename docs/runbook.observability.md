@@ -5,8 +5,9 @@ doc_type: runbook
 status: active
 summary: >
   Runbook für Systembeobachtung und Metriken.
-relates_to:
-  - docs/runbook.md
+relations:
+  - type: relates_to
+    target: docs/runbook.md
 ---
 ## Observability – Local Profile
 

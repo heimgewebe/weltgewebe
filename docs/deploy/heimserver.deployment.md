@@ -4,10 +4,13 @@ title: Heimserver Deployment
 doc_type: reference
 status: active
 summary: Deployment-Runbook für Weltgewebe auf dem Heimserver.
-relates_to:
-  - docs/deploy/README.md
-  - docs/deploy/heimserver.integration.md
-  - docs/deployment.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deploy/heimserver.integration.md
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Weltgewebe – Deployment Runbook (Heimserver)
 

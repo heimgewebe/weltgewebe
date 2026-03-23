@@ -4,8 +4,9 @@ title: ADR-0005 — Auth (Cookie-basierte Sessions)
 doc_type: reference
 status: active
 summary: Vorangegangene Auth-Entscheidung zu cookie-basierten Sessions und Rollen.
-relates_to:
-  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 ---
 # ADR-0005: Minimales Authentifizierungskonzept (Historisches Fundament)
 

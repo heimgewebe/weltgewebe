@@ -6,7 +6,7 @@ role: norm
 organ: governance
 status: canonical
 last_reviewed: 2026-03-03
-depends_on: []
+relations: []
 verifies_with: []
 ---
 

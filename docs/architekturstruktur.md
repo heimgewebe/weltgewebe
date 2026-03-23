@@ -5,10 +5,13 @@ doc_type: architecture
 status: active
 summary: >
   Kurzbeschreibung der Architektur und Struktur.
-relates_to:
-  - docs/techstack.md
-  - docs/datenmodell.md
-  - docs/vision.md
+relations:
+  - type: relates_to
+    target: docs/techstack.md
+  - type: relates_to
+    target: docs/datenmodell.md
+  - type: relates_to
+    target: docs/vision.md
 ---
 # Architektur & Struktur
 

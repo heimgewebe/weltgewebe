@@ -5,11 +5,15 @@ doc_type: guide
 status: active
 summary: Anleitung und Dokumentation zum Deployment.
 last_reviewed: "2026-03-05"
-relates_to:
-  - docs/deploy/README.md
-  - docs/deployment_governance.md
-  - docs/deploy/security.md
-  - docs/runbook.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deployment_governance.md
+  - type: relates_to
+    target: docs/deploy/security.md
+  - type: relates_to
+    target: docs/runbook.md
 ---
 
 ## Required runtime artifacts

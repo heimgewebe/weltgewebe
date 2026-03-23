@@ -4,9 +4,11 @@ title: Codespaces
 doc_type: reference
 status: active
 summary: Anleitung zur Entwicklung in GitHub Codespaces.
-relates_to:
-  - docs/quickstart-gate-c.md
-  - docs/runbooks/codespaces-recovery.md
+relations:
+  - type: relates_to
+    target: docs/quickstart-gate-c.md
+  - type: relates_to
+    target: docs/runbooks/codespaces-recovery.md
 ---
 # Codespaces: Dev-Server schnell starten
 

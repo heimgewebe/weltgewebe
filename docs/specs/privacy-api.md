@@ -4,9 +4,11 @@ title: Privacy API
 doc_type: reference
 status: active
 summary: API-Spezifikation für datenschutzrelevante Endpunkte.
-relates_to:
-  - docs/specs/privacy-ui.md
-  - docs/konzepte/garnrolle-und-verortung.md
+relations:
+  - type: relates_to
+    target: docs/specs/privacy-ui.md
+  - type: relates_to
+    target: docs/konzepte/garnrolle-und-verortung.md
 ---
 # Privacy API (ADR-0003)
 

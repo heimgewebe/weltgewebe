@@ -4,9 +4,11 @@ title: Drift Policy
 doc_type: reference
 status: active
 summary: Richtlinie zur Erkennung und Behandlung von Deployment-Drift.
-relates_to:
-  - docs/deploy/README.md
-  - docs/deployment.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Drift-Taxonomie & Guard-Policy
 

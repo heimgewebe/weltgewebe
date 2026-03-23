@@ -4,9 +4,11 @@ title: Zusammenstellung (Übersicht)
 doc_type: reference
 status: active
 summary: Systematische Zusammenfassung aus der Übersichtsperspektive.
-relates_to:
-  - docs/zusammenstellung.md
-  - docs/overview/inhalt.md
+relations:
+  - type: relates_to
+    target: docs/zusammenstellung.md
+  - type: relates_to
+    target: docs/overview/inhalt.md
 ---
 # Systematik & Strukturüberblick
 

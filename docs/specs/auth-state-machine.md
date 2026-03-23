@@ -4,10 +4,13 @@ title: Auth State Machine
 doc_type: reference
 status: active
 summary: Beschreibt die kanonischen Zustände und Transitionen des Weltgewebe-Auth-Systems.
-relates_to:
-  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
-  - docs/specs/auth-api.md
-  - docs/specs/auth-ui.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/specs/auth-api.md
+  - type: relates_to
+    target: docs/specs/auth-ui.md
 ---
 
 # Auth State Machine

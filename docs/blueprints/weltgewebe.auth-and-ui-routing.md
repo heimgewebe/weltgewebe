@@ -4,9 +4,11 @@ title: Auth und UI-Routing
 doc_type: reference
 status: active
 summary: Blaupause für Auth-Integration und UI-Routing im Weltgewebe.
-relates_to:
-  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
-  - docs/blueprints/ui-blaupause.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/blueprints/ui-blaupause.md
 ---
 # Blueprint: Heim-first Auth & UI Routing
 

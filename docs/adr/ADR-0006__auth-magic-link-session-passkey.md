@@ -4,11 +4,15 @@ title: ADR-0006 — Auth: Magic Link, Session und optionaler Passkey
 doc_type: reference
 status: active
 summary: Beschreibt das kanonische Auth-Modell aus Magic Link, persistenter Session, optionalem Passkey und Step-up Auth.
-relates_to:
-  - docs/blueprints/auth-roadmap.md
-  - docs/reports/auth-status-matrix.md
-  - docs/specs/auth-blueprint.md
-  - docs/adr/ADR-0005-auth.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/auth-roadmap.md
+  - type: relates_to
+    target: docs/reports/auth-status-matrix.md
+  - type: relates_to
+    target: docs/specs/auth-blueprint.md
+  - type: relates_to
+    target: docs/adr/ADR-0005-auth.md
 ---
 
 # ADR-0006 — Auth: Magic Link + Session + optionaler Passkey

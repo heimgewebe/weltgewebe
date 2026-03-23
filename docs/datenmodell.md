@@ -4,10 +4,13 @@ title: Datenmodell
 doc_type: reference
 status: active
 summary: Dokumentation des PostgreSQL-Datenmodells mit Kernentitäten, Beziehungen und Lese-Modellen.
-relates_to:
-  - docs/architekturstruktur.md
-  - docs/domain/vocabulary.md
-  - docs/techstack.md
+relations:
+  - type: relates_to
+    target: docs/architekturstruktur.md
+  - type: relates_to
+    target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/techstack.md
 ---
 # Datenmodell
 

@@ -4,9 +4,11 @@ title: Quickstart Gate C
 doc_type: reference
 status: active
 summary: Schnellstart-Anleitung für den Gate-C-Dev-Stack.
-relates_to:
-  - docs/process/fahrplan.md
-  - docs/dev/codespaces.md
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
+  - type: relates_to
+    target: docs/dev/codespaces.md
 ---
 # Quickstart · Gate C (Dev-Stack)
 

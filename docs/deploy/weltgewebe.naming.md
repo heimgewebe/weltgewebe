@@ -4,8 +4,9 @@ title: Weltgewebe Naming
 doc_type: reference
 status: active
 summary: Namenskonventionen für Deployment-Artefakte und Container.
-relates_to:
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Weltgewebe Naming Policy
 

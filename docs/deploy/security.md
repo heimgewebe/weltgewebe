@@ -4,9 +4,11 @@ title: Deploy Security
 doc_type: architecture
 status: active
 summary: Security configuration and CSP rules for deployment.
-relates_to:
-  - docs/deployment.md
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 
 ## Deploy Security

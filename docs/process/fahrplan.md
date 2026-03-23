@@ -4,8 +4,9 @@ title: Fahrplan
 doc_type: reference
 status: active
 summary: Zeitlicher Ablauf und Meilensteine des Projekts (Gates A–D).
-relates_to:
-  - docs/process/README.md
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Fahrplan
 

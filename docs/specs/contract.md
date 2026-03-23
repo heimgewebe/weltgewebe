@@ -4,9 +4,11 @@ title: Datenvertrag
 doc_type: reference
 status: active
 summary: Spezifikation der Datenverträge zwischen Frontend und API.
-relates_to:
-  - docs/domain/vocabulary.md
-  - docs/datenmodell.md
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/datenmodell.md
 ---
 # Weltgewebe Contract – Löschkonzept (Tombstone & Key-Erase)
 

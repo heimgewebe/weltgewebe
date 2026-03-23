@@ -4,10 +4,13 @@ title: Zusammenstellung
 doc_type: reference
 status: active
 summary: Systematische Zusammenfassung von Prinzipien, Domänenmodell, Governance und UI-Architektur.
-relates_to:
-  - docs/vision.md
-  - docs/inhalt.md
-  - docs/architekturstruktur.md
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/inhalt.md
+  - type: relates_to
+    target: docs/architekturstruktur.md
 ---
 # Zusammenstellung (MANDATORISCH)
 

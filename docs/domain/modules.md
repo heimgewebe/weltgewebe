@@ -4,8 +4,9 @@ title: Modul-IDs
 doc_type: reference
 status: active
 summary: Kanonische Policy für Modul-IDs im Weltgewebe (profile, forum, responsibilities).
-relates_to:
-  - docs/domain/vocabulary.md
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
 ---
 # Modul-IDs im Weltgewebe
 

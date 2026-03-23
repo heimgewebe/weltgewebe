@@ -4,9 +4,11 @@ title: Privacy UI
 doc_type: reference
 status: active
 summary: UI-Spezifikation für datenschutzrelevante Oberflächen und Interaktionen.
-relates_to:
-  - docs/specs/privacy-api.md
-  - docs/konzepte/garnrolle-und-verortung.md
+relations:
+  - type: relates_to
+    target: docs/specs/privacy-api.md
+  - type: relates_to
+    target: docs/konzepte/garnrolle-und-verortung.md
 ---
 # Privacy UI (ADR-0003)
 

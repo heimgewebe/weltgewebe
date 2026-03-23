@@ -4,8 +4,9 @@ title: Bash Tooling Guidelines
 doc_type: reference
 status: active
 summary: Richtlinien für Shell-Skripting und Bash-Tooling im Projekt.
-relates_to:
-  - docs/process/README.md
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Bash-Tooling-Richtlinien
 

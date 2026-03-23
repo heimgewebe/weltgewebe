@@ -5,9 +5,11 @@ doc_type: architecture
 status: active
 summary: >
   Dokumentation des verwendeten Technologie-Stacks.
-relates_to:
-  - docs/architekturstruktur.md
-  - docs/datenmodell.md
+relations:
+  - type: relates_to
+    target: docs/architekturstruktur.md
+  - type: relates_to
+    target: docs/datenmodell.md
 ---
 Weltgewebe Tech Stack
 

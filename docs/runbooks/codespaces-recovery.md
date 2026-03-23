@@ -4,9 +4,11 @@ title: Codespaces Recovery
 doc_type: reference
 status: active
 summary: Wiederherstellungsanleitung für GitHub-Codespaces-Umgebungen.
-relates_to:
-  - docs/runbooks/README.md
-  - docs/dev/codespaces.md
+relations:
+  - type: relates_to
+    target: docs/runbooks/README.md
+  - type: relates_to
+    target: docs/dev/codespaces.md
 ---
 # Codespaces Recovery
 

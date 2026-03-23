@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "description": "Unified DocMeta schema — single canonical model for all repo documents.",
+  "description": "Unified DocMeta schema — single canonical model for all repo documents. One relation mechanism: relations[].",
   "type": "object",
   "properties": {
     "id": {
@@ -28,26 +28,31 @@
       "type": "string",
       "minLength": 1
     },
-    "relates_to": {
+    "relations": {
       "type": "array",
       "items": {
-        "type": "string",
-        "minLength": 1
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "relates_to",
+              "depends_on",
+              "supersedes"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "type",
+          "target"
+        ],
+        "additionalProperties": false
       },
-      "description": "Related document paths (repo-root-relative) for cross-linking and backlink generation."
-    },
-    "supersedes": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      }
-    },
-    "depends_on": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "description": "Canonical relation mechanism. Each entry is a typed relationship to a target document (repo-root-relative path)."
     },
     "role": {
       "type": "string",

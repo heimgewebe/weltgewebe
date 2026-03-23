@@ -4,8 +4,9 @@ title: VPS-Deployment
 doc_type: reference
 status: active
 summary: Dokumentation zum VPS-basierten Deployment.
-relates_to:
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # VPS Deployment Runbook
 

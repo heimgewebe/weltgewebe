@@ -4,9 +4,11 @@ title: Deploy-Plan
 doc_type: reference
 status: active
 summary: Deployment-Planungsdokument für das Weltgewebe.
-relates_to:
-  - docs/deployment.md
-  - docs/deploy/README.md
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Migrationsplan: Heim-first Deployment (Phase 0)
 

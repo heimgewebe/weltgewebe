@@ -4,8 +4,9 @@ title: Garnrolle
 doc_type: reference
 status: deprecated
 summary: Veraltetes Dokument. Bitte docs/konzepte/garnrolle-und-verortung.md nutzen.
-relates_to:
-  - docs/konzepte/garnrolle-und-verortung.md
+relations:
+  - type: relates_to
+    target: docs/konzepte/garnrolle-und-verortung.md
 ---
 # Garnrolle (Veraltet)
 

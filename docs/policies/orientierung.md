@@ -4,9 +4,11 @@ title: Orientierung
 doc_type: reference
 status: active
 summary: Governance-Orientierung und Leitprinzipien für das Weltgewebe-Projekt.
-relates_to:
-  - docs/vision.md
-  - docs/weltgewebe-agenten-manifest.md
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/weltgewebe-agenten-manifest.md
 ---
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 

@@ -4,9 +4,11 @@ title: Weltgewebe UI Roadmap
 doc_type: blueprint
 status: canonical
 summary: Konkrete Priorisierung und Meilensteinplanung für den Ausbau der Weltgewebe UI.
-relates_to:
-  - docs/blueprints/ui-blaupause.md
-  - docs/blueprints/ui-state-machine.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/ui-blaupause.md
+  - type: relates_to
+    target: docs/blueprints/ui-state-machine.md
 ---
 
 # Weltgewebe UI Roadmap

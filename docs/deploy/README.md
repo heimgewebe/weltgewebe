@@ -4,12 +4,17 @@ title: Deployment-Übersicht
 doc_type: reference
 status: active
 summary: Kanonischer Deployment-Stand und normative Beschreibung der Laufzeitumgebung.
-relates_to:
-  - docs/deployment.md
-  - docs/deployment_governance.md
-  - docs/deploy/heimserver.deployment.md
-  - docs/deploy/heimserver.integration.md
-  - docs/deploy/security.md
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deployment_governance.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/deploy/heimserver.integration.md
+  - type: relates_to
+    target: docs/deploy/security.md
 ---
 # Weltgewebe – Deployment
 

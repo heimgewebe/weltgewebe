@@ -4,8 +4,9 @@ title: Glossar
 doc_type: reference
 status: active
 summary: Schnellreferenz der zentralen Begriffe im Weltgewebe-Projekt.
-relates_to:
-  - docs/domain/vocabulary.md
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
 ---
 # Glossar
 

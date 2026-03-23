@@ -4,11 +4,13 @@ title: "Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen"
 doc_type: concept
 status: active
 summary: "Kanonisches Konzept für Garnrolle, Verortung, Ungenauigkeitsradius und Rolle ohne Namen bei der Accounterstellung im Weltgewebe."
-relates_to:
-  - docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
-  - docs/konzepte/garnrolle.md
-supersedes:
-  - docs/konzepte/garnrolle.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
+  - type: relates_to
+    target: docs/konzepte/garnrolle.md
+  - type: supersedes
+    target: docs/konzepte/garnrolle.md
 ---
 
 # Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen

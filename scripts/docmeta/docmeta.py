@@ -5,7 +5,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 def normalize_list_field(value):
     """
-    Normalizes a frontmatter list field (like depends_on or verifies_with)
+    Normalizes a frontmatter list field (like relations or verifies_with)
     which could be a string, a stringified list, a list, or None,
     and returns a clean list of strings.
     """
@@ -17,6 +17,24 @@ def normalize_list_field(value):
     elif isinstance(value, list):
         return value
     return []
+
+
+def extract_depends_on(frontmatter):
+    """
+    Extract depends_on targets from the relations array.
+    Returns a list of target strings where type == 'depends_on'.
+    For zone files with relations: [], returns [].
+    """
+    relations = frontmatter.get('relations', [])
+    if not isinstance(relations, list):
+        return []
+    deps = []
+    for entry in relations:
+        if isinstance(entry, dict) and entry.get('type') == 'depends_on':
+            target = entry.get('target', '')
+            if target:
+                deps.append(target)
+    return deps
 
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
@@ -41,7 +59,7 @@ def parse_frontmatter(file_path):
             continue
 
         if line.startswith(' ') and stripped_line.startswith('- ') and current_key:
-            if current_key in ['depends_on', 'verifies_with', 'audit_gaps']:
+            if current_key in ['relations', 'verifies_with', 'audit_gaps']:
                 # It's a block list item
                 val = stripped_line[2:].strip()
                 # Handle quoted strings in lists
@@ -70,7 +88,7 @@ def parse_frontmatter(file_path):
                         items[i] = item[1:-1]
                 val = items
                 current_key = None # Completed inline list
-            elif val == '' and key in ['depends_on', 'verifies_with', 'audit_gaps']:
+            elif val == '' and key in ['relations', 'verifies_with', 'audit_gaps']:
                 # Initialize empty list for potential block list parsing on valid fields
                 val = []
                 current_key = key # Track to append items

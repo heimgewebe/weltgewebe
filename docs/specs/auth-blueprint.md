@@ -4,10 +4,13 @@ title: Auth Blueprint
 doc_type: reference
 status: active
 summary: Ältere Implementierungslinie für Auth (an ADR-0005 gebunden), abgelöst durch ADR-0006.
-relates_to:
-  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
-  - docs/adr/ADR-0005-auth.md
-  - docs/blueprints/auth-roadmap.md
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/adr/ADR-0005-auth.md
+  - type: relates_to
+    target: docs/blueprints/auth-roadmap.md
 ---
 # Blaupause: Schrittweise Implementierung von Account- und Login-Logik im Weltgewebe
 

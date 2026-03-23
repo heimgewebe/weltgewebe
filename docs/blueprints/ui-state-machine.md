@@ -4,9 +4,11 @@ title: Weltgewebe UI State Machine
 doc_type: blueprint
 status: canonical
 summary: Kanonische Zustandsmaschine der Weltgewebe-UI und verbindliche Implementierungsregeln.
-relates_to:
-  - docs/blueprints/ui-blaupause.md
-  - docs/blueprints/ui-roadmap.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/ui-blaupause.md
+  - type: relates_to
+    target: docs/blueprints/ui-roadmap.md
 ---
 
 # Weltgewebe UI State Machine

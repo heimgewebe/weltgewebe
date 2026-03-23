@@ -4,8 +4,9 @@ title: Peers Learnings
 doc_type: reference
 status: active
 summary: Erkenntnisse und Learnings aus verwandten Peer-Projekten.
-relates_to:
-  - docs/x-repo/semantAH.md
+relations:
+  - type: relates_to
+    target: docs/x-repo/semantAH.md
 ---
 
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil

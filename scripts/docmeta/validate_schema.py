@@ -86,10 +86,10 @@ def main():
                 continue
 
             # ensure arrays are properly formatted lists if possible.
-            # `depends_on` and `verifies_with` could be string parsed as strings by the basic yaml parser
+            # `relations` and `verifies_with` could be string parsed as strings by the basic yaml parser
             # Need to normalize them before validating
 
-            for key in ["depends_on", "verifies_with"]:
+            for key in ["relations", "verifies_with"]:
                 val = frontmatter.get(key)
                 if isinstance(val, str):
                     if val.startswith('[') and val.endswith(']'):
