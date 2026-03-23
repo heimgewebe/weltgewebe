@@ -26,6 +26,7 @@ pub async fn require_write(req: Request<Body>, next: Next) -> Response {
             authenticated: false,
             account_id: None,
             role: Role::Gast,
+            expires_at: None,
         });
 
     if !ctx.authenticated {

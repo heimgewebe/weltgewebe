@@ -18,7 +18,7 @@ use self::{
     accounts::{get_account, list_accounts},
     auth::{
         consume_login_get, consume_login_post, dev_login, list_dev_accounts, logout, me,
-        request_login,
+        request_login, session,
     },
     edges::{get_edge, list_edges},
     nodes::{get_node, list_nodes, patch_node},
@@ -52,4 +52,5 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
+        .route("/auth/session", get(session))
 }

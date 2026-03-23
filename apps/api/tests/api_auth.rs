@@ -1117,3 +1117,90 @@ async fn request_login_provisioning_email_normalization_works() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn session_endpoint_unauthenticated() -> Result<()> {
+    let state = test_state_with_accounts()?;
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let req = Request::get("/auth/session")
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+
+    let status = res.status();
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    if status != StatusCode::OK {
+        println!("FAIL BODY: {:?}", String::from_utf8_lossy(&body_bytes));
+    }
+    assert_eq!(status, StatusCode::OK);
+
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
+    assert_eq!(body_json["authenticated"], false);
+    assert!(
+        body_json.get("expires_at").is_none(),
+        "expires_at must be completely omitted"
+    );
+    assert!(
+        body_json.get("device_id").is_none(),
+        "device_id must be completely omitted"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn session_endpoint_authenticated() -> Result<()> {
+    let state = test_state_with_accounts()?;
+    // Mock a valid session for user u1
+    let session = state.sessions.create("u1".to_string());
+    let session_id = session.id;
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state);
+
+    let req = Request::get("/auth/session")
+        .header("Host", "localhost")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id
+            ),
+        )
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+
+    let status = res.status();
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    if status != StatusCode::OK {
+        println!("FAIL BODY: {:?}", String::from_utf8_lossy(&body_bytes));
+    }
+    assert_eq!(status, StatusCode::OK);
+
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
+    assert_eq!(body_json["authenticated"], true);
+    assert!(body_json.get("expires_at").is_some());
+    assert!(
+        body_json.get("device_id").is_none(),
+        "device_id must be completely omitted"
+    );
+
+    Ok(())
+}

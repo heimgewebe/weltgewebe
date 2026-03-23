@@ -887,6 +887,24 @@ pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     })
 }
 
+#[derive(Serialize)]
+pub struct SessionStatus {
+    pub authenticated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub device_id: Option<String>,
+}
+
+pub async fn session(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
+    Json(SessionStatus {
+        authenticated: ctx.authenticated,
+        expires_at: ctx.expires_at,
+        // TODO: Map to actual device ID once Device Management is implemented (Roadmap Phase 2, Step 3)
+        device_id: None,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

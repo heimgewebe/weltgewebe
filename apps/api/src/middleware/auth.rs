@@ -8,6 +8,7 @@ pub struct AuthContext {
     pub authenticated: bool,
     pub account_id: Option<String>,
     pub role: Role,
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 pub async fn auth_middleware(
@@ -20,6 +21,7 @@ pub async fn auth_middleware(
         authenticated: false,
         account_id: None,
         role: Role::Gast,
+        expires_at: None,
     };
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
@@ -29,6 +31,7 @@ pub async fn auth_middleware(
                 ctx.authenticated = true;
                 ctx.account_id = Some(session.account_id);
                 ctx.role = internal.role.clone();
+                ctx.expires_at = Some(session.expires_at);
             }
         }
     }
