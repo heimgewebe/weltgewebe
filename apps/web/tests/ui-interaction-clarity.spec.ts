@@ -109,4 +109,26 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(menu).toHaveCount(0);
     await expect(panel).toBeVisible(); // panel must remain open
   });
+
+  test("Escape on Garnrolle menu does NOT close SearchOverlay", async ({
+    page,
+  }) => {
+    // Open search overlay
+    await page.locator('.action-bar button[aria-label="Suche"]').click();
+    const searchOverlay = page.locator('[data-testid="search-overlay"]');
+    await expect(searchOverlay).toBeVisible();
+
+    // Open Garnrolle menu while search is open
+    const garnrolleBtn = page.locator(
+      '.garnrolle-container button[aria-label="Kontoeinstellungen"]',
+    );
+    await garnrolleBtn.click();
+    const menu = page.locator(".garnrolle-container .menu");
+    await expect(menu).toBeVisible();
+
+    // Press Escape: Garnrolle menu closes, search stays open
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+    await expect(searchOverlay).toBeVisible();
+  });
 });
