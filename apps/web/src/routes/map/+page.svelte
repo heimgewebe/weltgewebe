@@ -325,7 +325,6 @@
 
       const loadingTimeout = setTimeout(() => {
         isLoading = false;
-        mapStyleReady = true;
       }, 10000);
 
       const finishLoading = () => {
