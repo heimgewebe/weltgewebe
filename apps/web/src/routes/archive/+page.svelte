@@ -65,7 +65,8 @@
   }
 
   section li {
-    background: #f7f7f7;
+    background: var(--panel, #f7f7f7);
+    border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
     border-radius: 0.5rem;
     padding: 0.85rem 1rem;
     transition: background 0.2s ease-in-out, transform 0.2s ease-in-out;
@@ -73,7 +74,7 @@
 
   section li:hover,
   section li:focus-within {
-    background: #ececec;
+    background: var(--accent-soft, #ececec);
     transform: translateY(-1px);
   }
 

@@ -90,7 +90,7 @@
 </script>
 
 <div class="edge-mode">
-  <h3>Faden: {$selection?.id}</h3>
+  <h3>{edgeDetails?.edge_kind || $selection?.data?.edge_kind || 'Faden'}</h3>
 
   <div class="details">
     {#if isLoadingDetails}

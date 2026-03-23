@@ -27,6 +27,7 @@
 
 {#if $contextPanelOpen}
   <aside class="context-panel" data-testid="context-panel">
+    <div class="drag-handle" aria-hidden="true"><span class="drag-pill"></span></div>
     <header class="panel-header">
       {#if $systemState === 'komposition'}
         <h2>Neuer Knoten</h2>
@@ -76,6 +77,10 @@
     overflow-y: auto;
   }
 
+  .drag-handle {
+    display: none;
+  }
+
   .panel-header {
     display: flex;
     justify-content: space-between;
@@ -95,6 +100,10 @@
     font-size: 1.2rem;
     cursor: pointer;
     color: var(--text);
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
   }
 
   .panel-content {
@@ -110,6 +119,21 @@
       right: 0;
       max-height: 80vh;
       border-radius: 16px 16px 0 0;
+    }
+
+    .drag-handle {
+      display: flex;
+      justify-content: center;
+      padding: 10px 0 2px;
+      flex-shrink: 0;
+    }
+
+    .drag-pill {
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--muted, #9aa4b2);
+      opacity: 0.5;
     }
   }
 

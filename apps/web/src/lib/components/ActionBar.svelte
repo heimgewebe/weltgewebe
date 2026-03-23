@@ -56,10 +56,17 @@
     cursor: pointer;
     padding: 0.5rem 1rem;
     border-radius: 8px;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .action-btn:hover {
     background: rgba(0,0,0,0.05);
+  }
+
+  .action-btn:active {
+    background: rgba(255,255,255,0.1);
+    transform: scale(0.96);
   }
 
   .action-btn.active {
