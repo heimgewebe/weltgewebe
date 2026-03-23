@@ -311,7 +311,6 @@ async fn list_dev_accounts_succeeds_ipv6_localhost() -> Result<()> {
         std::env::set_var("AUTH_DEV_LOGIN", "1");
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let state = test_state_with_accounts()?;
     // Use IPv6 loopback address
@@ -348,7 +347,6 @@ async fn list_dev_accounts_succeeds_localhost() -> Result<()> {
         std::env::set_var("AUTH_DEV_LOGIN", "1");
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let state = test_state_with_accounts()?;
     let app = app(state);
@@ -378,7 +376,6 @@ async fn list_dev_accounts_fails_remote() -> Result<()> {
         std::env::remove_var("AUTH_DEV_LOGIN_ALLOW_REMOTE");
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let state = test_state_with_accounts()?;
     // Use a non-localhost IP to simulate remote access
@@ -420,7 +417,6 @@ async fn list_dev_accounts_rejects_spoofed_host_header() -> Result<()> {
         std::env::remove_var("AUTH_DEV_LOGIN_ALLOW_REMOTE");
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let state = test_state_with_accounts()?;
     // Use a non-localhost IP (actual client address)
@@ -445,7 +441,6 @@ async fn auth_login_fails_from_remote_without_allow_flag() -> Result<()> {
         std::env::remove_var("AUTH_DEV_LOGIN_ALLOW_REMOTE");
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let state = test_state_with_accounts()?;
     // Use a non-localhost IP to simulate remote access
@@ -1374,7 +1369,6 @@ async fn test_session_refresh_invalid_token() -> Result<()> {
 #[serial]
 async fn test_session_refresh_csrf_rejected() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
     let mut account_map = BTreeMap::new();
     let account = AccountInternal {
         public: AccountPublic {
