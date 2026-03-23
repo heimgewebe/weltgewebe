@@ -913,7 +913,7 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
             let accounts_map = state.accounts.read().await;
             let is_valid = accounts_map
                 .get(&old_session.account_id)
-                .map_or(false, |acc| !acc.public.disabled);
+                .is_some_and(|acc| !acc.public.disabled);
             drop(accounts_map);
 
             state.sessions.delete(old_session_id);
