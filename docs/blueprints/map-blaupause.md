@@ -398,7 +398,10 @@ Basemap ist Artefakt.
 
 Deploy-Strategie:
 
-`/tiles/basemap-hamburg.pmtiles` (Kanonischer Alias für die aktuelle Region)
+`/local-basemap/basemap-hamburg.pmtiles` (Öffentliche Edge-Route)
+`/local-basemap/basemap-hamburg.meta.json` (Öffentliche Metadaten-Route)
+
+*(Interner Storage-Pfad: `/srv/weltgewebe-basemap/`)*
 
 ---
 
@@ -411,19 +414,18 @@ OSM Updatezyklus:
 
 Publish- und Rollback-Strategie (Contract-First):
 
-- **Atomic Switch:** Neue PMTiles-Artefakte (z. B. `basemap-hamburg-v2.pmtiles`) werden zuerst vollständig neben dem aktiven Artefakt in das Zielverzeichnis transferiert.
-- **Verifikation (Der Sentinel Contract):** Die Einsatzbereitschaft wird über eine exakt korrespondierende `.meta.json` (z. B. `basemap-hamburg-v2.meta.json`) definiert. Diese Datei darf erst geschrieben werden, nachdem das PMTiles-Artefakt erfolgreich transferiert und geprüft wurde.
+- **Atomic Switch (PMTiles & Meta):** Neue versionierte Artefakte (z. B. `basemap-hamburg-v2.pmtiles` und `basemap-hamburg-v2.meta.json`) werden zuerst vollständig neben den aktiven Artefakten in das interne Zielverzeichnis (z. B. `/srv/weltgewebe-basemap/`) transferiert.
+- **Verifikation (Der Sentinel Contract):** Die Einsatzbereitschaft wird über die `.meta.json` definiert. Diese Datei darf erst geschrieben werden, nachdem das PMTiles-Artefakt erfolgreich transferiert und geprüft wurde.
   - Das Schema der `.meta.json` **muss** folgende Felder enthalten, um als Contract zu gelten:
     - `version`: Version des Builds
     - `artifact_name`: z. B. "basemap-hamburg-v2.pmtiles"
     - `sha256`: Hash der generierten `.pmtiles` Datei
     - `size_bytes`: Dateigröße
     - `status`: `"ready"` oder `"invalid"`
-- **Aktivierung:** Der Symlink-Switch (`ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles`) darf **ausschließlich** erfolgen, wenn:
-  1. Die `.meta.json` existiert und `status == "ready"` ist.
-  2. Der `sha256` Hash der echten `.pmtiles` Datei lokal mit der Angabe in der `.meta.json` übereinstimmt (Integrity Check, z. B. durch `weltgewebe-up` oder CI-Job).
-  3. Die Datei vollständig ist (`size_bytes` match).
-- **Rollback:** Bei Laufzeit-Anomalien wird der Symlink sofort auf die vorherige, intakte Version (z. B. `basemap-hamburg-v1.pmtiles`) zurückgesetzt. Konkrete Rollback-Trigger können sein:
+- **Aktivierung:** Der duale Symlink-Switch (oder die atomare Dateiumbenennung) darf **ausschließlich** erfolgen, wenn die `.meta.json` validiert wurde (`status == "ready"`, Hash/Size stimmen). Beide Kanonischen Aliase müssen simultan aktualisiert werden, um Drift zu verhindern:
+  1. `ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles`
+  2. `ln -sfn basemap-hamburg-v2.meta.json basemap-hamburg.meta.json` (oder alternativ atomares Neuschreiben der kanonischen Meta-Datei)
+- **Rollback:** Bei Laufzeit-Anomalien werden beide Symlinks/Aliase sofort auf das vorherige, intakte Paar (z. B. `v1`) zurückgesetzt. Konkrete Rollback-Trigger können sein:
   - Erhöhte HTTP-Fehlerquote (z. B. 404/500 auf der Edge-Route)
   - Fehlgeschlagene Range-Responses (PMTiles Client fordert Bytes an, Server liefert unvollständig)
   - MapLibre Client-Init-Fehler (Sichtbarkeit/Ladezeit überschreitet Timeout)

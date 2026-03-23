@@ -69,7 +69,7 @@ Requests. **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Kn
 - [x] Stabiler Alias-/Current-Pfad für das versionierte Artefakt bereitstellen
 - [x] Update-Zyklus definieren (z. B. monatliche OSM-Updates)
 - [x] Publish- und Rollback-Strategie festlegen
-  - _Umgesetzt: Publish- und Rollback-Strategie inklusive Atomic Switch und Sentinel-Verifikation in `map-blaupause.md` normativ definiert, operative Implementierung (CI/Guards) ausstehend._
+  - _Umgesetzt: Publish- und Rollback-Strategie inklusive Atomic Switch (PMTiles + Meta-Alias) und Sentinel-Verifikation in `map-blaupause.md` normativ definiert, operative Implementierung (CI/Guards) ausstehend._
 - [x] Basemap-Metadaten dokumentieren
 
 **Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne
