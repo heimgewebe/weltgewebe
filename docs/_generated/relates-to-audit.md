@@ -3,14 +3,12 @@ id: docs.generated.relates-to-audit
 title: Relates-To Audit
 doc_type: generated
 status: active
-summary: Semantik-Diagnose der relates_to-Nutzung — Dominanz, fehlende Richtung, Cluster.
+summary: Strukturelle Beobachtung der relates_to-Nutzung — Typen, Cluster, Beispiele.
 ---
 
 ## Weltgewebe Relates-To Audit
 
 Generated automatically. Do not edit.
-
-> Alle Ergebnisse sind heuristisch — keine automatischen Korrekturen.
 
 ### Zusammenfassung
 
@@ -21,27 +19,9 @@ Generated automatically. Do not edit.
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
-> ⚠️ **relates_to dominiert das System stark (99% aller Relationen). Dies kann ein Hinweis auf semantische Unterbestimmung sein.**
-
-### Auffällige Dokumente (relates_to-dominant)
-
-> Dokumente mit ≥5 Relationen, davon >80% relates_to.
-
-| Dokument | relates_to | gesamt | Anteil |
-| --- | --- | --- | --- |
-| `docs/deploy/README.md` | 5 | 5 | 100% |
-
-### Kandidaten für präzisere Relationen
-
-> Dokumente mit ≥5 Relationen, die ausschließlich relates_to nutzen.
-
-| Dokument | relates_to |
-| --- | --- |
-| `docs/deploy/README.md` | 5 |
-
 ### Mögliche supersedes-Lücken
 
-> Heuristisch erkannte Dokument-Paare, die möglicherweise eine supersedes-Relation benötigen.
+> Dokument-Paare mit namensähnlichen Mustern, die möglicherweise eine supersedes-Relation benötigen.
 
 _Keine Lücken erkannt._
 
@@ -136,16 +116,9 @@ _Keine Lücken erkannt._
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
 
-### Warnungen (extreme Dominanz)
-
-> Dokumente mit ≥5 Relationen, davon ≥90% relates_to.
-
-- ⚠️ `docs/deploy/README.md` (5/5 = 100% relates_to)
-  Dieses Dokument nutzt fast ausschließlich relates_to. Prüfe, ob einzelne Relationen präziser als depends_on oder supersedes modelliert werden sollten.
-
 ### Konkrete Beispiele zur Prüfung
 
-> Ausgewählte Dokumente mit ihren relates_to-Zielen. Diese könnten möglicherweise differenziert werden.
+> Dokumente mit den meisten relates_to-Zielen und ihren konkreten Relationen.
 
 **`docs/deploy/README.md`**:
 
@@ -169,24 +142,8 @@ _Keine Lücken erkannt._
 - relates_to → `docs/deployment_governance.md`
 - relates_to → `docs/runbook.md`
 
-### Positive Beispiele (Orientierung)
-
-> Dokumente, die mehrere Relationstypen nutzen — als Vorbild für differenzierte Modellierung.
-
-- `docs/konzepte/garnrolle-und-verortung.md` — 2× relates_to, 1× supersedes
-
-### Entwicklung (Delta)
-
-_Kein Vergleich mit vorherigem Lauf verfügbar oder keine Änderung._
-
-### Prüfhinweis bei Änderungen
-
-> Bei Änderungen an diesen Dokumenten: prüfe aktiv, ob relates_to präzisiert werden kann.
-
-- `docs/deploy/README.md`
-
 ### Hinweise
 
-- Alle Ergebnisse sind heuristisch und dienen der Sichtbarmachung.
-- `relates_to` ist kein Fehler — aber es darf nicht zur Ausweichlösung für alles werden.
+- Alle Ergebnisse dienen der strukturellen Sichtbarmachung.
+- `relates_to` ist kein Fehler — die Verteilung zeigt den aktuellen Stand.
 - Keine automatischen Korrekturen werden vorgenommen.

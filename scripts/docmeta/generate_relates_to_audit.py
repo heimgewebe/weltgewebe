@@ -1,35 +1,25 @@
 """
-Relates-To Audit Generator — semantic diagnosis of relates_to usage.
+Relates-To Audit Generator — structural observation of relates_to usage.
 
-Read-only analysis that makes relates_to quality visible:
-1. Dominance analysis: docs where >80% of relations are relates_to (with ≥5 total)
-2. Missing direction: docs using only relates_to despite many connections
-3. Supersedes gap detection: similar-named docs without supersedes links
-4. Cluster analysis: connected components in the relates_to subgraph
-5. Extreme dominance warnings: per-doc warnings at ≥90% relates_to
-6. System dominance warning: global hint when >95% of all relations are relates_to
-7. Negative examples: concrete relation lists from 2-3 docs for review
-8. Review hints: contextual call-to-action when warnings exist
-9. Delta tracking: compare current relates_to stats with previous run
-10. Positive examples: docs using multiple relation types as orientation
+Read-only analysis that makes relates_to patterns visible:
+1. Type distribution: summary of relation types across the repo
+2. Supersedes gap detection: similar-named docs without supersedes links
+3. Cluster analysis: connected components in the relates_to subgraph
+4. Concrete examples: relation lists from docs with most relates_to for review
+
+No quota-based warnings, no percentage thresholds, no feedback loops.
+Pure structural observation.
 
 Output: docs/_generated/relates-to-audit.md
 """
 
 import os
-import re
 import sys
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.validate_relations import extract_relations_from_content
 
-# Thresholds
-DOMINANCE_RATIO = 0.8
-MIN_RELATIONS_FOR_DOMINANCE = 5
-MIN_RELATIONS_FOR_DIRECTION = 5
-EXTREME_DOMINANCE_RATIO = 0.9
-SYSTEM_DOMINANCE_THRESHOLD = 0.95
 MAX_NEGATIVE_EXAMPLES = 3
 
 # Heuristic suffixes that suggest supersession
@@ -87,42 +77,6 @@ def compute_per_doc_type_counts(edges):
             counts[source][rel_type] += 1
         counts[source]["total"] += 1
     return dict(counts)
-
-
-def find_dominant_relates_to(doc_counts):
-    """
-    Phase 1: Find docs where >80% of relations are relates_to AND total ≥ 5.
-
-    Returns:
-        list of (doc, relates_to_count, total_count, ratio) sorted by relates_to_count desc
-    """
-    results = []
-    for doc, counts in doc_counts.items():
-        total = counts["total"]
-        rt = counts["relates_to"]
-        if total >= MIN_RELATIONS_FOR_DOMINANCE and total > 0:
-            ratio = rt / total
-            if ratio > DOMINANCE_RATIO:
-                results.append((doc, rt, total, ratio))
-    results.sort(key=lambda x: -x[1])
-    return results
-
-
-def find_direction_candidates(doc_counts):
-    """
-    Phase 2: Find docs using ONLY relates_to with ≥5 relations.
-
-    Returns:
-        list of (doc, relates_to_count) sorted by count desc
-    """
-    results = []
-    for doc, counts in doc_counts.items():
-        total = counts["total"]
-        rt = counts["relates_to"]
-        if total >= MIN_RELATIONS_FOR_DIRECTION and rt == total:
-            results.append((doc, rt))
-    results.sort(key=lambda x: -x[1])
-    return results
 
 
 def find_supersedes_gaps(all_docs):
@@ -225,43 +179,6 @@ def compute_type_distribution(edges):
     return dict(dist)
 
 
-def generate_system_dominance_warning(type_dist, total_rels):
-    """
-    Generate a system-level warning if relates_to dominates globally.
-
-    Returns warning string or None.
-    """
-    if total_rels == 0:
-        return None
-    rt_count = type_dist.get("relates_to", 0)
-    rt_ratio = rt_count / total_rels
-    if rt_ratio > SYSTEM_DOMINANCE_THRESHOLD:
-        return (
-            f"relates_to dominiert das System stark ({rt_ratio*100:.0f}% aller Relationen). "
-            "Dies kann ein Hinweis auf semantische Unterbestimmung sein."
-        )
-    return None
-
-
-def find_extreme_dominance_docs(doc_counts):
-    """
-    Find docs with extreme relates_to dominance (≥90%) for per-doc warnings.
-
-    Returns:
-        list of (doc, relates_to_count, total_count, ratio) sorted by relates_to_count desc
-    """
-    results = []
-    for doc, counts in doc_counts.items():
-        total = counts["total"]
-        rt = counts["relates_to"]
-        if total >= MIN_RELATIONS_FOR_DOMINANCE and total > 0:
-            ratio = rt / total
-            if ratio >= EXTREME_DOMINANCE_RATIO:
-                results.append((doc, rt, total, ratio))
-    results.sort(key=lambda x: -x[1])
-    return results
-
-
 def collect_negative_examples(edges, doc_counts, max_examples=MAX_NEGATIVE_EXAMPLES):
     """
     Collect concrete relates_to relation lists from docs with high relates_to usage.
@@ -293,115 +210,8 @@ def collect_negative_examples(edges, doc_counts, max_examples=MAX_NEGATIVE_EXAMP
     return examples
 
 
-def parse_previous_stats(out_file):
-    """
-    Parse the previous relates-to-audit.md to extract stats for delta tracking.
-
-    Returns:
-        dict with keys 'total', 'relates_to', 'relates_to_pct' or None if unavailable
-    """
-    if not os.path.exists(out_file):
-        return None
-
-    try:
-        with open(out_file, "r", encoding="utf-8") as f:
-            content = f.read()
-    except Exception:
-        return None
-
-    stats = {}
-    # Match "| Relationen gesamt | 140 |"
-    total_match = re.search(r"\| Relationen gesamt \| (\d+) \|", content)
-    if total_match:
-        stats["total"] = int(total_match.group(1))
-
-    # Match "| — relates_to | 139 |"
-    rt_match = re.search(r"\| — relates_to \| (\d+) \|", content)
-    if rt_match:
-        stats["relates_to"] = int(rt_match.group(1))
-
-    # Match "| relates_to Anteil | 99% |"
-    pct_match = re.search(r"\| relates_to Anteil \| (\d+)% \|", content)
-    if pct_match:
-        stats["relates_to_pct"] = int(pct_match.group(1))
-
-    if "total" in stats and "relates_to" in stats:
-        return stats
-    return None
-
-
-def compute_delta(current_total, current_rt, previous_stats):
-    """
-    Compute delta between current and previous relates_to stats.
-
-    Returns:
-        dict with 'total_delta', 'rt_delta', 'message' or None if no previous data
-    """
-    if previous_stats is None:
-        return None
-
-    prev_total = previous_stats.get("total", 0)
-    prev_rt = previous_stats.get("relates_to", 0)
-
-    total_delta = current_total - prev_total
-    rt_delta = current_rt - prev_rt
-
-    if total_delta == 0 and rt_delta == 0:
-        return {"total_delta": 0, "rt_delta": 0, "message": None}
-
-    message = None
-    if rt_delta > 0 and total_delta > 0:
-        new_rt_ratio = rt_delta / total_delta if total_delta > 0 else 0
-        if new_rt_ratio > SYSTEM_DOMINANCE_THRESHOLD:
-            message = (
-                f"relates_to-Anteil steigt — "
-                f"{rt_delta} von {total_delta} neuen Relationen sind relates_to. "
-                "Mögliche weitere Verallgemeinerung."
-            )
-
-    return {"total_delta": total_delta, "rt_delta": rt_delta, "message": message}
-
-
-def find_positive_examples(doc_counts, edges):
-    """
-    Find docs that use multiple relation types as positive orientation.
-
-    Selects docs that have at least 2 different relation types.
-
-    Returns:
-        list of (doc, {type: count}) sorted by total desc
-    """
-    results = []
-    for doc, counts in doc_counts.items():
-        types_used = sum(1 for t in ["relates_to", "depends_on", "supersedes"] if counts.get(t, 0) > 0)
-        if types_used >= 2:
-            type_breakdown = {}
-            for t in ["relates_to", "depends_on", "supersedes"]:
-                if counts.get(t, 0) > 0:
-                    type_breakdown[t] = counts[t]
-            results.append((doc, type_breakdown))
-    results.sort(key=lambda x: -sum(x[1].values()))
-    return results
-
-
-def generate_review_hint(extreme_docs, direction_candidates):
-    """
-    Generate a review hint when warnings or candidates exist.
-
-    Returns:
-        list of doc paths that should be reviewed, or empty list
-    """
-    docs = set()
-    for doc, _, _, _ in extreme_docs:
-        docs.add(doc)
-    for doc, _ in direction_candidates:
-        docs.add(doc)
-    return sorted(docs)
-
-
-def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
-                 supersedes_gaps, clusters, extreme_docs, system_warning,
-                 negative_examples, positive_examples, delta, review_docs):
+def write_output(edges, all_docs, doc_counts, supersedes_gaps, clusters,
+                 negative_examples):
     """Write the relates-to-audit.md output file."""
     out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relates-to-audit.md")
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
@@ -417,11 +227,10 @@ def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
         f.write("title: Relates-To Audit\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("summary: Semantik-Diagnose der relates_to-Nutzung — Dominanz, fehlende Richtung, Cluster.\n")
+        f.write("summary: Strukturelle Beobachtung der relates_to-Nutzung — Typen, Cluster, Beispiele.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Relates-To Audit\n\n")
         f.write("Generated automatically. Do not edit.\n\n")
-        f.write("> Alle Ergebnisse sind heuristisch — keine automatischen Korrekturen.\n\n")
 
         # 1. Summary
         f.write("### Zusammenfassung\n\n")
@@ -433,37 +242,9 @@ def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
         f.write(f"| relates_to Anteil | {rt_pct:.0f}% |\n")
         f.write("\n")
 
-        # System-level dominance warning
-        if system_warning:
-            f.write(f"> ⚠️ **{system_warning}**\n\n")
-
-        # 2. Dominant relates_to docs
-        f.write("### Auffällige Dokumente (relates_to-dominant)\n\n")
-        f.write(f"> Dokumente mit ≥{MIN_RELATIONS_FOR_DOMINANCE} Relationen, davon >{DOMINANCE_RATIO*100:.0f}% relates_to.\n\n")
-        if dominant:
-            f.write("| Dokument | relates_to | gesamt | Anteil |\n")
-            f.write("| --- | --- | --- | --- |\n")
-            for doc, rt, total, ratio in dominant:
-                f.write(f"| `{doc}` | {rt} | {total} | {ratio*100:.0f}% |\n")
-            f.write("\n")
-        else:
-            f.write("_Keine auffälligen Dokumente._\n\n")
-
-        # 3. Direction candidates
-        f.write("### Kandidaten für präzisere Relationen\n\n")
-        f.write(f"> Dokumente mit ≥{MIN_RELATIONS_FOR_DIRECTION} Relationen, die ausschließlich relates_to nutzen.\n\n")
-        if direction_candidates:
-            f.write("| Dokument | relates_to |\n")
-            f.write("| --- | --- |\n")
-            for doc, count in direction_candidates:
-                f.write(f"| `{doc}` | {count} |\n")
-            f.write("\n")
-        else:
-            f.write("_Keine Kandidaten gefunden._\n\n")
-
-        # 4. Supersedes gaps
+        # 2. Supersedes gaps
         f.write("### Mögliche supersedes-Lücken\n\n")
-        f.write("> Heuristisch erkannte Dokument-Paare, die möglicherweise eine supersedes-Relation benötigen.\n\n")
+        f.write("> Dokument-Paare mit namensähnlichen Mustern, die möglicherweise eine supersedes-Relation benötigen.\n\n")
         if supersedes_gaps:
             for doc_a, doc_b, reason in supersedes_gaps:
                 f.write(f"- `{doc_a}` ↔ `{doc_b}` — {reason}\n")
@@ -471,7 +252,7 @@ def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
         else:
             f.write("_Keine Lücken erkannt._\n\n")
 
-        # 5. Cluster analysis
+        # 3. Cluster analysis
         f.write("### Cluster-Analyse (relates_to)\n\n")
         f.write("> Zusammenhängende Gruppen im relates_to-Graphen.\n\n")
         if clusters:
@@ -483,22 +264,9 @@ def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
         else:
             f.write("_Keine Cluster gefunden._\n\n")
 
-        # 6. Extreme dominance warnings
-        f.write("### Warnungen (extreme Dominanz)\n\n")
-        f.write(f"> Dokumente mit ≥{MIN_RELATIONS_FOR_DOMINANCE} Relationen, davon ≥{EXTREME_DOMINANCE_RATIO*100:.0f}% relates_to.\n\n")
-        if extreme_docs:
-            for doc, rt, total, ratio in extreme_docs:
-                f.write(f"- ⚠️ `{doc}` ({rt}/{total} = {ratio*100:.0f}% relates_to)\n")
-                f.write("  Dieses Dokument nutzt fast ausschließlich relates_to. "
-                        "Prüfe, ob einzelne Relationen präziser als depends_on oder supersedes modelliert werden sollten.\n")
-            f.write("\n")
-        else:
-            f.write("_Keine extremen Dominanzen._\n\n")
-
-        # 7. Negative examples
+        # 4. Concrete examples
         f.write("### Konkrete Beispiele zur Prüfung\n\n")
-        f.write("> Ausgewählte Dokumente mit ihren relates_to-Zielen. "
-                "Diese könnten möglicherweise differenziert werden.\n\n")
+        f.write("> Dokumente mit den meisten relates_to-Zielen und ihren konkreten Relationen.\n\n")
         if negative_examples:
             for doc, rels in negative_examples:
                 f.write(f"**`{doc}`**:\n\n")
@@ -508,45 +276,10 @@ def write_output(edges, all_docs, doc_counts, dominant, direction_candidates,
         else:
             f.write("_Keine Beispiele verfügbar._\n\n")
 
-        # 8. Positive examples
-        f.write("### Positive Beispiele (Orientierung)\n\n")
-        f.write("> Dokumente, die mehrere Relationstypen nutzen — als Vorbild für differenzierte Modellierung.\n\n")
-        if positive_examples:
-            for doc, type_breakdown in positive_examples:
-                parts = [f"{count}× {t}" for t, count in sorted(type_breakdown.items())]
-                f.write(f"- `{doc}` — {', '.join(parts)}\n")
-            f.write("\n")
-        else:
-            f.write("_Keine Dokumente mit mehreren Relationstypen gefunden._\n\n")
-
-        # 9. Delta tracking
-        f.write("### Entwicklung (Delta)\n\n")
-        if delta and (delta["total_delta"] != 0 or delta["rt_delta"] != 0):
-            f.write(f"| Metrik | Veränderung |\n")
-            f.write(f"| --- | --- |\n")
-            f.write(f"| Relationen gesamt | {delta['total_delta']:+d} |\n")
-            f.write(f"| relates_to | {delta['rt_delta']:+d} |\n")
-            f.write("\n")
-            if delta.get("message"):
-                f.write(f"> ⚠️ {delta['message']}\n\n")
-        else:
-            f.write("_Kein Vergleich mit vorherigem Lauf verfügbar oder keine Änderung._\n\n")
-
-        # 10. Review hint
-        f.write("### Prüfhinweis bei Änderungen\n\n")
-        if review_docs:
-            f.write("> Bei Änderungen an diesen Dokumenten: "
-                    "prüfe aktiv, ob relates_to präzisiert werden kann.\n\n")
-            for doc in review_docs:
-                f.write(f"- `{doc}`\n")
-            f.write("\n")
-        else:
-            f.write("_Keine Dokumente mit Prüfbedarf._\n\n")
-
-        # 11. Disclaimer
+        # 5. Disclaimer
         f.write("### Hinweise\n\n")
-        f.write("- Alle Ergebnisse sind heuristisch und dienen der Sichtbarmachung.\n")
-        f.write("- `relates_to` ist kein Fehler — aber es darf nicht zur Ausweichlösung für alles werden.\n")
+        f.write("- Alle Ergebnisse dienen der strukturellen Sichtbarmachung.\n")
+        f.write("- `relates_to` ist kein Fehler — die Verteilung zeigt den aktuellen Stand.\n")
         f.write("- Keine automatischen Korrekturen werden vorgenommen.\n")
 
     return out_file
@@ -557,24 +290,11 @@ def main():
     try:
         edges, all_docs = collect_relations_graph()
         doc_counts = compute_per_doc_type_counts(edges)
-        dominant = find_dominant_relates_to(doc_counts)
-        direction_candidates = find_direction_candidates(doc_counts)
         supersedes_gaps = find_supersedes_gaps(all_docs)
         clusters = find_relates_to_clusters(edges)
-        extreme_docs = find_extreme_dominance_docs(doc_counts)
-        type_dist = compute_type_distribution(edges)
-        system_warning = generate_system_dominance_warning(type_dist, len(edges))
         negative_examples = collect_negative_examples(edges, doc_counts)
-        positive_examples = find_positive_examples(doc_counts, edges)
-        out_file = os.path.join(REPO_ROOT, "docs", "_generated", "relates-to-audit.md")
-        previous_stats = parse_previous_stats(out_file)
-        rt_count = type_dist.get("relates_to", 0)
-        delta = compute_delta(len(edges), rt_count, previous_stats)
-        review_docs = generate_review_hint(extreme_docs, direction_candidates)
-        out_file = write_output(edges, all_docs, doc_counts, dominant,
-                                direction_candidates, supersedes_gaps, clusters,
-                                extreme_docs, system_warning, negative_examples,
-                                positive_examples, delta, review_docs)
+        out_file = write_output(edges, all_docs, doc_counts, supersedes_gaps,
+                                clusters, negative_examples)
         print(f"Generated {out_file}")
     except Exception as e:
         print(f"Error generating relates-to audit: {e}", file=sys.stderr)
