@@ -277,6 +277,8 @@ OSM Download
 wget https://download.geofabrik.de/europe-latest.osm.pbf
 ```
 
+> **Hinweis:** Dies ist ein **nicht-deterministischer Quickstart**. Für produktive Builds werden zwingend ein gepinnter Snapshot und eine SHA256-Verifikation benötigt (siehe z.B. `build-hamburg-pmtiles.sh`).
+
 ---
 
 ### Schritt 2
@@ -422,9 +424,12 @@ Publish- und Rollback-Strategie (Contract-First):
     - `sha256`: Hash der generierten `.pmtiles` Datei
     - `size_bytes`: Dateigröße
     - `status`: `"ready"` oder `"invalid"`
-- **Aktivierung:** Der duale Symlink-Switch (oder die atomare Dateiumbenennung) darf **ausschließlich** erfolgen, wenn die `.meta.json` validiert wurde (`status == "ready"`, Hash/Size stimmen). Beide Kanonischen Aliase müssen simultan aktualisiert werden, um Drift zu verhindern:
-  1. `ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles`
-  2. `ln -sfn basemap-hamburg-v2.meta.json basemap-hamburg.meta.json` (oder alternativ atomares Neuschreiben der kanonischen Meta-Datei)
+  - **Hinweis zum Architektur-Drift:** Das aktuelle System (siehe `scripts/basemap/build-hamburg-pmtiles.sh`) ist derzeit **nicht contract-konform**. Es nutzt ein abweichendes Feld (`artifact` statt `artifact_name`) und generiert aktuell KEIN `sha256`, `size_bytes` oder `status`. Eine Anpassung der Skripte ist operativ erforderlich; dieser Contract bleibt die normative Referenz.
+- **Aktivierung:** Der duale Symlink-Switch (oder die atomare Dateiumbenennung) darf **ausschließlich** erfolgen, wenn die `.meta.json` validiert wurde (`status == "ready"`, Hash/Size stimmen). Die Aktualisierung der Aliase muss zwingend in dieser sicheren, sequenziellen Reihenfolge erfolgen:
+  1. `ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles` (Zuerst das Tile-Artefakt)
+  2. `ln -sfn basemap-hamburg-v2.meta.json basemap-hamburg.meta.json` (IMMER zuletzt den Meta-Alias)
+
+  *Begründung:* Dies verhindert Race Conditions, bei denen der Meta-Alias bereits auf `v2` zeigt (und Einsatzbereitschaft signalisiert), das PMTiles-Artefakt aber noch `v1` liefert. Der Meta-Alias fungiert als finaler Freigabe-Sentinel.
 - **Rollback:** Bei Laufzeit-Anomalien werden beide Symlinks/Aliase sofort auf das vorherige, intakte Paar (z. B. `v1`) zurückgesetzt. Konkrete Rollback-Trigger können sein:
   - Erhöhte HTTP-Fehlerquote (z. B. 404/500 auf der Edge-Route)
   - Fehlgeschlagene Range-Responses (PMTiles Client fordert Bytes an, Server liefert unvollständig)
