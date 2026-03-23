@@ -99,7 +99,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.3 Session Refresh
 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
-**Ist:** Ein erster Codepfad für `/auth/session/refresh` existiert und testet die Invalidation der Session, aber der vollumfängliche Zielrahmen (Split Access/Refresh Token) ist noch nicht gedeckt.
+**Ist:** POST `/auth/session/refresh` ist im MVP implementiert und durch API-Tests belegt; der Zielrahmen mit Persistenz und Token-Split ist noch offen.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** Echte E2E Persistenz, Vollständiger Token-Split (Access/Refresh)

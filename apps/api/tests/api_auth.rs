@@ -1347,6 +1347,8 @@ async fn test_session_refresh_invalid_token() -> Result<()> {
     // Refresh with invalid cookie
     let req2 = Request::post("/auth/session/refresh")
         .header("Cookie", "weltgewebe_session=invalid-session-id")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::empty())?;
 
     let res2 = app.clone().oneshot(req2).await?;
