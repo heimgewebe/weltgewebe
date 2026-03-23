@@ -4,6 +4,9 @@ set -euo pipefail
 # Test: scripts/guard/metrics-ref-guard.sh
 # Verifies that the metrics ref guard correctly detects mismatches
 # between uses: ref and metarepo_ref in the metrics workflow.
+#
+# Tests call the REAL guard script via REPO_ROOT override — no
+# shadow reimplementation of guard logic.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
@@ -39,28 +42,13 @@ jobs:
       post_url: https://example.com
 YAML
 
-# We need to override the REPO_ROOT in the guard script, so we run a modified version
-if bash -c "
-  set -euo pipefail
-  WORKFLOW='$TEMP_DIR/case1/.github/workflows/metrics.yml'
-  USES_REF=\$(grep -E '^\s+uses:\s+heimgewebe/metarepo/' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*@//' | tr -d '[:space:]')
-  METAREPO_REF=\$(grep -E '^\s+metarepo_ref:' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*metarepo_ref:[[:space:]]*//' | tr -d \"\\\"' \")
-  if [[ -z \"\$USES_REF\" ]] || [[ -z \"\$METAREPO_REF\" ]]; then
-    exit 2
-  fi
-  if [[ \"\$USES_REF\" != \"\$METAREPO_REF\" ]]; then
-    exit 1
-  fi
-  exit 0
-" 2>/dev/null; then
+if REPO_ROOT="$TEMP_DIR/case1" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
   report 0 "Matching refs pass"
 else
   report 1 "Matching refs should pass"
 fi
 
-# Case 2: Mismatched refs — should fail
+# Case 2: Mismatched refs — should fail with exit 1
 mkdir -p "$TEMP_DIR/case2/.github/workflows"
 cat > "$TEMP_DIR/case2/.github/workflows/metrics.yml" <<'YAML'
 name: Metrics
@@ -74,39 +62,14 @@ jobs:
       post_url: https://example.com
 YAML
 
-if bash -c "
-  set -euo pipefail
-  WORKFLOW='$TEMP_DIR/case2/.github/workflows/metrics.yml'
-  USES_REF=\$(grep -E '^\s+uses:\s+heimgewebe/metarepo/' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*@//' | tr -d '[:space:]')
-  METAREPO_REF=\$(grep -E '^\s+metarepo_ref:' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*metarepo_ref:[[:space:]]*//' | tr -d \"\\\"' \")
-  if [[ -z \"\$USES_REF\" ]] || [[ -z \"\$METAREPO_REF\" ]]; then
-    exit 2
-  fi
-  if [[ \"\$USES_REF\" != \"\$METAREPO_REF\" ]]; then
-    exit 1
-  fi
-  exit 0
-" 2>/dev/null; then
+if REPO_ROOT="$TEMP_DIR/case2" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
   report 1 "Mismatched refs should fail"
 else
-  EXIT=$?
-  if [ "$EXIT" -eq 1 ] 2>/dev/null || true; then
-    report 0 "Mismatched refs correctly detected"
-  else
-    report 0 "Mismatched refs correctly detected (exit code non-zero)"
-  fi
+  report 0 "Mismatched refs correctly detected"
 fi
 
 # Case 3: Missing workflow file — should fail with exit 2
-if bash -c "
-  set -euo pipefail
-  WORKFLOW='$TEMP_DIR/nonexistent/.github/workflows/metrics.yml'
-  if [[ ! -f \"\$WORKFLOW\" ]]; then
-    exit 2
-  fi
-" 2>/dev/null; then
+if REPO_ROOT="$TEMP_DIR/nonexistent" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
   report 1 "Missing workflow should fail"
 else
   report 0 "Missing workflow correctly detected"
@@ -126,21 +89,7 @@ jobs:
       post_url: https://example.com
 YAML
 
-if bash -c "
-  set -euo pipefail
-  WORKFLOW='$TEMP_DIR/case4/.github/workflows/metrics.yml'
-  USES_REF=\$(grep -E '^\s+uses:\s+heimgewebe/metarepo/' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*@//' | tr -d '[:space:]')
-  METAREPO_REF=\$(grep -E '^\s+metarepo_ref:' \"\$WORKFLOW\" \
-    | head -n1 | sed 's/.*metarepo_ref:[[:space:]]*//' | tr -d \"\\\"' \")
-  if [[ -z \"\$USES_REF\" ]] || [[ -z \"\$METAREPO_REF\" ]]; then
-    exit 2
-  fi
-  if [[ \"\$USES_REF\" != \"\$METAREPO_REF\" ]]; then
-    exit 1
-  fi
-  exit 0
-" 2>/dev/null; then
+if REPO_ROOT="$TEMP_DIR/case4" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
   report 0 "Quoted metarepo_ref correctly matches"
 else
   report 1 "Quoted metarepo_ref should be stripped and match"

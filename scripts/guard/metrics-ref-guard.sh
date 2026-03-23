@@ -8,7 +8,7 @@ set -euo pipefail
 # drift when one value is bumped but the other is forgotten.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 
 WORKFLOW="${REPO_ROOT}/.github/workflows/metrics.yml"
 

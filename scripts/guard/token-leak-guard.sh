@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 
 echo "Checking for accidental token/secret leaks in text files..."
 
@@ -12,6 +12,7 @@ set +e
 MATCHES=$(git -C "$REPO_ROOT" grep -i -E "token=[a-zA-Z0-9-]{10,}|/api/auth/(magic-link|login)/consume|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" \
   -- . \
   ':!scripts/guard/token-leak-guard.sh' \
+  ':!scripts/tests/test_token_leak_guard.sh' \
   ':!apps/api/src/routes/auth.rs' \
   ':!apps/api/tests/api_auth.rs' \
   ':!docs/runbook.md' \
