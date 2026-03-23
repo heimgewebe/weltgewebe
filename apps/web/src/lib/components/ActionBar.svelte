@@ -3,9 +3,11 @@
   import { isSearchOpen, closeSearch } from '$lib/stores/searchStore';
   import { isFilterOpen, closeFilter } from '$lib/stores/filterStore';
   import { toggleSearchExclusive, toggleFilterExclusive } from '$lib/stores/overlayManager';
-  import { setRestoreTarget } from '$lib/utils/focusManager';
+  import { setRestoreTarget, suppressNextRestore } from '$lib/utils/focusManager';
 
   function onNewNode() {
+    if ($isSearchOpen) suppressNextRestore('search');
+    if ($isFilterOpen) suppressNextRestore('filter');
     closeSearch();
     closeFilter();
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });

@@ -47,7 +47,7 @@
             id="email"
             type="email"
             bind:value={email}
-            placeholder="du@beispiel.de"
+            placeholder="du@example.com"
             required
             disabled={loading}
             style="padding:0.5rem; border-radius:6px; border:1px solid #263240; background:#101821; color:white;"
