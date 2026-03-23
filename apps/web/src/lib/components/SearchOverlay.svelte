@@ -47,6 +47,7 @@
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isSearchOpen) return;
+    if (e.defaultPrevented) return;
     if (e.key === 'Escape') {
       closeSearch();
     }

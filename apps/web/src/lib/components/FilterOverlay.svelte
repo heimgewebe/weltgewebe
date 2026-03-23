@@ -35,6 +35,7 @@
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isFilterOpen) return;
+    if (e.defaultPrevented) return;
     if (e.key === 'Escape') {
       closeFilter();
     }
