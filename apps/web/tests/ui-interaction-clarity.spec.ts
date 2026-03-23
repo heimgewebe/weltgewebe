@@ -59,9 +59,7 @@ test.describe("Interaction Clarity & State Feedback", () => {
 
     // Close panel → back to navigation → button should lose active
     await page.keyboard.press("Escape");
-    await expect(
-      page.locator('[data-testid="context-panel"]'),
-    ).toHaveCount(0);
+    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
     await expect(newNodeBtn).not.toHaveClass(/active/);
   });
 
