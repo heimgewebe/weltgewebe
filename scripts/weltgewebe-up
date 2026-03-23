@@ -1347,13 +1347,13 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
         echo "OK (sovereign style.json reachable)"
     fi
 
-    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap.meta.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard failed: Could not fetch basemap.meta.json via Edge Route (/local-basemap/basemap.meta.json). PMTiles artifact volume or route is missing."
+    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json >/dev/null 2>&1; then
+        msg="Sovereign Basemap Guard failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
         echo "ERROR: $msg"
         generate_failure_bundle "$msg"
         exit 1
     else
-        echo "OK (sovereign basemap.meta.json reachable)"
+        echo "OK (sovereign basemap-hamburg.meta.json reachable)"
     fi
     echo "   (Note: This proves edge routing readiness, not E2E client usage)"
 fi
