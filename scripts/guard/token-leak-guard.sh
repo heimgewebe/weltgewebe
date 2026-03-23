@@ -9,6 +9,14 @@ echo "Checking for accidental token/secret leaks in text files..."
 set +e
 # Exclude narrowly scoped known-safe reference/example locations that intentionally contain auth-related example strings.
 # Keep this list minimal; whole-directory exclusions must not be introduced.
+# Exclusion justifications:
+#   token-leak-guard.sh       — contains the detection pattern itself
+#   test_token_leak_guard.sh  — test fixtures for this guard
+#   auth.rs                   — production auth route with token handling
+#   api_auth.rs               — integration tests for auth endpoints
+#   runbook.md                — operational docs with auth example commands
+#   auth-and-ui-routing.md    — architecture blueprint with auth flow examples
+#   verify_magic_link.py      — deployment verification script with auth URLs
 MATCHES=$(git -C "$REPO_ROOT" grep -i -E "token=[a-zA-Z0-9-]{10,}|/api/auth/(magic-link|login)/consume|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" \
   -- . \
   ':!scripts/guard/token-leak-guard.sh' \

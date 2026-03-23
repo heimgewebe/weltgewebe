@@ -41,11 +41,8 @@ jobs:
           filters: |
             docs:
               - '**/*.md'
-              - '**/*.yml'
-              - '**/*.yaml'
               - '.markdownlint.*'
               - '.yamllint*'
-              - '.github/workflows/ci.yml'
 
   ci:
     needs: docs-changes

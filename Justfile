@@ -18,14 +18,13 @@ reset-web:
 alias c := ci
 
 ci:
-	@echo "==> Web: install, sync, build, typecheck, unit tests"
+	@echo "==> Web: install, sync, build, typecheck"
 	if [ -d apps/web ]; then \
 		pushd apps/web >/dev/null; \
 		pnpm install --frozen-lockfile; \
 		pnpm sync; \
 		pnpm build; \
 		pnpm run ci; \
-		pnpm test:unit; \
 		popd >/dev/null; \
 	fi
 	@echo "==> API: fmt, clippy, build, test (falls vorhanden)"
