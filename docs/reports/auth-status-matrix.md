@@ -101,7 +101,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
 **Ist:** POST `/auth/session/refresh` ist im MVP implementiert und durch API-Tests belegt; der Zielrahmen mit Persistenz und Token-Split ist noch offen.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** Echte E2E Persistenz, Vollständiger Token-Split (Access/Refresh)
 **Status:** Teil
 **Risiko:** hoch
@@ -119,7 +119,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** Fehlt vollständig im Repo. gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -129,7 +129,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Fehlt vollständig im Repo. gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -139,7 +139,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Fehlt vollständig im Repo. gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -149,7 +149,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.8 Passkeys
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
-**Ist:** Fehlt vollständig im Repo. gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case

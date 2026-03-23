@@ -67,7 +67,8 @@
       "risk": "hoch",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
-        "apps/api/tests/api_auth.rs"
+        "apps/api/tests/api_auth.rs",
+        "apps/api/src/routes/mod.rs"
       ]
     },
     "logout": {
@@ -87,7 +88,7 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
       "status": "Offen",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -99,7 +100,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
       "status": "Offen",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -111,7 +112,7 @@
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
-      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
       "status": "Offen",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -123,7 +124,7 @@
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
-      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
+      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
       "status": "Offen",
       "documentation_evidence": [],
       "missing_evidence": [
