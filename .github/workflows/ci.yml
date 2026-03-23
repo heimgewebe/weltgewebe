@@ -197,6 +197,11 @@ jobs:
           cargo-deny --version
           just --version
 
+      # CI Test Architecture:
+      #   ci.yml (just ci) — build, lint, typecheck (web + API), cargo test, cargo-deny.
+      #   web.yml (Gate A) — web unit tests (vitest) + Playwright E2E. Path-scoped to apps/web/**.
+      #   Vitest deliberately runs only in web.yml to avoid double execution on PRs
+      #   that trigger both workflows. See also: Justfile ci recipe, web.yml header.
       - name: Validate project
         env:
           CARGO_TERM_COLOR: always

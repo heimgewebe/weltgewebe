@@ -1,4 +1,7 @@
 ---
+# Web Check (Gate A) — canonical location for web unit tests (vitest) and Playwright E2E.
+# ci.yml does NOT run vitest; it handles build/lint/typecheck + API tests + guard tests.
+# This split avoids double vitest execution when both workflows trigger on the same PR.
 name: Web Check (Gate A)
 
 permissions:
