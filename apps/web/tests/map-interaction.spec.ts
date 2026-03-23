@@ -304,34 +304,6 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
   });
 
-  test("Escape closes Garnrolle menu without closing search overlay", async ({
-    page,
-  }) => {
-    await page.waitForSelector(".action-bar", { timeout: 10000 });
-
-    // Open search overlay
-    await page.locator('.action-bar button[aria-label="Suche"]').click();
-    const searchOverlay = page.locator('[data-testid="search-overlay"]');
-    await expect(searchOverlay).toBeVisible();
-
-    // Open Garnrolle menu
-    await page.locator('button[aria-label="Kontoeinstellungen"]').click();
-    const garnrolleMenu = page.locator(".garnrolle-container .menu");
-    await expect(garnrolleMenu).toBeVisible();
-
-    // Press Escape – Garnrolle capture handler should fire first
-    await page.keyboard.press("Escape");
-
-    // Garnrolle menu should close
-    await expect(garnrolleMenu).toHaveCount(0);
-
-    // Search overlay should remain open (not destroyed by the same Escape)
-    await expect(searchOverlay).toBeVisible();
-
-    // ContextPanel should remain absent
-    await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
-  });
-
   test("AccountPanel keyboard navigation allows arrow keys, Home, and End", async ({
     page,
   }) => {

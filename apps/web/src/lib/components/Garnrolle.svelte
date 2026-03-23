@@ -26,17 +26,6 @@
     }
   }
 
-  // Use capture phase so this handler runs before global Escape listeners
-  // (e.g. SearchOverlay, FilterOverlay, ContextPanel).
-  // preventDefault signals that this overlay owns the interaction –
-  // other listeners check event.defaultPrevented and yield.
-  function handleEscape(event: KeyboardEvent) {
-    if (!menuOpen) return;
-    if (event.key !== 'Escape') return;
-    event.preventDefault();
-    menuOpen = false;
-  }
-
   async function logout() {
     if (!browser) return;
     await authStore.logout();
@@ -44,7 +33,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} on:keydown|capture={handleEscape} />
+<svelte:window on:click={closeMenu} />
 
 <div class="garnrolle-container wrap">
   <button
