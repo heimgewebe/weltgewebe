@@ -37,3 +37,4 @@ Generated automatically. Do not edit.
 | Makefile (docs-guard) | scripts.docmeta.generate_staleness_report | `python3 -m scripts.docmeta.generate_staleness_report` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.generate_agent_readiness | `python3 -m scripts.docmeta.generate_agent_readiness` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.generate_relations_analysis | `python3 -m scripts.docmeta.generate_relations_analysis` | *unclear* |
+| Makefile (docs-guard) | scripts.docmeta.generate_relates_to_audit | `python3 -m scripts.docmeta.generate_relates_to_audit` | *unclear* |

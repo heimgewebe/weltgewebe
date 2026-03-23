@@ -24,6 +24,7 @@ docs-guard:
 	python3 -m scripts.docmeta.generate_staleness_report
 	python3 -m scripts.docmeta.generate_agent_readiness
 	python3 -m scripts.docmeta.generate_relations_analysis
+	python3 -m scripts.docmeta.generate_relates_to_audit
 	git diff --exit-code docs/_generated/
 
 up:
