@@ -13,6 +13,7 @@ export function updateEdges(
   const shouldShow = showEdges && edges.length > 0;
   const sourceId = LAYERS.EDGES_SOURCE;
   const layerId = LAYERS.EDGES_LAYER;
+  const haloLayerId = LAYERS.EDGES_HALO_LAYER;
 
   const source = map.getSource(sourceId) as GeoJSONSource | undefined;
 
@@ -70,6 +71,26 @@ export function updateEdges(
       }
     }
 
+    // Halo layer for better readability
+    map.addLayer(
+      {
+        id: haloLayerId,
+        type: "line",
+        source: sourceId,
+        layout: {
+          "line-join": "round",
+          "line-cap": "round",
+        },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 4, // Wider than the main line
+          "line-opacity": 0.8,
+        },
+      },
+      firstSymbolId,
+    );
+
+    // Main line layer
     map.addLayer(
       {
         id: layerId,

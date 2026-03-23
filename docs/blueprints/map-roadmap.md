@@ -39,7 +39,8 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
   - _Umgesetzt: OFL-Lizenz und Herkunft für Noto Sans Glyphs im ASSETS.md dokumentiert. Das Fehlen der Sprites ist dort explizit architekturell begründet._
 - [x] Basemap visuell beruhigen (Fokus auf Infrastruktur)
   - _Erledigt: Style ist minimalistisch und enthält keine POI-Icons. Visuelle Semantik liegt im Overlay._
-- [ ] Overlay-Lesbarkeit gegen Basemap prüfen
+- [x] Overlay-Lesbarkeit gegen Basemap prüfen
+  - _Umgesetzt: Edges-Layer in MapLibre um eine weiße Halo-Schicht (`EDGES_HALO_LAYER`) erweitert, die als Kontur unter der Hauptlinie liegt, um die Lesbarkeit des Fäden-Graphen unabhängig von der farblichen Helligkeit des darunterliegenden Basemap-Polygons abzusichern._
 
 **Abnahmekriterium:** Ein eigenes `style.json` wird geladen und Schriften (Glyphs) werden lokal/souverän serviert und sind
 lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons), da die visuelle Semantik vollständig in den Overlays (Nodes/Edges) liegt. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung

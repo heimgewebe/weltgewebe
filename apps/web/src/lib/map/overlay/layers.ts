@@ -21,6 +21,7 @@ export const LAYERS = {
   // 2. Edges
   EDGES_SOURCE: "edges-source",
   EDGES_LAYER: "edges-layer",
+  EDGES_HALO_LAYER: "edges-halo-layer",
 
   // 3. Activity (planned)
   ACTIVITY_SOURCE: "activity-source",
