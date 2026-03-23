@@ -20,6 +20,8 @@ Generated automatically. Do not edit.
 | adr.ADR-0003__privacy-ungenauigkeitsradius-ron | Adr 0003__Privacy Ungenauigkeitsradius Ron | reference | active | derived | docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md |
 | adr.ADR-0004__fahrplan-verweis | Adr 0004__Fahrplan Verweis | reference | active | derived | docs/adr/ADR-0004__fahrplan-verweis.md |
 | adr.ADR-0005-auth | Adr 0005 Auth | reference | active | derived | docs/adr/ADR-0005-auth.md |
+| adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | canonical | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
+| blueprints.auth-roadmap | Auth Roadmap | roadmap | active | canonical | docs/blueprints/auth-roadmap.md |
 | blueprints.weltgewebe.auth-and-ui-routing | Weltgewebe.Auth And Ui Routing | reference | active | derived | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
 | blueprints.weltgewebe.config.diff | Weltgewebe.Config.Diff | reference | active | derived | docs/blueprints/weltgewebe.config.diff.md |
 | blueprints.weltgewebe.deploy.plan | Weltgewebe.Deploy.Plan | reference | active | derived | docs/blueprints/weltgewebe.deploy.plan.md |
@@ -47,8 +49,8 @@ Generated automatically. Do not edit.
 | edge.systemd.README | Readme | reference | active | derived | docs/edge/systemd/README.md |
 | geist-und-plan | Geist Und Plan | reference | active | derived | docs/geist-und-plan.md |
 | inhalt | Inhalt | reference | active | canonical | docs/inhalt.md |
-| konzepte.garnrolle | Garnrolle | reference | active | derived | docs/konzepte/garnrolle.md |
-| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Wohnsitz und emergentes Vertrauen | concept | active | canonical | docs/konzepte/garnrolle-und-verortung.md |
+| konzepte.garnrolle | Garnrolle | reference | deprecated | derived | docs/konzepte/garnrolle.md |
+| konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | canonical | docs/konzepte/garnrolle-und-verortung.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | canonical | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | canonical | docs/blueprints/map-roadmap.md |
 | overview.inhalt | Inhalt | reference | active | canonical | docs/overview/inhalt.md |
@@ -60,12 +62,16 @@ Generated automatically. Do not edit.
 | process.sprache | Sprache | reference | active | derived | docs/process/sprache.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | derived | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | derived | docs/reference/glossar.md |
+| reports.auth-status-matrix | Auth Status Matrix | reference | active | canonical | docs/reports/auth-status-matrix.md |
 | reports.cost-report | Cost Report | reference | active | derived | docs/reports/cost-report.md |
 | runbooks.README | Readme | reference | active | derived | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | derived | docs/runbooks/codespaces-recovery.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Ops.Runbook.Weltgewebe Selfhost Deploy | reference | active | derived | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |
 | runbooks.uv-tooling | Uv Tooling | reference | active | derived | docs/runbooks/uv-tooling.md |
+| specs.auth-api | Auth API Spec | reference | active | derived | docs/specs/auth-api.md |
 | specs.auth-blueprint | Auth Blueprint | reference | active | derived | docs/specs/auth-blueprint.md |
+| specs.auth-state-machine | Auth State Machine | reference | active | canonical | docs/specs/auth-state-machine.md |
+| specs.auth-ui | Auth UI Spec | reference | active | derived | docs/specs/auth-ui.md |
 | specs.contract | Contract | reference | active | derived | docs/specs/contract.md |
 | specs.privacy-api | Privacy Api | reference | active | derived | docs/specs/privacy-api.md |
 | specs.privacy-ui | Privacy Ui | reference | active | derived | docs/specs/privacy-ui.md |
@@ -73,6 +79,7 @@ Generated automatically. Do not edit.
 | ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | This document is the canonical source of truth for the UI implementation roadmap. | docs/blueprints/ui-roadmap.md |
 | ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | state-machine-contract | docs/blueprints/ui-state-machine.md |
 | versionierungs-blaupause | Weltgewebe Deploy-Versionierung und Browser-Aktualität | blueprint | draft | normative | docs/blueprints/versionierungs-blaupause.md |
+| versionierungs-statusgrundlage | Weltgewebe – Versionierungs-Statusgrundlage | blueprint | active | normative | docs/blueprints/versionierungs-statusgrundlage.md |
 | weltgewebe-agenten-manifest | Weltgewebe Agenten Manifest | reference | active | derived | docs/weltgewebe-agenten-manifest.md |
 | x-repo.peers-learnings | Peers Learnings | reference | active | derived | docs/x-repo/peers-learnings.md |
 | x-repo.semantAH | Semantah | reference | active | derived | docs/x-repo/semantAH.md |
