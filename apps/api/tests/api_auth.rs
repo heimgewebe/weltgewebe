@@ -1145,7 +1145,10 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
     let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
 
     assert_eq!(body_json["authenticated"], false);
-    assert!(body_json.get("expires_at").is_none() || body_json["expires_at"].is_null());
+    assert!(
+        body_json.get("expires_at").is_none(),
+        "expires_at must be completely omitted"
+    );
     assert!(
         body_json.get("device_id").is_none(),
         "device_id must be completely omitted"
