@@ -35,6 +35,7 @@
 
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isFilterOpen) return;
+    // Respect capture-phase handlers (e.g. Garnrolle menu) that own this Escape
     if (e.defaultPrevented) return;
     if (e.key === 'Escape') {
       closeFilter();
