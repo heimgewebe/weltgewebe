@@ -1,10 +1,12 @@
 ---
 id: adr.ADR-0004__fahrplan-verweis
-title: Adr 0004__Fahrplan Verweis
+title: ADR-0004 — Fahrplan-Verweis
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Entscheidung zur Verknüpfung des Fahrplans mit der Architekturplanung.
+related_docs:
+  - docs/process/fahrplan.md
 ---
 # ADR-0004 — Fahrplan als kanonischer Verweis
 

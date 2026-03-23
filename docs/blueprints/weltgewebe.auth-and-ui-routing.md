@@ -1,10 +1,13 @@
 ---
 id: blueprints.weltgewebe.auth-and-ui-routing
-title: Weltgewebe.Auth And Ui Routing
+title: Auth und UI-Routing
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Blaupause für Auth-Integration und UI-Routing im Weltgewebe.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/blueprints/ui-blaupause.md
 ---
 # Blueprint: Heim-first Auth & UI Routing
 

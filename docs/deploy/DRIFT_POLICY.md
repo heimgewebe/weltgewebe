@@ -1,10 +1,13 @@
 ---
 id: deploy.DRIFT_POLICY
-title: Drift_Policy
+title: Drift Policy
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Richtlinie zur Erkennung und Behandlung von Deployment-Drift.
+related_docs:
+  - docs/deploy/README.md
+  - docs/deployment.md
 ---
 # Drift-Taxonomie & Guard-Policy
 

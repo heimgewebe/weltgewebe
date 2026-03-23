@@ -5,6 +5,10 @@ doc_type: reference
 status: active
 canonicality: derived
 summary: Beschreibt Login-, Wiederkehr-, Step-up- und Geräteverwaltungsflüsse für die Auth-UI.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/specs/auth-api.md
+  - docs/specs/auth-state-machine.md
 ---
 
 # Auth UI Spec

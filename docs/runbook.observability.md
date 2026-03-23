@@ -6,6 +6,8 @@ status: active
 canonicality: canonical
 summary: >
   Runbook für Systembeobachtung und Metriken.
+related_docs:
+  - docs/runbook.md
 ---
 ## Observability – Local Profile
 

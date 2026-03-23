@@ -1,10 +1,13 @@
 ---
 id: specs.privacy-ui
-title: Privacy Ui
+title: Privacy UI
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: UI-Spezifikation für datenschutzrelevante Oberflächen und Interaktionen.
+related_docs:
+  - docs/specs/privacy-api.md
+  - docs/konzepte/garnrolle-und-verortung.md
 ---
 # Privacy UI (ADR-0003)
 

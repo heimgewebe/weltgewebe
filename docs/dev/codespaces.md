@@ -4,7 +4,10 @@ title: Codespaces
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Anleitung zur Entwicklung in GitHub Codespaces.
+related_docs:
+  - docs/quickstart-gate-c.md
+  - docs/runbooks/codespaces-recovery.md
 ---
 # Codespaces: Dev-Server schnell starten
 

@@ -1,10 +1,12 @@
 ---
 id: deploy.CHANGELOG
-title: Changelog
+title: Deploy Changelog
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Änderungsprotokoll der Deployment-Konfiguration.
+related_docs:
+  - docs/deploy/README.md
 ---
 # Deployment-Änderungsprotokoll
 

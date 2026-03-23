@@ -1,10 +1,13 @@
 ---
 id: deploy.heim-first-phase0
-title: Heim First Phase0
+title: Heim-First Phase 0
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Phase-0-Planung für den Heim-First-Deployment-Ansatz.
+related_docs:
+  - docs/deploy/README.md
+  - docs/deploy/heimserver.deployment.md
 ---
 # Heim-first UI (Phase 0) Deployment
 

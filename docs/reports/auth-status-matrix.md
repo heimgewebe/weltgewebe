@@ -5,6 +5,9 @@ doc_type: reference
 status: active
 canonicality: canonical
 summary: Wahrheitsfilter und Statusmatrix der Auth-Architektur (Alt-/Ist-Linie vs Ziel-/Soll-Linie) zur Erkennung von Architekturdrift.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/blueprints/auth-roadmap.md
 ---
 
 # Auth Status Matrix – Weltgewebe

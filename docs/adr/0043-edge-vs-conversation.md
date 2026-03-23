@@ -1,10 +1,13 @@
 ---
 id: adr.0043-edge-vs-conversation
-title: 0043 Edge Vs Conversation
+title: ADR-0043 — Edge vs. Conversation
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Entscheidung zur Abgrenzung von Edge- und Conversation-Entitäten im Domänenmodell.
+related_docs:
+  - docs/domain/vocabulary.md
+  - docs/datenmodell.md
 ---
 # ADR 0043: Begriffsvereinheitlichung edge vs conversation
 

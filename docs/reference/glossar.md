@@ -4,7 +4,9 @@ title: Glossar
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Schnellreferenz der zentralen Begriffe im Weltgewebe-Projekt.
+related_docs:
+  - docs/domain/vocabulary.md
 ---
 # Glossar
 

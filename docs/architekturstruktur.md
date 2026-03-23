@@ -6,6 +6,10 @@ status: active
 canonicality: canonical
 summary: >
   Kurzbeschreibung der Architektur und Struktur.
+related_docs:
+  - docs/techstack.md
+  - docs/datenmodell.md
+  - docs/vision.md
 ---
 # Architektur & Struktur
 

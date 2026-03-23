@@ -1,10 +1,13 @@
 ---
 id: blueprints.weltgewebe.deploy.plan
-title: Weltgewebe.Deploy.Plan
+title: Deploy-Plan
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Deployment-Planungsdokument für das Weltgewebe.
+related_docs:
+  - docs/deployment.md
+  - docs/deploy/README.md
 ---
 # Migrationsplan: Heim-first Deployment (Phase 0)
 

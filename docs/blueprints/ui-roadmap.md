@@ -5,6 +5,9 @@ doc_type: blueprint
 status: canonical
 canonicality: This document is the canonical source of truth for the UI implementation roadmap.
 summary: Konkrete Priorisierung und Meilensteinplanung für den Ausbau der Weltgewebe UI.
+related_docs:
+  - docs/blueprints/ui-blaupause.md
+  - docs/blueprints/ui-state-machine.md
 ---
 
 # Weltgewebe UI Roadmap

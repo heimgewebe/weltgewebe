@@ -5,6 +5,9 @@ doc_type: blueprint
 status: canonical
 canonicality: "state-machine-contract"
 summary: Kanonische Zustandsmaschine der Weltgewebe-UI und verbindliche Implementierungsregeln.
+related_docs:
+  - docs/blueprints/ui-blaupause.md
+  - docs/blueprints/ui-roadmap.md
 ---
 
 # Weltgewebe UI State Machine

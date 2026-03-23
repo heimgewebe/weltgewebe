@@ -5,6 +5,10 @@ doc_type: reference
 status: active
 canonicality: canonical
 summary: Beschreibt die kanonischen Zustände und Transitionen des Weltgewebe-Auth-Systems.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/specs/auth-api.md
+  - docs/specs/auth-ui.md
 ---
 
 # Auth State Machine

@@ -4,7 +4,9 @@ title: Bash Tooling Guidelines
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Richtlinien für Shell-Skripting und Bash-Tooling im Projekt.
+related_docs:
+  - docs/process/README.md
 ---
 # Bash-Tooling-Richtlinien
 

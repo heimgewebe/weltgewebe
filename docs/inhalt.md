@@ -4,7 +4,10 @@ title: Inhalt
 doc_type: reference
 status: active
 canonicality: canonical
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Konzeptuelle Beschreibung des Weltgewebe – Funktionsweise, UI, Organisation.
+related_docs:
+  - docs/vision.md
+  - docs/zusammenstellung.md
 ---
 # Inhalt (MANDATORISCH)
 

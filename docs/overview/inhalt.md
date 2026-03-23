@@ -1,10 +1,13 @@
 ---
 id: overview.inhalt
-title: Inhalt
+title: Inhalt (Übersicht)
 doc_type: reference
 status: active
 canonicality: canonical
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Überblicksdarstellung des Weltgewebe-Inhalts und der Projektstruktur.
+related_docs:
+  - docs/inhalt.md
+  - docs/vision.md
 ---
 # Einführung: Ethik- & UX-First-Startpunkt
 

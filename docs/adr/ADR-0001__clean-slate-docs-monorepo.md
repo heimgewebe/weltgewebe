@@ -1,10 +1,12 @@
 ---
 id: adr.ADR-0001__clean-slate-docs-monorepo
-title: Adr 0001__Clean Slate Docs Monorepo
+title: ADR-0001 — Clean Slate und Docs-Monorepo
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Entscheidung für Clean-Slate-Ansatz und Docs-Monorepo-Struktur.
+related_docs:
+  - docs/architekturstruktur.md
 ---
 # ADR-0001 — Clean-Slate als Docs-Monorepo
 

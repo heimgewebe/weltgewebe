@@ -5,6 +5,8 @@ doc_type: blueprint
 status: active
 canonicality: normative
 summary: "Belastbare Arbeitsgrundlage und Ist-Stand-Dokumentation für alle Folgeschritte zur Weltgewebe-Versionierung."
+related_docs:
+  - docs/blueprints/versionierungs-blaupause.md
 ---
 
 # Weltgewebe – Versionierungs-Statusgrundlage

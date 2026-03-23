@@ -4,7 +4,9 @@ title: Fahrplan
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Zeitlicher Ablauf und Meilensteine des Projekts (Gates A–D).
+related_docs:
+  - docs/process/README.md
 ---
 # Fahrplan
 

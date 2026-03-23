@@ -5,6 +5,11 @@ doc_type: reference
 status: active
 canonicality: canonical
 summary: Beschreibt das kanonische Auth-Modell aus Magic Link, persistenter Session, optionalem Passkey und Step-up Auth.
+related_docs:
+  - docs/blueprints/auth-roadmap.md
+  - docs/reports/auth-status-matrix.md
+  - docs/specs/auth-blueprint.md
+  - docs/adr/ADR-0005-auth.md
 ---
 
 # ADR-0006 — Auth: Magic Link + Session + optionaler Passkey

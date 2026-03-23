@@ -4,7 +4,10 @@ title: Orientierung
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Governance-Orientierung und Leitprinzipien für das Weltgewebe-Projekt.
+related_docs:
+  - docs/vision.md
+  - docs/weltgewebe-agenten-manifest.md
 ---
 # Leitfaden · Ethik & Systemdesign (Weltgewebe)
 

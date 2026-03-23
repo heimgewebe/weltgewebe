@@ -4,7 +4,10 @@ title: Codespaces Recovery
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Wiederherstellungsanleitung für GitHub-Codespaces-Umgebungen.
+related_docs:
+  - docs/runbooks/README.md
+  - docs/dev/codespaces.md
 ---
 # Codespaces Recovery
 

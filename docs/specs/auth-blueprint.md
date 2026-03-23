@@ -4,7 +4,11 @@ title: Auth Blueprint
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Ältere Implementierungslinie für Auth (an ADR-0005 gebunden), abgelöst durch ADR-0006.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/adr/ADR-0005-auth.md
+  - docs/blueprints/auth-roadmap.md
 ---
 # Blaupause: Schrittweise Implementierung von Account- und Login-Logik im Weltgewebe
 

@@ -6,6 +6,10 @@ status: active
 canonicality: canonical
 summary: >
   Allgemeines operatives Runbook.
+related_docs:
+  - docs/runbook.observability.md
+  - docs/deployment.md
+  - docs/deploy/README.md
 ---
 ## Runbook
 

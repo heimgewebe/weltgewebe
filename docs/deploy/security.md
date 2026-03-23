@@ -11,6 +11,9 @@ last_reviewed: 2026-03-06
 depends_on: []
 verifies_with: []
 audit_gaps: []
+related_docs:
+  - docs/deployment.md
+  - docs/deploy/README.md
 ---
 
 ## Deploy Security

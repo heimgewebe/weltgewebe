@@ -4,7 +4,10 @@ title: Quickstart Gate C
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Schnellstart-Anleitung für den Gate-C-Dev-Stack.
+related_docs:
+  - docs/process/fahrplan.md
+  - docs/dev/codespaces.md
 ---
 # Quickstart · Gate C (Dev-Stack)
 

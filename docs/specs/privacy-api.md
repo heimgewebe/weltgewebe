@@ -1,10 +1,13 @@
 ---
 id: specs.privacy-api
-title: Privacy Api
+title: Privacy API
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: API-Spezifikation für datenschutzrelevante Endpunkte.
+related_docs:
+  - docs/specs/privacy-ui.md
+  - docs/konzepte/garnrolle-und-verortung.md
 ---
 # Privacy API (ADR-0003)
 

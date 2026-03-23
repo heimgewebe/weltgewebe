@@ -1,10 +1,12 @@
 ---
 id: deploy.vps
-title: Vps
+title: VPS-Deployment
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Dokumentation zum VPS-basierten Deployment.
+related_docs:
+  - docs/deploy/README.md
 ---
 # VPS Deployment Runbook
 

@@ -4,7 +4,9 @@ title: Sprache
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Sprachrichtlinien und Konventionen für Dokumentation und Kommunikation.
+related_docs:
+  - docs/process/README.md
 ---
 # Sprache & Ton im Weltgewebe
 

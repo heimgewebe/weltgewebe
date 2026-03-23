@@ -5,6 +5,9 @@ doc_type: concept
 status: active
 canonicality: canonical
 summary: "Kanonisches Konzept für Garnrolle, Verortung, Ungenauigkeitsradius und Rolle ohne Namen bei der Accounterstellung im Weltgewebe."
+related_docs:
+  - docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
+  - docs/konzepte/garnrolle.md
 ---
 
 # Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen

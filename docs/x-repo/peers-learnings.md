@@ -4,7 +4,9 @@ title: Peers Learnings
 doc_type: reference
 status: active
 canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Erkenntnisse und Learnings aus verwandten Peer-Projekten.
+related_docs:
+  - docs/x-repo/semantAH.md
 ---
 
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil

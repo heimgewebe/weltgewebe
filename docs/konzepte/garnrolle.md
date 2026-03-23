@@ -5,6 +5,8 @@ doc_type: reference
 status: deprecated
 canonicality: derived
 summary: Veraltetes Dokument. Bitte docs/konzepte/garnrolle-und-verortung.md nutzen.
+supersedes:
+  - docs/konzepte/garnrolle-und-verortung.md
 ---
 # Garnrolle (Veraltet)
 

@@ -6,6 +6,9 @@ status: active
 canonicality: canonical
 summary: >
   Dokumentation des verwendeten Technologie-Stacks.
+related_docs:
+  - docs/architekturstruktur.md
+  - docs/datenmodell.md
 ---
 Weltgewebe Tech Stack
 

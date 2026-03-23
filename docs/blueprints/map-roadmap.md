@@ -6,6 +6,8 @@ status: draft
 canonicality: canonical
 summary: >
   Roadmap zur schrittweisen operativen Umsetzung der souveränen Basemap-Architektur.
+related_docs:
+  - docs/blueprints/map-blaupause.md
 ---
 
 # Basemap-Umsetzungsroadmap

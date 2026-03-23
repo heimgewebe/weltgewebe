@@ -7,6 +7,10 @@ canonicality: canonical
 summary: >
   Exekutive Roadmap zur schrittweisen Kanonisierung, Verifikation und
   Vollendung der Auth-Architektur im Weltgewebe.
+related_docs:
+  - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - docs/reports/auth-status-matrix.md
+  - docs/specs/auth-blueprint.md
 ---
 
 # Auth Roadmap – Weltgewebe
