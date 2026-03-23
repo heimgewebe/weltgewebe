@@ -151,6 +151,8 @@ async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"any"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -285,6 +287,8 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -447,6 +451,8 @@ async fn auth_login_fails_from_remote_without_allow_flag() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -470,6 +476,8 @@ async fn auth_login_succeeds_from_remote_with_allow_flag() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -1201,6 +1209,211 @@ async fn session_endpoint_authenticated() -> Result<()> {
         body_json.get("device_id").is_none(),
         "device_id must be completely omitted"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_session_refresh_success() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+    let mut account_map = BTreeMap::new();
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u-admin".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(RwLock::new(account_map));
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    // 1. Login to get a session cookie
+    let req = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let set_cookie = res.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie = set_cookie.split(';').next().unwrap();
+    assert!(set_cookie.contains("Secure"));
+    assert!(set_cookie.contains("HttpOnly"));
+    assert!(set_cookie.contains("SameSite=Lax"));
+
+    // 2. Refresh session
+    let req_refresh = Request::post("/auth/session/refresh")
+        .header("Cookie", session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_refresh = app.clone().oneshot(req_refresh).await?;
+    assert_eq!(res_refresh.status(), StatusCode::OK);
+
+    // Verify new cookie is set
+    let refresh_set_cookie = res_refresh
+        .headers()
+        .get("Set-Cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let new_session_cookie = refresh_set_cookie.split(';').next().unwrap();
+    assert!(refresh_set_cookie.contains("Secure"));
+    assert!(refresh_set_cookie.contains("HttpOnly"));
+    assert!(refresh_set_cookie.contains("SameSite=Lax"));
+    assert_ne!(
+        session_cookie, new_session_cookie,
+        "Session cookie should be rotated"
+    );
+
+    let body_bytes = body::to_bytes(res_refresh.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["authenticated"], true);
+    assert!(body["expires_at"].is_string());
+
+    // 3. Old cookie should now be invalid
+    let req_old = Request::get("/auth/session")
+        .header("Cookie", session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_old = app.clone().oneshot(req_old).await?;
+    let old_body_bytes = body::to_bytes(res_old.into_body(), usize::MAX).await?;
+    let old_body: serde_json::Value = serde_json::from_slice(&old_body_bytes).unwrap();
+    assert_eq!(old_body["authenticated"], false);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_session_refresh_invalid_token() -> Result<()> {
+    let state = test_state()?;
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    // Refresh with no cookie
+    let req = Request::post("/auth/session/refresh")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body["error"], "SESSION_EXPIRED");
+
+    // Refresh with invalid cookie
+    let req2 = Request::post("/auth/session/refresh")
+        .header("Cookie", "weltgewebe_session=invalid-session-id")
+        .body(body::Body::empty())?;
+
+    let res2 = app.clone().oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::UNAUTHORIZED);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_session_refresh_csrf_rejected() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+    let mut account_map = BTreeMap::new();
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u-admin".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(RwLock::new(account_map));
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .with_state(state.clone());
+
+    // 1. Login to get a session cookie
+    let req = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let set_cookie = res.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie = set_cookie.split(';').next().unwrap();
+
+    // 2. Refresh session without Origin/Referer (CSRF failure)
+    let req_refresh = Request::post("/auth/session/refresh")
+        .header("Cookie", session_cookie)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_refresh = app.clone().oneshot(req_refresh).await?;
+    assert_eq!(res_refresh.status(), StatusCode::FORBIDDEN); // CSRF blocks it
 
     Ok(())
 }

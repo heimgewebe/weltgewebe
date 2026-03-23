@@ -57,15 +57,18 @@
     },
     "session_refresh": {
       "soll": "POST /auth/session/refresh",
-      "ist": "gegen neuen Zielrahmen noch nicht verifiziert",
-      "status": "Offen",
+      "ist": "Ein erster Codepfad für /auth/session/refresh existiert und testet die Invalidation der Session, aber der vollumfängliche Zielrahmen (Split Access/Refresh Token) ist noch nicht gedeckt.",
+      "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "Routen-Code",
-        "Test-Case"
+        "Echte E2E Persistenz",
+        "Vollständiger Token-Split (Access/Refresh)"
       ],
       "risk": "hoch",
-      "code_runtime_evidence": []
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/api/tests/api_auth.rs"
+      ]
     },
     "logout": {
       "soll": "POST /auth/logout",
