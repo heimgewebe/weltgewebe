@@ -910,9 +910,33 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
         let old_session_id = cookie.value();
 
         if let Some(old_session) = state.sessions.get(old_session_id) {
+            let accounts_map = state.accounts.read().await;
+            let is_valid = accounts_map
+                .get(&old_session.account_id)
+                .map_or(false, |acc| !acc.public.disabled);
+            drop(accounts_map);
+
             state.sessions.delete(old_session_id);
 
+            if !is_valid {
+                tracing::warn!(
+                    event = "session.refresh_failed_disabled",
+                    account_id = %old_session.account_id,
+                    "Session refresh failed: Account disabled or deleted"
+                );
+
+                let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+                let err_payload = serde_json::json!({"error": "SESSION_EXPIRED"});
+                return (
+                    axum::http::StatusCode::UNAUTHORIZED,
+                    jar.add(cookie),
+                    Json(err_payload),
+                )
+                    .into_response();
+            }
+
             let new_session = state.sessions.create(old_session.account_id);
+
             let new_cookie = build_session_cookie(new_session.id, None);
 
             let status = SessionStatus {
