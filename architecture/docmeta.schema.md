@@ -1,5 +1,7 @@
 ---
 id: docmeta.schema
+title: Docmeta Schema
+summary: Schema-Definition und Konventionen für Frontmatter-Metadaten in kanonischen Entry-Docs.
 role: norm
 organ: docmeta
 status: canonical

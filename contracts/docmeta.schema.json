@@ -1,10 +1,78 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Unified DocMeta schema for all repo documents (zone and docs/).",
   "type": "object",
   "properties": {
     "id": {
       "type": "string",
       "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "canonical",
+        "active",
+        "deprecated",
+        "draft"
+      ]
+    },
+    "doc_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "canonicality": {
+      "type": "string",
+      "description": "Legacy field. Use status instead. Will be phased out."
+    },
+    "related_docs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Related document paths (repo-root-relative) for cross-linking and backlink generation."
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "depends_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "implemented_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deprecated_by": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "role": {
       "type": "string",
@@ -13,34 +81,25 @@
         "reality",
         "runbooks",
         "action"
-      ]
+      ],
+      "description": "Zone-specific: document role within the zone hierarchy."
     },
     "organ": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[a-z0-9-]+$"
-    },
-    "status": {
-      "type": "string",
-      "enum": [
-        "canonical"
-      ]
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Zone-specific: organizational unit."
     },
     "last_reviewed": {
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
-    "depends_on": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "verifies_with": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "description": "Zone-specific: scripts that verify this document."
     },
     "audit_gaps": {
       "type": "array",
@@ -51,11 +110,9 @@
   },
   "required": [
     "id",
-    "role",
+    "title",
     "status",
-    "last_reviewed",
-    "depends_on",
-    "verifies_with"
+    "summary"
   ],
   "additionalProperties": false
 }

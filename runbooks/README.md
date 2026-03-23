@@ -1,5 +1,7 @@
 ---
 id: runbooks.readme
+title: Runbooks
+summary: Operative Runbooks für Betrieb, Wartung und Fehlerbehebung.
 role: runbooks
 organ: ops
 status: canonical

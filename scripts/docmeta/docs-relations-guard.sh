@@ -31,7 +31,7 @@ with open(file_path, 'r', encoding='utf-8') as f:
             break
         frontmatter.append(line)
 
-required_fields = ['id:', 'title:', 'doc_type:', 'status:', 'canonicality:', 'summary:']
+required_fields = ['id:', 'title:', 'status:', 'summary:']
 fm_str = ''.join(frontmatter)
 
 missing = []

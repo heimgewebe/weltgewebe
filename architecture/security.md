@@ -1,5 +1,7 @@
 ---
 id: security
+title: Security Architecture
+summary: Sicherheitsarchitektur, Bedrohungsmodell und Schutzmechanismen.
 role: norm
 organ: governance
 status: canonical
