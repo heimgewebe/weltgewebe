@@ -169,6 +169,22 @@ _Keine Lücken erkannt._
 - relates_to → `docs/deployment_governance.md`
 - relates_to → `docs/runbook.md`
 
+### Positive Beispiele (Orientierung)
+
+> Dokumente, die mehrere Relationstypen nutzen — als Vorbild für differenzierte Modellierung.
+
+- `docs/konzepte/garnrolle-und-verortung.md` — 2× relates_to, 1× supersedes
+
+### Entwicklung (Delta)
+
+_Kein Vergleich mit vorherigem Lauf verfügbar oder keine Änderung._
+
+### Prüfhinweis bei Änderungen
+
+> Bei Änderungen an diesen Dokumenten: prüfe aktiv, ob relates_to präzisiert werden kann.
+
+- `docs/deploy/README.md`
+
 ### Hinweise
 
 - Alle Ergebnisse sind heuristisch und dienen der Sichtbarmachung.

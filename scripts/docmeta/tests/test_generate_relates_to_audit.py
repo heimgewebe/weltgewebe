@@ -10,6 +10,10 @@ from scripts.docmeta.generate_relates_to_audit import (
     generate_system_dominance_warning,
     find_extreme_dominance_docs,
     collect_negative_examples,
+    parse_previous_stats,
+    compute_delta,
+    find_positive_examples,
+    generate_review_hint,
     DOMINANCE_RATIO,
     MIN_RELATIONS_FOR_DOMINANCE,
     MIN_RELATIONS_FOR_DIRECTION,
@@ -359,6 +363,152 @@ class TestCollectNegativeExamples(unittest.TestCase):
         }
         result = collect_negative_examples(edges, doc_counts, max_examples=2)
         self.assertEqual(result[0][0], "b.md")
+
+
+class TestParsePreviousStats(unittest.TestCase):
+    """Tests for parsing previous audit file stats."""
+
+    def test_nonexistent_file(self):
+        result = parse_previous_stats("/nonexistent/path/file.md")
+        self.assertIsNone(result)
+
+    def test_parse_valid_content(self):
+        import tempfile, os
+        content = (
+            "| Relationen gesamt | 140 |\n"
+            "| — relates_to | 139 |\n"
+            "| relates_to Anteil | 99% |\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            result = parse_previous_stats(path)
+            self.assertIsNotNone(result)
+            self.assertEqual(result["total"], 140)
+            self.assertEqual(result["relates_to"], 139)
+            self.assertEqual(result["relates_to_pct"], 99)
+        finally:
+            os.unlink(path)
+
+    def test_incomplete_content_returns_none(self):
+        import tempfile, os
+        content = "| some unrelated | content |\n"
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".md", delete=False) as f:
+            f.write(content)
+            path = f.name
+        try:
+            result = parse_previous_stats(path)
+            self.assertIsNone(result)
+        finally:
+            os.unlink(path)
+
+
+class TestComputeDelta(unittest.TestCase):
+    """Tests for delta computation between runs."""
+
+    def test_no_previous(self):
+        result = compute_delta(140, 139, None)
+        self.assertIsNone(result)
+
+    def test_no_change(self):
+        prev = {"total": 140, "relates_to": 139}
+        result = compute_delta(140, 139, prev)
+        self.assertEqual(result["total_delta"], 0)
+        self.assertEqual(result["rt_delta"], 0)
+        self.assertIsNone(result["message"])
+
+    def test_growth_with_warning(self):
+        prev = {"total": 100, "relates_to": 95}
+        result = compute_delta(110, 105, prev)
+        self.assertEqual(result["total_delta"], 10)
+        self.assertEqual(result["rt_delta"], 10)
+        self.assertIsNotNone(result["message"])
+        self.assertIn("steigt", result["message"])
+
+    def test_growth_without_warning(self):
+        prev = {"total": 100, "relates_to": 90}
+        # 5 new rels: 2 relates_to, 3 others = 40% rt ratio — no warning
+        result = compute_delta(105, 92, prev)
+        self.assertEqual(result["total_delta"], 5)
+        self.assertEqual(result["rt_delta"], 2)
+        self.assertIsNone(result["message"])
+
+    def test_decrease(self):
+        prev = {"total": 150, "relates_to": 145}
+        result = compute_delta(140, 139, prev)
+        self.assertEqual(result["total_delta"], -10)
+        self.assertEqual(result["rt_delta"], -6)
+
+
+class TestFindPositiveExamples(unittest.TestCase):
+    """Tests for positive example detection."""
+
+    def test_empty(self):
+        result = find_positive_examples({}, [])
+        self.assertEqual(result, [])
+
+    def test_single_type_excluded(self):
+        doc_counts = {
+            "a.md": {"relates_to": 5, "depends_on": 0, "supersedes": 0, "total": 5},
+        }
+        result = find_positive_examples(doc_counts, [])
+        self.assertEqual(result, [])
+
+    def test_two_types_detected(self):
+        doc_counts = {
+            "a.md": {"relates_to": 3, "depends_on": 2, "supersedes": 0, "total": 5},
+        }
+        result = find_positive_examples(doc_counts, [])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], "a.md")
+        self.assertIn("relates_to", result[0][1])
+        self.assertIn("depends_on", result[0][1])
+
+    def test_three_types_detected(self):
+        doc_counts = {
+            "a.md": {"relates_to": 2, "depends_on": 1, "supersedes": 1, "total": 4},
+        }
+        result = find_positive_examples(doc_counts, [])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0][1]), 3)
+
+    def test_sorted_by_total(self):
+        doc_counts = {
+            "a.md": {"relates_to": 1, "depends_on": 1, "supersedes": 0, "total": 2},
+            "b.md": {"relates_to": 3, "depends_on": 2, "supersedes": 0, "total": 5},
+        }
+        result = find_positive_examples(doc_counts, [])
+        self.assertEqual(result[0][0], "b.md")
+
+
+class TestGenerateReviewHint(unittest.TestCase):
+    """Tests for review hint generation."""
+
+    def test_empty(self):
+        result = generate_review_hint([], [])
+        self.assertEqual(result, [])
+
+    def test_from_extreme_docs(self):
+        extreme = [("a.md", 5, 5, 1.0)]
+        result = generate_review_hint(extreme, [])
+        self.assertEqual(result, ["a.md"])
+
+    def test_from_direction_candidates(self):
+        candidates = [("b.md", 5)]
+        result = generate_review_hint([], candidates)
+        self.assertEqual(result, ["b.md"])
+
+    def test_deduplication(self):
+        extreme = [("a.md", 5, 5, 1.0)]
+        candidates = [("a.md", 5)]
+        result = generate_review_hint(extreme, candidates)
+        self.assertEqual(result, ["a.md"])
+
+    def test_sorted(self):
+        extreme = [("c.md", 5, 5, 1.0), ("a.md", 5, 5, 1.0)]
+        result = generate_review_hint(extreme, [])
+        self.assertEqual(result, ["a.md", "c.md"])
 
 
 if __name__ == "__main__":
