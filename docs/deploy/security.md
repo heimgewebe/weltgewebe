@@ -5,12 +5,6 @@ doc_type: architecture
 status: active
 canonicality: canonical
 summary: Security configuration and CSP rules for deployment.
-role: reality
-organ: deploy
-last_reviewed: 2026-03-06
-depends_on: []
-verifies_with: []
-audit_gaps: []
 related_docs:
   - docs/deployment.md
   - docs/deploy/README.md

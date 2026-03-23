@@ -48,6 +48,37 @@ if missing:
     print(f'ERROR: Frontmatter missing fields {missing} in {file_path}')
     sys.exit(1)
 
+# Reject placeholder summaries that carry no real information
+placeholder_patterns = [
+    'Automatisch hinzugefügtes Frontmatter',
+    'TODO',
+    'FIXME',
+    'PLACEHOLDER',
+]
+summary_value = ''
+in_summary = False
+for line in frontmatter:
+    stripped = line.strip()
+    if stripped.startswith('summary:'):
+        val = stripped[len('summary:'):].strip()
+        if val == '>':
+            in_summary = True
+            continue
+        summary_value = val.strip('\"').strip(\"'\")
+        break
+    elif in_summary:
+        if stripped and not stripped.startswith(('-', '[')):
+            if ':' in stripped and not stripped.startswith(' '):
+                break
+            summary_value += stripped
+        else:
+            break
+
+for pattern in placeholder_patterns:
+    if pattern.lower() in summary_value.lower():
+        print(f'ERROR: Placeholder summary detected in {file_path}: \"{summary_value}\"')
+        sys.exit(1)
+
 sys.exit(0)
 " "$file" || FAIL=1
 

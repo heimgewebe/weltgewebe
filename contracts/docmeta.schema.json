@@ -47,14 +47,6 @@
       "items": {
         "type": "string"
       }
-    },
-    "related_docs": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "List of related document paths (relative to repo root) for cross-linking and backlink generation."
     }
   },
   "required": [
