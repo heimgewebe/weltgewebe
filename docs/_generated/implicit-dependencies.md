@@ -24,10 +24,10 @@ Generated automatically. Do not edit.
 | Makefile (docs-guard) | scripts.docmeta.generate_audit_gaps | `python3 -m scripts.docmeta.generate_audit_gaps` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.check_links | `python3 -m scripts.docmeta.check_links` | *unclear* |
 | Makefile (docs-guard) | scripts/docmeta/generate-doc-index.sh | `bash scripts/docmeta/generate-doc-index.sh` | *unclear* |
-| Makefile (docs-guard) | scripts/docmeta/generate-backlinks.sh | `bash scripts/docmeta/generate-backlinks.sh` | *unclear* |
+| Makefile (docs-guard) | scripts.docmeta.generate_backlinks | `python3 -m scripts.docmeta.generate_backlinks` | *unclear* |
 | Makefile (docs-guard) | scripts/docmeta/generate-impl-index.sh | `bash scripts/docmeta/generate-impl-index.sh` | *unclear* |
-| Makefile (docs-guard) | scripts/docmeta/orphan-guard.sh | `bash scripts/docmeta/orphan-guard.sh` | *unclear* |
-| Makefile (docs-guard) | scripts/docmeta/generate-supersession-map.sh | `bash scripts/docmeta/generate-supersession-map.sh` | *unclear* |
+| Makefile (docs-guard) | scripts.docmeta.generate_orphans | `python3 -m scripts.docmeta.generate_orphans` | *unclear* |
+| Makefile (docs-guard) | scripts.docmeta.generate_supersession_map | `python3 -m scripts.docmeta.generate_supersession_map` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.generate_system_map | `python3 -m scripts.docmeta.generate_system_map` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.generate_architecture_drift | `python3 -m scripts.docmeta.generate_architecture_drift` | *unclear* |
 | Makefile (docs-guard) | scripts.docmeta.generate_doc_coverage | `python3 -m scripts.docmeta.generate_doc_coverage` | *unclear* |

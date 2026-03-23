@@ -18,7 +18,7 @@ import sys
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
-from scripts.docmeta.validate_relations import extract_relations_from_content
+from scripts.docmeta.relations_parser import extract_relations_from_content
 
 MAX_NEGATIVE_EXAMPLES = 3
 

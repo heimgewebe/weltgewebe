@@ -14,6 +14,7 @@ import os
 import sys
 
 from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.relations_parser import extract_relations_from_content
 
 ALLOWED_TYPES = {"relates_to", "depends_on", "supersedes"}
 
@@ -98,77 +99,6 @@ def validate_relations(file_path, frontmatter):
             errors.append(f"{prefix}: unexpected keys {extra_keys}")
 
     return errors
-
-
-def extract_relations_from_content(content):
-    """
-    Parse structured relations[] from YAML frontmatter content string.
-
-    Returns list of dicts preserving ALL keys found per relation entry —
-    not just type/target. This ensures downstream validation can detect
-    unexpected keys, missing keys, and structural issues in real files.
-    """
-    relations = []
-    if not content.startswith("---"):
-        return relations
-
-    parts = content.split("---", 2)
-    if len(parts) < 3:
-        return relations
-
-    fm_str = parts[1]
-    lines = fm_str.strip().split("\n")
-    in_relations = False
-    current_entry = None
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            continue
-
-        # Detect top-level key (not indented)
-        if not line[0:1] in (" ", "\t") and ":" in stripped:
-            key = stripped.split(":")[0].strip()
-            if key == "relations":
-                in_relations = True
-                # Handle inline empty: relations: []
-                val = stripped.split(":", 1)[1].strip()
-                if val == "[]":
-                    in_relations = False
-            else:
-                in_relations = False
-            # Flush pending entry before leaving relations block
-            if current_entry:
-                relations.append(current_entry)
-                current_entry = None
-            continue
-
-        if in_relations:
-            if stripped.startswith("- "):
-                # New list item — flush previous entry
-                if current_entry:
-                    relations.append(current_entry)
-                    current_entry = None
-
-                item = stripped[2:]  # strip leading "- "
-                if ":" in item:
-                    key = item.split(":", 1)[0].strip()
-                    val = item.split(":", 1)[1].strip()
-                    current_entry = {key: val}
-                else:
-                    # Bare list item (not a dict) — record as non-dict entry
-                    relations.append(item)
-            elif ":" in stripped and current_entry is not None:
-                # Continuation key within the current dict entry
-                key = stripped.split(":", 1)[0].strip()
-                val = stripped.split(":", 1)[1].strip()
-                current_entry[key] = val
-
-    # Flush any pending entry
-    if current_entry:
-        relations.append(current_entry)
-
-    return relations
 
 
 def main():

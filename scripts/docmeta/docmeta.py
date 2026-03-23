@@ -51,6 +51,7 @@ def parse_frontmatter(file_path):
     frontmatter_text = match.group(1)
     data = {}
     current_key = None
+    current_dict_entry = None
 
     for line in frontmatter_text.splitlines():
         # Keep original indentation to identify block lists
@@ -59,8 +60,25 @@ def parse_frontmatter(file_path):
             continue
 
         if line.startswith(' ') and stripped_line.startswith('- ') and current_key:
-            if current_key in ['relations', 'verifies_with', 'audit_gaps']:
-                # It's a block list item
+            if current_key == 'relations':
+                # Flush any pending dict entry
+                if current_dict_entry is not None:
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(current_dict_entry)
+                    current_dict_entry = None
+
+                val = stripped_line[2:].strip()
+                if ':' in val:
+                    # Dict-style list item: "- type: relates_to"
+                    k, v = val.split(':', 1)
+                    current_dict_entry = {k.strip(): v.strip()}
+                else:
+                    # Bare list item
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(val)
+                continue
+            elif current_key in ['verifies_with', 'audit_gaps']:
+                # It's a block list item (string values)
                 val = stripped_line[2:].strip()
                 # Handle quoted strings in lists
                 if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
@@ -73,9 +91,23 @@ def parse_frontmatter(file_path):
                         data[current_key] = [data[current_key], val]
                     else:
                         data[current_key] = [val]
+                continue
+
+        # Handle continuation keys within a relations dict entry
+        if (line.startswith(' ') and current_key == 'relations'
+                and current_dict_entry is not None and ':' in stripped_line
+                and not stripped_line.startswith('- ')):
+            k, v = stripped_line.split(':', 1)
+            current_dict_entry[k.strip()] = v.strip()
             continue
 
         if ':' in line:
+            # Flush pending dict entry before processing new top-level key
+            if current_dict_entry is not None and current_key == 'relations':
+                if isinstance(data.get(current_key), list):
+                    data[current_key].append(current_dict_entry)
+                current_dict_entry = None
+
             key, val = line.split(':', 1)
             key = key.strip()
             val = val.strip()
@@ -102,6 +134,11 @@ def parse_frontmatter(file_path):
                 current_key = None # Scalar completed
 
             data[key] = val
+
+    # Flush any remaining dict entry
+    if current_dict_entry is not None and current_key == 'relations':
+        if isinstance(data.get(current_key), list):
+            data[current_key].append(current_dict_entry)
 
     return data
 

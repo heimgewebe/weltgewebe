@@ -4,9 +4,9 @@ import unittest
 
 from scripts.docmeta.validate_relations import (
     validate_relations,
-    extract_relations_from_content,
     ALLOWED_TYPES,
 )
+from scripts.docmeta.relations_parser import extract_relations_from_content
 
 
 class TestValidateRelations(unittest.TestCase):

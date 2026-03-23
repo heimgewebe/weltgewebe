@@ -16,7 +16,7 @@ import sys
 from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
-from scripts.docmeta.validate_relations import extract_relations_from_content
+from scripts.docmeta.relations_parser import extract_relations_from_content
 
 # Thresholds for heuristic warnings
 HUB_OUTBOUND_THRESHOLD = 8
