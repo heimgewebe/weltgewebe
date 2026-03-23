@@ -47,8 +47,35 @@ export async function mockApiResponses(page: Page): Promise<void> {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+      body: JSON.stringify({
+        version: 8,
+        sources: {
+          basemap: {
+            type: "vector",
+            url: "pmtiles://basemap-hamburg.pmtiles",
+          },
+        },
+        layers: [],
+      }),
     });
+  });
+
+  // Mock PMTiles requests locally to prove the PMTiles integration requests the artifact
+  await page.route("**/local-basemap/*.pmtiles", (route) => {
+    // PMTiles protocol requests bytes via Range headers
+    const req = route.request();
+    if (req.method() === "GET" || req.method() === "HEAD") {
+      route.fulfill({
+        status: 206,
+        headers: {
+          "Accept-Ranges": "bytes",
+          "Content-Range": "bytes 0-16383/512000", // fake minimal metadata chunk
+        },
+        body: "",
+      });
+    } else {
+      route.fulfill({ status: 200 });
+    }
   });
 
   // Track auth state in the mock
