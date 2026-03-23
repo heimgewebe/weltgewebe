@@ -277,6 +277,8 @@ OSM Download
 wget https://download.geofabrik.de/europe-latest.osm.pbf
 ```
 
+> **Hinweis:** Dies ist ein **nicht-deterministischer Quickstart**. Für produktive Builds werden zwingend ein gepinnter Snapshot und eine SHA256-Verifikation benötigt (siehe z.B. `build-hamburg-pmtiles.sh`).
+
 ---
 
 ### Schritt 2
@@ -398,21 +400,41 @@ Basemap ist Artefakt.
 
 Deploy-Strategie:
 
-`/tiles/basemap-current.pmtiles`
+`/local-basemap/basemap-hamburg.pmtiles` (Öffentliche Edge-Route)
+`/local-basemap/basemap-hamburg.meta.json` (Öffentliche Metadaten-Route)
+
+*(Interner Storage-Pfad: `/srv/weltgewebe-basemap/`)*
 
 ---
 
-## 8. Update-Strategie
+## 8. Update- und Publish-Strategie
 
 OSM Updatezyklus:
 
-monatlich
+- **Rhythmus:** Ereignis- oder zeitgetrieben (z. B. monatlich oder bei signifikanten OSM-Diffs/Regionsupdates).
+- **Prozess:** Ein Build-Job (z. B. `build-hamburg-pmtiles.sh`) lädt den definierten OSM-Snapshot (gepinnt via SHA256) herunter und erzeugt das PMTiles-Artefakt.
 
-Pipeline:
+Publish- und Rollback-Strategie (Contract-First):
 
-cron → rebuild tiles → publish artifact
+- **Atomic Switch (PMTiles & Meta):** Neue versionierte Artefakte (z. B. `basemap-hamburg-v2.pmtiles` und `basemap-hamburg-v2.meta.json`) werden zuerst vollständig neben den aktiven Artefakten in das interne Zielverzeichnis (z. B. `/srv/weltgewebe-basemap/`) transferiert.
+- **Verifikation (Der Sentinel Contract):** Die Einsatzbereitschaft wird über die `.meta.json` definiert. Diese Datei darf erst geschrieben werden, nachdem das PMTiles-Artefakt erfolgreich transferiert und geprüft wurde.
+  - Das Schema der `.meta.json` **muss** folgende Felder enthalten, um als Contract zu gelten:
+    - `version`: Version des Builds
+    - `artifact_name`: z. B. "basemap-hamburg-v2.pmtiles"
+    - `sha256`: Hash der generierten `.pmtiles` Datei
+    - `size_bytes`: Dateigröße
+    - `status`: `"ready"` oder `"invalid"`
+  - **Hinweis zum Architektur-Drift:** Das aktuelle System (siehe `scripts/basemap/build-hamburg-pmtiles.sh`) ist derzeit **nicht contract-konform**. Es nutzt ein abweichendes Feld (`artifact` statt `artifact_name`) und generiert aktuell KEIN `sha256`, `size_bytes` oder `status`. Eine Anpassung der Skripte ist operativ erforderlich; dieser Contract bleibt die normative Referenz.
+- **Aktivierung:** Der duale Symlink-Switch (oder die atomare Dateiumbenennung) darf **ausschließlich** erfolgen, wenn die `.meta.json` validiert wurde (`status == "ready"`, Hash/Size stimmen). Die Aktualisierung der Aliase muss zwingend in dieser sicheren, sequenziellen Reihenfolge erfolgen:
+  1. `ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles` (Zuerst das Tile-Artefakt)
+  2. `ln -sfn basemap-hamburg-v2.meta.json basemap-hamburg.meta.json` (IMMER zuletzt den Meta-Alias)
 
----
+  *Begründung:* Dies verhindert Race Conditions, bei denen der Meta-Alias bereits auf `v2` zeigt (und Einsatzbereitschaft signalisiert), das PMTiles-Artefakt aber noch `v1` liefert. Der Meta-Alias fungiert als finaler Freigabe-Sentinel.
+- **Rollback:** Bei Laufzeit-Anomalien werden beide Symlinks/Aliase sofort auf das vorherige, intakte Paar (z. B. `v1`) zurückgesetzt. Konkrete Rollback-Trigger können sein:
+  - Erhöhte HTTP-Fehlerquote (z. B. 404/500 auf der Edge-Route)
+  - Fehlgeschlagene Range-Responses (PMTiles Client fordert Bytes an, Server liefert unvollständig)
+  - MapLibre Client-Init-Fehler (Sichtbarkeit/Ladezeit überschreitet Timeout)
+  Alte Artefakte verbleiben für eine Karenzzeit von mindestens 14 Tagen im Storage.
 
 ## 9. Performance
 
