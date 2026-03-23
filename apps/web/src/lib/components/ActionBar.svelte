@@ -28,8 +28,8 @@
 </script>
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
-  <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button class="action-btn" class:active={$systemState === 'komposition'} on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
+  <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
   <button bind:this={filterBtnEl} class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
 </nav>
 
