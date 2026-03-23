@@ -1,53 +1,23 @@
 ---
+# Thin consumer wrapper — contract ownership stays in metarepo.
+# Delegates to the canonical reusable metrics workflow; no local
+# fetch / validate / schema-normalization logic needed here.
 name: "📊 Metrics Snapshot & Validation"
+
 permissions:
-  contents: read          # Repo lesen, um Skripte auszuführen
-  actions: write          # notwendig für upload-artifact
+  contents: read
+  actions: write
   checks: write
+
 "on":
   workflow_dispatch:
   schedule:
     - cron: "0 * * * *"
 
-env:
-  METRICS_SCHEMA_URL: https://raw.githubusercontent.com/heimgewebe/metarepo/contracts-v1/contracts/wgx/metrics.json
-  HAUSKI_POST_URL: ${{ secrets.HAUSKI_METRICS_URL }}
-
 jobs:
-  snapshot:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Ensure Node for ajv-cli
-        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
-        with:
-          node-version-file: '.node-version'
-
-      - name: Snapshot metrics
-        run: bash scripts/wgx-metrics-snapshot.sh --json
-      - name: Fetch AJV schema (local file)
-        run: |
-          mkdir -p .ci
-          curl -fsSL "$METRICS_SCHEMA_URL" -o .ci/metrics.schema.json
-
-      - name: Validate metrics contract
-        run: npx --yes ajv-cli@5 validate -s .ci/metrics.schema.json -d metrics.json
-
-      - name: Optional POST to hausKI
-        if: ${{ env.HAUSKI_POST_URL && env.HAUSKI_POST_URL != '' }}
-        run: |
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 \
-            -H 'Content-Type: application/json' \
-            --data @metrics.json \
-            "$HAUSKI_POST_URL"
-        continue-on-error: true
-
-      - name: Upload metrics.json artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: metrics-snapshot
-          path: metrics.json
-          retention-days: 7
+  metrics:
+    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@main
+    with:
+      schema_ref: main
+      post_url: ${{ secrets.HAUSKI_METRICS_URL }}
+    secrets: inherit
