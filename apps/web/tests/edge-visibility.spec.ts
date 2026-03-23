@@ -37,7 +37,7 @@ test.describe("Edge visibility on load", () => {
       const source = m.getSource("edges-source");
       const layer = m.getLayer("edges-layer");
 
-      // GeoJSON sources expose _data with the current FeatureCollection
+      // Access GeoJSON data via the public serialize() API to avoid relying on internal _data
       let featureCount = 0;
       if (source && typeof source.serialize === "function") {
         const serialized = source.serialize();
