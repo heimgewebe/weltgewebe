@@ -7,9 +7,14 @@ from scripts.docmeta.generate_relates_to_audit import (
     find_supersedes_gaps,
     find_relates_to_clusters,
     _check_supersession_pattern,
+    generate_system_dominance_warning,
+    find_extreme_dominance_docs,
+    collect_negative_examples,
     DOMINANCE_RATIO,
     MIN_RELATIONS_FOR_DOMINANCE,
     MIN_RELATIONS_FOR_DIRECTION,
+    EXTREME_DOMINANCE_RATIO,
+    SYSTEM_DOMINANCE_THRESHOLD,
 )
 
 
@@ -207,6 +212,153 @@ class TestRelatesToClusters(unittest.TestCase):
         ]
         clusters = find_relates_to_clusters(edges)
         self.assertTrue(len(clusters[0]) >= len(clusters[1]))
+
+
+class TestSystemDominanceWarning(unittest.TestCase):
+    """Tests for system-level dominance warning (Phase 2 intervention)."""
+
+    def test_no_warning_when_empty(self):
+        result = generate_system_dominance_warning({}, 0)
+        self.assertIsNone(result)
+
+    def test_no_warning_below_threshold(self):
+        type_dist = {"relates_to": 90, "depends_on": 10}
+        result = generate_system_dominance_warning(type_dist, 100)
+        self.assertIsNone(result)
+
+    def test_warning_above_threshold(self):
+        type_dist = {"relates_to": 97, "depends_on": 3}
+        result = generate_system_dominance_warning(type_dist, 100)
+        self.assertIsNotNone(result)
+        self.assertIn("dominiert", result)
+        self.assertIn("97%", result)
+
+    def test_exactly_at_threshold_no_warning(self):
+        type_dist = {"relates_to": 95, "depends_on": 5}
+        result = generate_system_dominance_warning(type_dist, 100)
+        self.assertIsNone(result)
+
+    def test_all_relates_to(self):
+        type_dist = {"relates_to": 100}
+        result = generate_system_dominance_warning(type_dist, 100)
+        self.assertIsNotNone(result)
+
+
+class TestExtremeDominanceDocs(unittest.TestCase):
+    """Tests for extreme dominance detection (Phase 1 intervention)."""
+
+    def test_empty(self):
+        self.assertEqual(find_extreme_dominance_docs({}), [])
+
+    def test_below_count_threshold(self):
+        doc_counts = {
+            "a.md": {"relates_to": 4, "depends_on": 0, "supersedes": 0, "total": 4},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(result, [])
+
+    def test_extreme_detected(self):
+        doc_counts = {
+            "a.md": {"relates_to": 9, "depends_on": 1, "supersedes": 0, "total": 10},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], "a.md")
+
+    def test_exactly_at_90_percent(self):
+        # ≥90% should trigger (>= not >)
+        doc_counts = {
+            "a.md": {"relates_to": 9, "depends_on": 1, "supersedes": 0, "total": 10},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(len(result), 1)
+
+    def test_100_percent_detected(self):
+        doc_counts = {
+            "a.md": {"relates_to": 5, "depends_on": 0, "supersedes": 0, "total": 5},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(len(result), 1)
+
+    def test_below_90_excluded(self):
+        doc_counts = {
+            "a.md": {"relates_to": 4, "depends_on": 1, "supersedes": 0, "total": 5},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(result, [])
+
+    def test_sorted_by_count(self):
+        doc_counts = {
+            "a.md": {"relates_to": 5, "depends_on": 0, "supersedes": 0, "total": 5},
+            "b.md": {"relates_to": 10, "depends_on": 0, "supersedes": 0, "total": 10},
+        }
+        result = find_extreme_dominance_docs(doc_counts)
+        self.assertEqual(result[0][0], "b.md")
+
+
+class TestCollectNegativeExamples(unittest.TestCase):
+    """Tests for negative example collection (Phase 3 intervention)."""
+
+    def test_empty(self):
+        result = collect_negative_examples([], {})
+        self.assertEqual(result, [])
+
+    def test_collects_examples(self):
+        edges = [
+            ("a.md", "relates_to", "b.md"),
+            ("a.md", "relates_to", "c.md"),
+            ("a.md", "relates_to", "d.md"),
+        ]
+        doc_counts = {
+            "a.md": {"relates_to": 3, "depends_on": 0, "supersedes": 0, "total": 3},
+        }
+        result = collect_negative_examples(edges, doc_counts, max_examples=3)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], "a.md")
+        self.assertEqual(len(result[0][1]), 3)
+
+    def test_respects_max_examples(self):
+        edges = [
+            ("a.md", "relates_to", "x.md"),
+            ("a.md", "relates_to", "y.md"),
+            ("b.md", "relates_to", "x.md"),
+            ("b.md", "relates_to", "z.md"),
+            ("c.md", "relates_to", "x.md"),
+            ("c.md", "relates_to", "w.md"),
+            ("d.md", "relates_to", "x.md"),
+            ("d.md", "relates_to", "v.md"),
+        ]
+        doc_counts = {
+            "a.md": {"relates_to": 2, "depends_on": 0, "supersedes": 0, "total": 2},
+            "b.md": {"relates_to": 2, "depends_on": 0, "supersedes": 0, "total": 2},
+            "c.md": {"relates_to": 2, "depends_on": 0, "supersedes": 0, "total": 2},
+            "d.md": {"relates_to": 2, "depends_on": 0, "supersedes": 0, "total": 2},
+        }
+        result = collect_negative_examples(edges, doc_counts, max_examples=2)
+        self.assertEqual(len(result), 2)
+
+    def test_single_relation_excluded(self):
+        edges = [("a.md", "relates_to", "b.md")]
+        doc_counts = {
+            "a.md": {"relates_to": 1, "depends_on": 0, "supersedes": 0, "total": 1},
+        }
+        result = collect_negative_examples(edges, doc_counts)
+        self.assertEqual(result, [])
+
+    def test_sorted_by_most_relates_to(self):
+        edges = [
+            ("a.md", "relates_to", "x.md"),
+            ("a.md", "relates_to", "y.md"),
+            ("b.md", "relates_to", "x.md"),
+            ("b.md", "relates_to", "y.md"),
+            ("b.md", "relates_to", "z.md"),
+        ]
+        doc_counts = {
+            "a.md": {"relates_to": 2, "depends_on": 0, "supersedes": 0, "total": 2},
+            "b.md": {"relates_to": 3, "depends_on": 0, "supersedes": 0, "total": 3},
+        }
+        result = collect_negative_examples(edges, doc_counts, max_examples=2)
+        self.assertEqual(result[0][0], "b.md")
 
 
 if __name__ == "__main__":

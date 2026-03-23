@@ -21,6 +21,8 @@ Generated automatically. Do not edit.
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
+> ⚠️ **relates_to dominiert das System stark (99% aller Relationen). Dies kann ein Hinweis auf semantische Unterbestimmung sein.**
+
 ### Auffällige Dokumente (relates_to-dominant)
 
 > Dokumente mit ≥5 Relationen, davon >80% relates_to.
@@ -133,6 +135,39 @@ _Keine Lücken erkannt._
 
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
+
+### Warnungen (extreme Dominanz)
+
+> Dokumente mit ≥5 Relationen, davon ≥90% relates_to.
+
+- ⚠️ `docs/deploy/README.md` (5/5 = 100% relates_to)
+  Dieses Dokument nutzt fast ausschließlich relates_to. Prüfe, ob einzelne Relationen präziser als depends_on oder supersedes modelliert werden sollten.
+
+### Konkrete Beispiele zur Prüfung
+
+> Ausgewählte Dokumente mit ihren relates_to-Zielen. Diese könnten möglicherweise differenziert werden.
+
+**`docs/deploy/README.md`**:
+
+- relates_to → `docs/deploy/heimserver.deployment.md`
+- relates_to → `docs/deploy/heimserver.integration.md`
+- relates_to → `docs/deploy/security.md`
+- relates_to → `docs/deployment.md`
+- relates_to → `docs/deployment_governance.md`
+
+**`docs/adr/ADR-0006__auth-magic-link-session-passkey.md`**:
+
+- relates_to → `docs/adr/ADR-0005-auth.md`
+- relates_to → `docs/blueprints/auth-roadmap.md`
+- relates_to → `docs/reports/auth-status-matrix.md`
+- relates_to → `docs/specs/auth-blueprint.md`
+
+**`docs/deployment.md`**:
+
+- relates_to → `docs/deploy/README.md`
+- relates_to → `docs/deploy/security.md`
+- relates_to → `docs/deployment_governance.md`
+- relates_to → `docs/runbook.md`
 
 ### Hinweise
 
