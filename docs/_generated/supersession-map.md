@@ -11,4 +11,4 @@ summary: Automatisch generierte Karte der abgelösten Dokumente.
 
 Generated automatically. Do not edit.
 
-_No supersession relations found._
+- docs/konzepte/garnrolle.md → superseded by → docs/konzepte/garnrolle-und-verortung.md

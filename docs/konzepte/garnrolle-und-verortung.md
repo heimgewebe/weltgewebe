@@ -8,6 +8,8 @@ summary: "Kanonisches Konzept für Garnrolle, Verortung, Ungenauigkeitsradius un
 related_docs:
   - docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
   - docs/konzepte/garnrolle.md
+supersedes:
+  - docs/konzepte/garnrolle.md
 ---
 
 # Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen
