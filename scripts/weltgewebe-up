@@ -1336,7 +1336,7 @@ fi
 
 echo
 
-echo ">> Guard 5b: Sovereign Basemap Route (Infrastructure Readiness)..."
+echo ">> Guard 4b: Sovereign Basemap Route (Infrastructure Readiness)..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
         msg="Sovereign Basemap Guard failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
