@@ -59,18 +59,19 @@ summary_value = ''
 in_summary = False
 for line in frontmatter:
     stripped = line.strip()
-    if stripped.startswith('summary:'):
-        val = stripped[len('summary:'):].strip()
-        if val == '>':
-            in_summary = True
-            continue
-        summary_value = val.strip('\"').strip(\"'\")
-        break
-    elif in_summary:
-        if stripped and not stripped.startswith(('-', '[')):
-            if ':' in stripped and not stripped.startswith(' '):
-                break
-            summary_value += stripped
+    if not in_summary:
+        if stripped.startswith('summary:'):
+            val = stripped[len('summary:'):].strip()
+            if val == '>' or val == '|':
+                in_summary = True
+                continue
+            summary_value = val.strip('\"').strip(\"'\")
+            break
+    else:
+        # In YAML block scalars (> or |), continuation lines are indented.
+        # An unindented line means the block ended.
+        if line[0:1] in ('', ' ', '\t') and stripped:
+            summary_value += (' ' if summary_value else '') + stripped
         else:
             break
 
