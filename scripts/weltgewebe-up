@@ -1336,11 +1336,11 @@ fi
 
 echo
 
-echo ">> Guard 4b: Sovereign Basemap Route (Infrastructure Readiness)..."
+echo ">> Check 4b: Sovereign Basemap Route (Advisory Infrastructure Readiness)..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-    echo "   (Epistemic Gap: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE to enforce this check.)"
+    echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
     if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
+        msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
         echo "   [!] WARNING: $msg"
         echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
     else
@@ -1348,7 +1348,7 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
     fi
 
     if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
+        msg="Sovereign Basemap Check skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
         echo "   [!] WARNING: $msg"
         echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
     else
