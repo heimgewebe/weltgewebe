@@ -10,3 +10,6 @@ echo "== guard: compose no relative volumes =="
 
 echo "== guard: token leak =="
 "${REPO_ROOT}/scripts/guard/token-leak-guard.sh"
+
+echo "== guard: metrics ref consistency =="
+"${REPO_ROOT}/scripts/guard/metrics-ref-guard.sh"
