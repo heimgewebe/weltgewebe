@@ -29,27 +29,53 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     });
 
     // Mock PMTiles requests locally to prove the PMTiles integration requests the artifact
-    await page.route("**/local-basemap/*.pmtiles", (route) => {
+    await page.route("**/local-basemap/*.pmtiles", async (route) => {
       // PMTiles protocol requests bytes via Range headers
       const req = route.request();
-      if (req.method() === "GET" || req.method() === "HEAD") {
-        route.fulfill({
+      const method = req.method();
+
+      const headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Range": "bytes 0-16383/512000", // fake minimal metadata chunk
+        "Content-Length": "16384",
+        "Content-Type": "application/octet-stream",
+      };
+
+      if (method === "GET") {
+        await route.fulfill({
           status: 206,
-          headers: {
-            "Accept-Ranges": "bytes",
-            "Content-Range": "bytes 0-16383/512000", // fake minimal metadata chunk
-          },
+          headers,
+          // Supply a real 16KB byte buffer to satisfy the Content-Length contract
+          body: Buffer.alloc(16384),
+        });
+      } else if (method === "HEAD") {
+        await route.fulfill({
+          status: 206,
+          headers,
+          // HEAD expects no body
           body: "",
         });
       } else {
-        route.fulfill({ status: 200 });
+        await route.fulfill({ status: 200 });
       }
     });
 
     // Track network requests to confirm what MapLibre actually requests
+    // and whether PMTiles correctly issues Range headers.
     const requestedUrls: string[] = [];
+    let sawPmtilesRangeRequest = false;
+
     page.on("request", (req) => {
-      requestedUrls.push(req.url());
+      const url = req.url();
+      requestedUrls.push(url);
+
+      if (url.includes("/local-basemap/basemap-hamburg.pmtiles")) {
+        // PMTiles must request partial content via HTTP Range header
+        const reqHeaders = req.headers();
+        if (reqHeaders["range"] && reqHeaders["range"].startsWith("bytes=")) {
+          sawPmtilesRangeRequest = true;
+        }
+      }
     });
 
     // We navigate to the map. The Vite server and resolveBasemapMode will
@@ -60,19 +86,43 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     await expect(page.locator("#map")).toBeVisible();
     await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15000 });
 
-    // Validate that the client actually attempted to fetch the sovereign resources:
-    const fetchedStyle = requestedUrls.some((url) =>
-      url.includes("/local-basemap/style.json"),
-    );
-    const fetchedPmtiles = requestedUrls.some((url) =>
-      url.includes("/local-basemap/basemap-hamburg.pmtiles"),
-    );
-
-    expect(fetchedStyle).toBeTruthy();
+    // Use expect.poll to wait for asynchronous MapLibre background requests to settle
+    // and validate that the client actually attempted to fetch the sovereign resources:
+    await expect
+      .poll(
+        () =>
+          requestedUrls.some((url) =>
+            url.includes("/local-basemap/style.json"),
+          ),
+        {
+          message: "Client should request the local sovereign style.json",
+          timeout: 5000,
+        },
+      )
+      .toBeTruthy();
 
     // PMTiles protocol fetch check. If MapLibre + pmtiles protocol is correctly linked,
     // the source URL pmtiles://basemap-hamburg.pmtiles should be transformed to a real
-    // fetch against /local-basemap/basemap-hamburg.pmtiles.
-    expect(fetchedPmtiles).toBeTruthy();
+    // fetch against /local-basemap/basemap-hamburg.pmtiles, and it MUST include a Range header.
+    await expect
+      .poll(
+        () =>
+          requestedUrls.some((url) =>
+            url.includes("/local-basemap/basemap-hamburg.pmtiles"),
+          ),
+        {
+          message:
+            "Client should transform pmtiles:// protocol and request local .pmtiles artifact",
+          timeout: 5000,
+        },
+      )
+      .toBeTruthy();
+
+    // Final semantic validation: Prove that it actually behaves like a PMTiles client
+    // requesting a byte slice, not just fetching a random file.
+    expect(
+      sawPmtilesRangeRequest,
+      "PMTiles client must issue a Range header",
+    ).toBeTruthy();
   });
 });
