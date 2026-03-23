@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
-  import { isSearchOpen } from '$lib/stores/searchStore';
-  import { isFilterOpen } from '$lib/stores/filterStore';
+  import { contextPanelOpen, systemState, enterKomposition } from '$lib/stores/uiView';
+  import { isSearchOpen, closeSearch } from '$lib/stores/searchStore';
+  import { isFilterOpen, closeFilter } from '$lib/stores/filterStore';
   import { toggleSearchExclusive, toggleFilterExclusive } from '$lib/stores/overlayManager';
-  import { setRestoreTarget } from '$lib/utils/focusManager';
+  import { setRestoreTarget, suppressNextRestore } from '$lib/utils/focusManager';
 
   function onNewNode() {
+    if ($isSearchOpen) suppressNextRestore('search');
+    if ($isFilterOpen) suppressNextRestore('filter');
+    closeSearch();
+    closeFilter();
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
   }
 
@@ -25,7 +29,7 @@
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
   <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
-  <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
+  <button class="action-btn" class:active={$systemState === 'komposition'} on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
   <button bind:this={filterBtnEl} class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
 </nav>
 
@@ -56,10 +60,17 @@
     cursor: pointer;
     padding: 0.5rem 1rem;
     border-radius: 8px;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .action-btn:hover {
     background: rgba(0,0,0,0.05);
+  }
+
+  .action-btn:active {
+    background: rgba(255,255,255,0.1);
+    transform: scale(0.96);
   }
 
   .action-btn.active {

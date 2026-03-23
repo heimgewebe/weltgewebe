@@ -26,6 +26,18 @@
     }
   }
 
+  // Capture phase so this handler fires before bubble-phase Escape listeners
+  // (e.g. ContextPanel, SearchOverlay). preventDefault() signals that the
+  // Garnrolle menu owns this Escape press; ContextPanel checks
+  // event.defaultPrevented and skips its own close logic accordingly.
+  function handleKeydown(event: KeyboardEvent) {
+    if (!menuOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      menuOpen = false;
+    }
+  }
+
   async function logout() {
     if (!browser) return;
     await authStore.logout();
@@ -33,7 +45,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} />
+<svelte:window on:click={closeMenu} on:keydown|capture={handleKeydown} />
 
 <div class="garnrolle-container wrap">
   <button

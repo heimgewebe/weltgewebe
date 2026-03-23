@@ -95,6 +95,10 @@
     font-size: 1.2rem;
     cursor: pointer;
     color: var(--text);
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
   }
 
   .panel-content {
