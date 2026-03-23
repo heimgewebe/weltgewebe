@@ -18,7 +18,7 @@ reason = "Transitive dependency via async-nats; waiting for upstream update"
 
 [[advisories.ignore]]
 id = "RUSTSEC-2026-0049"
-reason = "Transitive via async-nats; no available non-breaking upgrade path currently removes rustls-webpki 0.102.x. Temporary exception pending upstream fix or dedicated NATS client migration."
+reason = "Transitive via async-nats; no non-breaking upgrade path currently removes rustls-webpki 0.102.x. Temporary exception. Track: #TODO (review by 2024-06-30)."
 
 [bans]
 multiple-versions = "warn"
