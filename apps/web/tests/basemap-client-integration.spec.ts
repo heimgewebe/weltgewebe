@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test.describe("Basemap Integration (local-sovereign)", () => {
-  test("successfully loads local PMTiles style and artifact in local context", async ({
+test.describe("Basemap Client Integration (local-sovereign)", () => {
+  test("client requests local style and PMTiles artifact in test context (mocked)", async ({
     page,
   }) => {
-    // Setup full mock routing including local-basemap/style.json and *.pmtiles
+    // Setup full mock routing including local-basemap/style.json and *.pmtiles.
+    // NOTE: This intentionally mocks the network path to verify client-side behavior
+    // (MapLibre config and PMTiles protocol loading), not real Edge-routing delivery.
     await mockApiResponses(page);
 
     // Track network requests to confirm what MapLibre actually requests
@@ -22,7 +24,7 @@ test.describe("Basemap Integration (local-sovereign)", () => {
     await expect(page.locator("#map")).toBeVisible();
     await expect(page.locator(".spinner")).toHaveCount(0, { timeout: 15000 });
 
-    // Validate that the E2E client actually fetched the sovereign resources:
+    // Validate that the client actually attempted to fetch the sovereign resources:
     const fetchedStyle = requestedUrls.some((url) =>
       url.includes("/local-basemap/style.json"),
     );
