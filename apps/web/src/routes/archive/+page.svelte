@@ -65,8 +65,8 @@
   }
 
   section li {
-    background: var(--panel, #f7f7f7);
-    border: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+    background: var(--panel, #141a21);
+    border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.06));
     border-radius: 0.5rem;
     padding: 0.85rem 1rem;
     transition: background 0.2s ease-in-out, transform 0.2s ease-in-out;

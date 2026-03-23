@@ -32,7 +32,7 @@
   .container { max-width: 600px; margin: 40px auto; padding: 0 20px; color: var(--text); }
   h1 { font-size: 2rem; margin-bottom: 1rem; }
   .intro { margin-bottom: 2rem; opacity: 0.8; }
-  .card { background: var(--panel); padding: 24px; border-radius: 12px; border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.06)); }
+  .card { background: var(--panel, #141a21); padding: 24px; border-radius: 12px; border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.06)); }
   h2 { font-size: 1.25rem; margin-bottom: 1rem; }
   .setting-row { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; opacity: 0.6; }
   .disabled { pointer-events: none; }
