@@ -1338,20 +1338,19 @@ echo
 
 echo ">> Guard 4b: Sovereign Basemap Route (Infrastructure Readiness)..."
 if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        exit 1
+    echo "   (Epistemic Gap: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE to enforce this check.)"
+    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json >/dev/null 2>&1; then
+        msg="Sovereign Basemap Guard skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
+        echo "   [!] WARNING: $msg"
+        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
     else
         echo "OK (sovereign style.json reachable)"
     fi
 
-    if ! curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json >/dev/null 2>&1; then
-        msg="Sovereign Basemap Guard failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
-        echo "ERROR: $msg"
-        generate_failure_bundle "$msg"
-        exit 1
+    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/basemap-hamburg.meta.json >/dev/null 2>&1; then
+        msg="Sovereign Basemap Guard skipped/failed: Could not fetch basemap-hamburg.meta.json via Edge Route (/local-basemap/basemap-hamburg.meta.json). PMTiles artifact volume or route is missing."
+        echo "   [!] WARNING: $msg"
+        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
     else
         echo "OK (sovereign basemap-hamburg.meta.json reachable)"
     fi
