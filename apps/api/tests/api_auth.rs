@@ -1136,7 +1136,7 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
     let res = app.oneshot(req).await?;
 
     let status = res.status();
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     if status != StatusCode::OK {
         println!("FAIL BODY: {:?}", String::from_utf8_lossy(&body_bytes));
     }
@@ -1187,7 +1187,7 @@ async fn session_endpoint_authenticated() -> Result<()> {
     let res = app.oneshot(req).await?;
 
     let status = res.status();
-    let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     if status != StatusCode::OK {
         println!("FAIL BODY: {:?}", String::from_utf8_lossy(&body_bytes));
     }
