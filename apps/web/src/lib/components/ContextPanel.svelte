@@ -1,5 +1,7 @@
 <script lang="ts">
   import { selection, systemState, contextPanelOpen, leaveToNavigation } from '$lib/stores/uiView';
+  import { isSearchOpen } from '$lib/stores/searchStore';
+  import { isFilterOpen } from '$lib/stores/filterStore';
 
   import NodePanel from './panels/NodePanel.svelte';
   import AccountPanel from './panels/AccountPanel.svelte';
@@ -11,7 +13,11 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if ($contextPanelOpen && event.key === 'Escape') {
+    // Prevent repeated Escape from cascading from overlay-close into panel-close
+    if (event.repeat || event.defaultPrevented) return;
+
+    // Escape closes the panel only when no foreground overlay (search/filter) owns the interaction
+    if (event.key === 'Escape' && $contextPanelOpen && !$isSearchOpen && !$isFilterOpen) {
       closePanel();
     }
   }

@@ -51,6 +51,84 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(page.locator('[data-testid="context-panel"]')).toHaveCount(0);
   });
 
+  test("Escape closes ContextPanel when in fokus mode", async ({ page }) => {
+    await page.waitForSelector(".map-marker", { timeout: 10000 });
+    await page.evaluate(() => {
+      (document.querySelector(".map-marker") as HTMLElement)?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+
+    // Panel should close
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("Escape closes ContextPanel when composing", async ({ page }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+
+    // Enter komposition mode via action bar
+    await page.locator('button:has-text("Neuer Knoten")').click();
+
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+
+    // Panel should close
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("Escape does NOT close ContextPanel when search is open", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+
+    // Enter komposition mode to open panel
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+
+    // Open search
+    await page.locator('.action-bar button[aria-label="Suche"]').click();
+    const searchOverlay = page.locator('[data-testid="search-overlay"]');
+    await expect(searchOverlay).toBeVisible();
+
+    // Press Escape key
+    await page.keyboard.press("Escape");
+    await expect(searchOverlay).toHaveCount(0);
+    await expect(panel).toBeVisible();
+
+    // Press Escape again
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
+  test("Escape does NOT close ContextPanel when filter is open", async ({
+    page,
+  }) => {
+    await page.waitForSelector(".action-bar", { timeout: 10000 });
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    const panel = page.locator('[data-testid="context-panel"]');
+    await expect(panel).toBeVisible();
+    await page.locator('.action-bar button[aria-label="Filter"]').click();
+    const filterOverlay = page.locator('[data-testid="filter-overlay"]');
+    await expect(filterOverlay).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(filterOverlay).toHaveCount(0);
+    await expect(panel).toBeVisible();
+
+    // Press Escape again
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+  });
+
   test("Clicking empty map area closes the context panel", async ({ page }) => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
