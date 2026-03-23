@@ -66,3 +66,4 @@ apps/web/src/lib/generated/
 # Ignore downloaded basemap assets to avoid polluting the git history with binary blobs
 map-style/glyphs/*/*.pbf
 map-style/glyphs/*/.complete
+test-results/
