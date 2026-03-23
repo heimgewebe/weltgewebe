@@ -1,0 +1,168 @@
+import os
+import tempfile
+import unittest
+
+from scripts.docmeta.validate_relations import (
+    validate_relations,
+    extract_relations_from_content,
+    ALLOWED_TYPES,
+)
+
+
+class TestValidateRelations(unittest.TestCase):
+    """Tests for validate_relations() — the core validation logic."""
+
+    def test_no_relations_field(self):
+        errors = validate_relations("docs/foo.md", {})
+        self.assertEqual(errors, [])
+
+    def test_empty_relations_list(self):
+        errors = validate_relations("docs/foo.md", {"relations": []})
+        self.assertEqual(errors, [])
+
+    def test_relations_not_a_list(self):
+        errors = validate_relations("docs/foo.md", {"relations": "bad"})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("must be a list", errors[0])
+
+    def test_valid_relation(self):
+        # Create a temp file to act as the target
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".md", dir=os.environ.get("REPO_ROOT", "."), delete=False
+        ) as f:
+            f.write("---\nid: test\n---\n")
+            target_path = os.path.relpath(f.name, os.environ.get("REPO_ROOT", "."))
+
+        try:
+            fm = {"relations": [{"type": "relates_to", "target": target_path}]}
+            errors = validate_relations("docs/bar.md", fm)
+            self.assertEqual(errors, [])
+        finally:
+            os.remove(f.name)
+
+    def test_unknown_type(self):
+        fm = {"relations": [{"type": "implements", "target": "docs/something.md"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("unknown relation type 'implements'" in e for e in errors))
+
+    def test_missing_type(self):
+        fm = {"relations": [{"target": "docs/something.md"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("missing required key 'type'" in e for e in errors))
+
+    def test_missing_target(self):
+        fm = {"relations": [{"type": "relates_to"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("missing required key 'target'" in e for e in errors))
+
+    def test_empty_target(self):
+        fm = {"relations": [{"type": "relates_to", "target": ""}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("'target' must be a non-empty string" in e for e in errors))
+
+    def test_absolute_path_rejected(self):
+        fm = {"relations": [{"type": "relates_to", "target": "/docs/foo.md"}]}
+        errors = validate_relations("docs/bar.md", fm)
+        self.assertTrue(any("repo-root-relative, not absolute" in e for e in errors))
+
+    def test_nonexistent_target(self):
+        fm = {"relations": [{"type": "relates_to", "target": "docs/does-not-exist-12345.md"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("does not exist" in e for e in errors))
+
+    def test_self_reference(self):
+        fm = {"relations": [{"type": "relates_to", "target": "docs/foo.md"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("self-reference" in e for e in errors))
+
+    def test_duplicate_relation(self):
+        fm = {
+            "relations": [
+                {"type": "relates_to", "target": "docs/target.md"},
+                {"type": "relates_to", "target": "docs/target.md"},
+            ]
+        }
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("duplicate relation" in e for e in errors))
+
+    def test_extra_keys_rejected(self):
+        fm = {"relations": [{"type": "relates_to", "target": "docs/t.md", "label": "x"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("unexpected keys" in e for e in errors))
+
+    def test_entry_not_dict(self):
+        fm = {"relations": ["just a string"]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("expected object" in e for e in errors))
+
+    def test_allowed_types_exactly_three(self):
+        self.assertEqual(ALLOWED_TYPES, {"relates_to", "depends_on", "supersedes"})
+
+
+class TestExtractRelationsFromContent(unittest.TestCase):
+    """Tests for extract_relations_from_content() — the YAML parser."""
+
+    def test_basic_extraction(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "  - type: supersedes\n"
+            "    target: docs/bar.md\n"
+            "---\n"
+            "body\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 2)
+        self.assertEqual(rels[0], {"type": "relates_to", "target": "docs/foo.md"})
+        self.assertEqual(rels[1], {"type": "supersedes", "target": "docs/bar.md"})
+
+    def test_empty_relations_list(self):
+        content = "---\nid: test\nrelations: []\n---\nbody\n"
+        rels = extract_relations_from_content(content)
+        self.assertEqual(rels, [])
+
+    def test_no_relations_field(self):
+        content = "---\nid: test\ntitle: Hello\n---\nbody\n"
+        rels = extract_relations_from_content(content)
+        self.assertEqual(rels, [])
+
+    def test_no_frontmatter(self):
+        content = "Just a markdown file without frontmatter."
+        rels = extract_relations_from_content(content)
+        self.assertEqual(rels, [])
+
+    def test_relations_with_other_fields(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "title: Title\n"
+            "relations:\n"
+            "  - type: depends_on\n"
+            "    target: docs/dep.md\n"
+            "verifies_with:\n"
+            "  - scripts/check.py\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0], {"type": "depends_on", "target": "docs/dep.md"})
+
+    def test_single_relation(self):
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/only-one.md\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["target"], "docs/only-one.md")
+
+
+if __name__ == "__main__":
+    unittest.main()

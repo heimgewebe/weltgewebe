@@ -3,6 +3,7 @@
 docs-guard:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m scripts.docmeta.validate_schema
+	python3 -m scripts.docmeta.validate_relations
 	python3 -m scripts.docmeta.check_repo_index_consistency
 	python3 -m scripts.docmeta.check_doc_review_age
 	python3 -m scripts.docmeta.review_impact
