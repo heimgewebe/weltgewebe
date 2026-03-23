@@ -151,8 +151,6 @@ async fn auth_login_fails_when_dev_login_disabled() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
-        .header("Host", "localhost")
-        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"any"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -287,8 +285,6 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
-        .header("Host", "localhost")
-        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -451,8 +447,6 @@ async fn auth_login_fails_from_remote_without_allow_flag() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
-        .header("Host", "localhost")
-        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -476,8 +470,6 @@ async fn auth_login_succeeds_from_remote_with_allow_flag() -> Result<()> {
 
     let req = Request::post("/auth/dev/login")
         .header("Content-Type", "application/json")
-        .header("Host", "localhost")
-        .header("Origin", "http://localhost")
         .body(body::Body::from(r#"{"account_id":"u1"}"#))?;
 
     let res = app.oneshot(req).await?;
@@ -1284,7 +1276,7 @@ async fn test_session_refresh_success() -> Result<()> {
         .unwrap()
         .to_str()
         .unwrap();
-    let new_session_cookie = refresh_set_cookie.split(';').next().unwrap();
+    let new_session_cookie = refresh_set_cookie.split(';').next().unwrap().to_string();
     assert!(refresh_set_cookie.contains("Secure"));
     assert!(refresh_set_cookie.contains("HttpOnly"));
     assert!(refresh_set_cookie.contains("SameSite=Lax"));
@@ -1298,7 +1290,21 @@ async fn test_session_refresh_success() -> Result<()> {
     assert_eq!(body["authenticated"], true);
     assert!(body["expires_at"].is_string());
 
-    // 3. Old cookie should now be invalid
+    // 3. New cookie should be valid
+    let req_new = Request::get("/auth/session")
+        .header("Cookie", &new_session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_new = app.clone().oneshot(req_new).await?;
+    let new_body_bytes = body::to_bytes(res_new.into_body(), usize::MAX).await?;
+    let new_body: serde_json::Value = serde_json::from_slice(&new_body_bytes).unwrap();
+    assert_eq!(new_body["authenticated"], true);
+    assert!(new_body["expires_at"].is_string());
+
+    // 4. Old cookie should now be invalid
+
     let req_old = Request::get("/auth/session")
         .header("Cookie", session_cookie)
         .header("Host", "localhost")
