@@ -23,6 +23,7 @@ docs-guard:
 	python3 -m scripts.docmeta.generate_change_resonance
 	python3 -m scripts.docmeta.generate_staleness_report
 	python3 -m scripts.docmeta.generate_agent_readiness
+	python3 -m scripts.docmeta.generate_relations_analysis
 	git diff --exit-code docs/_generated/
 
 up:
