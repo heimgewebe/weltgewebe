@@ -13,6 +13,7 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    // Prevent repeated Escape from cascading from overlay-close into panel-close
     if (event.repeat || event.defaultPrevented) return;
 
     // Escape closes the panel only when no foreground overlay (search/filter) owns the interaction
