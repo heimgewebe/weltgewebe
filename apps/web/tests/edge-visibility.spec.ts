@@ -19,21 +19,40 @@ test.describe("Edge visibility on load", () => {
       { timeout: 15000 },
     );
 
-    // Wait for the edges GeoJSON source to appear on the map
+    // Wait for the edges layer to appear – this is the rendering layer, not just the data source
     await page.waitForFunction(
       () => {
         const m = (window as any).__TEST_MAP__;
-        return m && m.getSource("edges-source") !== undefined;
+        return m && m.getLayer("edges-layer") !== undefined;
       },
       undefined,
       { timeout: 5000 },
     );
 
-    const hasEdgeSource = await page.evaluate(() => {
+    // Verify the full rendering pipeline: source exists, layer exists, features are populated
+    const edgeState = await page.evaluate(() => {
       const m = (window as any).__TEST_MAP__;
-      return m?.getSource("edges-source") !== undefined;
+      if (!m) return { source: false, layer: false, featureCount: 0 };
+
+      const source = m.getSource("edges-source");
+      const layer = m.getLayer("edges-layer");
+
+      // GeoJSON sources expose _data with the current FeatureCollection
+      let featureCount = 0;
+      if (source && typeof source.serialize === "function") {
+        const serialized = source.serialize();
+        featureCount = serialized?.data?.features?.length ?? 0;
+      }
+
+      return {
+        source: source !== undefined,
+        layer: layer !== undefined,
+        featureCount,
+      };
     });
 
-    expect(hasEdgeSource).toBe(true);
+    expect(edgeState.source).toBe(true);
+    expect(edgeState.layer).toBe(true);
+    expect(edgeState.featureCount).toBeGreaterThan(0);
   });
 });
