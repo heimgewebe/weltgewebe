@@ -134,9 +134,9 @@ else
   report 0 "File with Bearer token leak correctly detected"
 fi
 
-# Case 5: Short token (under 10 chars) should NOT trigger
+# Case 5: Short token (9 chars, under the 10-char threshold) should NOT trigger
 setup_git_repo
-echo "token=abc123" > short.txt
+echo "token=abc12345x" > short.txt
 git add . && git commit -q -m "short token"
 if bash -c "
   set -euo pipefail
@@ -153,9 +153,9 @@ if bash -c "
     exit \$EXIT_CODE
   fi
 " 2>/dev/null; then
-  report 0 "Short token (under 10 chars) correctly passes"
+  report 0 "Short token (9 chars, under threshold) correctly passes"
 else
-  report 1 "Short token should not trigger detection"
+  report 1 "Short token (9 chars) should not trigger detection"
 fi
 
 echo ""
