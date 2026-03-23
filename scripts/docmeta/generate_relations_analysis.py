@@ -249,13 +249,13 @@ def write_output(edges, all_docs, stats, cycles, warnings):
         f.write("\n")
 
         # Warnings
+        f.write("### Warnungen\n\n")
+        f.write("> Heuristische Hinweise — keine CI-Fehler. Zyklen deuten auf zirkuläre Abhängigkeiten, hohe Vernetzung auf zentrale Dokumente, die bei Änderungen besondere Aufmerksamkeit erfordern.\n\n")
         if warnings:
-            f.write("### Warnungen\n\n")
             for w in warnings:
                 f.write(f"- {w}\n")
             f.write("\n")
         else:
-            f.write("### Warnungen\n\n")
             f.write("_Keine Warnungen._\n\n")
 
         # Cycles

@@ -25,6 +25,8 @@ Generated automatically. Do not edit.
 
 ### Warnungen
 
+> Heuristische Hinweise — keine CI-Fehler. Zyklen deuten auf zirkuläre Abhängigkeiten, hohe Vernetzung auf zentrale Dokumente, die bei Änderungen besondere Aufmerksamkeit erfordern.
+
 - ⚠️ High inbound count (13): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/deployment.md` — central dependency, review carefully
 
