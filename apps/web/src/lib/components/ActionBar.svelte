@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { contextPanelOpen, enterKomposition } from '$lib/stores/uiView';
-  import { isSearchOpen } from '$lib/stores/searchStore';
-  import { isFilterOpen } from '$lib/stores/filterStore';
+  import { contextPanelOpen, systemState, enterKomposition } from '$lib/stores/uiView';
+  import { isSearchOpen, closeSearch } from '$lib/stores/searchStore';
+  import { isFilterOpen, closeFilter } from '$lib/stores/filterStore';
   import { toggleSearchExclusive, toggleFilterExclusive } from '$lib/stores/overlayManager';
   import { setRestoreTarget } from '$lib/utils/focusManager';
 
   function onNewNode() {
+    closeSearch();
+    closeFilter();
     enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
   }
 
@@ -25,7 +27,7 @@
 
 <nav class="action-bar" class:panel-open={$contextPanelOpen} aria-label="Aktionsleiste">
   <button bind:this={searchBtnEl} class="action-btn" on:click={onToggleSearch} class:active={$isSearchOpen} aria-label="Suche">Suche</button>
-  <button class="action-btn" on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
+  <button class="action-btn" class:active={$systemState === 'komposition'} on:click={onNewNode} aria-label="Neuer Knoten">Neuer Knoten</button>
   <button bind:this={filterBtnEl} class="action-btn" class:active={$isFilterOpen} on:click={onToggleFilter} aria-label="Filter">Filter</button>
 </nav>
 

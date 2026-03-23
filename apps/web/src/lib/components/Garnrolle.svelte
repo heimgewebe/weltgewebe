@@ -26,6 +26,14 @@
     }
   }
 
+  function handleKeydown(event: KeyboardEvent) {
+    if (!menuOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      menuOpen = false;
+    }
+  }
+
   async function logout() {
     if (!browser) return;
     await authStore.logout();
@@ -33,7 +41,7 @@
   }
 </script>
 
-<svelte:window on:click={closeMenu} />
+<svelte:window on:click={closeMenu} on:keydown|capture={handleKeydown} />
 
 <div class="garnrolle-container wrap">
   <button
