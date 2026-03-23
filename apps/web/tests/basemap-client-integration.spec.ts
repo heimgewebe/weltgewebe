@@ -120,9 +120,11 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
 
     // Final semantic validation: Prove that it actually behaves like a PMTiles client
     // requesting a byte slice, not just fetching a random file.
-    expect(
-      sawPmtilesRangeRequest,
-      "PMTiles client must issue a Range header",
-    ).toBeTruthy();
+    await expect
+      .poll(() => sawPmtilesRangeRequest, {
+        message: "PMTiles client must issue a Range header",
+        timeout: 5000,
+      })
+      .toBeTruthy();
   });
 });
