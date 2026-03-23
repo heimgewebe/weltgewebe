@@ -31,7 +31,7 @@ pub async fn auth_middleware(
                 ctx.authenticated = true;
                 ctx.account_id = Some(session.account_id.clone());
                 ctx.role = internal.role.clone();
-                ctx.expires_at = Some(session.expires_at.clone());
+                ctx.expires_at = Some(session.expires_at);
             }
         }
     }
