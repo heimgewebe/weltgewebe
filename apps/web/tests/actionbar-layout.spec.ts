@@ -8,9 +8,7 @@ test.describe("ActionBar Layout", () => {
     await page.waitForSelector(".action-bar", { timeout: 10000 });
   });
 
-  test("buttons are ordered: Neuer Knoten, Suche, Filter", async ({
-    page,
-  }) => {
+  test("buttons are ordered: Neuer Knoten, Suche, Filter", async ({ page }) => {
     const buttons = page.locator(".action-bar .action-btn");
     await expect(buttons).toHaveCount(3);
     await expect(buttons.nth(0)).toHaveAttribute("aria-label", "Neuer Knoten");
