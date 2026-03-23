@@ -205,6 +205,16 @@ jobs:
           CARGO_TERM_COLOR: always
         run: just ci
 
+      - name: Guard script tests
+        run: |
+          set -euo pipefail
+          for t in scripts/tests/test_token_leak_guard.sh \
+                   scripts/tests/test_compose_volumes_guard.sh \
+                   scripts/tests/test_metrics_ref_guard.sh; do
+            echo "── $t ──"
+            bash "$t"
+          done
+
   web-e2e:
     name: Web E2E
     runs-on: ubuntu-latest
