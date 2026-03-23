@@ -151,4 +151,40 @@ test.describe("Interaction Clarity & State Feedback", () => {
     await expect(menu).toHaveCount(0);
     await expect(filterOverlay).toBeVisible();
   });
+
+  test("focus does not return to Search button when entering komposition", async ({
+    page,
+  }) => {
+    const searchBtn = page.locator('.action-bar button[aria-label="Suche"]');
+
+    // Open search overlay (sets restore target to searchBtn)
+    await searchBtn.click();
+    const searchOverlay = page.locator('[data-testid="search-overlay"]');
+    await expect(searchOverlay).toBeVisible();
+
+    // Click "Neuer Knoten" — suppressNextRestore should prevent focus restore
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    await expect(searchOverlay).toHaveCount(0);
+
+    // Focus must NOT be on the Search button
+    await expect(searchBtn).not.toBeFocused();
+  });
+
+  test("focus does not return to Filter button when entering komposition", async ({
+    page,
+  }) => {
+    const filterBtn = page.locator('.action-bar button[aria-label="Filter"]');
+
+    // Open filter overlay (sets restore target to filterBtn)
+    await filterBtn.click();
+    const filterOverlay = page.locator('[data-testid="filter-overlay"]');
+    await expect(filterOverlay).toBeVisible();
+
+    // Click "Neuer Knoten" — suppressNextRestore should prevent focus restore
+    await page.locator('button:has-text("Neuer Knoten")').click();
+    await expect(filterOverlay).toHaveCount(0);
+
+    // Focus must NOT be on the Filter button
+    await expect(filterBtn).not.toBeFocused();
+  });
 });
