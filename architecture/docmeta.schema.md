@@ -94,6 +94,7 @@ Targets verwenden **repo-root-relative Pfade** (z.B. `docs/blueprints/ui-state-m
 **Bei Umbenennung:**
 Wenn eine Zieldatei umbenannt wird, müssen alle `target:`-Einträge, die darauf
 verweisen, manuell angepasst werden. Der Guard erkennt verwaiste Targets als Fehler.
+Ein repo-weites `grep -r 'target: docs/alter-pfad.md'` hilft beim Auffinden.
 
 ### Guard-Validierung
 
