@@ -53,25 +53,36 @@ export function updateEdges(
 
   if (source) {
     source.setData(geoJsonData);
+    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
   } else if (features.length > 0) {
     map.addSource(sourceId, {
       type: "geojson",
       data: geoJsonData,
     });
+    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
+  }
+}
 
-    // Insert edges below basemap symbols (labels, POIs) so they stay readable.
-    const layers = map.getStyle()?.layers;
-    let firstSymbolId: string | undefined;
-    if (layers) {
-      for (const layer of layers) {
-        if (layer.type === "symbol") {
-          firstSymbolId = layer.id;
-          break;
-        }
+function ensureEdgeLayers(
+  map: MapLibreMap,
+  sourceId: string,
+  layerId: string,
+  haloLayerId: string,
+) {
+  // Insert edges below basemap symbols (labels, POIs) so they stay readable.
+  const layers = map.getStyle()?.layers;
+  let firstSymbolId: string | undefined;
+  if (layers) {
+    for (const layer of layers) {
+      if (layer.type === "symbol") {
+        firstSymbolId = layer.id;
+        break;
       }
     }
+  }
 
-    // Halo layer for better readability
+  // Halo layer for better readability
+  if (!map.getLayer(haloLayerId)) {
     map.addLayer(
       {
         id: haloLayerId,
@@ -85,12 +96,15 @@ export function updateEdges(
           "line-color": "#ffffff",
           "line-width": 4, // Wider than the main line
           "line-opacity": 0.8,
+          "line-dasharray": [2, 1], // Inherit dash semantics
         },
       },
       firstSymbolId,
     );
+  }
 
-    // Main line layer
+  // Main line layer
+  if (!map.getLayer(layerId)) {
     map.addLayer(
       {
         id: layerId,
