@@ -45,6 +45,8 @@ import os
 
 def _strip_quotes(value):
     """Strip matching surrounding single or double quotes from a value."""
+    if not isinstance(value, str):
+        return value
     if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
         return value[1:-1]
     return value
