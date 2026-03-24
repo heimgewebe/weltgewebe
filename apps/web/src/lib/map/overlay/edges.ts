@@ -81,43 +81,88 @@ function ensureEdgeLayers(
     }
   }
 
-  // Halo layer for better readability
-  if (!map.getLayer(haloLayerId)) {
+  const hasHalo = !!map.getLayer(haloLayerId);
+  const hasMain = !!map.getLayer(layerId);
+
+  // Common styling constants to prevent duplication drift
+  const EDGE_DASHARRAY = [2, 1] as [number, number];
+  const EDGE_JOIN = "round";
+  const EDGE_CAP = "round";
+
+  if (!hasHalo && !hasMain) {
+    // Both missing: Insert halo first, then main (main ends up above halo)
     map.addLayer(
       {
         id: haloLayerId,
         type: "line",
         source: sourceId,
         layout: {
-          "line-join": "round",
-          "line-cap": "round",
+          "line-join": EDGE_JOIN,
+          "line-cap": EDGE_CAP,
         },
         paint: {
           "line-color": "#ffffff",
-          "line-width": 4, // Wider than the main line
+          "line-width": 4,
           "line-opacity": 0.8,
-          "line-dasharray": [2, 1], // Inherit dash semantics
+          "line-dasharray": EDGE_DASHARRAY,
         },
       },
       firstSymbolId,
     );
-  }
 
-  // Main line layer
-  if (!map.getLayer(layerId)) {
     map.addLayer(
       {
         id: layerId,
         type: "line",
         source: sourceId,
         layout: {
-          "line-join": "round",
-          "line-cap": "round",
+          "line-join": EDGE_JOIN,
+          "line-cap": EDGE_CAP,
         },
         paint: {
           "line-color": "#888",
           "line-width": 2,
-          "line-dasharray": [2, 1],
+          "line-dasharray": EDGE_DASHARRAY,
+        },
+      },
+      firstSymbolId,
+    );
+  } else if (!hasHalo && hasMain) {
+    // Only halo missing: Insert halo explicitly BEFORE the main layer so it sits beneath it
+    map.addLayer(
+      {
+        id: haloLayerId,
+        type: "line",
+        source: sourceId,
+        layout: {
+          "line-join": EDGE_JOIN,
+          "line-cap": EDGE_CAP,
+        },
+        paint: {
+          "line-color": "#ffffff",
+          "line-width": 4,
+          "line-opacity": 0.8,
+          "line-dasharray": EDGE_DASHARRAY,
+        },
+      },
+      layerId,
+    );
+  } else if (hasHalo && !hasMain) {
+    // Only main missing: Insert main explicitly AFTER the halo, or before firstSymbolId
+    // Adding it before firstSymbolId is safe here, as halo is also before firstSymbolId.
+    map.addLayer(
+      {
+        id: layerId,
+        type: "line",
+        source: sourceId,
+        layout: {
+          "line-join": EDGE_JOIN,
+          "line-cap": EDGE_CAP,
+        },
+        paint: {
+          "line-color": "#888",
+          "line-width": 2,
+          "line-dasharray": EDGE_DASHARRAY,
         },
       },
       firstSymbolId,
