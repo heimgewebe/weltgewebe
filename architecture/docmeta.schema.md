@@ -195,6 +195,10 @@ meaningful relation blocks in zone documents — has not yet occurred. The
 decision above holds under the current simple usage; it must be re-evaluated
 once zone files carry active relations.
 
+**CI trigger:** `validate_relations.py` emits a non-blocking `NOTICE` to
+stderr whenever a zone file carries non-empty relations.  This makes the
+re-evaluation trigger operationally visible — no silent drift.
+
 Re-evaluate if:
 
 * Zone files begin using non-empty, semantically meaningful relations.

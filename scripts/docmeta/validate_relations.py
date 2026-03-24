@@ -107,6 +107,61 @@ def validate_relations(file_path, frontmatter):
     return errors
 
 
+ZONE_DIRS = ["architecture", "runtime", "runbooks"]
+
+
+def check_zone_relations_notice(repo_root):
+    """
+    Emit a non-blocking NOTICE when zone files carry non-empty relations.
+
+    Zone files (architecture/, runtime/, runbooks/) currently all use
+    ``relations: []``.  When the first real relations appear there, the
+    parser decision gate (see architecture/docmeta.schema.md) should be
+    re-evaluated.
+
+    Returns:
+        list of repo-root-relative file paths that have non-empty relations
+    """
+    zone_files_with_relations = []
+
+    for zone_dir in ZONE_DIRS:
+        dir_path = os.path.join(repo_root, zone_dir)
+        if not os.path.isdir(dir_path):
+            continue
+        for root, dirs, files in os.walk(dir_path):
+            if "_generated" in root:
+                continue
+            for file in sorted(files):
+                if not file.endswith(".md"):
+                    continue
+                abs_path = os.path.join(root, file)
+                rel_path = os.path.relpath(abs_path, repo_root)
+                try:
+                    with open(abs_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except Exception:
+                    continue
+                relations = extract_relations_from_content(content)
+                if relations:
+                    zone_files_with_relations.append(rel_path)
+
+    if zone_files_with_relations:
+        print(
+            "\n  NOTICE: Parser decision gate triggered — zone files now carry "
+            "non-empty relations.",
+            file=sys.stderr,
+        )
+        print(
+            "  Consider re-evaluating the mini-parser decision "
+            "(see architecture/docmeta.schema.md § Decision).",
+            file=sys.stderr,
+        )
+        for zf in zone_files_with_relations:
+            print(f"    → {zf}", file=sys.stderr)
+
+    return zone_files_with_relations
+
+
 def main():
     errors = []
 
@@ -149,6 +204,10 @@ def main():
             print(f"  ERROR: {error}", file=sys.stderr)
         print("\nRelations validation failed.", file=sys.stderr)
         sys.exit(1)
+
+    # Non-blocking notice: detect when zone files begin carrying active
+    # relations — signals that the parser decision gate should be reviewed.
+    check_zone_relations_notice(REPO_ROOT)
 
     print("Relations validation passed (0 errors).")
 

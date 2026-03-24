@@ -4,6 +4,7 @@ import unittest
 
 from scripts.docmeta.validate_relations import (
     validate_relations,
+    check_zone_relations_notice,
     ALLOWED_TYPES,
 )
 from scripts.docmeta.relations_parser import extract_relations_from_content
@@ -265,6 +266,82 @@ class TestExtractRelationsFromContent(unittest.TestCase):
         fm = {"relations": rels}
         errors = validate_relations("docs/test.md", fm)
         self.assertTrue(any("missing required key 'target'" in e for e in errors))
+
+
+class TestZoneRelationsNotice(unittest.TestCase):
+    """Tests for check_zone_relations_notice() — the decision gate trigger."""
+
+    def test_empty_zone_relations_no_notice(self):
+        """Zone files with only relations: [] should not trigger a notice."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zone = os.path.join(tmpdir, "architecture")
+            os.makedirs(zone)
+            with open(os.path.join(zone, "test.md"), "w") as f:
+                f.write("---\nid: test\nrelations: []\n---\n")
+            result = check_zone_relations_notice(tmpdir)
+            self.assertEqual(result, [])
+
+    def test_nonempty_zone_relations_triggers_notice(self):
+        """Zone files with actual relations should trigger a notice."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zone = os.path.join(tmpdir, "architecture")
+            os.makedirs(zone)
+            with open(os.path.join(zone, "test.md"), "w") as f:
+                f.write(
+                    "---\nid: test\nrelations:\n"
+                    "  - type: relates_to\n"
+                    "    target: docs/foo.md\n"
+                    "---\n"
+                )
+            result = check_zone_relations_notice(tmpdir)
+            self.assertEqual(result, ["architecture/test.md"])
+
+    def test_notice_emits_to_stderr(self):
+        """When triggered, the notice must be written to stderr (not stdout)."""
+        import io
+        from contextlib import redirect_stderr
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zone = os.path.join(tmpdir, "runtime")
+            os.makedirs(zone)
+            with open(os.path.join(zone, "doc.md"), "w") as f:
+                f.write(
+                    "---\nid: rt\nrelations:\n"
+                    "  - type: depends_on\n"
+                    "    target: docs/dep.md\n"
+                    "---\n"
+                )
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                check_zone_relations_notice(tmpdir)
+            output = buf.getvalue()
+            self.assertIn("NOTICE", output)
+            self.assertIn("decision gate triggered", output)
+
+    def test_no_zone_dirs_no_notice(self):
+        """When zone directories don't exist, no notice is emitted."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = check_zone_relations_notice(tmpdir)
+            self.assertEqual(result, [])
+
+    def test_multiple_zone_files_listed(self):
+        """All zone files with relations should appear in the result."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for zone_name in ("architecture", "runbooks"):
+                zone = os.path.join(tmpdir, zone_name)
+                os.makedirs(zone)
+                with open(os.path.join(zone, "doc.md"), "w") as f:
+                    f.write(
+                        "---\nid: x\nrelations:\n"
+                        "  - type: relates_to\n"
+                        "    target: docs/x.md\n"
+                        "---\n"
+                    )
+            result = check_zone_relations_notice(tmpdir)
+            self.assertEqual(len(result), 2)
+            paths = [os.path.basename(os.path.dirname(p)) for p in result]
+            self.assertIn("architecture", paths)
+            self.assertIn("runbooks", paths)
 
 
 if __name__ == "__main__":
