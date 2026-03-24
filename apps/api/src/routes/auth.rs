@@ -905,6 +905,66 @@ pub async fn session(Extension(ctx): Extension<AuthContext>) -> impl IntoRespons
     })
 }
 
+pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> impl IntoResponse {
+    if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
+        let old_session_id = cookie.value();
+
+        if let Some(old_session) = state.sessions.get(old_session_id) {
+            let accounts_map = state.accounts.read().await;
+            let is_valid = accounts_map
+                .get(&old_session.account_id)
+                .is_some_and(|acc| !acc.public.disabled);
+            drop(accounts_map);
+
+            state.sessions.delete(old_session_id);
+
+            if !is_valid {
+                tracing::warn!(
+                    event = "session.refresh_failed_disabled",
+                    account_id = %old_session.account_id,
+                    "Session refresh failed: Account disabled or deleted"
+                );
+
+                let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+                let err_payload = serde_json::json!({"error": "SESSION_EXPIRED"});
+                return (
+                    axum::http::StatusCode::UNAUTHORIZED,
+                    jar.add(cookie),
+                    Json(err_payload),
+                )
+                    .into_response();
+            }
+
+            let new_session = state.sessions.create(old_session.account_id);
+
+            let new_cookie = build_session_cookie(new_session.id, None);
+
+            let status = SessionStatus {
+                authenticated: true,
+                expires_at: Some(new_session.expires_at),
+                device_id: None,
+            };
+
+            tracing::info!(
+                event = "session.refreshed",
+                account_id = %new_session.account_id,
+                "Session refreshed"
+            );
+
+            return (jar.add(new_cookie), Json(status)).into_response();
+        }
+    }
+
+    tracing::warn!(
+        event = "session.refresh_failed",
+        reason = "invalid_or_expired_token",
+        "Session refresh failed"
+    );
+
+    let err_payload = serde_json::json!({"error": "SESSION_EXPIRED"});
+    (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

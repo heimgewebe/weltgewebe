@@ -29,7 +29,7 @@ pub async fn auth_middleware(
             let accounts_map = state.accounts.read().await;
             if let Some(internal) = accounts_map.get(&session.account_id) {
                 ctx.authenticated = true;
-                ctx.account_id = Some(session.account_id);
+                ctx.account_id = Some(session.account_id.clone());
                 ctx.role = internal.role.clone();
                 ctx.expires_at = Some(session.expires_at);
             }
