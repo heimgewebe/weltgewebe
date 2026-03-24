@@ -1595,7 +1595,7 @@ async fn test_logout() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn test_logout_all() -> Result<()> {
+async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
     let mut account_map = BTreeMap::new();
     let account = AccountInternal {
