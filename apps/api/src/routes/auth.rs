@@ -879,6 +879,20 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
     (jar.add(cookie), StatusCode::OK)
 }
 
+pub async fn logout_all(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    if let Some(account_id) = ctx.account_id {
+        state.sessions.delete_all_for_account(&account_id);
+    }
+
+    let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+
+    (jar.add(cookie), StatusCode::OK)
+}
+
 pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(AuthStatus {
         authenticated: ctx.authenticated,

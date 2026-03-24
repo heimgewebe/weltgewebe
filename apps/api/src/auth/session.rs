@@ -71,4 +71,9 @@ impl SessionStore {
         let mut store = self.store.write().expect("SessionStore lock poisoned");
         store.remove(session_id);
     }
+
+    pub fn delete_all_for_account(&self, account_id: &str) {
+        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        store.retain(|_, session| session.account_id != account_id);
+    }
 }
