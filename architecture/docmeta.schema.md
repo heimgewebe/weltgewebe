@@ -176,7 +176,10 @@ relations:
 
 ### Decision: Mini-Parser vs. Migration
 
-**Decision: Mini-Parser is sufficient** (as of 2026-03).
+**Decision: Mini-Parser is sufficient for now** (as of 2026-03).
+
+This decision applies to the current, documented subset. It is **not** a
+claim that the parser question is resolved for all future usage patterns.
 
 Rationale:
 
@@ -186,8 +189,15 @@ Rationale:
 * No silent misinterpretation risks for the currently used format.
 * The parser behavior is deterministic and fully tested.
 
+**Epistemic gap:** Zone files (architecture/, runtime/, runbooks/) currently
+all use `relations: []`. The real stress test — non-trivial, semantically
+meaningful relation blocks in zone documents — has not yet occurred. The
+decision above holds under the current simple usage; it must be re-evaluated
+once zone files carry active relations.
+
 Re-evaluate if:
 
+* Zone files begin using non-empty, semantically meaningful relations.
 * Inline mappings or nested structures appear in real documents.
 * A YAML library is already required as a dependency for other reasons.
 

@@ -37,7 +37,8 @@ Explicitly NOT supported (and not planned):
 - Nested structures beyond one level of key-value pairs
 - Anchors, aliases, or any advanced YAML feature
 
-See also: architecture/docmeta.schema.md (normative schema documentation).
+See also: architecture/docmeta.schema.md (normative schema documentation,
+including the decision gate for when to re-evaluate this parser).
 """
 
 import os
