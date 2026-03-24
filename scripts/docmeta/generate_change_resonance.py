@@ -13,7 +13,6 @@ try:
         f.write("title: Change Resonance\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Wenn sich X ändert, prüfe oder aktualisiere Y.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Change Resonance\n\n")

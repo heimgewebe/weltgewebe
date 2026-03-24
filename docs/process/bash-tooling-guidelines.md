@@ -3,8 +3,10 @@ id: process.bash-tooling-guidelines
 title: Bash Tooling Guidelines
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Richtlinien für Shell-Skripting und Bash-Tooling im Projekt.
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Bash-Tooling-Richtlinien
 

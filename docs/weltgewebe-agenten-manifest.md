@@ -3,8 +3,12 @@ id: weltgewebe-agenten-manifest
 title: Weltgewebe Agenten Manifest
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Manifest der Agentenprinzipien – dienend, nicht-autoritativ, ermöglichend.
+relations:
+  - type: relates_to
+    target: docs/policies/orientierung.md
+  - type: relates_to
+    target: docs/vision.md
 ---
 # Weltgewebe-Agenten-Manifest
 

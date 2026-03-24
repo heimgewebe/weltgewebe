@@ -1,10 +1,16 @@
 ---
 id: runbooks.ops.runbook.weltgewebe-selfhost-deploy
-title: Ops.Runbook.Weltgewebe Selfhost Deploy
+title: Selfhost-Deploy Runbook
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Operatives Runbook für Selfhost-Deployments des Weltgewebe.
+relations:
+  - type: relates_to
+    target: docs/runbooks/README.md
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
 ---
 # Ops Runbook: Weltgewebe Self-Hosted Deployment
 

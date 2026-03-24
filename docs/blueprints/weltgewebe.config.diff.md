@@ -1,10 +1,12 @@
 ---
 id: blueprints.weltgewebe.config.diff
-title: Weltgewebe.Config.Diff
+title: Config Diff
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Vergleich und Dokumentation von Konfigurationsunterschieden.
+relations:
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Blueprint Configuration Diff
 

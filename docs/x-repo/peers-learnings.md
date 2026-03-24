@@ -3,8 +3,10 @@ id: x-repo.peers-learnings
 title: Peers Learnings
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Erkenntnisse und Learnings aus verwandten Peer-Projekten.
+relations:
+  - type: relates_to
+    target: docs/x-repo/semantAH.md
 ---
 
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil

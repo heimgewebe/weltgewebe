@@ -1,10 +1,14 @@
 ---
 id: x-repo.semantAH
-title: Semantah
+title: SemanticAH
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Integrations-Notizen und Verknüpfung mit dem SemanticAH-Ökosystem.
+relations:
+  - type: relates_to
+    target: docs/x-repo/peers-learnings.md
+  - type: relates_to
+    target: docs/adr/0042-consume-semantah-contracts.md
 ---
 Weltgewebe könnte perspektivisch semantAH-Exports konsumieren.
 Aktueller Stand: keine aktive Anbindung, keine CI-Validierung, keine Import-Jobs.

@@ -3,8 +3,10 @@ id: reference.glossar
 title: Glossar
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Schnellreferenz der zentralen Begriffe im Weltgewebe-Projekt.
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
 ---
 # Glossar
 

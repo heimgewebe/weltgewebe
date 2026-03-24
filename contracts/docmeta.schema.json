@@ -1,10 +1,58 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Unified DocMeta schema — single canonical model for all repo documents. One relation mechanism: relations[].",
   "type": "object",
   "properties": {
     "id": {
       "type": "string",
       "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "canonical",
+        "active",
+        "deprecated",
+        "draft"
+      ]
+    },
+    "doc_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "relates_to",
+              "depends_on",
+              "supersedes"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "type",
+          "target"
+        ],
+        "additionalProperties": false
+      },
+      "description": "Canonical relation mechanism. Each entry is a typed relationship to a target document (repo-root-relative path)."
     },
     "role": {
       "type": "string",
@@ -13,34 +61,25 @@
         "reality",
         "runbooks",
         "action"
-      ]
+      ],
+      "description": "Zone-specific: document role within the zone hierarchy."
     },
     "organ": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^[a-z0-9-]+$"
-    },
-    "status": {
-      "type": "string",
-      "enum": [
-        "canonical"
-      ]
+      "pattern": "^[a-z0-9-]+$",
+      "description": "Zone-specific: organizational unit."
     },
     "last_reviewed": {
       "type": "string",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
     },
-    "depends_on": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
     "verifies_with": {
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "description": "Zone-specific: scripts that verify this document."
     },
     "audit_gaps": {
       "type": "array",
@@ -51,11 +90,9 @@
   },
   "required": [
     "id",
-    "role",
+    "title",
     "status",
-    "last_reviewed",
-    "depends_on",
-    "verifies_with"
+    "summary"
   ],
   "additionalProperties": false
 }

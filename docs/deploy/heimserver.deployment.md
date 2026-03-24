@@ -1,10 +1,16 @@
 ---
 id: deploy.heimserver.deployment
-title: Heimserver.Deployment
+title: Heimserver Deployment
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Deployment-Runbook für Weltgewebe auf dem Heimserver.
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deploy/heimserver.integration.md
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Weltgewebe – Deployment Runbook (Heimserver)
 

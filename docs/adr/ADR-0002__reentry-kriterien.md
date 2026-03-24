@@ -1,10 +1,12 @@
 ---
 id: adr.ADR-0002__reentry-kriterien
-title: Adr 0002__Reentry Kriterien
+title: ADR-0002 — Reentry-Kriterien
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Entscheidung zu Reentry-Kriterien für das Projekt.
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
 ---
 # ADR-0002 — Re-Entry-Kriterien (Gates)
 

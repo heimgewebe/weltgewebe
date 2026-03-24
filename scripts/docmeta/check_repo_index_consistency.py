@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
 def main():
     try:
@@ -68,7 +68,7 @@ def main():
             if role not in ('norm', 'reality', 'runbooks', 'action'):
                 errors.append(f"Invalid role '{role}' in '{rel_file_path}'. Must be norm|reality|runbooks|action.")
 
-            depends_on = normalize_list_field(frontmatter.get('depends_on', []))
+            depends_on = extract_depends_on(frontmatter)
             verifies_with = normalize_list_field(frontmatter.get('verifies_with', []))
 
             if doc_id:

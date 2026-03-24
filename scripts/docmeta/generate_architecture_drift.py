@@ -13,7 +13,6 @@ try:
         f.write("title: Architecture Drift\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Automatisch generierter Report über Architektur-Drift.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Architecture Drift\n\n")

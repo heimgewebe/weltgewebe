@@ -3,8 +3,14 @@ id: datenmodell
 title: Datenmodell
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Dokumentation des PostgreSQL-Datenmodells mit Kernentitäten, Beziehungen und Lese-Modellen.
+relations:
+  - type: relates_to
+    target: docs/architekturstruktur.md
+  - type: relates_to
+    target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/techstack.md
 ---
 # Datenmodell
 

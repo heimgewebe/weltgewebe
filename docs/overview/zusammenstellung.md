@@ -1,10 +1,14 @@
 ---
 id: overview.zusammenstellung
-title: Zusammenstellung
+title: Zusammenstellung (Übersicht)
 doc_type: reference
 status: active
-canonicality: canonical
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Systematische Zusammenfassung aus der Übersichtsperspektive.
+relations:
+  - type: relates_to
+    target: docs/zusammenstellung.md
+  - type: relates_to
+    target: docs/overview/inhalt.md
 ---
 # Systematik & Strukturüberblick
 

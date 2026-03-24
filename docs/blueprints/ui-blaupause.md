@@ -3,11 +3,12 @@ id: ui-blaupause
 title: Weltgewebe UI-Blaupause
 doc_type: blueprint
 status: canonical
-canonicality: This document is the canonical source of truth for the UI architecture.
 summary: Defines the core principles, layout, and interaction model for the Weltgewebe mobile-first UI.
-related_docs:
-  - docs/blueprints/ui-state-machine.md
-  - docs/blueprints/ui-roadmap.md
+relations:
+  - type: relates_to
+    target: docs/blueprints/ui-state-machine.md
+  - type: relates_to
+    target: docs/blueprints/ui-roadmap.md
 ---
 
 # Weltgewebe – UI-Blaupause

@@ -99,7 +99,6 @@ try:
         f.write("title: Doc Coverage\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Automatisch generierter Report über die Dokumentationsabdeckung.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Doc Coverage\n\n")

@@ -1,10 +1,12 @@
 ---
 id: edge.systemd.README
-title: Readme
+title: Edge Systemd
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Systemd-Konfiguration für den Edge-Gateway-Dienst.
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Edge systemd units (optional)
 

@@ -1,10 +1,16 @@
 ---
 id: deploy.heimserver.integration
-title: Heimserver.Integration
+title: Heimserver Integration
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: API-Integrationsdokumentation für das Heimserver-Deployment.
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/deployment.md
 ---
 # Weltgewebe API – Heimserver Integration
 

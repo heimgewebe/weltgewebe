@@ -3,7 +3,6 @@ id: docs.generated.change-resonance
 title: Change Resonance
 doc_type: generated
 status: active
-canonicality: derived
 summary: Wenn sich X ändert, prüfe oder aktualisiere Y.
 ---
 

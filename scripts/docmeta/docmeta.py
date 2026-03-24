@@ -5,7 +5,7 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 def normalize_list_field(value):
     """
-    Normalizes a frontmatter list field (like depends_on or verifies_with)
+    Normalizes a frontmatter list field (like relations or verifies_with)
     which could be a string, a stringified list, a list, or None,
     and returns a clean list of strings.
     """
@@ -17,6 +17,24 @@ def normalize_list_field(value):
     elif isinstance(value, list):
         return value
     return []
+
+
+def extract_depends_on(frontmatter):
+    """
+    Extract depends_on targets from the relations array.
+    Returns a list of target strings where type == 'depends_on'.
+    For zone files with relations: [], returns [].
+    """
+    relations = frontmatter.get('relations', [])
+    if not isinstance(relations, list):
+        return []
+    deps = []
+    for entry in relations:
+        if isinstance(entry, dict) and entry.get('type') == 'depends_on':
+            target = entry.get('target', '')
+            if target:
+                deps.append(target)
+    return deps
 
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
@@ -33,6 +51,7 @@ def parse_frontmatter(file_path):
     frontmatter_text = match.group(1)
     data = {}
     current_key = None
+    current_dict_entry = None
 
     for line in frontmatter_text.splitlines():
         # Keep original indentation to identify block lists
@@ -41,8 +60,25 @@ def parse_frontmatter(file_path):
             continue
 
         if line.startswith(' ') and stripped_line.startswith('- ') and current_key:
-            if current_key in ['depends_on', 'verifies_with', 'audit_gaps']:
-                # It's a block list item
+            if current_key == 'relations':
+                # Flush any pending dict entry
+                if current_dict_entry is not None:
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(current_dict_entry)
+                    current_dict_entry = None
+
+                val = stripped_line[2:].strip()
+                if ':' in val:
+                    # Dict-style list item: "- type: relates_to"
+                    k, v = val.split(':', 1)
+                    current_dict_entry = {k.strip(): v.strip()}
+                else:
+                    # Bare list item
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(val)
+                continue
+            elif current_key in ['verifies_with', 'audit_gaps']:
+                # It's a block list item (string values)
                 val = stripped_line[2:].strip()
                 # Handle quoted strings in lists
                 if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
@@ -55,9 +91,23 @@ def parse_frontmatter(file_path):
                         data[current_key] = [data[current_key], val]
                     else:
                         data[current_key] = [val]
+                continue
+
+        # Handle continuation keys within a relations dict entry
+        if (line.startswith(' ') and current_key == 'relations'
+                and current_dict_entry is not None and ':' in stripped_line
+                and not stripped_line.startswith('- ')):
+            k, v = stripped_line.split(':', 1)
+            current_dict_entry[k.strip()] = v.strip()
             continue
 
         if ':' in line:
+            # Flush pending dict entry before processing new top-level key
+            if current_dict_entry is not None and current_key == 'relations':
+                if isinstance(data.get(current_key), list):
+                    data[current_key].append(current_dict_entry)
+                current_dict_entry = None
+
             key, val = line.split(':', 1)
             key = key.strip()
             val = val.strip()
@@ -70,7 +120,7 @@ def parse_frontmatter(file_path):
                         items[i] = item[1:-1]
                 val = items
                 current_key = None # Completed inline list
-            elif val == '' and key in ['depends_on', 'verifies_with', 'audit_gaps']:
+            elif val == '' and key in ['relations', 'verifies_with', 'audit_gaps']:
                 # Initialize empty list for potential block list parsing on valid fields
                 val = []
                 current_key = key # Track to append items
@@ -84,6 +134,11 @@ def parse_frontmatter(file_path):
                 current_key = None # Scalar completed
 
             data[key] = val
+
+    # Flush any remaining dict entry
+    if current_dict_entry is not None and current_key == 'relations':
+        if isinstance(data.get(current_key), list):
+            data[current_key].append(current_dict_entry)
 
     return data
 

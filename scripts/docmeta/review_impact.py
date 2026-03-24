@@ -2,7 +2,7 @@ import os
 import sys
 import json
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
 def main():
     try:
@@ -48,7 +48,7 @@ def main():
             id_to_file[doc_id] = rel_file_path
             file_to_id[rel_file_path] = doc_id
 
-            depends_on = normalize_list_field(frontmatter.get('depends_on', []))
+            depends_on = extract_depends_on(frontmatter)
 
             forward_deps[doc_id] = depends_on
 

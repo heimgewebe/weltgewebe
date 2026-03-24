@@ -67,7 +67,6 @@ try:
         f.write("title: Knowledge Gaps\n")
         f.write("doc_type: generated\n")
         f.write("status: active\n")
-        f.write("canonicality: derived\n")
         f.write("summary: Automatisch markierte Wissenslücken in der Repo-Landschaft.\n")
         f.write("---\n\n")
         f.write("## Weltgewebe Knowledge Gaps\n\n")
