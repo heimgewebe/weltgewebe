@@ -108,7 +108,10 @@ mod tests {
     fn create_returns_uuid_format() {
         let store = TokenStore::new();
         let token = store.create("user@example.com".to_string());
-        assert!(uuid::Uuid::parse_str(&token).is_ok(), "Token should be valid UUID");
+        assert!(
+            uuid::Uuid::parse_str(&token).is_ok(),
+            "Token should be valid UUID"
+        );
     }
 
     #[test]
@@ -145,10 +148,8 @@ mod tests {
     #[test]
     fn expired_token_returns_none_for_peek_and_consume() {
         let store = TokenStore::new();
-        let token = store.create_with_expiry(
-            "user@example.com".to_string(),
-            Duration::milliseconds(1),
-        );
+        let token =
+            store.create_with_expiry("user@example.com".to_string(), Duration::milliseconds(1));
 
         std::thread::sleep(std::time::Duration::from_millis(50));
 
