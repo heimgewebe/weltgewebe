@@ -73,7 +73,7 @@
     },
     "logout": {
       "soll": "POST /auth/logout",
-      "ist": "Ein Logout-Codepfad ist im aktuellen Code vorhanden (/auth/logout). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch",
+      "ist": "Ein Logout-Codepfad ist im aktuellen Code vorhanden (/auth/logout) und durch API-Tests verifiziert. Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
