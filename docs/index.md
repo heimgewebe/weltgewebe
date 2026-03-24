@@ -69,6 +69,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Inhalt/Story:** [inhalt.md](inhalt.md), [zusammenstellung.md](zusammenstellung.md)
 – **Vision & Geist:** [geist-und-plan.md](geist-und-plan.md)
 – **X-Repo Learnings:** [x-repo/peers-learnings.md](x-repo/peers-learnings.md), [x-repo/semantAH.md](x-repo/semantAH.md)
+– **Repository-Übersicht:** [overview/repos.md](overview/repos.md)
 – **Beitragen:** [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 ### Policies & Orientierung

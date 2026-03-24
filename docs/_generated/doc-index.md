@@ -53,6 +53,7 @@ Generated automatically. Do not edit.
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
 | overview.inhalt | Inhalt (Übersicht) | reference | active | docs/overview/inhalt.md |
+| overview.repos | Repository-Übersicht | reference | active | docs/overview/repos.md |
 | overview.zusammenstellung | Zusammenstellung (Übersicht) | reference | active | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | docs/policies/orientierung.md |
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |

@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 140 |
-| — relates_to | 139 |
+| Relationen gesamt | 143 |
+| — relates_to | 142 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -62,8 +62,9 @@ _Keine Lücken erkannt._
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
 
-**Cluster 2** (17 Dokumente):
+**Cluster 2** (21 Dokumente):
 
+- `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/architekturstruktur.md`
@@ -73,6 +74,7 @@ _Keine Lücken erkannt._
 - `docs/geist-und-plan.md`
 - `docs/inhalt.md`
 - `docs/overview/inhalt.md`
+- `docs/overview/repos.md`
 - `docs/overview/zusammenstellung.md`
 - `docs/policies/orientierung.md`
 - `docs/reference/glossar.md`
@@ -80,6 +82,8 @@ _Keine Lücken erkannt._
 - `docs/techstack.md`
 - `docs/vision.md`
 - `docs/weltgewebe-agenten-manifest.md`
+- `docs/x-repo/peers-learnings.md`
+- `docs/x-repo/semantAH.md`
 - `docs/zusammenstellung.md`
 
 **Cluster 3** (12 Dokumente):
@@ -105,13 +109,7 @@ _Keine Lücken erkannt._
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
 
-**Cluster 5** (3 Dokumente):
-
-- `docs/adr/0042-consume-semantah-contracts.md`
-- `docs/x-repo/peers-learnings.md`
-- `docs/x-repo/semantAH.md`
-
-**Cluster 6** (2 Dokumente):
+**Cluster 5** (2 Dokumente):
 
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
