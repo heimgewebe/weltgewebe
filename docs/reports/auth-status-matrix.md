@@ -66,7 +66,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | verw. Codepfad implementiert, Zielrahmen-E2E offen | Teil   | mittel  |
+| Logout All            | required    | Codepfad implementiert, Zielrahmen-E2E offen | Teil   | mittel  |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |

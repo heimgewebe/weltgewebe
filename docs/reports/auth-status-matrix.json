@@ -89,13 +89,13 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all implementiert und mit API-Tests belegt. E2E Runtime-Beleg gegen Zielrahmen fehlt noch.",
+      "ist": "POST /auth/logout-all ist im Code implementiert und durch API-Tests belegt. Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
         "End-to-End-Test"
       ],
-      "risk": "hoch",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/tests/api_auth.rs",
