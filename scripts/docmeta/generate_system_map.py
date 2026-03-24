@@ -2,7 +2,7 @@ import os
 import sys
 import datetime
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field
+from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
 def main():
     try:
@@ -21,7 +21,6 @@ def main():
         "title: System Map",
         "doc_type: generated",
         "status: active",
-        "canonicality: derived",
         "summary: Automatisch generierte System Map.",
         "---",
         "## Weltgewebe System Map\n\nGenerated automatically. Do not edit.\n\nSource: scripts/docmeta/generate_system_map.py\n"
@@ -73,7 +72,7 @@ def main():
                 else:
                     freshness_status = "missing"
 
-                depends_on_list = normalize_list_field(frontmatter.get('depends_on', []))
+                depends_on_list = extract_depends_on(frontmatter)
                 depends_on_str = ', '.join(depends_on_list)
 
                 vw_list = normalize_list_field(frontmatter.get('verifies_with', []))

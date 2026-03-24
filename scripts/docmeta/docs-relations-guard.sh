@@ -31,7 +31,7 @@ with open(file_path, 'r', encoding='utf-8') as f:
             break
         frontmatter.append(line)
 
-required_fields = ['id:', 'title:', 'doc_type:', 'status:', 'canonicality:', 'summary:']
+required_fields = ['id:', 'title:', 'status:', 'summary:']
 fm_str = ''.join(frontmatter)
 
 missing = []
@@ -47,6 +47,38 @@ for field in required_fields:
 if missing:
     print(f'ERROR: Frontmatter missing fields {missing} in {file_path}')
     sys.exit(1)
+
+# Reject placeholder summaries that carry no real information
+placeholder_patterns = [
+    'Automatisch hinzugefügtes Frontmatter',
+    'TODO',
+    'FIXME',
+    'PLACEHOLDER',
+]
+summary_value = ''
+in_summary = False
+for line in frontmatter:
+    stripped = line.strip()
+    if not in_summary:
+        if stripped.startswith('summary:'):
+            val = stripped[len('summary:'):].strip()
+            if val == '>' or val == '|':
+                in_summary = True
+                continue
+            summary_value = val.strip('\"').strip(\"'\")
+            break
+    else:
+        # In YAML block scalars (> or |), continuation lines are indented.
+        # An unindented line means the block ended.
+        if line[0:1] in ('', ' ', '\t') and stripped:
+            summary_value += (' ' if summary_value else '') + stripped
+        else:
+            break
+
+for pattern in placeholder_patterns:
+    if pattern.lower() in summary_value.lower():
+        print(f'ERROR: Placeholder summary detected in {file_path}: \"{summary_value}\"')
+        sys.exit(1)
 
 sys.exit(0)
 " "$file" || FAIL=1

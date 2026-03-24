@@ -1,10 +1,14 @@
 ---
 id: specs.contract
-title: Contract
+title: Datenvertrag
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Spezifikation der Datenverträge zwischen Frontend und API.
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/datenmodell.md
 ---
 # Weltgewebe Contract – Löschkonzept (Tombstone & Key-Erase)
 

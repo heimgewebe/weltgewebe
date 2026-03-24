@@ -106,6 +106,7 @@
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
+  let mapStyleReady = false;
   let isLoading = true;
   let lastFocusedElement: HTMLElement | null = null;
   let showFilterTooltip = false;
@@ -147,13 +148,9 @@
     })();
   }
 
-  // Reactive update for edges
-  $: if (map && markersData && edgesData && $view && map.getStyle()) {
-     if (map.isStyleLoaded()) {
-        updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
-     } else {
-        map.once('styledata', () => updateEdges(map!, edgesData, filteredMarkersData, $view.showEdges));
-     }
+  // Reactive update for edges – only after map style is fully loaded
+  $: if (map && mapStyleReady && edgesData && $view) {
+     updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
   }
 
 
@@ -333,6 +330,7 @@
       const finishLoading = () => {
         clearTimeout(loadingTimeout);
         isLoading = false;
+        mapStyleReady = true;
 
         const currentSelection = get(selection);
         const currentSystemState = get(systemState);

@@ -3,8 +3,10 @@ id: konzepte.garnrolle
 title: Garnrolle
 doc_type: reference
 status: deprecated
-canonicality: derived
 summary: Veraltetes Dokument. Bitte docs/konzepte/garnrolle-und-verortung.md nutzen.
+relations:
+  - type: relates_to
+    target: docs/konzepte/garnrolle-und-verortung.md
 ---
 # Garnrolle (Veraltet)
 

@@ -3,8 +3,10 @@ id: process.fahrplan
 title: Fahrplan
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Zeitlicher Ablauf und Meilensteine des Projekts (Gates A–D).
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Fahrplan
 

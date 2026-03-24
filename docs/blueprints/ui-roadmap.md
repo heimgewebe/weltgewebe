@@ -3,8 +3,12 @@ id: ui-roadmap
 title: Weltgewebe UI Roadmap
 doc_type: blueprint
 status: canonical
-canonicality: This document is the canonical source of truth for the UI implementation roadmap.
 summary: Konkrete Priorisierung und Meilensteinplanung für den Ausbau der Weltgewebe UI.
+relations:
+  - type: relates_to
+    target: docs/blueprints/ui-blaupause.md
+  - type: relates_to
+    target: docs/blueprints/ui-state-machine.md
 ---
 
 # Weltgewebe UI Roadmap

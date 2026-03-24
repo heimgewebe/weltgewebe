@@ -3,8 +3,14 @@ id: zusammenstellung
 title: Zusammenstellung
 doc_type: reference
 status: active
-canonicality: canonical
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Systematische Zusammenfassung von Prinzipien, Domänenmodell, Governance und UI-Architektur.
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/inhalt.md
+  - type: relates_to
+    target: docs/architekturstruktur.md
 ---
 # Zusammenstellung (MANDATORISCH)
 

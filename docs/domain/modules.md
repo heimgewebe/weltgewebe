@@ -1,10 +1,12 @@
 ---
 id: domain.modules
-title: Modules
+title: Modul-IDs
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Kanonische Policy für Modul-IDs im Weltgewebe (profile, forum, responsibilities).
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
 ---
 # Modul-IDs im Weltgewebe
 

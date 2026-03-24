@@ -1,10 +1,16 @@
 ---
 id: domain.vocabulary
-title: Vocabulary
+title: Domänenvokabular
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Zuordnung von Domänenbegriffen zu technischen API-Konzepten (node, role, edge, conversation, message).
+relations:
+  - type: relates_to
+    target: docs/domain/modules.md
+  - type: relates_to
+    target: docs/datenmodell.md
+  - type: relates_to
+    target: docs/specs/contract.md
 ---
 |Domäne|Deutsch|Technik/API|Bedeutung|
 |---|---|---|---|

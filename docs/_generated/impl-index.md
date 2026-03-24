@@ -3,7 +3,6 @@ id: docs.generated.impl-index
 title: Implementation Index
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierter Index kritischer Implementierungen.
 ---
 

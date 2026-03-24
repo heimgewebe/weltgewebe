@@ -1,10 +1,16 @@
 ---
 id: process.README
-title: Readme
+title: Prozess-Übersicht
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Übersicht über Abläufe, Konventionen und den Fahrplan des Projekts.
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
+  - type: relates_to
+    target: docs/process/sprache.md
+  - type: relates_to
+    target: docs/process/bash-tooling-guidelines.md
 ---
 # Prozess
 

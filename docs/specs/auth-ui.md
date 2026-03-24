@@ -3,8 +3,14 @@ id: specs.auth-ui
 title: Auth UI Spec
 doc_type: reference
 status: active
-canonicality: derived
 summary: Beschreibt Login-, Wiederkehr-, Step-up- und Geräteverwaltungsflüsse für die Auth-UI.
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/specs/auth-api.md
+  - type: relates_to
+    target: docs/specs/auth-state-machine.md
 ---
 
 # Auth UI Spec

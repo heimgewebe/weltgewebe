@@ -3,9 +3,11 @@ id: docs.runbook.observability
 title: Observability Runbook
 doc_type: runbook
 status: active
-canonicality: canonical
 summary: >
   Runbook für Systembeobachtung und Metriken.
+relations:
+  - type: relates_to
+    target: docs/runbook.md
 ---
 ## Observability – Local Profile
 

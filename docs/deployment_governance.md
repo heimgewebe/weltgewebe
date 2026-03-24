@@ -1,10 +1,14 @@
 ---
 id: deployment_governance
-title: Deployment_Governance
+title: Deployment Governance
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Port-Ownership-Regeln und Health-Check-Strategie für Heimserver-Deployments.
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Deployment Governance: Port Ownership
 

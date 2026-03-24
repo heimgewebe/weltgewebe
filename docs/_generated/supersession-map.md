@@ -3,7 +3,6 @@ id: docs.generated.supersession-map
 title: Supersession Map
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierte Karte der abgelösten Dokumente.
 ---
 
@@ -11,4 +10,4 @@ summary: Automatisch generierte Karte der abgelösten Dokumente.
 
 Generated automatically. Do not edit.
 
-_No supersession relations found._
+- docs/konzepte/garnrolle.md → superseded by → docs/konzepte/garnrolle-und-verortung.md

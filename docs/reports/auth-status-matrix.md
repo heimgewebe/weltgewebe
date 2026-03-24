@@ -3,8 +3,12 @@ id: reports.auth-status-matrix
 title: Auth Status Matrix
 doc_type: reference
 status: active
-canonicality: canonical
 summary: Wahrheitsfilter und Statusmatrix der Auth-Architektur (Alt-/Ist-Linie vs Ziel-/Soll-Linie) zur Erkennung von Architekturdrift.
+relations:
+  - type: relates_to
+    target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/blueprints/auth-roadmap.md
 ---
 
 # Auth Status Matrix – Weltgewebe
@@ -64,7 +68,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
-| Session Refresh       | required    | Runtime-Beleg offen | Offen  | hoch    |
+| Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
@@ -99,11 +103,11 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.3 Session Refresh
 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
-**Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** POST `/auth/session/refresh` ist im MVP implementiert und durch API-Tests belegt; der Zielrahmen mit Persistenz und Token-Split ist noch offen.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/tests/api_auth.rs`
+**Fehlende Belege:** Echte E2E Persistenz, Vollständiger Token-Split (Access/Refresh)
+**Status:** Teil
 **Risiko:** hoch
 
 ### 2.4 Logout
@@ -119,7 +123,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -129,7 +133,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -139,7 +143,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case
@@ -149,7 +153,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.8 Passkeys
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
-**Ist:** gegen neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** keine
 **Fehlende Belege:** Routen-Code, Test-Case

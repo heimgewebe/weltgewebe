@@ -3,14 +3,12 @@ id: deploy.security
 title: Deploy Security
 doc_type: architecture
 status: active
-canonicality: canonical
 summary: Security configuration and CSP rules for deployment.
-role: reality
-organ: deploy
-last_reviewed: 2026-03-06
-depends_on: []
-verifies_with: []
-audit_gaps: []
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 
 ## Deploy Security

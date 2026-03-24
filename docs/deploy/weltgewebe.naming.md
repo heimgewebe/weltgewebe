@@ -1,10 +1,12 @@
 ---
 id: deploy.weltgewebe.naming
-title: Weltgewebe.Naming
+title: Weltgewebe Naming
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Namenskonventionen für Deployment-Artefakte und Container.
+relations:
+  - type: relates_to
+    target: docs/deploy/README.md
 ---
 # Weltgewebe Naming Policy
 

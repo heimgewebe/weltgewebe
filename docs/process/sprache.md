@@ -3,8 +3,10 @@ id: process.sprache
 title: Sprache
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Sprachrichtlinien und Konventionen für Dokumentation und Kommunikation.
+relations:
+  - type: relates_to
+    target: docs/process/README.md
 ---
 # Sprache & Ton im Weltgewebe
 

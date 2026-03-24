@@ -3,7 +3,6 @@ id: docs.generated.agent-readiness
 title: Agent Readiness
 doc_type: generated
 status: active
-canonicality: derived
 summary: Zusammenfassung der agentischen Reife.
 ---
 

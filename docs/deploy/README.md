@@ -1,10 +1,20 @@
 ---
 id: deploy.README
-title: Readme
+title: Deployment-Übersicht
 doc_type: reference
 status: active
-canonicality: derived
-summary: Automatisch hinzugefügtes Frontmatter.
+summary: Kanonischer Deployment-Stand und normative Beschreibung der Laufzeitumgebung.
+relations:
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deployment_governance.md
+  - type: relates_to
+    target: docs/deploy/heimserver.deployment.md
+  - type: relates_to
+    target: docs/deploy/heimserver.integration.md
+  - type: relates_to
+    target: docs/deploy/security.md
 ---
 # Weltgewebe – Deployment
 

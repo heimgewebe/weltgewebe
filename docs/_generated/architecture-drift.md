@@ -3,7 +3,6 @@ id: docs.generated.architecture-drift
 title: Architecture Drift
 doc_type: generated
 status: active
-canonicality: derived
 summary: Automatisch generierter Report über Architektur-Drift.
 ---
 
