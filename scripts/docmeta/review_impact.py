@@ -69,7 +69,7 @@ def main():
 
             id_to_file[doc_id] = rel_file_path
 
-            depends_on = extract_depends_on(frontmatter)
+            depends_on = _get_depends_on(frontmatter)
 
             forward_deps[doc_id] = depends_on
 
