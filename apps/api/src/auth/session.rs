@@ -72,3 +72,67 @@ impl SessionStore {
         store.remove(session_id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn create_produces_session_with_correct_account_id() {
+        let store = SessionStore::new();
+        let session = store.create("account-42".to_string());
+        assert_eq!(session.account_id, "account-42");
+    }
+
+    #[test]
+    fn create_produces_unique_session_ids() {
+        let store = SessionStore::new();
+        let s1 = store.create("a".to_string());
+        let s2 = store.create("b".to_string());
+        assert_ne!(s1.id, s2.id);
+    }
+
+    #[test]
+    fn get_returns_created_session() {
+        let store = SessionStore::new();
+        let session = store.create("account-1".to_string());
+        let retrieved = store.get(&session.id);
+        assert!(retrieved.is_some());
+        assert_eq!(retrieved.unwrap().account_id, "account-1");
+    }
+
+    #[test]
+    fn get_returns_none_for_unknown_id() {
+        let store = SessionStore::new();
+        assert!(store.get("nonexistent-id").is_none());
+    }
+
+    #[test]
+    fn delete_removes_session() {
+        let store = SessionStore::new();
+        let session = store.create("account-1".to_string());
+        store.delete(&session.id);
+        assert!(store.get(&session.id).is_none());
+    }
+
+    #[test]
+    fn session_expires_at_is_approximately_one_day() {
+        let store = SessionStore::new();
+        let before = Utc::now();
+        let session = store.create("account-1".to_string());
+        let after = Utc::now();
+
+        let expected_min = before + Duration::days(1);
+        let expected_max = after + Duration::days(1);
+
+        assert!(session.expires_at >= expected_min);
+        assert!(session.expires_at <= expected_max);
+    }
+
+    #[test]
+    fn is_expired_returns_false_for_new_session() {
+        let store = SessionStore::new();
+        let session = store.create("account-1".to_string());
+        assert!(!session.is_expired());
+    }
+}

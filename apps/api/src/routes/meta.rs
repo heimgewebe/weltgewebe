@@ -16,3 +16,20 @@ async fn version() -> Json<Value> {
         "build_timestamp": info.build_timestamp,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::telemetry::BuildInfo;
+
+    #[test]
+    fn build_info_version_is_not_empty() {
+        let info = BuildInfo::collect();
+        assert!(!info.version.is_empty(), "version must not be empty");
+    }
+
+    #[test]
+    fn build_info_version_matches_cargo_pkg() {
+        let info = BuildInfo::collect();
+        assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+    }
+}

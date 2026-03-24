@@ -25,6 +25,7 @@
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
     "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
+    "test:unit": "vitest run",
     "test": "playwright test",
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=dot,html,junit",
@@ -54,7 +55,8 @@
     "svelte": "^5.53.5",
     "svelte-check": "^4.3.2",
     "typescript": "5.9.2",
-    "vite": "^5.4.10"
+    "vite": "^5.4.10",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
     "maplibre-gl": "4.7.1",

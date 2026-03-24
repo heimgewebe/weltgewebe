@@ -77,7 +77,7 @@ def parse_frontmatter(file_path):
                     if isinstance(data[current_key], list):
                         data[current_key].append(val)
                 continue
-            elif current_key in ['verifies_with', 'audit_gaps']:
+            elif current_key in ['verifies_with', 'audit_gaps', 'depends_on']:
                 # It's a block list item (string values)
                 val = stripped_line[2:].strip()
                 # Handle quoted strings in lists
@@ -120,7 +120,7 @@ def parse_frontmatter(file_path):
                         items[i] = item[1:-1]
                 val = items
                 current_key = None # Completed inline list
-            elif val == '' and key in ['relations', 'verifies_with', 'audit_gaps']:
+            elif val == '' and key in ['relations', 'verifies_with', 'audit_gaps', 'depends_on']:
                 # Initialize empty list for potential block list parsing on valid fields
                 val = []
                 current_key = key # Track to append items

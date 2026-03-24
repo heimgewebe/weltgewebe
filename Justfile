@@ -18,6 +18,10 @@ reset-web:
 alias c := ci
 
 ci:
+	# Web: build, lint, typecheck (budget + prettier + eslint + svelte-check).
+	# Unit tests (vitest) run canonically in web.yml, not here, to avoid
+	# double execution when both ci.yml and web.yml trigger on the same PR.
+	# web.yml is path-scoped to apps/web/** and runs test:unit before Playwright.
 	@echo "==> Web: install, sync, build, typecheck"
 	if [ -d apps/web ]; then \
 		pushd apps/web >/dev/null; \

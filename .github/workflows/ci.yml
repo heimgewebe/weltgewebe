@@ -41,11 +41,8 @@ jobs:
           filters: |
             docs:
               - '**/*.md'
-              - '**/*.yml'
-              - '**/*.yaml'
               - '.markdownlint.*'
               - '.yamllint*'
-              - '.github/workflows/ci.yml'
 
   ci:
     needs: docs-changes
@@ -200,10 +197,26 @@ jobs:
           cargo-deny --version
           just --version
 
+      # CI Test Architecture:
+      #   ci.yml — build, lint, typecheck (web + API), cargo test, cargo-deny (via just ci),
+      #            plus guard script tests (compose, token-leak, metrics-ref).
+      #   web.yml (Gate A) — web unit tests (vitest) + Playwright E2E. Path-scoped to apps/web/**.
+      #   Vitest deliberately runs only in web.yml to avoid double execution on PRs
+      #   that trigger both workflows. See also: Justfile ci recipe, web.yml header.
       - name: Validate project
         env:
           CARGO_TERM_COLOR: always
         run: just ci
+
+      - name: Guard script tests
+        run: |
+          set -euo pipefail
+          for t in scripts/tests/test_token_leak_guard.sh \
+                   scripts/tests/test_compose_volumes_guard.sh \
+                   scripts/tests/test_metrics_ref_guard.sh; do
+            echo "── $t ──"
+            bash "$t"
+          done
 
   web-e2e:
     name: Web E2E

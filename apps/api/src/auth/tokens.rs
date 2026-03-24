@@ -85,3 +85,75 @@ impl TokenStore {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_token_consistent() {
+        let hash1 = TokenStore::hash_token("test-token");
+        let hash2 = TokenStore::hash_token("test-token");
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn hash_token_different_inputs_produce_different_hashes() {
+        let hash1 = TokenStore::hash_token("token-a");
+        let hash2 = TokenStore::hash_token("token-b");
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn create_returns_uuid_format() {
+        let store = TokenStore::new();
+        let token = store.create("user@example.com".to_string());
+        assert!(
+            uuid::Uuid::parse_str(&token).is_ok(),
+            "Token should be valid UUID"
+        );
+    }
+
+    #[test]
+    fn peek_returns_email_for_valid_token() {
+        let store = TokenStore::new();
+        let token = store.create("user@example.com".to_string());
+        assert_eq!(store.peek(&token), Some("user@example.com".to_string()));
+    }
+
+    #[test]
+    fn peek_returns_none_for_unknown_token() {
+        let store = TokenStore::new();
+        assert_eq!(store.peek("nonexistent-token"), None);
+    }
+
+    #[test]
+    fn consume_returns_email_and_removes_token() {
+        let store = TokenStore::new();
+        let token = store.create("user@example.com".to_string());
+
+        let first = store.consume(&token);
+        assert_eq!(first, Some("user@example.com".to_string()));
+
+        let second = store.consume(&token);
+        assert_eq!(second, None);
+    }
+
+    #[test]
+    fn consume_returns_none_for_unknown_token() {
+        let store = TokenStore::new();
+        assert_eq!(store.consume("nonexistent-token"), None);
+    }
+
+    #[test]
+    fn expired_token_returns_none_for_peek_and_consume() {
+        let store = TokenStore::new();
+        let token =
+            store.create_with_expiry("user@example.com".to_string(), Duration::milliseconds(1));
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        assert_eq!(store.peek(&token), None);
+        assert_eq!(store.consume(&token), None);
+    }
+}

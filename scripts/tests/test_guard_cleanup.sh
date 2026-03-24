@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Non-core guard test — not part of CI guard test suite.
+# Tests scripts/guard_api_alias.sh (a non-core guard that requires Docker).
+#
 # This test verifies that scripts/guard_api_alias.sh cleans up its
 # temporary stderr file properly, without needing to manipulate traps.
 

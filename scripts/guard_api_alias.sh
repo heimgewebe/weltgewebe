@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Non-core guard — not part of the CI guard system (scripts/guard/run.sh).
+# Requires Docker Compose to render config; run manually or in Docker-capable environments.
+#
 # Guard scripts are executable, not meant to be sourced.
 if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then
   echo "ERROR: scripts/guard_api_alias.sh must not be sourced. Run it as an executable."

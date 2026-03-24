@@ -4,6 +4,48 @@ import json
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
+
+# --- Dependency resolution contract ---
+# ``depends_on`` (direct frontmatter field) is the *canonical* source for
+# dependency IDs.  The ``relations`` array (entries with
+# ``type: depends_on``) serves only as a **legacy fallback** for documents
+# that have not yet migrated to the direct field.
+#
+# When both sources provide data simultaneously, ``depends_on`` wins and a
+# warning is emitted so the duplication can be cleaned up.
+#
+# Long-term goal: unify on ``depends_on`` exclusively and remove the
+# relations fallback.
+def _get_depends_on(frontmatter, doc_id=None):
+    """Get dependency IDs from frontmatter.
+
+    Supports both the direct ``depends_on`` field and the ``relations``
+    array (entries with ``type: depends_on``).  The direct field takes
+    precedence; the relations fallback ensures compatibility when
+    ``parse_frontmatter`` does not handle ``depends_on`` as a block list.
+    """
+    deps = normalize_list_field(frontmatter.get('depends_on', []))
+    relations_deps = []
+    relations = frontmatter.get('relations', [])
+    if isinstance(relations, list):
+        for entry in relations:
+            if isinstance(entry, dict) and entry.get('type') == 'depends_on':
+                target = entry.get('target', '')
+                if target:
+                    relations_deps.append(target)
+    if deps and relations_deps:
+        label = f"'{doc_id}'" if doc_id else '<unknown>'
+        print(
+            f"Warning: document {label} defines depends_on in both "
+            "'depends_on' and 'relations'. "
+            "Using 'depends_on' as canonical source.",
+            file=sys.stderr,
+        )
+    if deps:
+        return deps
+    return relations_deps
+
+
 def main():
     try:
         policy = parse_review_policy()
@@ -14,12 +56,12 @@ def main():
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Build dependency graph: id -> list of dependencies (edges from a doc to what it depends on)
-    # Also reverse graph: id -> list of dependent docs (edges from a doc to docs that depend on it)
-    dependencies = {} # id -> list of dependent docs (file paths)
-    forward_deps = {} # id -> list of ids it depends on
+    # Build dependency graph — all edges are ID-based.
+    # reverse_deps: id -> list of doc IDs that depend on it
+    # forward_deps: id -> list of doc IDs it depends on
+    reverse_deps = {}
+    forward_deps = {}
     id_to_file = {}
-    file_to_id = {}
     missing_ids = []
 
     zones = repo_index.get('zones', {})
@@ -46,16 +88,15 @@ def main():
                 continue
 
             id_to_file[doc_id] = rel_file_path
-            file_to_id[rel_file_path] = doc_id
 
-            depends_on = extract_depends_on(frontmatter)
+            depends_on = _get_depends_on(frontmatter, doc_id=doc_id)
 
             forward_deps[doc_id] = depends_on
 
-            for dep in depends_on:
-                if dep not in dependencies:
-                    dependencies[dep] = []
-                dependencies[dep].append(rel_file_path)
+            for dep_id in depends_on:
+                if dep_id not in reverse_deps:
+                    reverse_deps[dep_id] = []
+                reverse_deps[dep_id].append(doc_id)
 
     # Check for cycles
     def find_cycles():
@@ -93,12 +134,12 @@ def main():
 
     cycles = find_cycles()
 
-    # Calculate transitive impact for all documents
+    # Calculate transitive impact for all documents (fully ID-based traversal)
     impact_data = {}
     for doc_id, filepath in id_to_file.items():
         visited = set()
         queue = [doc_id]
-        impacted_files = set()
+        impacted_ids = set()
 
         while queue:
             current_id = queue.pop(0)
@@ -106,15 +147,17 @@ def main():
                 continue
             visited.add(current_id)
 
-            dependents = dependencies.get(current_id, [])
-            for dep_file in dependents:
-                impacted_files.add(dep_file)
-                if dep_file in file_to_id:
-                    queue.append(file_to_id[dep_file])
+            for dep_id in reverse_deps.get(current_id, []):
+                impacted_ids.add(dep_id)
+                queue.append(dep_id)
+
+        impacted_files = sorted(
+            id_to_file[i] for i in impacted_ids if i in id_to_file
+        )
 
         impact_data[doc_id] = {
             "file": filepath,
-            "transitive_impacts": sorted(list(impacted_files))
+            "transitive_impacts": impacted_files
         }
 
     # Save artifacts
