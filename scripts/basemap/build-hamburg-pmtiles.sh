@@ -112,8 +112,23 @@ if ! docker run --rm \
   fi
 fi
 
+
 # 7. Generate Metadata Manifest
 echo "=> Generating metadata manifest..."
+
+echo "=> Calculating size and SHA256 of $OUTPUT_PMTILES..."
+if [ -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
+  PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
+  if command -v sha256sum >/dev/null 2>&1; then
+    PMTILES_SHA256=$(sha256sum "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')
+  else
+    PMTILES_SHA256=$(shasum -a 256 "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')
+  fi
+else
+  PMTILES_SIZE=0
+  PMTILES_SHA256="unknown"
+fi
+
 
 BUILD_TIMESTAMP_VALUE=""
 
@@ -143,7 +158,10 @@ ${BUILD_TIMESTAMP_JSON}
     "sha256": "${OSM_SHA256}",
     "note": "Pinned historical snapshot with verified SHA256 integrity"
   },
-  "artifact": "${OUTPUT_PMTILES}"
+  "artifact_name": "${OUTPUT_PMTILES}",
+  "sha256": "${PMTILES_SHA256}",
+  "size_bytes": ${PMTILES_SIZE},
+  "status": "ready"
 }
 EOF
 
