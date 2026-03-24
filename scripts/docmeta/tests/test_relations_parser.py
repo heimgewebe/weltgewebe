@@ -93,6 +93,19 @@ class TestRelationsParserCentralized(unittest.TestCase):
         rels = extract_relations_from_content(content)
         self.assertEqual(rels, [])
 
+    def test_bare_list_item_returned_as_string(self):
+        """Bare list items (not key-value dicts) are returned as strings."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - just-a-string\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertIsInstance(rels[0], str)
+
 
 class TestCollectFileRelations(unittest.TestCase):
     """Tests for collect_file_relations helper."""

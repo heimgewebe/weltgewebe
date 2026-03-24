@@ -13,9 +13,13 @@ def extract_relations_from_content(content):
     """
     Parse structured relations[] from YAML frontmatter content string.
 
-    Returns list of dicts preserving ALL keys found per relation entry —
-    not just type/target. This ensures downstream validation can detect
-    unexpected keys, missing keys, and structural issues in real files.
+    Returns a list of entries found in the relations block. Each entry is
+    typically a dict preserving ALL keys found per relation entry (not just
+    type/target), so downstream validation can detect unexpected keys,
+    missing keys, and structural issues in real files.
+
+    Bare list items that are not key-value dicts are returned as-is (strings).
+    Consumers must handle non-dict entries defensively (e.g. isinstance check).
     """
     relations = []
     if not content.startswith("---"):

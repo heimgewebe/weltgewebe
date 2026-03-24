@@ -4,10 +4,11 @@ Relations Guard — validates the structural and semantic integrity of relations
 Checks:
 1. Structure: relations is a list of objects with required keys (type, target)
 2. Allowed types: relates_to, depends_on, supersedes
-3. Target validity: target must reference an existing file (repo-root-relative path)
+3. Target validity: target must be a repo-root-relative path to an existing file
 4. No duplicates: identical (type, target) pairs are rejected
 5. No self-references: a document must not point to itself
-6. No absolute paths or IDs in target
+6. No absolute paths in target
+7. No path traversal (target must resolve within the repository root)
 """
 
 import os
@@ -77,8 +78,13 @@ def validate_relations(file_path, frontmatter):
             if target.startswith("/"):
                 errors.append(f"{prefix}: target must be repo-root-relative, not absolute: '{target}'")
 
+            # No path traversal — target must resolve within REPO_ROOT
+            repo_root_real = os.path.realpath(REPO_ROOT)
+            abs_target = os.path.realpath(os.path.join(REPO_ROOT, target))
+            if not abs_target.startswith(repo_root_real + os.sep) and abs_target != repo_root_real:
+                errors.append(f"{prefix}: target '{target}' escapes repository root (path traversal)")
+
             # Target must exist as a file
-            abs_target = os.path.join(REPO_ROOT, target)
             if not os.path.isfile(abs_target):
                 errors.append(f"{prefix}: target '{target}' does not exist")
 

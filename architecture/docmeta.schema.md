@@ -69,11 +69,13 @@ Zwei Dokumente behandeln verwandtes Thema, ohne harte Abhängigkeit.
 Dieses Dokument setzt das Zieldokument inhaltlich voraus.
 
 * ✅ Spec, die auf dem Datenmodell aufbaut:
+
   ```yaml
   relations:
     - type: depends_on
       target: docs/datenmodell.md
   ```
+
 * ✅ Runbook, das eine Deployment-Anleitung referenziert
 * ❌ NICHT verwenden für lose thematische Nähe → dann `relates_to`
 
@@ -81,11 +83,13 @@ Dieses Dokument setzt das Zieldokument inhaltlich voraus.
 Dieses Dokument ersetzt das Zieldokument vollständig.
 
 * ✅ Neues Konzeptdokument löst altes ab:
+
   ```yaml
   relations:
     - type: supersedes
       target: docs/konzepte/alt.md
   ```
+
 * ❌ NICHT verwenden, wenn beide Dokumente weiterhin gültig sind → dann `relates_to`
 
 ### Referenzformat (PATH-Policy)

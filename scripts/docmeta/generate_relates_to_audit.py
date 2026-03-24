@@ -56,6 +56,8 @@ def collect_relations_graph():
 
             relations = extract_relations_from_content(content)
             for rel in relations:
+                if not isinstance(rel, dict):
+                    continue
                 rel_type = rel.get("type", "")
                 target = rel.get("target", "")
                 if rel_type and target:

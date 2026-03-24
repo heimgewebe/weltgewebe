@@ -98,6 +98,21 @@ class TestValidateRelations(unittest.TestCase):
     def test_allowed_types_exactly_three(self):
         self.assertEqual(ALLOWED_TYPES, {"relates_to", "depends_on", "supersedes"})
 
+    def test_path_traversal_rejected(self):
+        """Targets with .. segments that escape the repo root must be rejected."""
+        fm = {"relations": [{"type": "relates_to", "target": "../../etc/passwd"}]}
+        errors = validate_relations("docs/foo.md", fm)
+        self.assertTrue(any("escapes repository root" in e or "does not exist" in e for e in errors))
+
+    def test_path_traversal_within_repo_ok(self):
+        """A target using .. but still resolving within the repo should not trigger
+        the traversal error (though it may fail the existence check)."""
+        # docs/../docs/foo.md resolves to docs/foo.md which is within repo
+        fm = {"relations": [{"type": "relates_to", "target": "docs/../docs/foo.md"}]}
+        errors = validate_relations("docs/bar.md", fm)
+        # Should NOT contain path traversal error
+        self.assertFalse(any("escapes repository root" in e for e in errors))
+
 
 class TestExtractRelationsFromContent(unittest.TestCase):
     """Tests for extract_relations_from_content() — the YAML parser."""
