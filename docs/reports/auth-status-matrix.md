@@ -66,7 +66,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | Codepfad implementiert, Zielrahmen-E2E offen | Teil   | mittel  |
+| Logout All            | required    | Guard-Stumpf (403 STEP_UP_REQUIRED) implementiert | Teil   | hoch    |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
@@ -119,12 +119,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** POST `/auth/logout-all` ist im Code implementiert und durch API-Tests belegt. Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.
+**Ist:** POST `/auth/logout-all` ist als Step-up Guard-Stumpf implementiert (antwortet mit 403 STEP_UP_REQUIRED). Die funktionale Session-Löschung und Challenge-Generierung fehlt mangels Step-up-Architektur.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
-**Fehlende Belege:** End-to-End-Test
+**Fehlende Belege:** funktionale Session-Löschung, Challenge-Generierung, End-to-End-Test
 **Status:** Teil
-**Risiko:** mittel
+**Risiko:** hoch
 
 ### 2.6 Devices
 

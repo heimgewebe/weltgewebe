@@ -1665,20 +1665,15 @@ async fn test_logout_all() -> Result<()> {
         .body(body::Body::empty())?;
 
     let res_logout_all = app.clone().oneshot(req_logout_all).await?;
-    assert_eq!(res_logout_all.status(), StatusCode::OK);
+    // It should now return 403 Forbidden as Step-Up Auth is required
+    assert_eq!(res_logout_all.status(), StatusCode::FORBIDDEN);
 
-    let logout_set_cookie = res_logout_all
-        .headers()
-        .get("Set-Cookie")
-        .unwrap()
-        .to_str()
-        .unwrap();
-    assert!(
-        logout_set_cookie.contains("Max-Age=0"),
-        "Cookie should be deleted"
-    );
+    let body_bytes_logout_all = body::to_bytes(res_logout_all.into_body(), usize::MAX).await?;
+    let body_logout_all: serde_json::Value =
+        serde_json::from_slice(&body_bytes_logout_all).unwrap();
+    assert_eq!(body_logout_all["error"], "STEP_UP_REQUIRED");
 
-    // 4. Verify session 1 is invalid
+    // 4. Verify session 1 is STILL valid (no deletion without Step-Up)
     let req_check1 = Request::get("/auth/session")
         .header("Cookie", &session_cookie1)
         .header("Host", "localhost")
@@ -1688,9 +1683,9 @@ async fn test_logout_all() -> Result<()> {
     let res_check1 = app.clone().oneshot(req_check1).await?;
     let body_bytes1 = body::to_bytes(res_check1.into_body(), usize::MAX).await?;
     let body1: serde_json::Value = serde_json::from_slice(&body_bytes1).unwrap();
-    assert_eq!(body1["authenticated"], false);
+    assert_eq!(body1["authenticated"], true);
 
-    // 5. Verify session 2 is ALSO invalid
+    // 5. Verify session 2 is ALSO STILL valid
     let req_check2 = Request::get("/auth/session")
         .header("Cookie", &session_cookie2)
         .header("Host", "localhost")
@@ -1700,7 +1695,7 @@ async fn test_logout_all() -> Result<()> {
     let res_check2 = app.clone().oneshot(req_check2).await?;
     let body_bytes2 = body::to_bytes(res_check2.into_body(), usize::MAX).await?;
     let body2: serde_json::Value = serde_json::from_slice(&body_bytes2).unwrap();
-    assert_eq!(body2["authenticated"], false);
+    assert_eq!(body2["authenticated"], true);
 
     Ok(())
 }
