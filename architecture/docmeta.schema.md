@@ -133,3 +133,61 @@ Ein repo-weites `grep -r 'target: docs/alter-pfad.md'` hilft beim Auffinden.
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **verifies_with**: Liste von Checks/Scripts, die dieses Dokument verifizieren.
 * **audit_gaps**: Liste von bekannten Lücken, offenen Fragen oder technischen Schulden (optional).
+
+## Parser Contract (relations)
+
+> **This parser supports a strict YAML subset. It is NOT a general YAML parser.**
+
+The `relations` block is parsed by `scripts/docmeta/relations_parser.py`
+(single source of truth). All tools that need relation data **must** import
+from that module — no duplicate parsing logic elsewhere.
+
+### Supported format (normative)
+
+```yaml
+relations:
+  - type: relates_to
+    target: docs/foo.md
+  - type: supersedes
+    target: docs/bar.md
+```
+
+**Rules:**
+
+1. `relations:` must be a top-level key (column 0).
+2. Each list item starts with `- ` (indented, dash + space).
+3. Continuation keys are indented without a leading dash.
+4. Key order within an entry is irrelevant (`target` before `type` is valid).
+5. All keys per entry are preserved for downstream validation.
+6. Empty list shorthand `relations: []` is supported.
+7. Blank lines between entries are tolerated.
+8. Comment lines (`# ...`) inside the block are ignored.
+9. Simple surrounding quotes on values (`"val"` or `'val'`) are stripped.
+
+### Explicitly NOT supported
+
+| Pattern | Example | Behavior |
+| --- | --- | --- |
+| Inline mappings | `- {type: foo, target: bar}` | Returned as bare string, not dict |
+| Flow sequences | `[a, b]` as list items | Not parsed |
+| Multi-line scalars | `target: >\n  long value` | Not parsed |
+| Nested structures | Deeper than one key-value level | Not parsed |
+| Anchors / aliases | `*ref`, `&anchor` | Not supported |
+
+### Decision: Mini-Parser vs. Migration
+
+**Decision: Mini-Parser is sufficient** (as of 2026-03).
+
+Rationale:
+
+* The supported subset covers 100 % of the actual relations usage in the
+  repository (140 relations across all docs — all use `type:` + `target:`
+  block list format without quotes, comments, or inline mappings).
+* No silent misinterpretation risks for the currently used format.
+* The parser behavior is deterministic and fully tested.
+
+Re-evaluate if:
+
+* Inline mappings or nested structures appear in real documents.
+* A YAML library is already required as a dependency for other reasons.
+

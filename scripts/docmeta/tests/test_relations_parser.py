@@ -284,6 +284,150 @@ class TestExtractDependsOnWithDicts(unittest.TestCase):
         self.assertEqual(deps, [])
 
 
+class TestParserContract(unittest.TestCase):
+    """
+    Contract-proving tests: explicitly verify what the parser supports
+    and what it does NOT support.
+
+    See architecture/docmeta.schema.md § Parser Contract for the normative
+    specification.
+    """
+
+    # --- POSITIVE: supported subset ---
+
+    def test_target_before_type(self):
+        """Key order within an entry is irrelevant."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - target: docs/foo.md\n"
+            "    type: relates_to\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["type"], "relates_to")
+        self.assertEqual(rels[0]["target"], "docs/foo.md")
+
+    def test_double_quoted_values_stripped(self):
+        """Double-quoted values have their quotes removed."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            '  - type: "relates_to"\n'
+            '    target: "docs/foo.md"\n'
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["type"], "relates_to")
+        self.assertEqual(rels[0]["target"], "docs/foo.md")
+
+    def test_single_quoted_values_stripped(self):
+        """Single-quoted values have their quotes removed."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: 'relates_to'\n"
+            "    target: 'docs/foo.md'\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["type"], "relates_to")
+        self.assertEqual(rels[0]["target"], "docs/foo.md")
+
+    def test_blank_lines_between_entries(self):
+        """Blank lines between relation entries are tolerated."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/a.md\n"
+            "\n"
+            "  - type: supersedes\n"
+            "    target: docs/b.md\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 2)
+        self.assertEqual(rels[0]["target"], "docs/a.md")
+        self.assertEqual(rels[1]["target"], "docs/b.md")
+
+    def test_comment_lines_ignored(self):
+        """Comment lines inside the relations block are skipped."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  # this is a comment\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["type"], "relates_to")
+        self.assertEqual(rels[0]["target"], "docs/foo.md")
+
+    def test_extra_keys_preserved_in_entry(self):
+        """Additional keys beyond type/target survive for downstream checks."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "    label: important\n"
+            "    note: extra info\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        self.assertEqual(rels[0]["label"], "important")
+        self.assertEqual(rels[0]["note"], "extra info")
+
+    # --- NEGATIVE: explicitly unsupported ---
+
+    def test_inline_mapping_not_parsed_correctly(self):
+        """Inline mappings are NOT supported — not parsed into proper dicts."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - {type: relates_to, target: docs/foo.md}\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        # The inline mapping is misinterpreted: the parser splits on the first
+        # colon and produces a dict with a garbage key like "{type".  This is
+        # acceptable — the downstream validator will reject the entry because
+        # it lacks proper "type" and "target" keys.
+        if isinstance(rels[0], dict):
+            self.assertNotIn("type", rels[0])
+            self.assertNotIn("target", rels[0])
+
+    def test_mismatched_quotes_not_stripped(self):
+        """Mismatched quotes are preserved (no partial stripping)."""
+        content = (
+            "---\n"
+            "id: test\n"
+            "relations:\n"
+            "  - type: relates_to\n"
+            "    target: \"docs/foo.md'\n"
+            "---\n"
+        )
+        rels = extract_relations_from_content(content)
+        self.assertEqual(len(rels), 1)
+        # Mismatched quotes are NOT stripped
+        self.assertEqual(rels[0]["target"], "\"docs/foo.md'")
+
+
 class TestParserConsistency(unittest.TestCase):
     """
     Proves that the centralized parser and parse_frontmatter
