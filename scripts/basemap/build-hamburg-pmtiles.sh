@@ -117,16 +117,17 @@ fi
 echo "=> Generating metadata manifest..."
 
 echo "=> Calculating size and SHA256 of $OUTPUT_PMTILES..."
-if [ -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
-  PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
-  if command -v sha256sum >/dev/null 2>&1; then
-    PMTILES_SHA256=$(sha256sum "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')
-  else
-    PMTILES_SHA256=$(shasum -a 256 "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')
-  fi
-else
-  PMTILES_SIZE=0
-  PMTILES_SHA256="unknown"
+if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
+  echo "Error: Artifact $OUTPUT_PMTILES not found. Cannot generate ready status." >&2
+  exit 1
+fi
+
+PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
+PMTILES_SHA256="$("${SHA256_CMD[@]}" "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')"
+
+if [ -z "$PMTILES_SHA256" ] || [ "$PMTILES_SIZE" -eq 0 ]; then
+  echo "Error: Failed to determine valid size or hash for $OUTPUT_PMTILES." >&2
+  exit 1
 fi
 
 
