@@ -714,7 +714,7 @@ if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
   echo "[INFO] Expected canonical edge gateway container: ${EDGE_GATEWAY_CONTAINER}"
   if [[ "$EDGE_RUNTIME_DETECTED" == "0" ]]; then
     echo "[WARN] DEPLOY_FRONTEND_MODE=edge is set, but the canonical edge gateway container '${EDGE_GATEWAY_CONTAINER}' is not running."
-    echo "[WARN] A recreate will only be attempted if frontend delivery remains required for this run."
+    echo "[WARN] A best-effort recreate attempt will only occur if frontend delivery is required and the edge path is active."
   fi
 fi
 
