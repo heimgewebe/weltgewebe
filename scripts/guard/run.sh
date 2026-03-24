@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Core guard orchestrator — runs all canonical CI guards.
+#
+# Core guards are fast, deterministic, and require no external runtime
+# dependencies (no Docker daemon, no network, no running services).
+# Guards that need Docker Compose or other environment-specific tooling
+# are non-core and live outside this orchestration (see guard_api_alias.sh).
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)"
 
