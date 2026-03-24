@@ -5,7 +5,18 @@ import json
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
 
-def _get_depends_on(frontmatter):
+# --- Dependency resolution contract ---
+# ``depends_on`` (direct frontmatter field) is the *canonical* source for
+# dependency IDs.  The ``relations`` array (entries with
+# ``type: depends_on``) serves only as a **legacy fallback** for documents
+# that have not yet migrated to the direct field.
+#
+# When both sources provide data simultaneously, ``depends_on`` wins and a
+# warning is emitted so the duplication can be cleaned up.
+#
+# Long-term goal: unify on ``depends_on`` exclusively and remove the
+# relations fallback.
+def _get_depends_on(frontmatter, doc_id=None):
     """Get dependency IDs from frontmatter.
 
     Supports both the direct ``depends_on`` field and the ``relations``
@@ -14,16 +25,25 @@ def _get_depends_on(frontmatter):
     ``parse_frontmatter`` does not handle ``depends_on`` as a block list.
     """
     deps = normalize_list_field(frontmatter.get('depends_on', []))
-    if deps:
-        return deps
+    relations_deps = []
     relations = frontmatter.get('relations', [])
     if isinstance(relations, list):
         for entry in relations:
             if isinstance(entry, dict) and entry.get('type') == 'depends_on':
                 target = entry.get('target', '')
                 if target:
-                    deps.append(target)
-    return deps
+                    relations_deps.append(target)
+    if deps and relations_deps:
+        label = f"'{doc_id}'" if doc_id else '<unknown>'
+        print(
+            f"Warning: document {label} defines depends_on in both "
+            "'depends_on' and 'relations'. "
+            "Using 'depends_on' as canonical source.",
+            file=sys.stderr,
+        )
+    if deps:
+        return deps
+    return relations_deps
 
 
 def main():
@@ -69,7 +89,7 @@ def main():
 
             id_to_file[doc_id] = rel_file_path
 
-            depends_on = _get_depends_on(frontmatter)
+            depends_on = _get_depends_on(frontmatter, doc_id=doc_id)
 
             forward_deps[doc_id] = depends_on
 

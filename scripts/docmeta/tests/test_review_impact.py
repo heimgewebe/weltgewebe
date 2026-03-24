@@ -7,7 +7,7 @@ import unittest
 from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 
-from scripts.docmeta.review_impact import main
+from scripts.docmeta.review_impact import main, _get_depends_on
 
 
 class TestReviewImpact(unittest.TestCase):
@@ -204,6 +204,54 @@ class TestReviewImpact(unittest.TestCase):
         # Markdown artifact should also exist
         md_path = os.path.join(self.temp_dir, "artifacts", "docmeta", "impact.md")
         self.assertTrue(os.path.exists(md_path))
+
+
+class TestGetDependsOn(unittest.TestCase):
+    """Unit tests for the _get_depends_on helper."""
+
+    def test_direct_depends_on_only(self):
+        """Direct depends_on field is returned when present."""
+        fm = {'depends_on': ['doc-x', 'doc-y']}
+        self.assertEqual(_get_depends_on(fm), ['doc-x', 'doc-y'])
+
+    def test_relations_fallback(self):
+        """Relations array is used when depends_on is absent."""
+        fm = {
+            'relations': [
+                {'type': 'depends_on', 'target': 'doc-z'},
+            ],
+        }
+        self.assertEqual(_get_depends_on(fm), ['doc-z'])
+
+    def test_dual_source_warns(self):
+        """Warning emitted when both sources define depends_on."""
+        fm = {
+            'depends_on': ['doc-a'],
+            'relations': [
+                {'type': 'depends_on', 'target': 'doc-b'},
+            ],
+        }
+        captured_err = io.StringIO()
+        with redirect_stderr(captured_err):
+            result = _get_depends_on(fm, doc_id='test-doc')
+        # depends_on wins
+        self.assertEqual(result, ['doc-a'])
+        err = captured_err.getvalue()
+        self.assertIn("Warning", err)
+        self.assertIn("test-doc", err)
+        self.assertIn("depends_on", err)
+
+    def test_no_warning_single_source(self):
+        """No warning when only one source provides data."""
+        fm = {'depends_on': ['doc-a']}
+        captured_err = io.StringIO()
+        with redirect_stderr(captured_err):
+            _get_depends_on(fm, doc_id='test-doc')
+        self.assertEqual(captured_err.getvalue(), "")
+
+    def test_empty_returns_empty(self):
+        """Empty frontmatter returns empty list."""
+        self.assertEqual(_get_depends_on({}), [])
 
 
 if __name__ == '__main__':
