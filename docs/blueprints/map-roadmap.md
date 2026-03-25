@@ -42,7 +42,7 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
 - [x] Basemap visuell beruhigen (Fokus auf Infrastruktur)
   - _Erledigt: Style ist minimalistisch und enthält keine POI-Icons. Visuelle Semantik liegt im Overlay._
 - [ ] Overlay-Lesbarkeit gegen Basemap prüfen
-  - _Teilweise umgesetzt: Edges-Layer in MapLibre um eine weiße Halo-Schicht (`EDGES_HALO_LAYER`) erweitert, die als Kontur unter der Hauptlinie liegt, um die Lesbarkeit des Fäden-Graphen unabhängig von der farblichen Helligkeit des darunterliegenden Basemap-Polygons substanziell zu verbessern. Eine systematische Prüfung/Abnahme über reale Basemap-Situationen und Zoomstufen bleibt jedoch offen._
+  - _Teilweise umgesetzt: Edges-Layer in MapLibre um eine weiße Halo-Schicht (`EDGES_HALO_LAYER`) erweitert, die als Kontur unter der Hauptlinie liegt, um die Lesbarkeit des Fäden-Graphen unabhängig von der farblichen Helligkeit des darunterliegenden Basemap-Polygons substanziell zu verbessern. Die technische Existenz und das korrekte Rendering der Halo-Schicht wird nun automatisiert im Playwright-Test (`edge-visibility.spec.ts`) abgesichert, was die strukturelle Basis für die Lesbarkeit garantiert. Eine abschließende visuelle Abnahme durch Fachanwender über alle Zoomstufen steht noch aus._
 
 **Abnahmekriterium:** Ein eigenes `style.json` wird geladen und Schriften (Glyphs) werden lokal/souverän serviert und sind
 lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons), da die visuelle Semantik vollständig in den Overlays (Nodes/Edges) liegt. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
