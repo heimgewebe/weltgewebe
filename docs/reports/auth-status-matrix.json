@@ -73,7 +73,7 @@
     },
     "logout": {
       "soll": "POST /auth/logout",
-      "ist": "Ein Logout-Codepfad ist im aktuellen Code vorhanden (/auth/logout). Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch",
+      "ist": "Ein Logout-Codepfad ist im aktuellen Code vorhanden (/auth/logout) und durch API-Tests verifiziert. Ein belastbarer End-to-End-Nachweis gegen den neuen Zielrahmen fehlt jedoch noch.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
@@ -83,20 +83,25 @@
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs"
+        "apps/api/src/routes/auth.rs",
+        "apps/api/tests/api_auth.rs"
       ]
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
-      "status": "Offen",
+      "ist": "POST /auth/logout-all ist als Guard-Stumpf implementiert: unauthentifizierte Requests werden mit 401 UNAUTHORIZED abgewiesen, authentifizierte Requests mit 403 STEP_UP_REQUIRED. Funktionale Session-Löschung und Challenge-Generierung fehlen mangels Step-up-Architektur.",
+      "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "Routen-Code",
-        "Test-Case"
+        "funktionale Session-Löschung",
+        "Challenge-Generierung",
+        "End-to-End-Test"
       ],
       "risk": "hoch",
-      "code_runtime_evidence": []
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/api/tests/api_auth.rs"
+      ]
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",

@@ -879,6 +879,29 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
     (jar.add(cookie), StatusCode::OK)
 }
 
+pub async fn logout_all(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+    }
+
+    // Stub for Step-up Auth (Roadmap Phase 3)
+    // POST /auth/logout-all is a sensitive action that requires STEP_UP_REQUIRED
+    // No challenge_id generated yet as the step-up mechanism is not yet implemented.
+
+    tracing::info!(
+        event = "auth.logout_all.step_up_required",
+        "Logout All requested but Step-Up Auth is required (not yet implemented)"
+    );
+
+    let err_payload = serde_json::json!({
+        "error": "STEP_UP_REQUIRED"
+        // "challenge_id": "..." -> To be implemented in Phase 3
+    });
+
+    (axum::http::StatusCode::FORBIDDEN, Json(err_payload)).into_response()
+}
+
 pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(AuthStatus {
         authenticated: ctx.authenticated,

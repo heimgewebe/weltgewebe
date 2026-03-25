@@ -1505,3 +1505,230 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_logout() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+    let mut account_map = BTreeMap::new();
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u-admin".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(RwLock::new(account_map));
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    // 1. Login to get a session cookie
+    let req = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let set_cookie = res.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie = set_cookie.split(';').next().unwrap();
+
+    // 2. Logout
+    let req_logout = Request::post("/auth/logout")
+        .header("Cookie", session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_logout = app.clone().oneshot(req_logout).await?;
+    assert_eq!(res_logout.status(), StatusCode::OK);
+
+    let logout_set_cookie = res_logout
+        .headers()
+        .get("Set-Cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(
+        logout_set_cookie.contains("Max-Age=0"),
+        "Cookie should be deleted"
+    );
+
+    // 3. Old cookie should now be invalid
+    let req_old = Request::get("/auth/session")
+        .header("Cookie", session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_old = app.clone().oneshot(req_old).await?;
+    let old_body_bytes = body::to_bytes(res_old.into_body(), usize::MAX).await?;
+    let old_body: serde_json::Value = serde_json::from_slice(&old_body_bytes).unwrap();
+    assert_eq!(old_body["authenticated"], false);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+    let mut account_map = BTreeMap::new();
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u-admin".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let mut state = test_state()?;
+    state.accounts = Arc::new(RwLock::new(account_map));
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    // 1. Login once to get session 1
+    let req1 = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res1 = app.clone().oneshot(req1).await?;
+    assert_eq!(res1.status(), StatusCode::OK);
+    let set_cookie1 = res1.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie1 = set_cookie1.split(';').next().unwrap().to_string();
+
+    // 2. Login again to get session 2
+    let req2 = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res2 = app.clone().oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::OK);
+    let set_cookie2 = res2.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie2 = set_cookie2.split(';').next().unwrap().to_string();
+
+    assert_ne!(session_cookie1, session_cookie2);
+
+    // 3. Logout All using session 1
+    let req_logout_all = Request::post("/auth/logout-all")
+        .header("Cookie", &session_cookie1)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_logout_all = app.clone().oneshot(req_logout_all).await?;
+    // It should now return 403 Forbidden as Step-Up Auth is required
+    assert_eq!(res_logout_all.status(), StatusCode::FORBIDDEN);
+
+    let body_bytes_logout_all = body::to_bytes(res_logout_all.into_body(), usize::MAX).await?;
+    let body_logout_all: serde_json::Value =
+        serde_json::from_slice(&body_bytes_logout_all).unwrap();
+    assert_eq!(body_logout_all["error"], "STEP_UP_REQUIRED");
+
+    // 4. Verify session 1 is STILL valid (no deletion without Step-Up)
+    let req_check1 = Request::get("/auth/session")
+        .header("Cookie", &session_cookie1)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_check1 = app.clone().oneshot(req_check1).await?;
+    let body_bytes1 = body::to_bytes(res_check1.into_body(), usize::MAX).await?;
+    let body1: serde_json::Value = serde_json::from_slice(&body_bytes1).unwrap();
+    assert_eq!(body1["authenticated"], true);
+
+    // 5. Verify session 2 is ALSO STILL valid
+    let req_check2 = Request::get("/auth/session")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_check2 = app.clone().oneshot(req_check2).await?;
+    let body_bytes2 = body::to_bytes(res_check2.into_body(), usize::MAX).await?;
+    let body2: serde_json::Value = serde_json::from_slice(&body_bytes2).unwrap();
+    assert_eq!(body2["authenticated"], true);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_logout_all_unauthenticated_rejected() -> Result<()> {
+    let state = test_state()?;
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/logout-all")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body_json["error"], "UNAUTHORIZED");
+
+    Ok(())
+}
