@@ -155,7 +155,7 @@ relations:
 **Rules:**
 
 1. `relations:` must be a top-level key (column 0).
-2. Each list item starts with `- ` (dash + space) on an indented line. Any amount of leading whitespace is accepted.
+2. Each list item starts with `-` (dash), followed by a space, on an indented line. Any amount of leading whitespace is accepted.
 3. Continuation keys are indented without a leading dash.
 4. Key order within an entry is irrelevant (`target` before `type` is valid).
 5. All keys per entry are preserved for downstream validation.

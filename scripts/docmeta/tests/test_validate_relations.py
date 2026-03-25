@@ -4,8 +4,9 @@ import unittest
 
 from scripts.docmeta.validate_relations import (
     validate_relations,
-    check_zone_relations_notice,
+    emit_zone_relations_notice,
     ALLOWED_TYPES,
+    ZONE_DIRS,
 )
 from scripts.docmeta.relations_parser import extract_relations_from_content
 
@@ -269,79 +270,58 @@ class TestExtractRelationsFromContent(unittest.TestCase):
 
 
 class TestZoneRelationsNotice(unittest.TestCase):
-    """Tests for check_zone_relations_notice() — the decision gate trigger."""
+    """Tests for emit_zone_relations_notice() — the decision gate trigger."""
 
-    def test_empty_zone_relations_no_notice(self):
-        """Zone files with only relations: [] should not trigger a notice."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            zone = os.path.join(tmpdir, "architecture")
-            os.makedirs(zone)
-            with open(os.path.join(zone, "test.md"), "w") as f:
-                f.write("---\nid: test\nrelations: []\n---\n")
-            result = check_zone_relations_notice(tmpdir)
-            self.assertEqual(result, [])
-
-    def test_nonempty_zone_relations_triggers_notice(self):
-        """Zone files with actual relations should trigger a notice."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            zone = os.path.join(tmpdir, "architecture")
-            os.makedirs(zone)
-            with open(os.path.join(zone, "test.md"), "w") as f:
-                f.write(
-                    "---\nid: test\nrelations:\n"
-                    "  - type: relates_to\n"
-                    "    target: docs/foo.md\n"
-                    "---\n"
-                )
-            result = check_zone_relations_notice(tmpdir)
-            self.assertEqual(result, ["architecture/test.md"])
-
-    def test_notice_emits_to_stderr(self):
-        """When triggered, the notice must be written to stderr (not stdout)."""
+    def test_empty_list_no_output(self):
+        """An empty list should produce no stderr output."""
         import io
         from contextlib import redirect_stderr
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            zone = os.path.join(tmpdir, "runtime")
-            os.makedirs(zone)
-            with open(os.path.join(zone, "doc.md"), "w") as f:
-                f.write(
-                    "---\nid: rt\nrelations:\n"
-                    "  - type: depends_on\n"
-                    "    target: docs/dep.md\n"
-                    "---\n"
-                )
-            buf = io.StringIO()
-            with redirect_stderr(buf):
-                check_zone_relations_notice(tmpdir)
-            output = buf.getvalue()
-            self.assertIn("NOTICE", output)
-            self.assertIn("mini-parser detected", output)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice([])
+        self.assertEqual(buf.getvalue(), "")
 
-    def test_no_zone_dirs_no_notice(self):
-        """When zone directories don't exist, no notice is emitted."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = check_zone_relations_notice(tmpdir)
-            self.assertEqual(result, [])
+    def test_nonempty_list_triggers_notice(self):
+        """A non-empty list should produce a NOTICE on stderr."""
+        import io
+        from contextlib import redirect_stderr
 
-    def test_multiple_zone_files_listed(self):
-        """All zone files with relations should appear in the result."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for zone_name in ("architecture", "runbooks"):
-                zone = os.path.join(tmpdir, zone_name)
-                os.makedirs(zone)
-                with open(os.path.join(zone, "doc.md"), "w") as f:
-                    f.write(
-                        "---\nid: x\nrelations:\n"
-                        "  - type: relates_to\n"
-                        "    target: docs/x.md\n"
-                        "---\n"
-                    )
-            result = check_zone_relations_notice(tmpdir)
-            self.assertEqual(len(result), 2)
-            paths = [os.path.basename(os.path.dirname(p)) for p in result]
-            self.assertIn("architecture", paths)
-            self.assertIn("runbooks", paths)
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice(["architecture/test.md"])
+        output = buf.getvalue()
+        self.assertIn("NOTICE", output)
+        self.assertIn("mini-parser detected", output)
+        self.assertIn("architecture/test.md", output)
+
+    def test_multiple_paths_all_listed(self):
+        """All provided paths should appear in the stderr output."""
+        import io
+        from contextlib import redirect_stderr
+
+        paths = ["architecture/a.md", "runbooks/b.md"]
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice(paths)
+        output = buf.getvalue()
+        for p in paths:
+            self.assertIn(p, output)
+
+    def test_zone_dirs_constant_matches_expected(self):
+        """ZONE_DIRS must contain exactly the three zone directories."""
+        self.assertEqual(sorted(ZONE_DIRS), ["architecture", "runbooks", "runtime"])
+
+    def test_zone_scan_integration(self):
+        """Zone file with non-empty relations is detected by extract_relations_from_content."""
+        content = (
+            "---\nid: test\nrelations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "---\n"
+        )
+        relations = extract_relations_from_content(content)
+        self.assertTrue(len(relations) > 0)
 
 
 if __name__ == "__main__":
