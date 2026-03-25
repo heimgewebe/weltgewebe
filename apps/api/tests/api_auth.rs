@@ -1918,9 +1918,8 @@ async fn test_device_management() -> Result<()> {
         "Only Device B should remain after Device A was deleted"
     );
     assert_eq!(devices_b[0]["device_id"].as_str().unwrap(), device_b_id);
-    assert_eq!(
+    assert!(
         devices_b[0]["current"].as_bool().unwrap(),
-        true,
         "Device B should be current"
     );
 
