@@ -12,6 +12,7 @@ Generated automatically. Do not edit.
 
 | id | title | type | status | path |
 | --- | --- | --- | --- | --- |
+canonical | docs/policies/agent-reading-protocol.md |
 | adr.0042-consume-semantah-contracts | ADR-0042 — SemanticAH-Contracts konsumieren | reference | active | docs/adr/0042-consume-semantah-contracts.md |
 | adr.0043-edge-vs-conversation | ADR-0043 — Edge vs. Conversation | reference | active | docs/adr/0043-edge-vs-conversation.md |
 | adr.ADR-0001__clean-slate-docs-monorepo | ADR-0001 — Clean Slate und Docs-Monorepo | reference | active | docs/adr/ADR-0001__clean-slate-docs-monorepo.md |
@@ -39,7 +40,7 @@ Generated automatically. Do not edit.
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
-| docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | active | docs/policies/agent-reading-protocol.md |
+| docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | active
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |

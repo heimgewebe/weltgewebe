@@ -46,6 +46,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **ADR-0006:** [adr/ADR-0006__auth-magic-link-session-passkey.md](adr/ADR-0006__auth-magic-link-session-passkey.md) (Führendes Zielbild)
 – **Auth Roadmap:** [blueprints/auth-roadmap.md](blueprints/auth-roadmap.md) (Umsetzungspfad)
 – **Auth Status Matrix:** [reports/auth-status-matrix.md](reports/auth-status-matrix.md) (Aktueller Repo-Beweis)
+– **Agent Readiness Audit:** [reports/agent-readiness-audit.md](reports/agent-readiness-audit.md) (Diagnose)
 – **Auth Specs:** [specs/auth-api.md](specs/auth-api.md), [specs/auth-ui.md](specs/auth-ui.md), [specs/auth-state-machine.md](specs/auth-state-machine.md)
 
 ### Deployment & Betrieb
@@ -74,6 +75,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 ### Policies & Orientierung
 
 – **Orientierung:** [policies/orientierung.md](policies/orientierung.md)
+– **Agent Reading Protocol:** [policies/agent-reading-protocol.md](policies/agent-reading-protocol.md) (Bindend)
 – **Agenten-Manifest:** [weltgewebe-agenten-manifest.md](weltgewebe-agenten-manifest.md)
 – **Privacy:** [specs/privacy-api.md](specs/privacy-api.md), [specs/privacy-ui.md](specs/privacy-ui.md)
 

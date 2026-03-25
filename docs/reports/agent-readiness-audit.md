@@ -4,11 +4,16 @@ title: Agent Readiness Audit
 doc_type: documentation
 status: active
 scope: global
+relations:
+  - type: relates_to
+    target: docs/policies/agent-reading-protocol.md
 description: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für Weltgewebe"
 summary: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für Weltgewebe"
 ---
 
 # Weltgewebe Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans
+
+> **Hinweis:** Dieses Audit ist ein Diagnose- und Berichtsartefakt. Es dient als Grundlage für Priorisierungen, ist aber **keine Primärnorm**. Für bindende Agenten-Regeln siehe das [`Agent Reading Protocol`](../policies/agent-reading-protocol.md).
 
 ## Executive Summary
 

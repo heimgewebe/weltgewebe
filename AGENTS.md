@@ -29,14 +29,14 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 
 ## Read This First
 
-1. Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
+1. Begin with `repo.meta.yaml` and `docs/policies/agent-reading-protocol.md` to understand the truth structure. Navigation can be found in `docs/index.md`.
 2. Read the "Coding Guidelines" below. Sie definieren, wie Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich vorgeschlagen werden müssen – statt nur „so ungefähr“ zu passen.
 
 ## Canonical Sources
 
 - `repo.meta.yaml`
 - `AGENTS.md`
-- `docs/index.md`
+- `docs/policies/agent-reading-protocol.md`
 
 ## Discovery Rules
 

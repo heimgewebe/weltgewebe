@@ -3,7 +3,12 @@ id: docs.policies.agent-reading-protocol
 title: Agent Reading Protocol
 doc_type: policy
 status: active
-canonical: true
+status: canonical
+relations:
+  - type: relates_to
+    target: repo.meta.yaml
+  - type: relates_to
+    target: AGENTS.md
 scope: global
 description: "Bindendes Lese- und Entscheidungsprotokoll für Agentenarbeit im Weltgewebe-Repository"
 summary: "Bindendes Lese- und Entscheidungsprotokoll für Agentenarbeit im Weltgewebe-Repository"

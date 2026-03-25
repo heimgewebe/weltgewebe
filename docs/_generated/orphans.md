@@ -10,6 +10,4 @@ summary: Automatisch generierte Liste verwaister Dokumente.
 
 Generated automatically. Do not edit.
 
-- docs/policies/agent-reading-protocol.md
-- docs/reports/agent-readiness-audit.md
 - docs/reports/cost-report.md
