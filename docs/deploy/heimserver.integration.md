@@ -78,7 +78,8 @@ Zulässige Werte für `DEPLOY_FRONTEND_MODE`:
 * **`auto` (Default):** Nutzt eine Heuristik. Explizites `BUILD_WEB=no` deaktiviert die
   Frontend-Relevanz vorrangig. Andernfalls gilt das Frontend als deploy-relevant (`REQUIRE_FRONTEND=1`),
   wenn der interne Caddy aktiv ist oder das Verzeichnis `apps/web` existiert. Dies bedeutet lediglich,
-  dass Build-Artefakte erzeugt werden müssen, garantiert aber nicht die operative Auslieferung durch
+  dass Build-Artefakte erzeugt werden müssen. Build-Artefakte zu erzeugen heißt nicht automatisch,
+  dass sie schon operativ ausgeliefert werden. Das Skript garantiert nicht die operative Auslieferung durch
   den Stack selbst. Zusätzlich wird heuristisch (naming-dependent) geprüft, ob ein externer Container
   entsprechend `EDGE_GATEWAY_CONTAINER` läuft; ist dies der Fall, wird ein best-effort Edge-Aktualisierungs-Pfad
   ausgelöst (mit Warnung, dass eine explizite Konfiguration bevorzugt wird).
