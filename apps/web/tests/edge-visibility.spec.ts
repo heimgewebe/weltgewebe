@@ -48,6 +48,32 @@ test.describe("Edge visibility on load", () => {
       const layer = m.getLayer("edges-layer");
       const haloLayer = m.getLayer("edges-halo-layer");
 
+      // Extract paint properties for deeper verification
+      let haloColor = null;
+      let haloWidth = null;
+      let haloOpacity = null;
+      let isUnderMain = false;
+
+      if (haloLayer && layer) {
+        haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
+        haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
+        haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
+
+        // Check z-index / layer order: halo should be before main layer in the style layers array
+        const styleLayers = m.getStyle().layers;
+        if (styleLayers) {
+          const haloIndex = styleLayers.findIndex(
+            (l) => l.id === "edges-halo-layer",
+          );
+          const mainIndex = styleLayers.findIndex(
+            (l) => l.id === "edges-layer",
+          );
+          if (haloIndex !== -1 && mainIndex !== -1 && haloIndex < mainIndex) {
+            isUnderMain = true;
+          }
+        }
+      }
+
       // Access GeoJSON data via the public serialize() API to avoid relying on internal _data
       let featureCount = 0;
       if (source && typeof source.serialize === "function") {
@@ -59,6 +85,10 @@ test.describe("Edge visibility on load", () => {
         source: source !== undefined,
         layer: layer !== undefined,
         haloLayer: haloLayer !== undefined,
+        haloColor,
+        haloWidth,
+        haloOpacity,
+        isUnderMain,
         featureCount,
       };
     });
@@ -66,6 +96,10 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.source).toBe(true);
     expect(edgeState.layer).toBe(true);
     expect(edgeState.haloLayer).toBe(true);
+    expect(edgeState.haloColor).toBe("#ffffff");
+    expect(edgeState.haloWidth).toBe(4);
+    expect(edgeState.haloOpacity).toBe(0.8);
+    expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
   });
 });
