@@ -36,7 +36,7 @@ pub async fn auth_middleware(
                 ctx.role = internal.role.clone();
                 ctx.expires_at = Some(session.expires_at);
 
-                // Fire and forget touch to update last_active if needed
+                // Synchronously touch to update last_active if needed (debounced internally)
                 state.sessions.touch(&session.id);
             }
         }

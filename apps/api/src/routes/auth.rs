@@ -1018,9 +1018,20 @@ pub async fn list_devices(
     let sessions = state.sessions.list_by_account(&account_id);
 
     // Group sessions by device_id
+    let current_device_id = match ctx.device_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR", "message": "Authenticated context missing device_id"});
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(err_payload),
+            )
+                .into_response();
+        }
+    };
+
     let mut device_map: std::collections::HashMap<String, DeviceInfo> =
         std::collections::HashMap::new();
-    let current_device_id = ctx.device_id.unwrap_or_default();
 
     for session in sessions {
         device_map

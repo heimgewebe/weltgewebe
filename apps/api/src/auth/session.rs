@@ -92,10 +92,9 @@ impl SessionStore {
         };
 
         if needs_update {
-            if let Ok(mut store) = self.store.write() {
-                if let Some(session) = store.get_mut(session_id) {
-                    session.last_active = now;
-                }
+            let mut store = self.store.write().expect("SessionStore lock poisoned");
+            if let Some(session) = store.get_mut(session_id) {
+                session.last_active = now;
             }
         }
     }

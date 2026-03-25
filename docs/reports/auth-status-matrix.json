@@ -34,7 +34,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "Die MVP-Linie nutzt einen In-Memory Session-Store. GET /auth/session wurde als API-Endpoint implementiert (inkl. expires_at und device_id). Deckt dynamische device_id und Session Refresh ab, aber Persistenzanforderungen (Echte Persistenz statt In-Memory) noch nicht.",
+      "ist": "Die MVP-Linie nutzt einen In-Memory Session-Store. GET /auth/session wurde als API-Endpoint implementiert (inkl. expires_at und device_id). Deckt dynamische device_id ab, aber Persistenzanforderungen (nicht In-Memory) noch nicht.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/specs/auth-blueprint.md",

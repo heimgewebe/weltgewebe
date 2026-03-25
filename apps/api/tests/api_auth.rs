@@ -1195,7 +1195,7 @@ async fn session_endpoint_authenticated() -> Result<()> {
 
     assert_eq!(body_json["authenticated"], true);
     assert!(body_json.get("expires_at").is_some());
-    assert!(body_json.get("device_id").is_some());
+    assert_eq!(body_json["device_id"].as_str().unwrap(), session.device_id);
 
     Ok(())
 }
@@ -1865,6 +1865,21 @@ async fn test_device_management() -> Result<()> {
     let res_del_foreign = app.clone().oneshot(req_del_foreign).await?;
     assert_eq!(res_del_foreign.status(), StatusCode::FORBIDDEN);
 
+    // Explicitly verify that the foreign device (Device B) is STILL valid
+    let req_check_foreign = Request::get("/auth/session")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_check_foreign = app.clone().oneshot(req_check_foreign).await?;
+    let body_bytes_foreign = body::to_bytes(res_check_foreign.into_body(), usize::MAX).await?;
+    let body_foreign: serde_json::Value = serde_json::from_slice(&body_bytes_foreign).unwrap();
+    assert_eq!(
+        body_foreign["authenticated"], true,
+        "Foreign device should remain authenticated after 403 deletion attempt"
+    );
+    assert_eq!(body_foreign["device_id"].as_str().unwrap(), device_b_id);
+
     // 6. DELETE /auth/devices/:device_a_id using Device A (should delete current device)
     let req_del_self = Request::delete(format!("/auth/devices/{}", device_a_id))
         .header("Cookie", &refresh_cookie)
@@ -1885,6 +1900,29 @@ async fn test_device_management() -> Result<()> {
     let body_bytes_deleted = body::to_bytes(res_check_deleted.into_body(), usize::MAX).await?;
     let body_deleted: serde_json::Value = serde_json::from_slice(&body_bytes_deleted).unwrap();
     assert_eq!(body_deleted["authenticated"], false);
+
+    // Verify Device B is now the ONLY device left by querying /auth/devices using Device B's session
+    let req_devices_b = Request::get("/auth/devices")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_devices_b = app.clone().oneshot(req_devices_b).await?;
+    assert_eq!(res_devices_b.status(), StatusCode::OK);
+    let body_bytes_dev_b = body::to_bytes(res_devices_b.into_body(), usize::MAX).await?;
+    let devices_b: Vec<serde_json::Value> = serde_json::from_slice(&body_bytes_dev_b).unwrap();
+
+    assert_eq!(
+        devices_b.len(),
+        1,
+        "Only Device B should remain after Device A was deleted"
+    );
+    assert_eq!(devices_b[0]["device_id"].as_str().unwrap(), device_b_id);
+    assert_eq!(
+        devices_b[0]["current"].as_bool().unwrap(),
+        true,
+        "Device B should be current"
+    );
 
     Ok(())
 }
