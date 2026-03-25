@@ -155,7 +155,7 @@ relations:
 **Rules:**
 
 1. `relations:` must be a top-level key (column 0).
-2. Each list item starts with `- ` (indented, dash + space).
+2. Each list item starts with `- ` (dash + space) on an indented line. Any amount of leading whitespace is accepted.
 3. Continuation keys are indented without a leading dash.
 4. Key order within an entry is irrelevant (`target` before `type` is valid).
 5. All keys per entry are preserved for downstream validation.
@@ -168,7 +168,7 @@ relations:
 
 | Pattern | Example | Behavior |
 | --- | --- | --- |
-| Inline mappings | `- {type: foo, target: bar}` | Returned as bare string, not dict |
+| Inline mappings | `- {type: foo, target: bar}` | Misinterpreted as dict with garbage key (e.g. `{type`); caught by downstream validation |
 | Flow sequences | `[a, b]` as list items | Not parsed |
 | Multi-line scalars | `target: >\n  long value` | Not parsed |
 | Nested structures | Deeper than one key-value level | Not parsed |
@@ -196,8 +196,9 @@ decision above holds under the current simple usage; it must be re-evaluated
 once zone files carry active relations.
 
 **CI trigger:** `validate_relations.py` emits a non-blocking `NOTICE` to
-stderr whenever a zone file carries non-empty relations.  This makes the
-re-evaluation trigger operationally visible — no silent drift.
+stderr whenever the mini-parser produces a non-empty relations block for a
+zone file (regardless of whether the entries are semantically valid).  This
+makes the re-evaluation trigger operationally visible — no silent drift.
 
 Re-evaluate if:
 

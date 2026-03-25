@@ -20,7 +20,9 @@ Supported format::
 
 Rules:
 - Top-level ``relations:`` key at column 0, followed by a block list.
-- Each list item starts with ``- `` (two-space indent + dash + space).
+- Each list item starts with ``- `` (dash + space) on an indented line.
+  Any amount of leading whitespace is accepted; the parser strips it before
+  checking for the ``- `` prefix.
 - Continuation keys are indented (spaces or tabs) without a leading dash.
 - Key order within an entry is irrelevant (``target`` before ``type`` is fine).
 - All keys per entry are preserved (extra keys survive for downstream
@@ -31,7 +33,9 @@ Rules:
 - Simple surrounding quotes on values (``"val"`` or ``'val'``) are stripped.
 
 Explicitly NOT supported (and not planned):
-- Inline mappings ``{type: foo, target: bar}``
+- Inline mappings ``- {type: foo, target: bar}`` — the parser splits on the
+  first colon and produces a dict with a garbage key (e.g. ``{type``);
+  downstream validation rejects such entries.
 - Flow sequences ``[a, b]`` as list items
 - Multi-line scalar values
 - Nested structures beyond one level of key-value pairs

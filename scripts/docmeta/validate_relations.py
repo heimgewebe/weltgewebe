@@ -112,15 +112,19 @@ ZONE_DIRS = ["architecture", "runtime", "runbooks"]
 
 def check_zone_relations_notice(repo_root):
     """
-    Emit a non-blocking NOTICE when zone files carry non-empty relations.
+    Emit a non-blocking NOTICE when zone files produce non-empty parser output.
 
     Zone files (architecture/, runtime/, runbooks/) currently all use
-    ``relations: []``.  When the first real relations appear there, the
-    parser decision gate (see architecture/docmeta.schema.md) should be
+    ``relations: []``.  When the mini-parser produces any non-empty output
+    for a zone file — whether semantically valid or not — the parser
+    decision gate (see architecture/docmeta.schema.md) should be
     re-evaluated.
 
+    The trigger is parser-based, not semantic: even malformed entries
+    (e.g. inline mappings misinterpreted as garbage-key dicts) will fire it.
+
     Returns:
-        list of repo-root-relative file paths that have non-empty relations
+        list of repo-root-relative file paths with non-empty parser output
     """
     zone_files_with_relations = []
 
@@ -205,8 +209,8 @@ def main():
         print("\nRelations validation failed.", file=sys.stderr)
         sys.exit(1)
 
-    # Non-blocking notice: detect when zone files begin carrying active
-    # relations — signals that the parser decision gate should be reviewed.
+    # Non-blocking notice: detect when zone files produce non-empty parser
+    # output — signals that the parser decision gate should be reviewed.
     check_zone_relations_notice(REPO_ROOT)
 
     print("Relations validation passed (0 errors).")
