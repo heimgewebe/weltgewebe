@@ -98,8 +98,10 @@ truth_model:
       paths: ["repo.meta.yaml", "AGENTS.md", "agent-policy.yaml", "docs/policies/agent-reading-protocol.md"]
     - class: runtime_configs_and_code
       paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
-    - class: descriptive_documentation
-      paths: ["docs/blueprints/*", "docs/adr/*", "docs/specs/*", "docs/reports/*"]
+    - class: normative_specifications
+      paths: ["docs/specs/*", "docs/adr/*", "docs/blueprints/*"]
+    - class: diagnostic_reports
+      paths: ["docs/reports/*"]
     - class: navigational_indices
       paths: ["docs/index.md"]
     - class: generated_diagnostics
