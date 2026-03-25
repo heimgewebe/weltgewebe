@@ -6,6 +6,7 @@ status: active
 canonical: true
 scope: global
 description: "Bindendes Lese- und Entscheidungsprotokoll für Agentenarbeit im Weltgewebe-Repository"
+summary: "Bindendes Lese- und Entscheidungsprotokoll für Agentenarbeit im Weltgewebe-Repository"
 ---
 
 # Agent Reading Protocol

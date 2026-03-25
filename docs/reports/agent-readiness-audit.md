@@ -5,6 +5,7 @@ doc_type: documentation
 status: active
 scope: global
 description: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für Weltgewebe"
+summary: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für Weltgewebe"
 ---
 
 # Weltgewebe Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans
