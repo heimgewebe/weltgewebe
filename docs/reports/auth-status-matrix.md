@@ -119,7 +119,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** POST `/auth/logout-all` ist als Step-up Guard-Stumpf implementiert (antwortet mit 403 STEP_UP_REQUIRED). Die funktionale Session-Löschung und Challenge-Generierung fehlt mangels Step-up-Architektur.
+**Ist:** POST `/auth/logout-all` ist als Guard-Stumpf implementiert: unauthentifizierte Requests werden mit 401 UNAUTHORIZED abgewiesen, authentifizierte Requests mit 403 STEP_UP_REQUIRED. Funktionale Session-Löschung und Challenge-Generierung fehlen mangels Step-up-Architektur.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** funktionale Session-Löschung, Challenge-Generierung, End-to-End-Test

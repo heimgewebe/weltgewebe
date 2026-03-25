@@ -1,7 +1,0 @@
-Diagnose:
-- `logout_all` function in `apps/api/src/routes/auth.rs` takes `Extension(_ctx): Extension<AuthContext>` but doesn't check it.
-- `AuthContext` is always inserted by the `auth_middleware` (with `authenticated: false` if not logged in).
-- Unauthenticated requests currently get `403 STEP_UP_REQUIRED` because the handler immediately returns it without checking `_ctx.authenticated`.
-- Other parts of `auth.rs` use `axum::http::StatusCode::UNAUTHORIZED` with an error payload (e.g., `{"error": "SESSION_EXPIRED"}`) for missing/invalid sessions in endpoints like `session_refresh`.
-- We should check `ctx.authenticated` first. If false, return `401 Unauthorized` with `{"error": "UNAUTHORIZED"}` (or standard error form).
-- We should write a test `test_logout_all_unauthenticated_rejected` to verify this.

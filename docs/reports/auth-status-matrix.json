@@ -89,7 +89,7 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all ist als Step-up Guard-Stumpf implementiert (antwortet mit 403 STEP_UP_REQUIRED). Die funktionale Session-Löschung und Challenge-Generierung fehlt mangels Step-up-Architektur.",
+      "ist": "POST /auth/logout-all ist als Guard-Stumpf implementiert: unauthentifizierte Requests werden mit 401 UNAUTHORIZED abgewiesen, authentifizierte Requests mit 403 STEP_UP_REQUIRED. Funktionale Session-Löschung und Challenge-Generierung fehlen mangels Step-up-Architektur.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
