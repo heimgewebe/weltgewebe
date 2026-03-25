@@ -1,4 +1,5 @@
 use axum::{
+    extract::Path as AxumPath,
     extract::{ConnectInfo, Form, Json, Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
@@ -309,7 +310,7 @@ pub async fn dev_login(
         }
     }
 
-    let session = state.sessions.create(payload.account_id);
+    let session = state.sessions.create(payload.account_id, None);
 
     let cookie = build_session_cookie(session.id, None);
 
@@ -823,7 +824,7 @@ pub async fn consume_login_post(
                 return Redirect::to("/login?error=account_disabled").into_response();
             }
 
-            let session = state.sessions.create(acc.public.id.clone());
+            let session = state.sessions.create(acc.public.id.clone(), None);
             let cookie = build_session_cookie(session.id, None);
 
             // Clear the nonce cookie
@@ -923,8 +924,7 @@ pub async fn session(Extension(ctx): Extension<AuthContext>) -> impl IntoRespons
     Json(SessionStatus {
         authenticated: ctx.authenticated,
         expires_at: ctx.expires_at,
-        // TODO: Map to actual device ID once Device Management is implemented (Roadmap Phase 2, Step 3)
-        device_id: None,
+        device_id: ctx.device_id,
     })
 }
 
@@ -958,7 +958,9 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
                     .into_response();
             }
 
-            let new_session = state.sessions.create(old_session.account_id);
+            let new_session = state
+                .sessions
+                .create(old_session.account_id, Some(old_session.device_id.clone()));
 
             let new_cookie = build_session_cookie(new_session.id, None);
 
@@ -986,6 +988,112 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
 
     let err_payload = serde_json::json!({"error": "SESSION_EXPIRED"});
     (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response()
+}
+
+#[derive(Serialize)]
+pub struct DeviceInfo {
+    pub device_id: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub last_active: chrono::DateTime<chrono::Utc>,
+    pub current: bool,
+}
+
+pub async fn list_devices(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+        }
+    };
+
+    let sessions = state.sessions.list_by_account(&account_id);
+
+    // Group sessions by device_id
+    let mut device_map: std::collections::HashMap<String, DeviceInfo> =
+        std::collections::HashMap::new();
+    let current_device_id = ctx.device_id.unwrap_or_default();
+
+    for session in sessions {
+        device_map
+            .entry(session.device_id.clone())
+            .and_modify(|d| {
+                if session.created_at < d.created_at {
+                    d.created_at = session.created_at;
+                }
+                if session.last_active > d.last_active {
+                    d.last_active = session.last_active;
+                }
+            })
+            .or_insert_with(|| DeviceInfo {
+                device_id: session.device_id.clone(),
+                created_at: session.created_at,
+                last_active: session.last_active,
+                current: session.device_id == current_device_id,
+            });
+    }
+
+    let mut devices: Vec<DeviceInfo> = device_map.into_values().collect();
+    // Sort devices by last_active descending
+    devices.sort_by(|a, b| b.last_active.cmp(&a.last_active));
+
+    (axum::http::StatusCode::OK, Json(devices)).into_response()
+}
+
+pub async fn remove_device(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    AxumPath(device_id): AxumPath<String>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (axum::http::StatusCode::UNAUTHORIZED, jar, Json(err_payload)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (axum::http::StatusCode::UNAUTHORIZED, jar, Json(err_payload)).into_response();
+        }
+    };
+
+    let current_device_id = match &ctx.device_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (axum::http::StatusCode::UNAUTHORIZED, jar, Json(err_payload)).into_response();
+        }
+    };
+
+    if *current_device_id == device_id {
+        // Logging out current device -> delete all sessions for it and clear cookie
+        state.sessions.delete_by_device(&account_id, &device_id);
+        let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+        return (axum::http::StatusCode::NO_CONTENT, jar.add(cookie)).into_response();
+    }
+
+    // Removing another device -> requires step-up auth
+    tracing::info!(
+        event = "auth.remove_device.step_up_required",
+        "Removing a foreign device requires Step-Up Auth (not yet implemented)"
+    );
+
+    let err_payload = serde_json::json!({
+        "error": "STEP_UP_REQUIRED"
+        // "challenge_id": "..." -> To be implemented in Phase 3
+    });
+
+    (axum::http::StatusCode::FORBIDDEN, jar, Json(err_payload)).into_response()
 }
 
 #[cfg(test)]

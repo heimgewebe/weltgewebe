@@ -71,7 +71,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Guard-Stumpf implementiert (401 ohne Auth, 403 mit Auth/ohne Step-up) | Teil   | hoch    |
-| Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
+| Devices               | required    | API implementiert, Guard für Step-up aktiv, Step-up E2E fehlt | Teil   | mittel  |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
 | Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
@@ -93,10 +93,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** Die MVP-Linie nutzt einen In-Memory Session-Store. `GET /auth/session` wurde als API-Endpoint implementiert (inkl. `expires_at`), lässt `device_id` jedoch derzeit noch aus (wird nicht serialisiert). Deckt Persistenzanforderungen, Session Refresh und dynamische `device_id` noch nicht ab.
+**Ist:** Die MVP-Linie nutzt einen In-Memory Session-Store. `GET /auth/session` wurde als API-Endpoint implementiert (inkl. `expires_at` und `device_id`). Deckt dynamische `device_id` ab, aber Persistenzanforderungen (nicht In-Memory) noch nicht.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
-**Fehlende Belege:** Echte Persistenz (nicht In-Memory), dynamische `device_id`-Integration, vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests).
+**Fehlende Belege:** Echte Persistenz (nicht In-Memory), vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests).
 **Status:** Teil
 **Risiko:** hoch
 
@@ -133,12 +133,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Das Device-Management ist implementiert und im Session-Modell integriert (`device_id` überdauert `session_refresh`, `GET /auth/devices` aggregiert Sessions nach Gerät, `DELETE` löscht das aktuelle oder weist bei fremden Geräten mit 403 `STEP_UP_REQUIRED` ab). Der End-to-End Nachweis inkl. Step-up für fremde Geräte fehlt noch.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
-**Risiko:** hoch
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/tests/api_auth.rs`
+**Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte
+**Status:** Teil
+**Risiko:** mittel
 
 ### 2.7 Step-up Auth
 

@@ -7,6 +7,7 @@ use crate::{auth::role::Role, routes::auth::SESSION_COOKIE_NAME, state::ApiState
 pub struct AuthContext {
     pub authenticated: bool,
     pub account_id: Option<String>,
+    pub device_id: Option<String>,
     pub role: Role,
     pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -20,6 +21,7 @@ pub async fn auth_middleware(
     let mut ctx = AuthContext {
         authenticated: false,
         account_id: None,
+        device_id: None,
         role: Role::Gast,
         expires_at: None,
     };
@@ -30,8 +32,12 @@ pub async fn auth_middleware(
             if let Some(internal) = accounts_map.get(&session.account_id) {
                 ctx.authenticated = true;
                 ctx.account_id = Some(session.account_id.clone());
+                ctx.device_id = Some(session.device_id.clone());
                 ctx.role = internal.role.clone();
                 ctx.expires_at = Some(session.expires_at);
+
+                // Fire and forget touch to update last_active if needed
+                state.sessions.touch(&session.id);
             }
         }
     }

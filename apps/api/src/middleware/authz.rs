@@ -25,6 +25,7 @@ pub async fn require_write(req: Request<Body>, next: Next) -> Response {
         .unwrap_or(AuthContext {
             authenticated: false,
             account_id: None,
+            device_id: None,
             role: Role::Gast,
             expires_at: None,
         });
