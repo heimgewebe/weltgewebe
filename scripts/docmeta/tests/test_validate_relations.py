@@ -4,7 +4,9 @@ import unittest
 
 from scripts.docmeta.validate_relations import (
     validate_relations,
+    emit_zone_relations_notice,
     ALLOWED_TYPES,
+    ZONE_DIRS,
 )
 from scripts.docmeta.relations_parser import extract_relations_from_content
 
@@ -265,6 +267,61 @@ class TestExtractRelationsFromContent(unittest.TestCase):
         fm = {"relations": rels}
         errors = validate_relations("docs/test.md", fm)
         self.assertTrue(any("missing required key 'target'" in e for e in errors))
+
+
+class TestZoneRelationsNotice(unittest.TestCase):
+    """Tests for emit_zone_relations_notice() — the decision gate trigger."""
+
+    def test_empty_list_no_output(self):
+        """An empty list should produce no stderr output."""
+        import io
+        from contextlib import redirect_stderr
+
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice([])
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_nonempty_list_triggers_notice(self):
+        """A non-empty list should produce a NOTICE on stderr."""
+        import io
+        from contextlib import redirect_stderr
+
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice(["architecture/test.md"])
+        output = buf.getvalue()
+        self.assertIn("NOTICE", output)
+        self.assertIn("mini-parser detected", output)
+        self.assertIn("architecture/test.md", output)
+
+    def test_multiple_paths_all_listed(self):
+        """All provided paths should appear in the stderr output."""
+        import io
+        from contextlib import redirect_stderr
+
+        paths = ["architecture/a.md", "runbooks/b.md"]
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            emit_zone_relations_notice(paths)
+        output = buf.getvalue()
+        for p in paths:
+            self.assertIn(p, output)
+
+    def test_zone_dirs_constant_matches_expected(self):
+        """ZONE_DIRS must contain exactly the three zone directories."""
+        self.assertEqual(sorted(ZONE_DIRS), ["architecture", "runbooks", "runtime"])
+
+    def test_zone_scan_integration(self):
+        """Zone file with non-empty relations is detected by extract_relations_from_content."""
+        content = (
+            "---\nid: test\nrelations:\n"
+            "  - type: relates_to\n"
+            "    target: docs/foo.md\n"
+            "---\n"
+        )
+        relations = extract_relations_from_content(content)
+        self.assertTrue(len(relations) > 0)
 
 
 if __name__ == "__main__":

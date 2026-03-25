@@ -4,9 +4,57 @@ relations[] from YAML frontmatter content strings.
 
 All tools that need to read relations from markdown files MUST use this
 module. No duplicate parsing logic anywhere else in the repository.
+
+Parser Contract (strict YAML subset)
+=====================================
+This parser supports a **strict YAML subset** — it is NOT a general YAML
+parser.
+
+Supported format::
+
+    relations:
+      - type: relates_to
+        target: docs/foo.md
+      - type: supersedes
+        target: docs/bar.md
+
+Rules:
+- Top-level ``relations:`` key at column 0, followed by a block list.
+- Each list item starts with ``- `` (dash + space) on an indented line.
+  Any amount of leading whitespace is accepted; the parser strips it before
+  checking for the ``- `` prefix.
+- Continuation keys are indented (spaces or tabs) without a leading dash.
+- Key order within an entry is irrelevant (``target`` before ``type`` is fine).
+- All keys per entry are preserved (extra keys survive for downstream
+  validation).
+- Empty list shorthand ``relations: []`` is supported.
+- Blank lines and comment lines (``# ...``) inside the relations block are
+  ignored.
+- Simple surrounding quotes on values (``"val"`` or ``'val'``) are stripped.
+
+Explicitly NOT supported (and not planned):
+- Inline mappings ``- {type: foo, target: bar}`` — the parser splits on the
+  first colon and produces a dict with a garbage key (e.g. ``{type``);
+  downstream validation rejects such entries.
+- Flow sequences ``[a, b]`` as list items
+- Multi-line scalar values
+- Nested structures beyond one level of key-value pairs
+- Anchors, aliases, or any advanced YAML feature
+
+See also: architecture/docmeta.schema.md (normative schema documentation,
+including the decision gate for when to re-evaluate this parser).
 """
 
 import os
+
+
+def _strip_quotes(value):
+    """Strip matching surrounding single or double quotes from a value."""
+    if not isinstance(value, str):
+        return value
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
 
 
 def extract_relations_from_content(content):
@@ -39,6 +87,10 @@ def extract_relations_from_content(content):
         if not stripped:
             continue
 
+        # Skip comment lines (both at top level and inside relations block)
+        if stripped.startswith("#"):
+            continue
+
         # Detect top-level key (not indented)
         if not line[0:1] in (" ", "\t") and ":" in stripped:
             key = stripped.split(":")[0].strip()
@@ -66,7 +118,7 @@ def extract_relations_from_content(content):
                 item = stripped[2:]  # strip leading "- "
                 if ":" in item:
                     key = item.split(":", 1)[0].strip()
-                    val = item.split(":", 1)[1].strip()
+                    val = _strip_quotes(item.split(":", 1)[1].strip())
                     current_entry = {key: val}
                 else:
                     # Bare list item (not a dict) — record as non-dict entry
@@ -74,7 +126,7 @@ def extract_relations_from_content(content):
             elif ":" in stripped and current_entry is not None:
                 # Continuation key within the current dict entry
                 key = stripped.split(":", 1)[0].strip()
-                val = stripped.split(":", 1)[1].strip()
+                val = _strip_quotes(stripped.split(":", 1)[1].strip())
                 current_entry[key] = val
 
     # Flush any pending entry

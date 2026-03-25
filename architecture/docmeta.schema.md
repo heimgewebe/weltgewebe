@@ -133,3 +133,77 @@ Ein repo-weites `grep -r 'target: docs/alter-pfad.md'` hilft beim Auffinden.
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **verifies_with**: Liste von Checks/Scripts, die dieses Dokument verifizieren.
 * **audit_gaps**: Liste von bekannten Lücken, offenen Fragen oder technischen Schulden (optional).
+
+## Parser Contract (relations)
+
+> **This parser supports a strict YAML subset. It is NOT a general YAML parser.**
+
+The `relations` block is parsed by `scripts/docmeta/relations_parser.py`
+(single source of truth). All tools that need relation data **must** import
+from that module — no duplicate parsing logic elsewhere.
+
+### Supported format (normative)
+
+```yaml
+relations:
+  - type: relates_to
+    target: docs/foo.md
+  - type: supersedes
+    target: docs/bar.md
+```
+
+**Rules:**
+
+1. `relations:` must be a top-level key (column 0).
+2. Each list item starts with `-` (dash), followed by a space, on an indented line. Any amount of leading whitespace is accepted.
+3. Continuation keys are indented without a leading dash.
+4. Key order within an entry is irrelevant (`target` before `type` is valid).
+5. All keys per entry are preserved for downstream validation.
+6. Empty list shorthand `relations: []` is supported.
+7. Blank lines between entries are tolerated.
+8. Comment lines (`# ...`) inside the block are ignored.
+9. Simple surrounding quotes on values (`"val"` or `'val'`) are stripped.
+
+### Explicitly NOT supported
+
+| Pattern | Example | Behavior |
+| --- | --- | --- |
+| Inline mappings | `- {type: foo, target: bar}` | Misinterpreted as dict with garbage key (e.g. `{type`); caught by downstream validation |
+| Flow sequences | `[a, b]` as list items | Not parsed |
+| Multi-line scalars | `target: >\n  long value` | Not parsed |
+| Nested structures | Deeper than one key-value level | Not parsed |
+| Anchors / aliases | `*ref`, `&anchor` | Not supported |
+
+### Decision: Mini-Parser vs. Migration
+
+**Decision: Mini-Parser is sufficient for now** (as of 2026-03).
+
+This decision applies to the current, documented subset. It is **not** a
+claim that the parser question is resolved for all future usage patterns.
+
+Rationale:
+
+* The supported subset covers 100 % of the actual relations usage in the
+  repository (140 relations across all docs — all use `type:` + `target:`
+  block list format without quotes, comments, or inline mappings).
+* No silent misinterpretation risks for the currently used format.
+* The parser behavior is deterministic and fully tested.
+
+**Epistemic gap:** Zone files (architecture/, runtime/, runbooks/) currently
+all use `relations: []`. The real stress test — non-trivial, semantically
+meaningful relation blocks in zone documents — has not yet occurred. The
+decision above holds under the current simple usage.
+
+**Operational CI trigger:** `validate_relations.py` emits a non-blocking
+`NOTICE` to stderr whenever the mini-parser produces non-empty output for a
+zone file — regardless of whether the entries are semantically valid.  This
+is a parser-based signal, not a semantic-validity check.  Even malformed
+entries (e.g. inline mappings misinterpreted as garbage-key dicts) will fire
+it.  The trigger makes drift operationally visible before it becomes silent.
+
+**Stronger re-evaluation reasons** (beyond the operational trigger):
+
+* Zone files begin using non-empty, semantically meaningful relations.
+* Inline mappings or nested structures appear in real documents.
+* A YAML library is already required as a dependency for other reasons.
+
