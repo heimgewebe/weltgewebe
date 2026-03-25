@@ -426,7 +426,6 @@ Publish- und Rollback-Strategie (Contract-First):
     - `sha256`: Hash der generierten `.pmtiles` Datei
     - `size_bytes`: Dateigröße
     - `status`: `"ready"` oder `"invalid"`
-  - **Hinweis zum Architektur-Drift:** Das aktuelle System (siehe `scripts/basemap/build-hamburg-pmtiles.sh`) ist derzeit **nicht contract-konform**. Es nutzt ein abweichendes Feld (`artifact` statt `artifact_name`) und generiert aktuell KEIN `sha256`, `size_bytes` oder `status`. Eine Anpassung der Skripte ist operativ erforderlich; dieser Contract bleibt die normative Referenz.
 - **Aktivierung:** Der duale Symlink-Switch (oder die atomare Dateiumbenennung) darf **ausschließlich** erfolgen, wenn die `.meta.json` validiert wurde (`status == "ready"`, Hash/Size stimmen). Die Aktualisierung der Aliase muss zwingend in dieser sicheren, sequenziellen Reihenfolge erfolgen:
   1. `ln -sfn basemap-hamburg-v2.pmtiles basemap-hamburg.pmtiles` (Zuerst das Tile-Artefakt)
   2. `ln -sfn basemap-hamburg-v2.meta.json basemap-hamburg.meta.json` (IMMER zuletzt den Meta-Alias)

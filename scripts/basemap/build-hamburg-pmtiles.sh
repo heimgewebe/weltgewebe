@@ -112,8 +112,24 @@ if ! docker run --rm \
   fi
 fi
 
+
 # 7. Generate Metadata Manifest
 echo "=> Generating metadata manifest..."
+
+echo "=> Calculating size and SHA256 of $OUTPUT_PMTILES..."
+if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
+  echo "Error: Artifact $OUTPUT_PMTILES not found. Cannot generate ready status." >&2
+  exit 1
+fi
+
+PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
+PMTILES_SHA256="$("${SHA256_CMD[@]}" "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')"
+
+if [ -z "$PMTILES_SHA256" ] || [ "$PMTILES_SIZE" -eq 0 ]; then
+  echo "Error: Failed to determine valid size or hash for $OUTPUT_PMTILES." >&2
+  exit 1
+fi
+
 
 BUILD_TIMESTAMP_VALUE=""
 
@@ -143,7 +159,10 @@ ${BUILD_TIMESTAMP_JSON}
     "sha256": "${OSM_SHA256}",
     "note": "Pinned historical snapshot with verified SHA256 integrity"
   },
-  "artifact": "${OUTPUT_PMTILES}"
+  "artifact_name": "${OUTPUT_PMTILES}",
+  "sha256": "${PMTILES_SHA256}",
+  "size_bytes": ${PMTILES_SIZE},
+  "status": "ready"
 }
 EOF
 
