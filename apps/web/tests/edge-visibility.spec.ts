@@ -63,10 +63,10 @@ test.describe("Edge visibility on load", () => {
         const styleLayers = m.getStyle().layers;
         if (styleLayers) {
           const haloIndex = styleLayers.findIndex(
-            (l) => l.id === "edges-halo-layer",
+            (l: any) => l.id === "edges-halo-layer",
           );
           const mainIndex = styleLayers.findIndex(
-            (l) => l.id === "edges-layer",
+            (l: any) => l.id === "edges-layer",
           );
           if (haloIndex !== -1 && mainIndex !== -1 && haloIndex < mainIndex) {
             isUnderMain = true;
