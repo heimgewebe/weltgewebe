@@ -66,7 +66,7 @@ echo ">> Verifying Sentinel Contract ($SOURCE_META)..."
 
 # Use python to parse the json safely and robustly
 VERIFY_OUTPUT=$(mktemp)
-if ! python3 -c '
+if python3 - "$SOURCE_META" > "$VERIFY_OUTPUT" << 'PY'; then
 import sys, json
 try:
     with open(sys.argv[1], "r") as f:
@@ -75,21 +75,22 @@ try:
     req_fields = ["version", "artifact_name", "sha256", "size_bytes", "status"]
     missing = [f for f in req_fields if f not in data]
     if missing:
-        print(f"Missing fields: {", ".join(missing)}", file=sys.stderr)
+        print("Missing fields: " + ", ".join(missing), file=sys.stderr)
         sys.exit(2)
 
     if data["status"] != "ready":
-        print(f"Status is not \"ready\", found: {data["status"]}", file=sys.stderr)
+        print('Status is not "ready", found: ' + str(data.get("status")), file=sys.stderr)
         sys.exit(3)
 
-    print(f"{data["artifact_name"]}\n{data["sha256"]}\n{data["size_bytes"]}")
+    print(f"{data['artifact_name']}\n{data['sha256']}\n{data['size_bytes']}")
 except json.JSONDecodeError:
     print("Invalid JSON.", file=sys.stderr)
     sys.exit(4)
 except Exception as e:
     print(str(e), file=sys.stderr)
     sys.exit(5)
-' "$SOURCE_META" > "$VERIFY_OUTPUT" 2>/dev/null; then
+PY
+else
     PY_STATUS=$?
     echo "ERROR: Sentinel contract validation failed (Exit Code: $PY_STATUS)." >&2
     rm -f "$VERIFY_OUTPUT"
@@ -180,9 +181,6 @@ ALIAS_META="${REGION}.meta.json"
 
 # 5. Atomic Switch (The core invariant: PMTiles first, then Meta)
 echo ">> Executing Atomic Switch..."
-
-# Clean up any existing symlinks first to prevent nesting or stale references
-rm -f "$TARGET_DIR/$ALIAS_PMTILES" "$TARGET_DIR/$ALIAS_META"
 
 echo "   1. Linking $ALIAS_PMTILES -> $BASENAME_PMTILES"
 ln -sfn "$BASENAME_PMTILES" "$TARGET_DIR/$ALIAS_PMTILES"
