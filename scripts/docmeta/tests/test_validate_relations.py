@@ -316,7 +316,7 @@ class TestZoneRelationsNotice(unittest.TestCase):
                 check_zone_relations_notice(tmpdir)
             output = buf.getvalue()
             self.assertIn("NOTICE", output)
-            self.assertIn("decision gate triggered", output)
+            self.assertIn("mini-parser detected", output)
 
     def test_no_zone_dirs_no_notice(self):
         """When zone directories don't exist, no notice is emitted."""

@@ -192,15 +192,16 @@ Rationale:
 **Epistemic gap:** Zone files (architecture/, runtime/, runbooks/) currently
 all use `relations: []`. The real stress test — non-trivial, semantically
 meaningful relation blocks in zone documents — has not yet occurred. The
-decision above holds under the current simple usage; it must be re-evaluated
-once zone files carry active relations.
+decision above holds under the current simple usage.
 
-**CI trigger:** `validate_relations.py` emits a non-blocking `NOTICE` to
-stderr whenever the mini-parser produces a non-empty relations block for a
-zone file (regardless of whether the entries are semantically valid).  This
-makes the re-evaluation trigger operationally visible — no silent drift.
+**Operational CI trigger:** `validate_relations.py` emits a non-blocking
+`NOTICE` to stderr whenever the mini-parser produces non-empty output for a
+zone file — regardless of whether the entries are semantically valid.  This
+is a parser-based signal, not a semantic-validity check.  Even malformed
+entries (e.g. inline mappings misinterpreted as garbage-key dicts) will fire
+it.  The trigger makes drift operationally visible before it becomes silent.
 
-Re-evaluate if:
+**Stronger re-evaluation reasons** (beyond the operational trigger):
 
 * Zone files begin using non-empty, semantically meaningful relations.
 * Inline mappings or nested structures appear in real documents.

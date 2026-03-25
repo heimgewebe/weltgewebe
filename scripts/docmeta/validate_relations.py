@@ -151,8 +151,8 @@ def check_zone_relations_notice(repo_root):
 
     if zone_files_with_relations:
         print(
-            "\n  NOTICE: Parser decision gate triggered — zone files now carry "
-            "non-empty relations.",
+            "\n  NOTICE: Parser decision gate triggered — mini-parser detected "
+            "non-empty relations output in zone files.",
             file=sys.stderr,
         )
         print(
