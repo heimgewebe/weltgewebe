@@ -9,6 +9,20 @@ summary: Agent configuration and operational boundaries for Weltgewebe.
 
 # AGENTS
 
+## Binding Reading Protocol
+
+All agents MUST follow:
+
+-> docs/policies/agent-reading-protocol.md
+
+This protocol defines:
+
+- reading order
+- conflict resolution
+- abort rules
+
+It overrides implicit interpretation.
+
 ## Purpose
 
 Agent configuration, operational boundaries, and strict coding guidelines for Weltgewebe. This document defines how agents navigate the repository, canonical files, and the rules for CI-ready code contributions.
