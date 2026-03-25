@@ -1699,3 +1699,36 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_logout_all_unauthenticated_rejected() -> Result<()> {
+    let state = test_state()?;
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/logout-all")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+    assert_eq!(body_json["error"], "UNAUTHORIZED");
+
+    Ok(())
+}
