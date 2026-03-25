@@ -179,8 +179,8 @@ mod tests {
     #[test]
     fn delete_by_device_removes_correct_sessions() {
         let store = SessionStore::new();
-        let s1 = store.create("acc-1".to_string(), Some("dev-A".to_string()));
-        let s2 = store.create("acc-1".to_string(), Some("dev-A".to_string()));
+        let _s1 = store.create("acc-1".to_string(), Some("dev-A".to_string()));
+        let _s2 = store.create("acc-1".to_string(), Some("dev-A".to_string()));
         let s3 = store.create("acc-1".to_string(), Some("dev-B".to_string()));
 
         store.delete_by_device("acc-1", "dev-A");

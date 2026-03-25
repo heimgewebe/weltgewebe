@@ -1856,7 +1856,7 @@ async fn test_device_management() -> Result<()> {
     assert_eq!(current_dev["device_id"].as_str().unwrap(), device_a_id);
 
     // 5. DELETE /auth/devices/:device_b_id using Device A (should return 403 Step-up required)
-    let req_del_foreign = Request::delete(&format!("/auth/devices/{}", device_b_id))
+    let req_del_foreign = Request::delete(format!("/auth/devices/{}", device_b_id))
         .header("Cookie", &refresh_cookie)
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
@@ -1866,7 +1866,7 @@ async fn test_device_management() -> Result<()> {
     assert_eq!(res_del_foreign.status(), StatusCode::FORBIDDEN);
 
     // 6. DELETE /auth/devices/:device_a_id using Device A (should delete current device)
-    let req_del_self = Request::delete(&format!("/auth/devices/{}", device_a_id))
+    let req_del_self = Request::delete(format!("/auth/devices/{}", device_a_id))
         .header("Cookie", &refresh_cookie)
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
