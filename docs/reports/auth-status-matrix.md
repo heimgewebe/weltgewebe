@@ -66,7 +66,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | Guard-Stumpf (403 STEP_UP_REQUIRED) implementiert | Teil   | hoch    |
+| Logout All            | required    | Guard-Stumpf implementiert (401 ohne Auth, 403 mit Auth/ohne Step-up) | Teil   | hoch    |
 | Devices               | required    | Runtime-Beleg offen | Offen  | hoch    |
 | Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
