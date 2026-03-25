@@ -99,6 +99,7 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloColor).toBe("#ffffff");
     expect(edgeState.haloWidth).toBe(4);
     expect(edgeState.haloOpacity).toBe(0.8);
+
     expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
   });
