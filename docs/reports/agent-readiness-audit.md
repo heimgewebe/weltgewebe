@@ -1,5 +1,7 @@
 ---
-type: documentation
+id: docs.reports.agent-readiness-audit
+title: Agent Readiness Audit
+doc_type: documentation
 status: active
 scope: global
 description: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für Weltgewebe"

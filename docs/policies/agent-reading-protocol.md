@@ -1,5 +1,7 @@
 ---
-type: policy
+id: docs.policies.agent-reading-protocol
+title: Agent Reading Protocol
+doc_type: policy
 status: active
 canonical: true
 scope: global

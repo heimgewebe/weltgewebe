@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 71 |
+| Dokumente gesamt | 73 |
 | Dokumente mit ausgehenden Relationen | 69 |
 | Dokumente als Ziel referenziert | 53 |
 | Relationen gesamt | 140 |
 | — relates_to | 139 |
 | — supersedes | 1 |
-| Isolierte Dokumente | 1 |
+| Isolierte Dokumente | 3 |
 | depends_on Zyklen | 0 |
 
 ### Warnungen
@@ -45,5 +45,7 @@ _Keine Zyklen gefunden._
 
 > Dokumente ohne eingehende und ausgehende Relationen (index.md/README.md ausgenommen).
 
+- `docs/policies/agent-reading-protocol.md`
+- `docs/reports/agent-readiness-audit.md`
 - `docs/reports/cost-report.md`
 
