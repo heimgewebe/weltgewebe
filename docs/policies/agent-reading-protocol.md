@@ -21,9 +21,10 @@ Dieses Dokument definiert das **verbindliche Lese-, Entscheidungs- und Abbruchve
 für alle Agenten, die mit diesem Repository arbeiten.
 
 Ziel:
--> deterministische Entscheidungen
--> keine stille Interpolation
--> klare Konfliktauflösung
+
+- deterministische Entscheidungen
+- keine stille Interpolation
+- klare Konfliktauflösung
 
 ---
 
@@ -79,7 +80,8 @@ Agenten MÜSSEN abbrechen, wenn:
 - kein Target-Proof möglich ist
 
 Form:
--> „X fehlt, nötig für Y“
+
+- „X fehlt, nötig für Y“
 
 ---
 
@@ -88,7 +90,8 @@ Form:
 Interpolation ist VERBOTEN, wenn Informationen nachlieferbar sind.
 
 Stattdessen:
--> explizite Leerstelle benennen
+
+- explizite Leerstelle benennen
 
 ---
 
@@ -104,6 +107,7 @@ Stattdessen:
 ## Essenz
 
 Dieses Protokoll priorisiert:
--> Entscheidbarkeit über Vollständigkeit
--> Wahrheit über Lesbarkeit
--> Abbruch über Halluzination
+
+- Entscheidbarkeit über Vollständigkeit
+- Wahrheit über Lesbarkeit
+- Abbruch über Halluzination

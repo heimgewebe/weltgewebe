@@ -166,18 +166,14 @@ pnpm run contracts:domain:check
 ```mermaid
 flowchart LR
  U[Browser / Mobile] -->|HTTPS| C[Caddy Frontdoor]
- C -->|static| W[Web: SvelteKit build
-oder Vite dev]
+ C -->|static| W["Web: SvelteKit build<br/>oder Vite dev"]
  C -->|/api/*| A[API: Rust/Axum]
- A -->|read/write| J[JSONL: .gewebe/in
-(demo.*.jsonl)]
+ A -->|read/write| J["JSONL: .gewebe/in<br/>(demo.*.jsonl)"]
  A -->|optional| P[(Postgres)]
  A -->|optional| N[(NATS JetStream)]
  A -->|optional| S[SMTP]
- A --> M[/metrics
-Prometheus/]
- A --> H[/health/live
-/health/ready/]
+ A --> M["/metrics<br/>Prometheus"]
+ A --> H["/health/live<br/>/health/ready"]
  subgraph Deploy-Modi
  D1[Dev: compose.core + Caddyfile.dev]
  D2[Prod: compose.prod + Caddyfile.heim]
@@ -237,15 +233,15 @@ Die lokale SvelteKit-Demo liefert bereits „enriched“ Node-Details (participa
 
 - **Open Issues:** keine offenen Issues gefunden (per GitHub-Suche).
 - **Open PRs (3 relevante Signale):**
-- PR #950: Auth-EP `POST /auth/logout-all` (Roadmap-Schritt) – spricht für systematische Abarbeitung des Auth-Blueprints.
-- PR #951: Deploy/Edge-Hardening, Verifikation/Logs – spricht für Ops-Realität und „keine False-Greens“.
-- PR #952: Basemap-Sentinel-Contract alignment – spricht für Contract-first Drift-Fixes.
+  - PR #950: Auth-EP `POST /auth/logout-all` (Roadmap-Schritt) – spricht für systematische Abarbeitung des Auth-Blueprints.
+  - PR #951: Deploy/Edge-Hardening, Verifikation/Logs – spricht für Ops-Realität und „keine False-Greens“.
+  - PR #952: Basemap-Sentinel-Contract alignment – spricht für Contract-first Drift-Fixes.
 
 >(Die PRs sind aktives, zeitnahes Signal; sie erklären auch, warum „Docs-only“ als Label nicht die ganze Realität beschreibt.)
 
 ### Masterplan-Anwendung auf dieses Repo: Audit-Matrix (Phase 1/2), Widerspruchsmatrix (Phase 3)
 
-Dein Masterplan verlangt pro Datei: Rolle, Normativität, Zielgruppe, Konfliktpotenzial, Veraltungsrisiko, Änderungsbedarf.
+Dein Masterplan verlangt pro Datei: Rolle, Normativität, Zielgruppe, Konfliktpotenzial, Veralterungsrisiko, Änderungsbedarf.
 Unten ist eine **komprimierte** Inventur- und Kanonizitätsmatrix (repräsentative Auswahl der wichtigsten Truth-Träger).
 
 | Artefakt | Rolle | Normativität | Konfliktpotenzial | Beobachtung (Ist) | Maßnahme (Plan) |
