@@ -102,7 +102,14 @@ META_SHA256=$(sed -n '2p' "$VERIFY_OUTPUT")
 META_SIZE=$(sed -n '3p' "$VERIFY_OUTPUT")
 rm -f "$VERIFY_OUTPUT"
 
-echo "   [✓] Schema valid. Status is 'ready'."
+case "$META_SIZE" in
+  ''|*[!0-9]*)
+    echo "ERROR: META_SIZE from sentinel is missing or non-numeric: '$META_SIZE'" >&2
+    exit 1
+    ;;
+esac
+
+echo "   [✓] Schema valid. Status is 'ready'. Size parsed: $META_SIZE bytes."
 
 # Check if the filename in meta matches the provided pmtiles filename
 BASENAME_PMTILES=$(basename "$SOURCE_PMTILES")
