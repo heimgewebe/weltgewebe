@@ -8,7 +8,7 @@ set -euo pipefail
 # - Pinned Planetiler container version (deterministic toolchain)
 # - Explicit host path and user mapping (reproducible environment)
 # - Tool presence checks
-# - OSM input is currently volatile (outputs are not yet strictly reproducible)
+# - Pinned historical OSM snapshot with self-determined SHA256 integrity
 
 # 1. Resolve repo root securely
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -158,7 +158,7 @@ ${BUILD_TIMESTAMP_JSON}
   },
   "input": {
     "url": "${OSM_URL}",
-    "md5": "${OSM_MD5}",
+    "sha256": "${OSM_SHA256}",
     "note": "Pinned historical snapshot with verified SHA256 integrity"
   },
   "artifact_name": "${OUTPUT_PMTILES}",
