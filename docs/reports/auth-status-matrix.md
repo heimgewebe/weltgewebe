@@ -133,7 +133,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Das Device-Management ist implementiert und im Session-Modell integriert (`device_id` überdauert `session_refresh`, `GET /auth/devices` aggregiert Sessions nach Gerät, `DELETE` löscht das aktuelle oder weist bei fremden Geräten mit 403 `STEP_UP_REQUIRED` ab). Der End-to-End Nachweis inkl. Step-up für fremde Geräte fehlt noch.
+**Ist:** Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt, jedoch mangels Step-up-Architektur noch nicht vollständig umsetzbar.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte

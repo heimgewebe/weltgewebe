@@ -104,7 +104,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Das Device-Management (GET /auth/devices, DELETE /auth/devices/:id) ist implementiert und im Session-Modell integriert. Die Löschung fremder Geräte ist durch einen 403 STEP_UP_REQUIRED Guard geschützt. Es fehlt der E2E Step-up Auth Nachweis für die Löschung fremder Geräte.",
+      "ist": "Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt, jedoch mangels Step-up-Architektur noch nicht vollständig umsetzbar.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [

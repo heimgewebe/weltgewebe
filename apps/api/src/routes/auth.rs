@@ -1081,8 +1081,13 @@ pub async fn remove_device(
     let current_device_id = match &ctx.device_id {
         Some(id) => id,
         None => {
-            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
-            return (axum::http::StatusCode::UNAUTHORIZED, jar, Json(err_payload)).into_response();
+            let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR", "message": "Authenticated context missing device_id"});
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                jar,
+                Json(err_payload),
+            )
+                .into_response();
         }
     };
 
