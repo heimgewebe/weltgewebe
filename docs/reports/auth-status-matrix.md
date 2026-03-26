@@ -70,8 +70,8 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | Guard-Stumpf implementiert (401 ohne Auth, 403 mit Auth/ohne Step-up) | Teil   | hoch    |
-| Devices               | required    | API implementiert, Guard für Step-up aktiv, Step-up E2E fehlt | Teil   | mittel  |
+| Logout All            | required    | Guard erzeugt Challenge, Consume fehlt              | Teil   | hoch    |
+| Devices               | required    | API implementiert, Guard erzeugt Challenge, Consume fehlt   | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store aktiv, Consume offen        | Teil   | hoch      |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
 | Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
