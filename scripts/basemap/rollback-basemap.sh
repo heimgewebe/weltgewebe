@@ -8,11 +8,11 @@ set -euo pipefail
 SCRIPT_NAME=$(basename "$0")
 
 function print_usage() {
-  echo "Usage: $SCRIPT_NAME <path_to_pmtiles> <path_to_meta_json> [target_directory]"
+  echo "Usage: $SCRIPT_NAME <pmtiles_filename> <meta_filename> [target_directory]"
   echo ""
   echo "Arguments:"
-  echo "  path_to_pmtiles      Path to the previous versioned .pmtiles artifact to rollback to (e.g., basemap-hamburg-v0.1.0.pmtiles)"
-  echo "  path_to_meta_json    Path to the corresponding .meta.json sentinel (e.g., basemap-hamburg-v0.1.0.meta.json)"
+  echo "  pmtiles_filename     Filename of the previous versioned .pmtiles artifact to rollback to (must exist in target_directory, e.g., basemap-hamburg-v0.1.0.pmtiles)"
+  echo "  meta_filename        Filename of the corresponding .meta.json sentinel (must exist in target_directory, e.g., basemap-hamburg-v0.1.0.meta.json)"
   echo "  target_directory     Optional. The directory where the artifacts are published. Defaults to /srv/weltgewebe-basemap/"
   echo ""
   echo "Environment Variables:"
@@ -25,13 +25,13 @@ if [[ $# -lt 2 ]]; then
   exit $EXIT_CODE
 fi
 
-SOURCE_PMTILES="$1"
-SOURCE_META="$2"
+PMTILES_FILENAME="$1"
+META_FILENAME="$2"
 TARGET_DIR="${3:-${TARGET_DIR:-/srv/weltgewebe-basemap/}}"
 
 echo "=== Weltgewebe Basemap Rollback ==="
-echo "Artifact: $SOURCE_PMTILES"
-echo "Sentinel: $SOURCE_META"
+echo "Artifact: $PMTILES_FILENAME"
+echo "Sentinel: $META_FILENAME"
 echo "Target:   $TARGET_DIR"
 echo "==================================="
 
@@ -42,14 +42,14 @@ if [[ ! -d "$TARGET_DIR" ]]; then
   exit $EXIT_CODE
 fi
 
-if [[ ! -f "$TARGET_DIR/$SOURCE_PMTILES" ]]; then
-  echo "ERROR: PMTiles artifact not found in target directory: $TARGET_DIR/$SOURCE_PMTILES" >&2
+if [[ ! -f "$TARGET_DIR/$PMTILES_FILENAME" ]]; then
+  echo "ERROR: PMTiles artifact not found in target directory: $TARGET_DIR/$PMTILES_FILENAME" >&2
   EXIT_CODE=1
   exit $EXIT_CODE
 fi
 
-if [[ ! -f "$TARGET_DIR/$SOURCE_META" ]]; then
-  echo "ERROR: Meta JSON sentinel not found in target directory: $TARGET_DIR/$SOURCE_META" >&2
+if [[ ! -f "$TARGET_DIR/$META_FILENAME" ]]; then
+  echo "ERROR: Meta JSON sentinel not found in target directory: $TARGET_DIR/$META_FILENAME" >&2
   EXIT_CODE=1
   exit $EXIT_CODE
 fi
@@ -72,11 +72,11 @@ else
 fi
 
 # 2. Sentinel Contract Verification
-echo ">> Verifying Sentinel Contract ($TARGET_DIR/$SOURCE_META)..."
+echo ">> Verifying Sentinel Contract ($TARGET_DIR/$META_FILENAME)..."
 
 # Use python to parse the json safely and robustly
 VERIFY_OUTPUT=$(mktemp)
-if python3 - "$TARGET_DIR/$SOURCE_META" > "$VERIFY_OUTPUT" << 'PY'; then
+if python3 - "$TARGET_DIR/$META_FILENAME" > "$VERIFY_OUTPUT" << 'PY'; then
 import sys, json
 try:
     with open(sys.argv[1], "r") as f:
@@ -123,28 +123,28 @@ esac
 
 echo "   [✓] Schema valid. Status is 'ready'. Size parsed: $META_SIZE bytes."
 
-if [[ "$META_ARTIFACT_NAME" != "$SOURCE_PMTILES" ]]; then
-   echo "ERROR: artifact_name in meta ($META_ARTIFACT_NAME) does not match the provided PMTiles filename ($SOURCE_PMTILES)." >&2
+if [[ "$META_ARTIFACT_NAME" != "$PMTILES_FILENAME" ]]; then
+   echo "ERROR: artifact_name in meta ($META_ARTIFACT_NAME) does not match the provided PMTiles filename ($PMTILES_FILENAME)." >&2
    EXIT_CODE=1
    exit $EXIT_CODE
 fi
 
 # 3. Artifact Verification
-echo ">> Verifying PMTiles Artifact ($TARGET_DIR/$SOURCE_PMTILES)..."
+echo ">> Verifying PMTiles Artifact ($TARGET_DIR/$PMTILES_FILENAME)..."
 
-ACTUAL_SIZE=$(wc -c < "$TARGET_DIR/$SOURCE_PMTILES" | tr -d '[:space:]')
+ACTUAL_SIZE=$(wc -c < "$TARGET_DIR/$PMTILES_FILENAME" | tr -d '[:space:]')
 case "$ACTUAL_SIZE" in
   ''|*[!0-9]*)
-    echo "ERROR: Could not determine valid size for $TARGET_DIR/$SOURCE_PMTILES." >&2
+    echo "ERROR: Could not determine valid size for $TARGET_DIR/$PMTILES_FILENAME." >&2
     EXIT_CODE=1
     exit $EXIT_CODE
     ;;
 esac
 
-ACTUAL_SHA256="$("${SHA256_CMD[@]}" "$TARGET_DIR/$SOURCE_PMTILES" | awk '{print $1}')"
+ACTUAL_SHA256="$("${SHA256_CMD[@]}" "$TARGET_DIR/$PMTILES_FILENAME" | awk '{print $1}')"
 
 if [[ "$ACTUAL_SIZE" -ne "$META_SIZE" ]]; then
-  echo "ERROR: Size mismatch for $TARGET_DIR/$SOURCE_PMTILES!" >&2
+  echo "ERROR: Size mismatch for $TARGET_DIR/$PMTILES_FILENAME!" >&2
   echo "Expected: $META_SIZE bytes" >&2
   echo "Actual:   $ACTUAL_SIZE bytes" >&2
   EXIT_CODE=1
@@ -152,7 +152,7 @@ if [[ "$ACTUAL_SIZE" -ne "$META_SIZE" ]]; then
 fi
 
 if [[ "$ACTUAL_SHA256" != "$META_SHA256" ]]; then
-  echo "ERROR: Checksum mismatch for $TARGET_DIR/$SOURCE_PMTILES!" >&2
+  echo "ERROR: Checksum mismatch for $TARGET_DIR/$PMTILES_FILENAME!" >&2
   echo "Expected: $META_SHA256" >&2
   echo "Actual:   $ACTUAL_SHA256" >&2
   EXIT_CODE=1
@@ -177,12 +177,12 @@ echo ">> Executing Atomic Switch (Rollback)..."
 TMP_STAGE_DIR="$(mktemp -d "$TARGET_DIR/.publish-tmp.XXXXXX")"
 trap 'rm -rf "$TMP_STAGE_DIR"' EXIT
 
-echo "   1. Atomically linking $ALIAS_PMTILES -> $SOURCE_PMTILES"
-ln -sfn "$SOURCE_PMTILES" "$TMP_STAGE_DIR/$ALIAS_PMTILES.tmp"
+echo "   1. Atomically linking $ALIAS_PMTILES -> $PMTILES_FILENAME"
+ln -sfn "$PMTILES_FILENAME" "$TMP_STAGE_DIR/$ALIAS_PMTILES.tmp"
 mv -Tf "$TMP_STAGE_DIR/$ALIAS_PMTILES.tmp" "$TARGET_DIR/$ALIAS_PMTILES"
 
-echo "   2. Atomically linking $ALIAS_META -> $SOURCE_META"
-ln -sfn "$SOURCE_META" "$TMP_STAGE_DIR/$ALIAS_META.tmp"
+echo "   2. Atomically linking $ALIAS_META -> $META_FILENAME"
+ln -sfn "$META_FILENAME" "$TMP_STAGE_DIR/$ALIAS_META.tmp"
 mv -Tf "$TMP_STAGE_DIR/$ALIAS_META.tmp" "$TARGET_DIR/$ALIAS_META"
 
 echo "   [✓] Atomic switch complete."
