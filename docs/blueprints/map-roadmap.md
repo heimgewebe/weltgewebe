@@ -71,8 +71,8 @@ Requests. **Nicht-Ziele:** Integration von nutzergenerierten Overlays (Fäden/Kn
 - [x] Versioniertes Artefakt-Schema definieren (z. B. `basemap-vX.pmtiles`)
 - [x] Stabiler Alias-/Current-Pfad für das versionierte Artefakt bereitstellen
 - [x] Update-Zyklus definieren (z. B. monatliche OSM-Updates)
-- [x] Publish- und Rollback-Strategie festlegen
-  - _Umgesetzt: Publish- und Rollback-Strategie inklusive Atomic Switch (PMTiles + Meta-Alias) und Sentinel-Verifikation in `map-blaupause.md` normativ definiert, operative Implementierung (CI/Guards) ausstehend._
+- [ ] Publish- und Rollback-Strategie festlegen
+  - _Teilweise umgesetzt: Publish- und Rollback-Strategie inklusive Atomic Switch (PMTiles + Meta-Alias) und Sentinel-Verifikation in `map-blaupause.md` normativ definiert. Operative Publish-Implementierung durch `scripts/basemap/publish-basemap.sh` bereitgestellt, welches den Sentinel Contract (Hash/Size) prüft und den Switch atomar ausführt. Ein expliziter operativer Rollback-Pfad bleibt noch offen._
 - [x] Basemap-Metadaten dokumentieren
 
 **Abnahmekriterium:** Ein reproduzierbarer Cronjob oder CI-Workflow kann eine neue Version bauen und bereitstellen, ohne
