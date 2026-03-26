@@ -1667,6 +1667,18 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
     let body_logout_all: serde_json::Value =
         serde_json::from_slice(&body_bytes_logout_all).unwrap();
     assert_eq!(body_logout_all["error"], "STEP_UP_REQUIRED");
+    assert!(body_logout_all["challenge_id"].is_string());
+
+    let challenge_id = body_logout_all["challenge_id"].as_str().unwrap();
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .expect("Challenge not found in store");
+    assert_eq!(challenge.account_id, "u-admin");
+    assert_eq!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll
+    );
 
     // 4. Verify session 1 is STILL valid (no deletion without Step-Up)
     let req_check1 = Request::get("/auth/session")
@@ -1870,6 +1882,21 @@ async fn test_device_management() -> Result<()> {
     let body_del_foreign: serde_json::Value =
         serde_json::from_slice(&body_bytes_del_foreign).unwrap();
     assert_eq!(body_del_foreign["error"], "STEP_UP_REQUIRED");
+    assert!(body_del_foreign["challenge_id"].is_string());
+
+    let challenge_id = body_del_foreign["challenge_id"].as_str().unwrap();
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .expect("Challenge not found in store");
+    assert_eq!(challenge.account_id, "u-admin");
+    if let weltgewebe_api::auth::challenges::ChallengeIntent::RemoveDevice { target_device_id } =
+        challenge.intent
+    {
+        assert_eq!(target_device_id, device_b_id);
+    } else {
+        panic!("Incorrect challenge intent");
+    }
 
     // Explicitly verify that the foreign device (Device B) is STILL valid
     let req_check_foreign = Request::get("/auth/session")
