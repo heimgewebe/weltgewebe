@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 140 |
-| — relates_to | 139 |
+| Relationen gesamt | 143 |
+| — relates_to | 142 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -105,13 +105,20 @@ _Keine Lücken erkannt._
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
 
-**Cluster 5** (3 Dokumente):
+**Cluster 5** (4 Dokumente):
+
+- `AGENTS.md`
+- `docs/policies/agent-reading-protocol.md`
+- `docs/reports/agent-readiness-audit.md`
+- `repo.meta.yaml`
+
+**Cluster 6** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
 - `docs/x-repo/semantAH.md`
 
-**Cluster 6** (2 Dokumente):
+**Cluster 7** (2 Dokumente):
 
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`

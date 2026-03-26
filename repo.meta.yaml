@@ -23,7 +23,7 @@ entrypoints:
 canonical_sources:
   - repo.meta.yaml
   - AGENTS.md
-  - docs/index.md
+  - docs/policies/agent-reading-protocol.md
 
 discovery_roots:
   - .github/workflows/
@@ -86,3 +86,26 @@ related_repos: []
 keywords:
   - docs
   - agent-ready
+
+agent_reading:
+  protocol: docs/policies/agent-reading-protocol.md
+
+truth_model:
+  precedence:
+    - class: domain_contracts
+      paths: ["contracts/domain/*.schema.json"]
+    - class: canonical_policies
+      paths: ["repo.meta.yaml", "AGENTS.md", "agent-policy.yaml", "docs/policies/agent-reading-protocol.md"]
+    - class: runtime_configs_and_code
+      paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
+    - class: normative_specifications
+      paths: ["docs/specs/*", "docs/adr/*", "docs/blueprints/*"]
+    - class: diagnostic_reports
+      paths: ["docs/reports/*"]
+    - class: navigational_indices
+      paths: ["docs/index.md"]
+    - class: generated_diagnostics
+      paths: ["docs/_generated/*"]
+
+  generated_is_canonical: false
+  navigation_is_canonical: false
