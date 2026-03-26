@@ -88,12 +88,11 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all ist als Guard-Stumpf implementiert: unauthentifizierte Requests werden mit 401 UNAUTHORIZED abgewiesen, authentifizierte Requests mit 403 STEP_UP_REQUIRED. Funktionale Session-Löschung und Challenge-Generierung fehlen mangels Step-up-Architektur.",
+      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Funktionale Session-Löschung nach Challenge-Consume fehlt noch.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "funktionale Session-Löschung",
-        "Challenge-Generierung",
+        "funktionale Session-Löschung nach Challenge-Consume",
         "End-to-End-Test"
       ],
       "risk": "hoch",
@@ -104,7 +103,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt, jedoch mangels Step-up-Architektur noch nicht vollständig umsetzbar.",
+      "ist": "Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt und erzeugen eine challenge_id. Step-up Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -119,15 +118,19 @@
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
-      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
-      "status": "Offen",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. Consume-Pfade und Intent-Binding-E2E fehlen noch.",
+      "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "Routen-Code",
-        "Test-Case"
+        "Consume-Pfade",
+        "UI Integration"
       ],
-      "risk": "sehr hoch",
-      "code_runtime_evidence": []
+      "risk": "hoch",
+      "code_runtime_evidence": [
+        "apps/api/src/auth/challenges.rs",
+        "apps/api/src/routes/auth.rs",
+        "apps/api/tests/api_auth.rs"
+      ]
     },
     "passkeys": {
       "soll": "register, auth, list, remove",

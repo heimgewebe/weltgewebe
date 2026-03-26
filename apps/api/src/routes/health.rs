@@ -318,6 +318,7 @@ mod tests {
             config,
             metrics,
             sessions: SessionStore::new(),
+        challenges: Default::default(),
             tokens: crate::auth::tokens::TokenStore::new(),
             accounts: Arc::new(RwLock::new(BTreeMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),

@@ -47,6 +47,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
     let sessions = crate::auth::session::SessionStore::new();
+    let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let accounts = Arc::new(tokio::sync::RwLock::new(
         routes::accounts::load_all_accounts().await,
@@ -90,6 +91,7 @@ pub async fn run() -> anyhow::Result<()> {
         config: app_config.clone(),
         metrics: metrics.clone(),
         sessions,
+        challenges,
         tokens,
         accounts,
         nodes,

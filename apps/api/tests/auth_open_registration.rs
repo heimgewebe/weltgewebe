@@ -69,6 +69,7 @@ fn test_state_open_reg() -> Result<ApiState> {
         config,
         metrics,
         sessions: SessionStore::new(),
+        challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),

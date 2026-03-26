@@ -16,6 +16,7 @@ use time::Duration;
 use uuid::Uuid;
 
 use crate::{
+    auth::challenges::ChallengeIntent,
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -880,24 +881,27 @@ pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoR
     (jar.add(cookie), StatusCode::OK)
 }
 
-pub async fn logout_all(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
+pub async fn logout_all(State(state): State<ApiState>, Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     if !ctx.authenticated {
         let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
         return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
     }
 
-    // Stub for Step-up Auth (Roadmap Phase 3)
-    // POST /auth/logout-all is a sensitive action that requires STEP_UP_REQUIRED
-    // No challenge_id generated yet as the step-up mechanism is not yet implemented.
-
+    // Phase 3 Step-up Challenge generation
     tracing::info!(
         event = "auth.logout_all.step_up_required",
-        "Logout All requested but Step-Up Auth is required (not yet implemented)"
+        "Logout All requested, generating step-up challenge"
+    );
+
+    let challenge = state.challenges.create(
+        ctx.account_id.clone().unwrap(),
+        ctx.device_id.clone().unwrap(),
+        ChallengeIntent::LogoutAll,
     );
 
     let err_payload = serde_json::json!({
-        "error": "STEP_UP_REQUIRED"
-        // "challenge_id": "..." -> To be implemented in Phase 3
+        "error": "STEP_UP_REQUIRED",
+        "challenge_id": challenge.id
     });
 
     (axum::http::StatusCode::FORBIDDEN, Json(err_payload)).into_response()
@@ -1101,12 +1105,18 @@ pub async fn remove_device(
     // Removing another device -> requires step-up auth
     tracing::info!(
         event = "auth.remove_device.step_up_required",
-        "Removing a foreign device requires Step-Up Auth (not yet implemented)"
+        "Removing a foreign device requires Step-Up Auth, generating challenge"
+    );
+
+    let challenge = state.challenges.create(
+        account_id,
+        current_device_id.to_string(),
+        ChallengeIntent::RemoveDevice { target_device_id: device_id.clone() },
     );
 
     let err_payload = serde_json::json!({
-        "error": "STEP_UP_REQUIRED"
-        // "challenge_id": "..." -> To be implemented in Phase 3
+        "error": "STEP_UP_REQUIRED",
+        "challenge_id": challenge.id
     });
 
     (axum::http::StatusCode::FORBIDDEN, jar, Json(err_payload)).into_response()
