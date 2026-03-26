@@ -1150,10 +1150,7 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
         body_json.get("expires_at").is_none(),
         "expires_at must be completely omitted"
     );
-    assert!(
-        body_json.get("device_id").is_none(),
-        "device_id must be completely omitted"
-    );
+    assert!(body_json.get("device_id").is_none());
 
     Ok(())
 }
@@ -1162,7 +1159,7 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
 async fn session_endpoint_authenticated() -> Result<()> {
     let state = test_state_with_accounts()?;
     // Mock a valid session for user u1
-    let session = state.sessions.create("u1".to_string());
+    let session = state.sessions.create("u1".to_string(), None);
     let session_id = session.id;
 
     let app = Router::new()
@@ -1198,10 +1195,7 @@ async fn session_endpoint_authenticated() -> Result<()> {
 
     assert_eq!(body_json["authenticated"], true);
     assert!(body_json.get("expires_at").is_some());
-    assert!(
-        body_json.get("device_id").is_none(),
-        "device_id must be completely omitted"
-    );
+    assert_eq!(body_json["device_id"].as_str().unwrap(), session.device_id);
 
     Ok(())
 }
@@ -1729,6 +1723,221 @@ async fn test_logout_all_unauthenticated_rejected() -> Result<()> {
     let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let body_json: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body_json["error"], "UNAUTHORIZED");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_device_management() -> Result<()> {
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+    let mut account_map = std::collections::BTreeMap::new();
+    let account = weltgewebe_api::routes::accounts::AccountInternal {
+        public: weltgewebe_api::routes::accounts::AccountPublic {
+            id: "u-admin".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Admin,
+        email: Some("u1@example.com".to_string()),
+    };
+    account_map.insert(account.public.id.clone(), account);
+
+    let state = test_state()?;
+    state.accounts.write().await.insert(
+        "u-admin".to_string(),
+        account_map.get("u-admin").unwrap().clone(),
+    );
+
+    let app = Router::new()
+        .merge(api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .layer(MockConnectInfo(
+            "127.0.0.1:8080".parse::<std::net::SocketAddr>().unwrap(),
+        ))
+        .layer(axum::middleware::from_fn(
+            weltgewebe_api::middleware::csrf::require_csrf,
+        ))
+        .with_state(state.clone());
+
+    // 1. Login to get a session (Device A)
+    let req1 = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res1 = app.clone().oneshot(req1).await?;
+    assert_eq!(res1.status(), StatusCode::OK);
+    let set_cookie1 = res1.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie1 = set_cookie1.split(';').next().unwrap().to_string();
+
+    // 2. Refresh session 1 (should preserve device A)
+    let req_refresh = Request::post("/auth/session/refresh")
+        .header("Cookie", &session_cookie1)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_refresh = app.clone().oneshot(req_refresh).await?;
+    assert_eq!(res_refresh.status(), StatusCode::OK);
+    let refresh_set_cookie = res_refresh
+        .headers()
+        .get("Set-Cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let refresh_cookie = refresh_set_cookie.split(';').next().unwrap().to_string();
+
+    // Verify session 1 gives device A
+    let req_check_session1 = Request::get("/auth/session")
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_check_session1 = app.clone().oneshot(req_check_session1).await?;
+    let body_bytes1 = body::to_bytes(res_check_session1.into_body(), usize::MAX).await?;
+    let body1: serde_json::Value = serde_json::from_slice(&body_bytes1).unwrap();
+    let device_a_id = body1["device_id"].as_str().unwrap().to_string();
+
+    // 3. Login again (Device B)
+    let req2 = Request::post("/auth/dev/login")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"account_id": "u-admin"}"#))?;
+
+    let res2 = app.clone().oneshot(req2).await?;
+    let set_cookie2 = res2.headers().get("Set-Cookie").unwrap().to_str().unwrap();
+    let session_cookie2 = set_cookie2.split(';').next().unwrap().to_string();
+
+    let req_check_session2 = Request::get("/auth/session")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_check_session2 = app.clone().oneshot(req_check_session2).await?;
+    let body_bytes2 = body::to_bytes(res_check_session2.into_body(), usize::MAX).await?;
+    let body2: serde_json::Value = serde_json::from_slice(&body_bytes2).unwrap();
+    let device_b_id = body2["device_id"].as_str().unwrap().to_string();
+
+    assert_ne!(
+        device_a_id, device_b_id,
+        "Different logins should generate different device IDs"
+    );
+
+    // 4. GET /auth/devices using Device A
+    let req_devices = Request::get("/auth/devices")
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_devices = app.clone().oneshot(req_devices).await?;
+    assert_eq!(res_devices.status(), StatusCode::OK);
+    let body_bytes_dev = body::to_bytes(res_devices.into_body(), usize::MAX).await?;
+    let devices: Vec<serde_json::Value> = serde_json::from_slice(&body_bytes_dev).unwrap();
+
+    // There should be exactly 2 devices (the original session 1 was rotated out and replaced, so still 1 device for A)
+    assert_eq!(devices.len(), 2);
+
+    let current_dev = devices
+        .iter()
+        .find(|d| d["current"].as_bool().unwrap())
+        .unwrap();
+    assert_eq!(current_dev["device_id"].as_str().unwrap(), device_a_id);
+
+    // 5. DELETE /auth/devices/:device_b_id using Device A (should return 403 Step-up required)
+    let req_del_foreign = Request::delete(format!("/auth/devices/{}", device_b_id))
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_del_foreign = app.clone().oneshot(req_del_foreign).await?;
+    assert_eq!(res_del_foreign.status(), StatusCode::FORBIDDEN);
+
+    let body_bytes_del_foreign = body::to_bytes(res_del_foreign.into_body(), usize::MAX).await?;
+    let body_del_foreign: serde_json::Value =
+        serde_json::from_slice(&body_bytes_del_foreign).unwrap();
+    assert_eq!(body_del_foreign["error"], "STEP_UP_REQUIRED");
+
+    // Explicitly verify that the foreign device (Device B) is STILL valid
+    let req_check_foreign = Request::get("/auth/session")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_check_foreign = app.clone().oneshot(req_check_foreign).await?;
+    let body_bytes_foreign = body::to_bytes(res_check_foreign.into_body(), usize::MAX).await?;
+    let body_foreign: serde_json::Value = serde_json::from_slice(&body_bytes_foreign).unwrap();
+    assert_eq!(
+        body_foreign["authenticated"], true,
+        "Foreign device should remain authenticated after 403 deletion attempt"
+    );
+    assert_eq!(body_foreign["device_id"].as_str().unwrap(), device_b_id);
+
+    // 6. DELETE /auth/devices/:device_a_id using Device A (should delete current device)
+    let req_del_self = Request::delete(format!("/auth/devices/{}", device_a_id))
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())?;
+
+    let res_del_self = app.clone().oneshot(req_del_self).await?;
+    assert_eq!(res_del_self.status(), StatusCode::NO_CONTENT);
+
+    let logout_set_cookie = res_del_self
+        .headers()
+        .get("Set-Cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(
+        logout_set_cookie.contains("Max-Age=0"),
+        "Cookie should be deleted on self device removal"
+    );
+
+    // Verify Device A is gone
+    let req_check_deleted = Request::get("/auth/session")
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_check_deleted = app.clone().oneshot(req_check_deleted).await?;
+    let body_bytes_deleted = body::to_bytes(res_check_deleted.into_body(), usize::MAX).await?;
+    let body_deleted: serde_json::Value = serde_json::from_slice(&body_bytes_deleted).unwrap();
+    assert_eq!(body_deleted["authenticated"], false);
+
+    // Verify Device B is now the ONLY device left by querying /auth/devices using Device B's session
+    let req_devices_b = Request::get("/auth/devices")
+        .header("Cookie", &session_cookie2)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+
+    let res_devices_b = app.clone().oneshot(req_devices_b).await?;
+    assert_eq!(res_devices_b.status(), StatusCode::OK);
+    let body_bytes_dev_b = body::to_bytes(res_devices_b.into_body(), usize::MAX).await?;
+    let devices_b: Vec<serde_json::Value> = serde_json::from_slice(&body_bytes_dev_b).unwrap();
+
+    assert_eq!(
+        devices_b.len(),
+        1,
+        "Only Device B should remain after Device A was deleted"
+    );
+    assert_eq!(devices_b[0]["device_id"].as_str().unwrap(), device_b_id);
+    assert!(
+        devices_b[0]["current"].as_bool().unwrap(),
+        "Device B should be current"
+    );
 
     Ok(())
 }

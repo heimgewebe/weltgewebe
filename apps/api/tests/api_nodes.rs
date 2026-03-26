@@ -215,7 +215,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     state.accounts = Arc::new(RwLock::new(account_map));
 
     // Create Session
-    let session = state.sessions.create("weber1".to_string());
+    let session = state.sessions.create("weber1".to_string(), None);
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
@@ -401,7 +401,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     state.accounts = Arc::new(RwLock::new(account_map));
 
     // Create Session
-    let session = state.sessions.create("weber1".to_string());
+    let session = state.sessions.create("weber1".to_string(), None);
     let cookie_val = format!("gewebe_session={}", session.id);
 
     let app = Router::new()
