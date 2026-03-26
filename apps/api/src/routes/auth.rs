@@ -890,6 +890,25 @@ pub async fn logout_all(
         return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
     }
 
+    let account_id = match ctx.account_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (axum::http::StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+        }
+    };
+
+    let device_id = match ctx.device_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "Authenticated context missing device_id"
+            });
+            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
+        }
+    };
+
     // Phase 3 Step-up Challenge generation
     tracing::info!(
         event = "auth.logout_all.step_up_required",
@@ -897,8 +916,8 @@ pub async fn logout_all(
     );
 
     let challenge = state.challenges.create(
-        ctx.account_id.clone().unwrap(),
-        ctx.device_id.clone().unwrap(),
+        account_id,
+        device_id,
         ChallengeIntent::LogoutAll,
     );
 
