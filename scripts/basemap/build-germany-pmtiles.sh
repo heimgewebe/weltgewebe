@@ -142,7 +142,7 @@ elif [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
 fi
 
 if [ -n "$BUILD_TIMESTAMP_VALUE" ]; then
-  BUILD_TIMESTAMP_JSON="  "build_timestamp": "${BUILD_TIMESTAMP_VALUE}","
+  BUILD_TIMESTAMP_JSON="  \"build_timestamp\": \"${BUILD_TIMESTAMP_VALUE}\","
 else
   BUILD_TIMESTAMP_JSON=""
 fi
