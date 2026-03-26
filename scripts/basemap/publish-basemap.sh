@@ -189,11 +189,13 @@ ALIAS_META="${REGION}.meta.json"
 # 5. Atomic Switch (The core invariant: PMTiles first, then Meta)
 echo ">> Executing Atomic Switch..."
 
-echo "   1. Linking $ALIAS_PMTILES -> $BASENAME_PMTILES"
-ln -sfn "$BASENAME_PMTILES" "$TARGET_DIR/$ALIAS_PMTILES"
+echo "   1. Atomically linking $ALIAS_PMTILES -> $BASENAME_PMTILES"
+ln -sfn "$BASENAME_PMTILES" "$TARGET_DIR/$ALIAS_PMTILES.tmp"
+mv -Tf "$TARGET_DIR/$ALIAS_PMTILES.tmp" "$TARGET_DIR/$ALIAS_PMTILES"
 
-echo "   2. Linking $ALIAS_META -> $BASENAME_META"
-ln -sfn "$BASENAME_META" "$TARGET_DIR/$ALIAS_META"
+echo "   2. Atomically linking $ALIAS_META -> $BASENAME_META"
+ln -sfn "$BASENAME_META" "$TARGET_DIR/$ALIAS_META.tmp"
+mv -Tf "$TARGET_DIR/$ALIAS_META.tmp" "$TARGET_DIR/$ALIAS_META"
 
 echo "   [✓] Atomic switch complete."
 echo ">> Publish successful!"
