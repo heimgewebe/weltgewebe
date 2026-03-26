@@ -55,7 +55,7 @@ def generate_backlinks():
         else:
             blocks = []
             for target in sorted(backlinks.keys()):
-                block_lines = [f"## {target}"]
+                block_lines = [f"## {target}\n"]
                 for source, rel in sorted(backlinks[target]):
                     block_lines.append(f"- [{rel}] {source}")
                 blocks.append("\n".join(block_lines))

@@ -26,7 +26,7 @@ class TestGenerateBacklinks(unittest.TestCase):
         full_content = "".join(written_chunks)
 
         # Basic format checks
-        self.assertIn("## docs/target_X.md", full_content)
+        self.assertIn("## docs/target_X.md\n\n- ", full_content, "Must have a blank line after heading")
         self.assertIn("## docs/target_Y.md", full_content)
 
         # Strict EOF and newline checks
