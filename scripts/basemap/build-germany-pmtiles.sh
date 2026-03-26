@@ -17,11 +17,10 @@ BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
 # 2. Pin tools and OSM input for reproducible input provenance
 # We use a stable, historical OSM snapshot from Geofabrik instead of the daily latest.
-# Note: Geofabrik does not provide SHA256 hashes for large files, only MD5.
-# We download and verify via MD5 to ensure input integrity.
+# Geofabrik does not provide SHA256 hashes, so we determine and pin the SHA256 hash ourselves to maintain input integrity.
 OSM_FILE="germany-260101.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany-260101.osm.pbf"
-OSM_MD5="c38e34046d67858088883792b9ddbf28"
+OSM_SHA256="4a2e3181c2cef4795b62ef9b447d4fa5f7f9bb2352d563292a7b98baa75279f8"
 
 # Versioning
 BASEMAP_VERSION="0.1.0"
@@ -73,24 +72,24 @@ else
 fi
 
 echo "=> Verifying integrity of $OSM_FILE..."
-if command -v md5sum >/dev/null 2>&1; then
-  MD5_CMD=(md5sum)
-elif command -v md5 >/dev/null 2>&1; then
-  MD5_CMD=(md5 -q)
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA256_CMD=(sha256sum)
+elif command -v shasum >/dev/null 2>&1; then
+  SHA256_CMD=(shasum -a 256)
 else
-  echo "Error: 'md5sum' or 'md5' is required for artifact verification but not installed." >&2
+  echo "Error: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
   exit 1
 fi
 
-ACTUAL_MD5="$("${MD5_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
-if [ "$ACTUAL_MD5" != "$OSM_MD5" ]; then
+ACTUAL_SHA256="$("${SHA256_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
+if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
   echo "Error: Checksum mismatch for $OSM_FILE!" >&2
-  echo "Expected: $OSM_MD5" >&2
-  echo "Actual:   $ACTUAL_MD5" >&2
+  echo "Expected: $OSM_SHA256" >&2
+  echo "Actual:   $ACTUAL_SHA256" >&2
   echo "The file may be corrupted or modified. Aborting to preserve reproducibility." >&2
   exit 1
 fi
-echo "   [✓] Integrity verified (MD5 match)."
+echo "   [✓] Integrity verified (SHA256 match)."
 
 # 6. Build the artifact
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
@@ -160,7 +159,7 @@ ${BUILD_TIMESTAMP_JSON}
   "input": {
     "url": "${OSM_URL}",
     "md5": "${OSM_MD5}",
-    "note": "Pinned historical snapshot with verified MD5 integrity"
+    "note": "Pinned historical snapshot with verified SHA256 integrity"
   },
   "artifact_name": "${OUTPUT_PMTILES}",
   "sha256": "${PMTILES_SHA256}",
