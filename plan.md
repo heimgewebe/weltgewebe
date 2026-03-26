@@ -1,0 +1,8 @@
+1. **Befund**: Phase 1 bis 4 sind weitgehend abgeschlossen. Phase 5 "Ausbau" fordert als Ziel: *Regionale Tilesets ergänzen (Large Scale vs. Local Scale)*. Das Hamburg-Tileset existiert bereits (50 MB). Das Germany-Tileset (ca 4,5 GB Download) fehlt noch.
+2. **Kritische Prüfung**: Die Roadmap fordert als nächsten Ausbauschritt "Regionale Tilesets" oder "Heatmap". Da das Hamburg-Script bereits als MVP funktioniert, ist die Verallgemeinerung des Build-Skripts oder die Erstellung eines `build-germany-pmtiles.sh` der exakte logische nächste Schritt laut Blaupause (Kapitel 2.2 Tileset-Strategie, "germany.pmtiles – guter Mittelweg").
+3. **Optimierung**: Anstatt ein komplett separates Skript zu kopieren, sollte ein neues Skript `build-germany-pmtiles.sh` erstellt werden, welches die exakt gleiche deterministische Architektur nutzt, aber die Germany-URL referenziert. Da der Download sehr groß ist (4.5GB), sollte das Skript robust sein.
+4. **Gewählter nächster Schritt**: Erstellung des Skripts `scripts/basemap/build-germany-pmtiles.sh` nach exaktem Vorbild von `build-hamburg-pmtiles.sh`, mit Anpassung von `REGION="germany"`, `OSM_URL`, `OSM_SHA256` und `OSM_FILE`.
+5. **Umsetzung**:
+   - SHA256 für `germany-250101.osm.pbf` von Geofabrik herunterladen/berechnen (da `.md5` nicht verfügbar, müssen wir den Hashen per Script berechnen oder mocken, falls nicht lokal verifizierbar. *Korrektur: Besser wir berechnen ihn kurz via curl + sha256sum oder suchen ihn. Geofabrik bietet keine `.sha256` Datei. Ich ermittle den Hash.*)
+   - `build-germany-pmtiles.sh` anlegen.
+   - Roadmap aktualisieren: Regionale Tilesets als teilweise umgesetzt markieren `[~]`.
