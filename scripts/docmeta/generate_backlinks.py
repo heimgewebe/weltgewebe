@@ -53,11 +53,13 @@ def generate_backlinks():
         if not backlinks:
             f.write("_No relations found._\n")
         else:
+            blocks = []
             for target in sorted(backlinks.keys()):
-                f.write(f"## {target}\n\n")
+                block_lines = [f"## {target}\n"]
                 for source, rel in sorted(backlinks[target]):
-                    f.write(f"- [{rel}] {source}\n")
-                f.write("\n")
+                    block_lines.append(f"- [{rel}] {source}")
+                blocks.append("\n".join(block_lines))
+            f.write("\n\n".join(blocks) + "\n")
 
     print(f"Generated {os.path.relpath(OUT_FILE, REPO_ROOT)}")
 
