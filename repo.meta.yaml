@@ -23,6 +23,7 @@ entrypoints:
 canonical_sources:
   - repo.meta.yaml
   - AGENTS.md
+  - agent-policy.yaml
   - docs/policies/agent-reading-protocol.md
 
 discovery_roots:

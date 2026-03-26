@@ -37,7 +37,7 @@ Agenten MÜSSEN in dieser Reihenfolge lesen:
 3. `agent-policy.yaml`
 4. Policies / Contracts / explizit kanonische Dokumente
 5. `docs/index.md` (nur Navigation)
-6. `_generated/*` (nur Diagnose)
+6. `docs/_generated/*` (nur Diagnose)
 
 ---
 
@@ -62,7 +62,7 @@ Es darf NICHT als Entscheidungsquelle verwendet werden.
 
 ## 4. _generated ist Diagnose, nicht Ursprung
 
-Artefakte unter `_generated/*`:
+Artefakte unter `docs/_generated/*`:
 
 - spiegeln Zustand
 - zeigen Drift

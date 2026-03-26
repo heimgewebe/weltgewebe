@@ -11,9 +11,7 @@ summary: Agent configuration and operational boundaries for Weltgewebe.
 
 ## Binding Reading Protocol
 
-All agents MUST follow:
-
--> docs/policies/agent-reading-protocol.md
+All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-protocol.md).
 
 This protocol defines:
 
@@ -36,6 +34,7 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 
 - `repo.meta.yaml`
 - `AGENTS.md`
+- `agent-policy.yaml`
 - `docs/policies/agent-reading-protocol.md`
 
 ## Discovery Rules
