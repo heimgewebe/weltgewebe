@@ -45,7 +45,12 @@ impl ChallengeStore {
         }
     }
 
-    pub fn create(&self, account_id: String, device_id: String, intent: ChallengeIntent) -> Challenge {
+    pub fn create(
+        &self,
+        account_id: String,
+        device_id: String,
+        intent: ChallengeIntent,
+    ) -> Challenge {
         self.cleanup_expired();
 
         let id = Uuid::new_v4().to_string();
@@ -96,7 +101,11 @@ mod tests {
     #[test]
     fn test_create_and_get_challenge() {
         let store = ChallengeStore::new();
-        let c = store.create("acc-1".to_string(), "dev-1".to_string(), ChallengeIntent::LogoutAll);
+        let c = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
 
         let retrieved = store.get(&c.id).unwrap();
         assert_eq!(retrieved.account_id, "acc-1");
@@ -107,7 +116,11 @@ mod tests {
     #[test]
     fn test_consume_removes_challenge() {
         let store = ChallengeStore::new();
-        let c = store.create("acc-1".to_string(), "dev-1".to_string(), ChallengeIntent::LogoutAll);
+        let c = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
 
         let consumed = store.consume(&c.id).unwrap();
         assert_eq!(consumed.id, c.id);

@@ -2,7 +2,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    auth::{challenges::ChallengeStore, rate_limit::AuthRateLimiter, session::SessionStore, tokens::TokenStore},
+    auth::{
+        challenges::ChallengeStore, rate_limit::AuthRateLimiter, session::SessionStore,
+        tokens::TokenStore,
+    },
     config::AppConfig,
     mailer::Mailer,
     routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
