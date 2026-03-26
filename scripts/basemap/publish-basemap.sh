@@ -52,6 +52,11 @@ if [[ ! -d "$TARGET_DIR" ]]; then
 fi
 
 # Determine verification tools
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: 'python3' is required for sentinel verification but not installed." >&2
+  exit 1
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
 elif command -v shasum >/dev/null 2>&1; then
@@ -148,33 +153,42 @@ fi
 echo "   [✓] Integrity verified (SHA256 and Size match)."
 
 # 4. Transfer Artifacts
-# We transfer the files explicitly to the target directory before switching symlinks
+# We transfer the files explicitly to a staging directory before exposing them
 BASENAME_META=$(basename "$SOURCE_META")
 
 TARGET_PMTILES="$TARGET_DIR/$BASENAME_PMTILES"
 TARGET_META="$TARGET_DIR/$BASENAME_META"
 
-echo ">> Transferring artifacts to $TARGET_DIR..."
+echo ">> Staging artifacts in $TARGET_DIR..."
 
-# Copy artifacts safely
-cp -f "$SOURCE_PMTILES" "$TARGET_PMTILES.tmp"
-cp -f "$SOURCE_META" "$TARGET_META.tmp"
+TMP_STAGE_DIR="$(mktemp -d "$TARGET_DIR/.publish-tmp.XXXXXX")"
+trap 'rm -rf "$TMP_STAGE_DIR"' EXIT
 
-mv -f "$TARGET_PMTILES.tmp" "$TARGET_PMTILES"
-mv -f "$TARGET_META.tmp" "$TARGET_META"
+STAGED_PMTILES="$TMP_STAGE_DIR/$BASENAME_PMTILES"
+STAGED_META="$TMP_STAGE_DIR/$BASENAME_META"
 
-echo "   [✓] Transfer complete."
+# Copy artifacts into the staging directory
+cp -f "$SOURCE_PMTILES" "$STAGED_PMTILES"
+cp -f "$SOURCE_META" "$STAGED_META"
+
+echo "   [✓] Staging complete."
 
 # Verify transferred PMTiles to ensure integrity during copy
-TRANSFERRED_SHA256="$("${SHA256_CMD[@]}" "$TARGET_PMTILES" | awk '{print $1}')"
+TRANSFERRED_SHA256="$("${SHA256_CMD[@]}" "$STAGED_PMTILES" | awk '{print $1}')"
 if [[ "$TRANSFERRED_SHA256" != "$META_SHA256" ]]; then
-  echo "ERROR: Checksum mismatch for transferred artifact $TARGET_PMTILES!" >&2
+  echo "ERROR: Checksum mismatch for transferred artifact $STAGED_PMTILES!" >&2
   echo "Expected: $META_SHA256" >&2
   echo "Actual:   $TRANSFERRED_SHA256" >&2
   echo "Transfer failed. Aborting." >&2
-  rm -f "$TARGET_PMTILES" "$TARGET_META"
   exit 1
 fi
+
+# Now that the staged artifact is verified, safely move them into place
+# to satisfy the Sentinel visibility contract (PMTiles first, then Meta).
+mv -f "$STAGED_PMTILES" "$TARGET_PMTILES"
+mv -f "$STAGED_META" "$TARGET_META"
+
+echo "   [✓] Artifacts are now verified and visible in target directory."
 
 # Extract base alias name from the artifact name, assuming format like basemap-REGION-vX.Y.Z.pmtiles
 # We fallback to a generic name if parsing fails, but typical is basemap-hamburg.pmtiles
@@ -190,12 +204,12 @@ ALIAS_META="${REGION}.meta.json"
 echo ">> Executing Atomic Switch..."
 
 echo "   1. Atomically linking $ALIAS_PMTILES -> $BASENAME_PMTILES"
-ln -sfn "$BASENAME_PMTILES" "$TARGET_DIR/$ALIAS_PMTILES.tmp"
-mv -Tf "$TARGET_DIR/$ALIAS_PMTILES.tmp" "$TARGET_DIR/$ALIAS_PMTILES"
+ln -sfn "$BASENAME_PMTILES" "$TMP_STAGE_DIR/$ALIAS_PMTILES.tmp"
+mv -Tf "$TMP_STAGE_DIR/$ALIAS_PMTILES.tmp" "$TARGET_DIR/$ALIAS_PMTILES"
 
 echo "   2. Atomically linking $ALIAS_META -> $BASENAME_META"
-ln -sfn "$BASENAME_META" "$TARGET_DIR/$ALIAS_META.tmp"
-mv -Tf "$TARGET_DIR/$ALIAS_META.tmp" "$TARGET_DIR/$ALIAS_META"
+ln -sfn "$BASENAME_META" "$TMP_STAGE_DIR/$ALIAS_META.tmp"
+mv -Tf "$TMP_STAGE_DIR/$ALIAS_META.tmp" "$TARGET_DIR/$ALIAS_META"
 
 echo "   [✓] Atomic switch complete."
 echo ">> Publish successful!"
