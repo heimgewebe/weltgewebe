@@ -1865,6 +1865,11 @@ async fn test_device_management() -> Result<()> {
     let res_del_foreign = app.clone().oneshot(req_del_foreign).await?;
     assert_eq!(res_del_foreign.status(), StatusCode::FORBIDDEN);
 
+    let body_bytes_del_foreign = body::to_bytes(res_del_foreign.into_body(), usize::MAX).await?;
+    let body_del_foreign: serde_json::Value =
+        serde_json::from_slice(&body_bytes_del_foreign).unwrap();
+    assert_eq!(body_del_foreign["error"], "STEP_UP_REQUIRED");
+
     // Explicitly verify that the foreign device (Device B) is STILL valid
     let req_check_foreign = Request::get("/auth/session")
         .header("Cookie", &session_cookie2)
@@ -1889,6 +1894,17 @@ async fn test_device_management() -> Result<()> {
 
     let res_del_self = app.clone().oneshot(req_del_self).await?;
     assert_eq!(res_del_self.status(), StatusCode::NO_CONTENT);
+
+    let logout_set_cookie = res_del_self
+        .headers()
+        .get("Set-Cookie")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert!(
+        logout_set_cookie.contains("Max-Age=0"),
+        "Cookie should be deleted on self device removal"
+    );
 
     // Verify Device A is gone
     let req_check_deleted = Request::get("/auth/session")
