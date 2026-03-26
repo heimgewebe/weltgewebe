@@ -126,7 +126,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Ist:** POST `/auth/logout-all` gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Funktionale Session-Löschung nach Challenge-Consume fehlt noch.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** funktionale Session-Löschung, Challenge-Generierung, End-to-End-Test
+**Fehlende Belege:** funktionale Session-Löschung nach Challenge-Consume, End-to-End-Test
 **Status:** Teil
 **Risiko:** hoch
 
