@@ -9,20 +9,33 @@ summary: Agent configuration and operational boundaries for Weltgewebe.
 
 # AGENTS
 
+## Binding Reading Protocol
+
+All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-protocol.md).
+
+This protocol defines:
+
+- reading order
+- conflict resolution
+- abort rules
+
+It overrides implicit interpretation.
+
 ## Purpose
 
 Agent configuration, operational boundaries, and strict coding guidelines for Weltgewebe. This document defines how agents navigate the repository, canonical files, and the rules for CI-ready code contributions.
 
 ## Read This First
 
-1. Begin with `repo.meta.yaml` and `docs/index.md` to understand the truth structure.
+1. Begin with `repo.meta.yaml` and `docs/policies/agent-reading-protocol.md` to understand the truth structure. Navigation can be found in `docs/index.md`.
 2. Read the "Coding Guidelines" below. Sie definieren, wie Code-Snippets syntaktisch korrekt, ausführbar und CI-tauglich vorgeschlagen werden müssen – statt nur „so ungefähr“ zu passen.
 
 ## Canonical Sources
 
 - `repo.meta.yaml`
 - `AGENTS.md`
-- `docs/index.md`
+- `agent-policy.yaml`
+- `docs/policies/agent-reading-protocol.md`
 
 ## Discovery Rules
 

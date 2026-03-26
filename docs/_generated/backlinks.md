@@ -10,6 +10,10 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
+## AGENTS.md
+
+- [relates_to] docs/policies/agent-reading-protocol.md
+
 ## docs/adr/0042-consume-semantah-contracts.md
 
 - [relates_to] docs/x-repo/semantAH.md
@@ -180,6 +184,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/overview/zusammenstellung.md
 
+## docs/policies/agent-reading-protocol.md
+
+- [relates_to] docs/reports/agent-readiness-audit.md
+
 ## docs/policies/orientierung.md
 
 - [relates_to] docs/weltgewebe-agenten-manifest.md
@@ -309,3 +317,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/overview/zusammenstellung.md
 - [relates_to] docs/vision.md
 
+## repo.meta.yaml
+
+- [relates_to] docs/policies/agent-reading-protocol.md
