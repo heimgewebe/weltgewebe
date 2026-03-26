@@ -88,7 +88,7 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Funktionale Session-Löschung nach Challenge-Consume fehlt noch.",
+      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Challenge-Erzeugung belegt; Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -103,7 +103,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt und erzeugen eine challenge_id. Step-up Consume fehlt.",
+      "ist": "Fremdgeräte-Löschung erzeugt Challenge mit Zielbindung. Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -118,11 +118,12 @@
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
-      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. Consume-Pfade und Intent-Binding-E2E fehlen noch.",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. Partielle Intent-/Gerätebindung belegt. Consume-/Verifikationspfade offen.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
         "Consume-Pfade",
+        "Verifikationspfade",
         "UI Integration"
       ],
       "risk": "hoch",

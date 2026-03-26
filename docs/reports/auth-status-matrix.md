@@ -123,7 +123,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** POST `/auth/logout-all` gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Funktionale Session-Löschung nach Challenge-Consume fehlt noch.
+**Ist:** POST `/auth/logout-all` gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Challenge-Erzeugung belegt; Consume fehlt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** funktionale Session-Löschung nach Challenge-Consume, End-to-End-Test
@@ -133,7 +133,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt und erzeugen eine `challenge_id`. Step-up Consume fehlt.
+**Ist:** Fremdgeräte-Löschung erzeugt Challenge mit Zielbindung. Consume fehlt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte
@@ -143,10 +143,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen nun Challenges. Consume-Pfade und Intent-Binding-E2E fehlen noch.
+**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen nun Challenges. Partielle Intent-/Gerätebindung belegt. Consume-/Verifikationspfade offen.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** Consume-Pfade, UI Integration
+**Fehlende Belege:** Consume-Pfade, Verifikationspfade, UI Integration
 **Status:** Teil
 **Risiko:** hoch
 
