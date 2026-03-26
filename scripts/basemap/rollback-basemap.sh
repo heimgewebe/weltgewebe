@@ -29,6 +29,19 @@ PMTILES_FILENAME="$1"
 META_FILENAME="$2"
 TARGET_DIR="${3:-${TARGET_DIR:-/srv/weltgewebe-basemap/}}"
 
+# Enforce strict filename contract (no paths, no traversal)
+if [[ "$PMTILES_FILENAME" == */* ]] || [[ "$PMTILES_FILENAME" == *..* ]]; then
+  echo "ERROR: Invalid pmtiles_filename '$PMTILES_FILENAME'. Must be a simple filename without paths or traversal characters." >&2
+  EXIT_CODE=1
+  exit $EXIT_CODE
+fi
+
+if [[ "$META_FILENAME" == */* ]] || [[ "$META_FILENAME" == *..* ]]; then
+  echo "ERROR: Invalid meta_filename '$META_FILENAME'. Must be a simple filename without paths or traversal characters." >&2
+  EXIT_CODE=1
+  exit $EXIT_CODE
+fi
+
 echo "=== Weltgewebe Basemap Rollback ==="
 echo "Artifact: $PMTILES_FILENAME"
 echo "Sentinel: $META_FILENAME"
@@ -174,7 +187,7 @@ ALIAS_META="${REGION}.meta.json"
 # 4. Atomic Switch (The core invariant: PMTiles first, then Meta)
 echo ">> Executing Atomic Switch (Rollback)..."
 
-TMP_STAGE_DIR="$(mktemp -d "$TARGET_DIR/.publish-tmp.XXXXXX")"
+TMP_STAGE_DIR="$(mktemp -d "$TARGET_DIR/.rollback-tmp.XXXXXX")"
 trap 'rm -rf "$TMP_STAGE_DIR"' EXIT
 
 echo "   1. Atomically linking $ALIAS_PMTILES -> $PMTILES_FILENAME"
