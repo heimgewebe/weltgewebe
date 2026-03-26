@@ -905,7 +905,11 @@ pub async fn logout_all(
                 "error": "INTERNAL_SERVER_ERROR",
                 "message": "Authenticated context missing device_id"
             });
-            return (axum::http::StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
+            return (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                Json(err_payload),
+            )
+                .into_response();
         }
     };
 
@@ -915,11 +919,9 @@ pub async fn logout_all(
         "Logout All requested, generating step-up challenge"
     );
 
-    let challenge = state.challenges.create(
-        account_id,
-        device_id,
-        ChallengeIntent::LogoutAll,
-    );
+    let challenge = state
+        .challenges
+        .create(account_id, device_id, ChallengeIntent::LogoutAll);
 
     let err_payload = serde_json::json!({
         "error": "STEP_UP_REQUIRED",
