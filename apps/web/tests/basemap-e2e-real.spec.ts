@@ -18,28 +18,38 @@ test.describe("Basemap Sovereign End-to-End Verification", () => {
 
       try {
         const urlObj = new URL(url);
-        const isLocalHost = urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1';
+        const isLocalHost =
+          urlObj.hostname === "localhost" || urlObj.hostname === "127.0.0.1";
 
         // Exclude data URIs, blob URIs, and our local dev server
-        if (!isLocalHost && !url.startsWith('data:') && !url.startsWith('blob:') && !urlObj.hostname.includes('localhost')) {
+        if (
+          !isLocalHost &&
+          !url.startsWith("data:") &&
+          !url.startsWith("blob:") &&
+          !urlObj.hostname.includes("localhost")
+        ) {
           externalDependencyDetected = true;
           console.warn("External dependency detected:", url);
         }
-      } catch (e) {
+      } catch {
         // ignore invalid URLs
       }
     });
 
     // Abort external tile/style providers to ensure we don't accidentally fall back
     await page.route("**/*", (route) => {
-      const url = route.request().url();
-      if (
-        url.includes("cartocdn.com") ||
-        url.includes("mapbox.com") ||
-        url.includes("maptiles")
-      ) {
-        route.abort();
-      } else {
+      try {
+        const routeUrlObj = new URL(route.request().url());
+        if (
+          routeUrlObj.hostname.endsWith("cartocdn.com") ||
+          routeUrlObj.hostname.endsWith("mapbox.com") ||
+          routeUrlObj.hostname.includes("maptiles")
+        ) {
+          route.abort();
+        } else {
+          route.continue();
+        }
+      } catch {
         route.continue();
       }
     });
@@ -61,7 +71,8 @@ test.describe("Basemap Sovereign End-to-End Verification", () => {
             url.includes("/local-basemap/style.json"),
           ),
         {
-          message: "Client MUST request the local sovereign style.json from the dev server",
+          message:
+            "Client MUST request the local sovereign style.json from the dev server",
           timeout: 5000,
         },
       )
@@ -69,6 +80,9 @@ test.describe("Basemap Sovereign End-to-End Verification", () => {
 
     // Verify that NO external domains were contacted during the map load process.
     // This is the true proof of "Sovereignty" (no CDN dependencies).
-    expect(externalDependencyDetected, "External map dependency detected during load. True sovereignty violated.").toBe(false);
+    expect(
+      externalDependencyDetected,
+      "External map dependency detected during load. True sovereignty violated.",
+    ).toBe(false);
   });
 });
