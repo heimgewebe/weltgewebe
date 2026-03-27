@@ -83,7 +83,7 @@ mod tests {
             sessions: SessionStore::new(),
             challenges: Default::default(),
             tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-            step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+        step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
             accounts: Arc::new(RwLock::new(account_map)),
             nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
