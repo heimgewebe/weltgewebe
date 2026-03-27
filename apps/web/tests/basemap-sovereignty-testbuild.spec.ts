@@ -5,7 +5,7 @@ import { mockApiResponses } from "./fixtures/mockApi";
 // and renders without ANY external CDN dependencies in the local-sovereign mode.
 // It uses a strict deny-by-default routing logic to ensure E2E-Test-Build sovereignty without fallbacks.
 test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", () => {
-  test("client successfully fetches local style and map isStyleLoaded() resolves without external CDN dependencies", async ({
+  test("client requests local style path and map isStyleLoaded() resolves against mock without external CDN dependencies", async ({
     page,
   }) => {
     // Setup mock API routing for the auth endpoints to allow the app to load
@@ -19,7 +19,8 @@ test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", (
     const allowedHosts = [
       "localhost",
       "127.0.0.1",
-      "[::1]", // some IPv6 local loops
+      "[::1]",
+      "::1", // some IPv6 local loops
     ];
 
     page.on("request", (req) => {
