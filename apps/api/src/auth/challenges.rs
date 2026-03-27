@@ -84,12 +84,23 @@ impl ChallengeStore {
     }
 
     pub fn get(&self, challenge_id: &str) -> Option<Challenge> {
-        let store = self.store.read().expect("ChallengeStore lock poisoned");
-        if let Some(challenge) = store.get(challenge_id) {
-            if !challenge.is_expired() {
-                return Some(challenge.clone());
+        let is_expired = {
+            let store = self.store.read().expect("ChallengeStore lock poisoned");
+            if let Some(challenge) = store.get(challenge_id) {
+                if !challenge.is_expired() {
+                    return Some(challenge.clone());
+                }
+                true
+            } else {
+                false
             }
+        };
+
+        if is_expired {
+            let mut store = self.store.write().expect("ChallengeStore lock poisoned");
+            store.remove(challenge_id);
         }
+
         None
     }
 }
@@ -126,5 +137,32 @@ mod tests {
         assert_eq!(consumed.id, c.id);
 
         assert!(store.get(&c.id).is_none());
+    }
+
+    #[test]
+    fn test_get_removes_expired_challenge() {
+        let store = ChallengeStore::new();
+        let c = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        // Manually expire the challenge
+        {
+            let mut w = store.store.write().unwrap();
+            let challenge = w.get_mut(&c.id).unwrap();
+            challenge.expires_at = Utc::now() - Duration::minutes(10);
+        }
+
+        // Before get, it's still in the map
+        assert!(store.store.read().unwrap().contains_key(&c.id));
+
+        // get() should return None and remove it
+        let retrieved = store.get(&c.id);
+        assert!(retrieved.is_none());
+
+        // After get, it should be removed from the map
+        assert!(!store.store.read().unwrap().contains_key(&c.id));
     }
 }
