@@ -27,7 +27,7 @@
   import { updateEdges } from '$lib/map/overlay/edges';
   import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
   import { setupFocusInteraction } from '$lib/map/overlay/focus';
-  import { setupActivityInteraction } from '$lib/map/overlay/activity';
+  import { updateActivity } from '$lib/map/overlay/activity';
 
   export let data: PageData;
 
@@ -151,6 +151,7 @@
   // Reactive update for edges – only after map style is fully loaded
   $: if (map && mapStyleReady && edgesData && $view) {
      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+     updateActivity(map, filteredMarkersData);
   }
 
 
@@ -248,7 +249,6 @@
 
   let cleanupKomposition: (() => void) | undefined = undefined;
   let cleanupFocus: (() => void) | undefined = undefined;
-  let cleanupActivity: (() => void) | undefined = undefined;
   let unsubscribeSysState: (() => void) | undefined = undefined;
 
   const shouldExposeTestMap = import.meta.env.DEV || import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true';
@@ -321,7 +321,6 @@
       let sysStateStr = '';
       unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
-      cleanupActivity = setupActivityInteraction(map);
 
       const loadingTimeout = setTimeout(() => {
         isLoading = false;
@@ -368,7 +367,6 @@
       }
       cleanupKomposition?.();
       cleanupFocus?.();
-      cleanupActivity?.();
       unsubscribeSysState?.();
       nodesOverlay?.destroy();
       if (map && typeof map.remove === 'function') map.remove();
