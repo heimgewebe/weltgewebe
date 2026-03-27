@@ -44,7 +44,7 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 - **Test-Skript:** `scripts/tests/test_verify_deployment.sh` enthält Test 22 für "Cache Guards Logic".
 - **Vorhandene Tests:** Das Skript testet den Cache-Guard aktuell über Sub-Tests `22a` (HTML-Cache) bis `22c` (Positiv-Pfad).
-- **Vorhandene Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Sub-Tests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare kanonische Versionsangabe) sind ebenfalls im Code implementiert.
+- **Weitere Tests:** Die in der Blaupause (`versionierungs-blaupause.md`) erwähnten Sub-Tests `22d` (`version.json` ohne `no-store`) und `22e` (`version.json` erreichbar, aber ohne brauchbare kanonische Versionsangabe) sind ebenfalls im Code implementiert.
 
 ## 3. Kanonische Begriffe
 
@@ -86,10 +86,10 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
   - *Typ:* Positivtest (Erwarteter Exit 0)
   - *Verhalten:* Simuliert korrekte Header für HTML und Assets sowie eine gültige `version.json`-Antwort. Geht erfolgreich durch.
 - **22d: version.json ohne no-store**
-  - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
+  - *Typ:* Negativtest (Erwarteter Exit != 0)
   - *Status:* Implementiert in `test_verify_deployment.sh`.
 - **22e: version.json ohne brauchbare kanonische Versionsangabe**
-  - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
+  - *Typ:* Negativtest (Erwarteter Exit != 0)
   - *Status:* Implementiert in `test_verify_deployment.sh`.
 
 ## 6. Verbleibende Klarstellungen
