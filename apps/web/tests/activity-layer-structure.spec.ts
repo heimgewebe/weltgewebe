@@ -14,11 +14,15 @@ test.describe("Activity Heatmap layer structure on load", () => {
     await mockApiResponses(page);
     await page.goto("/map");
 
-    // Wait until the Svelte layer binding pushes the activity layer
+    // Wait until the Svelte layer bindings push both activity and edges layers
     await page.waitForFunction(
       () => {
         const map = (window as any).__TEST_MAP__;
-        return map && map.getLayer("activity-layer");
+        return (
+          map &&
+          map.getLayer("activity-layer") &&
+          (map.getLayer("edges-layer") || map.getLayer("edges-halo-layer"))
+        );
       },
       undefined,
       { timeout: 15000 },
@@ -83,6 +87,22 @@ test.describe("Activity Heatmap layer structure on load", () => {
     // Ensure that it does not immediately fade to 0 at zoom 15
     const opacityConfig = activityLayerInfo?.opacityPaint;
     expect(Array.isArray(opacityConfig)).toBe(true);
+    expect(opacityConfig[0]).toBe("interpolate");
+
+    // The interpolation stops start at index 3 in the array, formatted as [zoom1, opacity1, zoom2, opacity2, ...]
+    let isVisibleAt15 = false;
+    for (let i = 3; i < opacityConfig.length; i += 2) {
+      const zoom = opacityConfig[i];
+      const opacity = opacityConfig[i + 1];
+      if (zoom <= 15 && opacity > 0) {
+        isVisibleAt15 = true;
+      }
+    }
+
+    expect(
+      isVisibleAt15,
+      "Heatmap must be configured to have > 0 opacity at or before zoom level 15",
+    ).toBe(true);
 
     // As long as the fadeout completely reaches 0 at zoom >= 16, we are safe.
     const lastStopZoom = opacityConfig[opacityConfig.length - 2];

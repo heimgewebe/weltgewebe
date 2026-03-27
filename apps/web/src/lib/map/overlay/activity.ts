@@ -29,14 +29,14 @@ export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
 
   if (source) {
     source.setData(geoJsonData);
-    ensureActivityLayer(map, sourceId, layerId);
   } else {
     map.addSource(sourceId, {
       type: "geojson",
       data: geoJsonData,
     });
-    ensureActivityLayer(map, sourceId, layerId);
   }
+
+  ensureActivityLayer(map, sourceId, layerId);
 }
 
 function ensureActivityLayer(
