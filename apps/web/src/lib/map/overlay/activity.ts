@@ -49,12 +49,19 @@ function ensureActivityLayer(
   if (hasLayer) return;
 
   const layers = map.getStyle()?.layers;
-  let firstSymbolId: string | undefined;
+  let beforeId: string | undefined;
   if (layers) {
+    // Priority: place heatmap below edge layers to ensure edges are visible over density
     for (const layer of layers) {
-      if (layer.type === "symbol") {
-        firstSymbolId = layer.id;
+      if (
+        layer.id === LAYERS.EDGES_HALO_LAYER ||
+        layer.id === LAYERS.EDGES_LAYER
+      ) {
+        beforeId = layer.id;
         break;
+      } else if (!beforeId && layer.type === "symbol") {
+        // Fallback: place below the first symbol layer (e.g., place labels)
+        beforeId = layer.id;
       }
     }
   }
@@ -65,9 +72,9 @@ function ensureActivityLayer(
       id: layerId,
       type: "heatmap",
       source: sourceId,
-      maxzoom: 15,
+      maxzoom: 17,
       paint: {
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 17, 3],
         "heatmap-color": [
           "interpolate",
           ["linear"],
@@ -85,18 +92,20 @@ function ensureActivityLayer(
           1,
           "rgba(178,24,43,0.9)",
         ],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 15, 40],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 17, 40],
         "heatmap-opacity": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          10,
+          12,
           0.8,
-          15,
+          16,
+          0.6,
+          17,
           0,
         ],
       },
     },
-    firstSymbolId,
+    beforeId,
   );
 }

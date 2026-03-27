@@ -85,8 +85,8 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
 - [ ] Regionale Tilesets ergänzen (Large Scale vs. Local Scale)
   - _Teilweise umgesetzt: Deterministisches Build-Skript für Deutschland (Large Scale) als `build-germany-pmtiles.sh` bereitgestellt._
 - [ ] Offline-Modus-Konzepte prüfen
-- [x] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
-  - _Umgesetzt: Dynamische Heatmap-Dichtevisualisierung für MapLibre clientseitig basierend auf den gerenderten Knoten-Koordinaten im `activity.ts`-Overlay implementiert._
+- [~] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
+  - _Teilweise umgesetzt: Ein technisches Heatmap-Fundament (`activity.ts`) wurde eingezogen, das derzeit clientseitig die Dichte der aktuell gerenderten Kartenpunkte als Heatmap visualisiert. Die Layer-Reihenfolge (Z-Order) und Skalierung (Zoom) ist strukturell etabliert. Eine echte Activity-Semantik basierend auf Infrastruktur-Telemetrie oder Event-Datenströmen fehlt noch._
 - [ ] Mehrskalige Projektionen prüfen
 
 **Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der
