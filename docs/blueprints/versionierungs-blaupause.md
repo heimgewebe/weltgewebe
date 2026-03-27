@@ -376,31 +376,31 @@ und zeigt einen Hinweis an.
 
 ### Phase B — Edge-Semantik härten
 
-- [ ] Caddy-Regel für `/_app/version.json` mit `Cache-Control: no-store` bestätigen.
-- [ ] Regelreihenfolge gegen HTML-Fallback absichern.
-- [ ] HTML-Regel auf `no-cache, must-revalidate` verifizieren.
-- [ ] Immutable-Regel unverändert funktional bestätigen.
+- [x] Caddy-Regel für `/_app/version.json` mit `Cache-Control: no-store` bestätigen.
+- [x] Regelreihenfolge gegen HTML-Fallback absichern.
+- [x] HTML-Regel auf `no-cache, must-revalidate` verifizieren.
+- [x] Immutable-Regel unverändert funktional bestätigen.
 
 **Stop-Kriterium:** Header-Matrix für HTML / immutable / version ist korrekt.
 
 ### Phase C — Deploy-Verify finalisieren
 
-- [ ] `weltgewebe-up` auf harte Prüfung von `version.json` ausrichten.
-- [ ] `version`-Feld als Pflicht prüfen.
-- [ ] Bei invalidem JSON klar scheitern.
-- [ ] `REQUIRE_FRONTEND`-Override validieren.
-- [ ] Leeren oder ungültigen `REQUIRE_FRONTEND` fail fast behandeln.
-- [ ] Doku zur Override-Semantik ergänzen.
+- [x] `weltgewebe-up` auf harte Prüfung von `version.json` ausrichten.
+- [x] `version`-Feld als Pflicht prüfen.
+- [x] Bei invalidem JSON klar scheitern.
+- [x] `REQUIRE_FRONTEND`-Override validieren.
+- [x] Leeren oder ungültigen `REQUIRE_FRONTEND` fail fast behandeln.
+- [x] Doku zur Override-Semantik ergänzen.
 
 **Stop-Kriterium:** `weltgewebe-up` behandelt `version.json` und `REQUIRE_FRONTEND` deterministisch und explizit.
 
 ### Phase D — Testharness bereinigen
 
-- [ ] `scripts/tests/test_verify_deployment.sh` nur minimal für 22a–22e erweitern.
-- [ ] Keinen generischen Monster-Mock bauen.
-- [ ] Keine Hilfsskripte außerhalb der kanonischen Testdatei.
-- [ ] Keine Artefakte im Diff.
-- [ ] 22a–22e sauber durchlaufen lassen.
+- [x] `scripts/tests/test_verify_deployment.sh` nur minimal für 22a–22e erweitern.
+- [x] Keinen generischen Monster-Mock bauen.
+- [x] Keine Hilfsskripte außerhalb der kanonischen Testdatei.
+- [x] Keine Artefakte im Diff.
+- [x] 22a–22e sauber durchlaufen lassen.
 
 **Stop-Kriterium:** Die Vertragsmatrix ist vollständig und stabil.
 
