@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // external map styling dependencies when using the local-sovereign mode.
 // It explicitly intercepts and ABORTS any requests to external domains
 // (like cartocdn, mapbox, unpkg) to ensure true sovereignty.
-test.describe("Basemap Sovereign End-to-End Verification", () => {
+test.describe("Basemap Sovereignty Verification (Dev/Test Environment)", () => {
   test("client successfully requests and renders local artifacts without external dependencies", async ({
     page,
   }) => {
