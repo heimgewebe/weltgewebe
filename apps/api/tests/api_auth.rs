@@ -1912,6 +1912,24 @@ async fn test_device_management() -> Result<()> {
         panic!("Incorrect challenge intent");
     }
 
+    // Attempt to delete a non-existent foreign device (should return 404 NOT_FOUND)
+    let req_del_fake = Request::delete(format!("/auth/devices/{}", "fake-device-id"))
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())
+        .unwrap();
+
+    let res_del_fake = app.clone().oneshot(req_del_fake).await.unwrap();
+    assert_eq!(res_del_fake.status(), StatusCode::NOT_FOUND);
+
+    let body_bytes_del_fake = axum::body::to_bytes(res_del_fake.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_del_fake: serde_json::Value = serde_json::from_slice(&body_bytes_del_fake).unwrap();
+    assert_eq!(body_del_fake["error"], "NOT_FOUND");
+    assert!(body_del_fake.get("challenge_id").is_none());
+
     // Explicitly verify that the foreign device (Device B) is STILL valid
     let req_check_foreign = Request::get("/auth/session")
         .header("Cookie", &session_cookie2)

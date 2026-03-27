@@ -1126,6 +1126,19 @@ pub async fn remove_device(
         return (axum::http::StatusCode::NO_CONTENT, jar.add(cookie)).into_response();
     }
 
+    // Removing another device -> first check if it even exists for this account
+    let account_sessions = state.sessions.list_by_account(&account_id);
+    let target_device_exists = account_sessions.iter().any(|s| s.device_id == device_id);
+
+    if !target_device_exists {
+        tracing::warn!(
+            event = "auth.remove_device.not_found",
+            "Attempted to remove a foreign device that does not exist for this account"
+        );
+        let err_payload = serde_json::json!({"error": "NOT_FOUND"});
+        return (axum::http::StatusCode::NOT_FOUND, jar, Json(err_payload)).into_response();
+    }
+
     // Removing another device -> requires step-up auth
     tracing::info!(
         event = "auth.remove_device.step_up_required",
