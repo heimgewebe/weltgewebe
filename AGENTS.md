@@ -14,6 +14,7 @@ summary: Agent configuration and operational boundaries for Weltgewebe.
 All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-protocol.md).
 
 **Core Rules (Strictly Binding):**
+
 1. **Reading Order:** `repo.meta.yaml` -> `AGENTS.md` -> `agent-policy.yaml` -> `docs/policies/agent-reading-protocol.md`
 2. **Conflict Resolution:** Contracts > Canonical Policies > Runtime Code > Normative Specs > Navigation.
 3. **No Interpolation:** Silent interpolation is FORBIDDEN. Explicitly name missing gaps.
