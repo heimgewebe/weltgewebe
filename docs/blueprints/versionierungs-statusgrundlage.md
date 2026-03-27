@@ -92,9 +92,9 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
   - *Typ:* Geplanter Negativtest (Erwarteter Exit != 0)
   - *Status:* Implementiert in `test_verify_deployment.sh`.
 
-## 6. Offene Widersprüche / epistemische Leerstellen
+## 6. Verbleibende Klarstellungen
 
-- (Keine offenen Widersprüche mehr bzgl. version.json Caching und Guarding)
+- Aktuell bestehen keine offenen Widersprüche mehr bzgl. version.json-Caching und -Guarding.
 - **Klarstellung REQUIRE_FRONTEND:** REQUIRE_FRONTEND ist technisch strikt validiert (0|1, sonst `exit 1`), dient aber konzeptionell primär als Override-/Testhebel.
 
 ### Beantwortung der Kernfragen
