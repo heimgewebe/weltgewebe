@@ -13,7 +13,7 @@ relations:
 
 ## 1. Ziel und Zweck
 
-Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgewebe-Deploy-Versionierung. Es beendet den Zyklus aus isolierten Patches und unkoordinierten Reparaturen, indem es eine präzise Bestandsaufnahme liefert. Es ist die kanonische Arbeitsgrundlage für den nächsten, fokussierten PR zur sauberen Durchsetzung der Versionierungsverträge (Cache-Guards, Caddy-Header, Testsemantik).
+Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgewebe-Deploy-Versionierung. Es beendet den Zyklus aus isolierten Patches und unkoordinierten Reparaturen, indem es eine präzise Bestandsaufnahme liefert. Es ist die kanonische Arbeitsgrundlage für die Einordnung und Nachvollziehbarkeit der inzwischen umgesetzten Versionierungsverträge (Cache-Guards, Caddy-Header, Testsemantik).
 
 ## 2. Repo-belegter Ist-Stand
 
