@@ -71,7 +71,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge + Gerätebindung belegt, Consume fehlt     | Teil   | hoch    |
-| Devices               | required    | API aktiv, Guard erzeugt Challenge inkl. Bindung, Consume fehlt | Teil   | mittel  |
+| Devices               | required    | API aktiv (Liste, Self-Delete), Fremdgeräte-Guard erzeugt gebundene Challenge, Consume fehlt | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store aktiv, Consume offen        | Teil   | hoch      |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
 | Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
@@ -133,7 +133,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Device-Management vorhanden; Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.
+**Ist:** Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/src/auth/challenges.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte

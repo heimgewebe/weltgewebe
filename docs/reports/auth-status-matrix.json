@@ -103,7 +103,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Device-Management vorhanden; Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.",
+      "ist": "Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
