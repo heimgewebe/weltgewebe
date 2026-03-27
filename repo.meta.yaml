@@ -92,7 +92,7 @@ agent_reading:
   protocol: docs/policies/agent-reading-protocol.md
 
 truth_model:
-  conflict_resolution: "Runtime/Contracts > Policies > Normative > Diagnostic > Navigation"
+  conflict_resolution: "domain_contracts > canonical_policies > runtime_configs_and_code > normative_specifications > diagnostic_reports > navigational_indices > generated_diagnostics"
   abort_on_conflict: true
   interpolation_allowed: false
   precedence:
