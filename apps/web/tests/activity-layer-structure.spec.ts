@@ -56,6 +56,7 @@ test.describe("Activity Heatmap layer structure on load", () => {
         opacityPaint,
         sourceExists: !!source,
         isBelowEdges,
+        edgeIndex,
       };
     });
 
@@ -67,8 +68,17 @@ test.describe("Activity Heatmap layer structure on load", () => {
     expect(activityLayerInfo?.type).toBe("heatmap");
     expect(activityLayerInfo?.sourceExists).toBe(true);
 
-    // Structural Z-Order proof: The heatmap density must remain in the background (beneath edges or labels)
-    expect(activityLayerInfo?.isBelowEdges).toBe(true);
+    // Hardened Structural Z-Order proof:
+    // Ensure that edge layers are actually present in the style during the test,
+    // otherwise our relative z-order assertion (isBelowEdges) is vacuously true.
+    expect(
+      activityLayerInfo?.edgeIndex,
+      "Edge layers should be present for a robust z-order test",
+    ).toBeGreaterThan(-1);
+    expect(
+      activityLayerInfo?.isBelowEdges,
+      "Activity layer should be below edge layers",
+    ).toBe(true);
 
     // Ensure that it does not immediately fade to 0 at zoom 15
     const opacityConfig = activityLayerInfo?.opacityPaint;

@@ -151,6 +151,10 @@
   // Reactive update for edges – only after map style is fully loaded
   $: if (map && mapStyleReady && edgesData && $view) {
      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+  }
+
+  // Reactive update for activity heatmap - independent of edges and explicit view toggles
+  $: if (map && mapStyleReady && filteredMarkersData) {
      updateActivity(map, filteredMarkersData);
   }
 
