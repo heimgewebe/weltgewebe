@@ -83,6 +83,7 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
 **Ziel:** Erweiterung der souveränen Kartengrundlage um spezifische Sichten und Leistungsmerkmale.
 
 - [ ] Regionale Tilesets ergänzen (Large Scale vs. Local Scale)
+  - _Teilweise umgesetzt: Deterministisches Build-Skript für Deutschland (Large Scale) als `build-germany-pmtiles.sh` bereitgestellt._
 - [ ] Offline-Modus-Konzepte prüfen
 - [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
 - [ ] Mehrskalige Projektionen prüfen

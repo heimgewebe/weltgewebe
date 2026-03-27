@@ -414,7 +414,7 @@ Deploy-Strategie:
 OSM Updatezyklus:
 
 - **Rhythmus:** Ereignis- oder zeitgetrieben (z. B. monatlich oder bei signifikanten OSM-Diffs/Regionsupdates).
-- **Prozess:** Ein Build-Job (z. B. `build-hamburg-pmtiles.sh`) lädt den definierten OSM-Snapshot (gepinnt via SHA256) herunter und erzeugt das PMTiles-Artefakt.
+- **Prozess:** Ein Build-Job (z. B. `build-hamburg-pmtiles.sh` oder `build-germany-pmtiles.sh`) lädt den definierten OSM-Snapshot (gepinnt via SHA256) herunter und erzeugt **ausschließlich** das versionierte PMTiles-Artefakt sowie die dazugehörige `.meta.json`. Er erzeugt **keine** stabilen Aliase oder Current-Pfade.
 
 Publish- und Rollback-Strategie (Contract-First):
 
