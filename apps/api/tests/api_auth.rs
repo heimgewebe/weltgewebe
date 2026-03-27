@@ -65,6 +65,7 @@ fn test_state() -> Result<ApiState> {
         sessions: SessionStore::new(),
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+        step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
         accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
@@ -1998,6 +1999,191 @@ async fn test_device_management() -> Result<()> {
         devices_b[0]["current"].as_bool().unwrap(),
         "Device B should be current"
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_step_up_magic_link_request_success() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let session = state.sessions.create("u1".to_string(), None);
+    let session_id = session.id.clone();
+    let device_id = session.device_id.clone();
+
+    let challenge = state.challenges.create(
+        "u1".to_string(),
+        device_id,
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
+    );
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/step-up/magic-link/request")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"challenge_id":"{}"}}"#,
+            challenge.id
+        )))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_step_up_magic_link_request_unauthenticated() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/step-up/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(format!(r#"{{"challenge_id":"any-id"}}"#)))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_step_up_magic_link_request_invalid_challenge() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let session = state.sessions.create("u1".to_string(), None);
+    let session_id = session.id;
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/step-up/magic-link/request")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"challenge_id":"invalid-id"}}"#
+        )))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_str = String::from_utf8_lossy(&body_bytes);
+    assert!(body_str.contains("CHALLENGE_INVALID"));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    {
+        let mut accounts = state.accounts.write().await;
+        let account = weltgewebe_api::routes::accounts::AccountInternal {
+            public: weltgewebe_api::routes::accounts::AccountPublic {
+                id: "u2".to_string(),
+                kind: "garnrolle".to_string(),
+                title: "u2".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: weltgewebe_api::auth::role::Role::Gast,
+            email: Some("u2@example.com".to_string()),
+        };
+        accounts.insert("u2".to_string(), account);
+    }
+    let session2 = state.sessions.create("u2".to_string(), None);
+
+    let session_id2 = session2.id;
+
+    let session1 = state.sessions.create("u1".to_string(), None);
+    let device_id1 = session1.device_id;
+    let challenge1 = state.challenges.create(
+        "u1".to_string(),
+        device_id1,
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
+    );
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/step-up/magic-link/request")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id2
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"challenge_id":"{}"}}"#,
+            challenge1.id
+        )))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_str = String::from_utf8_lossy(&body_bytes);
+    assert!(body_str.contains("CHALLENGE_INVALID"));
 
     Ok(())
 }

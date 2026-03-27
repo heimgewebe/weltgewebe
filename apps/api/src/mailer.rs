@@ -101,6 +101,36 @@ impl Mailer {
         })
     }
 
+    pub async fn send_step_up_magic_link(&self, to: &str, link: &str) -> Result<()> {
+        let email = Message::builder()
+            .from(self.from.parse().context("invalid from address")?)
+            .to(to.parse().context("invalid to address")?)
+            .subject("Confirm sensitive action in Weltgewebe")
+            .header(ContentType::TEXT_HTML)
+            .body(format!(
+                r#"<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; padding: 20px;">
+    <h2>Confirm your action in Weltgewebe</h2>
+    <p>Click the link below to confirm your sensitive action. This link is strictly bound to your current session.</p>
+    <p style="margin: 20px 0;">
+        <a href="{}" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Confirm Action</a>
+    </p>
+    <p style="color: #666; font-size: 0.9em;">This link expires in a few minutes.</p>
+    <p style="color: #666; font-size: 0.9em;">If you did not request this email, please secure your account.</p>
+</body>
+</html>"#,
+                link
+            ))
+            .context("failed to build email")?;
+
+        self.transport
+            .send(email)
+            .await
+            .context("failed to send step-up magic link email")?;
+        Ok(())
+    }
+
     pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
         let email = Message::builder()
             .from(self.from.parse().context("invalid from address")?)
