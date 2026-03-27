@@ -36,3 +36,10 @@ human_review_required_for:
   - security/
   - deployment/
   - credentials/
+
+# Note: These agent_rules are normative guidelines for agent execution behavior,
+# not mechanically enforced by a specific CI runner or tooling engine.
+agent_rules:
+  abort_on_conflict: true
+  interpolation_allowed: false
+  require_explicit_reading_order: true

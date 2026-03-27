@@ -1,4 +1,4 @@
-<!-- Repo ist aktuell Docs-only. Befehle für spätere Gates sind unten als Vorschau markiert. -->
+<!-- "Docs-only" ist ein formaler Gate-Status (ADR-0001). Das Repo ENTHÄLT operativen Code in apps/ und infra/. Diese Runtime-Artefakte sind Teil der Wahrheitsschicht und müssen gemäß dem definierten Truth Model (repo.meta.yaml) berücksichtigt werden. -->
 <!-- Docs-only (ADR-0001 Clean-Slate) • Re-Entry via Gates A–D -->
 # Weltgewebe
 
@@ -90,7 +90,7 @@ Für einen schnellen Einstieg in Ethik, UX und Projektkontext:
   (Details im Abschnitt [Web-E2E-Quickstart](#web-e2e-quickstart-preview)):
   `pnpm exec playwright install --with-deps`
 
-> **Hinweis:** Aktuell **Docs-only/Clean-Slate** gemäß ADR-0001.
+> **Hinweis:** Aktuell formaler **Docs-only/Clean-Slate** Gate-Status gemäß ADR-0001, ABER `apps/` und `infra/` enthalten operative Laufzeitumgebungen. Deren Relevanz und Bindung für Agentenentscheidungen ergibt sich strikt aus dem Truth Model in `repo.meta.yaml` und dem Agent Reading Protocol.
 > Code-Re-Entry erfolgt über die Gates A–D (siehe [docs/process/fahrplan.md](docs/process/fahrplan.md)).
 > Dort sind die Gate-Checklisten (A–D) als To-dos dokumentiert.
 
