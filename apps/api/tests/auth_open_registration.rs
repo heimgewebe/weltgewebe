@@ -71,6 +71,7 @@ fn test_state_open_reg() -> Result<ApiState> {
         sessions: SessionStore::new(),
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+        step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
         accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),

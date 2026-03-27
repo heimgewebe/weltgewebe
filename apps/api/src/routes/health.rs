@@ -320,6 +320,7 @@ mod tests {
             sessions: SessionStore::new(),
             challenges: Default::default(),
             tokens: crate::auth::tokens::TokenStore::new(),
+            step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
             accounts: Arc::new(RwLock::new(BTreeMap::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
