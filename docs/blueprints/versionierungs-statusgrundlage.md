@@ -110,7 +110,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 5. **Ist die UI-Diagnose inhaltlich schon „fertig genug“, sodass PR 2 im Wesentlichen als erledigt gelten kann?**
    Ja, die UI-Komponente ist vollständig implementiert, abgetestet und erfüllt die Anforderungen von Phase E der Blaupause.
 
-## 7. Empfohlener nächster Schritt
+## 7. Abschlussstatus
 
 ### Fokus-PR: Härtung des version.json Vertrags in Infrastruktur und Tests (Abgeschlossen)
 
