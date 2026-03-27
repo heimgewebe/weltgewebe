@@ -2,10 +2,7 @@ import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { RenderableMapPoint } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
-export function updateActivity(
-  map: MapLibreMap,
-  points: RenderableMapPoint[],
-) {
+export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
   if (!map) return;
 
   const sourceId = LAYERS.ACTIVITY_SOURCE;
@@ -70,38 +67,34 @@ function ensureActivityLayer(
       source: sourceId,
       maxzoom: 15,
       paint: {
-        "heatmap-intensity": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          0, 1,
-          15, 3
-        ],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 15, 3],
         "heatmap-color": [
           "interpolate",
           ["linear"],
           ["heatmap-density"],
-          0, "rgba(33,102,172,0)",
-          0.2, "rgba(103,169,207,0.5)",
-          0.4, "rgba(209,229,240,0.6)",
-          0.6, "rgba(253,219,199,0.7)",
-          0.8, "rgba(239,138,98,0.8)",
-          1, "rgba(178,24,43,0.9)"
+          0,
+          "rgba(33,102,172,0)",
+          0.2,
+          "rgba(103,169,207,0.5)",
+          0.4,
+          "rgba(209,229,240,0.6)",
+          0.6,
+          "rgba(253,219,199,0.7)",
+          0.8,
+          "rgba(239,138,98,0.8)",
+          1,
+          "rgba(178,24,43,0.9)",
         ],
-        "heatmap-radius": [
-          "interpolate",
-          ["linear"],
-          ["zoom"],
-          0, 5,
-          15, 40
-        ],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 5, 15, 40],
         "heatmap-opacity": [
           "interpolate",
           ["linear"],
           ["zoom"],
-          10, 0.8,
-          15, 0
-        ]
+          10,
+          0.8,
+          15,
+          0,
+        ],
       },
     },
     firstSymbolId,
