@@ -53,6 +53,21 @@ impl ChallengeStore {
     ) -> Challenge {
         self.cleanup_expired();
 
+        // 1. Try to find and reuse an existing active challenge with identical context
+        {
+            let store = self.store.read().expect("ChallengeStore lock poisoned");
+            for existing_challenge in store.values() {
+                if existing_challenge.account_id == account_id
+                    && existing_challenge.device_id == device_id
+                    && existing_challenge.intent == intent
+                    && !existing_challenge.is_expired()
+                {
+                    return existing_challenge.clone();
+                }
+            }
+        }
+
+        // 2. Fallback: create a new one if no active matching challenge exists
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
         // Step-up Challenges TTL is short-lived, typically 5 minutes
@@ -164,5 +179,49 @@ mod tests {
 
         // After get, it should be removed from the map
         assert!(!store.store.read().unwrap().contains_key(&c.id));
+    }
+
+    #[test]
+    fn test_create_reuses_active_challenge() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        assert_eq!(
+            c1.id, c2.id,
+            "Second call should return the exact same challenge ID"
+        );
+    }
+
+    #[test]
+    fn test_create_generates_new_challenge_for_different_intent() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::RemoveDevice {
+                target_device_id: "dev-2".to_string(),
+            },
+        );
+
+        assert_ne!(
+            c1.id, c2.id,
+            "Changing intent should produce a new challenge ID"
+        );
     }
 }
