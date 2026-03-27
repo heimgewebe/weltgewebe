@@ -16,7 +16,7 @@ All agents MUST follow the [Agent Reading Protocol](docs/policies/agent-reading-
 **Core Rules (Strictly Binding):**
 
 1. **Reading Order:** `repo.meta.yaml` -> `AGENTS.md` -> `agent-policy.yaml` -> `docs/policies/agent-reading-protocol.md`
-2. **Conflict Resolution:** Kanonisch definiert in `repo.meta.yaml` (`truth_model.precedence`). `domain_contracts` schlagen `canonical_policies` schlagen `runtime_configs_and_code`.
+2. **Conflict Resolution:** Kanonisch und vollständig definiert in `repo.meta.yaml` (`truth_model.precedence`).
 3. **No Interpolation:** Silent interpolation is FORBIDDEN. Explicitly name missing gaps.
 4. **Abort Rule:** Agents MUST abort if contradictions are unresolvable, necessary files are missing, or target proof is impossible.
 5. **Navigation vs Truth:** `docs/index.md` is strictly navigation (`navigational_indices`). `docs/_generated/*` is strictly diagnostic (`generated_diagnostics`).

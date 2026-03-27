@@ -92,6 +92,8 @@ agent_reading:
   protocol: docs/policies/agent-reading-protocol.md
 
 truth_model:
+  # conflict_resolution is a derived human-readable summary.
+  # The canonical machine truth is defined in the precedence array below.
   conflict_resolution: >
     domain_contracts > canonical_policies > runtime_configs_and_code >
     normative_specifications > diagnostic_reports > navigational_indices >

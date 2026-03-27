@@ -44,16 +44,15 @@ Agenten MÜSSEN in dieser Reihenfolge lesen:
 ## 2. Quellenrangfolge bei Widerspruch (Canonical Hierarchy)
 
 Kanonisch definiert im `truth_model.precedence` von `repo.meta.yaml`.
+Diese Liste ist eine illustrative Spiegelung der dort festgelegten Maschinenwahrheit:
 
-Bei Konflikten gilt strikt diese absteigende Priorität:
-
-1. `domain_contracts` (e.g., JSON schemas)
-2. `canonical_policies` (e.g., `repo.meta.yaml`, `AGENTS.md`)
-3. `runtime_configs_and_code` (e.g., Apps, CI, Compose)
-4. `normative_specifications` (e.g., Blueprints, ADRs, Specs)
-5. `diagnostic_reports` (e.g., Manual audits)
-6. `navigational_indices` (e.g., `docs/index.md`)
-7. `generated_diagnostics` (e.g., `docs/_generated/*`)
+1. `domain_contracts` (z. B. JSON Schemas)
+2. `canonical_policies` (z. B. `repo.meta.yaml`, `AGENTS.md`)
+3. `runtime_configs_and_code` (z. B. Apps, CI, Compose)
+4. `normative_specifications` (z. B. Blueprints, ADRs, Specs)
+5. `diagnostic_reports` (z. B. Manual Audits)
+6. `navigational_indices` (z. B. `docs/index.md`)
+7. `generated_diagnostics` (z. B. `docs/_generated/*`)
 
 `generated_diagnostics` zeigen Probleme und Drift, sind aber NIEMALS kanonisch.
 
