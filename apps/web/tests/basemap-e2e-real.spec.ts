@@ -41,8 +41,10 @@ test.describe("Basemap Sovereign End-to-End Verification", () => {
       try {
         const routeUrlObj = new URL(route.request().url());
         if (
-          routeUrlObj.hostname.endsWith("cartocdn.com") ||
-          routeUrlObj.hostname.endsWith("mapbox.com") ||
+          routeUrlObj.hostname === "cartocdn.com" ||
+          routeUrlObj.hostname.endsWith(".cartocdn.com") ||
+          routeUrlObj.hostname === "mapbox.com" ||
+          routeUrlObj.hostname.endsWith(".mapbox.com") ||
           routeUrlObj.hostname.includes("maptiles")
         ) {
           route.abort();
