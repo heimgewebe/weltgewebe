@@ -1669,12 +1669,25 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
     assert_eq!(body_logout_all["error"], "STEP_UP_REQUIRED");
     assert!(body_logout_all["challenge_id"].is_string());
 
+    let req_check_device_1 = Request::get("/auth/session")
+        .header("Cookie", &session_cookie1)
+        .header("Host", "localhost")
+        .body(body::Body::empty())
+        .unwrap();
+    let res_check_device_1 = app.clone().oneshot(req_check_device_1).await.unwrap();
+    let body_bytes_dev_1 = axum::body::to_bytes(res_check_device_1.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_dev_1: serde_json::Value = serde_json::from_slice(&body_bytes_dev_1).unwrap();
+    let expected_device_id_1 = body_dev_1["device_id"].as_str().unwrap().to_string();
+
     let challenge_id = body_logout_all["challenge_id"].as_str().unwrap();
     let challenge = state
         .challenges
         .get(challenge_id)
         .expect("Challenge not found in store");
     assert_eq!(challenge.account_id, "u-admin");
+    assert_eq!(challenge.device_id, expected_device_id_1);
     assert_eq!(
         challenge.intent,
         weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll
@@ -1890,6 +1903,7 @@ async fn test_device_management() -> Result<()> {
         .get(challenge_id)
         .expect("Challenge not found in store");
     assert_eq!(challenge.account_id, "u-admin");
+    assert_eq!(challenge.device_id, device_a_id);
     if let weltgewebe_api::auth::challenges::ChallengeIntent::RemoveDevice { target_device_id } =
         challenge.intent
     {

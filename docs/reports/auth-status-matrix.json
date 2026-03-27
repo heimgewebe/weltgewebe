@@ -88,7 +88,7 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Challenge-Erzeugung belegt; Consume fehlt.",
+      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Challenge-Erzeugung und Gerätebindung belegt; Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -103,7 +103,7 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Fremdgeräte-Löschung erzeugt Challenge mit Zielbindung. Consume fehlt.",
+      "ist": "Device-Management vorhanden; Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
@@ -113,12 +113,13 @@
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/auth/session.rs",
-        "apps/api/tests/api_auth.rs"
+        "apps/api/tests/api_auth.rs",
+        "apps/api/src/auth/challenges.rs"
       ]
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
-      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. Partielle Intent-/Gerätebindung belegt. Consume-/Verifikationspfade offen.",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. Partielle Intent-/Gerätebindung belegt; Consume-/Verifikationspfade offen.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
