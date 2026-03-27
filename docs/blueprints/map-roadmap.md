@@ -56,8 +56,8 @@ lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons),
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
-- [~] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Teilweise umgesetzt: Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der Deploy-Guard verifiziert die Edge-Routen-Bereitschaft als Teilschritt. Ein Playwright-Test (`basemap-client-integration.spec.ts`) beweist die Client-seitige Request-Auslösung auf die `/local-basemap/`-Routen im Browser (gemocktes Netzwerk zur Validierung des PMTiles-Loadings). Der vollständige E2E-Nachweis gegen reale Artefakte und die echte Produktionsroute bleibt jedoch offen._
+- [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - _Teilweise umgesetzt: Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der Deploy-Guard verifiziert die Edge-Routen-Bereitschaft als Teilschritt. Ein clientseitiger Stylepfad-Nachweis (mit lokal gemockter Style-Antwort) und das Ausbleiben externer CDN-Abhängigkeiten im Browserlauf sind per `basemap-sovereignty-testbuild.spec.ts` (E2E-Test-Build-Kontext) abgesichert. Der echte E2E-Nachweis für den Abruf eines realen PMTiles-Artefakts über die Produktionsroute fehlt weiterhin._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
