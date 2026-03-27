@@ -119,7 +119,7 @@
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent",
-      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. POST /auth/step-up/magic-link/request erzeugt explizite StepUpTokens (separater Store) inkl. Intent-/Gerätebindung und versendet Step-up Magic Link Emails. Consume-/Verifikationspfade offen.",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. POST /auth/step-up/magic-link/request erzeugt explizite StepUpTokens (separater Store) inkl. Intent-/Gerätebindung und versucht Versand über konfigurierten Mailer (Mailer-Pfad implementiert). Consume-/Verifikationspfade offen.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
