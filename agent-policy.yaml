@@ -36,3 +36,8 @@ human_review_required_for:
   - security/
   - deployment/
   - credentials/
+
+agent_rules:
+  abort_on_contradiction: true
+  interpolation_allowed: false
+  require_explicit_reading_order: true
