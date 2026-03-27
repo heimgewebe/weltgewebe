@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-// This test proves that the application can render the map without ANY
-// external map styling dependencies when using the local-sovereign mode.
+// This test proves that the application requests the local sovereign style
+// and renders without ANY external CDN dependencies in the local-sovereign mode.
 // It explicitly intercepts and ABORTS any requests to external domains
-// (like cartocdn, mapbox, unpkg) to ensure true sovereignty.
+// (like cartocdn, mapbox, unpkg) to ensure dev/test sovereignty without fallbacks.
 test.describe("Basemap Sovereignty Verification (Dev/Test Environment)", () => {
-  test("client successfully requests and renders local artifacts without external dependencies", async ({
+  test("client successfully requests local style path and renders without external CDN dependencies", async ({
     page,
   }) => {
     // Track all network requests
@@ -81,10 +81,10 @@ test.describe("Basemap Sovereignty Verification (Dev/Test Environment)", () => {
       .toBeTruthy();
 
     // Verify that NO external domains were contacted during the map load process.
-    // This is the true proof of "Sovereignty" (no CDN dependencies).
+    // This proves dev/test sovereignty (no external CDN dependencies during browser run).
     expect(
       externalDependencyDetected,
-      "External map dependency detected during load. True sovereignty violated.",
+      "External map dependency detected during load. Dev/test sovereignty check failed.",
     ).toBe(false);
   });
 });
