@@ -70,9 +70,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | Guard-Stumpf implementiert (401 ohne Auth, 403 mit Auth/ohne Step-up) | Teil   | hoch    |
-| Devices               | required    | API implementiert, Guard für Step-up aktiv, Step-up E2E fehlt | Teil   | mittel  |
-| Step-up Auth          | required    | Runtime-Beleg offen | Offen  | sehr hoch |
+| Logout All            | required    | Challenge + Gerätebindung belegt, Consume fehlt     | Teil   | hoch    |
+| Devices               | required    | API aktiv (Liste, Self-Delete), Fremdgeräte-Guard erzeugt gebundene Challenge, Consume fehlt | Teil   | mittel  |
+| Step-up Auth          | required    | Challenge-Store aktiv, Consume offen        | Teil   | hoch      |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
 | Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
 
@@ -123,19 +123,19 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** POST `/auth/logout-all` ist als Guard-Stumpf implementiert: unauthentifizierte Requests werden mit 401 UNAUTHORIZED abgewiesen, authentifizierte Requests mit 403 STEP_UP_REQUIRED. Funktionale Session-Löschung und Challenge-Generierung fehlen mangels Step-up-Architektur.
+**Ist:** POST `/auth/logout-all` gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Challenge-Erzeugung und Gerätebindung belegt; Consume fehlt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** funktionale Session-Löschung, Challenge-Generierung, End-to-End-Test
+**Fehlende Belege:** funktionale Session-Löschung nach Challenge-Consume, End-to-End-Test
 **Status:** Teil
 **Risiko:** hoch
 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Das Device-Management ist funktional implementiert; sicherheitskritische Operationen (Löschung fremder Geräte) sind durch STEP_UP_REQUIRED geschützt, jedoch mangels Step-up-Architektur noch nicht vollständig umsetzbar.
+**Ist:** Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/tests/api_auth.rs`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/src/auth/challenges.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte
 **Status:** Teil
 **Risiko:** mittel
@@ -143,12 +143,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen nun Challenges. Partielle Intent-/Gerätebindung belegt; Consume-/Verifikationspfade offen.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
-**Risiko:** sehr hoch
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
+**Fehlende Belege:** Consume-Pfade, Verifikationspfade, UI Integration
+**Status:** Teil
+**Risiko:** hoch
 
 ### 2.8 Passkeys
 

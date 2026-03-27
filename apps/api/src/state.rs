@@ -2,7 +2,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    auth::{rate_limit::AuthRateLimiter, session::SessionStore, tokens::TokenStore},
+    auth::{
+        challenges::ChallengeStore, rate_limit::AuthRateLimiter, session::SessionStore,
+        tokens::TokenStore,
+    },
     config::AppConfig,
     mailer::Mailer,
     routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
@@ -20,6 +23,7 @@ pub struct ApiState {
     pub config: AppConfig,
     pub metrics: Metrics,
     pub sessions: SessionStore,
+    pub challenges: ChallengeStore,
     pub tokens: TokenStore,
     pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,

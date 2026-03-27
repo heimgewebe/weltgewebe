@@ -63,6 +63,7 @@ fn test_state() -> Result<ApiState> {
         config,
         metrics,
         sessions: SessionStore::new(),
+        challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         accounts: Arc::new(RwLock::new(BTreeMap::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -1666,6 +1667,31 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
     let body_logout_all: serde_json::Value =
         serde_json::from_slice(&body_bytes_logout_all).unwrap();
     assert_eq!(body_logout_all["error"], "STEP_UP_REQUIRED");
+    assert!(body_logout_all["challenge_id"].is_string());
+
+    let req_check_device_1 = Request::get("/auth/session")
+        .header("Cookie", &session_cookie1)
+        .header("Host", "localhost")
+        .body(body::Body::empty())
+        .unwrap();
+    let res_check_device_1 = app.clone().oneshot(req_check_device_1).await.unwrap();
+    let body_bytes_dev_1 = axum::body::to_bytes(res_check_device_1.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_dev_1: serde_json::Value = serde_json::from_slice(&body_bytes_dev_1).unwrap();
+    let expected_device_id_1 = body_dev_1["device_id"].as_str().unwrap().to_string();
+
+    let challenge_id = body_logout_all["challenge_id"].as_str().unwrap();
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .expect("Challenge not found in store");
+    assert_eq!(challenge.account_id, "u-admin");
+    assert_eq!(challenge.device_id, expected_device_id_1);
+    assert_eq!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll
+    );
 
     // 4. Verify session 1 is STILL valid (no deletion without Step-Up)
     let req_check1 = Request::get("/auth/session")
@@ -1869,6 +1895,40 @@ async fn test_device_management() -> Result<()> {
     let body_del_foreign: serde_json::Value =
         serde_json::from_slice(&body_bytes_del_foreign).unwrap();
     assert_eq!(body_del_foreign["error"], "STEP_UP_REQUIRED");
+    assert!(body_del_foreign["challenge_id"].is_string());
+
+    let challenge_id = body_del_foreign["challenge_id"].as_str().unwrap();
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .expect("Challenge not found in store");
+    assert_eq!(challenge.account_id, "u-admin");
+    assert_eq!(challenge.device_id, device_a_id);
+    if let weltgewebe_api::auth::challenges::ChallengeIntent::RemoveDevice { target_device_id } =
+        challenge.intent
+    {
+        assert_eq!(target_device_id, device_b_id);
+    } else {
+        panic!("Incorrect challenge intent");
+    }
+
+    // Attempt to delete a non-existent foreign device (should return 404 NOT_FOUND)
+    let req_del_fake = Request::delete(format!("/auth/devices/{}", "fake-device-id"))
+        .header("Cookie", &refresh_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::empty())
+        .unwrap();
+
+    let res_del_fake = app.clone().oneshot(req_del_fake).await.unwrap();
+    assert_eq!(res_del_fake.status(), StatusCode::NOT_FOUND);
+
+    let body_bytes_del_fake = axum::body::to_bytes(res_del_fake.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_del_fake: serde_json::Value = serde_json::from_slice(&body_bytes_del_fake).unwrap();
+    assert_eq!(body_del_fake["error"], "NOT_FOUND");
+    assert!(body_del_fake.get("challenge_id").is_none());
 
     // Explicitly verify that the foreign device (Device B) is STILL valid
     let req_check_foreign = Request::get("/auth/session")
