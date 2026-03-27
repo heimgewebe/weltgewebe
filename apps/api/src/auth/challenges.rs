@@ -51,25 +51,25 @@ impl ChallengeStore {
         device_id: String,
         intent: ChallengeIntent,
     ) -> Challenge {
-        self.cleanup_expired();
+        // Atomic block: take a single write lock to avoid race conditions
+        let mut store = self.store.write().expect("ChallengeStore lock poisoned");
+
+        let now = Utc::now();
+        // Inline cleanup to avoid double-locking
+        store.retain(|_, challenge| challenge.expires_at > now);
 
         // 1. Try to find and reuse an existing active challenge with identical context
-        {
-            let store = self.store.read().expect("ChallengeStore lock poisoned");
-            for existing_challenge in store.values() {
-                if existing_challenge.account_id == account_id
-                    && existing_challenge.device_id == device_id
-                    && existing_challenge.intent == intent
-                    && !existing_challenge.is_expired()
-                {
-                    return existing_challenge.clone();
-                }
+        for existing_challenge in store.values() {
+            if existing_challenge.account_id == account_id
+                && existing_challenge.device_id == device_id
+                && existing_challenge.intent == intent
+            {
+                return existing_challenge.clone();
             }
         }
 
         // 2. Fallback: create a new one if no active matching challenge exists
         let id = Uuid::new_v4().to_string();
-        let now = Utc::now();
         // Step-up Challenges TTL is short-lived, typically 5 minutes
         let expires_at = now + Duration::minutes(5);
 
@@ -82,7 +82,6 @@ impl ChallengeStore {
             expires_at,
         };
 
-        let mut store = self.store.write().expect("ChallengeStore lock poisoned");
         store.insert(id, challenge.clone());
 
         challenge
