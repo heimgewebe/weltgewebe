@@ -131,7 +131,9 @@
       "code_runtime_evidence": [
         "apps/api/src/auth/challenges.rs",
         "apps/api/src/routes/auth.rs",
-        "apps/api/tests/api_auth.rs"
+        "apps/api/tests/api_auth.rs",
+        "apps/api/src/auth/step_up_tokens.rs",
+        "apps/api/src/mailer.rs"
       ]
     },
     "passkeys": {

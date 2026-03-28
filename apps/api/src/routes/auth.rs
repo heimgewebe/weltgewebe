@@ -1295,8 +1295,8 @@ pub async fn request_step_up(
             event = "auth.step_up.request.mailer_missing",
             request_id = %request_id,
             account_id = %account_id,
-            "Step-up Magic Link requested but no mailer configured. Token generated: {}",
-            token
+            challenge_id = %challenge.id,
+            "Step-up Magic Link requested but no mailer configured. Token generation logged abstractly without payload."
         );
     }
 
