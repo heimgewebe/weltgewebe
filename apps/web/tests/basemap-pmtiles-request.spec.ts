@@ -40,14 +40,19 @@ test.describe("Basemap PMTiles Request E2E Verification", () => {
 
     await page.goto("/map?t=" + Date.now());
 
-    await expect.poll(() => styleRequested, {
-      message: "Client MUST fetch the sovereign style.json",
-      timeout: 5000,
-    }).toBeTruthy();
+    await expect
+      .poll(() => styleRequested, {
+        message: "Client MUST fetch the sovereign style.json",
+        timeout: 5000,
+      })
+      .toBeTruthy();
 
-    await expect.poll(() => pmtilesRequested, {
-      message: "Client MUST initiate range requests for the local pmtiles artifact",
-      timeout: 15000,
-    }).toBeTruthy();
+    await expect
+      .poll(() => pmtilesRequested, {
+        message:
+          "Client MUST initiate range requests for the local pmtiles artifact",
+        timeout: 15000,
+      })
+      .toBeTruthy();
   });
 });
