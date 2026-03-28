@@ -41,8 +41,8 @@ werden. **Nicht-Ziele:** Perfektes Styling, automatisierte CI-Pipeline für Arte
   - _Umgesetzt: OFL-Lizenz und Herkunft für Noto Sans Glyphs im ASSETS.md dokumentiert. Das Fehlen der Sprites ist dort explizit architekturell begründet._
 - [x] Basemap visuell beruhigen (Fokus auf Infrastruktur)
   - _Erledigt: Style ist minimalistisch und enthält keine POI-Icons. Visuelle Semantik liegt im Overlay._
-- [x] Overlay-Lesbarkeit gegen Basemap prüfen
-  - _Umgesetzt: Edges-Layer in MapLibre um eine weiße Halo-Schicht (`EDGES_HALO_LAYER`) erweitert. Da MapLibre GL JS laut Context7-Dokumentation nativ keinen `line-halo` für Linien unterstützt, ist die Implementierung als duplizierter, darunterliegender Layer mit identischem Dasharray architektonisch (als "Best Practice") korrekt. Die visuelle Lesbarkeit ist damit strukturell im Layer-Stack gesichert und durch E2E-Tests (`edge-visibility.spec.ts`) nachgewiesen. (Die finale farbliche Abstimmung obliegt dem Fachbereich, blockiert aber die Architektur nicht mehr)._
+- [ ] Overlay-Lesbarkeit gegen Basemap prüfen
+  - _Teilweise umgesetzt: Edges-Layer in MapLibre um eine weiße Halo-Schicht (`EDGES_HALO_LAYER`) erweitert, die als Kontur unter der Hauptlinie liegt, um die Lesbarkeit unabhängig vom Basemap-Polygon substanziell zu verbessern. Die technische Existenz, Konfiguration und Layer-Reihenfolge der Halo-Schicht wird automatisiert im Playwright-Test (`edge-visibility.spec.ts`) abgesichert. Da MapLibre GL JS laut Context7 nativ keinen `line-halo` für Linien unterstützt, ist der duplizierte Layer architektonisch korrekt. Eine echte visuelle Abnahme durch Fachanwender über alle realen Basemap-Situationen und Zoomstufen hinweg steht jedoch noch aus, weshalb die Lesbarkeit final als offen gilt._
 
 **Abnahmekriterium:** Ein eigenes `style.json` wird geladen und Schriften (Glyphs) werden lokal/souverän serviert und sind
 lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons), da die visuelle Semantik vollständig in den Overlays (Nodes/Edges) liegt. **Nicht-Ziele:** Finale Farbpalette für alle Layer; dynamische Theming-Umschaltung
@@ -56,8 +56,8 @@ lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons),
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
-- [x] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - _Umgesetzt: Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der Deploy-Guard verifiziert die Edge-Routen-Bereitschaft als Teilschritt. Der E2E-Nachweis für den Abruf des PMTiles-Artefakts über die Produktionsroute wurde mittels des neuen Tests `basemap-pmtiles-request.spec.ts` ergänzt. Dieser Test weist nach, dass MapLibre das Artefakt via HTTP GET/Range auf dem lokalen Hostingspfad (`/local-basemap/`) aktiv abruft, wodurch die Runtime-Integration vollständig bewiesen ist._
+- [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
+  - _Teilweise umgesetzt: Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der Deploy-Guard verifiziert die Edge-Routen-Bereitschaft als Teilschritt. Ein clientseitiger Nachweis (mit lokal gemockter Style-Antwort und PMTiles-Bytes) ist per E2E-Testbuild abgesichert. Ein dedizierter Test (`basemap-pmtiles-request-testbuild.spec.ts`) belegt zudem, dass MapLibre im Browser erfolgreich `Range`-Header an den lokalen PMTiles-Pfad absetzt. Der echte E2E-Nachweis für das Laden des realen Artefakts aus der echten Produktionsroute (Caddy) fehlt jedoch weiterhin._
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
