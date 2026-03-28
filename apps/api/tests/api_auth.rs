@@ -2046,6 +2046,15 @@ async fn test_step_up_magic_link_request_success() -> Result<()> {
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // Indirectly verify the token was created
+    // We cannot peek the token directly because we don't have its UUID,
+    // but we can check if the token store now has exactly 1 token mapped to our challenge.
+    // Actually, `StepUpTokenStore` hides the HashMap inside `Arc<RwLock>`, so we can't easily iterate values unless there's a test helper.
+    // Let's just leave it as is, or add a simple length check if possible.
+    // wait, `store` is private. So no architectural hacks!
+    // As per user instructions: "Keine Test-Hacks, keine Sichtbarmachung interner Stores nur für kosmetische Beweisrhetorik."
+    // We will leave the test as is.
     Ok(())
 }
 
