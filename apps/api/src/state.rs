@@ -4,7 +4,7 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     auth::{
         challenges::ChallengeStore, rate_limit::AuthRateLimiter, session::SessionStore,
-        tokens::TokenStore,
+        step_up_tokens::StepUpTokenStore, tokens::TokenStore,
     },
     config::AppConfig,
     mailer::Mailer,
@@ -25,6 +25,7 @@ pub struct ApiState {
     pub sessions: SessionStore,
     pub challenges: ChallengeStore,
     pub tokens: TokenStore,
+    pub step_up_tokens: StepUpTokenStore,
     pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
     pub nodes_persist: Arc<Mutex<()>>,

@@ -1161,6 +1161,160 @@ pub async fn remove_device(
     (axum::http::StatusCode::FORBIDDEN, jar, Json(err_payload)).into_response()
 }
 
+#[derive(Deserialize)]
+pub struct StepUpRequestPayload {
+    pub challenge_id: String,
+}
+
+pub async fn request_step_up(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<StepUpRequestPayload>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+    if !ctx.authenticated {
+        let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(ref id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (StatusCode::UNAUTHORIZED, Json(err_payload)).into_response();
+        }
+    };
+
+    let device_id = match ctx.device_id {
+        Some(ref id) => id,
+        None => {
+            let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR", "message": "Authenticated context missing device_id"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
+        }
+    };
+
+    // 1. Verify that the challenge exists and is bound to this exact session (account + device)
+    let challenge = match state.challenges.get(&payload.challenge_id) {
+        Some(c) => c,
+        None => {
+            tracing::warn!(
+                event = "auth.step_up.request.invalid_challenge",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up request failed: Challenge not found or expired"
+            );
+            // We return a generic error to prevent enumeration of challenges
+            let err_payload = serde_json::json!({"error": "CHALLENGE_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err_payload)).into_response();
+        }
+    };
+
+    if challenge.account_id != *account_id || challenge.device_id != *device_id {
+        tracing::warn!(
+            event = "auth.step_up.request.binding_mismatch",
+            request_id = %request_id,
+            account_id = %account_id,
+            "Step-up request failed: Challenge does not belong to the requesting session"
+        );
+        let err_payload = serde_json::json!({"error": "CHALLENGE_INVALID"});
+        return (StatusCode::BAD_REQUEST, Json(err_payload)).into_response();
+    }
+
+    // 2. Lookup the user's email to send the Magic Link
+    let email = {
+        let accounts = state.accounts.read().await;
+        if let Some(acc) = accounts.get(account_id) {
+            acc.email.clone()
+        } else {
+            None
+        }
+    };
+
+    let email = match email {
+        Some(e) => e,
+        None => {
+            tracing::error!(
+                event = "auth.step_up.request.no_email",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up request failed: Account has no email address"
+            );
+            let err_payload = serde_json::json!({"error": "ACCOUNT_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err_payload)).into_response();
+        }
+    };
+
+    // 3. Generate a Step-up Token bound to the challenge (NOT the email)
+    let token =
+        state
+            .step_up_tokens
+            .create(challenge.id.clone(), account_id.clone(), device_id.clone());
+
+    // 4. Send the Step-up Magic Link via Mailer
+    let base_url = match &state.config.app_base_url {
+        Some(url) => url.clone(),
+        None => {
+            tracing::error!(
+                event = "auth.step_up.request.no_base_url",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up request failed: APP_BASE_URL is not configured"
+            );
+            let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
+        }
+    };
+    let base_url = base_url.trim_end_matches('/');
+    // We send them to the frontend Step-up consume UI, NOT the API endpoint directly.
+    let link = format!("{}/auth/step-up/consume?token={}", base_url, token);
+
+    let mailer = match &state.mailer {
+        Some(m) => m,
+        None => {
+            tracing::error!(
+                event = "auth.step_up.request.mailer_missing",
+                request_id = %request_id,
+                account_id = %account_id,
+                challenge_id = %challenge.id,
+                "Step-up request failed: Mailer is not configured"
+            );
+            let err_payload = serde_json::json!({"error": "SERVICE_UNAVAILABLE"});
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(err_payload)).into_response();
+        }
+    };
+
+    let mut hasher = Sha256::new();
+    hasher.update(email.as_bytes());
+    let email_hash_full = format!("{:x}", hasher.finalize());
+    let email_hash = &email_hash_full[..16];
+
+    match mailer.send_step_up_magic_link(&email, &link).await {
+        Ok(_) => {
+            tracing::info!(
+                event = "auth.step_up.request.sent",
+                request_id = %request_id,
+                account_id = %account_id,
+                email_hash = %email_hash,
+                "Step-up Magic Link sent via email"
+            );
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => {
+            tracing::error!(
+                event = "auth.step_up.request.send_failed",
+                request_id = %request_id,
+                account_id = %account_id,
+                email_hash = %email_hash,
+                error = %e,
+                "Failed to send Step-up Magic Link email"
+            );
+            let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

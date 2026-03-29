@@ -49,6 +49,7 @@ pub async fn run() -> anyhow::Result<()> {
     let sessions = crate::auth::session::SessionStore::new();
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
+    let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
     let accounts = Arc::new(tokio::sync::RwLock::new(
         routes::accounts::load_all_accounts().await,
     ));
@@ -93,6 +94,7 @@ pub async fn run() -> anyhow::Result<()> {
         sessions,
         challenges,
         tokens,
+        step_up_tokens,
         accounts,
         nodes,
         nodes_persist,
