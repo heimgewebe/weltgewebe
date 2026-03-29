@@ -19,6 +19,7 @@ export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
     properties: {
       id: p.id,
       kind: p.kind || "node",
+      weight: p.weight !== undefined ? p.weight : 1,
     },
   }));
 
@@ -74,6 +75,7 @@ function ensureActivityLayer(
       source: sourceId,
       maxzoom: 17,
       paint: {
+        "heatmap-weight": ["get", "weight"],
         "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 17, 3],
         "heatmap-color": [
           "interpolate",
