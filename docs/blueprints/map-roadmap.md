@@ -63,7 +63,7 @@ lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons),
   - **Status:** Indirekt validiert (Mock/Testbuild)
   - **Nachweisquelle:** `apps/web/tests/basemap-client-integration.spec.ts` (Playwright E2E-Client-Integration)
   - **Befund:** Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der aktuelle Test validiert ausschließlich das Client-Verhalten: MapLibre parst das PMTiles-Protokoll und sendet korrekte `Range`-Header.
-  - **Offene Lücke:** Nicht verifiziert (Produktionspfad fehlt). Der echte E2E-Nachweis (Client → Edge (Caddy) → echte Artefakte) fehlt als Blocker. Dieser muss beweisen: echter HTTP-206 Response, echter Byte-Stream (nicht Mock), und keine externen Requests im Browser.
+  - **Offene Lücke:** Nicht verifiziert (Produktionspfad fehlt). Der echte E2E-Nachweis (Client → Edge (Caddy) → echte Artefakte) fehlt weiterhin als notwendiger Vollnachweis für den Abschluss dieses Punktes. Dieser muss beweisen: echter HTTP-206 Response, echter Byte-Stream (nicht Mock), und keine externen Requests im Browser.
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
