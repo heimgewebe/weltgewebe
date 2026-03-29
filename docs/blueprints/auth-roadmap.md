@@ -187,14 +187,14 @@ Jeder relevante Bereich ist entweder:
 
 ### Arbeitspakete Phase 2
 
-1. `GET /auth/session` belegen oder implementieren
-2. `POST /auth/session/refresh` belegen oder implementieren
-3. Device-ID-Strategie vereinheitlichen
-4. Device-Liste bereitstellen
-5. Current-Device-Markierung einführen
-6. `DELETE /auth/devices/:id`
-7. `POST /auth/logout-all`
-8. Session-Persistenzentscheidung explizit festziehen
+- [x] `GET /auth/session` belegen oder implementieren — Route aktiv, Tests in `api_auth.rs`
+- [x] `POST /auth/session/refresh` belegen oder implementieren — Route aktiv, Tests in `api_auth.rs`
+- [x] Device-ID-Strategie vereinheitlichen — dynamische `device_id` pro Session
+- [x] Device-Liste bereitstellen — `GET /auth/devices` aktiv
+- [x] Current-Device-Markierung einführen — `is_current` Flag in Device-Liste
+- [x] `DELETE /auth/devices/:id` — Self-Delete aktiv, Fremdgeräte-Guard erzeugt Challenge
+- [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad fehlt (Phase 3)
+- [ ] Session-Persistenzentscheidung explizit festziehen — derzeit In-Memory
 
 ### Risiken
 
@@ -215,15 +215,15 @@ Jeder relevante Bereich ist entweder:
 
 ### Arbeitspakete Phase 3
 
-1. Challenge-Erzeugung
-2. TTL für Challenges
-3. Intent-Bindung
-4. `POST /auth/step-up/magic-link/request`
-5. `POST /auth/step-up/magic-link/consume`
-6. Passkey als bevorzugter Step-up-Pfad
-7. Step-up-Dialog in der UI
-8. Fehlerpfade ohne unnötigen Session-Abbruch
-9. Nachweis, dass Step-up keine neue allgemeine Session erzeugt
+- [x] Challenge-Erzeugung — `ChallengeStore` in `apps/api/src/auth/challenges.rs`
+- [x] TTL für Challenges — 5-Minuten-TTL, Cleanup bei Zugriff
+- [x] Intent-Bindung — `ChallengeIntent::LogoutAll`, `RemoveDevice`
+- [x] `POST /auth/step-up/magic-link/request` — separater `StepUpTokenStore`, defensive Fehlersemantik (400/500/503), Mailer-Pfad, Tests
+- [ ] `POST /auth/step-up/magic-link/consume`
+- [ ] Passkey als bevorzugter Step-up-Pfad
+- [ ] Step-up-Dialog in der UI
+- [x] Fehlerpfade ohne unnötigen Session-Abbruch — Request-Pfad bricht keine Session ab
+- [ ] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — benötigt Consume-Pfad
 
 ### Nicht verhandelbare Regel
 
