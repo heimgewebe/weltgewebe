@@ -16,7 +16,8 @@
 
   # Phase 1: Sovereign Basemap Hosting (PMTiles)
   # PMTiles clients strictly require HTTP Range requests and CORS headers.
-  handle_path /basemap/* {
+  # Route matches the public edge contract: /local-basemap/ (frontend, blueprint, Vite middleware)
+  handle_path /local-basemap/* {
     root * /srv/weltgewebe-basemap
     header Access-Control-Allow-Origin "*"
     header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
