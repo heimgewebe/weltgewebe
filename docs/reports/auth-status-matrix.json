@@ -88,14 +88,13 @@
     },
     "logout_all": {
       "soll": "POST /auth/logout-all",
-      "ist": "POST /auth/logout-all gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Challenge-Erzeugung und Gerätebindung belegt; Consume fehlt.",
+      "ist": "POST /auth/logout-all gibt bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen challenge_id zurück. Challenge-Erzeugung und Gerätebindung belegt. Die tatsächliche Session-Löschung erfolgt über POST /auth/step-up/magic-link/consume mit Intent LogoutAll — dieser Pfad ist implementiert und durch Tests belegt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "funktionale Session-Löschung nach Challenge-Consume",
-        "End-to-End-Test"
+        "End-to-End-Test (logout-all → step-up-request → consume via E-Mail-Flow)"
       ],
-      "risk": "hoch",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/tests/api_auth.rs"
@@ -103,11 +102,11 @@
     },
     "devices": {
       "soll": "GET /auth/devices, DELETE /auth/devices/:id",
-      "ist": "Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.",
+      "ist": "Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung. Die Ausführung der Fremdgeräte-Löschung erfolgt über POST /auth/step-up/magic-link/consume mit Intent RemoveDevice — dieser Pfad ist implementiert und durch Tests belegt.",
       "status": "Teil",
       "documentation_evidence": [],
       "missing_evidence": [
-        "E2E Step-up Auth Integration für Löschung fremder Geräte"
+        "E2E Step-up Auth Integration für Löschung fremder Geräte (vollständiger E-Mail-Flow im Test)"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
@@ -118,16 +117,17 @@
       ]
     },
     "step_up_auth": {
-      "soll": "Challenge, TTL, Intent",
-      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen nun Challenges. POST /auth/step-up/magic-link/request validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. Consume-/Verifikationspfade offen.",
+      "soll": "Challenge, TTL, Intent, Magic Link + Passkey, keine neue Session",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen Challenges. POST /auth/step-up/magic-link/request validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. POST /auth/step-up/magic-link/consume konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice), erzeugt dabei keine neue Session. Passkey-Pfad und UI-Integration offen.",
       "status": "Teil",
-      "documentation_evidence": [],
+      "documentation_evidence": [
+        "docs/specs/auth-api.md"
+      ],
       "missing_evidence": [
-        "Consume-Pfade",
-        "Verifikationspfade",
+        "Passkey-Pfad",
         "UI Integration"
       ],
-      "risk": "hoch",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/api/src/auth/challenges.rs",
         "apps/api/src/routes/auth.rs",

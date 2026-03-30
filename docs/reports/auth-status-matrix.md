@@ -70,9 +70,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
-| Logout All            | required    | Challenge + Gerätebindung belegt, Consume fehlt     | Teil   | hoch    |
-| Devices               | required    | API aktiv (Liste, Self-Delete), Fremdgeräte-Guard erzeugt gebundene Challenge, Consume fehlt | Teil   | mittel  |
-| Step-up Auth          | required    | Challenge-Store aktiv, Consume offen        | Teil   | hoch      |
+| Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
+| Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
+| Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad und UI offen | Teil   | mittel  |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
 | Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
 
@@ -123,32 +123,32 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.5 Logout All
 
 **Soll:** POST `/auth/logout-all`
-**Ist:** POST `/auth/logout-all` gibt nun bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Challenge-Erzeugung und Gerätebindung belegt; Consume fehlt.
+**Ist:** POST `/auth/logout-all` gibt bei authentifizierten Requests 403 STEP_UP_REQUIRED mit einer gültigen `challenge_id` zurück. Challenge-Erzeugung und Gerätebindung belegt. Die tatsächliche Session-Löschung erfolgt über `POST /auth/step-up/magic-link/consume` mit Intent `LogoutAll` — dieser Pfad ist implementiert und durch Tests belegt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** funktionale Session-Löschung nach Challenge-Consume, End-to-End-Test
+**Fehlende Belege:** End-to-End-Test (logout-all → step-up-request → consume via E-Mail-Flow), keine echte E-Mail in Tests
 **Status:** Teil
-**Risiko:** hoch
+**Risiko:** mittel
 
 ### 2.6 Devices
 
 **Soll:** GET `/auth/devices`, DELETE `/auth/devices/:id`, Device-Bindung an Session.
-**Ist:** Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung; Consume fehlt.
+**Ist:** Device-Management (Liste, Self-Delete) funktional implementiert. Fremdgeräte-Guard erzeugt Challenge mit Ziel- und Gerätebindung. Die Ausführung der Fremdgeräte-Löschung erfolgt über `POST /auth/step-up/magic-link/consume` mit Intent `RemoveDevice` — dieser Pfad ist implementiert und durch Tests belegt.
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/src/auth/challenges.rs`, `apps/api/tests/api_auth.rs`
-**Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte
+**Fehlende Belege:** E2E Step-up Auth Integration für Löschung fremder Geräte (vollständiger E-Mail-Flow im Test)
 **Status:** Teil
 **Risiko:** mittel
 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen nun Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. Consume-/Verifikationspfade offen.
-**Dokumentationsbelege:** keine
+**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. `POST /auth/step-up/magic-link/consume` konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice), erzeugt dabei keine neue Session. Passkey-Pfad und UI-Integration offen.
+**Dokumentationsbelege:** `docs/specs/auth-api.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/step_up_tokens.rs`, `apps/api/src/mailer.rs`
-**Fehlende Belege:** Consume-Pfade, Verifikationspfade, UI Integration
+**Fehlende Belege:** Passkey-Pfad, UI Integration
 **Status:** Teil
-**Risiko:** hoch
+**Risiko:** mittel
 
 ### 2.8 Passkeys
 

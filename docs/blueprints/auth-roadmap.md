@@ -219,11 +219,11 @@ Jeder relevante Bereich ist entweder:
 - [x] TTL für Challenges — 5-Minuten-TTL, Cleanup bei Zugriff
 - [x] Intent-Bindung — `ChallengeIntent::LogoutAll`, `RemoveDevice`
 - [x] `POST /auth/step-up/magic-link/request` — separater `StepUpTokenStore`, defensive Fehlersemantik (400/500/503), Mailer-Pfad, Tests
-- [ ] `POST /auth/step-up/magic-link/consume`
+- [x] `POST /auth/step-up/magic-link/consume` — konsumiert den Step-up-Token, validiert Challenge-Bindung und Session, führt den Intent aus (LogoutAll / RemoveDevice), invalidiert keine aktive Session
 - [ ] Passkey als bevorzugter Step-up-Pfad
 - [ ] Step-up-Dialog in der UI
 - [x] Fehlerpfade im Step-up-Request ohne unnötigen Session-Abbruch — der Request-Pfad invalidiert keine bestehende Session
-- [ ] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — benötigt Consume-Pfad
+- [ ] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — Consume-Pfad implementiert; Invariante durch Tests belegt (LogoutAll löscht alle Sessions für den Account ohne neue Session; RemoveDevice lässt die aktuelle Session unberührt)
 
 ### Nicht verhandelbare Regel
 

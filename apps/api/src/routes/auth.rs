@@ -1315,6 +1315,120 @@ pub async fn request_step_up(
     }
 }
 
+#[derive(Deserialize)]
+pub struct StepUpConsumePayload {
+    pub token: String,
+    pub challenge_id: String,
+}
+
+pub async fn consume_step_up(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+    jar: CookieJar,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<StepUpConsumePayload>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    if !ctx.authenticated {
+        let err = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(ref id) => id.clone(),
+        None => {
+            let err = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+    };
+
+    let device_id = match ctx.device_id {
+        Some(ref id) => id.clone(),
+        None => {
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+        }
+    };
+
+    // 1. Consume the step-up token (single-use, validates TTL)
+    let token_data = match state.step_up_tokens.consume(&payload.token) {
+        Some(data) => data,
+        None => {
+            tracing::warn!(
+                event = "auth.step_up.consume.token_invalid",
+                request_id = %request_id,
+                "Step-up consume failed: token not found, expired, or already used"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+    };
+
+    // 2. Validate: token's challenge_id must match the provided challenge_id
+    if token_data.challenge_id != payload.challenge_id {
+        tracing::warn!(
+            event = "auth.step_up.consume.challenge_mismatch",
+            request_id = %request_id,
+            "Step-up consume failed: token challenge_id does not match provided challenge_id"
+        );
+        let err = serde_json::json!({"error": "TOKEN_INVALID"});
+        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+    }
+
+    // 3. Validate: token must be bound to the current session
+    if token_data.account_id != account_id || token_data.device_id != device_id {
+        tracing::warn!(
+            event = "auth.step_up.consume.session_mismatch",
+            request_id = %request_id,
+            "Step-up consume failed: token is not bound to the current session"
+        );
+        let err = serde_json::json!({"error": "TOKEN_INVALID"});
+        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+    }
+
+    // 4. Consume the challenge (single-use, validates TTL)
+    let challenge = match state.challenges.consume(&payload.challenge_id) {
+        Some(c) => c,
+        None => {
+            tracing::warn!(
+                event = "auth.step_up.consume.challenge_expired",
+                request_id = %request_id,
+                "Step-up consume failed: challenge not found or expired"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+    };
+
+    // 5. Execute the intent
+    match challenge.intent {
+        ChallengeIntent::LogoutAll => {
+            tracing::info!(
+                event = "auth.step_up.consume.logout_all",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: executing LogoutAll intent"
+            );
+            state.sessions.delete_all_by_account(&account_id);
+            // Empty value + zero max-age clears the session cookie in the client
+            let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+            (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
+        }
+        ChallengeIntent::RemoveDevice { target_device_id } => {
+            tracing::info!(
+                event = "auth.step_up.consume.remove_device",
+                request_id = %request_id,
+                account_id = %account_id,
+                target_device_id = %target_device_id,
+                "Step-up consume: executing RemoveDevice intent"
+            );
+            state.sessions.delete_by_device(&account_id, &target_device_id);
+            StatusCode::NO_CONTENT.into_response()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
