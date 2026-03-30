@@ -78,4 +78,5 @@ export interface RenderableMapPoint {
   updated_at?: string;
   kind?: string;
   tags?: string[];
+  weight?: number;
 }

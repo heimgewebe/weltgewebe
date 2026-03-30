@@ -43,6 +43,15 @@ test.describe("Activity Heatmap layer structure on load", () => {
       if (!layer || !source) return null;
 
       const opacityPaint = map.getPaintProperty(layerId, "heatmap-opacity");
+      const weightPaint = map.getPaintProperty(layerId, "heatmap-weight");
+
+      let defaultFeatureWeight = null;
+      if (typeof source.serialize === "function") {
+        const serialized = source.serialize();
+        if (serialized?.data?.features?.length > 0) {
+          defaultFeatureWeight = serialized.data.features[0].properties.weight;
+        }
+      }
 
       // We expect the activity layer to be below edges if edges are active, but at least below symbols
       // We can query the raw layers array to check its relative position
@@ -58,6 +67,8 @@ test.describe("Activity Heatmap layer structure on load", () => {
         id: layer.id,
         type: layer.type,
         opacityPaint,
+        weightPaint,
+        defaultFeatureWeight,
         sourceExists: !!source,
         isBelowEdges,
         edgeIndex,
@@ -71,6 +82,16 @@ test.describe("Activity Heatmap layer structure on load", () => {
     expect(activityLayerInfo?.id).toBe("activity-layer");
     expect(activityLayerInfo?.type).toBe("heatmap");
     expect(activityLayerInfo?.sourceExists).toBe(true);
+
+    // Semantic proof: Layer uses weight property and defaults to 1
+    expect(
+      activityLayerInfo?.weightPaint,
+      "Layer MUST use 'weight' property for heatmap-weight scaling",
+    ).toEqual(["get", "weight"]);
+    expect(
+      activityLayerInfo?.defaultFeatureWeight,
+      "GeoJSON features MUST default to a weight of 1 if none provided",
+    ).toBe(1);
 
     // Hardened Structural Z-Order proof:
     // Ensure that edge layers are actually present in the style during the test,
