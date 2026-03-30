@@ -2471,6 +2471,80 @@ async fn test_step_up_consume_session_mismatch() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn test_step_up_consume_session_mismatch_token_survives() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    // session1 belongs to u1/device1 — token and challenge are bound to this session
+    let session1 = state.sessions.create("u1".to_string(), None);
+    let session_id1 = session1.id.clone();
+    let device_id1 = session1.device_id.clone();
+    let challenge = state.challenges.create(
+        "u1".to_string(),
+        device_id1.clone(),
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
+    );
+    let token = state
+        .step_up_tokens
+        .create(challenge.id.clone(), "u1".to_string(), device_id1);
+
+    // session2 belongs to u1 but a different device — wrong session
+    let session2 = state.sessions.create("u1".to_string(), None);
+    let session_id2 = session2.id.clone();
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    // First attempt: wrong session — must return 401 and must NOT burn the token
+    let req_mismatch = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id2
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"token":"{}","challenge_id":"{}"}}"#,
+            token, challenge.id
+        )))?;
+
+    let res_mismatch = app.clone().oneshot(req_mismatch).await?;
+    assert_eq!(res_mismatch.status(), StatusCode::UNAUTHORIZED);
+    let body_bytes = body::to_bytes(res_mismatch.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body["error"], "TOKEN_INVALID");
+
+    // Second attempt: correct session — must succeed, proving the token was not burned
+    let req_correct = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id1
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"token":"{}","challenge_id":"{}"}}"#,
+            token, challenge.id
+        )))?;
+
+    let res_correct = app.oneshot(req_correct).await?;
+    assert_eq!(res_correct.status(), StatusCode::NO_CONTENT);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn test_step_up_consume_token_reuse_rejected() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;

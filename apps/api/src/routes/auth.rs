@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::challenges::ChallengeIntent,
+    auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -1346,15 +1347,26 @@ pub async fn consume_step_up(
     let device_id = match ctx.device_id {
         Some(ref id) => id.clone(),
         None => {
-            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            tracing::error!(
+                event = "auth.step_up.consume.missing_device_id",
+                request_id = %request_id,
+                "Authenticated context missing device_id"
+            );
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR", "message": "Authenticated context missing device_id"});
             return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
         }
     };
 
-    // 1. Consume the step-up token (single-use, validates TTL)
-    let token_data = match state.step_up_tokens.consume(&payload.token) {
-        Some(data) => data,
-        None => {
+    // 1. Atomically validate all bindings and consume the token.
+    // The token is only removed when challenge_id, account_id, and device_id all match,
+    // so a wrong caller cannot burn a valid token that belongs to a different session.
+    match state.step_up_tokens.consume_if_matches(
+        &payload.token,
+        &payload.challenge_id,
+        &account_id,
+        &device_id,
+    ) {
+        ConsumeMatchResult::NotFound => {
             tracing::warn!(
                 event = "auth.step_up.consume.token_invalid",
                 request_id = %request_id,
@@ -1363,31 +1375,19 @@ pub async fn consume_step_up(
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
         }
-    };
-
-    // 2. Validate: token's challenge_id must match the provided challenge_id
-    if token_data.challenge_id != payload.challenge_id {
-        tracing::warn!(
-            event = "auth.step_up.consume.challenge_mismatch",
-            request_id = %request_id,
-            "Step-up consume failed: token challenge_id does not match provided challenge_id"
-        );
-        let err = serde_json::json!({"error": "TOKEN_INVALID"});
-        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        ConsumeMatchResult::BindingMismatch => {
+            tracing::warn!(
+                event = "auth.step_up.consume.binding_mismatch",
+                request_id = %request_id,
+                "Step-up consume failed: token binding mismatch (challenge_id, account_id, or device_id)"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+        ConsumeMatchResult::Consumed(_) => {}
     }
 
-    // 3. Validate: token must be bound to the current session
-    if token_data.account_id != account_id || token_data.device_id != device_id {
-        tracing::warn!(
-            event = "auth.step_up.consume.session_mismatch",
-            request_id = %request_id,
-            "Step-up consume failed: token is not bound to the current session"
-        );
-        let err = serde_json::json!({"error": "TOKEN_INVALID"});
-        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
-    }
-
-    // 4. Consume the challenge (single-use, validates TTL)
+    // 2. Consume the challenge (single-use, validates TTL)
     let challenge = match state.challenges.consume(&payload.challenge_id) {
         Some(c) => c,
         None => {
@@ -1401,7 +1401,7 @@ pub async fn consume_step_up(
         }
     };
 
-    // 5. Execute the intent
+    // 3. Execute the intent
     match challenge.intent {
         ChallengeIntent::LogoutAll => {
             tracing::info!(

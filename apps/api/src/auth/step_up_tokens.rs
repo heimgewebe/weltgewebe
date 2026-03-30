@@ -12,6 +12,17 @@ pub struct StepUpTokenData {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Result of an atomic [`StepUpTokenStore::consume_if_matches`] operation.
+pub enum ConsumeMatchResult {
+    /// Token not found or expired.
+    NotFound,
+    /// Token found but at least one binding (challenge_id, account_id, device_id) did not match.
+    /// The token is left intact so the correct caller can still use it.
+    BindingMismatch,
+    /// All bindings matched; the token has been removed.
+    Consumed(StepUpTokenData),
+}
+
 #[derive(Clone, Default)]
 pub struct StepUpTokenStore {
     store: Arc<RwLock<HashMap<String, StepUpTokenData>>>,
@@ -75,6 +86,34 @@ impl StepUpTokenStore {
         token
     }
 
+    pub fn consume_if_matches(
+        &self,
+        token: &str,
+        expected_challenge_id: &str,
+        expected_account_id: &str,
+        expected_device_id: &str,
+    ) -> ConsumeMatchResult {
+        let now = Utc::now();
+        let hash = Self::hash_token(token);
+        let mut store = self.store.write().expect("StepUpTokenStore lock poisoned");
+        store.retain(|_, v| v.expires_at > now);
+
+        match store.get(&hash) {
+            None => ConsumeMatchResult::NotFound,
+            Some(data) => {
+                if data.challenge_id != expected_challenge_id
+                    || data.account_id != expected_account_id
+                    || data.device_id != expected_device_id
+                {
+                    ConsumeMatchResult::BindingMismatch
+                } else {
+                    let data = store.remove(&hash).expect("entry was present under write lock");
+                    ConsumeMatchResult::Consumed(data)
+                }
+            }
+        }
+    }
+
     pub fn consume(&self, token: &str) -> Option<StepUpTokenData> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
@@ -133,6 +172,63 @@ mod tests {
 
         let second = store.consume(&token);
         assert!(second.is_none());
+    }
+
+    #[test]
+    fn consume_if_matches_removes_on_full_match() {
+        let store = StepUpTokenStore::new();
+        let token = store.create("c-1".to_string(), "a-1".to_string(), "d-1".to_string());
+
+        let result = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
+        assert!(matches!(result, ConsumeMatchResult::Consumed(_)));
+
+        // Token must be gone after successful consume
+        let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
+        assert!(matches!(result2, ConsumeMatchResult::NotFound));
+    }
+
+    #[test]
+    fn consume_if_matches_preserves_token_on_account_mismatch() {
+        let store = StepUpTokenStore::new();
+        let token = store.create("c-1".to_string(), "a-1".to_string(), "d-1".to_string());
+
+        let result = store.consume_if_matches(&token, "c-1", "wrong-account", "d-1");
+        assert!(matches!(result, ConsumeMatchResult::BindingMismatch));
+
+        // Token must still be present and consumable by the correct caller
+        let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
+        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+    }
+
+    #[test]
+    fn consume_if_matches_preserves_token_on_device_mismatch() {
+        let store = StepUpTokenStore::new();
+        let token = store.create("c-1".to_string(), "a-1".to_string(), "d-1".to_string());
+
+        let result = store.consume_if_matches(&token, "c-1", "a-1", "wrong-device");
+        assert!(matches!(result, ConsumeMatchResult::BindingMismatch));
+
+        let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
+        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+    }
+
+    #[test]
+    fn consume_if_matches_preserves_token_on_challenge_mismatch() {
+        let store = StepUpTokenStore::new();
+        let token = store.create("c-1".to_string(), "a-1".to_string(), "d-1".to_string());
+
+        let result = store.consume_if_matches(&token, "wrong-challenge", "a-1", "d-1");
+        assert!(matches!(result, ConsumeMatchResult::BindingMismatch));
+
+        let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
+        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+    }
+
+    #[test]
+    fn consume_if_matches_returns_not_found_for_missing_token() {
+        let store = StepUpTokenStore::new();
+        let result = store.consume_if_matches("no-such-token", "c-1", "a-1", "d-1");
+        assert!(matches!(result, ConsumeMatchResult::NotFound));
     }
 
     #[test]
