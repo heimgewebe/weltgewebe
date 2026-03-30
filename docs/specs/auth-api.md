@@ -257,12 +257,19 @@ Response:
 
 Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch,
 dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist.
-Ein Step-up-Request ist nur aus einer aktiven Session heraus zulässig.
+Sowohl der Step-up-Request als auch der Consume-Aufruf sind **nur aus einer aktiven Session heraus zulässig**.
+Der Token ist an `account_id` und `device_id` der ausstellenden Session gebunden; ein Consume-Aufruf ohne
+passende aktive Session wird mit `401 Unauthorized` abgelehnt.
 Die `challenge_id` ist kurzlebig, strikt single-use und an die aktuelle Session und den Intent gebunden.
-Die Konsumierung dieses Links **etabliert keine neue Session**, sondern berechtigt ausschließlich zur Ausführung
-des ausstehenden Intents oder öffnet ein sehr kurzlebiges Zeitfenster (z.B. wenige Minuten).
+Die Konsumierung dieses Links **etabliert keine neue Session**, sondern führt ausschließlich den gebundenen Intent aus:
+
+- `LogoutAll`: alle Sessions des Accounts werden beendet, das Session-Cookie wird geleert.
+  Der anfragende Client ist danach ausgeloggt.
+- `RemoveDevice`: nur die Sessions des Zielgeräts werden entfernt.
+  Die aktuelle Session des anfragenden Clients bleibt erhalten.
+
 Es entsteht kein impliziter "Superuser"-Zustand.
-Ungültige oder abgelaufene Step-up-Links werfen ein generisches `401 Unauthorized` (`TOKEN_INVALID` / `TOKEN_EXPIRED`),
+Ungültige oder abgelaufene Step-up-Links werfen ein generisches `401 Unauthorized` (`TOKEN_INVALID`),
 um keine semantisch reichhaltigen Fehlerdetails über abgelaufene oder fremde Challenges preiszugeben.
 
 ## Magic Link Details
