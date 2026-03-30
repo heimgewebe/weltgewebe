@@ -92,7 +92,7 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
   - _Teilweise umgesetzt: Deterministisches Build-Skript für Deutschland (Large Scale) als `build-germany-pmtiles.sh` bereitgestellt._
 - [ ] Offline-Modus-Konzepte prüfen
 - [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
-  - _Teilweise umgesetzt: Ein technisches Heatmap-Fundament (`activity.ts`) wurde eingezogen. Es unterstützt nun serverseitige oder clientseitige Gewichtung (weight) für Elemente, um eine echte Activity-Semantik basierend auf Telemetrie oder Event-Metadaten abzubilden. Die vollständige Event-Stream-Integration im Backend fehlt noch._
+  - _Teilweise umgesetzt: Ein technisches Heatmap-Fundament (`activity.ts`) wurde eingezogen. Es unterstützt nun serverseitige oder clientseitige Gewichtung (weight) als technische Grundlage für eine spätere Activity-Semantik. Die vollständige Event-Stream-Integration im Backend fehlt weiterhin._
 - [ ] Mehrskalige Projektionen prüfen
 
 **Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der
