@@ -191,7 +191,7 @@ Jeder relevante Bereich ist entweder:
 - [x] `POST /auth/session/refresh` belegen oder implementieren — Route aktiv, Tests in `api_auth.rs`
 - [x] Device-ID-Strategie vereinheitlichen — dynamische `device_id` pro Session
 - [x] Device-Liste bereitstellen — `GET /auth/devices` aktiv
-- [x] Current-Device-Markierung einführen — `is_current` Flag in Device-Liste
+- [x] Current-Device-Markierung einführen — `current` Flag in Device-Liste
 - [x] `DELETE /auth/devices/:id` — Self-Delete aktiv, Fremdgeräte-Guard erzeugt Challenge
 - [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad fehlt (Phase 3)
 - [ ] Session-Persistenzentscheidung explizit festziehen — derzeit In-Memory
