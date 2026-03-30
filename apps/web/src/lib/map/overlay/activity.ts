@@ -19,7 +19,10 @@ export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
     properties: {
       id: p.id,
       kind: p.kind || "node",
-      weight: p.weight !== undefined ? p.weight : 1,
+      weight:
+        typeof p.weight === "number" && Number.isFinite(p.weight)
+          ? p.weight
+          : 1,
     },
   }));
 
