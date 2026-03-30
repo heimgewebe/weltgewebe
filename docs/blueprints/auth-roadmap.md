@@ -222,7 +222,7 @@ Jeder relevante Bereich ist entweder:
 - [ ] `POST /auth/step-up/magic-link/consume`
 - [ ] Passkey als bevorzugter Step-up-Pfad
 - [ ] Step-up-Dialog in der UI
-- [x] Fehlerpfade ohne unnötigen Session-Abbruch — Request-Pfad bricht keine Session ab
+- [x] Fehlerpfade im Step-up-Request ohne unnötigen Session-Abbruch — der Request-Pfad invalidiert keine bestehende Session
 - [ ] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — benötigt Consume-Pfad
 
 ### Nicht verhandelbare Regel
