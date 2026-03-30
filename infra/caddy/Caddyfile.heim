@@ -3,26 +3,7 @@ weltgewebe.home.arpa {
   tls internal
 
 
-  # Phase 1: Sovereign Basemap Hosting (PMTiles)
-  # PMTiles clients strictly require HTTP Range requests and CORS headers.
-  handle_path /basemap/* {
-    root * /srv/weltgewebe-basemap
-    header Access-Control-Allow-Origin "*"
-    header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-    header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
-    header Access-Control-Allow-Headers "Range, If-None-Match"
-    # defensive CORS hardening for clients/browsers that do send preflight requests
-    @options {
-      method OPTIONS
-    }
-    respond @options 204
-
-    file_server {
-      precompressed gzip zstd
-    }
-  }
-
-  # Phase 2/3: Sovereign Basemap Style & Assets Routing
+  # Sovereign Basemap Style & Assets Routing
   # Mirrored from Vite dev-server: `.pmtiles` and `.meta.json` from basemap dir, others from map-style dir
   handle_path /local-basemap/* {
     @pmtiles path_regexp \.pmtiles$
