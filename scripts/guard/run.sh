@@ -20,3 +20,6 @@ echo "== guard: token leak =="
 
 echo "== guard: metrics ref consistency =="
 "${REPO_ROOT}/scripts/guard/metrics-ref-guard.sh"
+
+echo "== guard: caddy basemap route contract =="
+"${REPO_ROOT}/scripts/guard/caddy-basemap-route-guard.sh"
