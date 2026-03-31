@@ -3,12 +3,15 @@
   "private": true,
   "packageManager": "pnpm@9.11.0",
   "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "contracts:domain:check": "bash ./scripts/contracts-domain-check.sh"
   },
   "devDependencies": {
     "ajv": "^8.18.0",
     "ajv-cli": "^5.0.0",
     "ajv-formats": "^3.0.1",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0"
   }
 }
