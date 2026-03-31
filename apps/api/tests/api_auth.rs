@@ -2504,6 +2504,8 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+// Verifies the 401/TOKEN_INVALID error response when a token is presented from the wrong session.
+// See also: test_step_up_consume_session_mismatch_token_survives, which proves the token is preserved.
 async fn test_step_up_consume_session_mismatch() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
@@ -2557,6 +2559,9 @@ async fn test_step_up_consume_session_mismatch() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+// Verifies the token-survival invariant: a wrong-session attempt returns 401 but does NOT burn
+// the token, so the legitimate caller can still succeed on a subsequent attempt.
+// See also: test_step_up_consume_session_mismatch, which focuses only on the error response.
 async fn test_step_up_consume_session_mismatch_token_survives() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;

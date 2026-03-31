@@ -20,7 +20,7 @@ pub enum ConsumeMatchResult {
     /// The token is left intact so the correct caller can still use it.
     BindingMismatch,
     /// All bindings matched; the token has been removed.
-    Consumed(StepUpTokenData),
+    Consumed,
 }
 
 #[derive(Clone, Default)]
@@ -107,8 +107,8 @@ impl StepUpTokenStore {
                 {
                     ConsumeMatchResult::BindingMismatch
                 } else {
-                    let data = store.remove(&hash).expect("entry was present under write lock");
-                    ConsumeMatchResult::Consumed(data)
+                    store.remove(&hash).expect("entry was present under write lock");
+                    ConsumeMatchResult::Consumed
                 }
             }
         }
@@ -180,7 +180,7 @@ mod tests {
         let token = store.create("c-1".to_string(), "a-1".to_string(), "d-1".to_string());
 
         let result = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
-        assert!(matches!(result, ConsumeMatchResult::Consumed(_)));
+        assert!(matches!(result, ConsumeMatchResult::Consumed));
 
         // Token must be gone after successful consume
         let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
@@ -197,7 +197,7 @@ mod tests {
 
         // Token must still be present and consumable by the correct caller
         let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
-        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+        assert!(matches!(result2, ConsumeMatchResult::Consumed));
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
         assert!(matches!(result, ConsumeMatchResult::BindingMismatch));
 
         let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
-        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+        assert!(matches!(result2, ConsumeMatchResult::Consumed));
     }
 
     #[test]
@@ -221,7 +221,7 @@ mod tests {
         assert!(matches!(result, ConsumeMatchResult::BindingMismatch));
 
         let result2 = store.consume_if_matches(&token, "c-1", "a-1", "d-1");
-        assert!(matches!(result2, ConsumeMatchResult::Consumed(_)));
+        assert!(matches!(result2, ConsumeMatchResult::Consumed));
     }
 
     #[test]

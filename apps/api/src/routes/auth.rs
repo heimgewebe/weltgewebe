@@ -1384,7 +1384,7 @@ pub async fn consume_step_up(
             let err = serde_json::json!({"error": "TOKEN_INVALID"});
             return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
         }
-        ConsumeMatchResult::Consumed(_) => {}
+        ConsumeMatchResult::Consumed => {}
     }
 
     // 2. Consume the challenge (single-use, validates TTL).
