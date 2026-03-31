@@ -1,2 +1,5 @@
 # Prettier has issues with GitHub Flavored Markdown alerts
 README.md
+
+# Machine-generated lockfiles are producer-owned; Prettier must not reformat them
+pnpm-lock.yaml
