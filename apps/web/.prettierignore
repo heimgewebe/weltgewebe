@@ -1,2 +1,5 @@
 # Prettier has issues with GitHub Flavored Markdown alerts
 README.md
+
+# Auto-generated lockfiles should not be reformatted
+pnpm-lock.yaml
