@@ -2418,6 +2418,92 @@ async fn test_step_up_consume_challenge_id_mismatch() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+// Documents the deliberate asymmetry: once consume_if_matches succeeds (token removed),
+// a missing/expired challenge causes a 401 and the token cannot be reused — client must
+// request a new step-up link.
+async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state.sessions.create("u1".to_string(), None);
+    let session_id = session.id.clone();
+    let device_id = session.device_id.clone();
+
+    let challenge = state.challenges.create(
+        "u1".to_string(),
+        device_id.clone(),
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
+    );
+    let challenge_id = challenge.id.clone();
+    let token = state
+        .step_up_tokens
+        .create(challenge_id.clone(), "u1".to_string(), device_id);
+
+    // Pre-consume the challenge so it is gone when the HTTP call arrives
+    state.challenges.consume(&challenge_id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    // Bindings match → token is removed; challenge is absent → 401
+    let req = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                session_id
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"token":"{}","challenge_id":"{}"}}"#,
+            token, challenge_id
+        )))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body["error"], "TOKEN_INVALID");
+
+    // Token is gone — a retry with the same token also fails
+    let new_session = state.sessions.create("u1".to_string(), None);
+    let new_challenge = state.challenges.create(
+        "u1".to_string(),
+        new_session.device_id.clone(),
+        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
+    );
+    let req_retry = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}",
+                weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
+                new_session.id
+            ),
+        )
+        .body(body::Body::from(format!(
+            r#"{{"token":"{}","challenge_id":"{}"}}"#,
+            token, new_challenge.id
+        )))?;
+
+    let res_retry = app.oneshot(req_retry).await?;
+    assert_eq!(res_retry.status(), StatusCode::UNAUTHORIZED);
+    let body_bytes = body::to_bytes(res_retry.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body["error"], "TOKEN_INVALID");
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn test_step_up_consume_session_mismatch() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
