@@ -2472,13 +2472,9 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
     assert_eq!(body["error"], "TOKEN_INVALID");
 
-    // Token is gone — a retry with the same token also fails
-    let new_session = state.sessions.create("u1".to_string(), None);
-    let new_challenge = state.challenges.create(
-        "u1".to_string(),
-        new_session.device_id.clone(),
-        weltgewebe_api::auth::challenges::ChallengeIntent::LogoutAll,
-    );
+    // Token is gone — retry with the exact same session, challenge_id, and token also fails.
+    // This isolates the cause: the token was consumed during the first call (binding-match
+    // succeeded) and is now NotFound in the store, regardless of challenge state.
     let req_retry = Request::post("/auth/step-up/magic-link/consume")
         .header("Content-Type", "application/json")
         .header(
@@ -2486,12 +2482,12 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
             format!(
                 "{}={}",
                 weltgewebe_api::routes::auth::SESSION_COOKIE_NAME,
-                new_session.id
+                session_id
             ),
         )
         .body(body::Body::from(format!(
             r#"{{"token":"{}","challenge_id":"{}"}}"#,
-            token, new_challenge.id
+            token, challenge_id
         )))?;
 
     let res_retry = app.oneshot(req_retry).await?;
@@ -2499,6 +2495,16 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
     let body_bytes = body::to_bytes(res_retry.into_body(), usize::MAX).await?;
     let body: serde_json::Value = serde_json::from_slice(&body_bytes)?;
     assert_eq!(body["error"], "TOKEN_INVALID");
+
+    // Confirm at store level: the token is gone (NotFound, not BindingMismatch)
+    use weltgewebe_api::auth::step_up_tokens::ConsumeMatchResult;
+    let device_id = state.sessions.get(&session_id).unwrap().device_id;
+    assert!(matches!(
+        state
+            .step_up_tokens
+            .consume_if_matches(&token, &challenge_id, "u1", &device_id),
+        ConsumeMatchResult::NotFound
+    ));
     Ok(())
 }
 

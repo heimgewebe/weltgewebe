@@ -261,7 +261,7 @@ Sowohl der Step-up-Request als auch der Consume-Aufruf sind **nur aus einer akti
 Der Token ist an `account_id` und `device_id` der ausstellenden Session gebunden; ein Consume-Aufruf ohne
 passende aktive Session wird mit `401 Unauthorized` abgelehnt.
 Die `challenge_id` ist kurzlebig, strikt single-use und an die aktuelle Session und den Intent gebunden.
-**Token-Invariante:** Der Step-up-Token wird atomar entfernt, sobald `challenge_id`, `account_id` und `device_id`
+**Token-Invariante:** Der Step-up-Token wird im Token-Store nur dann entfernt, wenn `challenge_id`, `account_id` und `device_id`
 korrekt übereinstimmen (Binding-Match). Schlägt ein Consume-Versuch wegen Binding-Mismatch fehl (falsche Session,
 falsche `challenge_id`), bleibt der Token erhalten und ein legitimer Aufruf aus dem korrekten Kontext ist weiterhin
 möglich. Ist der Binding-Match hingegen erfolgreich, der Token also bereits entfernt, und schlägt danach die
