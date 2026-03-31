@@ -10,6 +10,10 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-03-31
+
+- `infra/caddy/Caddyfile.heim`: CSP-Härtungsfix — `https://basemaps.cartocdn.com` aus `connect-src` und `img-src` entfernt. Die Heim-Instanz operiert im `local-sovereign`-Modus; externe Tile-Provider haben dort keinen Platz in der CSP. Fail-Fast-Nebeneffekt: ein irrtümlich remote gebautes Bundle erzeugt jetzt sichtbare CSP-Violations statt stillschweigend CartoDB zu kontaktieren.
+
 ## 2026-03-30
 
 - `infra/caddy/Caddyfile`: Caddy-Route von `/basemap/*` auf `/local-basemap/*` korrigiert (Contract-Drift-Fix). Die Route entspricht jetzt dem öffentlichen Edge-Contract, der übereinstimmend von Frontend (`basemap.ts`), Vite-Middleware (`vite.config.ts`) und Blueprint (`map-blaupause.md §7`) als `/local-basemap/` definiert wird. Zuvor fielen Anfragen an `/local-basemap/` durch den Catch-All an Vite (im Dev-Kontext unauffällig); der souveräne Hosting-Pfad war faktisch inaktiv. — Neuer Regressions-Guard: `scripts/guard/caddy-basemap-route-guard.sh` sichert den Vertrag ab.
