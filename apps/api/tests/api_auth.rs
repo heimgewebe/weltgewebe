@@ -1287,6 +1287,10 @@ async fn test_session_refresh_success() -> Result<()> {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["authenticated"], true);
     assert!(body["expires_at"].is_string());
+    assert!(
+        body["device_id"].is_string(),
+        "session refresh response must include device_id"
+    );
 
     // 3. New cookie should be valid
     let req_new = Request::get("/auth/session")

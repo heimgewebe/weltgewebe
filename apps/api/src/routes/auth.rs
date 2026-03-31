@@ -1001,7 +1001,7 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
             let status = SessionStatus {
                 authenticated: true,
                 expires_at: Some(new_session.expires_at),
-                device_id: None,
+                device_id: Some(new_session.device_id.clone()),
             };
 
             tracing::info!(
