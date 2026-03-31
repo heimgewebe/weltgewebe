@@ -93,7 +93,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. In-Memory `SessionStore` ist als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (`auth-roadmap.md`, Phase 2 Persistenzentscheidung). Die `SessionStore`-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv (httpOnly, Secure, SameSite=Lax).
+**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. In-Memory `SessionStore` ist als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (`auth-roadmap.md`, Phase 2 Persistenzentscheidung). Die `SessionStore`-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
 **Dokumentationsbelege:** `docs/blueprints/auth-roadmap.md` (Persistenzentscheidung), `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
 **Fehlende Belege:** Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests), E2E-Nachweis.

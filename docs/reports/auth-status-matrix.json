@@ -34,7 +34,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. In-Memory SessionStore als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (auth-roadmap.md, Phase 2 Persistenzentscheidung). SessionStore-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv.",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. In-Memory SessionStore als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (auth-roadmap.md, Phase 2 Persistenzentscheidung). SessionStore-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/auth-roadmap.md",
