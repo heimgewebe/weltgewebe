@@ -1387,7 +1387,13 @@ pub async fn consume_step_up(
         ConsumeMatchResult::Consumed(_) => {}
     }
 
-    // 2. Consume the challenge (single-use, validates TTL)
+    // 2. Consume the challenge (single-use, validates TTL).
+    // Note: the token was already removed above. If the challenge is missing or expired at this
+    // point, the token is lost and the client must request a new step-up link. This is deliberate:
+    // both token and challenge share the same short TTL (~5 min) and are created together, so a
+    // race where the challenge expires while the token is still valid is extremely narrow in
+    // practice. A full atomic guarantee would require a combined store operation; that refactor is
+    // deferred until the use-case demands it.
     let challenge = match state.challenges.consume(&payload.challenge_id) {
         Some(c) => c,
         None => {
