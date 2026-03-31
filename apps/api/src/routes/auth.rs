@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::challenges::ChallengeIntent,
+    auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
@@ -1311,6 +1312,127 @@ pub async fn request_step_up(
             );
             let err_payload = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct StepUpConsumePayload {
+    pub token: String,
+    pub challenge_id: String,
+}
+
+pub async fn consume_step_up(
+    State(state): State<ApiState>,
+    headers: axum::http::HeaderMap,
+    jar: CookieJar,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<StepUpConsumePayload>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    if !ctx.authenticated {
+        let err = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(ref id) => id.clone(),
+        None => {
+            let err = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+    };
+
+    let device_id = match ctx.device_id {
+        Some(ref id) => id.clone(),
+        None => {
+            tracing::error!(
+                event = "auth.step_up.consume.missing_device_id",
+                request_id = %request_id,
+                "Authenticated context missing device_id"
+            );
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR", "message": "Authenticated context missing device_id"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, jar, Json(err)).into_response();
+        }
+    };
+
+    // 1. Atomically validate all bindings and consume the token.
+    // The token is only removed when challenge_id, account_id, and device_id all match,
+    // so a wrong caller cannot burn a valid token that belongs to a different session.
+    match state.step_up_tokens.consume_if_matches(
+        &payload.token,
+        &payload.challenge_id,
+        &account_id,
+        &device_id,
+    ) {
+        ConsumeMatchResult::NotFound => {
+            tracing::warn!(
+                event = "auth.step_up.consume.token_invalid",
+                request_id = %request_id,
+                "Step-up consume failed: token not found, expired, or already used"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+        ConsumeMatchResult::BindingMismatch => {
+            tracing::warn!(
+                event = "auth.step_up.consume.binding_mismatch",
+                request_id = %request_id,
+                "Step-up consume failed: token binding mismatch (challenge_id, account_id, or device_id)"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+        ConsumeMatchResult::Consumed => {}
+    }
+
+    // 2. Consume the challenge (single-use, validates TTL).
+    // Note: the token was already removed above. If the challenge is missing or expired at this
+    // point, the token is lost and the client must request a new step-up link. This is deliberate:
+    // both token and challenge share the same short TTL (~5 min) and are created together, so a
+    // race where the challenge expires while the token is still valid is extremely narrow in
+    // practice. A full atomic guarantee would require a combined store operation; that refactor is
+    // deferred until the use-case demands it.
+    let challenge = match state.challenges.consume(&payload.challenge_id) {
+        Some(c) => c,
+        None => {
+            tracing::warn!(
+                event = "auth.step_up.consume.challenge_expired",
+                request_id = %request_id,
+                "Step-up consume failed: challenge not found or expired"
+            );
+            let err = serde_json::json!({"error": "TOKEN_INVALID"});
+            return (StatusCode::UNAUTHORIZED, jar, Json(err)).into_response();
+        }
+    };
+
+    // 3. Execute the intent
+    match challenge.intent {
+        ChallengeIntent::LogoutAll => {
+            tracing::info!(
+                event = "auth.step_up.consume.logout_all",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: executing LogoutAll intent"
+            );
+            state.sessions.delete_all_by_account(&account_id);
+            // Empty value + zero max-age clears the session cookie in the client
+            let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
+            (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
+        }
+        ChallengeIntent::RemoveDevice { target_device_id } => {
+            tracing::info!(
+                event = "auth.step_up.consume.remove_device",
+                request_id = %request_id,
+                account_id = %account_id,
+                target_device_id = %target_device_id,
+                "Step-up consume: executing RemoveDevice intent"
+            );
+            state
+                .sessions
+                .delete_by_device(&account_id, &target_device_id);
+            StatusCode::NO_CONTENT.into_response()
         }
     }
 }

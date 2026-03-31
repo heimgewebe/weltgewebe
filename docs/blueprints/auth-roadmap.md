@@ -193,7 +193,7 @@ Jeder relevante Bereich ist entweder:
 - [x] Device-Liste bereitstellen — `GET /auth/devices` aktiv
 - [x] Current-Device-Markierung einführen — `current` Flag in Device-Liste
 - [x] `DELETE /auth/devices/:id` — Self-Delete aktiv, Fremdgeräte-Guard erzeugt Challenge
-- [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad fehlt (Phase 3)
+- [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad in Phase 3 implementiert
 - [ ] Session-Persistenzentscheidung explizit festziehen — derzeit In-Memory
 
 ### Risiken
@@ -219,11 +219,11 @@ Jeder relevante Bereich ist entweder:
 - [x] TTL für Challenges — 5-Minuten-TTL, Cleanup bei Zugriff
 - [x] Intent-Bindung — `ChallengeIntent::LogoutAll`, `RemoveDevice`
 - [x] `POST /auth/step-up/magic-link/request` — separater `StepUpTokenStore`, defensive Fehlersemantik (400/500/503), Mailer-Pfad, Tests
-- [ ] `POST /auth/step-up/magic-link/consume`
+- [x] `POST /auth/step-up/magic-link/consume` — konsumiert den Step-up-Token, validiert Challenge-Bindung und Session, führt den Intent aus: bei `LogoutAll` werden alle Sessions des Accounts beendet und das Cookie geleert; bei `RemoveDevice` wird nur das Zielgerät entfernt, die aktuelle Session bleibt erhalten
 - [ ] Passkey als bevorzugter Step-up-Pfad
 - [ ] Step-up-Dialog in der UI
 - [x] Fehlerpfade im Step-up-Request ohne unnötigen Session-Abbruch — der Request-Pfad invalidiert keine bestehende Session
-- [ ] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — benötigt Consume-Pfad
+- [x] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — der Consume-Handler erstellt in keinem Pfad eine Session; `LogoutAll` löscht alle Account-Sessions (inkl. der aktuellen), `RemoveDevice` löscht nur die Sessions des Zielgeräts; beide Invarianten sind durch `test_step_up_consume_logout_all_success` und `test_step_up_consume_remove_device_success` in `apps/api/tests/api_auth.rs` belegt
 
 ### Nicht verhandelbare Regel
 

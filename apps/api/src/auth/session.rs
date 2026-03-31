@@ -113,6 +113,11 @@ impl SessionStore {
         let mut store = self.store.write().expect("SessionStore lock poisoned");
         store.retain(|_, s| !(s.account_id == account_id && s.device_id == device_id));
     }
+
+    pub fn delete_all_by_account(&self, account_id: &str) {
+        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        store.retain(|_, s| s.account_id != account_id);
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +192,20 @@ mod tests {
         let sessions = store.list_by_account("acc-1");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].id, s3.id);
+    }
+
+    #[test]
+    fn delete_all_by_account_removes_only_that_account() {
+        let store = SessionStore::new();
+        let _s1 = store.create("acc-1".to_string(), None);
+        let _s2 = store.create("acc-1".to_string(), None);
+        let s3 = store.create("acc-2".to_string(), None);
+
+        store.delete_all_by_account("acc-1");
+
+        assert_eq!(store.list_by_account("acc-1").len(), 0);
+        assert_eq!(store.list_by_account("acc-2").len(), 1);
+        assert!(store.get(&s3.id).is_some());
     }
 
     #[test]
