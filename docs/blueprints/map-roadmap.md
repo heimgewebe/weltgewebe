@@ -53,17 +53,17 @@ lizenzrechtlich dokumentiert. Die Basemap ist bewusst sprite-frei (keine Icons),
 
 ## Phase 3 — Runtime-Integration
 
-**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _(Update: Dev-Infrastruktur im Vite-Server bereitet vor; Prod-Hosting in Caddy für Style und PMTiles unter `/local-basemap/` vorbereitet; produktiver Rollout steht noch aus.)_
+**Ziel:** MapLibre nutzt ausschließlich das eigene, souveräne PMTiles-Artefakt. _(Update: Dev-Infrastruktur im Vite-Server bereitet vor; Prod-Hosting in Caddy für Style und PMTiles unter `/local-basemap/` korrekt verdrahtet; produktiver Vollnachweis mit realem Artefakt steht noch aus.)_
 
 - [x] PMTiles-Protokoll in MapLibre registrieren
 - [x] Externe Style-Abhängigkeiten im Dev-Betrieb entfernen
   - _Hinweis: Der lokale Dev-Server nutzt nun die souveräne Struktur (`local-sovereign`)
     als Standard. CDN-Abhängigkeiten sind im Dev-Betrieb aufgelöst._
 - [ ] Lokales bzw. selbst gehostetes Basemap-Artefakt in MapLibre anbinden
-  - **Status:** Indirekt validiert (Mock/Testbuild)
-  - **Nachweisquelle:** `apps/web/tests/basemap-client-integration.spec.ts` (Playwright E2E-Client-Integration)
-  - **Befund:** Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der aktuelle Test validiert ausschließlich das Client-Verhalten: MapLibre parst das PMTiles-Protokoll und sendet korrekte `Range`-Header.
-  - **Offene Lücke:** Nicht verifiziert (Produktionspfad fehlt). Der echte E2E-Nachweis (Client → Edge (Caddy) → echte Artefakte) fehlt weiterhin als notwendiger Vollnachweis für den Abschluss dieses Punktes. Dieser muss beweisen: echter HTTP-206 Response, echter Byte-Stream (nicht Mock), und keine externen Requests im Browser.
+  - **Status:** Infrastruktur-seitig verdrahtet, echter E2E-Nachweis ausstehend
+  - **Nachweisquelle:** `apps/web/tests/basemap-client-integration.spec.ts` (Playwright E2E-Client-Integration); `scripts/guard/caddy-basemap-route-guard.sh` (Infra-Route-Guard)
+  - **Befund:** Das Frontend-Flag (`PUBLIC_BASEMAP_MODE`) schaltet die Logik frei. Der aktuelle Client-Test validiert: MapLibre parst das PMTiles-Protokoll und sendet korrekte `Range`-Header. Caddy-Route ist jetzt korrekt auf `/local-basemap/*` ausgerichtet (Contract-Drift behoben, Route-Guard eingezogen).
+  - **Offene Lücke:** Echter E2E-Nachweis fehlt noch (Client → Caddy → echtes Artefakt). Dieser muss beweisen: echter HTTP-206 Response, echter Byte-Stream (nicht Mock), keine externen Requests im Browser. Benötigt: physisches PMTiles-Artefakt im Stack.
 - [x] OSM-/ODbL-Attribution im MapLibre-Client sichtbar verankern
 - [x] MapLibre Layer-Reihenfolge (Basemap vs. Overlays) final absichern (siehe `apps/web/src/lib/map/overlay/edges.ts`)
 
