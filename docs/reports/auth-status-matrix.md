@@ -67,14 +67,14 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
-| Session               | required    | In-Memory MVP implementiert, API-Endpoints aktiv und getestet, Persistenz bewusst offen | Teil   | mittel  |
-| Session Refresh       | required    | MVP implementiert und API-Tests belegt, Token-Split offen | Teil   | mittel  |
+| Session               | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
+| Session Refresh       | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | hoch    |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad und UI offen | Teil   | mittel  |
 | Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
-| Sicherheitsinvarianten| required    | Code-Evidenz für Anti-Enumeration, CSRF, Rate Limit, Trusted Proxy, Token-Hashing vorhanden; reproduzierbare Runtime-Nachweise ausstehend | Teil   | mittel  |
+| Sicherheitsinvarianten| required    | teilweise dokumentiert | Teil   | hoch    |
 
 ---
 
@@ -93,12 +93,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** Die MVP-Linie nutzt einen In-Memory Session-Store als bewusste Architekturentscheidung. `GET /auth/session` wurde als API-Endpoint implementiert (inkl. `expires_at` und `device_id`). Cookie-Transport aktiv: httpOnly und SameSite=Lax sind unconditional gesetzt; Secure ist abhängig vom Deploy-Kontext (Env `AUTH_COOKIE_SECURE`, Default: true). Persistenz bewusst offen.
+**Ist:** Die MVP-Linie nutzt einen In-Memory Session-Store. `GET /auth/session` wurde als API-Endpoint implementiert (inkl. `expires_at` und `device_id`). Deckt dynamische `device_id` ab, aber Persistenzanforderungen (nicht In-Memory) noch nicht.
 **Dokumentationsbelege:** `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
 **Fehlende Belege:** Echte Persistenz (nicht In-Memory), vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests).
 **Status:** Teil
-**Risiko:** mittel
+**Risiko:** hoch
 
 ### 2.3 Session Refresh
 
@@ -108,7 +108,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** Echte E2E Persistenz, Vollständiger Token-Split (Access/Refresh)
 **Status:** Teil
-**Risiko:** mittel
+**Risiko:** hoch
 
 ### 2.4 Logout
 
@@ -163,12 +163,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.9 Sicherheitsinvarianten
 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
-**Ist:** Anti-Enumeration: `request_login` liefert für bekannte, unbekannte und deaktivierte Accounts identische 200-Responses mit generischer Meldung (`GENERIC_LOGIN_MSG`). CSRF: Origin-/Referer-Middleware implementiert (`middleware/csrf.rs`) mit Unit-Tests für Parsing und Matching sowie Integrations-Test (`test_session_refresh_csrf_rejected`); vollständige Endpunkt-Abdeckung nicht separat nachgewiesen. Rate Limit: Duale IP- und E-Mail-basierte Rate-Limitierung (`AuthRateLimiter`, `governor`-Crate, per-Minute und per-Stunde). Trusted Proxy: `effective_client_ip()` in `auth.rs` wertet RFC-7239-`Forwarded`-Header und `X-Forwarded-For` aus; Allowlist über `AUTH_TRUSTED_PROXIES` (IP und CIDR). Token Leak Prevention: SHA-256-Hashing für Login-Tokens (`tokens.rs`) und Step-up-Tokens (`step_up_tokens.rs`); Constant-Time-Vergleich (`constant_time_eq`) für Nonce-/Hash-Validierung im Consume-Pfad; Step-up-Tokens zusätzlich mit Binding-Validierung (challenge_id, account_id, device_id).
+**Ist:** teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs` (Anti-Enumeration, Trusted Proxy, Constant-Time-Vergleich), `apps/api/src/middleware/csrf.rs` (CSRF-Middleware + Unit-Tests), `apps/api/src/auth/rate_limit.rs` (Rate Limiter), `apps/api/src/auth/tokens.rs` (SHA-256-Hashing), `apps/api/src/auth/step_up_tokens.rs` (SHA-256 + Binding-Validierung), `apps/api/tests/api_auth.rs` (CSRF-Integrationstest)
-**Fehlende Belege:** Reproduzierbare Runtime-Nachweise (automatisierte Smoke-Tests oder Guards) für alle Invarianten; CSRF-Integrationstest deckt nur Session-Refresh ab.
+**Code-, Test- und Verifikationsbelege:** keine
+**Fehlende Belege:** Anti-Enumeration-Nachweis fehlt, CSRF-/Origin-Nachweis fehlt, Token-Leak-Prevention nicht separat verifiziert, Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt.
 **Status:** Teil
-**Risiko:** mittel
+**Risiko:** hoch
 
 ---
 

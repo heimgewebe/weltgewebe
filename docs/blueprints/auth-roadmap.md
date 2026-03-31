@@ -194,7 +194,7 @@ Jeder relevante Bereich ist entweder:
 - [x] Current-Device-Markierung einführen — `current` Flag in Device-Liste
 - [x] `DELETE /auth/devices/:id` — Self-Delete aktiv, Fremdgeräte-Guard erzeugt Challenge
 - [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad in Phase 3 implementiert
-- [x] Session-Persistenzentscheidung explizit festziehen — In-Memory als bewusste MVP-Entscheidung; Migrationspfad auf persistenten Store architektonisch vorgesehen, konkrete Persistenzanbindung bleibt nachzuliefern
+- [ ] Session-Persistenzentscheidung explizit festziehen — derzeit In-Memory
 
 ### Risiken
 

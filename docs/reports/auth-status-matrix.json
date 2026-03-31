@@ -34,7 +34,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "Die MVP-Linie nutzt einen In-Memory Session-Store als bewusste Architekturentscheidung. GET /auth/session wurde als API-Endpoint implementiert (inkl. expires_at und device_id). Cookie-Transport aktiv: httpOnly und SameSite=Lax unconditional gesetzt; Secure abhängig vom Deploy-Kontext (Env AUTH_COOKIE_SECURE, Default: true). Persistenz bewusst offen.",
+      "ist": "Die MVP-Linie nutzt einen In-Memory Session-Store. GET /auth/session wurde als API-Endpoint implementiert (inkl. expires_at und device_id). Deckt dynamische device_id ab, aber Persistenzanforderungen (nicht In-Memory) noch nicht.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/specs/auth-blueprint.md",
@@ -44,7 +44,7 @@
         "Echte Persistenz (nicht In-Memory)",
         "vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests)"
       ],
-      "risk": "mittel",
+      "risk": "hoch",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/routes/mod.rs",
@@ -63,7 +63,7 @@
         "Echte E2E Persistenz",
         "Vollständiger Token-Split (Access/Refresh)"
       ],
-      "risk": "mittel",
+      "risk": "hoch",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/tests/api_auth.rs",
@@ -150,25 +150,20 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Anti-Enumeration: request_login liefert für bekannte, unbekannte und deaktivierte Accounts identische 200-Responses (GENERIC_LOGIN_MSG). CSRF: Origin-/Referer-Middleware (middleware/csrf.rs) mit Unit-Tests und Integrations-Test (test_session_refresh_csrf_rejected); vollständige Endpunkt-Abdeckung nicht separat nachgewiesen. Rate Limit: Duale IP-/E-Mail-basierte Rate-Limitierung (AuthRateLimiter, governor). Trusted Proxy: effective_client_ip() wertet RFC-7239-Forwarded und X-Forwarded-For aus; Allowlist über AUTH_TRUSTED_PROXIES (IP/CIDR). Token Leak Prevention: SHA-256-Hashing (tokens.rs, step_up_tokens.rs); Constant-Time-Vergleich (constant_time_eq) im Consume-Pfad; Step-up-Tokens mit Binding-Validierung.",
+      "ist": "teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
         "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"
       ],
       "missing_evidence": [
-        "Reproduzierbare Runtime-Nachweise (automatisierte Smoke-Tests oder Guards) für alle Invarianten",
-        "CSRF-Integrationstest deckt nur Session-Refresh ab"
+        "Anti-Enumeration-Nachweis fehlt",
+        "CSRF-/Origin-Nachweis fehlt",
+        "Token-Leak-Prevention nicht separat verifiziert",
+        "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"
       ],
-      "risk": "mittel",
-      "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs",
-        "apps/api/src/middleware/csrf.rs",
-        "apps/api/src/auth/rate_limit.rs",
-        "apps/api/src/auth/tokens.rs",
-        "apps/api/src/auth/step_up_tokens.rs",
-        "apps/api/tests/api_auth.rs"
-      ]
+      "risk": "hoch",
+      "code_runtime_evidence": []
     }
   },
   "open_architectural_decisions": {
