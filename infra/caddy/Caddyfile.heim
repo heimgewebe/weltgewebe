@@ -60,7 +60,7 @@ weltgewebe.home.arpa {
 
   header {
     # Security headers (Heim-first specific)
-    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://basemaps.cartocdn.com; img-src 'self' data: blob: https://basemaps.cartocdn.com; worker-src 'self' blob:; object-src 'none';"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
   }
