@@ -2,7 +2,7 @@ import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { RenderableMapPoint } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
-export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
+export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[], showActivity: boolean) {
   if (!map) return;
 
   const sourceId = LAYERS.ACTIVITY_SOURCE;
@@ -10,37 +10,47 @@ export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[]) {
 
   const source = map.getSource(sourceId) as GeoJSONSource | undefined;
 
-  const features: GeoJSON.Feature<GeoJSON.Point>[] = points.map((p) => ({
-    type: "Feature",
-    geometry: {
-      type: "Point",
-      coordinates: [p.lon, p.lat],
-    },
-    properties: {
-      id: p.id,
-      kind: p.kind || "node",
-      weight:
-        typeof p.weight === "number" && Number.isFinite(p.weight)
-          ? p.weight
-          : 1,
-    },
-  }));
+  const shouldShow = showActivity && points.length > 0;
+
+  const features: GeoJSON.Feature<GeoJSON.Point>[] = shouldShow
+    ? points.map((p) => ({
+        type: "Feature",
+        geometry: {
+          type: "Point",
+          coordinates: [p.lon, p.lat],
+        },
+        properties: {
+          id: p.id,
+          kind: p.kind || "node",
+          weight:
+            typeof p.weight === "number" && Number.isFinite(p.weight)
+              ? p.weight
+              : 1,
+        },
+      }))
+    : [];
 
   const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.Point> = {
     type: "FeatureCollection",
     features: features,
   };
 
+  let sourceTouched = false;
+
   if (source) {
     source.setData(geoJsonData);
-  } else {
+    sourceTouched = true;
+  } else if (shouldShow) {
     map.addSource(sourceId, {
       type: "geojson",
       data: geoJsonData,
     });
+    sourceTouched = true;
   }
 
-  ensureActivityLayer(map, sourceId, layerId);
+  if (sourceTouched) {
+    ensureActivityLayer(map, sourceId, layerId);
+  }
 }
 
 function ensureActivityLayer(

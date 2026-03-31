@@ -153,9 +153,9 @@
      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
   }
 
-  // Reactive update for activity heatmap - independent of edges and explicit view toggles
-  $: if (map && mapStyleReady && filteredMarkersData) {
-     updateActivity(map, filteredMarkersData);
+  // Reactive update for activity heatmap - controlled by showActivity toggle
+  $: if (map && mapStyleReady && filteredMarkersData && $view) {
+     updateActivity(map, filteredMarkersData, $view.showActivity);
   }
 
 

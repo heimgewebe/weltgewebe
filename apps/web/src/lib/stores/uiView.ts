@@ -4,6 +4,7 @@ import { setupUiInvariantWatcher } from "./uiInvariants";
 export type ViewToggles = {
   showNodes: boolean;
   showEdges: boolean;
+  showActivity: boolean;
   showGovernance: boolean;
   showSearch: boolean;
 };
@@ -11,6 +12,7 @@ export type ViewToggles = {
 export const view = writable<ViewToggles>({
   showNodes: true,
   showEdges: true,
+  showActivity: true,
   showGovernance: true,
   showSearch: true,
 });
