@@ -1429,7 +1429,9 @@ pub async fn consume_step_up(
                 target_device_id = %target_device_id,
                 "Step-up consume: executing RemoveDevice intent"
             );
-            state.sessions.delete_by_device(&account_id, &target_device_id);
+            state
+                .sessions
+                .delete_by_device(&account_id, &target_device_id);
             StatusCode::NO_CONTENT.into_response()
         }
     }

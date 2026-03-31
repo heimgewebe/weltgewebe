@@ -107,7 +107,9 @@ impl StepUpTokenStore {
                 {
                     ConsumeMatchResult::BindingMismatch
                 } else {
-                    store.remove(&hash).expect("entry was present under write lock");
+                    store
+                        .remove(&hash)
+                        .expect("entry was present under write lock");
                     ConsumeMatchResult::Consumed
                 }
             }
