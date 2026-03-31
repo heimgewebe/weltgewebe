@@ -17,3 +17,6 @@ Generated automatically. Do not edit.
 | impl.service.web | ⚠ undocumented | service | none |
 | impl.infra.compose | ⚠ undocumented | config | none |
 | impl.contracts | ⚠ undocumented | schema | none |
+| impl.pipeline.basemap | docs/blueprints/map-blaupause.md, docs/blueprints/map-roadmap.md | workflow | scripts/guard/caddy-basemap-route-guard.sh |
+| impl.assets.map-style | docs/blueprints/map-blaupause.md, map-style/ASSETS.md | config | none |
+| impl.infra.caddy | docs/blueprints/map-blaupause.md | config | scripts/guard/caddy-basemap-route-guard.sh |

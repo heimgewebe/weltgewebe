@@ -36,3 +36,31 @@ implementations:
     status: active
     documented_by: []
     verified_by: []
+
+  - id: impl.pipeline.basemap
+    path: scripts/basemap/
+    impl_type: workflow
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+      - docs/blueprints/map-roadmap.md
+    verified_by:
+      - scripts/guard/caddy-basemap-route-guard.sh
+
+  - id: impl.assets.map-style
+    path: map-style/
+    impl_type: config
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+      - map-style/ASSETS.md
+    verified_by: []
+
+  - id: impl.infra.caddy
+    path: infra/caddy/
+    impl_type: config
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+    verified_by:
+      - scripts/guard/caddy-basemap-route-guard.sh
