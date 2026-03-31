@@ -74,15 +74,10 @@ impl TokenStore {
         // Cleanup expired tokens
         store.retain(|_, v| v.expires_at > now);
 
-        // Strict single-use: remove immediately upon lookup
-        if let Some(data) = store.remove(&hash) {
-            // Double check expiry just in case retain didn't catch it (though it should have)
-            if data.expires_at <= now {
-                return None;
-            }
-            return Some(data.email);
-        }
-        None
+        // Strict single-use: remove immediately upon lookup.
+        // Expired tokens were already purged by retain() above, so any
+        // token still present is guaranteed to be valid.
+        store.remove(&hash).map(|data| data.email)
     }
 }
 
