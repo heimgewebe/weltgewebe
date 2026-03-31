@@ -89,7 +89,7 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
 **Ziel:** Erweiterung der souveränen Kartengrundlage um spezifische Sichten und Leistungsmerkmale.
 
 - [~] Regionale Tilesets ergänzen (Large Scale vs. Local Scale)
-  - _Umgesetzt (zwei Scales): Local Scale durch `build-hamburg-pmtiles.sh`, Large Scale durch `build-germany-pmtiles.sh`. Beide Skripte deterministisch (gepinnter Planetiler-Digest, SHA256-verifizierter OSM-Snapshot). Europe/Planet-Abdeckung ist optional und in der Blaupause als nächste Eskalationsstufe beschrieben – der Schritt ist nicht für den MVP-Betrieb erforderlich._
+  - _MVP-seitig erfüllt: Local Scale durch `build-hamburg-pmtiles.sh`, Large Scale durch `build-germany-pmtiles.sh`. Beide Skripte deterministisch (gepinnter Planetiler-Digest, SHA256-verifizierter OSM-Snapshot). Europe/Planet bleibt als optionale Eskalationsstufe offen._
 - [ ] Offline-Modus-Konzepte prüfen
 - [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
   - _Teilweise umgesetzt: Ein technisches Heatmap-Fundament (`activity.ts`) wurde eingezogen. Es unterstützt nun serverseitige oder clientseitige Gewichtung (weight) als technische Grundlage für eine spätere Activity-Semantik. Die vollständige Event-Stream-Integration im Backend fehlt weiterhin._
