@@ -96,23 +96,20 @@ echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
 # Using a pinned docker image to ensure a deterministic toolchain without requiring local java/planetiler installation
 # Using --user to prevent creating root-owned files in the host build directory
 # Enforcing linux/amd64 platform to match the specific toolchain digest
-if ! docker run --rm   --platform linux/amd64   --user "$(id -u):$(id -g)"   -v "$BASEMAP_DIR":/data   "$PLANETILER_IMAGE"   --osm-path="/data/$OSM_FILE"   --output="/data/$OUTPUT_PMTILES"; then
+if ! docker run --rm \
+  --platform linux/amd64 \
+  --user "$(id -u):$(id -g)" \
+  -v "$BASEMAP_DIR":/data \
+  "$PLANETILER_IMAGE" \
+  --osm-path="/data/$OSM_FILE" \
+  --output="/data/$OUTPUT_PMTILES"; then
   echo "Error: Docker execution failed." >&2
   exit 1
 fi
 
 # 7. Generate Metadata Manifest
 echo "=> Generating metadata manifest..."
-
 echo "=> Calculating size and SHA256 of $OUTPUT_PMTILES..."
-if command -v sha256sum >/dev/null 2>&1; then
-  SHA256_CMD=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
-  SHA256_CMD=(shasum -a 256)
-else
-  echo "Error: 'sha256sum' or 'shasum' is required for artifact verification but not installed." >&2
-  exit 1
-fi
 
 if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
   echo "Error: Artifact $OUTPUT_PMTILES not found. Cannot generate ready status." >&2
