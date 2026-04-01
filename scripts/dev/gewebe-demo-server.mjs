@@ -193,13 +193,15 @@ async function ensureDemoData() {
 async function readJsonl(path) {
   const raw = await readFile(path, "utf8").catch(() => "");
   const results = [];
+  let lineNo = 0;
   for (const line of raw.split(/\r?\n/)) {
+    lineNo++;
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
       results.push(JSON.parse(trimmed));
     } catch (e) {
-      console.warn(`[readJsonl] skipping malformed line in ${path}: ${e.message}`);
+      console.warn(`[readJsonl] skipping malformed line ${lineNo} in ${path}: ${e.message}`);
     }
   }
   return results;
