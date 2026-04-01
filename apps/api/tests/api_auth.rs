@@ -1122,6 +1122,88 @@ async fn request_login_provisioning_email_normalization_works() -> Result<()> {
 }
 
 #[tokio::test]
+#[serial]
+async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
+    // Regression test: eq_ignore_ascii_case in request_login's account lookup ensures that a
+    // pre-existing account whose stored email has Mixed-Case (e.g. legacy data) is found when a
+    // login request arrives with the normalised lowercase form.
+    // Without the fix the lookup would miss the stored account and provision_account would create a
+    // duplicate entry, because that path's own collision check was also case-sensitive before.
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+    state.config.auth_auto_provision = true;
+    // Allow the normalized email so the provisioning path would be entered if the lookup fails.
+    state.config.auth_allow_emails = Some(vec!["user@mixedcase.example".to_string()]);
+
+    // Insert a legacy account with a Mixed-Case stored email.
+    let mixed_id = "legacy-mixed-case".to_string();
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(
+            mixed_id.clone(),
+            AccountInternal {
+                public: AccountPublic {
+                    id: mixed_id.clone(),
+                    kind: "garnrolle".to_string(),
+                    title: "Mixed Case Legacy".to_string(),
+                    summary: None,
+                    public_pos: None,
+                    mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+                    radius_m: 0,
+                    disabled: false,
+                    tags: vec![],
+                },
+                role: Role::Gast,
+                email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
+            },
+        );
+    }
+
+    let account_count_before = state.accounts.read().await.len();
+
+    let app = app(state.clone());
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"user@mixedcase.example"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let accounts = state.accounts.read().await;
+
+    // No duplicate must have been created: the case-insensitive lookup finds the existing
+    // account, so provision_account is never called.
+    assert_eq!(
+        accounts.len(),
+        account_count_before,
+        "No new account should be created when the stored Mixed-Case email matches case-insensitively"
+    );
+
+    // The original account must be the sole case-insensitive match for the request email.
+    let matches: Vec<_> = accounts
+        .values()
+        .filter(|acc| {
+            acc.email
+                .as_deref()
+                .map(|e| e.eq_ignore_ascii_case("user@mixedcase.example"))
+                .unwrap_or(false)
+        })
+        .collect();
+    assert_eq!(
+        matches.len(),
+        1,
+        "Exactly one account should match the email case-insensitively"
+    );
+    assert_eq!(
+        matches[0].public.id, mixed_id,
+        "The matched account must be the original Mixed-Case account, not a new one"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn session_endpoint_unauthenticated() -> Result<()> {
     let state = test_state_with_accounts()?;
     let app = Router::new()
@@ -1287,6 +1369,10 @@ async fn test_session_refresh_success() -> Result<()> {
     let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
     assert_eq!(body["authenticated"], true);
     assert!(body["expires_at"].is_string());
+    assert!(
+        body["device_id"].is_string(),
+        "session refresh response must include device_id"
+    );
 
     // 3. New cookie should be valid
     let req_new = Request::get("/auth/session")

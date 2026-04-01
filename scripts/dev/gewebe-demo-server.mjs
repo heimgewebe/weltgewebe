@@ -153,6 +153,9 @@ const DEMO_ACCOUNTS_JSONL = [
     summary: "Persönlicher Account (Garnrolle), am Wohnsitz verortet. Ursprung von Fäden ins Gewebe.",
     location: { lat: 53.5604148, lon: 10.0629844 },
     public_pos: { lat: 53.5604148, lon: 10.0629844 },
+    mode: "verortet",
+    radius_m: 0,
+    created_at: "2025-01-01T12:00:00Z",
     visibility: "public",
     tags: ["account", "garnrolle", "wohnort"]
   }
@@ -189,11 +192,19 @@ async function ensureDemoData() {
 
 async function readJsonl(path) {
   const raw = await readFile(path, "utf8").catch(() => "");
-  return raw
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((l) => JSON.parse(l));
+  const results = [];
+  let lineNo = 0;
+  for (const line of raw.split(/\r?\n/)) {
+    lineNo++;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      results.push(JSON.parse(trimmed));
+    } catch (e) {
+      console.warn(`[readJsonl] skipping malformed line ${lineNo} in ${path}: ${e.message}`);
+    }
+  }
+  return results;
 }
 
 function parseBBox(q) {
