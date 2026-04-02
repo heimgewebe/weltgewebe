@@ -194,13 +194,30 @@ Jeder relevante Bereich ist entweder:
 - [x] Current-Device-Markierung einführen — `current` Flag in Device-Liste
 - [x] `DELETE /auth/devices/:id` — Self-Delete aktiv, Fremdgeräte-Guard erzeugt Challenge
 - [x] `POST /auth/logout-all` — Challenge-Erzeugung aktiv, Consume-Pfad in Phase 3 implementiert
-- [ ] Session-Persistenzentscheidung explizit festziehen — derzeit In-Memory
+- [x] Session-Persistenzentscheidung explizit festgezogen — In-Memory als bewusste Wahl für Single-Instance-Betrieb; Migrationspfad auf persistenten Store architektonisch vorgesehen; konkrete Persistenzanbindung bleibt nachzuliefern; siehe Begründung unten
 
 ### Risiken
 
 - inkonsistente Session-Realität
 - fehlende Gerätehoheit
 - spätere Sicherheits- und UX-Drift
+
+### Persistenzentscheidung (Session)
+
+**Entscheidung:** In-Memory `SessionStore` ist die bewusste Wahl für den aktuellen Single-Instance-Betrieb.
+
+**Begründung:**
+
+- Die Session-TTL (24 h) und das serverseitige State-Modell funktionieren im Single-Instance-Modus korrekt.
+- `ApiState` enthält bereits ein optionales `db_pool: Option<PgPool>` als generelle DB-Infrastruktur; eine Session-spezifische Anbindung existiert noch nicht.
+- Die `SessionStore`-Schnittstelle (`create`, `get`, `delete`, `list_by_account`, `delete_by_device`, `delete_all_by_account`) ist abstrakt genug, um ohne Route-Änderungen auf einen persistenten Adapter umgestellt zu werden.
+- Challenge- und Token-Stores unterliegen derselben Einschätzung: kurzlebig (5 min TTL), sicherheitsunkritisch bei Verlust durch Restart.
+
+**Trigger für Migration auf persistenten Store:**
+
+- Multi-Instance-Deployment erforderlich
+- Zero-Downtime-Restarts müssen Sessions bewahren
+- Persistente Session-Audits benötigt
 
 ### Stop-Kriterium für Phase 2
 
