@@ -54,10 +54,15 @@ test.describe("Edge visibility on load", () => {
       let haloOpacity = null;
       let isUnderMain = false;
 
+      let haloDasharray = null;
+      let mainDasharray = null;
+
       if (haloLayer && layer) {
         haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
         haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
         haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
+        haloDasharray = m.getPaintProperty("edges-halo-layer", "line-dasharray");
+        mainDasharray = m.getPaintProperty("edges-layer", "line-dasharray");
 
         // Check z-index / layer order: halo should be before main layer in the style layers array
         const styleLayers = m.getStyle().layers;
@@ -88,6 +93,8 @@ test.describe("Edge visibility on load", () => {
         haloColor,
         haloWidth,
         haloOpacity,
+        haloDasharray,
+        mainDasharray,
         isUnderMain,
         featureCount,
       };
@@ -99,6 +106,8 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloColor).toBe("#ffffff");
     expect(edgeState.haloWidth).toBe(4);
     expect(edgeState.haloOpacity).toBe(0.8);
+    expect(edgeState.haloDasharray).toEqual([2, 1]);
+    expect(edgeState.mainDasharray).toEqual([2, 1]);
 
     expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
