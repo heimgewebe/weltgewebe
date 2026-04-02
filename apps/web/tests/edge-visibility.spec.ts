@@ -61,7 +61,10 @@ test.describe("Edge visibility on load", () => {
         haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
         haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
         haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
-        haloDasharray = m.getPaintProperty("edges-halo-layer", "line-dasharray");
+        haloDasharray = m.getPaintProperty(
+          "edges-halo-layer",
+          "line-dasharray",
+        );
         mainDasharray = m.getPaintProperty("edges-layer", "line-dasharray");
 
         // Check z-index / layer order: halo should be before main layer in the style layers array
