@@ -2,7 +2,11 @@ import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
 import type { RenderableMapPoint } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
-export function updateActivity(map: MapLibreMap, points: RenderableMapPoint[], showActivity: boolean) {
+export function updateActivity(
+  map: MapLibreMap,
+  points: RenderableMapPoint[],
+  showActivity: boolean,
+) {
   if (!map) return;
 
   const sourceId = LAYERS.ACTIVITY_SOURCE;

@@ -2,14 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { updateActivity } from "./activity";
 import type { RenderableMapPoint } from "$lib/map/types";
 
-function makePoint(overrides: Partial<RenderableMapPoint> = {}): RenderableMapPoint {
+function makePoint(
+  overrides: Partial<RenderableMapPoint> = {},
+): RenderableMapPoint {
   return { id: "p1", title: "P1", lat: 1, lon: 2, ...overrides };
 }
 
 function makeMap(sourceData?: object) {
-  const source = sourceData
-    ? { setData: vi.fn() }
-    : undefined;
+  const source = sourceData ? { setData: vi.fn() } : undefined;
 
   return {
     getSource: vi.fn().mockReturnValue(source),
