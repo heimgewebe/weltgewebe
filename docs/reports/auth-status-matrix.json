@@ -151,7 +151,7 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert; punktuell durch API-Test belegt), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing + Constant-Time-Vergleich). Systematische Sicherheits-Smoke-Tests fehlen.",
+      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert; punktuell durch API-Test belegt), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Systematische Sicherheits-Smoke-Tests fehlen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
