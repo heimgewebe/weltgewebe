@@ -981,6 +981,7 @@ pub async fn update_email(
     };
 
     let new_email = payload.new_email.trim().to_ascii_lowercase();
+    // Minimal validation because true ownership is proven by the verification link sent via email.
     if !new_email.contains('@') {
         let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
