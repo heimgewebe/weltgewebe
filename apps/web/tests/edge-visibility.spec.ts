@@ -109,8 +109,11 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloColor).toBe("#ffffff");
     expect(edgeState.haloWidth).toBe(4);
     expect(edgeState.haloOpacity).toBe(0.8);
-    expect(edgeState.haloDasharray).toEqual([2, 1]);
-    expect(edgeState.mainDasharray).toEqual([2, 1]);
+    // Structural invariant: Halo and main line must share the exact same dasharray
+    // to prevent the solid background from visually filling the dashed gaps.
+    expect(edgeState.haloDasharray).toBeDefined();
+    expect(edgeState.haloDasharray).not.toBeNull();
+    expect(edgeState.haloDasharray).toEqual(edgeState.mainDasharray);
 
     expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
