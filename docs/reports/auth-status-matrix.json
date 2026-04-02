@@ -150,24 +150,20 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Alle fünf Invarianten sind im Code belegt. Anti-Enumeration: identische 200-Antworten in request_login. Rate Limiting: Dual-IP+Email-Ratelimiter via AuthRateLimiter. Trusted Proxy: RFC-7239-Parsing in effective_client_ip. CSRF: Origin/Referer-Middleware plus Integrationstest. Token Leak Prevention: SHA-256-Hashing für Magic-Link- und Step-up-Tokens (tokens.rs, step_up_tokens.rs); Constant-Time-Vergleich punktuell im Auth-Flow (routes/auth.rs). Laufzeit-E2E-Nachweise für alle Aspekte fehlen noch.",
+      "ist": "teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
         "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"
       ],
       "missing_evidence": [
-        "Laufzeit-E2E-Nachweise fehlen für alle fünf Invarianten"
+        "Anti-Enumeration-Nachweis fehlt",
+        "CSRF-/Origin-Nachweis fehlt",
+        "Token-Leak-Prevention nicht separat verifiziert",
+        "Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt"
       ],
       "risk": "hoch",
-      "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs",
-        "apps/api/src/auth/rate_limit.rs",
-        "apps/api/src/middleware/csrf.rs",
-        "apps/api/src/auth/tokens.rs",
-        "apps/api/src/auth/step_up_tokens.rs",
-        "apps/api/tests/api_auth.rs"
-      ]
+      "code_runtime_evidence": []
     }
   },
   "open_architectural_decisions": {
