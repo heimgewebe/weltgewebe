@@ -2968,6 +2968,96 @@ async fn test_update_email_requires_step_up() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn test_update_email_invalid_format() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(r#"{"new_email": "invalidemail"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_conflict_with_existing_account() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    // We must add u2 to state.accounts so there is a conflict
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(
+            "u2".to_string(),
+            weltgewebe_api::routes::accounts::AccountInternal {
+                public: weltgewebe_api::routes::accounts::AccountPublic {
+                    id: "u2".to_string(),
+                    kind: "garnrolle".to_string(),
+                    title: "User Two".to_string(),
+                    summary: None,
+                    public_pos: None,
+                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                    radius_m: 0,
+                    disabled: false,
+                    tags: vec![],
+                },
+                role: weltgewebe_api::auth::role::Role::Gast,
+                email: Some("u2@example.com".to_string()),
+            },
+        );
+    }
+
+    // Try to update to an email that is already used by u2
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(r#"{"new_email": "u2@example.com"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn test_update_email_success_via_step_up_consume() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;

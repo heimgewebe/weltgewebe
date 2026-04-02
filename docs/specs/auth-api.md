@@ -206,7 +206,7 @@ Response:
 Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 
 - `PUT /me/visibility` (Verortung hinzufügen/ändern)
-- `/me/email` (E-Mail ändern; konkrete HTTP-Methode noch offen, nötig für finalen API-Contract)
+- `PUT /auth/me/email` (E-Mail ändern; erfordert Step-up Auth, Token geht an die *neue* Adresse zur Verifikation)
 - `POST /auth/passkeys/register/*` und `DELETE /auth/passkeys/:id` (Passkey hinzufügen/entfernen)
 - `DELETE /auth/devices/:id` (sofern es sich **nicht** um das aktuell anfragende Gerät handelt)
 - `POST /auth/logout-all` (alle Sessions widerrufen)
