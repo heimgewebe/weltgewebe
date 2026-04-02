@@ -2928,7 +2928,9 @@ async fn test_update_email_requires_step_up() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), Some("dev1".to_string()));
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -2946,9 +2948,7 @@ async fn test_update_email_requires_step_up() -> Result<()> {
         .header("Origin", "http://localhost")
         .header("Content-Type", "application/json")
         .header("X-Forwarded-For", "127.0.0.1")
-        .body(body::Body::from(
-            r#"{"new_email": "new@example.com"}"#,
-        ))?;
+        .body(body::Body::from(r#"{"new_email": "new@example.com"}"#))?;
 
     let res = app.oneshot(req).await?;
 
@@ -2972,7 +2972,9 @@ async fn test_update_email_success_via_step_up_consume() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), Some("dev1".to_string()));
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     use weltgewebe_api::auth::challenges::ChallengeIntent;
@@ -2980,10 +2982,16 @@ async fn test_update_email_success_via_step_up_consume() -> Result<()> {
     let challenge = state.challenges.create(
         session.account_id.clone(),
         session.device_id.clone(),
-        ChallengeIntent::UpdateEmail { new_email: "new@example.com".to_string() }
+        ChallengeIntent::UpdateEmail {
+            new_email: "new@example.com".to_string(),
+        },
     );
 
-    let token = state.step_up_tokens.create(challenge.id.clone(), session.account_id.clone(), session.device_id.clone());
+    let token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        session.account_id.clone(),
+        session.device_id.clone(),
+    );
 
     let app = Router::new()
         .merge(weltgewebe_api::routes::api_router())
@@ -3004,7 +3012,8 @@ async fn test_update_email_success_via_step_up_consume() -> Result<()> {
             serde_json::json!({
                 "token": token,
                 "challenge_id": challenge.id
-            }).to_string(),
+            })
+            .to_string(),
         ))?;
 
     let res = app.oneshot(req).await?;

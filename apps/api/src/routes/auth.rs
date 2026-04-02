@@ -961,11 +961,23 @@ pub async fn update_email(
     }
     let account_id = match ctx.account_id {
         Some(id) => id,
-        None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "UNAUTHORIZED"}))).into_response(),
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "UNAUTHORIZED"})),
+            )
+                .into_response()
+        }
     };
     let device_id = match ctx.device_id {
         Some(id) => id,
-        None => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "SESSION_INVALID"}))).into_response(),
+        None => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": "SESSION_INVALID"})),
+            )
+                .into_response()
+        }
     };
     let challenge = state.challenges.create(
         account_id,
