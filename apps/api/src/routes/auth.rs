@@ -945,6 +945,42 @@ pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     })
 }
 
+#[derive(Deserialize)]
+pub struct UpdateEmailPayload {
+    pub new_email: String,
+}
+
+pub async fn update_email(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<UpdateEmailPayload>,
+) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+    }
+    let account_id = match ctx.account_id {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({"error": "UNAUTHORIZED"}))).into_response(),
+    };
+    let device_id = match ctx.device_id {
+        Some(id) => id,
+        None => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": "SESSION_INVALID"}))).into_response(),
+    };
+    let challenge = state.challenges.create(
+        account_id,
+        device_id,
+        ChallengeIntent::UpdateEmail {
+            new_email: payload.new_email,
+        },
+    );
+    let err_payload = serde_json::json!({
+        "error": "STEP_UP_REQUIRED",
+        "challenge_id": challenge.id
+    });
+    (StatusCode::FORBIDDEN, Json(err_payload)).into_response()
+}
+
 #[derive(Serialize)]
 pub struct SessionStatus {
     pub authenticated: bool,
@@ -1437,6 +1473,19 @@ pub async fn consume_step_up(
             state
                 .sessions
                 .delete_by_device(&account_id, &target_device_id);
+            StatusCode::NO_CONTENT.into_response()
+        }
+        ChallengeIntent::UpdateEmail { new_email } => {
+            tracing::info!(
+                event = "auth.step_up.consume.update_email",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: executing UpdateEmail intent"
+            );
+            let mut accounts = state.accounts.write().await;
+            if let Some(account) = accounts.get_mut(&account_id) {
+                account.email = Some(new_email.to_lowercase());
+            }
             StatusCode::NO_CONTENT.into_response()
         }
     }
