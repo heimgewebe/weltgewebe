@@ -163,10 +163,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.9 Sicherheitsinvarianten
 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
-**Ist:** teilweise im Runbook dokumentiert; Laufzeitnachweise fehlen für alle Aspekte.
+**Ist:** Alle fünf Invarianten sind im Code belegt. Anti-Enumeration: identische 200-Antworten in `request_login`. Rate Limiting: Dual-IP+Email-Ratelimiter via `AuthRateLimiter`. Trusted Proxy: RFC-7239-Parsing in `effective_client_ip`. CSRF: Origin/Referer-Middleware plus Integrationstest. Token Leak Prevention: SHA-256-Hashing für Magic-Link- und Step-up-Tokens (`tokens.rs`, `step_up_tokens.rs`); Constant-Time-Vergleich punktuell im Auth-Flow (`routes/auth.rs`). Laufzeit-E2E-Nachweise für alle Aspekte fehlen noch.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Anti-Enumeration-Nachweis fehlt, CSRF-/Origin-Nachweis fehlt, Token-Leak-Prevention nicht separat verifiziert, Trusted-Proxy-/Rate-Limit-Runtime-Nachweis fehlt.
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/auth/rate_limit.rs`, `apps/api/src/middleware/csrf.rs`, `apps/api/src/auth/tokens.rs`, `apps/api/src/auth/step_up_tokens.rs`, `apps/api/tests/api_auth.rs`
+**Fehlende Belege:** Laufzeit-E2E-Nachweise fehlen für alle fünf Invarianten.
 **Status:** Teil
 **Risiko:** hoch
 
