@@ -355,7 +355,12 @@ async fn provision_account(
         // Double-checked locking to avoid race condition
         let collision_id = accounts_map
             .values()
-            .find(|acc| acc.email.as_ref().map(|e| e == email_norm).unwrap_or(false))
+            .find(|acc| {
+                acc.email
+                    .as_ref()
+                    .map(|e| e.eq_ignore_ascii_case(email_norm))
+                    .unwrap_or(false)
+            })
             .map(|acc| acc.public.id.clone());
 
         if let Some(id) = collision_id {
@@ -554,7 +559,7 @@ pub async fn request_login(
             .find(|acc| {
                 acc.email
                     .as_ref()
-                    .map(|e| e == &email_norm)
+                    .map(|e| e.eq_ignore_ascii_case(&email_norm))
                     .unwrap_or(false)
             })
             .map(|acc| (acc.public.id.clone(), acc.public.disabled))
@@ -996,7 +1001,7 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
             let status = SessionStatus {
                 authenticated: true,
                 expires_at: Some(new_session.expires_at),
-                device_id: None,
+                device_id: Some(new_session.device_id.clone()),
             };
 
             tracing::info!(

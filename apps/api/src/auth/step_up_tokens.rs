@@ -123,13 +123,9 @@ impl StepUpTokenStore {
 
         store.retain(|_, v| v.expires_at > now);
 
-        if let Some(data) = store.remove(&hash) {
-            if data.expires_at <= now {
-                return None;
-            }
-            return Some(data);
-        }
-        None
+        // Expired tokens were already purged by retain() above, so any
+        // token still present is guaranteed to be valid.
+        store.remove(&hash)
     }
 }
 
