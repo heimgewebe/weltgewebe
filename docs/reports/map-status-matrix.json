@@ -8,7 +8,8 @@
     "apps/web/tests/activity-layer-structure.spec.ts",
     "apps/web/tests/basemap-client-integration.spec.ts",
     "docs/deployment.md",
-    "infra/caddy/Caddyfile.prod",
+    "infra/caddy/Caddyfile",
+    "infra/caddy/Caddyfile.heim",
     "scripts/guard/caddy-basemap-route-guard.sh"
   ],
   "areas": {
@@ -43,7 +44,7 @@
     },
     "runtime_integration": {
       "soll": "MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls",
-      "ist": "Frontend parst PMTiles-Protokoll und sendet Range-Header (geprüft im Mock). Caddy-Route ist per Caddyfile.prod und guard (caddy-basemap-route-guard.sh) konfiguriert. PUBLIC_BASEMAP_MODE Contract ist in docs/deployment.md verankert. Die echte HTTP-206-Verifikation gegen das physische Artefakt fehlt im CI.",
+      "ist": "Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in Caddyfile/Caddyfile.heim und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md",
@@ -56,7 +57,8 @@
       "code_runtime_evidence": [
         "apps/web/tests/basemap-client-integration.spec.ts",
         "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
-        "infra/caddy/Caddyfile.prod",
+        "infra/caddy/Caddyfile",
+        "infra/caddy/Caddyfile.heim",
         "scripts/guard/caddy-basemap-route-guard.sh"
       ]
     },

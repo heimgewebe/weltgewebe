@@ -28,7 +28,7 @@ Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist
 ## 3. Runtime-Integration
 
 - **Soll**: MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls.
-- **Ist**: Frontend parst PMTiles-Protokoll und sendet Range-Header (geprüft im Mock `basemap-client-integration.spec.ts`). Caddy-Route ist per Guard (`caddy-basemap-route-guard.sh`) validiert. `PUBLIC_BASEMAP_MODE` Contract ist verankert.
+- **Ist**: Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in `Caddyfile`/`Caddyfile.heim` und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.
 - **Status**: Teil
 - **Fehlend**: Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream im CI.
 
