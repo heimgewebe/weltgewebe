@@ -13,7 +13,7 @@ pub struct Mailer {
     user: Option<String>,
     from: String,
     #[allow(clippy::type_complexity)]
-    pub test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
+    test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
 }
 
 impl Mailer {
