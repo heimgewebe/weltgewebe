@@ -91,10 +91,10 @@ Ziel: Die Basemap wird als Artefakt erzeugt und verteilt, nicht als externer Kar
                    ▼
                 MapLibre
                    │
-        ┌──────────┼───────────┐
-        ▼          ▼           ▼
-      Edges      Nodes      Activity
-      Overlay    Overlay    Overlay
+        ┌──────────┴───────────┐
+        ▼                      ▼
+      Edges                  Nodes
+      Overlay                Overlay
 ```
 
 ### Prinzip
@@ -124,6 +124,7 @@ Vorteile:
 PMTiles
 
 Eigenschaften:
+
 
 - Single-File Tileset
 - Range Requests
@@ -265,7 +266,6 @@ Hier lebt:
 - Overlay
 - Nodes
 - Edges
-- Activity
 
 ---
 
@@ -358,9 +358,8 @@ MapLibre Layer Order:
 
 1. Basemap layers
 2. Graph edges
-3. Activity layers
-4. Nodes (DOM markers)
-5. Focus / highlight
+3. Nodes (DOM markers)
+4. Focus / highlight
 
 ---
 
@@ -378,7 +377,6 @@ Basemap enthält NICHT:
 
 - domain nodes
 - graph edges
-- activity layers
 - semantic overlays
 
 Strikte Trennung. Das verhindert später die Frage: "Packen wir das noch in die Basemap?"
@@ -387,7 +385,6 @@ Weltgewebe enthält:
 
 - nodes
 - edges
-- activity
 - focus
 - komposition
 
@@ -455,10 +452,6 @@ PMTiles reduziert typischerweise die Anzahl einzelner Tile-Anfragen, da Tiles au
 
 Später möglich:
 
-Activity Heatmap
-
-MapLibre heatmap layer
-
 Regionale Tiles
 
 `germany.pmtiles`
@@ -520,3 +513,19 @@ Das liefert:
 - Langfristiger Plattformanspruch für die Basemap
 - Infrastruktur-Integration (z. B. Heimserver)
 - MapLibre bleibt als Rendering-Engine erhalten
+
+## Invariante: Fäden als Dichtevisualisierung
+
+Die Aktivitätsdichte wird ausschließlich durch Fäden dargestellt.
+
+Eigenschaften:
+
+- Anzahl der Fäden → Dichte
+- Transparenz / Verblassen → Zeit
+- Überlagerung → Intensität
+
+Separate Heatmaps sind nicht zulässig, da sie:
+
+- eine zweite Semantik einführen
+- die direkte Lesbarkeit von Handlung verfälschen
+- das Systemprinzip unterlaufen

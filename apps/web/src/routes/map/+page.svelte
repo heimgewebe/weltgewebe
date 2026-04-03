@@ -27,7 +27,6 @@
   import { updateEdges } from '$lib/map/overlay/edges';
   import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
   import { setupFocusInteraction } from '$lib/map/overlay/focus';
-  import { updateActivity } from '$lib/map/overlay/activity';
 
   export let data: PageData;
 
@@ -153,10 +152,6 @@
      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
   }
 
-  // Reactive update for activity heatmap - independent of edges and explicit view toggles
-  $: if (map && mapStyleReady && filteredMarkersData) {
-     updateActivity(map, filteredMarkersData);
-  }
 
 
   function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
@@ -319,7 +314,7 @@
       map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
       map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
 
-      // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, activity, etc.) carry domain meaning.
+      // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
       nodesOverlay = new NodesOverlay(map);
       cleanupKomposition = setupKompositionInteraction(map);
       let sysStateStr = '';

@@ -5,7 +5,6 @@
     "docs/deployment.md",
     "infra/caddy/Caddyfile",
     "apps/web/src/lib/map/overlay/edges.ts",
-    "apps/web/src/lib/map/overlay/activity.ts",
     "infra/caddy/Caddyfile.heim"
   ],
   "areas": {
@@ -23,7 +22,7 @@
       ]
     },
     "style_souveraenitaet": {
-      "soll": "Eigenes style.json, Glyphs lokal, keine fremden Abhängigkeiten",
+      "soll": "Eigenes style.json, Glyphs lokal, keine fremden Abh\u00e4ngigkeiten",
       "ist": "style.json vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap ist strukturell durch Playwright-Tests validiert, die echte visuelle Abnahme kann aktuell nur manuell erfolgen.",
       "status": "Teil",
       "documentation_evidence": [
@@ -73,26 +72,25 @@
       ]
     },
     "ausbau": {
-      "soll": "Heatmap/Activity-Layer, Offline-Modus, Regionale Tilesets",
-      "ist": "Regionale Scripts für Hamburg und Deutschland vorhanden. Heatmap-Frontend-Layer (activity.ts) liest weight und heatmap-* Properties gemäß MapLibre-Doku. Die Event-Stream-Integration im Backend fehlt. Offline-Modus-Konzepte stehen noch offen.",
+      "soll": "Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit",
+      "ist": "Regionale Scripts f\u00fcr Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschlie\u00dflich \u00fcber F\u00e4den).",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md"
       ],
       "missing_evidence": [
-        "Event-Stream-Integration im Backend",
-        "Offline-Modus Konzept"
+        "Offline-Modus Konzept",
+        "Clustering ohne Semantikbruch"
       ],
       "risk": "gering",
       "code_runtime_evidence": [
-        "apps/web/src/lib/map/overlay/activity.ts",
-        "apps/web/tests/activity-layer-structure.spec.ts",
         "scripts/basemap/build-hamburg-pmtiles.sh",
-        "scripts/basemap/build-germany-pmtiles.sh"
+        "scripts/basemap/build-germany-pmtiles.sh",
+        "apps/web/tests/no-activity-heatmap.spec.ts"
       ]
     }
   },
   "open_architectural_decisions": {
-    "Visuelle_Abnahme": "Mit der aktuellen Testarchitektur nicht automatisiert nachgewiesen (erfordert manuelle QA oder zusätzliche VRT-Pipeline)."
+    "Visuelle_Abnahme": "Mit der aktuellen Testarchitektur nicht automatisiert nachgewiesen (erfordert manuelle QA oder zus\u00e4tzliche VRT-Pipeline)."
   }
 }
