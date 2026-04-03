@@ -12,6 +12,7 @@ pub struct Mailer {
     port: u16,
     user: Option<String>,
     from: String,
+    #[allow(clippy::type_complexity)]
     pub test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
 }
 
