@@ -316,18 +316,9 @@ Sie muss auch wissen:
 
 **Ziel:** offene API-Semantik schließen.
 
-### Offener Kernpunkt
+### Kernpunkt gelöst
 
-- `/me/email`
-
-### Zu klären
-
-- exakte Route
-- HTTP-Methode
-- Verifikationsbedarf
-- Step-up-Pflicht
-- Session-Verhalten nach Änderung
-- Audit-/Logging-Level
+- `/me/email` (abgeschlossen über `PUT /auth/me/email` mit Doppel-Nachweis: Step-up-Request an die neue E-Mail beweist deren Besitz, Consume beweist Besitz des bestehenden authentifizierten Geräte-Kontexts (`account_id` + `device_id`); inkl. Validierung und Eindeutigkeits-Prüfung)
 
 ### Stop-Kriterium für Phase 6
 

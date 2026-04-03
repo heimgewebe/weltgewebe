@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub enum ChallengeIntent {
     LogoutAll,
     RemoveDevice { target_device_id: String },
+    UpdateEmail { new_email: String },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

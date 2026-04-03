@@ -945,6 +945,98 @@ pub async fn me(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     })
 }
 
+#[derive(Deserialize)]
+pub struct UpdateEmailPayload {
+    pub new_email: String,
+}
+
+pub async fn update_email(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<UpdateEmailPayload>,
+) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+    }
+    let account_id = match ctx.account_id {
+        Some(id) => id,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({"error": "UNAUTHORIZED"})),
+            )
+                .into_response()
+        }
+    };
+    let device_id = match ctx.device_id {
+        Some(id) => id,
+        None => {
+            let err_payload = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "Authenticated context missing device_id"
+            });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
+        }
+    };
+
+    let new_email = payload.new_email.trim().to_ascii_lowercase();
+
+    // Pragmatic minimal validation: exactly one @, no spaces, non-empty local/domain parts.
+    if new_email.matches('@').count() != 1 || new_email.contains(|c: char| c.is_whitespace()) {
+        let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
+        return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    let parts: Vec<&str> = new_email.split('@').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() || !parts[1].contains('.') {
+        let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
+        return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    {
+        let accounts = state.accounts.read().await;
+
+        // No-Op: if it's already the current email, return success without triggering a step-up.
+        if let Some(acc) = accounts.get(&account_id) {
+            if acc
+                .email
+                .as_deref()
+                .map(|e| e.eq_ignore_ascii_case(&new_email))
+                .unwrap_or(false)
+            {
+                return StatusCode::NO_CONTENT.into_response();
+            }
+        }
+
+        // Uniqueness check
+        for acc in accounts.values() {
+            if acc
+                .email
+                .as_deref()
+                .map(|e| e.eq_ignore_ascii_case(&new_email))
+                .unwrap_or(false)
+                && acc.public.id != account_id
+            {
+                let err =
+                    serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
+                return (StatusCode::CONFLICT, Json(err)).into_response();
+            }
+        }
+    }
+
+    let challenge = state.challenges.create(
+        account_id,
+        device_id,
+        ChallengeIntent::UpdateEmail { new_email },
+    );
+    let err_payload = serde_json::json!({
+        "error": "STEP_UP_REQUIRED",
+        "challenge_id": challenge.id
+    });
+    (StatusCode::FORBIDDEN, Json(err_payload)).into_response()
+}
+
 #[derive(Serialize)]
 pub struct SessionStatus {
     pub authenticated: bool,
@@ -1228,12 +1320,11 @@ pub async fn request_step_up(
     }
 
     // 2. Lookup the user's email to send the Magic Link
-    let email = {
-        let accounts = state.accounts.read().await;
-        if let Some(acc) = accounts.get(account_id) {
-            acc.email.clone()
-        } else {
-            None
+    let email = match &challenge.intent {
+        ChallengeIntent::UpdateEmail { new_email } => Some(new_email.clone()),
+        _ => {
+            let accounts = state.accounts.read().await;
+            accounts.get(account_id).and_then(|acc| acc.email.clone())
         }
     };
 
@@ -1438,6 +1529,50 @@ pub async fn consume_step_up(
                 .sessions
                 .delete_by_device(&account_id, &target_device_id);
             StatusCode::NO_CONTENT.into_response()
+        }
+        ChallengeIntent::UpdateEmail { new_email } => {
+            tracing::info!(
+                event = "auth.step_up.consume.update_email",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: executing UpdateEmail intent"
+            );
+            let mut accounts = state.accounts.write().await;
+
+            // Check for conflict right before writing
+            for acc in accounts.values() {
+                if acc
+                    .email
+                    .as_deref()
+                    .map(|e| e.eq_ignore_ascii_case(&new_email))
+                    .unwrap_or(false)
+                    && acc.public.id != account_id
+                {
+                    tracing::warn!(
+                        event = "auth.step_up.consume.update_email.conflict",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Email was taken by another account before step-up was consumed"
+                    );
+                    let err =
+                        serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
+                    return (StatusCode::CONFLICT, jar, Json(err)).into_response();
+                }
+            }
+
+            if let Some(account) = accounts.get_mut(&account_id) {
+                account.email = Some(new_email);
+                (StatusCode::NO_CONTENT, jar).into_response()
+            } else {
+                tracing::error!(
+                    event = "auth.step_up.consume.update_email.missing_account",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Account missing during email update step-up consume"
+                );
+                let err = serde_json::json!({"error": "ACCOUNT_INVALID"});
+                (StatusCode::BAD_REQUEST, jar, Json(err)).into_response()
+            }
         }
     }
 }
