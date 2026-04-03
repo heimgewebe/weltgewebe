@@ -2954,9 +2954,6 @@ async fn test_update_email_no_op_returns_204() -> Result<()> {
     // Should be a no-op since the email is already u1@example.com
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
-    // Ensure no challenge was created
-    assert!(state.challenges.get("some-fake-id").is_none());
-
     Ok(())
 }
 
@@ -3030,8 +3027,9 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
 
-        // The link looks like: http://localhost/auth/step-up/consume?token=XYZ
         let link = &messages[0].1;
+        // We know the link format is precisely "{base_url}/auth/step-up/consume?token={token}"
+        // A simple split on "?token=" is safe because token is the only parameter and last in the URL structure defined in mailer.rs
         link.split("token=").last().unwrap().to_string()
     };
 

@@ -999,14 +999,25 @@ pub async fn update_email(
 
         // No-Op: if it's already the current email, return success without triggering a step-up.
         if let Some(acc) = accounts.get(&account_id) {
-            if acc.email.as_ref() == Some(&new_email) {
+            if acc
+                .email
+                .as_deref()
+                .map(|e| e.eq_ignore_ascii_case(&new_email))
+                .unwrap_or(false)
+            {
                 return StatusCode::NO_CONTENT.into_response();
             }
         }
 
         // Uniqueness check
         for acc in accounts.values() {
-            if acc.email.as_ref() == Some(&new_email) && acc.public.id != account_id {
+            if acc
+                .email
+                .as_deref()
+                .map(|e| e.eq_ignore_ascii_case(&new_email))
+                .unwrap_or(false)
+                && acc.public.id != account_id
+            {
                 let err =
                     serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
                 return (StatusCode::CONFLICT, Json(err)).into_response();
@@ -1530,7 +1541,13 @@ pub async fn consume_step_up(
 
             // Check for conflict right before writing
             for acc in accounts.values() {
-                if acc.email.as_ref() == Some(&new_email) && acc.public.id != account_id {
+                if acc
+                    .email
+                    .as_deref()
+                    .map(|e| e.eq_ignore_ascii_case(&new_email))
+                    .unwrap_or(false)
+                    && acc.public.id != account_id
+                {
                     tracing::warn!(
                         event = "auth.step_up.consume.update_email.conflict",
                         request_id = %request_id,

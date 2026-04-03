@@ -12,6 +12,7 @@ pub struct Mailer {
     port: u16,
     user: Option<String>,
     from: String,
+    // Note: Test-only hook to capture outbound emails without sending them via SMTP.
     #[allow(clippy::type_complexity)]
     test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
 }
@@ -104,6 +105,8 @@ impl Mailer {
         })
     }
 
+    /// Test-only hook to capture outbound emails without sending them via SMTP.
+    /// This should not be used in production code.
     pub fn with_test_sink(
         mut self,
         sink: std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
