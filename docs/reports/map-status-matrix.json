@@ -7,12 +7,14 @@
     "apps/web/tests/edge-visibility.spec.ts",
     "apps/web/tests/activity-layer-structure.spec.ts",
     "apps/web/tests/basemap-client-integration.spec.ts",
-    "docs/deployment.md"
+    "docs/deployment.md",
+    "infra/caddy/Caddyfile.prod",
+    "scripts/guard/caddy-basemap-route-guard.sh"
   ],
   "areas": {
     "basemap_grundlage": {
-      "soll": "Lokales Artefakt generieren (planetiler, PMTiles, Heimserver/Caddy)",
-      "ist": "Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung sind vorhanden.",
+      "soll": "Lokales Artefakt generieren (planetiler, PMTiles)",
+      "ist": "Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung des Artefakts sind vorhanden.",
       "status": "Erledigt",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md"
@@ -41,7 +43,7 @@
     },
     "runtime_integration": {
       "soll": "MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls",
-      "ist": "Frontend parst das PMTiles-Protokoll und sendet korrekte Range-Header (geprüft im Mock-Test). PUBLIC_BASEMAP_MODE Contract ist in docs/deployment.md verankert. Die echte HTTP-206-Verifikation gegen das echte Artefakt über den lokalen Caddy-Proxy fehlt.",
+      "ist": "Frontend parst PMTiles-Protokoll und sendet Range-Header (geprüft im Mock). Caddy-Route ist per Caddyfile.prod und guard (caddy-basemap-route-guard.sh) konfiguriert. PUBLIC_BASEMAP_MODE Contract ist in docs/deployment.md verankert. Die echte HTTP-206-Verifikation gegen das physische Artefakt fehlt im CI.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md",
@@ -53,7 +55,9 @@
       "risk": "mittel",
       "code_runtime_evidence": [
         "apps/web/tests/basemap-client-integration.spec.ts",
-        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
+        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
+        "infra/caddy/Caddyfile.prod",
+        "scripts/guard/caddy-basemap-route-guard.sh"
       ]
     },
     "versionierung": {
@@ -72,7 +76,7 @@
     },
     "ausbau": {
       "soll": "Heatmap/Activity-Layer, Offline-Modus, Regionale Tilesets",
-      "ist": "Regionale Scripts für Hamburg und Deutschland vorhanden (Local Scale MVP). Heatmap/Activity-Layer im Frontend grundlegend umgesetzt (activity.ts liest weight, heatmap-* Properties gemäß Context7-MapLibre-Doku konfiguriert), aber die Event-Stream-Integration im Backend fehlt. Offline-Modus-Konzepte stehen noch offen.",
+      "ist": "Regionale Scripts für Hamburg und Deutschland vorhanden. Heatmap-Frontend-Layer (activity.ts) liest weight und heatmap-* Properties gemäß MapLibre-Doku. Die Event-Stream-Integration im Backend fehlt. Offline-Modus-Konzepte stehen noch offen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md"
@@ -85,11 +89,12 @@
       "code_runtime_evidence": [
         "apps/web/src/lib/map/overlay/activity.ts",
         "apps/web/tests/activity-layer-structure.spec.ts",
-        "scripts/basemap/build-hamburg-pmtiles.sh"
+        "scripts/basemap/build-hamburg-pmtiles.sh",
+        "scripts/basemap/build-germany-pmtiles.sh"
       ]
     }
   },
   "open_architectural_decisions": {
-    "Visuelle_Abnahme": "Nicht automatisierbar im Rahmen der aktuellen Architektur (erfordert Human-in-the-Loop oder neue VRT-Pipeline)."
+    "Visuelle_Abnahme": "Mit der aktuellen Testarchitektur nicht automatisiert nachgewiesen (erfordert manuelle QA oder zusätzliche VRT-Pipeline)."
   }
 }

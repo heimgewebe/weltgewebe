@@ -4,17 +4,17 @@ title: Map Status Matrix
 doc_type: status-matrix
 status: active
 summary: >
-  Dieses Dokument bildet den wahren, beweisbaren Zustand (Ist-Zustand) der Basemap-Architektur ab.
+  Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist-Zustand der Basemap-Architektur ab.
 ---
 
 # Map Status Matrix
 
-Dieses Dokument bildet den wahren, beweisbaren Zustand (Ist-Zustand) der Basemap-Architektur ab.
+Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist-Zustand ab. Es ist rein diagnostisch und ersetzt nicht die normative [Roadmap](../blueprints/map-roadmap.md), sondern dokumentiert den belegbaren Stand gegenüber diesem Zielbild.
 
 ## 1. Basemap Grundlage
 
-- **Soll**: Lokales Artefakt generieren (planetiler, PMTiles, Heimserver/Caddy).
-- **Ist**: Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung sind vorhanden.
+- **Soll**: Lokales Artefakt generieren (planetiler, PMTiles).
+- **Ist**: Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung des Artefakts sind vorhanden.
 - **Status**: Erledigt
 - **Nachweis**: `scripts/basemap/build-hamburg-pmtiles.sh`
 
@@ -28,9 +28,9 @@ Dieses Dokument bildet den wahren, beweisbaren Zustand (Ist-Zustand) der Basemap
 ## 3. Runtime-Integration
 
 - **Soll**: MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls.
-- **Ist**: Frontend parst das PMTiles-Protokoll und sendet korrekte Range-Header (geprüft im Mock-Test `basemap-client-integration.spec.ts`). `PUBLIC_BASEMAP_MODE` Contract ist verankert.
+- **Ist**: Frontend parst PMTiles-Protokoll und sendet Range-Header (geprüft im Mock `basemap-client-integration.spec.ts`). Caddy-Route ist per Guard (`caddy-basemap-route-guard.sh`) validiert. `PUBLIC_BASEMAP_MODE` Contract ist verankert.
 - **Status**: Teil
-- **Fehlend**: Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream.
+- **Fehlend**: Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream im CI.
 
 ## 4. Betrieb und Versionierung
 
