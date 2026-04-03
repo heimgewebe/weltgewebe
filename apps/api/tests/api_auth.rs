@@ -2924,6 +2924,209 @@ async fn test_step_up_consume_remove_device_success() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn test_update_email_no_op_returns_204() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(r#"{"new_email": "u1@example.com"}"#))?;
+
+    let res = app.oneshot(req).await?;
+    // Should be a no-op since the email is already u1@example.com
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // Ensure no challenge was created
+    assert!(state.challenges.get("some-fake-id").is_none());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_full_e2e_flow() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Inject the mock mailer with a test sink
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    state.config.smtp_host = Some("localhost".to_string());
+    state.config.smtp_from = Some("noreply@example.com".to_string());
+    let mailer = weltgewebe_api::mailer::Mailer::new(&state.config)
+        .unwrap()
+        .with_test_sink(sink.clone());
+    state.mailer = Some(std::sync::Arc::new(mailer));
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    // 1. PUT /auth/me/email
+    let req1 = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(r#"{"new_email": "e2e@example.com"}"#))?;
+
+    let res1 = app.clone().oneshot(req1).await?;
+    assert_eq!(res1.status(), StatusCode::FORBIDDEN);
+
+    let body_bytes = axum::body::to_bytes(res1.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    let challenge_id = body_json["challenge_id"].as_str().unwrap().to_string();
+
+    // 2. POST /auth/step-up/magic-link/request
+    let req2 = Request::builder()
+        .method("POST")
+        .uri("/auth/step-up/magic-link/request")
+        .header("Cookie", cookie.clone())
+        .header("Content-Type", "application/json")
+        .header("Origin", "http://localhost")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            serde_json::json!({
+                "challenge_id": challenge_id
+            })
+            .to_string(),
+        ))?;
+
+    let res2 = app.clone().oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::NO_CONTENT);
+
+    // 3. Extract token from mail sink
+    let messages = sink.lock().unwrap();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
+
+    // The link looks like: http://localhost/auth/step-up/consume?token=XYZ
+    let link = &messages[0].1;
+    let token = link.split("token=").last().unwrap().to_string();
+
+    // Release lock before next await
+    drop(messages);
+
+    // 4. POST /auth/step-up/magic-link/consume
+    let req3 = Request::builder()
+        .method("POST")
+        .uri("/auth/step-up/magic-link/consume")
+        .header("Cookie", cookie)
+        .header("Content-Type", "application/json")
+        .header("Origin", "http://localhost")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            serde_json::json!({
+                "token": token,
+                "challenge_id": challenge_id
+            })
+            .to_string(),
+        ))?;
+
+    let res3 = app.oneshot(req3).await?;
+    assert_eq!(res3.status(), StatusCode::NO_CONTENT);
+
+    // 5. Assert the database email has changed
+    let accounts = state.accounts.read().await;
+    let acc = accounts.get("u1").unwrap();
+    assert_eq!(acc.email, Some("e2e@example.com".to_string()));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_invalid_format() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req1 = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(r#"{"new_email": "invalidemail"}"#))?;
+
+    let res1 = app.clone().oneshot(req1).await?;
+    assert_eq!(res1.status(), StatusCode::BAD_REQUEST);
+
+    let req2 = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            r#"{"new_email": "invalid email@example.com"}"#, // space
+        ))?;
+
+    let res2 = app.clone().oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::BAD_REQUEST);
+
+    let req3 = Request::builder()
+        .method("PUT")
+        .uri("/auth/me/email")
+        .header("Cookie", cookie.clone())
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            r#"{"new_email": "nodomain@a"}"#, // missing dot
+        ))?;
+
+    let res3 = app.oneshot(req3).await?;
+    assert_eq!(res3.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn test_update_email_requires_step_up() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
@@ -2961,39 +3164,6 @@ async fn test_update_email_requires_step_up() -> Result<()> {
     let body_json: serde_json::Value = serde_json::from_str(&body_str)?;
     assert_eq!(body_json["error"], "STEP_UP_REQUIRED");
     assert!(body_json.get("challenge_id").is_some());
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn test_update_email_invalid_format() -> Result<()> {
-    let mut state = test_state_with_accounts()?;
-    state.config.auth_public_login = true;
-
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()));
-    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
-
-    let app = Router::new()
-        .merge(weltgewebe_api::routes::api_router())
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            weltgewebe_api::middleware::auth::auth_middleware,
-        ))
-        .with_state(state.clone());
-
-    let req = Request::builder()
-        .method("PUT")
-        .uri("/auth/me/email")
-        .header("Cookie", cookie.clone())
-        .header("Origin", "http://localhost")
-        .header("Content-Type", "application/json")
-        .header("X-Forwarded-For", "127.0.0.1")
-        .body(body::Body::from(r#"{"new_email": "invalidemail"}"#))?;
-
-    let res = app.oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     Ok(())
 }
 
@@ -3051,133 +3221,6 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::CONFLICT);
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn test_update_email_success_via_step_up_consume() -> Result<()> {
-    let mut state = test_state_with_accounts()?;
-    state.config.auth_public_login = true;
-
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()));
-    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
-
-    use weltgewebe_api::auth::challenges::ChallengeIntent;
-
-    let challenge = state.challenges.create(
-        session.account_id.clone(),
-        session.device_id.clone(),
-        ChallengeIntent::UpdateEmail {
-            new_email: "new@example.com".to_string(),
-        },
-    );
-
-    let token = state.step_up_tokens.create(
-        challenge.id.clone(),
-        session.account_id.clone(),
-        session.device_id.clone(),
-    );
-
-    let app = Router::new()
-        .merge(weltgewebe_api::routes::api_router())
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            weltgewebe_api::middleware::auth::auth_middleware,
-        ))
-        .with_state(state.clone());
-
-    let req = Request::builder()
-        .method("POST")
-        .uri("/auth/step-up/magic-link/consume")
-        .header("Cookie", cookie)
-        .header("Content-Type", "application/json")
-        .header("Origin", "http://localhost")
-        .header("X-Forwarded-For", "127.0.0.1")
-        .body(body::Body::from(
-            serde_json::json!({
-                "token": token,
-                "challenge_id": challenge.id
-            })
-            .to_string(),
-        ))?;
-
-    let res = app.oneshot(req).await?;
-
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
-
-    let accounts = state.accounts.read().await;
-    let acc = accounts.get("u1").unwrap();
-    assert_eq!(acc.email, Some("new@example.com".to_string()));
-
-    Ok(())
-}
-
-#[tokio::test]
-#[serial]
-async fn test_update_email_request_goes_to_new_email() -> Result<()> {
-    let mut state = test_state_with_accounts()?;
-    state.config.auth_public_login = true;
-    state.config.app_base_url = Some("http://localhost".to_string());
-
-    // Inject the mock mailer with a test sink
-    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    state.config.smtp_host = Some("localhost".to_string());
-    state.config.smtp_from = Some("noreply@example.com".to_string());
-    let mailer = weltgewebe_api::mailer::Mailer::new(&state.config)
-        .unwrap()
-        .with_test_sink(sink.clone());
-    state.mailer = Some(std::sync::Arc::new(mailer));
-
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()));
-    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
-
-    use weltgewebe_api::auth::challenges::ChallengeIntent;
-
-    let challenge = state.challenges.create(
-        session.account_id.clone(),
-        session.device_id.clone(),
-        ChallengeIntent::UpdateEmail {
-            new_email: "new@example.com".to_string(),
-        },
-    );
-
-    let app = Router::new()
-        .merge(weltgewebe_api::routes::api_router())
-        .route_layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            weltgewebe_api::middleware::auth::auth_middleware,
-        ))
-        .with_state(state.clone());
-
-    let req = Request::builder()
-        .method("POST")
-        .uri("/auth/step-up/magic-link/request")
-        .header("Cookie", cookie)
-        .header("Content-Type", "application/json")
-        .header("Origin", "http://localhost")
-        .header("X-Forwarded-For", "127.0.0.1")
-        .body(body::Body::from(
-            serde_json::json!({
-                "challenge_id": challenge.id
-            })
-            .to_string(),
-        ))?;
-
-    let res = app.oneshot(req).await?;
-
-    assert_eq!(res.status(), StatusCode::NO_CONTENT);
-
-    let messages = sink.lock().unwrap();
-    assert_eq!(messages.len(), 1);
-
-    // Core security proof: the email goes strictly to the NEW email address.
-    assert_eq!(messages[0].0, "new@example.com");
-
     Ok(())
 }
 

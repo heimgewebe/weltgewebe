@@ -981,14 +981,30 @@ pub async fn update_email(
     };
 
     let new_email = payload.new_email.trim().to_ascii_lowercase();
-    // Minimal validation because true ownership is proven by the verification link sent via email.
-    if !new_email.contains('@') {
+
+    // Pragmatic minimal validation: exactly one @, no spaces, non-empty local/domain parts.
+    if new_email.matches('@').count() != 1 || new_email.contains(|c: char| c.is_whitespace()) {
+        let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
+        return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    let parts: Vec<&str> = new_email.split('@').collect();
+    if parts.len() != 2 || parts[0].is_empty() || parts[1].is_empty() || !parts[1].contains('.') {
         let err = serde_json::json!({"error": "BAD_REQUEST", "message": "Invalid email format"});
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
     }
 
     {
         let accounts = state.accounts.read().await;
+
+        // No-Op: if it's already the current email, return success without triggering a step-up.
+        if let Some(acc) = accounts.get(&account_id) {
+            if acc.email.as_ref() == Some(&new_email) {
+                return StatusCode::NO_CONTENT.into_response();
+            }
+        }
+
+        // Uniqueness check
         for acc in accounts.values() {
             if acc.email.as_ref() == Some(&new_email) && acc.public.id != account_id {
                 let err =
