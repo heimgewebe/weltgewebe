@@ -3028,9 +3028,9 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
         assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
 
         let link = &messages[0].1;
-        // We know the link format is precisely "{base_url}/auth/step-up/consume?token={token}"
-        // A simple split on "?token=" is safe because token is the only parameter and last in the URL structure defined in mailer.rs
-        link.split("token=").last().unwrap().to_string()
+        // The link format is "{base_url}/auth/step-up/consume?token={token}&challenge_id={id}"
+        let parts: Vec<&str> = link.split("?token=").collect();
+        parts[1].split("&challenge_id=").next().unwrap().to_string()
     };
 
     // 4. POST /auth/step-up/magic-link/consume
