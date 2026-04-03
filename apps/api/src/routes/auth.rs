@@ -972,11 +972,11 @@ pub async fn update_email(
     let device_id = match ctx.device_id {
         Some(id) => id,
         None => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({"error": "SESSION_INVALID"})),
-            )
-                .into_response()
+            let err_payload = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "Authenticated context missing device_id"
+            });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err_payload)).into_response();
         }
     };
 
@@ -1320,8 +1320,8 @@ pub async fn request_step_up(
     }
 
     // 2. Lookup the user's email to send the Magic Link
-    let email = match challenge.intent {
-        ChallengeIntent::UpdateEmail { ref new_email } => Some(new_email.clone()),
+    let email = match &challenge.intent {
+        ChallengeIntent::UpdateEmail { new_email } => Some(new_email.clone()),
         _ => {
             let accounts = state.accounts.read().await;
             accounts.get(account_id).and_then(|acc| acc.email.clone())
