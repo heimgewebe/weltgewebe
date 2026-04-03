@@ -5,7 +5,8 @@
     "docs/deployment.md",
     "infra/caddy/Caddyfile",
     "apps/web/src/lib/map/overlay/edges.ts",
-    "apps/web/src/lib/map/overlay/activity.ts"
+    "apps/web/src/lib/map/overlay/activity.ts",
+    "infra/caddy/Caddyfile.heim"
   ],
   "areas": {
     "basemap_grundlage": {
