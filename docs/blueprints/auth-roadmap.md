@@ -318,7 +318,7 @@ Sie muss auch wissen:
 
 ### Kernpunkt gelöst
 
-- `/me/email` (abgeschlossen über `PUT /auth/me/email` mit Doppel-Nachweis: Step-up-Request an die neue E-Mail beweist deren Besitz, Consume aus bestehender Session beweist Session-Besitz; inkl. Validierung und Eindeutigkeits-Prüfung)
+- `/me/email` (abgeschlossen über `PUT /auth/me/email` mit Doppel-Nachweis: Step-up-Request an die neue E-Mail beweist deren Besitz, Consume beweist Besitz des bestehenden authentifizierten Geräte-Kontexts (`account_id` + `device_id`); inkl. Validierung und Eindeutigkeits-Prüfung)
 
 ### Stop-Kriterium für Phase 6
 

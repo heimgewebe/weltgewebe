@@ -3291,3 +3291,74 @@ async fn test_update_email_consume_wrong_session() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn test_update_email_consume_session_rotation() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    // Session 1 is the one that initiated the update (same device)
+    let session1 = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+
+    use weltgewebe_api::auth::challenges::ChallengeIntent;
+
+    let challenge = state.challenges.create(
+        session1.account_id.clone(),
+        session1.device_id.clone(),
+        ChallengeIntent::UpdateEmail {
+            new_email: "rotated@example.com".to_string(),
+        },
+    );
+
+    let token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        session1.account_id.clone(),
+        session1.device_id.clone(),
+    );
+
+    // Simulate session rotation: Session 1 expires, new Session 2 is created for the *same* device
+    state.sessions.delete(&session1.id);
+    let session2 = state
+        .sessions
+        .create("u1".to_string(), Some("dev1".to_string()));
+
+    let new_cookie = format!("{}={}", SESSION_COOKIE_NAME, session2.id);
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/step-up/magic-link/consume")
+        .header("Cookie", new_cookie) // Consume with rotated session
+        .header("Content-Type", "application/json")
+        .header("Origin", "http://localhost")
+        .header("X-Forwarded-For", "127.0.0.1")
+        .body(body::Body::from(
+            serde_json::json!({
+                "token": token,
+                "challenge_id": challenge.id
+            })
+            .to_string(),
+        ))?;
+
+    let res = app.oneshot(req).await?;
+
+    // The binding matches because account_id and device_id match, despite the different session_id
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+
+    // Ensure the email was updated
+    let accounts = state.accounts.read().await;
+    let acc = accounts.get("u1").unwrap();
+    assert_eq!(acc.email, Some("rotated@example.com".to_string()));
+
+    Ok(())
+}

@@ -206,7 +206,7 @@ Response:
 Step-up Auth wird erzwungen für folgende Endpunkte / Aktionen:
 
 - `PUT /me/visibility` (Verortung hinzufügen/ändern)
-- `PUT /auth/me/email` (E-Mail ändern; erfordert Step-up Auth. E-Mail ist identitätskritisch: Änderung erfordert den doppelten Besitznachweis aus aktueller Session für den Request und der **neuen** E-Mail-Adresse für den Empfang des Tokens. Das Consume muss aus der identischen Session erfolgen.)
+- `PUT /auth/me/email` (E-Mail ändern; erfordert Step-up Auth. E-Mail ist identitätskritisch: Änderung erfordert den doppelten Besitznachweis aus einem aktiven authentifizierten Geräte-Kontext für den Request und der **neuen** E-Mail-Adresse für den Empfang des Tokens. Das Consume ist an denselben authentifizierten Kontext aus `account_id` und `device_id` gebunden.)
 - `POST /auth/passkeys/register/*` und `DELETE /auth/passkeys/:id` (Passkey hinzufügen/entfernen)
 - `DELETE /auth/devices/:id` (sofern es sich **nicht** um das aktuell anfragende Gerät handelt)
 - `POST /auth/logout-all` (alle Sessions widerrufen)
