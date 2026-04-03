@@ -452,7 +452,6 @@ PMTiles reduziert typischerweise die Anzahl einzelner Tile-Anfragen, da Tiles au
 
 Später möglich:
 
-
 Regionale Tiles
 
 `germany.pmtiles`
