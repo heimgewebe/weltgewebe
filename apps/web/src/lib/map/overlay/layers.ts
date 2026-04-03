@@ -22,7 +22,6 @@ export const LAYERS = {
   EDGES_LAYER: "edges-layer",
   EDGES_HALO_LAYER: "edges-halo-layer",
 
-
   // 4. Nodes are HTML markers, so they inherently sit above WebGL.
 
   // 5. Focus / Highlight (planned, could be source/layer or DOM)
