@@ -1,9 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 test.describe("Activity Heatmap Removal Guard", () => {
   test("activity-layer and heatmap layers should not exist on the map", async ({
     page,
   }) => {
+    // Setup API mocking, including the empty /local-basemap/style.json,
+    // so MapLibre initializes fully without 'style could not be loaded' errors
+    await mockApiResponses(page);
     await page.goto("/map");
 
     // Wait until the map is loaded and exposed on the window
@@ -20,7 +24,7 @@ test.describe("Activity Heatmap Removal Guard", () => {
 
     const result = await page.evaluate(() => {
       const map = (window as any).__TEST_MAP__ as maplibregl.Map;
-      const layers = map.getStyle().layers;
+      const layers = map.getStyle().layers || [];
 
       const hasActivityLayer = layers.some(
         (layer) => layer.id === "activity-layer",
