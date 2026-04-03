@@ -54,6 +54,7 @@ Generated automatically. Do not edit.
 | konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | docs/konzepte/garnrolle-und-verortung.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
+| map-status-matrix | Map Status Matrix | status-matrix | active | docs/reports/map-status-matrix.md |
 | overview.inhalt | Inhalt (Übersicht) | reference | active | docs/overview/inhalt.md |
 | overview.zusammenstellung | Zusammenstellung (Übersicht) | reference | active | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | docs/policies/orientierung.md |
