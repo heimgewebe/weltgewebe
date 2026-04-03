@@ -3025,16 +3025,15 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
     assert_eq!(res2.status(), StatusCode::NO_CONTENT);
 
     // 3. Extract token from mail sink
-    let messages = sink.lock().unwrap();
-    assert_eq!(messages.len(), 1);
-    assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
+    let token = {
+        let messages = sink.lock().unwrap();
+        assert_eq!(messages.len(), 1);
+        assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
 
-    // The link looks like: http://localhost/auth/step-up/consume?token=XYZ
-    let link = &messages[0].1;
-    let token = link.split("token=").last().unwrap().to_string();
-
-    // Release lock before next await
-    drop(messages);
+        // The link looks like: http://localhost/auth/step-up/consume?token=XYZ
+        let link = &messages[0].1;
+        link.split("token=").last().unwrap().to_string()
+    };
 
     // 4. POST /auth/step-up/magic-link/consume
     let req3 = Request::builder()
