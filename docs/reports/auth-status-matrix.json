@@ -119,13 +119,14 @@
     },
     "step_up_auth": {
       "soll": "Challenge, TTL, Intent, Magic Link + Passkey, keine neue Session",
-      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen Challenges. POST /auth/step-up/magic-link/request validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. POST /auth/step-up/magic-link/consume konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice), erzeugt dabei keine neue Session. Passkey-Pfad offen, UI-Integration implementiert.",
+      "ist": "Challenge-Store (In-Memory) implementiert. /auth/logout-all und DELETE /auth/devices/:id erzeugen Challenges. POST /auth/step-up/magic-link/request validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. POST /auth/step-up/magic-link/consume konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice), erzeugt dabei keine neue Session. Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/specs/auth-api.md"
       ],
       "missing_evidence": [
-        "Passkey-Pfad"
+        "Passkey-Pfad",
+        "UI E2E Test"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
