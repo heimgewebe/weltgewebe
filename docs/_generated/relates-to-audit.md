@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 143 |
-| — relates_to | 142 |
+| Relationen gesamt | 144 |
+| — relates_to | 143 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -118,10 +118,11 @@ _Keine Lücken erkannt._
 - `docs/x-repo/peers-learnings.md`
 - `docs/x-repo/semantAH.md`
 
-**Cluster 7** (2 Dokumente):
+**Cluster 7** (3 Dokumente):
 
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
+- `docs/reports/map-status-matrix.md`
 
 ### Konkrete Beispiele zur Prüfung
 

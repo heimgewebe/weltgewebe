@@ -7,6 +7,8 @@ summary: >
   Roadmap zur schrittweisen operativen Umsetzung der souveränen Basemap-Architektur.
 relations:
   - type: relates_to
+    target: docs/reports/map-status-matrix.md
+  - type: relates_to
     target: docs/blueprints/map-blaupause.md
 ---
 

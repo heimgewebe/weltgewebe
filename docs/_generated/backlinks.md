@@ -222,6 +222,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 
+## docs/reports/map-status-matrix.md
+
+- [relates_to] docs/blueprints/map-roadmap.md
+
 ## docs/runbook.md
 
 - [relates_to] docs/deployment.md
