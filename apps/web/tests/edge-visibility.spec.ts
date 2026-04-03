@@ -111,6 +111,8 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloOpacity).toBe(0.8);
     // Structural invariant: Halo and main line must share the exact same dasharray
     // to prevent the solid background from visually filling the dashed gaps.
+    expect(edgeState.mainDasharray).toBeDefined();
+    expect(edgeState.mainDasharray).not.toBeNull();
     expect(edgeState.haloDasharray).toBeDefined();
     expect(edgeState.haloDasharray).not.toBeNull();
     expect(edgeState.haloDasharray).toEqual(edgeState.mainDasharray);
