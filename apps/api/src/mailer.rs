@@ -12,6 +12,7 @@ pub struct Mailer {
     port: u16,
     user: Option<String>,
     from: String,
+    pub test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
 }
 
 impl Mailer {
@@ -98,10 +99,26 @@ impl Mailer {
             host: host.to_string(),
             port,
             user: user.map(|s| s.to_string()),
+            test_sink: None,
         })
     }
 
+    pub fn with_test_sink(
+        mut self,
+        sink: std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    ) -> Self {
+        self.test_sink = Some(sink);
+        self
+    }
+
     pub async fn send_step_up_magic_link(&self, to: &str, link: &str) -> Result<()> {
+        if let Some(sink) = &self.test_sink {
+            sink.lock()
+                .unwrap()
+                .push((to.to_string(), link.to_string()));
+            return Ok(());
+        }
+
         let email = Message::builder()
             .from(self.from.parse().context("invalid from address")?)
             .to(to.parse().context("invalid to address")?)
@@ -132,6 +149,13 @@ impl Mailer {
     }
 
     pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
+        if let Some(sink) = &self.test_sink {
+            sink.lock()
+                .unwrap()
+                .push((to.to_string(), link.to_string()));
+            return Ok(());
+        }
+
         let email = Message::builder()
             .from(self.from.parse().context("invalid from address")?)
             .to(to.parse().context("invalid to address")?)

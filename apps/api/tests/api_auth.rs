@@ -2955,8 +2955,6 @@ async fn test_update_email_requires_step_up() -> Result<()> {
     let status = res.status();
     let body_bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await?;
     let body_str = String::from_utf8_lossy(&body_bytes);
-    println!("Response status: {}", status);
-    println!("Response body: {}", body_str);
 
     assert_eq!(status, StatusCode::FORBIDDEN);
 
@@ -3124,6 +3122,15 @@ async fn test_update_email_request_goes_to_new_email() -> Result<()> {
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
+    // Inject the mock mailer with a test sink
+    let sink = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    state.config.smtp_host = Some("localhost".to_string());
+    state.config.smtp_from = Some("noreply@example.com".to_string());
+    let mailer = weltgewebe_api::mailer::Mailer::new(&state.config)
+        .unwrap()
+        .with_test_sink(sink.clone());
+    state.mailer = Some(std::sync::Arc::new(mailer));
+
     let session = state
         .sessions
         .create("u1".to_string(), Some("dev1".to_string()));
@@ -3163,15 +3170,14 @@ async fn test_update_email_request_goes_to_new_email() -> Result<()> {
 
     let res = app.oneshot(req).await?;
 
-    // In tests, the mailer is missing so it falls back to 503 SERVICE_UNAVAILABLE instead of silently logging.
-    // This proves the handler processed the challenge successfully up until the mailer step.
-    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
-    // The test logic here doesn't have an easy way to mock the mailer and inspect the destination because
-    // the mailer is None in tests and it falls back to Dev/Ops log.
-    // But since the step-up tokens map stores the challenge ID, account ID and device ID,
-    // and `request_step_up` logs to `email_outbox` target with the email_hash, we can't directly assert on the email.
-    // However, the function returns NO_CONTENT without erroring, and the logic was verified by tracing.
+    let messages = sink.lock().unwrap();
+    assert_eq!(messages.len(), 1);
+
+    // Core security proof: the email goes strictly to the NEW email address.
+    assert_eq!(messages[0].0, "new@example.com");
+
     Ok(())
 }
 
