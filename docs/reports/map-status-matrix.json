@@ -2,15 +2,10 @@
   "generated_from": [
     "docs/blueprints/map-blaupause.md",
     "docs/blueprints/map-roadmap.md",
-    "apps/web/src/lib/map/overlay/edges.ts",
-    "apps/web/src/lib/map/overlay/activity.ts",
-    "apps/web/tests/edge-visibility.spec.ts",
-    "apps/web/tests/activity-layer-structure.spec.ts",
-    "apps/web/tests/basemap-client-integration.spec.ts",
     "docs/deployment.md",
     "infra/caddy/Caddyfile",
-    "infra/caddy/Caddyfile.heim",
-    "scripts/guard/caddy-basemap-route-guard.sh"
+    "apps/web/src/lib/map/overlay/edges.ts",
+    "apps/web/src/lib/map/overlay/activity.ts"
   ],
   "areas": {
     "basemap_grundlage": {

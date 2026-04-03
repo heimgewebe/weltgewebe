@@ -11,6 +11,8 @@ summary: >
 
 Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist-Zustand ab. Es ist rein diagnostisch und ersetzt nicht die normative [Roadmap](../blueprints/map-roadmap.md), sondern dokumentiert den belegbaren Stand gegenüber diesem Zielbild.
 
+Das Feld `generated_from` (bzw. die Metadaten) benennt bewusst nur die zentralen Primärquellen der Diagnosebildung (Blueprints, zentrale Codepfade). Die vollständigen, konkreten Belege finden sich transparent im `code_runtime_evidence` der jeweiligen JSON-Bereiche.
+
 ## 1. Basemap Grundlage
 
 - **Soll**: Lokales Artefakt generieren (planetiler, PMTiles).
@@ -28,7 +30,7 @@ Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist
 ## 3. Runtime-Integration
 
 - **Soll**: MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls.
-- **Ist**: Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in `Caddyfile`/`Caddyfile.heim` und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.
+- **Ist**: Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock `basemap-client-integration.spec.ts`). Route-Contract ist belegt (Caddy-Route existiert in `Caddyfile`/`Caddyfile.heim` und wird per Guard `caddy-basemap-route-guard.sh` validiert). `PUBLIC_BASEMAP_MODE` Contract ist verankert.
 - **Status**: Teil
 - **Fehlend**: Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream im CI.
 
