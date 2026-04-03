@@ -54,10 +54,18 @@ test.describe("Edge visibility on load", () => {
       let haloOpacity = null;
       let isUnderMain = false;
 
+      let haloDasharray = null;
+      let mainDasharray = null;
+
       if (haloLayer && layer) {
         haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
         haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
         haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
+        haloDasharray = m.getPaintProperty(
+          "edges-halo-layer",
+          "line-dasharray",
+        );
+        mainDasharray = m.getPaintProperty("edges-layer", "line-dasharray");
 
         // Check z-index / layer order: halo should be before main layer in the style layers array
         const styleLayers = m.getStyle().layers;
@@ -88,6 +96,8 @@ test.describe("Edge visibility on load", () => {
         haloColor,
         haloWidth,
         haloOpacity,
+        haloDasharray,
+        mainDasharray,
         isUnderMain,
         featureCount,
       };
@@ -99,6 +109,13 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloColor).toBe("#ffffff");
     expect(edgeState.haloWidth).toBe(4);
     expect(edgeState.haloOpacity).toBe(0.8);
+    // Structural invariant: Halo and main line must share the exact same dasharray
+    // to prevent the solid background from visually filling the dashed gaps.
+    expect(edgeState.mainDasharray).toBeDefined();
+    expect(edgeState.mainDasharray).not.toBeNull();
+    expect(edgeState.haloDasharray).toBeDefined();
+    expect(edgeState.haloDasharray).not.toBeNull();
+    expect(edgeState.haloDasharray).toEqual(edgeState.mainDasharray);
 
     expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
