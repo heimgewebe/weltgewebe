@@ -23,7 +23,10 @@ test.describe("Activity Heatmap Removal Guard", () => {
     );
 
     const result = await page.evaluate(() => {
-      const map = (window as any).__TEST_MAP__ as maplibregl.Map;
+      const map = (window as any).__TEST_MAP__ as {
+        getStyle(): { layers?: Array<{ id: string; type?: string }> };
+        getSource(id: string): unknown;
+      };
       const layers = map.getStyle().layers || [];
 
       const hasActivityLayer = layers.some(

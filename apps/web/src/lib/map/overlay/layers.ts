@@ -9,9 +9,9 @@
  * Target Order (Bottom to Top):
  * 1. Basemap (vector tiles)
  * 2. Edges (MapLibre 'line' layer)
- * 4. Nodes / Accounts (DOM Markers, so they sit above WebGL canvas)
- * 5. Focus / Highlight (DOM elements or top-level layers)
- * 6. Komposition (Temporary interaction aides)
+ * 3. Nodes / Accounts (DOM Markers, so they sit above WebGL canvas)
+ * 4. Focus / Highlight (DOM elements or top-level layers)
+ * 5. Komposition (Temporary interaction aides)
  */
 
 export const LAYERS = {
@@ -22,9 +22,9 @@ export const LAYERS = {
   EDGES_LAYER: "edges-layer",
   EDGES_HALO_LAYER: "edges-halo-layer",
 
-  // 4. Nodes are HTML markers, so they inherently sit above WebGL.
+  // 3. Nodes are HTML markers, so they inherently sit above WebGL.
 
-  // 5. Focus / Highlight (planned, could be source/layer or DOM)
+  // 4. Focus / Highlight (planned, could be source/layer or DOM)
 
-  // 6. Komposition (planned, could be source/layer or DOM)
+  // 5. Komposition (planned, could be source/layer or DOM)
 } as const;
