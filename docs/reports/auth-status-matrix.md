@@ -177,7 +177,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### /me/email
 
 **Soll:** Route, Methode, Step-up Pflicht, Session-Verhalten danach.
-**Ist:** `PUT /auth/me/email` validiert und normalisiert die E-Mail (Format, Eindeutigkeit). Erfordert Step-up Auth (`403 STEP_UP_REQUIRED` ohne Challenge). `request_step_up` routet den Token an die NEUE E-Mail. Consume des Intents `UpdateEmail` prüft Eindeutigkeit erneut und ändert die E-Mail der aktuellen Session. Session bleibt erhalten. Damit ist der Besitz beider Identitäten belegt.
+**Ist:** `PUT /auth/me/email` validiert und normalisiert die E-Mail (Format, Eindeutigkeit). Erfordert Step-up Auth (`403 STEP_UP_REQUIRED` mit `challenge_id`). `request_step_up` routet den Token an die NEUE E-Mail. Consume des Intents `UpdateEmail` prüft Eindeutigkeit erneut und ändert die E-Mail der aktuellen Session. Session bleibt erhalten. Damit ist der doppelte Besitznachweis aus bestehender Session und neuer E-Mail-Adresse erbracht.
 **Status:** OK
 
 ---

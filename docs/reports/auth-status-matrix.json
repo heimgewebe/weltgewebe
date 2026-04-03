@@ -175,16 +175,19 @@
     },
     "me_email": {
       "soll": "Route, Methode, Step-up Pflicht, Session-Verhalten danach.",
-      "ist": "PUT /auth/me/email validiert und normalisiert die E-Mail (Format, Eindeutigkeit). Erfordert Step-up Auth (403 STEP_UP_REQUIRED ohne Challenge). request_step_up routet den Token an die NEUE E-Mail. Consume des Intents UpdateEmail prüft Eindeutigkeit erneut und ändert die E-Mail der aktuellen Session. Session bleibt erhalten. Damit ist der Besitz beider Identitäten belegt.",
+      "ist": "PUT /auth/me/email validiert und normalisiert die E-Mail (Format, Eindeutigkeit). Erfordert Step-up Auth (403 STEP_UP_REQUIRED mit challenge_id). request_step_up routet den Token an die NEUE E-Mail. Consume des Intents UpdateEmail prüft Eindeutigkeit erneut und ändert die E-Mail der aktuellen Session. Session bleibt erhalten. Damit ist der doppelte Besitznachweis aus bestehender Session und neuer E-Mail-Adresse erbracht.",
       "status": "OK",
       "documentation_evidence": [
         "docs/blueprints/auth-roadmap.md",
         "docs/specs/auth-api.md"
       ],
       "missing_evidence": [],
-      "risk": "niedrig",
+      "risk": "mittel",
       "code_runtime_evidence": [
-        "apps/api/src/routes/auth.rs"
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/routes/mod.rs",
+        "apps/api/src/auth/challenges.rs",
+        "apps/api/tests/api_auth.rs"
       ]
     }
   },
