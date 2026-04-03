@@ -125,6 +125,7 @@ PMTiles
 
 Eigenschaften:
 
+
 - Single-File Tileset
 - Range Requests
 - CDN-freundlich
@@ -357,8 +358,8 @@ MapLibre Layer Order:
 
 1. Basemap layers
 2. Graph edges
-4. Nodes (DOM markers)
-5. Focus / highlight
+3. Nodes (DOM markers)
+4. Focus / highlight
 
 ---
 
@@ -519,11 +520,13 @@ Das liefert:
 Die Aktivitätsdichte wird ausschließlich durch Fäden dargestellt.
 
 Eigenschaften:
+
 - Anzahl der Fäden → Dichte
 - Transparenz / Verblassen → Zeit
 - Überlagerung → Intensität
 
 Separate Heatmaps sind nicht zulässig, da sie:
+
 - eine zweite Semantik einführen
 - die direkte Lesbarkeit von Handlung verfälschen
 - das Systemprinzip unterlaufen

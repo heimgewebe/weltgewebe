@@ -103,11 +103,13 @@ Architektur verankert und abrufbar. **Nicht-Ziele:** Implementierung einer kompl
 Die Aktivitätsdichte wird ausschließlich durch Fäden dargestellt.
 
 Eigenschaften:
+
 - Anzahl der Fäden → Dichte
 - Transparenz / Verblassen → Zeit
 - Überlagerung → Intensität
 
 Separate Heatmaps sind nicht zulässig, da sie:
+
 - eine zweite Semantik einführen
 - die direkte Lesbarkeit von Handlung verfälschen
 - das Systemprinzip unterlaufen
