@@ -172,9 +172,21 @@
         "apps/api/src/auth/tokens.rs",
         "apps/api/src/auth/step_up_tokens.rs"
       ]
+    },
+    "me_email": {
+      "soll": "Route, Methode, Step-up Pflicht, Session-Verhalten danach.",
+      "ist": "PUT /auth/me/email validiert und normalisiert die E-Mail (Format, Eindeutigkeit). Erfordert Step-up Auth (403 STEP_UP_REQUIRED ohne Challenge). request_step_up routet den Token an die NEUE E-Mail. Consume des Intents UpdateEmail prüft Eindeutigkeit erneut und ändert die E-Mail der aktuellen Session. Session bleibt erhalten. Damit ist der Besitz beider Identitäten belegt.",
+      "status": "OK",
+      "documentation_evidence": [
+        "docs/blueprints/auth-roadmap.md",
+        "docs/specs/auth-api.md"
+      ],
+      "missing_evidence": [],
+      "risk": "niedrig",
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs"
+      ]
     }
   },
-  "open_architectural_decisions": {
-    "/me/email": "Offen"
-  }
+  "open_architectural_decisions": {}
 }

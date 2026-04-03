@@ -3057,6 +3057,9 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
     let acc = accounts.get("u1").unwrap();
     assert_eq!(acc.email, Some("e2e@example.com".to_string()));
 
+    // Ensure challenge is consumed and gone
+    assert!(state.challenges.get(&challenge_id).is_none());
+
     Ok(())
 }
 
