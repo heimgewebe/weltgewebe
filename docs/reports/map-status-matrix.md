@@ -42,7 +42,7 @@ Das Feld `generated_from` (bzw. die Metadaten) benennt bewusst nur die zentralen
 
 ## 5. Ausbau
 
-- **Soll**: Heatmap/Activity-Layer, Offline-Modus, Regionale Tilesets.
-- **Ist**: Regionale Scripts für Hamburg und Deutschland vorhanden.
+- **Soll**: Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit.
+- **Ist**: Regionale Scripts für Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschließlich über Fäden).
 - **Status**: Teil
-- **Fehlend**: Event-Stream-Integration im Backend, Offline-Modus-Konzept.
+- **Fehlend**: Offline-Modus-Konzept, Clustering ohne Semantikbruch.

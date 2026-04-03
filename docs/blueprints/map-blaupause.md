@@ -91,10 +91,10 @@ Ziel: Die Basemap wird als Artefakt erzeugt und verteilt, nicht als externer Kar
                    ▼
                 MapLibre
                    │
-        ┌──────────┼───────────┐
-        ▼          ▼           ▼
-      Edges      Nodes
-      Overlay    Overlay    Overlay
+        ┌──────────┴───────────┐
+        ▼                      ▼
+      Edges                  Nodes
+      Overlay                Overlay
 ```
 
 ### Prinzip

@@ -94,8 +94,9 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
   - _MVP-seitig erfüllt: Local Scale durch `build-hamburg-pmtiles.sh`, Large Scale durch `build-germany-pmtiles.sh`. Beide Skripte deterministisch (gepinnter Planetiler-Digest, SHA256-verifizierter OSM-Snapshot). Europe/Planet bleibt als optionale Eskalationsstufe offen._
 - [ ] Offline-Modus-Konzepte prüfen
 - [ ] Mehrskalige Projektionen prüfen
+- [ ] Verbesserte Faden-Lesbarkeit erarbeiten (z.B. Clustering ohne Semantikbruch)
 
-**Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der
+**Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. regionales Tileset oder Offline-Szenario) ist in der
 Architektur verankert und abrufbar. **Nicht-Ziele:** Implementierung einer komplett neuen Render-Engine.
 
 ## Invariante: Fäden als Dichtevisualisierung
