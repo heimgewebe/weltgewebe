@@ -43,6 +43,6 @@ Das Feld `generated_from` (bzw. die Metadaten) benennt bewusst nur die zentralen
 ## 5. Ausbau
 
 - **Soll**: Heatmap/Activity-Layer, Offline-Modus, Regionale Tilesets.
-- **Ist**: Regionale Scripts für Hamburg und Deutschland vorhanden. Heatmap-Frontend-Layer `activity.ts` implementiert und getestet, liest `weight`. Serverseitige Activity-Daten (Event-Stream) fehlen.
+- **Ist**: Regionale Scripts für Hamburg und Deutschland vorhanden.
 - **Status**: Teil
 - **Fehlend**: Event-Stream-Integration im Backend, Offline-Modus-Konzept.

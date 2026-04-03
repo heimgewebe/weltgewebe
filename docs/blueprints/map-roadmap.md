@@ -93,9 +93,21 @@ Clients zu brechen. **Nicht-Ziele:** Real-Time OSM-Updates; vollautomatisches De
 - [~] Regionale Tilesets ergänzen (Large Scale vs. Local Scale)
   - _MVP-seitig erfüllt: Local Scale durch `build-hamburg-pmtiles.sh`, Large Scale durch `build-germany-pmtiles.sh`. Beide Skripte deterministisch (gepinnter Planetiler-Digest, SHA256-verifizierter OSM-Snapshot). Europe/Planet bleibt als optionale Eskalationsstufe offen._
 - [ ] Offline-Modus-Konzepte prüfen
-- [ ] Heatmap- und Activity-Layer auf Basis der eigenen Infrastruktur ergänzen
-  - _Teilweise umgesetzt: Ein technisches Heatmap-Fundament (`activity.ts`) wurde eingezogen. Es unterstützt nun serverseitige oder clientseitige Gewichtung (weight) als technische Grundlage für eine spätere Activity-Semantik. Die vollständige Event-Stream-Integration im Backend fehlt weiterhin._
 - [ ] Mehrskalige Projektionen prüfen
 
 **Abnahmekriterium:** Mindestens ein spezifisches Zusatzfeature (z. B. Heatmap oder regionales Tileset) ist in der
 Architektur verankert und abrufbar. **Nicht-Ziele:** Implementierung einer komplett neuen Render-Engine.
+
+## Invariante: Fäden als Dichtevisualisierung
+
+Die Aktivitätsdichte wird ausschließlich durch Fäden dargestellt.
+
+Eigenschaften:
+- Anzahl der Fäden → Dichte
+- Transparenz / Verblassen → Zeit
+- Überlagerung → Intensität
+
+Separate Heatmaps sind nicht zulässig, da sie:
+- eine zweite Semantik einführen
+- die direkte Lesbarkeit von Handlung verfälschen
+- das Systemprinzip unterlaufen
