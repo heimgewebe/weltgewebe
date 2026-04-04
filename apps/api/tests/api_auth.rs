@@ -600,8 +600,7 @@ async fn consume_legacy_alias_returns_404() -> Result<()> {
     let app = app(state);
 
     // 1. GET (Legacy Alias)
-    let req_get = Request::get("/auth/login/consume?token=any")
-        .body(body::Body::empty())?;
+    let req_get = Request::get("/auth/login/consume?token=any").body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
     assert_eq!(res_get.status(), StatusCode::NOT_FOUND);
 

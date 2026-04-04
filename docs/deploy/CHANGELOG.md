@@ -305,3 +305,4 @@ während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltg
 erhalten bleibt.
 
 **Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
+Acknowledge removal of /auth/login/consume legacy alias
