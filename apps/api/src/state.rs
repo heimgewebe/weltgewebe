@@ -22,8 +22,8 @@ use async_nats::Client as NatsClient;
 /// load/insertion order for deterministic list responses.
 #[derive(Clone, Default)]
 pub struct OrderedCache<T> {
-    pub items: HashMap<String, T>,
-    pub order: Vec<String>,
+    items: HashMap<String, T>,
+    order: Vec<String>,
 }
 
 impl<T> OrderedCache<T> {
@@ -34,10 +34,16 @@ impl<T> OrderedCache<T> {
         }
     }
 
-    pub fn insert(&mut self, id: String, item: T) {
-        if self.items.insert(id.clone(), item).is_none() {
+    pub fn insert(&mut self, id: String, item: T) -> bool {
+        let is_replaced = self.items.insert(id.clone(), item).is_some();
+        if !is_replaced {
             self.order.push(id);
         }
+        is_replaced
+    }
+
+    pub fn iter_in_order(&self) -> impl Iterator<Item = &T> {
+        self.order.iter().filter_map(move |id| self.items.get(id))
     }
 
     pub fn get(&self, id: &str) -> Option<&T> {
@@ -101,10 +107,10 @@ mod tests {
         cache.insert("a".to_string(), "item_a".to_string());
         cache.insert("m".to_string(), "item_m".to_string());
 
-        let order: Vec<_> = cache.order.clone();
+        let order: Vec<_> = cache.iter_in_order().collect();
         assert_eq!(
             order,
-            vec!["z".to_string(), "a".to_string(), "m".to_string()]
+            vec![&"item_z".to_string(), &"item_a".to_string(), &"item_m".to_string()]
         );
     }
 
@@ -118,6 +124,10 @@ mod tests {
         assert_eq!(cache.get("id1"), Some(&"second".to_string()));
         assert_eq!(cache.len(), 2);
         // Order must match original insertion of the unique ID
-        assert_eq!(cache.order, vec!["id1".to_string(), "id2".to_string()]);
+        let order: Vec<_> = cache.iter_in_order().collect();
+        assert_eq!(
+            order,
+            vec![&"second".to_string(), &"item2".to_string()]
+        );
     }
 }

@@ -332,11 +332,10 @@ pub async fn load_nodes() -> OrderedCache<Node> {
             }
         };
         let node: Node = dto.into();
-        if nodes.items.contains_key(&node.id) {
+        if nodes.insert(node.id.clone(), node) {
             // Last-write-wins: Overwrite existing node
             duplicates_count += 1;
         }
-        nodes.insert(node.id.clone(), node);
     }
 
     let load_ms = start.elapsed().as_millis();
@@ -576,9 +575,7 @@ pub async fn list_nodes(
     let cache = state.nodes.read().await;
 
     let out: Vec<Node> = cache
-        .order
-        .iter()
-        .filter_map(|id| cache.items.get(id))
+        .iter_in_order()
         .filter(|node| {
             if let Some(bb) = &bbox {
                 point_in_bbox(node.location.lon, node.location.lat, bb)

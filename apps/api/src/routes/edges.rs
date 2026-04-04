@@ -97,10 +97,9 @@ pub async fn load_edges() -> OrderedCache<Edge> {
                 continue;
             }
         };
-        if edges.items.contains_key(&edge.id) {
+        if edges.insert(edge.id.clone(), edge) {
             duplicates_count += 1;
         }
-        edges.insert(edge.id.clone(), edge);
     }
 
     let load_ms = start.elapsed().as_millis();
@@ -129,9 +128,7 @@ pub async fn list_edges(
     let cache = state.edges.read().await;
 
     let out: Vec<Edge> = cache
-        .order
-        .iter()
-        .filter_map(|id| cache.items.get(id))
+        .iter_in_order()
         .filter(|edge| {
             if let Some(s) = src {
                 if edge.source_id != *s {
