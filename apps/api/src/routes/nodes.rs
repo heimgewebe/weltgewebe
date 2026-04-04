@@ -1,4 +1,4 @@
-use crate::state::ApiState;
+use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
     extract::{Path, Query, State},
@@ -304,20 +304,22 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 /// - `patch_node` updates both the file (for durability) and this cache (for consistency).
 /// - External modifications to the nodes file (e.g. via deployment or manual edit)
 ///   will NOT be detected until the API process is restarted.
-pub async fn load_nodes() -> Vec<Node> {
+pub async fn load_nodes() -> OrderedCache<Node> {
     let start = std::time::Instant::now();
     let path = nodes_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open nodes file, returning empty list");
-            return Vec::new();
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open nodes file, returning empty cache"
+            );
+            return OrderedCache::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut nodes = Vec::new();
-    // Temporary map to handle duplicates efficiently during load
-    let mut id_map: HashMap<String, usize> = HashMap::new();
+    let mut nodes = OrderedCache::new();
     let mut duplicates_count = 0;
     let mut skipped_count = 0;
 
@@ -330,13 +332,9 @@ pub async fn load_nodes() -> Vec<Node> {
             }
         };
         let node: Node = dto.into();
-        if let Some(&idx) = id_map.get(&node.id) {
+        if nodes.insert(node.id.clone(), node) {
             // Last-write-wins: Overwrite existing node
-            nodes[idx] = node;
             duplicates_count += 1;
-        } else {
-            id_map.insert(node.id.clone(), nodes.len());
-            nodes.push(node);
         }
     }
 
@@ -373,8 +371,7 @@ pub async fn get_node(
 ) -> Result<Json<Node>, StatusCode> {
     let nodes = state.nodes.read().await;
     nodes
-        .iter()
-        .find(|n| n.id == id)
+        .get(&id)
         .cloned()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
@@ -465,6 +462,12 @@ pub async fn patch_node(
                 // Map to Node and fail hard if mapping fails.
                 // Ensures we never persist changes without a valid Node response.
                 let node = map_json_to_node(&v).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                // Security/Consistency: Ensure the ID hasn't been changed via the update.
+                if node.id != id {
+                    tracing::error!(path_id = %id, payload_id = %node.id, "Node ID mismatch in PATCH");
+                    return Err(StatusCode::BAD_REQUEST);
+                }
                 found_node = Some(node);
 
                 let s = serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -524,26 +527,22 @@ pub async fn patch_node(
 
     // Update in-memory cache
     let start_mem_wait = std::time::Instant::now();
-    let mut nodes_guard = state.nodes.write().await;
+    let mut cache_guard = state.nodes.write().await;
     let mem_lock_wait_ms = start_mem_wait.elapsed().as_millis();
     let start_mem_hold = std::time::Instant::now();
 
     if let Some(ref updated_node) = found_node {
-        if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
-            nodes_guard[idx] = updated_node.clone();
-        } else {
-            nodes_guard.push(updated_node.clone());
-        }
+        cache_guard.insert(id.clone(), updated_node.clone());
     }
 
     // Update metrics
     state
         .metrics
-        .set_nodes_cache_count(nodes_guard.len() as i64);
+        .set_nodes_cache_count(cache_guard.len() as i64);
 
     let mem_lock_hold_ms = start_mem_hold.elapsed().as_millis();
     // Explicitly drop lock before logging to avoid holding it during tracing
-    drop(nodes_guard);
+    drop(cache_guard);
 
     tracing::info!(
         persist_ms,
@@ -573,10 +572,10 @@ pub async fn list_nodes(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let nodes = state.nodes.read().await;
+    let cache = state.nodes.read().await;
 
-    let out: Vec<Node> = nodes
-        .iter()
+    let out: Vec<Node> = cache
+        .iter_in_order()
         .filter(|node| {
             if let Some(bb) = &bbox {
                 point_in_bbox(node.location.lon, node.location.lat, bb)

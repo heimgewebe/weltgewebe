@@ -89,9 +89,13 @@ mod tests {
             tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
             step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
             accounts: Arc::new(RwLock::new(account_map)),
-            nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            nodes: Arc::new(tokio::sync::RwLock::new(
+                weltgewebe_api::state::OrderedCache::new(),
+            )),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
-            edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+            edges: Arc::new(tokio::sync::RwLock::new(
+                weltgewebe_api::state::OrderedCache::new(),
+            )),
             rate_limiter,
             mailer: None, // No Mailer instance
             webauthn: None,

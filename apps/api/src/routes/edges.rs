@@ -1,4 +1,4 @@
-use crate::state::ApiState;
+use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
     extract::{Path, Query, State},
@@ -45,18 +45,24 @@ pub struct EdgeWithDetails {
 
 const MAX_PAGE_SIZE: usize = 1000;
 
-pub async fn load_edges() -> Vec<Edge> {
+pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open edges file, returning empty list");
-            return Vec::new();
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open edges file, returning empty cache"
+            );
+            return OrderedCache::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut edges = Vec::new();
+    let mut edges = OrderedCache::new();
+    let mut records_read = 0;
+    let mut duplicates_count = 0;
 
     let max_edges = match std::env::var("MAX_EDGES_CACHE") {
         Ok(val) => match val.parse::<usize>() {
@@ -73,7 +79,7 @@ pub async fn load_edges() -> Vec<Edge> {
     };
 
     while let Ok(Some(line)) = lines.next_line().await {
-        if edges.len() >= max_edges {
+        if records_read >= max_edges {
             tracing::warn!(
                 ?path,
                 max_edges,
@@ -81,6 +87,7 @@ pub async fn load_edges() -> Vec<Edge> {
             );
             break;
         }
+        records_read += 1;
 
         let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
@@ -90,12 +97,15 @@ pub async fn load_edges() -> Vec<Edge> {
                 continue;
             }
         };
-        edges.push(edge);
+        if edges.insert(edge.id.clone(), edge) {
+            duplicates_count += 1;
+        }
     }
 
     let load_ms = start.elapsed().as_millis();
     tracing::info!(
         count = edges.len(),
+        duplicates_count,
         load_ms,
         ?path,
         "Loaded edges into memory cache"
@@ -115,10 +125,10 @@ pub async fn list_edges(
         .unwrap_or(250)
         .min(MAX_PAGE_SIZE);
 
-    let edges = state.edges.read().await;
+    let cache = state.edges.read().await;
 
-    let out: Vec<Edge> = edges
-        .iter()
+    let out: Vec<Edge> = cache
+        .iter_in_order()
         .filter(|edge| {
             if let Some(s) = src {
                 if edge.source_id != *s {
@@ -143,12 +153,8 @@ pub async fn get_edge(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<EdgeWithDetails>, StatusCode> {
-    let edges = state.edges.read().await;
-    let edge = edges
-        .iter()
-        .find(|e| e.id == id)
-        .cloned()
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let cache = state.edges.read().await;
+    let edge = cache.get(&id).cloned().ok_or(StatusCode::NOT_FOUND)?;
 
     let mut source_details = None;
     let mut target_details = None;
@@ -164,8 +170,8 @@ pub async fn get_edge(
                 });
             }
         } else if src_type == "node" {
-            let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.iter().find(|n| n.id == edge.source_id) {
+            let nodes_cache = state.nodes.read().await;
+            if let Some(node) = nodes_cache.get(&edge.source_id) {
                 source_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),
@@ -186,8 +192,8 @@ pub async fn get_edge(
                 });
             }
         } else if tgt_type == "node" {
-            let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.iter().find(|n| n.id == edge.target_id) {
+            let nodes_cache = state.nodes.read().await;
+            if let Some(node) = nodes_cache.get(&edge.target_id) {
                 target_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),

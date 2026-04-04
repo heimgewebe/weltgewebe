@@ -54,14 +54,14 @@ pub async fn run() -> anyhow::Result<()> {
         routes::accounts::load_all_accounts().await,
     ));
 
-    let nodes_list = routes::nodes::load_nodes().await;
-    metrics.set_nodes_cache_count(nodes_list.len() as i64);
-    let nodes = Arc::new(tokio::sync::RwLock::new(nodes_list));
+    let nodes_cache = routes::nodes::load_nodes().await;
+    metrics.set_nodes_cache_count(nodes_cache.len() as i64);
+    let nodes = Arc::new(tokio::sync::RwLock::new(nodes_cache));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
 
-    let edges_list = routes::edges::load_edges().await;
-    metrics.set_edges_cache_count(edges_list.len() as i64);
-    let edges = Arc::new(tokio::sync::RwLock::new(edges_list));
+    let edges_cache = routes::edges::load_edges().await;
+    metrics.set_edges_cache_count(edges_cache.len() as i64);
+    let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
 
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
 
