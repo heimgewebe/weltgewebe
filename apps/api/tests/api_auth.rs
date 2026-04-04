@@ -51,6 +51,9 @@ fn test_state() -> Result<ApiState> {
         smtp_from: None,
         // Enable token logging to satisfy "delivery mechanism required" policy for tests
         auth_log_magic_token: true,
+        webauthn_rp_id: None,
+        webauthn_rp_origin: None,
+        webauthn_rp_name: None,
     };
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -72,6 +75,8 @@ fn test_state() -> Result<ApiState> {
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
+        webauthn: None,
+        passkey_registrations: Default::default(),
     })
 }
 
@@ -94,6 +99,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -112,6 +118,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
         role: Role::Admin,
         email: Some("a1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -278,6 +285,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         },
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1156,6 +1164,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
                 },
                 role: Role::Gast,
                 email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
+                webauthn_user_id: uuid::Uuid::new_v4(),
             },
         );
     }
@@ -1304,6 +1313,7 @@ async fn test_session_refresh_success() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1466,6 +1476,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1529,6 +1540,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account.clone());
 
@@ -1607,6 +1619,7 @@ async fn test_logout() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1694,6 +1707,7 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1859,6 +1873,7 @@ async fn test_device_management() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -2224,6 +2239,7 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
             },
             role: weltgewebe_api::auth::role::Role::Gast,
             email: Some("u2@example.com".to_string()),
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         accounts.insert("u2".to_string(), account);
     }
@@ -2296,6 +2312,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
             },
             role: weltgewebe_api::auth::role::Role::Gast,
             email: None, // Missing email
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         accounts.insert("u2".to_string(), account);
     }
@@ -3222,6 +3239,7 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
                 },
                 role: weltgewebe_api::auth::role::Role::Gast,
                 email: Some("u2@example.com".to_string()),
+                webauthn_user_id: uuid::Uuid::new_v4(),
             },
         );
     }
@@ -3376,6 +3394,192 @@ async fn test_update_email_consume_session_rotation() -> Result<()> {
     let accounts = state.accounts.read().await;
     let acc = accounts.get("u1").unwrap();
     assert_eq!(acc.email, Some("rotated@example.com".to_string()));
+
+    Ok(())
+}
+
+// ─── Passkey / WebAuthn Integration Tests ────────────────────────────────────
+
+/// Helper: build a test state with WebAuthn configured (rp_id=localhost, origin=http://localhost:3000).
+fn test_state_with_webauthn() -> Result<ApiState> {
+    let mut state = test_state_with_accounts()?;
+    state.config.webauthn_rp_id = Some("localhost".to_string());
+    state.config.webauthn_rp_origin = Some("http://localhost:3000".to_string());
+    let webauthn = weltgewebe_api::auth::passkeys::build_webauthn(&state.config)
+        .context("failed to build Webauthn")?
+        .context("Webauthn should be Some when rp_id/rp_origin set")?;
+    state.webauthn = Some(webauthn);
+    Ok(state)
+}
+
+fn app_with_auth(state: ApiState) -> Router {
+    Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state)
+}
+
+#[tokio::test]
+async fn passkey_register_options_requires_authentication() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "unauthenticated request must be rejected"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_options_returns_503_when_not_configured() -> Result<()> {
+    let state = test_state_with_accounts()?;
+    // webauthn is None in default test_state
+    let session = state.sessions.create("u1".to_string(), None);
+
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "should return 503 when WebAuthn not configured"
+    );
+
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body_json["error"], "PASSKEYS_NOT_CONFIGURED");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_options_success() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let session = state.sessions.create("u1".to_string(), None);
+
+    // Capture the webauthn_user_id before the request.
+    let expected_wuid = {
+        let accounts = state.accounts.read().await;
+        accounts.get("u1").unwrap().webauthn_user_id
+    };
+
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    let status = res.status();
+    let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+
+    if status != StatusCode::OK {
+        let text = String::from_utf8_lossy(&body_bytes);
+        panic!("expected 200 OK, got {status}: {text}");
+    }
+
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+
+    // Must contain a registration_id for the client to send back with register/verify.
+    assert!(
+        body_json.get("registration_id").is_some(),
+        "response must include registration_id"
+    );
+
+    // Must contain WebAuthn creation options under "options".
+    let options = body_json
+        .get("options")
+        .expect("response must include options");
+    let public_key = options
+        .get("publicKey")
+        .expect("options must include publicKey");
+
+    // Verify RP ID comes from config.
+    let rp = public_key.get("rp").expect("publicKey must include rp");
+    assert_eq!(rp["id"], "localhost", "rp.id must match configured value");
+
+    // Verify user.id matches the persisted webauthn_user_id (not a random new one).
+    let user = public_key.get("user").expect("publicKey must include user");
+    let user_id_b64 = user["id"].as_str().expect("user.id must be string");
+    let decoded = {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::Engine;
+        URL_SAFE_NO_PAD.decode(user_id_b64)?
+    };
+    assert_eq!(
+        decoded,
+        expected_wuid.as_bytes().to_vec(),
+        "user.id must match the persisted webauthn_user_id"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_options_stable_webauthn_user_id() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let session = state.sessions.create("u1".to_string(), None);
+
+    let app = app_with_auth(state.clone());
+
+    // First call
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body1: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(res.into_body(), usize::MAX).await?)?;
+
+    // Second call (rebuild the app since oneshot consumes it)
+    let app2 = app_with_auth(state);
+    let req2 = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::empty())?;
+    let res2 = app2.oneshot(req2).await?;
+    assert_eq!(res2.status(), StatusCode::OK);
+    let body2: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(res2.into_body(), usize::MAX).await?)?;
+
+    // The user.id must be identical across calls (stable identity).
+    let uid1 = &body1["options"]["publicKey"]["user"]["id"];
+    let uid2 = &body2["options"]["publicKey"]["user"]["id"];
+    assert_eq!(
+        uid1, uid2,
+        "webauthn_user_id must be stable across registration attempts"
+    );
+
+    // But each call must produce a different registration_id (different challenge).
+    let reg1 = &body1["registration_id"];
+    let reg2 = &body2["registration_id"];
+    assert_ne!(
+        reg1, reg2,
+        "each registration attempt must get a unique registration_id"
+    );
 
     Ok(())
 }

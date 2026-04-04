@@ -257,21 +257,39 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 **Ziel:** Komfort und Sicherheit erhöhen, ohne Recovery zu opfern.
 
+### Architekturentscheidung: WebAuthn-Identität
+
+- Jeder Account erhält eine dedizierte `webauthn_user_id` (UUID v4).
+- Diese wird **nicht** aus `account_id` abgeleitet, sondern unabhängig verwaltet.
+- `account_id` bleibt die interne Fachidentität; `webauthn_user_id` ist die vom WebAuthn-Protokoll verwendete opake Nutzerkennung.
+- `rp_id` und `rp_origin` kommen aus `AppConfig` (Env: `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`). Keine hardcodierten Defaults.
+- **Persistenzstatus:** Der Wert wird aus der Datenquelle gelesen, wenn vorhanden. Bei Accounts ohne persistierten Wert wird er beim Laden erzeugt (Lazy Backfill) und ist für die Laufzeit des Prozesses stabil. Eine dauerhafte Persistenz über Neustarts hinweg ist erst mit `register/verify` nötig und noch nicht implementiert.
+
 ### Arbeitspakete Phase 4
 
-1. Statusbeweis: Was existiert bereits?
-2. Register-Options
-3. Register-Verify
-4. Auth-Options
-5. Auth-Verify
-6. Passkeys auflisten
-7. Passkey entfernen
-8. UI-Aktivierung erst nach erfolgreichem Login anbieten
+1. [x] Statusbeweis: Was existiert bereits?
+2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Tests implementiert
+3. [ ] Register-Verify
+4. [ ] Auth-Options
+5. [ ] Auth-Verify
+6. [ ] Passkeys auflisten
+7. [ ] Passkey entfernen
+8. [ ] UI-Aktivierung erst nach erfolgreichem Login anbieten
+
+### Aktueller Stand
+
+- `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; persistenzpflichtig ab register/verify)
+- WebAuthn-Konfiguration (`rp_id`, `rp_origin`, optional `rp_name`) aus `AppConfig` mit Validierung
+- `Webauthn`-Instanz wird beim Start einmalig gebaut (optional, nur wenn konfiguriert)
+- Register-Options-Endpunkt gibt `CreationChallengeResponse` mit `webauthn_user_id` zurück
+- In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min)
+- 11 Tests belegen die neue Semantik (7 Unit + 4 Integration)
+- **Offen:** Register-Verify (inkl. Persistenz der webauthn_user_id), Auth-Optionen/Verify, Passkey-Speicherung, UI
 
 ### Voraussetzungen
 
-- stabile Session
-- definierter Geräte- und Step-up-Pfad
+- stabile Session ✅
+- definierter Geräte- und Step-up-Pfad ✅
 
 ### Stop-Kriterium für Phase 4
 

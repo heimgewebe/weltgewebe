@@ -185,6 +185,50 @@ Response:
 
 `POST /auth/passkeys/register/options`
 
+**Voraussetzung:** Aktive authentifizierte Session.
+
+**Zweck:** Erzeugt WebAuthn-Registrierungsoptionen für den eingeloggten Account.
+Der Client übergibt diese Optionen an `navigator.credentials.create()`.
+Die serverseitig gespeicherte `registration_id` muss im nachfolgenden
+`POST /auth/passkeys/register/verify`-Schritt mitgesendet werden.
+
+**Hinweis:** Step-up-Auth ist für den vollständigen Registrierungsfluss
+(`register/options` + `register/verify`) vorgesehen (vgl. Step-up-Sektion).
+Der `register/verify`-Schritt ist noch nicht implementiert.
+
+**Response `200 OK`:**
+
+```json
+{
+  "registration_id": "<uuid>",
+  "options": { }
+}
+```
+
+- `registration_id`: UUID, die den serverseitig gespeicherten Registrierungszustand
+  (In-Memory, TTL 5 Min) identifiziert. Muss im `register/verify`-Schritt übergeben werden.
+- `options`: WebAuthn `CreationChallengeResponse` — enthält Challenge, RP-Parameter,
+  User-Handle und Algorithmen für `navigator.credentials.create()`.
+  Die Shape entspricht dem webauthn-rs-Protokoll und ist nicht weiter flachgeklopft.
+
+**Fehlerfälle:**
+
+| HTTP-Status | `error`-Code             | Ursache                                                            |
+|-------------|--------------------------|--------------------------------------------------------------------|
+| `401`       | `UNAUTHORIZED`           | Keine aktive Session                                               |
+| `400`       | `ACCOUNT_INVALID`        | Session referenziert nicht mehr existierenden Account              |
+| `503`       | `PASSKEYS_NOT_CONFIGURED`| WebAuthn ist auf diesem Server nicht konfiguriert                  |
+| `500`       | `INTERNAL_ERROR`         | Generierung der Optionen fehlgeschlagen                            |
+
+**Architekturanmerkungen (Phase-4-Teilschritt):**
+
+- `exclude_credentials` wird noch nicht befüllt — bestehende Credentials des Accounts
+  werden noch nicht in die Exclude-Liste eingespeist. Das ist erst nach Passkey-Speicherung möglich.
+- Die `webauthn_user_id` des Accounts ist bei bereits persistiertem Wert dauerhaft stabil;
+  bei Accounts ohne persistierten Wert ist sie lazy-backfill/prozessstabil
+  (kein Writeback in dieser Phase). Writeback-Persistenz ist Voraussetzung für `register/verify`.
+- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung, List, Remove und UI sind offen.
+
 ### Registrierung abschließen
 
 `POST /auth/passkeys/register/verify`

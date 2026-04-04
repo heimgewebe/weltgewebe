@@ -64,6 +64,23 @@ pub async fn run() -> anyhow::Result<()> {
     let edges = Arc::new(tokio::sync::RwLock::new(edges_list));
 
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
+
+    // WebAuthn / Passkey support (optional — only active when WEBAUTHN_RP_ID + WEBAUTHN_RP_ORIGIN are set)
+    let webauthn = match crate::auth::passkeys::build_webauthn(&app_config) {
+        Ok(Some(wa)) => {
+            tracing::info!("WebAuthn passkey support enabled");
+            Some(wa)
+        }
+        Ok(None) => {
+            tracing::info!("WebAuthn passkey support not configured (WEBAUTHN_RP_ID / WEBAUTHN_RP_ORIGIN unset)");
+            None
+        }
+        Err(e) => {
+            return Err(anyhow!("Failed to initialize WebAuthn: {}", e));
+        }
+    };
+    let passkey_registrations = crate::auth::passkeys::PasskeyRegistrationStore::new();
+
     let mailer = match crate::mailer::Mailer::new(&app_config) {
         Ok(mailer) => Some(Arc::new(mailer)),
         Err(error) => {
@@ -101,6 +118,8 @@ pub async fn run() -> anyhow::Result<()> {
         edges,
         rate_limiter,
         mailer,
+        webauthn,
+        passkey_registrations,
     };
 
     let app = Router::new()
