@@ -975,4 +975,18 @@ delegation_expire_days: 28
         );
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_fragment() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com#frag");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "origin with a fragment must be rejected");
+        Ok(())
+    }
 }
