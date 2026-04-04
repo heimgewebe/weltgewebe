@@ -3,8 +3,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     auth::{
-        challenges::ChallengeStore, rate_limit::AuthRateLimiter, session::SessionStore,
-        step_up_tokens::StepUpTokenStore, tokens::TokenStore,
+        challenges::ChallengeStore, passkeys::PasskeyRegistrationStore,
+        rate_limit::AuthRateLimiter, session::SessionStore, step_up_tokens::StepUpTokenStore,
+        tokens::TokenStore,
     },
     config::AppConfig,
     mailer::Mailer,
@@ -13,6 +14,7 @@ use crate::{
 };
 use async_nats::Client as NatsClient;
 use sqlx::PgPool;
+use webauthn_rs::prelude::Webauthn;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -32,4 +34,7 @@ pub struct ApiState {
     pub edges: Arc<RwLock<Vec<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
+    /// WebAuthn instance, present only when passkey support is configured.
+    pub webauthn: Option<Arc<Webauthn>>,
+    pub passkey_registrations: PasskeyRegistrationStore,
 }

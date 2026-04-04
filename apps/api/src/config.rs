@@ -90,6 +90,14 @@ pub struct AppConfig {
     #[serde(default)]
     pub smtp_from: Option<String>,
 
+    // WebAuthn / Passkey Configuration
+    #[serde(default)]
+    pub webauthn_rp_id: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_origin: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_name: Option<String>,
+
     // Dev/Ops Configuration
     #[serde(default)]
     pub auth_log_magic_token: bool,
@@ -136,6 +144,13 @@ impl AppConfig {
             .with_context(|| format!("failed to read configuration file at {}", path.display()))?;
         let config: Self = serde_yaml::from_str(&raw)
             .with_context(|| format!("failed to parse configuration file at {}", path.display()))?;
+        config.apply_env_overrides()
+    }
+
+    /// Parse configuration from a YAML string (primarily for tests).
+    pub fn load_from_str(yaml: &str) -> Result<Self> {
+        let config: Self =
+            serde_yaml::from_str(yaml).context("failed to parse YAML configuration string")?;
         config.apply_env_overrides()
     }
 
@@ -222,6 +237,26 @@ impl AppConfig {
         if let Ok(val) = env::var("AUTH_LOG_MAGIC_TOKEN") {
             let val = val.trim();
             self.auth_log_magic_token = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+
+        // WebAuthn Overrides
+        if let Ok(val) = env::var("WEBAUTHN_RP_ID") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_id = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("WEBAUTHN_RP_ORIGIN") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_origin = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("WEBAUTHN_RP_NAME") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_name = Some(val.to_string());
+            }
         }
 
         self.normalize().validate()
@@ -331,6 +366,30 @@ impl AppConfig {
             anyhow::bail!(
                 "SMTP_HOST is set but SMTP_FROM is missing. Please set SMTP_FROM (e.g. noreply@example.com)."
             );
+        }
+
+        // WebAuthn Configuration Validation
+        // rp_id and rp_origin must both be set (or both unset).
+        // When set, rp_origin must be a valid URL whose host matches rp_id.
+        let has_rp_id = self.webauthn_rp_id.is_some();
+        let has_rp_origin = self.webauthn_rp_origin.is_some();
+        if has_rp_id != has_rp_origin {
+            anyhow::bail!(
+                "WEBAUTHN_RP_ID and WEBAUTHN_RP_ORIGIN must both be set or both be unset."
+            );
+        }
+        if let (Some(rp_id), Some(rp_origin)) = (&self.webauthn_rp_id, &self.webauthn_rp_origin) {
+            let origin_url = url::Url::parse(rp_origin).map_err(|e| {
+                anyhow::anyhow!("WEBAUTHN_RP_ORIGIN is not a valid URL: {rp_origin} ({e})")
+            })?;
+            let origin_host = origin_url.host_str().unwrap_or("");
+            // rp_id must be a suffix of the origin host (per WebAuthn spec §5.1.3)
+            if !origin_host.ends_with(rp_id.as_str()) {
+                anyhow::bail!(
+                    "WEBAUTHN_RP_ORIGIN host '{origin_host}' does not match WEBAUTHN_RP_ID '{rp_id}'. \
+                     The RP ID must be a registrable domain suffix of the origin."
+                );
+            }
         }
 
         Ok(self)

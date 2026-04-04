@@ -16,6 +16,7 @@ use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
 };
+use uuid::Uuid;
 
 const METERS_PER_DEGREE: f64 = 111_000.0;
 const COS_LAT_FLOOR: f64 = 1e-3;
@@ -73,6 +74,10 @@ pub struct AccountInternal {
     pub public: AccountPublic,
     pub role: Role,
     pub email: Option<String>,
+    /// Stable WebAuthn user identity. Generated once per account and persisted.
+    /// This is NOT derived from `account_id` — it is an independent, opaque handle
+    /// used exclusively by the WebAuthn protocol to identify the user.
+    pub webauthn_user_id: Uuid,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -287,11 +292,23 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
+        // Read persisted webauthn_user_id if present; otherwise generate a new one.
+        // NOTE: This generated ID is stable only for the lifetime of this process.
+        // Once passkey registration is implemented (register-verify), the generated
+        // webauthn_user_id MUST be persisted back to the account data source so that
+        // registered passkeys remain bound to the correct identity across restarts.
+        let webauthn_user_id = v
+            .get("webauthn_user_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .unwrap_or_else(Uuid::new_v4);
+
         if let Some(public) = map_json_to_public_account(&v) {
             let account = AccountInternal {
                 public,
                 role,
                 email,
+                webauthn_user_id,
             };
             map.insert(account.public.id.clone(), account);
         }
