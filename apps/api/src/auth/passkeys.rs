@@ -7,9 +7,14 @@
 //!
 //! ## Design decisions
 //!
-//! * **`webauthn_user_id`** is a dedicated, persisted UUID per account — it is
+//! * **`webauthn_user_id`** is a dedicated UUID per account that is
 //!   NOT derived from `account_id`. This decouples the WebAuthn identity from
 //!   internal account semantics and protects against future migration pain.
+//!   **Persistence status:** the value is read from the account data source when
+//!   present and generated fresh (lazy backfill) when absent. It is stable for
+//!   the lifetime of the running process. Across restarts it is only stable once
+//!   the value has been written back to the account data source — which is a
+//!   prerequisite for `register/verify` and is NOT yet implemented.
 //! * **`rp_id` / `rp_origin`** come from `AppConfig` (env overrides supported).
 //!   No hardcoded defaults — missing values cause an explicit startup error when
 //!   passkeys are enabled.
@@ -57,7 +62,10 @@ pub fn build_webauthn(config: &AppConfig) -> Result<Option<Arc<Webauthn>>, Webau
     };
 
     let rp_origin = Url::parse(rp_origin_str)?;
-    let builder = WebauthnBuilder::new(rp_id, &rp_origin)?;
+    let mut builder = WebauthnBuilder::new(rp_id, &rp_origin)?;
+    if let Some(name) = config.webauthn_rp_name.as_deref() {
+        builder = builder.rp_name(name);
+    }
     let webauthn = builder.build()?;
     Ok(Some(Arc::new(webauthn)))
 }

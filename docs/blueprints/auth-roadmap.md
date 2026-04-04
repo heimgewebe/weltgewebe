@@ -259,10 +259,11 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 ### Architekturentscheidung: WebAuthn-Identität
 
-- Jeder Account erhält eine dedizierte, stabile `webauthn_user_id` (UUID v4).
-- Diese wird **nicht** aus `account_id` abgeleitet, sondern einmalig erzeugt und persistiert.
+- Jeder Account erhält eine dedizierte `webauthn_user_id` (UUID v4).
+- Diese wird **nicht** aus `account_id` abgeleitet, sondern unabhängig verwaltet.
 - `account_id` bleibt die interne Fachidentität; `webauthn_user_id` ist die vom WebAuthn-Protokoll verwendete opake Nutzerkennung.
 - `rp_id` und `rp_origin` kommen aus `AppConfig` (Env: `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`). Keine hardcodierten Defaults.
+- **Persistenzstatus:** Der Wert wird aus der Datenquelle gelesen, wenn vorhanden. Bei Accounts ohne persistierten Wert wird er beim Laden erzeugt (Lazy Backfill) und ist für die Laufzeit des Prozesses stabil. Eine dauerhafte Persistenz über Neustarts hinweg ist erst mit `register/verify` nötig und noch nicht implementiert.
 
 ### Arbeitspakete Phase 4
 
@@ -277,13 +278,13 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 ### Aktueller Stand
 
-- `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt
-- WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung
+- `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; persistenzpflichtig ab register/verify)
+- WebAuthn-Konfiguration (`rp_id`, `rp_origin`, optional `rp_name`) aus `AppConfig` mit Validierung
 - `Webauthn`-Instanz wird beim Start einmalig gebaut (optional, nur wenn konfiguriert)
-- Register-Options-Endpunkt gibt `CreationChallengeResponse` mit stabiler `webauthn_user_id` zurück
+- Register-Options-Endpunkt gibt `CreationChallengeResponse` mit `webauthn_user_id` zurück
 - In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min)
 - 11 Tests belegen die neue Semantik (7 Unit + 4 Integration)
-- **Offen:** Register-Verify, Auth-Optionen/Verify, Passkey-Speicherung, UI
+- **Offen:** Register-Verify (inkl. Persistenz der webauthn_user_id), Auth-Optionen/Verify, Passkey-Speicherung, UI
 
 ### Voraussetzungen
 

@@ -776,4 +776,60 @@ delegation_expire_days: 28
 
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn webauthn_env_overrides_are_applied() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com");
+        let _rp_name = EnvGuard::set("WEBAUTHN_RP_NAME", "My App");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.webauthn_rp_id.as_deref(), Some("example.com"));
+        assert_eq!(
+            cfg.webauthn_rp_origin.as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(cfg.webauthn_rp_name.as_deref(), Some("My App"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_rp_id_without_origin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::unset("WEBAUTHN_RP_ORIGIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "rp_id without rp_origin must be rejected at config load"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_mismatched_origin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // rp_id is "example.com" but origin host is "other.org" — must be rejected.
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://other.org");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin that does not end with rp_id must be rejected"
+        );
+        Ok(())
+    }
 }

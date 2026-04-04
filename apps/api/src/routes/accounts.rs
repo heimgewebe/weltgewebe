@@ -74,9 +74,16 @@ pub struct AccountInternal {
     pub public: AccountPublic,
     pub role: Role,
     pub email: Option<String>,
-    /// Stable WebAuthn user identity. Generated once per account and persisted.
+    /// Dedicated WebAuthn user identity for this account.
     /// This is NOT derived from `account_id` — it is an independent, opaque handle
     /// used exclusively by the WebAuthn protocol to identify the user.
+    ///
+    /// **Persistence:** read from the account data source when present. When absent
+    /// (e.g. existing accounts loaded before this field was introduced), a fresh
+    /// UUID v4 is generated at load time as a lazy backfill. This generated value
+    /// is stable for the lifetime of the running process only. It becomes durable
+    /// once written back to the data source — a prerequisite for `register/verify`
+    /// that is not yet implemented.
     pub webauthn_user_id: Uuid,
 }
 
