@@ -1,15 +1,30 @@
 <script lang="ts">
   import { page } from '$app/stores';
 
-  $: token = $page.url.searchParams.get('token');
-  $: challengeId = $page.url.searchParams.get('challenge_id');
+  let token: string | null = null;
+  let challengeId: string | null = null;
+
+  // Track last evaluated pair to detect navigation changes
+  let lastEvaluatedToken: string | null = null;
+  let lastEvaluatedChallengeId: string | null = null;
+
   let status: 'idle' | 'loading' | 'success' | 'error' | 'invalid' = 'idle';
 
   $: {
+    token = $page.url.searchParams.get('token');
+    challengeId = $page.url.searchParams.get('challenge_id');
+
     if (!token || !challengeId) {
       status = 'invalid';
-    } else if (status === 'invalid') {
-      status = 'idle';
+      lastEvaluatedToken = token;
+      lastEvaluatedChallengeId = challengeId;
+    } else {
+      // Both exist. If they represent a NEW valid pair, reset to idle
+      if (token !== lastEvaluatedToken || challengeId !== lastEvaluatedChallengeId) {
+        status = 'idle';
+        lastEvaluatedToken = token;
+        lastEvaluatedChallengeId = challengeId;
+      }
     }
   }
 
