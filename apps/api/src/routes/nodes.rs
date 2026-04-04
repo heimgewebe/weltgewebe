@@ -310,7 +310,11 @@ pub async fn load_nodes() -> OrderedCache<Node> {
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open nodes file, returning empty cache");
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open nodes file, returning empty cache"
+            );
             return OrderedCache::new();
         }
     };
@@ -459,6 +463,13 @@ pub async fn patch_node(
                 // Map to Node and fail hard if mapping fails.
                 // Ensures we never persist changes without a valid Node response.
                 let node = map_json_to_node(&v).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                // Security/Consistency: Ensure the ID hasn't been changed via the update.
+                if node.id != id {
+                    tracing::error!(path_id = %id, payload_id = %node.id, "Node ID mismatch in PATCH");
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+
                 found_node = Some(node);
 
                 let s = serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

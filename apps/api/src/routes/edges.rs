@@ -51,12 +51,17 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open edges file, returning empty cache");
+            tracing::warn!(
+                ?path,
+                ?e,
+                "Failed to open edges file, returning empty cache"
+            );
             return OrderedCache::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
     let mut edges = OrderedCache::new();
+    let mut records_read = 0;
     let mut duplicates_count = 0;
 
     let max_edges = match std::env::var("MAX_EDGES_CACHE") {
@@ -74,7 +79,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     };
 
     while let Ok(Some(line)) = lines.next_line().await {
-        if edges.len() >= max_edges {
+        if records_read >= max_edges {
             tracing::warn!(
                 ?path,
                 max_edges,
@@ -82,6 +87,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
             );
             break;
         }
+        records_read += 1;
 
         let edge: Edge = match serde_json::from_str(&line) {
             Ok(v) => v,
