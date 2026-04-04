@@ -73,7 +73,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert | Teil   | mittel  |
-| Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
+| Passkeys              | optional    | Register-Options implementiert, stabile `webauthn_user_id`, Config-basiert; restlicher Pfad offen | Teil  | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
 
 ---
@@ -153,11 +153,23 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.8 Passkeys
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
-**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
-**Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
+**Ist:**
+- `webauthn_user_id` als dedizierte, stabile UUID pro Account eingeführt (nicht aus `account_id` abgeleitet)
+- WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
+- `POST /auth/passkeys/register/options` implementiert (gibt `CreationChallengeResponse` zurück)
+- `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min)
+- **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Speicherung, List, Remove, UI
+
+**Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert)
+**Code-, Test- und Verifikationsbelege:**
+- `apps/api/src/auth/passkeys.rs` — Modul mit Builder, Store, Registrierung
+- `apps/api/src/routes/auth.rs` — `passkey_register_options` Endpunkt
+- `apps/api/src/config.rs` — `webauthn_rp_id`, `webauthn_rp_origin`, `webauthn_rp_name`
+- `apps/api/src/routes/accounts.rs` — `webauthn_user_id` am Account-Modell
+- 7 Unit-Tests (passkeys.rs) + 4 Integrationstests (api_auth.rs)
+
+**Fehlende Belege:** Register-Verify, Auth-Flow, Passkey-Persistenz, E2E-UI
+**Status:** Teil
 **Risiko:** mittel
 
 ### 2.9 Sicherheitsinvarianten

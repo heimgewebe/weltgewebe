@@ -140,15 +140,27 @@
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
-      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
-      "status": "Offen",
-      "documentation_evidence": [],
+      "ist": "Register-Options implementiert. Dedizierte webauthn_user_id pro Account (UUID v4, nicht aus account_id abgeleitet). WebAuthn-Config aus AppConfig. Restlicher Pfad (Register-Verify, Auth, List, Remove) offen.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/auth-roadmap.md (Phase 4 aktualisiert)"
+      ],
       "missing_evidence": [
-        "Routen-Code",
-        "Test-Case"
+        "Register-Verify",
+        "Auth-Options",
+        "Auth-Verify",
+        "Passkey-Persistenz",
+        "List/Remove",
+        "E2E-UI"
       ],
       "risk": "mittel",
-      "code_runtime_evidence": []
+      "code_runtime_evidence": [
+        "apps/api/src/auth/passkeys.rs",
+        "apps/api/src/routes/auth.rs (passkey_register_options)",
+        "apps/api/src/config.rs (webauthn_rp_id, webauthn_rp_origin)",
+        "apps/api/src/routes/accounts.rs (webauthn_user_id)",
+        "7 Unit-Tests + 4 Integrationstests"
+      ]
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
