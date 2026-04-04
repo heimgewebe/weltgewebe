@@ -304,20 +304,18 @@ fn map_json_to_node(v: &Value) -> Option<Node> {
 /// - `patch_node` updates both the file (for durability) and this cache (for consistency).
 /// - External modifications to the nodes file (e.g. via deployment or manual edit)
 ///   will NOT be detected until the API process is restarted.
-pub async fn load_nodes() -> Vec<Node> {
+pub async fn load_nodes() -> HashMap<String, Node> {
     let start = std::time::Instant::now();
     let path = nodes_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(?path, ?e, "Failed to open nodes file, returning empty list");
-            return Vec::new();
+            return HashMap::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut nodes = Vec::new();
-    // Temporary map to handle duplicates efficiently during load
-    let mut id_map: HashMap<String, usize> = HashMap::new();
+    let mut nodes = HashMap::new();
     let mut duplicates_count = 0;
     let mut skipped_count = 0;
 
@@ -330,13 +328,9 @@ pub async fn load_nodes() -> Vec<Node> {
             }
         };
         let node: Node = dto.into();
-        if let Some(&idx) = id_map.get(&node.id) {
+        if nodes.insert(node.id.clone(), node).is_some() {
             // Last-write-wins: Overwrite existing node
-            nodes[idx] = node;
             duplicates_count += 1;
-        } else {
-            id_map.insert(node.id.clone(), nodes.len());
-            nodes.push(node);
         }
     }
 
@@ -373,8 +367,7 @@ pub async fn get_node(
 ) -> Result<Json<Node>, StatusCode> {
     let nodes = state.nodes.read().await;
     nodes
-        .iter()
-        .find(|n| n.id == id)
+        .get(&id)
         .cloned()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
@@ -529,11 +522,7 @@ pub async fn patch_node(
     let start_mem_hold = std::time::Instant::now();
 
     if let Some(ref updated_node) = found_node {
-        if let Some(idx) = nodes_guard.iter().position(|n| n.id == id) {
-            nodes_guard[idx] = updated_node.clone();
-        } else {
-            nodes_guard.push(updated_node.clone());
-        }
+        nodes_guard.insert(id.clone(), updated_node.clone());
     }
 
     // Update metrics
@@ -576,7 +565,7 @@ pub async fn list_nodes(
     let nodes = state.nodes.read().await;
 
     let out: Vec<Node> = nodes
-        .iter()
+        .values()
         .filter(|node| {
             if let Some(bb) = &bbox {
                 point_in_bbox(node.location.lon, node.location.lat, bb)

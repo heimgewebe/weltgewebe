@@ -45,18 +45,18 @@ pub struct EdgeWithDetails {
 
 const MAX_PAGE_SIZE: usize = 1000;
 
-pub async fn load_edges() -> Vec<Edge> {
+pub async fn load_edges() -> HashMap<String, Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
             tracing::warn!(?path, ?e, "Failed to open edges file, returning empty list");
-            return Vec::new();
+            return HashMap::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut edges = Vec::new();
+    let mut edges = HashMap::new();
 
     let max_edges = match std::env::var("MAX_EDGES_CACHE") {
         Ok(val) => match val.parse::<usize>() {
@@ -90,7 +90,7 @@ pub async fn load_edges() -> Vec<Edge> {
                 continue;
             }
         };
-        edges.push(edge);
+        edges.insert(edge.id.clone(), edge);
     }
 
     let load_ms = start.elapsed().as_millis();
@@ -118,7 +118,7 @@ pub async fn list_edges(
     let edges = state.edges.read().await;
 
     let out: Vec<Edge> = edges
-        .iter()
+        .values()
         .filter(|edge| {
             if let Some(s) = src {
                 if edge.source_id != *s {
@@ -145,8 +145,7 @@ pub async fn get_edge(
 ) -> Result<Json<EdgeWithDetails>, StatusCode> {
     let edges = state.edges.read().await;
     let edge = edges
-        .iter()
-        .find(|e| e.id == id)
+        .get(&id)
         .cloned()
         .ok_or(StatusCode::NOT_FOUND)?;
 
@@ -165,7 +164,7 @@ pub async fn get_edge(
             }
         } else if src_type == "node" {
             let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.iter().find(|n| n.id == edge.source_id) {
+            if let Some(node) = nodes.get(&edge.source_id) {
                 source_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),
@@ -187,7 +186,7 @@ pub async fn get_edge(
             }
         } else if tgt_type == "node" {
             let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.iter().find(|n| n.id == edge.target_id) {
+            if let Some(node) = nodes.get(&edge.target_id) {
                 target_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),

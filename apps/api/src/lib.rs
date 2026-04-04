@@ -54,14 +54,14 @@ pub async fn run() -> anyhow::Result<()> {
         routes::accounts::load_all_accounts().await,
     ));
 
-    let nodes_list = routes::nodes::load_nodes().await;
-    metrics.set_nodes_cache_count(nodes_list.len() as i64);
-    let nodes = Arc::new(tokio::sync::RwLock::new(nodes_list));
+    let nodes_map = routes::nodes::load_nodes().await;
+    metrics.set_nodes_cache_count(nodes_map.len() as i64);
+    let nodes = Arc::new(tokio::sync::RwLock::new(nodes_map));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
 
-    let edges_list = routes::edges::load_edges().await;
-    metrics.set_edges_cache_count(edges_list.len() as i64);
-    let edges = Arc::new(tokio::sync::RwLock::new(edges_list));
+    let edges_map = routes::edges::load_edges().await;
+    metrics.set_edges_cache_count(edges_map.len() as i64);
+    let edges = Arc::new(tokio::sync::RwLock::new(edges_map));
 
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
     let mailer = match crate::mailer::Mailer::new(&app_config) {

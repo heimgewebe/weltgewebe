@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::{BTreeMap, HashMap}, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -27,9 +27,9 @@ pub struct ApiState {
     pub tokens: TokenStore,
     pub step_up_tokens: StepUpTokenStore,
     pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
-    pub nodes: Arc<RwLock<Vec<Node>>>,
+    pub nodes: Arc<RwLock<HashMap<String, Node>>>,
     pub nodes_persist: Arc<Mutex<()>>,
-    pub edges: Arc<RwLock<Vec<Edge>>>,
+    pub edges: Arc<RwLock<HashMap<String, Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
 }
