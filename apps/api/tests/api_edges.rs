@@ -69,7 +69,7 @@ async fn test_state() -> Result<ApiState> {
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
         accounts: Arc::new(RwLock::new(BTreeMap::new())),
-        nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+        nodes: Arc::new(tokio::sync::RwLock::new(weltgewebe_api::state::OrderedCache::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(edges)),
         rate_limiter,

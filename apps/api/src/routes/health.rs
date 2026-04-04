@@ -264,6 +264,7 @@ async fn ready(State(state): State<ApiState>) -> Response {
 
 #[cfg(test)]
 mod tests {
+    use crate::state::OrderedCache;
     use super::*;
     use crate::{
         auth::{rate_limit::AuthRateLimiter, session::SessionStore},
@@ -325,9 +326,9 @@ mod tests {
             tokens: crate::auth::tokens::TokenStore::new(),
             step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
             accounts: Arc::new(RwLock::new(BTreeMap::new())),
-            nodes: Arc::new(RwLock::new(Vec::new())),
+            nodes: Arc::new(RwLock::new(OrderedCache::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
-            edges: Arc::new(RwLock::new(Vec::new())),
+            edges: Arc::new(RwLock::new(OrderedCache::new())),
             rate_limiter,
             mailer: None,
             webauthn: None,
