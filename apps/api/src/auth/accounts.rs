@@ -37,7 +37,8 @@ impl AccountStore {
             }
         }
         if let Some(email) = &account.email {
-            self.email_index.insert(normalize_email_key(email), id.clone());
+            self.email_index
+                .insert(normalize_email_key(email), id.clone());
         }
         self.map.insert(id, account);
     }
@@ -62,8 +63,8 @@ impl AccountStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::routes::accounts::AccountPublic;
     use crate::auth::role::Role;
+    use crate::routes::accounts::AccountPublic;
     use uuid::Uuid;
 
     fn dummy_account(id: &str, email: Option<&str>) -> AccountInternal {
