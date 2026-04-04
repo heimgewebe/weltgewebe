@@ -224,6 +224,9 @@ mod tests {
             smtp_pass: Some("pass".to_string()),
             smtp_from: Some("not-an-email".to_string()),
             auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
         };
 
         // This should fail because "not-an-email" cannot be parsed into a Mailbox

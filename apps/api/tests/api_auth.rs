@@ -51,6 +51,9 @@ fn test_state() -> Result<ApiState> {
         smtp_from: None,
         // Enable token logging to satisfy "delivery mechanism required" policy for tests
         auth_log_magic_token: true,
+        webauthn_rp_id: None,
+        webauthn_rp_origin: None,
+        webauthn_rp_name: None,
     };
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -72,6 +75,8 @@ fn test_state() -> Result<ApiState> {
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
+        webauthn: None,
+        passkey_registrations: Default::default(),
     })
 }
 
@@ -94,6 +99,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -112,6 +118,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         },
         role: Role::Admin,
         email: Some("a1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -278,6 +285,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         },
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1156,6 +1164,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
                 },
                 role: Role::Gast,
                 email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
+                webauthn_user_id: uuid::Uuid::new_v4(),
             },
         );
     }
@@ -1304,6 +1313,7 @@ async fn test_session_refresh_success() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1466,6 +1476,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1529,6 +1540,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account.clone());
 
@@ -1607,6 +1619,7 @@ async fn test_logout() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1694,6 +1707,7 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -1859,6 +1873,7 @@ async fn test_device_management() -> Result<()> {
         },
         role: Role::Admin,
         email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
     account_map.insert(account.public.id.clone(), account);
 
@@ -2224,6 +2239,7 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
             },
             role: weltgewebe_api::auth::role::Role::Gast,
             email: Some("u2@example.com".to_string()),
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         accounts.insert("u2".to_string(), account);
     }
@@ -2296,6 +2312,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
             },
             role: weltgewebe_api::auth::role::Role::Gast,
             email: None, // Missing email
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         accounts.insert("u2".to_string(), account);
     }
@@ -3222,6 +3239,7 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
                 },
                 role: weltgewebe_api::auth::role::Role::Gast,
                 email: Some("u2@example.com".to_string()),
+                webauthn_user_id: uuid::Uuid::new_v4(),
             },
         );
     }

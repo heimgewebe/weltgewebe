@@ -43,6 +43,8 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
+        webauthn: None,
+        passkey_registrations: Default::default(),
     })
 }
 
@@ -76,6 +78,9 @@ fn default_config() -> AppConfig {
         smtp_from: None,
         // Enable token logging to satisfy "delivery mechanism required" policy for tests
         auth_log_magic_token: true,
+        webauthn_rp_id: None,
+        webauthn_rp_origin: None,
+        webauthn_rp_name: None,
     }
 }
 

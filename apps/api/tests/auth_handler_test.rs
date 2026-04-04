@@ -50,6 +50,9 @@ mod tests {
             smtp_pass: None,
             smtp_from: None,
             auth_log_magic_token: false, // No Dev Logging
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
         };
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -70,6 +73,7 @@ mod tests {
             },
             role: Role::Gast,
             email: Some("u1@example.com".to_string()),
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         account_map.insert(account.public.id.clone(), account);
 
@@ -90,6 +94,8 @@ mod tests {
             edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             rate_limiter,
             mailer: None, // No Mailer instance
+            webauthn: None,
+            passkey_registrations: Default::default(),
         })
     }
 
