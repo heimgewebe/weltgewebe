@@ -257,6 +257,9 @@ Response:
 
 Ein Step-up-Magic-Link unterscheidet sich von einem normalen Login-Link dadurch,
 dass er kryptografisch an die ausstehende sensible Aktion bzw. eine serverseitige `challenge_id` gebunden ist.
+Der an den Nutzer versendete Frontend-Link enthält daher zwingend beide Parameter (`?token=...&challenge_id=...`).
+Die konsumierende UI muss beide Werte auslesen und an den Endpunkt `POST /auth/step-up/magic-link/consume` übergeben;
+ein Fehlen eines Parameters macht den Link bereits im Frontend ungültig.
 Sowohl der Step-up-Request als auch der Consume-Aufruf sind **nur aus einer aktiven Session heraus zulässig**.
 Der Token ist an `account_id` und `device_id` der ausstellenden Session gebunden; ein Consume-Aufruf ohne
 passende aktive Session wird mit `401 Unauthorized` abgelehnt.
