@@ -17,7 +17,7 @@
   "areas": {
     "magic_link": {
       "soll": "POST /auth/magic-link/request, POST /auth/magic-link/consume",
-      "ist": "Kanonischer Zielcontract ist auf /auth/magic-link/* migriert. Der Legacy-Consume-Pfad /auth/login/consume bleibt temporär als Rollout-Migrationsbrücke für in-flight Tokens bestehen. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.",
+      "ist": "Kanonischer Zielcontract ist auf /auth/magic-link/* migriert. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md"
