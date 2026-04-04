@@ -55,9 +55,7 @@ async fn nodes_load_deduplication_last_write_wins() -> Result<()> {
 
     // Verify "n1" is the "New" one
     let n1 = nodes
-        .items
-        .values()
-        .find(|n| n.id == "n1")
+        .get("n1")
         .expect("n1 should exist");
     assert_eq!(
         n1.title, "New",
@@ -67,9 +65,7 @@ async fn nodes_load_deduplication_last_write_wins() -> Result<()> {
 
     // Verify "n2" exists
     let n2 = nodes
-        .items
-        .values()
-        .find(|n| n.id == "n2")
+        .get("n2")
         .expect("n2 should exist");
     assert_eq!(n2.title, "Other");
 
