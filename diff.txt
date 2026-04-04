@@ -1,0 +1,1143 @@
+diff --git a/apps/api/src/auth/accounts.rs b/apps/api/src/auth/accounts.rs
+new file mode 100644
+index 0000000..b8b8a69
+--- /dev/null
++++ b/apps/api/src/auth/accounts.rs
+@@ -0,0 +1,130 @@
++use crate::routes::accounts::AccountInternal;
++use std::collections::{BTreeMap, HashMap};
++
++#[derive(Clone, Default)]
++pub struct AccountStore {
++    map: BTreeMap<String, AccountInternal>,
++    email_index: HashMap<String, String>,
++}
++
++/// Normalizes an email for use as an index key. Historically this repository
++/// has used `.eq_ignore_ascii_case()` for email uniqueness checks. To preserve
++/// this semantic during O(1) lookups, we convert all emails to lowercase ASCII.
++fn normalize_email_key(email: &str) -> String {
++    email.to_ascii_lowercase()
++}
++
++impl AccountStore {
++    pub fn new() -> Self {
++        Self::default()
++    }
++
++    pub fn get(&self, id: &str) -> Option<&AccountInternal> {
++        self.map.get(id)
++    }
++
++    pub fn get_by_email(&self, email: &str) -> Option<&AccountInternal> {
++        let id = self.email_index.get(&normalize_email_key(email))?;
++        self.map.get(id)
++    }
++
++    pub fn insert(&mut self, account: AccountInternal) {
++        let id = account.public.id.clone();
++        // Remove old email from index if it existed and is different
++        if let Some(existing) = self.map.get(&id) {
++            if let Some(old_email) = &existing.email {
++                self.email_index.remove(&normalize_email_key(old_email));
++            }
++        }
++        if let Some(email) = &account.email {
++            self.email_index.insert(normalize_email_key(email), id.clone());
++        }
++        self.map.insert(id, account);
++    }
++
++    pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, AccountInternal> {
++        self.map.iter()
++    }
++
++    pub fn values(&self) -> std::collections::btree_map::Values<'_, String, AccountInternal> {
++        self.map.values()
++    }
++
++    pub fn len(&self) -> usize {
++        self.map.len()
++    }
++
++    pub fn is_empty(&self) -> bool {
++        self.map.is_empty()
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::routes::accounts::AccountPublic;
++    use crate::auth::role::Role;
++    use uuid::Uuid;
++
++    fn dummy_account(id: &str, email: Option<&str>) -> AccountInternal {
++        AccountInternal {
++            public: AccountPublic {
++                id: id.to_string(),
++                kind: "ron".to_string(),
++                title: "Dummy".to_string(),
++                summary: None,
++                public_pos: None,
++                mode: crate::routes::accounts::AccountMode::Ron,
++                radius_m: 0,
++                disabled: false,
++                tags: vec![],
++            },
++            role: Role::Gast,
++            email: email.map(|e| e.to_string()),
++            webauthn_user_id: Uuid::new_v4(),
++        }
++    }
++
++    #[test]
++    fn test_insert_and_get() {
++        let mut store = AccountStore::new();
++        let acc = dummy_account("u1", Some("Test@Example.com"));
++        store.insert(acc);
++
++        assert!(store.get("u1").is_some());
++        // Test case-insensitive ASCII normalization lookup
++        assert!(store.get_by_email("test@example.com").is_some());
++        assert!(store.get_by_email("TEST@EXAMPLE.COM").is_some());
++    }
++
++    #[test]
++    fn test_reinsert_removes_old_email_index() {
++        let mut store = AccountStore::new();
++        let acc1 = dummy_account("u1", Some("old@example.com"));
++        store.insert(acc1);
++
++        // Re-insert same ID, new email
++        let acc2 = dummy_account("u1", Some("new@example.com"));
++        store.insert(acc2);
++
++        // Old email should no longer point to u1
++        assert!(store.get_by_email("old@example.com").is_none());
++        // New email should work
++        assert!(store.get_by_email("new@example.com").is_some());
++    }
++
++    #[test]
++    fn test_reinsert_with_none_email_removes_index() {
++        let mut store = AccountStore::new();
++        let acc1 = dummy_account("u1", Some("old@example.com"));
++        store.insert(acc1);
++
++        // Re-insert same ID, no email
++        let acc2 = dummy_account("u1", None);
++        store.insert(acc2);
++
++        assert!(store.get_by_email("old@example.com").is_none());
++        assert!(store.get("u1").is_some());
++        assert_eq!(store.get("u1").unwrap().email, None);
++    }
++}
+diff --git a/apps/api/src/auth/mod.rs b/apps/api/src/auth/mod.rs
+index db6b7c3..d08e937 100644
+--- a/apps/api/src/auth/mod.rs
++++ b/apps/api/src/auth/mod.rs
+@@ -1,3 +1,4 @@
++pub mod accounts;
+ pub mod challenges;
+ pub mod passkeys;
+ pub mod rate_limit;
+diff --git a/apps/api/src/middleware/auth.rs b/apps/api/src/middleware/auth.rs
+index 289c0e4..dd0662f 100644
+--- a/apps/api/src/middleware/auth.rs
++++ b/apps/api/src/middleware/auth.rs
+@@ -28,8 +28,8 @@ pub async fn auth_middleware(
+
+     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
+         if let Some(session) = state.sessions.get(cookie.value()) {
+-            let accounts_map = state.accounts.read().await;
+-            if let Some(internal) = accounts_map.get(&session.account_id) {
++            let accounts = state.accounts.read().await;
++            if let Some(internal) = accounts.get(&session.account_id) {
+                 ctx.authenticated = true;
+                 ctx.account_id = Some(session.account_id.clone());
+                 ctx.device_id = Some(session.device_id.clone());
+diff --git a/apps/api/src/routes/accounts.rs b/apps/api/src/routes/accounts.rs
+index 42d9acb..f3767cf 100644
+--- a/apps/api/src/routes/accounts.rs
++++ b/apps/api/src/routes/accounts.rs
+@@ -1,4 +1,4 @@
+-use crate::auth::role::Role;
++use crate::auth::{accounts::AccountStore, role::Role};
+ use crate::state::ApiState;
+ use axum::{
+     extract::{Path, Query, State},
+@@ -7,11 +7,7 @@ use axum::{
+ };
+ use serde::{Deserialize, Serialize};
+ use serde_json::Value;
+-use std::{
+-    collections::{BTreeMap, HashMap},
+-    env,
+-    path::PathBuf,
+-};
++use std::{collections::HashMap, env, path::PathBuf};
+ use tokio::{
+     fs::File,
+     io::{AsyncBufReadExt, BufReader},
+@@ -265,8 +261,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
+     })
+ }
+
+-pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
+-    let mut map = BTreeMap::new();
++pub async fn load_all_accounts() -> AccountStore {
++    let mut store = AccountStore::new();
+     let path = accounts_path();
+
+     let file = match File::open(&path).await {
+@@ -277,7 +273,7 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
+                 ?e,
+                 "Failed to open accounts file, returning empty map"
+             );
+-            return map;
++            return store;
+         }
+     };
+
+@@ -317,10 +313,10 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
+                 email,
+                 webauthn_user_id,
+             };
+-            map.insert(account.public.id.clone(), account);
++            store.insert(account);
+         }
+     }
+-    map
++    store
+ }
+
+ pub async fn list_accounts(
+@@ -332,10 +328,10 @@ pub async fn list_accounts(
+         .and_then(|s| s.parse().ok())
+         .unwrap_or(100);
+
+-    let accounts_map = state.accounts.read().await;
++    let accounts = state.accounts.read().await;
+
+     // BTreeMap iterates in ascending key order, so output is deterministic by account id.
+-    let accounts: Vec<AccountPublic> = accounts_map
++    let accounts: Vec<AccountPublic> = accounts
+         .iter()
+         .take(limit)
+         .map(|(_id, internal)| internal.public.clone())
+@@ -348,8 +344,8 @@ pub async fn get_account(
+     State(state): State<ApiState>,
+     Path(id): Path<String>,
+ ) -> Result<Json<AccountPublic>, StatusCode> {
+-    let accounts_map = state.accounts.read().await;
+-    if let Some(internal) = accounts_map.get(&id) {
++    let accounts = state.accounts.read().await;
++    if let Some(internal) = accounts.get(&id) {
+         Ok(Json(internal.public.clone()))
+     } else {
+         Err(StatusCode::NOT_FOUND)
+diff --git a/apps/api/src/routes/auth.rs b/apps/api/src/routes/auth.rs
+index fa6237b..4aa0520 100644
+--- a/apps/api/src/routes/auth.rs
++++ b/apps/api/src/routes/auth.rs
+@@ -263,8 +263,8 @@ pub async fn list_dev_accounts(
+ ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
+     check_dev_login_guard(&headers, addr)?;
+
+-    let accounts_map = state.accounts.read().await;
+-    let accounts: Vec<DevAccount> = accounts_map
++    let accounts = state.accounts.read().await;
++    let accounts: Vec<DevAccount> = accounts
+         .iter()
+         .map(|(id, acc)| {
+             debug_assert_eq!(
+@@ -305,8 +305,8 @@ pub async fn dev_login(
+     }
+
+     {
+-        let accounts_map = state.accounts.read().await;
+-        if !accounts_map.contains_key(&payload.account_id) {
++        let accounts = state.accounts.read().await;
++        if accounts.get(&payload.account_id).is_none() {
+             tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
+             return (jar, StatusCode::BAD_REQUEST).into_response();
+         }
+@@ -352,24 +352,17 @@ async fn provision_account(
+     };
+
+     {
+-        let mut accounts_map = state.accounts.write().await;
++        let mut accounts = state.accounts.write().await;
+         // Double-checked locking to avoid race condition
+-        let collision_id = accounts_map
+-            .values()
+-            .find(|acc| {
+-                acc.email
+-                    .as_ref()
+-                    .map(|e| e.eq_ignore_ascii_case(email_norm))
+-                    .unwrap_or(false)
+-            })
++        let collision_id = accounts
++            .get_by_email(email_norm)
+             .map(|acc| acc.public.id.clone());
+
+         if let Some(id) = collision_id {
+             // Another request provisioned it in the meantime
+             Some(id)
+         } else {
+-            let id = new_account.public.id.clone();
+-            accounts_map.insert(id.clone(), new_account);
++            accounts.insert(new_account);
+             tracing::info!(
+                 event = "login.provisioned",
+                 request_id = %ctx.request_id,
+@@ -554,15 +547,9 @@ pub async fn request_login(
+     // If found, we proceed.
+     // If not found, we check policy and potentially acquire a write lock to provision.
+     let existing_account_info = {
+-        let accounts_map = state.accounts.read().await;
+-        accounts_map
+-            .values()
+-            .find(|acc| {
+-                acc.email
+-                    .as_ref()
+-                    .map(|e| e.eq_ignore_ascii_case(&email_norm))
+-                    .unwrap_or(false)
+-            })
++        let accounts = state.accounts.read().await;
++        accounts
++            .get_by_email(&email_norm)
+             .map(|acc| (acc.public.id.clone(), acc.public.disabled))
+     };
+
+@@ -810,13 +797,9 @@ pub async fn consume_login_post(
+     // 2. Consume Token
+     if let Some(email) = state.tokens.consume(&form.token) {
+         // Find account
+-        let accounts_map = state.accounts.read().await;
+-        let account = accounts_map.values().find(|acc| {
+-            acc.email
+-                .as_ref()
+-                .map(|e| e.eq_ignore_ascii_case(&email))
+-                .unwrap_or(false)
+-        });
++        let accounts = state.accounts.read().await;
++        // email in AccountStore index is normalized to lowercase
++        let account = accounts.get_by_email(&email);
+
+         if let Some(acc) = account {
+             if acc.public.disabled {
+@@ -1011,14 +994,8 @@ pub async fn update_email(
+         }
+
+         // Uniqueness check
+-        for acc in accounts.values() {
+-            if acc
+-                .email
+-                .as_deref()
+-                .map(|e| e.eq_ignore_ascii_case(&new_email))
+-                .unwrap_or(false)
+-                && acc.public.id != account_id
+-            {
++        if let Some(existing) = accounts.get_by_email(&new_email) {
++            if existing.public.id != account_id {
+                 let err =
+                     serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
+                 return (StatusCode::CONFLICT, Json(err)).into_response();
+@@ -1060,11 +1037,11 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
+         let old_session_id = cookie.value();
+
+         if let Some(old_session) = state.sessions.get(old_session_id) {
+-            let accounts_map = state.accounts.read().await;
+-            let is_valid = accounts_map
++            let accounts = state.accounts.read().await;
++            let is_valid = accounts
+                 .get(&old_session.account_id)
+                 .is_some_and(|acc| !acc.public.disabled);
+-            drop(accounts_map);
++            drop(accounts);
+
+             state.sessions.delete(old_session_id);
+
+@@ -1544,14 +1521,8 @@ pub async fn consume_step_up(
+             let mut accounts = state.accounts.write().await;
+
+             // Check for conflict right before writing
+-            for acc in accounts.values() {
+-                if acc
+-                    .email
+-                    .as_deref()
+-                    .map(|e| e.eq_ignore_ascii_case(&new_email))
+-                    .unwrap_or(false)
+-                    && acc.public.id != account_id
+-                {
++            if let Some(existing) = accounts.get_by_email(&new_email) {
++                if existing.public.id != account_id {
+                     tracing::warn!(
+                         event = "auth.step_up.consume.update_email.conflict",
+                         request_id = %request_id,
+@@ -1564,8 +1535,10 @@ pub async fn consume_step_up(
+                 }
+             }
+
+-            if let Some(account) = accounts.get_mut(&account_id) {
+-                account.email = Some(new_email);
++            if let Some(account) = accounts.get(&account_id).cloned() {
++                let mut updated_account = account;
++                updated_account.email = Some(new_email);
++                accounts.insert(updated_account);
+                 (StatusCode::NO_CONTENT, jar).into_response()
+             } else {
+                 tracing::error!(
+diff --git a/apps/api/src/routes/health.rs b/apps/api/src/routes/health.rs
+index 83b62c6..54dc39f 100644
+--- a/apps/api/src/routes/health.rs
++++ b/apps/api/src/routes/health.rs
+@@ -14,6 +14,8 @@ use axum::{
+ use serde_json::{json, Map};
+ use sqlx::query_scalar;
+
++#[cfg(test)]
++use crate::auth::accounts::AccountStore;
+ use crate::{
+     state::ApiState,
+     telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
+@@ -275,7 +277,7 @@ mod tests {
+     use axum::{body, extract::State, http::header};
+     use serde_json::Value;
+     use serial_test::serial;
+-    use std::{collections::BTreeMap, sync::Arc};
++    use std::sync::Arc;
+     use tokio::sync::RwLock;
+
+     fn test_state() -> Result<ApiState> {
+@@ -324,7 +326,7 @@ mod tests {
+             challenges: Default::default(),
+             tokens: crate::auth::tokens::TokenStore::new(),
+             step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
+-            accounts: Arc::new(RwLock::new(BTreeMap::new())),
++            accounts: Arc::new(RwLock::new(AccountStore::new())),
+             nodes: Arc::new(RwLock::new(Vec::new())),
+             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+             edges: Arc::new(RwLock::new(Vec::new())),
+diff --git a/apps/api/src/state.rs b/apps/api/src/state.rs
+index ac29fc6..24f88bf 100644
+--- a/apps/api/src/state.rs
++++ b/apps/api/src/state.rs
+@@ -1,7 +1,8 @@
+-use std::{collections::BTreeMap, sync::Arc};
++use std::sync::Arc;
+ use tokio::sync::{Mutex, RwLock};
+
+ use crate::{
++    auth::accounts::AccountStore,
+     auth::{
+         challenges::ChallengeStore, passkeys::PasskeyRegistrationStore,
+         rate_limit::AuthRateLimiter, session::SessionStore, step_up_tokens::StepUpTokenStore,
+@@ -9,7 +10,7 @@ use crate::{
+     },
+     config::AppConfig,
+     mailer::Mailer,
+-    routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
++    routes::{edges::Edge, nodes::Node},
+     telemetry::Metrics,
+ };
+ use async_nats::Client as NatsClient;
+@@ -28,7 +29,7 @@ pub struct ApiState {
+     pub challenges: ChallengeStore,
+     pub tokens: TokenStore,
+     pub step_up_tokens: StepUpTokenStore,
+-    pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
++    pub accounts: Arc<RwLock<AccountStore>>,
+     pub nodes: Arc<RwLock<Vec<Node>>>,
+     pub nodes_persist: Arc<Mutex<()>>,
+     pub edges: Arc<RwLock<Vec<Edge>>>,
+diff --git a/apps/api/tests/api_accounts.rs b/apps/api/tests/api_accounts.rs
+index fac22d8..7d9e4f3 100644
+--- a/apps/api/tests/api_accounts.rs
++++ b/apps/api/tests/api_accounts.rs
+@@ -6,11 +6,13 @@ use axum::{
+ };
+ mod helpers;
+
+-use std::{collections::BTreeMap, sync::Arc};
++use std::sync::Arc;
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
++    auth::{
++        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
++    },
+     config::AppConfig,
+     routes::{
+         accounts::{AccountInternal, AccountPublic},
+@@ -66,7 +68,7 @@ async fn test_state() -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+@@ -80,33 +82,30 @@ async fn test_state() -> Result<ApiState> {
+ #[tokio::test]
+ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
+     let mut state = test_state().await?;
+-    let mut accounts = BTreeMap::new();
++    let mut accounts = AccountStore::new();
+
+     // Insert accounts in unsorted order: u2, a1, u1
+     // Expected sort order (lexicographical by ID): a1, u1, u2
+     let ids = vec!["u2", "a1", "u1"];
+
+     for id in ids {
+-        accounts.insert(
+-            id.to_string(),
+-            AccountInternal {
+-                public: AccountPublic {
+-                    id: id.to_string(),
+-                    kind: "garnrolle".to_string(),
+-                    title: format!("Title {}", id),
+-                    summary: None,
+-                    public_pos: None,
+-                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+-                    radius_m: 0,
+-
+-                    disabled: false,
+-                    tags: vec![],
+-                },
+-                role: Role::Gast,
+-                email: None,
+-                webauthn_user_id: uuid::Uuid::new_v4(),
++        accounts.insert(AccountInternal {
++            public: AccountPublic {
++                id: id.to_string(),
++                kind: "garnrolle".to_string(),
++                title: format!("Title {}", id),
++                summary: None,
++                public_pos: None,
++                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
++                radius_m: 0,
++
++                disabled: false,
++                tags: vec![],
+             },
+-        );
++            role: Role::Gast,
++            email: None,
++            webauthn_user_id: uuid::Uuid::new_v4(),
++        });
+     }
+
+     state.accounts = Arc::new(RwLock::new(accounts));
+diff --git a/apps/api/tests/api_auth.rs b/apps/api/tests/api_auth.rs
+index 5d42fd7..5eb1954 100644
+--- a/apps/api/tests/api_auth.rs
++++ b/apps/api/tests/api_auth.rs
+@@ -7,11 +7,13 @@ use axum::{
+ };
+ use serial_test::serial;
+ use sha2::{Digest, Sha256};
+-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
++    auth::{
++        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
++    },
+     config::AppConfig,
+     routes::{
+         accounts::{AccountInternal, AccountPublic},
+@@ -69,7 +71,7 @@ fn test_state() -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+@@ -82,7 +84,7 @@ fn test_state() -> Result<ApiState> {
+
+ fn test_state_with_accounts() -> Result<ApiState> {
+     let mut state = test_state()?;
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+
+     let account = AccountInternal {
+         public: AccountPublic {
+@@ -101,7 +103,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let account = AccountInternal {
+         public: AccountPublic {
+@@ -120,7 +122,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
+         email: Some("a1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     state.accounts = Arc::new(RwLock::new(account_map));
+     Ok(state)
+@@ -177,8 +179,10 @@ async fn request_login_denied_if_account_disabled() -> Result<()> {
+     // Disable the account
+     {
+         let mut accounts = state.accounts.write().await;
+-        if let Some(acc) = accounts.get_mut("u1") {
++        if let Some(acc) = accounts.get("u1").cloned() {
++            let mut acc = acc;
+             acc.public.disabled = true;
++            accounts.insert(acc);
+         }
+     }
+
+@@ -211,8 +215,10 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
+     // Disable the account
+     {
+         let mut accounts = state.accounts.write().await;
+-        if let Some(acc) = accounts.get_mut("u1") {
++        if let Some(acc) = accounts.get("u1").cloned() {
++            let mut acc = acc;
+             acc.public.disabled = true;
++            accounts.insert(acc);
+         }
+     }
+
+@@ -269,7 +275,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
+     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
+     let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
+
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountInternal {
+         public: AccountPublic {
+             id: "u1".to_string(),
+@@ -287,7 +293,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -1148,28 +1154,25 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
+     let mixed_id = "legacy-mixed-case".to_string();
+     {
+         let mut accounts = state.accounts.write().await;
+-        accounts.insert(
+-            mixed_id.clone(),
+-            AccountInternal {
+-                public: AccountPublic {
+-                    id: mixed_id.clone(),
+-                    kind: "garnrolle".to_string(),
+-                    title: "Mixed Case Legacy".to_string(),
+-                    summary: None,
+-                    public_pos: None,
+-                    mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+-                    radius_m: 0,
+-                    disabled: false,
+-                    tags: vec![],
+-                },
+-                role: Role::Gast,
+-                email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
+-                webauthn_user_id: uuid::Uuid::new_v4(),
++        accounts.insert(AccountInternal {
++            public: AccountPublic {
++                id: mixed_id.clone(),
++                kind: "garnrolle".to_string(),
++                title: "Mixed Case Legacy".to_string(),
++                summary: None,
++                public_pos: None,
++                mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
++                radius_m: 0,
++                disabled: false,
++                tags: vec![],
+             },
+-        );
++            role: Role::Gast,
++            email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
++            webauthn_user_id: uuid::Uuid::new_v4(),
++        });
+     }
+
+-    let account_count_before = state.accounts.read().await.len();
++    let account_count_before = state.accounts.read().await.values().count();
+
+     let app = app(state.clone());
+     let req = Request::post("/auth/magic-link/request")
+@@ -1184,7 +1187,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
+     // No duplicate must have been created: the case-insensitive lookup finds the existing
+     // account, so provision_account is never called.
+     assert_eq!(
+-        accounts.len(),
++        accounts.values().count(),
+         account_count_before,
+         "No new account should be created when the stored Mixed-Case email matches case-insensitively"
+     );
+@@ -1298,7 +1301,7 @@ async fn session_endpoint_authenticated() -> Result<()> {
+ async fn test_session_refresh_success() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+     let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountInternal {
+         public: AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1315,7 +1318,7 @@ async fn test_session_refresh_success() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -1461,7 +1464,7 @@ async fn test_session_refresh_invalid_token() -> Result<()> {
+ #[serial]
+ async fn test_session_refresh_csrf_rejected() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountInternal {
+         public: AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1478,7 +1481,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -1525,7 +1528,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
+ #[serial]
+ async fn test_session_refresh_account_disabled() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let mut account = AccountInternal {
+         public: AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1542,7 +1545,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account.clone());
++    account_map.insert(account.clone());
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map.clone()));
+@@ -1570,11 +1573,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
+
+     // 2. Disable account
+     account.public.disabled = true;
+-    state
+-        .accounts
+-        .write()
+-        .await
+-        .insert(account.public.id.clone(), account);
++    state.accounts.write().await.insert(account);
+
+     // 3. Refresh session (should fail)
+     let req_refresh = Request::post("/auth/session/refresh")
+@@ -1604,7 +1603,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
+ #[serial]
+ async fn test_logout() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountInternal {
+         public: AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1621,7 +1620,7 @@ async fn test_logout() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -1692,7 +1691,7 @@ async fn test_logout() -> Result<()> {
+ #[serial]
+ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountInternal {
+         public: AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1709,7 +1708,7 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let mut state = test_state()?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -1858,7 +1857,7 @@ async fn test_logout_all_unauthenticated_rejected() -> Result<()> {
+ #[serial]
+ async fn test_device_management() -> Result<()> {
+     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
+-    let mut account_map = std::collections::BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = weltgewebe_api::routes::accounts::AccountInternal {
+         public: weltgewebe_api::routes::accounts::AccountPublic {
+             id: "u-admin".to_string(),
+@@ -1875,13 +1874,14 @@ async fn test_device_management() -> Result<()> {
+         email: Some("u1@example.com".to_string()),
+         webauthn_user_id: uuid::Uuid::new_v4(),
+     };
+-    account_map.insert(account.public.id.clone(), account);
++    account_map.insert(account);
+
+     let state = test_state()?;
+-    state.accounts.write().await.insert(
+-        "u-admin".to_string(),
+-        account_map.get("u-admin").unwrap().clone(),
+-    );
++    state
++        .accounts
++        .write()
++        .await
++        .insert(account_map.get("u-admin").unwrap().clone());
+
+     let app = Router::new()
+         .merge(api_router())
+@@ -2241,7 +2241,7 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
+             email: Some("u2@example.com".to_string()),
+             webauthn_user_id: uuid::Uuid::new_v4(),
+         };
+-        accounts.insert("u2".to_string(), account);
++        accounts.insert(account);
+     }
+     let session2 = state.sessions.create("u2".to_string(), None);
+     let session_id2 = session2.id;
+@@ -2314,7 +2314,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
+             email: None, // Missing email
+             webauthn_user_id: uuid::Uuid::new_v4(),
+         };
+-        accounts.insert("u2".to_string(), account);
++        accounts.insert(account);
+     }
+
+     let session = state.sessions.create("u2".to_string(), None);
+@@ -3223,25 +3223,22 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
+     // We must add u2 to state.accounts so there is a conflict
+     {
+         let mut accounts = state.accounts.write().await;
+-        accounts.insert(
+-            "u2".to_string(),
+-            weltgewebe_api::routes::accounts::AccountInternal {
+-                public: weltgewebe_api::routes::accounts::AccountPublic {
+-                    id: "u2".to_string(),
+-                    kind: "garnrolle".to_string(),
+-                    title: "User Two".to_string(),
+-                    summary: None,
+-                    public_pos: None,
+-                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+-                    radius_m: 0,
+-                    disabled: false,
+-                    tags: vec![],
+-                },
+-                role: weltgewebe_api::auth::role::Role::Gast,
+-                email: Some("u2@example.com".to_string()),
+-                webauthn_user_id: uuid::Uuid::new_v4(),
++        accounts.insert(weltgewebe_api::routes::accounts::AccountInternal {
++            public: weltgewebe_api::routes::accounts::AccountPublic {
++                id: "u2".to_string(),
++                kind: "garnrolle".to_string(),
++                title: "User Two".to_string(),
++                summary: None,
++                public_pos: None,
++                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
++                radius_m: 0,
++                disabled: false,
++                tags: vec![],
+             },
+-        );
++            role: weltgewebe_api::auth::role::Role::Gast,
++            email: Some("u2@example.com".to_string()),
++            webauthn_user_id: uuid::Uuid::new_v4(),
++        });
+     }
+
+     // Try to update to an email that is already used by u2
+diff --git a/apps/api/tests/api_edges.rs b/apps/api/tests/api_edges.rs
+index 0b8f3d1..72749ec 100644
+--- a/apps/api/tests/api_edges.rs
++++ b/apps/api/tests/api_edges.rs
+@@ -8,11 +8,11 @@ use serial_test::serial;
+ mod helpers;
+
+ use helpers::set_gewebe_in_dir;
+-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
++use std::{fs, path::PathBuf, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
++    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+     config::AppConfig,
+     routes::api_router,
+     state::ApiState,
+@@ -68,7 +68,7 @@ async fn test_state() -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(edges)),
+diff --git a/apps/api/tests/api_nodes.rs b/apps/api/tests/api_nodes.rs
+index f16241a..befd36e 100644
+--- a/apps/api/tests/api_nodes.rs
++++ b/apps/api/tests/api_nodes.rs
+@@ -9,11 +9,13 @@ mod helpers;
+
+ use axum::middleware::from_fn_with_state;
+ use helpers::set_gewebe_in_dir;
+-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
++use std::{fs, path::PathBuf, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
++    auth::{
++        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
++    },
+     config::AppConfig,
+     middleware::{auth::auth_middleware, csrf::require_csrf},
+     routes::{
+@@ -71,7 +73,7 @@ async fn test_state() -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(
+             weltgewebe_api::routes::nodes::load_nodes().await,
+         )),
+@@ -196,7 +198,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
+     let _env = set_gewebe_in_dir(&in_dir);
+
+     // Setup Auth State with Account
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountPublic {
+         id: "weber1".to_string(),
+         kind: "garnrolle".to_string(),
+@@ -209,15 +211,12 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
+         disabled: false,
+         tags: vec![],
+     };
+-    account_map.insert(
+-        account.id.clone(),
+-        AccountInternal {
+-            public: account,
+-            role: Role::Weber,
+-            email: Some("weber1@example.com".to_string()),
+-            webauthn_user_id: uuid::Uuid::new_v4(),
+-        },
+-    );
++    account_map.insert(AccountInternal {
++        public: account,
++        role: Role::Weber,
++        email: Some("weber1@example.com".to_string()),
++        webauthn_user_id: uuid::Uuid::new_v4(),
++    });
+
+     let mut state = test_state().await?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+@@ -383,7 +382,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
+     );
+
+     // Setup Auth State with Account
+-    let mut account_map = BTreeMap::new();
++    let mut account_map = AccountStore::new();
+     let account = AccountPublic {
+         id: "weber1".to_string(),
+         kind: "garnrolle".to_string(),
+@@ -396,15 +395,12 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
+         disabled: false,
+         tags: vec![],
+     };
+-    account_map.insert(
+-        account.id.clone(),
+-        AccountInternal {
+-            public: account,
+-            role: Role::Weber,
+-            email: Some("weber1@example.com".to_string()),
+-            webauthn_user_id: uuid::Uuid::new_v4(),
+-        },
+-    );
++    account_map.insert(AccountInternal {
++        public: account,
++        role: Role::Weber,
++        email: Some("weber1@example.com".to_string()),
++        webauthn_user_id: uuid::Uuid::new_v4(),
++    });
+
+     let mut state = test_state().await?;
+     state.accounts = Arc::new(RwLock::new(account_map));
+diff --git a/apps/api/tests/auth_handler_test.rs b/apps/api/tests/auth_handler_test.rs
+index aa97b00..01ea2b5 100644
+--- a/apps/api/tests/auth_handler_test.rs
++++ b/apps/api/tests/auth_handler_test.rs
+@@ -8,11 +8,13 @@ mod tests {
+         Router,
+     };
+     use serial_test::serial;
+-    use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++    use std::{net::SocketAddr, sync::Arc};
+     use tokio::sync::RwLock;
+     use tower::ServiceExt;
+     use weltgewebe_api::{
+-        auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
++        auth::{
++            accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
++        },
+         config::AppConfig,
+         routes::{
+             accounts::{AccountInternal, AccountPublic},
+@@ -57,7 +59,7 @@ mod tests {
+
+         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
+-        let mut account_map = BTreeMap::new();
++        let mut account_map = AccountStore::new();
+         let account = AccountInternal {
+             public: AccountPublic {
+                 id: "u1".to_string(),
+@@ -75,7 +77,7 @@ mod tests {
+             email: Some("u1@example.com".to_string()),
+             webauthn_user_id: uuid::Uuid::new_v4(),
+         };
+-        account_map.insert(account.public.id.clone(), account);
++        account_map.insert(account);
+
+         Ok(ApiState {
+             db_pool: None,
+diff --git a/apps/api/tests/auth_open_registration.rs b/apps/api/tests/auth_open_registration.rs
+index 5839432..cd33a4f 100644
+--- a/apps/api/tests/auth_open_registration.rs
++++ b/apps/api/tests/auth_open_registration.rs
+@@ -6,11 +6,11 @@ use axum::{
+     Router,
+ };
+ use serial_test::serial;
+-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
++    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+     config::AppConfig,
+     routes::{api_router, auth::GENERIC_LOGIN_MSG},
+     state::ApiState,
+@@ -75,7 +75,7 @@ fn test_state_open_reg() -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+diff --git a/apps/api/tests/auth_ratelimit.rs b/apps/api/tests/auth_ratelimit.rs
+index c1d0d0d..e08ccb0 100644
+--- a/apps/api/tests/auth_ratelimit.rs
++++ b/apps/api/tests/auth_ratelimit.rs
+@@ -6,11 +6,11 @@ use axum::{
+     Router,
+ };
+ use serial_test::serial;
+-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
++    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+     config::AppConfig,
+     routes::api_router,
+     state::ApiState,
+@@ -37,7 +37,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+diff --git a/apps/api/tests/auth_ratelimit_proxy_trusted.rs b/apps/api/tests/auth_ratelimit_proxy_trusted.rs
+index 7f613e0..7462dde 100644
+--- a/apps/api/tests/auth_ratelimit_proxy_trusted.rs
++++ b/apps/api/tests/auth_ratelimit_proxy_trusted.rs
+@@ -6,11 +6,11 @@ use axum::{
+     Router,
+ };
+ use serial_test::serial;
+-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
++    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+     config::AppConfig,
+     routes::api_router,
+     state::ApiState,
+@@ -38,7 +38,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+diff --git a/apps/api/tests/auth_ratelimit_proxy_untrusted.rs b/apps/api/tests/auth_ratelimit_proxy_untrusted.rs
+index 3abe8c2..34dcb20 100644
+--- a/apps/api/tests/auth_ratelimit_proxy_untrusted.rs
++++ b/apps/api/tests/auth_ratelimit_proxy_untrusted.rs
+@@ -6,11 +6,11 @@ use axum::{
+     Router,
+ };
+ use serial_test::serial;
+-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
++use std::{net::SocketAddr, sync::Arc};
+ use tokio::sync::RwLock;
+ use tower::ServiceExt;
+ use weltgewebe_api::{
+-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
++    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+     config::AppConfig,
+     routes::api_router,
+     state::ApiState,
+@@ -38,7 +38,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
+         challenges: Default::default(),
+         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
++        accounts: Arc::new(RwLock::new(AccountStore::new())),
+         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
+         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),

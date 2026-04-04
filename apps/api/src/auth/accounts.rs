@@ -7,6 +7,13 @@ pub struct AccountStore {
     email_index: HashMap<String, String>,
 }
 
+/// Normalizes an email for use as an index key. Historically this repository
+/// has used `.eq_ignore_ascii_case()` for email uniqueness checks. To preserve
+/// this semantic during O(1) lookups, we convert all emails to lowercase ASCII.
+fn normalize_email_key(email: &str) -> String {
+    email.to_ascii_lowercase()
+}
+
 impl AccountStore {
     pub fn new() -> Self {
         Self::default()
@@ -17,7 +24,7 @@ impl AccountStore {
     }
 
     pub fn get_by_email(&self, email: &str) -> Option<&AccountInternal> {
-        let id = self.email_index.get(&email.to_lowercase())?;
+        let id = self.email_index.get(&normalize_email_key(email))?;
         self.map.get(id)
     }
 
@@ -26,11 +33,11 @@ impl AccountStore {
         // Remove old email from index if it existed and is different
         if let Some(existing) = self.map.get(&id) {
             if let Some(old_email) = &existing.email {
-                self.email_index.remove(&old_email.to_lowercase());
+                self.email_index.remove(&normalize_email_key(old_email));
             }
         }
         if let Some(email) = &account.email {
-            self.email_index.insert(email.to_lowercase(), id.clone());
+            self.email_index.insert(normalize_email_key(email), id.clone());
         }
         self.map.insert(id, account);
     }
@@ -49,5 +56,75 @@ impl AccountStore {
 
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::routes::accounts::AccountPublic;
+    use crate::auth::role::Role;
+    use uuid::Uuid;
+
+    fn dummy_account(id: &str, email: Option<&str>) -> AccountInternal {
+        AccountInternal {
+            public: AccountPublic {
+                id: id.to_string(),
+                kind: "ron".to_string(),
+                title: "Dummy".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: crate::routes::accounts::AccountMode::Ron,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: Role::Gast,
+            email: email.map(|e| e.to_string()),
+            webauthn_user_id: Uuid::new_v4(),
+        }
+    }
+
+    #[test]
+    fn test_insert_and_get() {
+        let mut store = AccountStore::new();
+        let acc = dummy_account("u1", Some("Test@Example.com"));
+        store.insert(acc);
+
+        assert!(store.get("u1").is_some());
+        // Test case-insensitive ASCII normalization lookup
+        assert!(store.get_by_email("test@example.com").is_some());
+        assert!(store.get_by_email("TEST@EXAMPLE.COM").is_some());
+    }
+
+    #[test]
+    fn test_reinsert_removes_old_email_index() {
+        let mut store = AccountStore::new();
+        let acc1 = dummy_account("u1", Some("old@example.com"));
+        store.insert(acc1);
+
+        // Re-insert same ID, new email
+        let acc2 = dummy_account("u1", Some("new@example.com"));
+        store.insert(acc2);
+
+        // Old email should no longer point to u1
+        assert!(store.get_by_email("old@example.com").is_none());
+        // New email should work
+        assert!(store.get_by_email("new@example.com").is_some());
+    }
+
+    #[test]
+    fn test_reinsert_with_none_email_removes_index() {
+        let mut store = AccountStore::new();
+        let acc1 = dummy_account("u1", Some("old@example.com"));
+        store.insert(acc1);
+
+        // Re-insert same ID, no email
+        let acc2 = dummy_account("u1", None);
+        store.insert(acc2);
+
+        assert!(store.get_by_email("old@example.com").is_none());
+        assert!(store.get("u1").is_some());
+        assert_eq!(store.get("u1").unwrap().email, None);
     }
 }
