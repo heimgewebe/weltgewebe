@@ -1,16 +1,17 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount } from 'svelte';
 
-  let token = $page.url.searchParams.get('token');
-  let challengeId = $page.url.searchParams.get('challenge_id');
+  $: token = $page.url.searchParams.get('token');
+  $: challengeId = $page.url.searchParams.get('challenge_id');
   let status: 'idle' | 'loading' | 'success' | 'error' | 'invalid' = 'idle';
 
-  onMount(() => {
+  $: {
     if (!token || !challengeId) {
       status = 'invalid';
+    } else if (status === 'invalid') {
+      status = 'idle';
     }
-  });
+  }
 
   async function confirm() {
     if (!token || !challengeId) return;
