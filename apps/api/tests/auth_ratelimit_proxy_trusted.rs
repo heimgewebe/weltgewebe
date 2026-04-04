@@ -77,6 +77,9 @@ fn default_config() -> AppConfig {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: true,
+        auth_webauthn_rp_id: None,
+        auth_webauthn_rp_origin: None,
+        auth_webauthn_rp_name: None,
     }
 }
 

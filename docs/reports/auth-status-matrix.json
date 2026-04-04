@@ -140,15 +140,25 @@
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
-      "ist": "Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.",
-      "status": "Offen",
-      "documentation_evidence": [],
+      "ist": "POST /auth/passkeys/register/options ist implementiert. Antwort nutzt dedizierte stabile webauthn_user_id pro Account (nicht aus account_id abgeleitet) sowie rp_id/rp_origin aus AppConfig mit Validierung und explizitem Fehlerpfad. Verify/Auth/List/Remove bleiben offen.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/auth-roadmap.md",
+        "docs/specs/auth-api.md"
+      ],
       "missing_evidence": [
-        "Routen-Code",
-        "Test-Case"
+        "Register-Verify",
+        "Auth-Options/Auth-Verify",
+        "List/Remove",
+        "UI E2E"
       ],
       "risk": "mittel",
-      "code_runtime_evidence": []
+      "code_runtime_evidence": [
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/config.rs",
+        "apps/api/tests/api_auth.rs"
+      ]
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",

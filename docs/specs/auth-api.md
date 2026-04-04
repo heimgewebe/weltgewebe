@@ -185,6 +185,13 @@ Response:
 
 `POST /auth/passkeys/register/options`
 
+Aktueller Stand:
+
+- nutzt eine dedizierte stabile `webauthn_user_id` je Account
+- `webauthn_user_id` wird nicht aus `account_id` abgeleitet
+- `rp_id` und `rp_origin` stammen aus `AppConfig` (`AUTH_WEBAUTHN_RP_ID`, `AUTH_WEBAUTHN_RP_ORIGIN`)
+- bei fehlender/inkonsistenter RP-Konfiguration: `503` mit `PASSKEY_CONFIG_INVALID`
+
 ### Registrierung abschließen
 
 `POST /auth/passkeys/register/verify`

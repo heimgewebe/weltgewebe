@@ -153,11 +153,11 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.8 Passkeys
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
-**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
-**Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
+**Ist:** `POST /auth/passkeys/register/options` ist implementiert. Die Antwort nutzt eine dedizierte stabile `webauthn_user_id` pro Account (nicht aus `account_id` abgeleitet) sowie `rp_id`/`rp_origin` aus `AppConfig` mit Validierung und explizitem Fehlerpfad bei fehlender/inkonsistenter Konfiguration. Verify-/Auth-/List-/Remove-Pfade sind weiterhin offen.
+**Dokumentationsbelege:** `docs/blueprints/auth-roadmap.md`, `docs/specs/auth-api.md`
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/accounts.rs`, `apps/api/src/config.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/config.rs` (Unit-Tests)
+**Fehlende Belege:** Register-Verify, Auth-Options/Auth-Verify, List/Remove, UI E2E
+**Status:** Teil
 **Risiko:** mittel
 
 ### 2.9 Sicherheitsinvarianten

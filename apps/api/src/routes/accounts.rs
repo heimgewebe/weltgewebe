@@ -16,6 +16,7 @@ use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
 };
+use uuid::Uuid;
 
 const METERS_PER_DEGREE: f64 = 111_000.0;
 const COS_LAT_FLOOR: f64 = 1e-3;
@@ -73,6 +74,7 @@ pub struct AccountInternal {
     pub public: AccountPublic,
     pub role: Role,
     pub email: Option<String>,
+    pub webauthn_user_id: Uuid,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -253,6 +255,24 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
+fn parse_webauthn_user_id(v: &Value, account_id: &str) -> Uuid {
+    match v.get("webauthn_user_id").and_then(|raw| raw.as_str()) {
+        Some(raw) => match Uuid::parse_str(raw) {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::warn!(
+                    %account_id,
+                    raw_value = %raw,
+                    %error,
+                    "invalid webauthn_user_id in account source; generating runtime backfill value"
+                );
+                Uuid::new_v4()
+            }
+        },
+        None => Uuid::new_v4(),
+    }
+}
+
 pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
     let mut map = BTreeMap::new();
     let path = accounts_path();
@@ -288,10 +308,12 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
             .map(|s| s.to_string());
 
         if let Some(public) = map_json_to_public_account(&v) {
+            let webauthn_user_id = parse_webauthn_user_id(&v, &public.id);
             let account = AccountInternal {
                 public,
                 role,
                 email,
+                webauthn_user_id,
             };
             map.insert(account.public.id.clone(), account);
         }

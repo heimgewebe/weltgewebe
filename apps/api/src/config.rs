@@ -1,6 +1,7 @@
 use std::{env, fs, path::Path};
 
 use anyhow::{Context, Result};
+use axum::http::Uri;
 use serde::Deserialize;
 
 macro_rules! apply_env_override {
@@ -93,6 +94,19 @@ pub struct AppConfig {
     // Dev/Ops Configuration
     #[serde(default)]
     pub auth_log_magic_token: bool,
+    #[serde(default)]
+    pub auth_webauthn_rp_id: Option<String>,
+    #[serde(default)]
+    pub auth_webauthn_rp_origin: Option<String>,
+    #[serde(default)]
+    pub auth_webauthn_rp_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct WebAuthnConfig {
+    pub rp_id: String,
+    pub rp_origin: String,
+    pub rp_name: String,
 }
 
 impl AppConfig {
@@ -223,6 +237,24 @@ impl AppConfig {
             let val = val.trim();
             self.auth_log_magic_token = val == "1" || val.eq_ignore_ascii_case("true");
         }
+        if let Ok(val) = env::var("AUTH_WEBAUTHN_RP_ID") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_webauthn_rp_id = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_WEBAUTHN_RP_ORIGIN") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_webauthn_rp_origin = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_WEBAUTHN_RP_NAME") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_webauthn_rp_name = Some(val.to_string());
+            }
+        }
 
         self.normalize().validate()
     }
@@ -268,6 +300,65 @@ impl AppConfig {
             && self.auth_rl_ip_per_hour.unwrap_or(0) > 0
             && self.auth_rl_email_per_min.unwrap_or(0) > 0
             && self.auth_rl_email_per_hour.unwrap_or(0) > 0
+    }
+
+    pub fn webauthn_config(&self) -> Result<WebAuthnConfig> {
+        let rp_id = self
+            .auth_webauthn_rp_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "AUTH_WEBAUTHN_RP_ID is required for passkey registration but is missing"
+                )
+            })?
+            .to_string();
+        let rp_origin = self
+            .auth_webauthn_rp_origin
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "AUTH_WEBAUTHN_RP_ORIGIN is required for passkey registration but is missing"
+                )
+            })?
+            .to_string();
+
+        let rp_name = self
+            .auth_webauthn_rp_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .unwrap_or("Weltgewebe")
+            .to_string();
+
+        let origin_uri: Uri = rp_origin.parse().map_err(|_| {
+            anyhow::anyhow!("AUTH_WEBAUTHN_RP_ORIGIN must be a valid absolute origin URL")
+        })?;
+        let scheme = origin_uri
+            .scheme_str()
+            .ok_or_else(|| anyhow::anyhow!("AUTH_WEBAUTHN_RP_ORIGIN must include a scheme"))?;
+        if scheme != "https" && scheme != "http" {
+            anyhow::bail!("AUTH_WEBAUTHN_RP_ORIGIN must use http or https");
+        }
+        let host = origin_uri
+            .host()
+            .ok_or_else(|| anyhow::anyhow!("AUTH_WEBAUTHN_RP_ORIGIN must include a host"))?;
+        if host != rp_id && !host.ends_with(&format!(".{rp_id}")) {
+            anyhow::bail!(
+                "AUTH_WEBAUTHN_RP_ORIGIN host '{}' must equal AUTH_WEBAUTHN_RP_ID '{}' or be a subdomain of it",
+                host,
+                rp_id
+            );
+        }
+
+        Ok(WebAuthnConfig {
+            rp_id,
+            rp_origin,
+            rp_name,
+        })
     }
 
     fn validate(self) -> Result<Self> {
@@ -715,6 +806,32 @@ delegation_expire_days: 28
         let res = AppConfig::load_from_path(file.path());
         assert!(res.is_err());
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_config_requires_rp_id_and_origin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        let err = cfg.webauthn_config().unwrap_err().to_string();
+        assert!(err.contains("AUTH_WEBAUTHN_RP_ID"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_config_validates_origin_host_against_rp_id() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _rp_id = EnvGuard::set("AUTH_WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("AUTH_WEBAUTHN_RP_ORIGIN", "https://evil.test");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        let err = cfg.webauthn_config().unwrap_err().to_string();
+        assert!(err.contains("must equal AUTH_WEBAUTHN_RP_ID"));
         Ok(())
     }
 }

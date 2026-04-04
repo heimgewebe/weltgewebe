@@ -57,6 +57,9 @@ fn test_state_open_reg() -> Result<ApiState> {
         smtp_from: None,
         // Enable token logging to satisfy delivery requirement for tests without SMTP
         auth_log_magic_token: true,
+        auth_webauthn_rp_id: None,
+        auth_webauthn_rp_origin: None,
+        auth_webauthn_rp_name: None,
     };
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));

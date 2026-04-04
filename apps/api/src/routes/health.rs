@@ -306,6 +306,9 @@ mod tests {
             smtp_pass: None,
             smtp_from: None,
             auth_log_magic_token: false,
+            auth_webauthn_rp_id: None,
+            auth_webauthn_rp_origin: None,
+            auth_webauthn_rp_name: None,
         };
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));

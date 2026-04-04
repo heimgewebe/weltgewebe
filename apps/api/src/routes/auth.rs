@@ -98,6 +98,17 @@ pub struct LoginResponse {
     pub message: String,
 }
 
+#[derive(Serialize)]
+pub struct PasskeyRegistrationOptionsResponse {
+    pub challenge: String,
+    pub rp_id: String,
+    pub rp_origin: String,
+    pub rp_name: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub user_display_name: String,
+}
+
 #[derive(Clone)]
 enum TrustedProxyRule {
     Ip(IpAddr),
@@ -348,6 +359,7 @@ async fn provision_account(
         },
         role: Role::Gast,
         email: Some(email_norm.to_string()),
+        webauthn_user_id: Uuid::new_v4(),
     };
 
     {
@@ -1578,6 +1590,57 @@ pub async fn consume_step_up(
             }
         }
     }
+}
+
+pub async fn start_passkey_registration(
+    State(state): State<ApiState>,
+    ctx: Option<Extension<AuthContext>>,
+) -> impl IntoResponse {
+    let account_id = match ctx
+        .as_ref()
+        .and_then(|Extension(ctx)| ctx.account_id.as_ref())
+    {
+        Some(id) => id,
+        None => return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response(),
+    };
+
+    let cfg = match state.config.webauthn_config() {
+        Ok(cfg) => cfg,
+        Err(error) => {
+            tracing::warn!(%error, "passkey registration requested without valid WebAuthn config");
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "PASSKEY_CONFIG_INVALID",
+                    "message": error.to_string(),
+                })),
+            )
+                .into_response();
+        }
+    };
+
+    let account = {
+        let accounts = state.accounts.read().await;
+        match accounts.get(account_id) {
+            Some(account) => account.clone(),
+            None => return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response(),
+        }
+    };
+
+    let response = PasskeyRegistrationOptionsResponse {
+        challenge: Uuid::new_v4().to_string(),
+        rp_id: cfg.rp_id,
+        rp_origin: cfg.rp_origin,
+        rp_name: cfg.rp_name,
+        user_id: account.webauthn_user_id.to_string(),
+        user_name: account
+            .email
+            .clone()
+            .unwrap_or_else(|| account.public.id.clone()),
+        user_display_name: account.public.title,
+    };
+
+    (StatusCode::OK, Json(response)).into_response()
 }
 
 #[cfg(test)]

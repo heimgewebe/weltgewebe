@@ -49,7 +49,10 @@ mod tests {
             smtp_user: None,
             smtp_pass: None,
             smtp_from: None,
-            auth_log_magic_token: false, // No Dev Logging
+            auth_log_magic_token: false,
+            auth_webauthn_rp_id: None,
+            auth_webauthn_rp_origin: None,
+            auth_webauthn_rp_name: None, // No Dev Logging
         };
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -70,6 +73,7 @@ mod tests {
             },
             role: Role::Gast,
             email: Some("u1@example.com".to_string()),
+            webauthn_user_id: uuid::Uuid::new_v4(),
         };
         account_map.insert(account.public.id.clone(), account);
 

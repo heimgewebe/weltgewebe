@@ -260,7 +260,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 ### Arbeitspakete Phase 4
 
 1. Statusbeweis: Was existiert bereits?
-2. Register-Options
+2. Register-Options (inkl. stabiler `webauthn_user_id` je Account und RP-Werte aus `AppConfig`)
 3. Register-Verify
 4. Auth-Options
 5. Auth-Verify
@@ -277,6 +277,13 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 - Passkeys sind nicht mehr nur dokumentiert, sondern in Runtime und UI belegbar
 - Magic Link bleibt Recovery-/Neugerät-Pfad
+
+### Phase-4-Zwischenstand (April 2026)
+
+- `POST /auth/passkeys/register/options` ist vorhanden.
+- Der WebAuthn-Nutzerbezug ist als dedizierte, stabile `webauthn_user_id` im Account-Modell eingeführt (nicht aus `account_id` abgeleitet).
+- `rp_id` und `rp_origin` werden aus `AppConfig` gelesen; fehlende/inkonsistente Werte führen zu expliziten Fehlern.
+- Offen bleiben: Register-Verify, Auth-Options/Auth-Verify, Passkey-Liste, Passkey-Entfernen, UI-Flows.
 
 ---
 

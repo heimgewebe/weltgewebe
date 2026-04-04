@@ -48,6 +48,9 @@ async fn test_state() -> Result<ApiState> {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: false,
+        auth_webauthn_rp_id: None,
+        auth_webauthn_rp_origin: None,
+        auth_webauthn_rp_name: None,
     };
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -99,6 +102,7 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
                 },
                 role: Role::Gast,
                 email: None,
+                webauthn_user_id: uuid::Uuid::new_v4(),
             },
         );
     }
