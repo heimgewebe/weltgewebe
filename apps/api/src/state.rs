@@ -110,7 +110,11 @@ mod tests {
         let order: Vec<_> = cache.iter_in_order().collect();
         assert_eq!(
             order,
-            vec![&"item_z".to_string(), &"item_a".to_string(), &"item_m".to_string()]
+            vec![
+                &"item_z".to_string(),
+                &"item_a".to_string(),
+                &"item_m".to_string()
+            ]
         );
     }
 
@@ -125,9 +129,6 @@ mod tests {
         assert_eq!(cache.len(), 2);
         // Order must match original insertion of the unique ID
         let order: Vec<_> = cache.iter_in_order().collect();
-        assert_eq!(
-            order,
-            vec![&"second".to_string(), &"item2".to_string()]
-        );
+        assert_eq!(order, vec![&"second".to_string(), &"item2".to_string()]);
     }
 }
