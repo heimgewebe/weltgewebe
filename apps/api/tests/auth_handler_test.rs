@@ -12,7 +12,9 @@ mod tests {
     use tokio::sync::RwLock;
     use tower::ServiceExt;
     use weltgewebe_api::{
-        auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+        auth::{
+            accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+        },
         config::AppConfig,
         routes::{
             accounts::{AccountInternal, AccountPublic},

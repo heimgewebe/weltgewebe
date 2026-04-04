@@ -13,7 +13,9 @@ use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+    },
     config::AppConfig,
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
@@ -210,12 +212,11 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         tags: vec![],
     };
     account_map.insert(AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-            webauthn_user_id: uuid::Uuid::new_v4(),
-        },
-    );
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -395,12 +396,11 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         tags: vec![],
     };
     account_map.insert(AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-            webauthn_user_id: uuid::Uuid::new_v4(),
-        },
-    );
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));

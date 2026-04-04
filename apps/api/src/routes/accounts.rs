@@ -7,12 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-
-    env,
-    path::PathBuf,
-};
+use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},

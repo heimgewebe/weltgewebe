@@ -14,12 +14,12 @@ use axum::{
 use serde_json::{json, Map};
 use sqlx::query_scalar;
 
+#[cfg(test)]
+use crate::auth::accounts::AccountStore;
 use crate::{
     state::ApiState,
     telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
 };
-#[cfg(test)]
-use crate::auth::accounts::AccountStore;
 
 pub fn health_routes() -> Router<ApiState> {
     Router::new()

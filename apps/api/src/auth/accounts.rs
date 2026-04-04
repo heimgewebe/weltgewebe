@@ -1,5 +1,5 @@
-use std::collections::{BTreeMap, HashMap};
 use crate::routes::accounts::AccountInternal;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Default)]
 pub struct AccountStore {
@@ -15,8 +15,6 @@ impl AccountStore {
     pub fn get(&self, id: &str) -> Option<&AccountInternal> {
         self.map.get(id)
     }
-
-
 
     pub fn get_by_email(&self, email: &str) -> Option<&AccountInternal> {
         let id = self.email_index.get(&email.to_lowercase())?;

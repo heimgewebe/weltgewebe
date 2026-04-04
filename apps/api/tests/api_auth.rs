@@ -11,7 +11,9 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+    },
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -1153,22 +1155,21 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
     {
         let mut accounts = state.accounts.write().await;
         accounts.insert(AccountInternal {
-                public: AccountPublic {
-                    id: mixed_id.clone(),
-                    kind: "garnrolle".to_string(),
-                    title: "Mixed Case Legacy".to_string(),
-                    summary: None,
-                    public_pos: None,
-                    mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
-                    radius_m: 0,
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
-                webauthn_user_id: uuid::Uuid::new_v4(),
+            public: AccountPublic {
+                id: mixed_id.clone(),
+                kind: "garnrolle".to_string(),
+                title: "Mixed Case Legacy".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
             },
-        );
+            role: Role::Gast,
+            email: Some("User@MixedCase.Example".to_string()), // Mixed-Case stored
+            webauthn_user_id: uuid::Uuid::new_v4(),
+        });
     }
 
     let account_count_before = state.accounts.read().await.values().count();
@@ -1572,11 +1573,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
 
     // 2. Disable account
     account.public.disabled = true;
-    state
-        .accounts
-        .write()
-        .await
-        .insert(account);
+    state.accounts.write().await.insert(account);
 
     // 3. Refresh session (should fail)
     let req_refresh = Request::post("/auth/session/refresh")
@@ -1880,7 +1877,11 @@ async fn test_device_management() -> Result<()> {
     account_map.insert(account);
 
     let state = test_state()?;
-    state.accounts.write().await.insert(account_map.get("u-admin").unwrap().clone());
+    state
+        .accounts
+        .write()
+        .await
+        .insert(account_map.get("u-admin").unwrap().clone());
 
     let app = Router::new()
         .merge(api_router())
@@ -3223,22 +3224,21 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
     {
         let mut accounts = state.accounts.write().await;
         accounts.insert(weltgewebe_api::routes::accounts::AccountInternal {
-                public: weltgewebe_api::routes::accounts::AccountPublic {
-                    id: "u2".to_string(),
-                    kind: "garnrolle".to_string(),
-                    title: "User Two".to_string(),
-                    summary: None,
-                    public_pos: None,
-                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
-                    radius_m: 0,
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: weltgewebe_api::auth::role::Role::Gast,
-                email: Some("u2@example.com".to_string()),
-                webauthn_user_id: uuid::Uuid::new_v4(),
+            public: weltgewebe_api::routes::accounts::AccountPublic {
+                id: "u2".to_string(),
+                kind: "garnrolle".to_string(),
+                title: "User Two".to_string(),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
             },
-        );
+            role: weltgewebe_api::auth::role::Role::Gast,
+            email: Some("u2@example.com".to_string()),
+            webauthn_user_id: uuid::Uuid::new_v4(),
+        });
     }
 
     // Try to update to an email that is already used by u2

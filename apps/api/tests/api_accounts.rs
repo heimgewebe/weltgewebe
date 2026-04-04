@@ -10,7 +10,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+    },
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -88,23 +90,22 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
 
     for id in ids {
         accounts.insert(AccountInternal {
-                public: AccountPublic {
-                    id: id.to_string(),
-                    kind: "garnrolle".to_string(),
-                    title: format!("Title {}", id),
-                    summary: None,
-                    public_pos: None,
-                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
-                    radius_m: 0,
+            public: AccountPublic {
+                id: id.to_string(),
+                kind: "garnrolle".to_string(),
+                title: format!("Title {}", id),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                radius_m: 0,
 
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: None,
-                webauthn_user_id: uuid::Uuid::new_v4(),
+                disabled: false,
+                tags: vec![],
             },
-        );
+            role: Role::Gast,
+            email: None,
+            webauthn_user_id: uuid::Uuid::new_v4(),
+        });
     }
 
     state.accounts = Arc::new(RwLock::new(accounts));
