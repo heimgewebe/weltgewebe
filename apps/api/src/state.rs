@@ -1,4 +1,7 @@
-use std::{collections::{BTreeMap, HashMap}, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -99,7 +102,10 @@ mod tests {
         cache.insert("m".to_string(), "item_m".to_string());
 
         let order: Vec<_> = cache.order.clone();
-        assert_eq!(order, vec!["z".to_string(), "a".to_string(), "m".to_string()]);
+        assert_eq!(
+            order,
+            vec!["z".to_string(), "a".to_string(), "m".to_string()]
+        );
     }
 
     #[test]

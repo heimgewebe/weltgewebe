@@ -1,5 +1,6 @@
 # Performance Rationale: O(1) Lookups for Nodes and Edges
 
+
 ## Issue
 The original implementation of the API stored `Node` and `Edge` objects in `Vec` collections within the `ApiState`.
 This resulted in $O(N)$ linear scans when looking up a specific node or edge by its unique `id` (e.g., in `get_node`, `get_edge`, and `patch_node`).

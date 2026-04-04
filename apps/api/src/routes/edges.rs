@@ -157,10 +157,7 @@ pub async fn get_edge(
     Path(id): Path<String>,
 ) -> Result<Json<EdgeWithDetails>, StatusCode> {
     let cache = state.edges.read().await;
-    let edge = cache
-        .get(&id)
-        .cloned()
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let edge = cache.get(&id).cloned().ok_or(StatusCode::NOT_FOUND)?;
 
     let mut source_details = None;
     let mut target_details = None;

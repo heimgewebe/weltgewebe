@@ -264,8 +264,8 @@ async fn ready(State(state): State<ApiState>) -> Response {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::OrderedCache;
     use super::*;
+    use crate::state::OrderedCache;
     use crate::{
         auth::{rate_limit::AuthRateLimiter, session::SessionStore},
         config::AppConfig,
