@@ -96,13 +96,15 @@ mod tests {
     }
 
     #[test]
-    fn test_ordered_cache_duplicate_last_write_wins() {
+    fn test_ordered_cache_duplicate_last_write_wins_and_stable_order() {
         let mut cache = OrderedCache::<String>::new();
         cache.insert("id1".to_string(), "first".to_string());
+        cache.insert("id2".to_string(), "item2".to_string());
         cache.insert("id1".to_string(), "second".to_string());
 
         assert_eq!(cache.get("id1"), Some(&"second".to_string()));
-        assert_eq!(cache.len(), 1);
-        assert_eq!(cache.order, vec!["id1".to_string()]);
+        assert_eq!(cache.len(), 2);
+        // Order must match original insertion of the unique ID
+        assert_eq!(cache.order, vec!["id1".to_string(), "id2".to_string()]);
     }
 }

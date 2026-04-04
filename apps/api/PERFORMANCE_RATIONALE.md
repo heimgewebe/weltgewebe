@@ -13,6 +13,6 @@ To optimize these hotpaths without compromising the stability of API list respon
 
 ## Impact & Evidence
 - **Asymptotic Improvement:** Theoretical lookup and update complexity is reduced from $O(N)$ to average $O(1)$.
-- **Semantic Stability:** Unlike a standard `HashMap`, this approach preserves the implicit API contract of stable list ordering.
-- **Measurability:** While full end-to-end performance benchmarks were not conducted in this development iteration due to environment constraints, the complexity reduction is mathematically proven to provide a performance boost as the graph size grows.
-- **Data Integrity:** The "last-write-wins" policy for duplicate IDs is now enforced explicitly and documented via unit tests.
+- **Semantic Stability:** Unlike a standard `HashMap`, this approach preserves the implicit API contract of stable list ordering by separating retrieval from iteration.
+- **Measurability:** While full end-to-end performance benchmarks were not conducted in this development iteration due to environment constraints, the asymptotic complexity reduction makes improved lookup performance expected as graph size grows, while real-world gains remain workload-dependent.
+- **Data Integrity:** The "last-write-wins" policy for duplicate IDs is now enforced explicitly and verified via unit tests to ensure cache consistency.
