@@ -7,11 +7,14 @@ use axum::{
 };
 use serial_test::serial;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role,
+        session::SessionStore,
+    },
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -64,7 +67,7 @@ fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -75,7 +78,7 @@ fn test_state() -> Result<ApiState> {
 
 fn test_state_with_accounts() -> Result<ApiState> {
     let mut state = test_state()?;
-    let mut account_map = BTreeMap::new();
+    let mut accounts = AccountStore::new();
 
     let account = AccountInternal {
         public: AccountPublic {
@@ -93,7 +96,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
     };
-    account_map.insert(account.public.id.clone(), account);
+    accounts.insert(account);
 
     let account = AccountInternal {
         public: AccountPublic {
@@ -111,9 +114,9 @@ fn test_state_with_accounts() -> Result<ApiState> {
         role: Role::Admin,
         email: Some("a1@example.com".to_string()),
     };
-    account_map.insert(account.public.id.clone(), account);
+    accounts.insert(account);
 
-    state.accounts = Arc::new(RwLock::new(account_map));
+    state.accounts = Arc::new(RwLock::new(accounts));
     Ok(state)
 }
 
@@ -259,7 +262,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     }
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
 
-    let mut account_map = BTreeMap::new();
+    let mut accounts = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u1".to_string(),
@@ -276,10 +279,10 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         role: Role::Gast,
         email: Some("u1@example.com".to_string()),
     };
-    account_map.insert(account.public.id.clone(), account);
+    accounts.insert(account);
 
     let mut state = test_state()?;
-    state.accounts = Arc::new(RwLock::new(account_map));
+    state.accounts = Arc::new(RwLock::new(accounts));
 
     let app = app(state);
 

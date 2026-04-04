@@ -15,6 +15,7 @@ use serde_json::{json, Map};
 use sqlx::query_scalar;
 
 use crate::{
+    auth::accounts::AccountStore,
     state::ApiState,
     telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
 };
@@ -319,7 +320,7 @@ mod tests {
             metrics,
             sessions: SessionStore::new(),
             tokens: crate::auth::tokens::TokenStore::new(),
-            accounts: Arc::new(RwLock::new(BTreeMap::new())),
+            accounts: Arc::new(RwLock::new(AccountStore::new())),
             nodes: Arc::new(RwLock::new(Vec::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(RwLock::new(Vec::new())),

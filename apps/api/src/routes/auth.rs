@@ -260,8 +260,8 @@ pub async fn list_dev_accounts(
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     check_dev_login_guard(&headers, addr)?;
 
-    let accounts_map = state.accounts.read().await;
-    let accounts: Vec<DevAccount> = accounts_map
+    let accounts = state.accounts.read().await;
+    let accounts: Vec<DevAccount> = accounts
         .iter()
         .map(|(id, acc)| {
             debug_assert_eq!(
@@ -302,8 +302,8 @@ pub async fn dev_login(
     }
 
     {
-        let accounts_map = state.accounts.read().await;
-        if !accounts_map.contains_key(&payload.account_id) {
+        let accounts = state.accounts.read().await;
+        if accounts.get(&payload.account_id).is_none() {
             tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
             return (jar, StatusCode::BAD_REQUEST).into_response();
         }
@@ -348,11 +348,10 @@ async fn provision_account(
     };
 
     {
-        let mut accounts_map = state.accounts.write().await;
+        let mut accounts = state.accounts.write().await;
         // Double-checked locking to avoid race condition
-        let collision_id = accounts_map
-            .values()
-            .find(|acc| acc.email.as_ref().map(|e| e == email_norm).unwrap_or(false))
+        let collision_id = accounts
+            .get_by_email(email_norm)
             .map(|acc| acc.public.id.clone());
 
         if let Some(id) = collision_id {
@@ -360,7 +359,7 @@ async fn provision_account(
             Some(id)
         } else {
             let id = new_account.public.id.clone();
-            accounts_map.insert(id.clone(), new_account);
+            accounts.insert(new_account);
             tracing::info!(
                 event = "login.provisioned",
                 request_id = %ctx.request_id,
@@ -545,15 +544,9 @@ pub async fn request_login(
     // If found, we proceed.
     // If not found, we check policy and potentially acquire a write lock to provision.
     let existing_account_info = {
-        let accounts_map = state.accounts.read().await;
-        accounts_map
-            .values()
-            .find(|acc| {
-                acc.email
-                    .as_ref()
-                    .map(|e| e == &email_norm)
-                    .unwrap_or(false)
-            })
+        let accounts = state.accounts.read().await;
+        accounts
+            .get_by_email(&email_norm)
             .map(|acc| (acc.public.id.clone(), acc.public.disabled))
     };
 
@@ -801,13 +794,9 @@ pub async fn consume_login_post(
     // 2. Consume Token
     if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
-        let accounts_map = state.accounts.read().await;
-        let account = accounts_map.values().find(|acc| {
-            acc.email
-                .as_ref()
-                .map(|e| e.eq_ignore_ascii_case(&email))
-                .unwrap_or(false)
-        });
+        let accounts = state.accounts.read().await;
+        // email in AccountStore index is normalized to lowercase
+        let account = accounts.get_by_email(&email.to_lowercase());
 
         if let Some(acc) = account {
             if acc.public.disabled {

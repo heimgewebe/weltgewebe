@@ -6,11 +6,14 @@ use axum::{
 };
 mod helpers;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role,
+        session::SessionStore,
+    },
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -61,7 +64,7 @@ async fn test_state() -> Result<ApiState> {
         metrics,
         sessions: SessionStore::new(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -73,32 +76,29 @@ async fn test_state() -> Result<ApiState> {
 #[tokio::test]
 async fn accounts_list_is_sorted_and_limited() -> Result<()> {
     let mut state = test_state().await?;
-    let mut accounts = BTreeMap::new();
+    let mut accounts = AccountStore::new();
 
     // Insert accounts in unsorted order: u2, a1, u1
     // Expected sort order (lexicographical by ID): a1, u1, u2
     let ids = vec!["u2", "a1", "u1"];
 
     for id in ids {
-        accounts.insert(
-            id.to_string(),
-            AccountInternal {
-                public: AccountPublic {
-                    id: id.to_string(),
-                    kind: "garnrolle".to_string(),
-                    title: format!("Title {}", id),
-                    summary: None,
-                    public_pos: None,
-                    mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
-                    radius_m: 0,
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: id.to_string(),
+                kind: "garnrolle".to_string(),
+                title: format!("Title {}", id),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                radius_m: 0,
 
-                    disabled: false,
-                    tags: vec![],
-                },
-                role: Role::Gast,
-                email: None,
+                disabled: false,
+                tags: vec![],
             },
-        );
+            role: Role::Gast,
+            email: None,
+        });
     }
 
     state.accounts = Arc::new(RwLock::new(accounts));

@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod rate_limit;
 pub mod role;
 pub mod session;
