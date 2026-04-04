@@ -305,3 +305,11 @@ während die Rückwärtskompatibilität zum bisherigen Standardpfad (`/opt/weltg
 erhalten bleibt.
 
 **Risiko:** Niedrig. (Flexibilisierung des Deployments ohne funktionale Änderungen für bestehende Setups).
+
+## 2026-04-04 - Entfernung des Legacy-Alias /auth/login/consume
+
+**Beschreibung:**
+
+Der temporäre Legacy-Alias `/auth/login/consume` wurde entfernt. Der Magic-Link-Consume-Pfad läuft nun ausschließlich über `/auth/magic-link/consume`.
+
+**Risiko:** Niedrig.
