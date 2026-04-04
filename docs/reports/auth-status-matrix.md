@@ -66,14 +66,14 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
-| Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
+| Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, E2E belegt | OK     | mittel  |
 | Session               | required    | API aktiv, In-Memory als bewusste Wahl dokumentiert, E2E offen | Teil   | mittel  |
 | Session Refresh       | required    | Route aktiv, Session-Rotation belegt, Token-Split offen | Teil   | mittel  |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert | Teil   | mittel  |
-| Passkeys              | optional    | Runtime-Beleg offen | Offen  | mittel  |
+| Passkeys              | optional    | Register-Options API belegt (stabile webauthn_user_id), Rest offen | Teil   | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
 
 ---
@@ -153,11 +153,11 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.8 Passkeys
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
-**Ist:** Fehlt vollständig im Repo; gegen den neuen Zielrahmen noch nicht verifiziert.
+**Ist:** Webauthn Integration (webauthn-rs) und `POST /auth/passkeys/register-options` sind implementiert und durch API-Tests belegt. Hierbei wurde eine persistierte `webauthn_user_id` eingeführt, um Passkey-IDs von der Account-Semantik zu entkoppeln. `rp_id` und `rp_origin` stammen sauber aus der AppConfig. Verify, Auth und List/Remove fehlen noch.
 **Dokumentationsbelege:** keine
-**Code-, Test- und Verifikationsbelege:** keine
-**Fehlende Belege:** Routen-Code, Test-Case
-**Status:** Offen
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/state.rs`, `apps/api/src/config.rs`
+**Fehlende Belege:** Register-Verify Routen-Code, Auth-Options/Verify Routen-Code, UI E2E Test
+**Status:** Teil
 **Risiko:** mittel
 
 ### 2.9 Sicherheitsinvarianten

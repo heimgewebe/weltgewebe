@@ -13,6 +13,7 @@ use crate::{
 };
 use async_nats::Client as NatsClient;
 use sqlx::PgPool;
+use webauthn_rs::Webauthn;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -32,4 +33,5 @@ pub struct ApiState {
     pub edges: Arc<RwLock<Vec<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
+    pub webauthn: Arc<Webauthn>,
 }

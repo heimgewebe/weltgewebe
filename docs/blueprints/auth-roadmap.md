@@ -237,7 +237,7 @@ Jeder relevante Bereich ist entweder:
 - [x] Intent-Bindung — `ChallengeIntent::LogoutAll`, `RemoveDevice`
 - [x] `POST /auth/step-up/magic-link/request` — separater `StepUpTokenStore`, defensive Fehlersemantik (400/500/503), Mailer-Pfad, Tests
 - [x] `POST /auth/step-up/magic-link/consume` — konsumiert den Step-up-Token, validiert Challenge-Bindung und Session, führt den Intent aus: bei `LogoutAll` werden alle Sessions des Accounts beendet und das Cookie geleert; bei `RemoveDevice` wird nur das Zielgerät entfernt, die aktuelle Session bleibt erhalten
-- [ ] Passkey als bevorzugter Step-up-Pfad
+- [ ] Passkey als bevorzugter Step-up-Pfad (Blockiert durch Phase 4)
 - [x] Minimaler Step-up-Consume-Pfad in der UI
 - [x] Fehlerpfade im Step-up-Request ohne unnötigen Session-Abbruch — der Request-Pfad invalidiert keine bestehende Session
 - [x] Nachweis, dass Step-up keine neue allgemeine Session erzeugt — der Consume-Handler erstellt in keinem Pfad eine Session; `LogoutAll` löscht alle Account-Sessions (inkl. der aktuellen), `RemoveDevice` löscht nur die Sessions des Zielgeräts; beide Invarianten sind durch `test_step_up_consume_logout_all_success` und `test_step_up_consume_remove_device_success` in `apps/api/tests/api_auth.rs` belegt
@@ -260,7 +260,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 ### Arbeitspakete Phase 4
 
 1. Statusbeweis: Was existiert bereits?
-2. Register-Options
+[x] 2. Register-Options (mit config-driven RP und stabiler webauthn_user_id)
 3. Register-Verify
 4. Auth-Options
 5. Auth-Verify

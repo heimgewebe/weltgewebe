@@ -348,6 +348,7 @@ async fn provision_account(
         },
         role: Role::Gast,
         email: Some(email_norm.to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
     };
 
     {
@@ -1747,4 +1748,54 @@ mod tests {
             Err(StatusCode::FORBIDDEN)
         );
     }
+}
+
+
+// POST /auth/passkeys/register-options
+pub async fn passkey_register_options(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+) -> impl IntoResponse {
+    if !ctx.authenticated {
+        let err = serde_json::json!({"error": "UNAUTHORIZED"});
+        return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+    }
+
+    let account_id = match ctx.account_id {
+        Some(ref id) => id.clone(),
+        None => {
+            let err = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    let accounts_map = state.accounts.read().await;
+    let account = match accounts_map.get(&account_id) {
+        Some(acc) => acc,
+        None => {
+            let err = serde_json::json!({"error": "UNAUTHORIZED"});
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    let user_unique_id = account.webauthn_user_id;
+    let username = account.email.clone().unwrap_or_else(|| account_id.clone());
+    let display_name = account.public.title.clone();
+    drop(accounts_map);
+
+    let (ccr, _skr) = match state.webauthn.start_passkey_registration(
+        user_unique_id,
+        &username,
+        &display_name,
+        None,
+    ) {
+        Ok(res) => res,
+        Err(e) => {
+            tracing::error!("Failed to start passkey registration: {:?}", e);
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        }
+    };
+
+    (StatusCode::OK, Json(ccr)).into_response()
 }

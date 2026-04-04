@@ -93,6 +93,15 @@ pub struct AppConfig {
     // Dev/Ops Configuration
     #[serde(default)]
     pub auth_log_magic_token: bool,
+
+    // WebAuthn Configuration
+    #[serde(default)]
+    pub webauthn_rp_id: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_origin: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_name: Option<String>,
+
 }
 
 impl AppConfig {

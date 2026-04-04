@@ -16,6 +16,8 @@ use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
 use config::AppConfig;
+use webauthn_rs::prelude::*;
+use webauthn_rs::WebauthnBuilder;
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
@@ -84,6 +86,16 @@ pub async fn run() -> anyhow::Result<()> {
         }
     };
 
+
+    let rp_id = app_config.webauthn_rp_id.clone().unwrap_or_else(|| "weltgewebe.home.arpa".to_string());
+    let rp_origin_str = app_config.webauthn_rp_origin.clone().unwrap_or_else(|| "https://weltgewebe.home.arpa".to_string());
+    let rp_origin = Url::parse(&rp_origin_str).expect("Invalid WEBAUTHN_RP_ORIGIN URL");
+    let rp_name = app_config.webauthn_rp_name.clone().unwrap_or_else(|| "Weltgewebe".to_string());
+
+    let mut builder = WebauthnBuilder::new(&rp_id, &rp_origin).expect("Invalid Webauthn configuration");
+    builder = builder.allow_subdomains(true).allow_any_port(true).rp_name(&rp_name);
+    let webauthn = Arc::new(builder.build().expect("Failed to build Webauthn"));
+
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -101,6 +113,7 @@ pub async fn run() -> anyhow::Result<()> {
         edges,
         rate_limiter,
         mailer,
+        webauthn,
     };
 
     let app = Router::new()

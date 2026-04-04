@@ -30,7 +30,7 @@ fn accounts_path() -> PathBuf {
     in_dir().join("demo.accounts.jsonl")
 }
 
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Location {
     pub lat: f64,
     pub lon: f64,
@@ -45,7 +45,7 @@ pub enum AccountMode {
     Verortet,
     Ron,
 }
-#[derive(Serialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountPublic {
     pub id: String,
     #[serde(rename = "type")]
@@ -68,11 +68,13 @@ pub struct AccountPublic {
     pub tags: Vec<String>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AccountInternal {
     pub public: AccountPublic,
     pub role: Role,
     pub email: Option<String>,
+    #[serde(default = "uuid::Uuid::new_v4")]
+    pub webauthn_user_id: uuid::Uuid,
 }
 
 /// Simple deterministic pseudo-random number generator based on ID
@@ -292,6 +294,7 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
                 public,
                 role,
                 email,
+                webauthn_user_id: uuid::Uuid::new_v4()
             };
             map.insert(account.public.id.clone(), account);
         }

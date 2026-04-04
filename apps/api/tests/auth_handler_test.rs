@@ -49,7 +49,10 @@ mod tests {
             smtp_user: None,
             smtp_pass: None,
             smtp_from: None,
-            auth_log_magic_token: false, // No Dev Logging
+            auth_log_magic_token: false, // No Dev Logging,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
         };
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
@@ -70,10 +73,21 @@ mod tests {
             },
             role: Role::Gast,
             email: Some("u1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
         };
         account_map.insert(account.public.id.clone(), account);
 
-        Ok(ApiState {
+
+    let rp_id = config.webauthn_rp_id.clone().unwrap_or_else(|| "weltgewebe.home.arpa".to_string());
+    let rp_origin_str = config.webauthn_rp_origin.clone().unwrap_or_else(|| "https://weltgewebe.home.arpa".to_string());
+    let rp_origin = webauthn_rs::prelude::Url::parse(&rp_origin_str).expect("Invalid WEBAUTHN_RP_ORIGIN URL");
+    let rp_name = config.webauthn_rp_name.clone().unwrap_or_else(|| "Weltgewebe-Test".to_string());
+
+    let mut builder = webauthn_rs::WebauthnBuilder::new(&rp_id, &rp_origin).expect("Invalid Webauthn configuration");
+    builder = builder.allow_subdomains(true).allow_any_port(true).rp_name(&rp_name);
+    let webauthn = std::sync::Arc::new(builder.build().expect("Failed to build Webauthn"));
+
+    Ok(ApiState {
             db_pool: None,
             db_pool_configured: false,
             nats_client: None,
@@ -89,7 +103,8 @@ mod tests {
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
             rate_limiter,
-            mailer: None, // No Mailer instance
+            mailer: None,
+        webauthn: webauthn.clone(), // No Mailer instance
         })
     }
 

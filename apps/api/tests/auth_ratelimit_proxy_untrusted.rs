@@ -27,6 +27,16 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
 
     let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
+
+    let rp_id = config.webauthn_rp_id.clone().unwrap_or_else(|| "weltgewebe.home.arpa".to_string());
+    let rp_origin_str = config.webauthn_rp_origin.clone().unwrap_or_else(|| "https://weltgewebe.home.arpa".to_string());
+    let rp_origin = webauthn_rs::prelude::Url::parse(&rp_origin_str).expect("Invalid WEBAUTHN_RP_ORIGIN URL");
+    let rp_name = config.webauthn_rp_name.clone().unwrap_or_else(|| "Weltgewebe-Test".to_string());
+
+    let mut builder = webauthn_rs::WebauthnBuilder::new(&rp_id, &rp_origin).expect("Invalid Webauthn configuration");
+    builder = builder.allow_subdomains(true).allow_any_port(true).rp_name(&rp_name);
+    let webauthn = std::sync::Arc::new(builder.build().expect("Failed to build Webauthn"));
+
     Ok(ApiState {
         db_pool: None,
         db_pool_configured: false,
@@ -44,6 +54,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         rate_limiter,
         mailer: None,
+        webauthn: webauthn.clone(),
     })
 }
 
@@ -77,6 +88,9 @@ fn default_config() -> AppConfig {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: true,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
     }
 }
 

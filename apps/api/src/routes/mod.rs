@@ -13,6 +13,7 @@ use axum::{
 
 use crate::middleware::authz::require_write;
 use crate::state::ApiState;
+use crate::routes::auth::passkey_register_options;
 
 use self::{
     accounts::{get_account, list_accounts},
@@ -61,4 +62,5 @@ pub fn api_router() -> Router<ApiState> {
         .route("/auth/session/refresh", post(session_refresh))
         .route("/auth/step-up/magic-link/request", post(request_step_up))
         .route("/auth/step-up/magic-link/consume", post(consume_step_up))
+        .route("/auth/passkeys/register-options", post(passkey_register_options))
 }
