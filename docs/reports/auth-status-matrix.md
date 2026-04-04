@@ -83,7 +83,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.1 Magic Link
 
 **Soll:** POST `/auth/magic-link/request`, POST `/auth/magic-link/consume`, Anti-Enumeration, Token TTL.
-**Ist:** Kanonischer Zielcontract ist auf `/auth/magic-link/*` migriert. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.
+**Ist:** Kanonischer Zielcontract ist auf `/auth/magic-link/*` migriert. Der temporäre Legacy-Alias `/auth/login/consume` wurde nach Ablauf der Token-TTL (15 Min.) und erfolgreichem Rollout der Zielrouten entfernt. Ein belastbarer Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten ist noch separat zu führen.
 **Dokumentationsbelege:** `docs/runbook.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/web/src/routes/login/+page.svelte`, `verification/verify_magic_link.py`
 **Fehlende Belege:** erfolgreicher Runtime-/E2E-Nachweis des vollständigen Flows unter den neuen Zielrouten

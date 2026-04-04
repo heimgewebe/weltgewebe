@@ -587,6 +587,28 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
 
 #[tokio::test]
 #[serial]
+async fn consume_legacy_alias_returns_404() -> Result<()> {
+    let state = test_state_with_accounts()?;
+    let app = app(state);
+
+    // 1. GET (Legacy Alias)
+    let req_get = Request::get("/auth/login/consume?token=any")
+        .body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+    assert_eq!(res_get.status(), StatusCode::NOT_FOUND);
+
+    // 2. POST (Legacy Alias)
+    let req_post = Request::post("/auth/login/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(body::Body::from("token=any&nonce=any"))?;
+    let res_post = app.oneshot(req_post).await?;
+    assert_eq!(res_post.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn consume_login_flow_succeeds() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
