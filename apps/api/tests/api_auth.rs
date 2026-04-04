@@ -3021,16 +3021,33 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
     let res2 = app.clone().oneshot(req2).await?;
     assert_eq!(res2.status(), StatusCode::NO_CONTENT);
 
-    // 3. Extract token from mail sink
-    let token = {
+    // 3. Extract token and challenge_id from mail sink and verify the contract
+    let (token, link_challenge_id) = {
         let messages = sink.lock().unwrap();
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].0, "e2e@example.com"); // Mail went to new address
 
         let link = &messages[0].1;
-        // We know the link format is precisely "{base_url}/auth/step-up/consume?token={token}"
-        // A simple split on "?token=" is safe because token is the only parameter and last in the URL structure defined in mailer.rs
-        link.split("token=").last().unwrap().to_string()
+        // The link format must be exactly "{base_url}/auth/step-up/consume?token={token}&challenge_id={id}"
+        assert!(link.contains("?token="), "Link must contain ?token=");
+        assert!(
+            link.contains("&challenge_id="),
+            "Link must contain &challenge_id="
+        );
+
+        let parts: Vec<&str> = link.split("?token=").collect();
+        let token_and_challenge: Vec<&str> = parts[1].split("&challenge_id=").collect();
+
+        let extracted_token = token_and_challenge[0].to_string();
+        let extracted_challenge = token_and_challenge[1].to_string();
+
+        // Explicitly assert the challenge_id in the link matches the challenge we created
+        assert_eq!(
+            extracted_challenge, challenge_id,
+            "Challenge ID in link must match the requested challenge"
+        );
+
+        (extracted_token, extracted_challenge)
     };
 
     // 4. POST /auth/step-up/magic-link/consume
@@ -3044,7 +3061,7 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
         .body(body::Body::from(
             serde_json::json!({
                 "token": token,
-                "challenge_id": challenge_id
+                "challenge_id": link_challenge_id
             })
             .to_string(),
         ))?;

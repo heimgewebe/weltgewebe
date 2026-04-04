@@ -1364,7 +1364,10 @@ pub async fn request_step_up(
     };
     let base_url = base_url.trim_end_matches('/');
     // We send them to the frontend Step-up consume UI, NOT the API endpoint directly.
-    let link = format!("{}/auth/step-up/consume?token={}", base_url, token);
+    let link = format!(
+        "{}/auth/step-up/consume?token={}&challenge_id={}",
+        base_url, token, challenge.id
+    );
 
     let mailer = match &state.mailer {
         Some(m) => m,
