@@ -1,4 +1,4 @@
-use crate::state::ApiState;
+use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
     extract::{Path, Query, State},
@@ -45,18 +45,19 @@ pub struct EdgeWithDetails {
 
 const MAX_PAGE_SIZE: usize = 1000;
 
-pub async fn load_edges() -> HashMap<String, Edge> {
+pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) => {
-            tracing::warn!(?path, ?e, "Failed to open edges file, returning empty list");
-            return HashMap::new();
+            tracing::warn!(?path, ?e, "Failed to open edges file, returning empty cache");
+            return OrderedCache::new();
         }
     };
     let mut lines = BufReader::new(file).lines();
-    let mut edges = HashMap::new();
+    let mut edges = OrderedCache::new();
+    let mut duplicates_count = 0;
 
     let max_edges = match std::env::var("MAX_EDGES_CACHE") {
         Ok(val) => match val.parse::<usize>() {
@@ -90,12 +91,17 @@ pub async fn load_edges() -> HashMap<String, Edge> {
                 continue;
             }
         };
+
+        if edges.items.contains_key(&edge.id) {
+            duplicates_count += 1;
+        }
         edges.insert(edge.id.clone(), edge);
     }
 
     let load_ms = start.elapsed().as_millis();
     tracing::info!(
         count = edges.len(),
+        duplicates_count,
         load_ms,
         ?path,
         "Loaded edges into memory cache"
@@ -115,10 +121,12 @@ pub async fn list_edges(
         .unwrap_or(250)
         .min(MAX_PAGE_SIZE);
 
-    let edges = state.edges.read().await;
+    let cache = state.edges.read().await;
 
-    let out: Vec<Edge> = edges
-        .values()
+    let out: Vec<Edge> = cache
+        .order
+        .iter()
+        .filter_map(|id| cache.items.get(id))
         .filter(|edge| {
             if let Some(s) = src {
                 if edge.source_id != *s {
@@ -143,8 +151,8 @@ pub async fn get_edge(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<EdgeWithDetails>, StatusCode> {
-    let edges = state.edges.read().await;
-    let edge = edges
+    let cache = state.edges.read().await;
+    let edge = cache
         .get(&id)
         .cloned()
         .ok_or(StatusCode::NOT_FOUND)?;
@@ -163,8 +171,8 @@ pub async fn get_edge(
                 });
             }
         } else if src_type == "node" {
-            let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.get(&edge.source_id) {
+            let nodes_cache = state.nodes.read().await;
+            if let Some(node) = nodes_cache.get(&edge.source_id) {
                 source_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),
@@ -185,8 +193,8 @@ pub async fn get_edge(
                 });
             }
         } else if tgt_type == "node" {
-            let nodes = state.nodes.read().await;
-            if let Some(node) = nodes.get(&edge.target_id) {
+            let nodes_cache = state.nodes.read().await;
+            if let Some(node) = nodes_cache.get(&edge.target_id) {
                 target_details = Some(EdgeParticipantDetails {
                     id: node.id.clone(),
                     title: node.title.clone(),
