@@ -154,6 +154,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:**
+
 - `webauthn_user_id` als dedizierte UUID pro Account eingeführt (nicht aus `account_id` abgeleitet); wenn in der Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil (Writeback-Persistenz ist Voraussetzung für Register-Verify, noch offen)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
 - `POST /auth/passkeys/register/options` implementiert (gibt `CreationChallengeResponse` zurück)
@@ -162,6 +163,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert)
 **Code-, Test- und Verifikationsbelege:**
+
 - `apps/api/src/auth/passkeys.rs` — Modul mit Builder, Store, Registrierung
 - `apps/api/src/routes/auth.rs` — `passkey_register_options` Endpunkt
 - `apps/api/src/config.rs` — `webauthn_rp_id`, `webauthn_rp_origin`, `webauthn_rp_name`

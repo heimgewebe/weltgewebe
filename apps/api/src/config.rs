@@ -382,6 +382,29 @@ impl AppConfig {
             let origin_url = url::Url::parse(rp_origin).map_err(|e| {
                 anyhow::anyhow!("WEBAUTHN_RP_ORIGIN is not a valid URL: {rp_origin} ({e})")
             })?;
+
+            // WEBAUTHN_RP_ORIGIN must be a strict Origin value: scheme + host [+ port].
+            // Paths, queries, fragments and credentials are not valid Origin components.
+            let scheme = origin_url.scheme();
+            if scheme != "http" && scheme != "https" {
+                anyhow::bail!(
+                    "WEBAUTHN_RP_ORIGIN scheme must be 'http' or 'https', got '{scheme}'"
+                );
+            }
+            if !origin_url.username().is_empty() || origin_url.password().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain credentials (userinfo)");
+            }
+            if origin_url.query().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a query string");
+            }
+            if origin_url.fragment().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a fragment");
+            }
+            let path = origin_url.path();
+            if path != "/" && !path.is_empty() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a path component, got '{path}'");
+            }
+
             let origin_host = origin_url.host_str().unwrap_or("");
             // rp_id must equal the origin host, or the origin host must be a proper
             // subdomain of rp_id (i.e. host ends with ".<rp_id>").
@@ -887,6 +910,68 @@ delegation_expire_days: 28
         assert!(
             res.is_err(),
             "suffix attack (evil-example.com) must be rejected for rp_id=example.com"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_path() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com/app");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin with a path component must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_query() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com?foo=bar");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "origin with a query string must be rejected");
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_non_http_scheme() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "ftp://example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "non-http/https scheme must be rejected");
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_credentials() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://user@example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin with userinfo credentials must be rejected"
         );
         Ok(())
     }

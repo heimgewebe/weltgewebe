@@ -114,18 +114,33 @@ impl PasskeyRegistrationStore {
 
     /// Consume a pending registration by ID. Returns `None` if the entry
     /// does not exist, has expired, or does not belong to the given account.
+    ///
+    /// A mismatched `account_id` does **not** remove the entry — the entry
+    /// remains available for the correct account (non-destructive rejection).
     pub async fn consume(
         &self,
         registration_id: &str,
         account_id: &str,
     ) -> Option<PasskeyRegistration> {
         let mut store = self.store.write().await;
-        let pending = store.remove(registration_id)?;
         let cutoff = Utc::now() - chrono::Duration::seconds(REGISTRATION_TTL_SECS);
-        if pending.created_at <= cutoff || pending.account_id != account_id {
+        // Peek first so we can decide whether to consume without holding a
+        // borrow across a mutable operation.
+        let (is_expired, account_matches) = match store.get(registration_id) {
+            None => return None,
+            Some(entry) => (entry.created_at <= cutoff, entry.account_id == account_id),
+        };
+        if is_expired {
+            // Clean up the stale entry and reject.
+            store.remove(registration_id);
             return None;
         }
-        Some(pending.state)
+        if !account_matches {
+            // Wrong account: leave the entry intact for the legitimate caller.
+            return None;
+        }
+        // Valid match: single-use consume.
+        store.remove(registration_id).map(|p| p.state)
     }
 }
 
@@ -297,6 +312,26 @@ webauthn_rp_id: example.com\n";
         assert!(
             consumed.is_none(),
             "consume must reject mismatched account_id"
+        );
+    }
+
+    #[tokio::test]
+    async fn registration_store_wrong_account_does_not_burn_registration() {
+        let store = PasskeyRegistrationStore::new();
+        let webauthn = test_webauthn();
+        let (_, reg) = webauthn
+            .start_passkey_registration(Uuid::new_v4(), "u", "U", None)
+            .unwrap();
+
+        let reg_id = store.insert("acct-1".to_string(), reg).await;
+        // A wrong-account attempt must not remove the entry.
+        let wrong = store.consume(&reg_id, "acct-wrong").await;
+        assert!(wrong.is_none(), "wrong account must be rejected");
+        // The entry must still be consumable by the correct account.
+        let correct = store.consume(&reg_id, "acct-1").await;
+        assert!(
+            correct.is_some(),
+            "correct account must still consume after a wrong-account attempt"
         );
     }
 
