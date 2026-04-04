@@ -362,6 +362,7 @@ async fn provision_account(
             // Another request provisioned it in the meantime
             Some(id)
         } else {
+            let id = new_account.public.id.clone();
             accounts.insert(new_account);
             tracing::info!(
                 event = "login.provisioned",
@@ -369,11 +370,11 @@ async fn provision_account(
                 client_ip = %ctx.client_ip,
                 remote_ip = %ctx.remote_ip,
                 proxy_trusted = ctx.proxy_trusted,
-                account_id = %new_id,
+                account_id = %id,
                 email_hash = %ctx.email_hash,
                 "Auto-provisioned new account"
             );
-            Some(new_id)
+            Some(id)
         }
     }
 }

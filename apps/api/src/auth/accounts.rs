@@ -128,4 +128,24 @@ mod tests {
         assert!(store.get("u1").is_some());
         assert_eq!(store.get("u1").unwrap().email, None);
     }
+
+    #[test]
+    fn test_reinsert_does_not_affect_other_accounts() {
+        let mut store = AccountStore::new();
+        let acc1 = dummy_account("u1", Some("a@example.com"));
+        let acc2 = dummy_account("u2", Some("b@example.com"));
+        store.insert(acc1);
+        store.insert(acc2);
+
+        // Update u1's email to c@example.com
+        let updated_acc1 = dummy_account("u1", Some("c@example.com"));
+        store.insert(updated_acc1);
+
+        // Verify u1's old email is gone
+        assert!(store.get_by_email("a@example.com").is_none());
+        // Verify u1's new email works
+        assert_eq!(store.get_by_email("c@example.com").unwrap().public.id, "u1");
+        // Verify u2 is completely unaffected
+        assert_eq!(store.get_by_email("b@example.com").unwrap().public.id, "u2");
+    }
 }

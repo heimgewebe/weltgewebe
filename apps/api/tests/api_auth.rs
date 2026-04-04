@@ -1172,7 +1172,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
         });
     }
 
-    let account_count_before = state.accounts.read().await.values().count();
+    let account_count_before = state.accounts.read().await.len();
 
     let app = app(state.clone());
     let req = Request::post("/auth/magic-link/request")
@@ -1187,7 +1187,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
     // No duplicate must have been created: the case-insensitive lookup finds the existing
     // account, so provision_account is never called.
     assert_eq!(
-        accounts.values().count(),
+        accounts.len(),
         account_count_before,
         "No new account should be created when the stored Mixed-Case email matches case-insensitively"
     );
