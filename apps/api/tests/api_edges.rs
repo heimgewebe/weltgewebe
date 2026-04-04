@@ -8,11 +8,11 @@ use serial_test::serial;
 mod helpers;
 
 use helpers::set_gewebe_in_dir;
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
     config::AppConfig,
     routes::api_router,
     state::ApiState,
@@ -68,7 +68,7 @@ async fn test_state() -> Result<ApiState> {
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(edges)),

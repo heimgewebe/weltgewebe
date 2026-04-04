@@ -6,11 +6,11 @@ use axum::{
 };
 mod helpers;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -66,7 +66,7 @@ async fn test_state() -> Result<ApiState> {
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -80,16 +80,14 @@ async fn test_state() -> Result<ApiState> {
 #[tokio::test]
 async fn accounts_list_is_sorted_and_limited() -> Result<()> {
     let mut state = test_state().await?;
-    let mut accounts = BTreeMap::new();
+    let mut accounts = AccountStore::new();
 
     // Insert accounts in unsorted order: u2, a1, u1
     // Expected sort order (lexicographical by ID): a1, u1, u2
     let ids = vec!["u2", "a1", "u1"];
 
     for id in ids {
-        accounts.insert(
-            id.to_string(),
-            AccountInternal {
+        accounts.insert(AccountInternal {
                 public: AccountPublic {
                     id: id.to_string(),
                     kind: "garnrolle".to_string(),

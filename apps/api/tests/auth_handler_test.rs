@@ -8,11 +8,11 @@ mod tests {
         Router,
     };
     use serial_test::serial;
-    use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+    use std::{net::SocketAddr, sync::Arc};
     use tokio::sync::RwLock;
     use tower::ServiceExt;
     use weltgewebe_api::{
-        auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+        auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
         config::AppConfig,
         routes::{
             accounts::{AccountInternal, AccountPublic},
@@ -57,7 +57,7 @@ mod tests {
 
         let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
 
-        let mut account_map = BTreeMap::new();
+        let mut account_map = AccountStore::new();
         let account = AccountInternal {
             public: AccountPublic {
                 id: "u1".to_string(),
@@ -75,7 +75,7 @@ mod tests {
             email: Some("u1@example.com".to_string()),
             webauthn_user_id: uuid::Uuid::new_v4(),
         };
-        account_map.insert(account.public.id.clone(), account);
+        account_map.insert(account);
 
         Ok(ApiState {
             db_pool: None,

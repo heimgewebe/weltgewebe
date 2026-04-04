@@ -1,7 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
+    auth::accounts::AccountStore,
     auth::{
         challenges::ChallengeStore, passkeys::PasskeyRegistrationStore,
         rate_limit::AuthRateLimiter, session::SessionStore, step_up_tokens::StepUpTokenStore,
@@ -9,7 +10,7 @@ use crate::{
     },
     config::AppConfig,
     mailer::Mailer,
-    routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
+    routes::{edges::Edge, nodes::Node},
     telemetry::Metrics,
 };
 use async_nats::Client as NatsClient;
@@ -28,7 +29,7 @@ pub struct ApiState {
     pub challenges: ChallengeStore,
     pub tokens: TokenStore,
     pub step_up_tokens: StepUpTokenStore,
-    pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
+    pub accounts: Arc<RwLock<AccountStore>>,
     pub nodes: Arc<RwLock<Vec<Node>>>,
     pub nodes_persist: Arc<Mutex<()>>,
     pub edges: Arc<RwLock<Vec<Edge>>>,

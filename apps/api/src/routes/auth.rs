@@ -263,8 +263,8 @@ pub async fn list_dev_accounts(
 ) -> Result<Json<Vec<DevAccount>>, StatusCode> {
     check_dev_login_guard(&headers, addr)?;
 
-    let accounts_map = state.accounts.read().await;
-    let accounts: Vec<DevAccount> = accounts_map
+    let accounts = state.accounts.read().await;
+    let accounts: Vec<DevAccount> = accounts
         .iter()
         .map(|(id, acc)| {
             debug_assert_eq!(
@@ -305,8 +305,8 @@ pub async fn dev_login(
     }
 
     {
-        let accounts_map = state.accounts.read().await;
-        if !accounts_map.contains_key(&payload.account_id) {
+        let accounts = state.accounts.read().await;
+        if accounts.get(&payload.account_id).is_none() {
             tracing::warn!(?payload.account_id, "Login attempt refused: Account not found");
             return (jar, StatusCode::BAD_REQUEST).into_response();
         }
@@ -352,24 +352,17 @@ async fn provision_account(
     };
 
     {
-        let mut accounts_map = state.accounts.write().await;
+        let mut accounts = state.accounts.write().await;
         // Double-checked locking to avoid race condition
-        let collision_id = accounts_map
-            .values()
-            .find(|acc| {
-                acc.email
-                    .as_ref()
-                    .map(|e| e.eq_ignore_ascii_case(email_norm))
-                    .unwrap_or(false)
-            })
+        let collision_id = accounts
+            .get_by_email(email_norm)
             .map(|acc| acc.public.id.clone());
 
         if let Some(id) = collision_id {
             // Another request provisioned it in the meantime
             Some(id)
         } else {
-            let id = new_account.public.id.clone();
-            accounts_map.insert(id.clone(), new_account);
+            accounts.insert(new_account);
             tracing::info!(
                 event = "login.provisioned",
                 request_id = %ctx.request_id,
@@ -554,15 +547,9 @@ pub async fn request_login(
     // If found, we proceed.
     // If not found, we check policy and potentially acquire a write lock to provision.
     let existing_account_info = {
-        let accounts_map = state.accounts.read().await;
-        accounts_map
-            .values()
-            .find(|acc| {
-                acc.email
-                    .as_ref()
-                    .map(|e| e.eq_ignore_ascii_case(&email_norm))
-                    .unwrap_or(false)
-            })
+        let accounts = state.accounts.read().await;
+        accounts
+            .get_by_email(&email_norm)
             .map(|acc| (acc.public.id.clone(), acc.public.disabled))
     };
 
@@ -810,13 +797,9 @@ pub async fn consume_login_post(
     // 2. Consume Token
     if let Some(email) = state.tokens.consume(&form.token) {
         // Find account
-        let accounts_map = state.accounts.read().await;
-        let account = accounts_map.values().find(|acc| {
-            acc.email
-                .as_ref()
-                .map(|e| e.eq_ignore_ascii_case(&email))
-                .unwrap_or(false)
-        });
+        let accounts = state.accounts.read().await;
+        // email in AccountStore index is normalized to lowercase
+        let account = accounts.get_by_email(&email);
 
         if let Some(acc) = account {
             if acc.public.disabled {
@@ -1011,14 +994,8 @@ pub async fn update_email(
         }
 
         // Uniqueness check
-        for acc in accounts.values() {
-            if acc
-                .email
-                .as_deref()
-                .map(|e| e.eq_ignore_ascii_case(&new_email))
-                .unwrap_or(false)
-                && acc.public.id != account_id
-            {
+        if let Some(existing) = accounts.get_by_email(&new_email) {
+            if existing.public.id != account_id {
                 let err =
                     serde_json::json!({"error": "CONFLICT", "message": "Email already in use"});
                 return (StatusCode::CONFLICT, Json(err)).into_response();
@@ -1060,11 +1037,11 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
         let old_session_id = cookie.value();
 
         if let Some(old_session) = state.sessions.get(old_session_id) {
-            let accounts_map = state.accounts.read().await;
-            let is_valid = accounts_map
+            let accounts = state.accounts.read().await;
+            let is_valid = accounts
                 .get(&old_session.account_id)
                 .is_some_and(|acc| !acc.public.disabled);
-            drop(accounts_map);
+            drop(accounts);
 
             state.sessions.delete(old_session_id);
 
@@ -1544,14 +1521,8 @@ pub async fn consume_step_up(
             let mut accounts = state.accounts.write().await;
 
             // Check for conflict right before writing
-            for acc in accounts.values() {
-                if acc
-                    .email
-                    .as_deref()
-                    .map(|e| e.eq_ignore_ascii_case(&new_email))
-                    .unwrap_or(false)
-                    && acc.public.id != account_id
-                {
+            if let Some(existing) = accounts.get_by_email(&new_email) {
+                if existing.public.id != account_id {
                     tracing::warn!(
                         event = "auth.step_up.consume.update_email.conflict",
                         request_id = %request_id,
@@ -1564,8 +1535,10 @@ pub async fn consume_step_up(
                 }
             }
 
-            if let Some(account) = accounts.get_mut(&account_id) {
-                account.email = Some(new_email);
+            if let Some(account) = accounts.get(&account_id).cloned() {
+                let mut updated_account = account;
+                updated_account.email = Some(new_email);
+                accounts.insert(updated_account);
                 (StatusCode::NO_CONTENT, jar).into_response()
             } else {
                 tracing::error!(

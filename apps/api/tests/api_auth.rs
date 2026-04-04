@@ -7,11 +7,11 @@ use axum::{
 };
 use serial_test::serial;
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
     config::AppConfig,
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -69,7 +69,7 @@ fn test_state() -> Result<ApiState> {
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(Vec::new())),
@@ -82,7 +82,7 @@ fn test_state() -> Result<ApiState> {
 
 fn test_state_with_accounts() -> Result<ApiState> {
     let mut state = test_state()?;
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
 
     let account = AccountInternal {
         public: AccountPublic {
@@ -101,7 +101,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let account = AccountInternal {
         public: AccountPublic {
@@ -120,7 +120,7 @@ fn test_state_with_accounts() -> Result<ApiState> {
         email: Some("a1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     state.accounts = Arc::new(RwLock::new(account_map));
     Ok(state)
@@ -177,8 +177,10 @@ async fn request_login_denied_if_account_disabled() -> Result<()> {
     // Disable the account
     {
         let mut accounts = state.accounts.write().await;
-        if let Some(acc) = accounts.get_mut("u1") {
+        if let Some(acc) = accounts.get("u1").cloned() {
+            let mut acc = acc;
             acc.public.disabled = true;
+            accounts.insert(acc);
         }
     }
 
@@ -211,8 +213,10 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
     // Disable the account
     {
         let mut accounts = state.accounts.write().await;
-        if let Some(acc) = accounts.get_mut("u1") {
+        if let Some(acc) = accounts.get("u1").cloned() {
+            let mut acc = acc;
             acc.public.disabled = true;
+            accounts.insert(acc);
         }
     }
 
@@ -269,7 +273,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
     let _defer = defer_env_remove("AUTH_DEV_LOGIN");
     let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u1".to_string(),
@@ -287,7 +291,7 @@ async fn auth_login_succeeds_with_flag_and_account() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -1148,9 +1152,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
     let mixed_id = "legacy-mixed-case".to_string();
     {
         let mut accounts = state.accounts.write().await;
-        accounts.insert(
-            mixed_id.clone(),
-            AccountInternal {
+        accounts.insert(AccountInternal {
                 public: AccountPublic {
                     id: mixed_id.clone(),
                     kind: "garnrolle".to_string(),
@@ -1169,7 +1171,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
         );
     }
 
-    let account_count_before = state.accounts.read().await.len();
+    let account_count_before = state.accounts.read().await.values().count();
 
     let app = app(state.clone());
     let req = Request::post("/auth/magic-link/request")
@@ -1184,7 +1186,7 @@ async fn request_login_mixed_case_stored_email_no_duplicate() -> Result<()> {
     // No duplicate must have been created: the case-insensitive lookup finds the existing
     // account, so provision_account is never called.
     assert_eq!(
-        accounts.len(),
+        accounts.values().count(),
         account_count_before,
         "No new account should be created when the stored Mixed-Case email matches case-insensitively"
     );
@@ -1298,7 +1300,7 @@ async fn session_endpoint_authenticated() -> Result<()> {
 async fn test_session_refresh_success() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
     let _guard_cookie = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u-admin".to_string(),
@@ -1315,7 +1317,7 @@ async fn test_session_refresh_success() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -1461,7 +1463,7 @@ async fn test_session_refresh_invalid_token() -> Result<()> {
 #[serial]
 async fn test_session_refresh_csrf_rejected() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u-admin".to_string(),
@@ -1478,7 +1480,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -1525,7 +1527,7 @@ async fn test_session_refresh_csrf_rejected() -> Result<()> {
 #[serial]
 async fn test_session_refresh_account_disabled() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let mut account = AccountInternal {
         public: AccountPublic {
             id: "u-admin".to_string(),
@@ -1542,7 +1544,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account.clone());
+    account_map.insert(account.clone());
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map.clone()));
@@ -1574,7 +1576,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
         .accounts
         .write()
         .await
-        .insert(account.public.id.clone(), account);
+        .insert(account);
 
     // 3. Refresh session (should fail)
     let req_refresh = Request::post("/auth/session/refresh")
@@ -1604,7 +1606,7 @@ async fn test_session_refresh_account_disabled() -> Result<()> {
 #[serial]
 async fn test_logout() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u-admin".to_string(),
@@ -1621,7 +1623,7 @@ async fn test_logout() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -1692,7 +1694,7 @@ async fn test_logout() -> Result<()> {
 #[serial]
 async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountInternal {
         public: AccountPublic {
             id: "u-admin".to_string(),
@@ -1709,7 +1711,7 @@ async fn test_logout_all_requires_step_up_and_preserves_sessions() -> Result<()>
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let mut state = test_state()?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -1858,7 +1860,7 @@ async fn test_logout_all_unauthenticated_rejected() -> Result<()> {
 #[serial]
 async fn test_device_management() -> Result<()> {
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_DEV_LOGIN", "1");
-    let mut account_map = std::collections::BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = weltgewebe_api::routes::accounts::AccountInternal {
         public: weltgewebe_api::routes::accounts::AccountPublic {
             id: "u-admin".to_string(),
@@ -1875,13 +1877,10 @@ async fn test_device_management() -> Result<()> {
         email: Some("u1@example.com".to_string()),
         webauthn_user_id: uuid::Uuid::new_v4(),
     };
-    account_map.insert(account.public.id.clone(), account);
+    account_map.insert(account);
 
     let state = test_state()?;
-    state.accounts.write().await.insert(
-        "u-admin".to_string(),
-        account_map.get("u-admin").unwrap().clone(),
-    );
+    state.accounts.write().await.insert(account_map.get("u-admin").unwrap().clone());
 
     let app = Router::new()
         .merge(api_router())
@@ -2241,7 +2240,7 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
             email: Some("u2@example.com".to_string()),
             webauthn_user_id: uuid::Uuid::new_v4(),
         };
-        accounts.insert("u2".to_string(), account);
+        accounts.insert(account);
     }
     let session2 = state.sessions.create("u2".to_string(), None);
     let session_id2 = session2.id;
@@ -2314,7 +2313,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
             email: None, // Missing email
             webauthn_user_id: uuid::Uuid::new_v4(),
         };
-        accounts.insert("u2".to_string(), account);
+        accounts.insert(account);
     }
 
     let session = state.sessions.create("u2".to_string(), None);
@@ -3223,9 +3222,7 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
     // We must add u2 to state.accounts so there is a conflict
     {
         let mut accounts = state.accounts.write().await;
-        accounts.insert(
-            "u2".to_string(),
-            weltgewebe_api::routes::accounts::AccountInternal {
+        accounts.insert(weltgewebe_api::routes::accounts::AccountInternal {
                 public: weltgewebe_api::routes::accounts::AccountPublic {
                     id: "u2".to_string(),
                     kind: "garnrolle".to_string(),
