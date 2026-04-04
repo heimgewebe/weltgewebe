@@ -3453,10 +3453,7 @@ async fn passkey_register_options_returns_503_when_not_configured() -> Result<()
     let req = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
         .header("Origin", "http://localhost")
-        .header(
-            "Cookie",
-            format!("{}={}", SESSION_COOKIE_NAME, session.id),
-        )
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
@@ -3489,10 +3486,7 @@ async fn passkey_register_options_success() -> Result<()> {
     let req = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
         .header("Origin", "http://localhost:3000")
-        .header(
-            "Cookie",
-            format!("{}={}", SESSION_COOKIE_NAME, session.id),
-        )
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
 
     let res = app.oneshot(req).await?;
@@ -3552,10 +3546,7 @@ async fn passkey_register_options_stable_webauthn_user_id() -> Result<()> {
     let req = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
         .header("Origin", "http://localhost:3000")
-        .header(
-            "Cookie",
-            format!("{}={}", SESSION_COOKIE_NAME, session.id),
-        )
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -3567,10 +3558,7 @@ async fn passkey_register_options_stable_webauthn_user_id() -> Result<()> {
     let req2 = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
         .header("Origin", "http://localhost:3000")
-        .header(
-            "Cookie",
-            format!("{}={}", SESSION_COOKIE_NAME, session.id),
-        )
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
     let res2 = app2.oneshot(req2).await?;
     assert_eq!(res2.status(), StatusCode::OK);
