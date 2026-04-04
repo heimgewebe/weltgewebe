@@ -383,11 +383,16 @@ impl AppConfig {
                 anyhow::anyhow!("WEBAUTHN_RP_ORIGIN is not a valid URL: {rp_origin} ({e})")
             })?;
             let origin_host = origin_url.host_str().unwrap_or("");
-            // rp_id must be a suffix of the origin host (per WebAuthn spec §5.1.3)
-            if !origin_host.ends_with(rp_id.as_str()) {
+            // rp_id must equal the origin host, or the origin host must be a proper
+            // subdomain of rp_id (i.e. host ends with ".<rp_id>").
+            // A bare ends_with check is intentionally NOT used here because it would
+            // accept "evil-example.com" when rp_id is "example.com".
+            let host_matches =
+                origin_host == rp_id.as_str() || origin_host.ends_with(&format!(".{rp_id}"));
+            if !host_matches {
                 anyhow::bail!(
                     "WEBAUTHN_RP_ORIGIN host '{origin_host}' does not match WEBAUTHN_RP_ID '{rp_id}'. \
-                     The RP ID must be a registrable domain suffix of the origin."
+                     The origin host must equal the RP ID or be a subdomain of it."
                 );
             }
         }
@@ -829,6 +834,59 @@ delegation_expire_days: 28
         assert!(
             res.is_err(),
             "origin that does not end with rp_id must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_allows_exact_host_match() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_ok(),
+            "exact host match (origin host == rp_id) must be accepted"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_allows_true_subdomain() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // sub.example.com ends_with ".example.com" — valid subdomain
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://app.example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_ok(),
+            "true subdomain (app.example.com for rp_id=example.com) must be accepted"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_suffix_attack() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // evil-example.com ends_with "example.com" as a bare string but is NOT a subdomain
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://evil-example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "suffix attack (evil-example.com) must be rejected for rp_id=example.com"
         );
         Ok(())
     }

@@ -73,7 +73,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert | Teil   | mittel  |
-| Passkeys              | optional    | Register-Options implementiert, stabile `webauthn_user_id`, Config-basiert; restlicher Pfad offen | Teil  | mittel  |
+| Passkeys              | optional    | Register-Options implementiert, `webauthn_user_id` eingeführt (bei persistiertem Wert dauerhaft, sonst lazy-backfill/prozessstabil); restlicher Pfad offen | Teil  | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
 
 ---
@@ -154,7 +154,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:**
-- `webauthn_user_id` als dedizierte, stabile UUID pro Account eingeführt (nicht aus `account_id` abgeleitet)
+- `webauthn_user_id` als dedizierte UUID pro Account eingeführt (nicht aus `account_id` abgeleitet); wenn in der Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil (Writeback-Persistenz ist Voraussetzung für Register-Verify, noch offen)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
 - `POST /auth/passkeys/register/options` implementiert (gibt `CreationChallengeResponse` zurück)
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min)
