@@ -55,7 +55,7 @@ impl AccountStore {
         }
     }
 
-    pub fn rebuild_email_index(&mut self) {
+    pub(crate) fn rebuild_email_index(&mut self) {
         self.email_index.clear();
         let mut groups: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -82,7 +82,7 @@ impl AccountStore {
         }
     }
 
-    pub fn insert_unindexed(&mut self, account: AccountInternal) {
+    pub(crate) fn insert_unindexed(&mut self, account: AccountInternal) {
         self.map.insert(account.public.id.clone(), account);
     }
 
