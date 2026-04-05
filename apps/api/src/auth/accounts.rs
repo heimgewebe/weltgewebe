@@ -46,7 +46,6 @@ impl AccountStore {
             if candidates.len() > 1 {
                 tracing::warn!(
                     event = "account_store.duplicate_email",
-                    email_key = %key,
                     owner_id = %owner_id,
                     count = candidates.len(),
                     "Duplicate email detected in AccountStore. The deterministically smallest ID is chosen as owner."
