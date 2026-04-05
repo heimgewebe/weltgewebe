@@ -9,11 +9,13 @@ mod helpers;
 
 use axum::middleware::from_fn_with_state;
 use helpers::set_gewebe_in_dir;
-use std::{collections::BTreeMap, fs, path::PathBuf, sync::Arc};
+use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, role::Role, session::SessionStore},
+    auth::{
+        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+    },
     config::AppConfig,
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
@@ -71,7 +73,7 @@ async fn test_state() -> Result<ApiState> {
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::routes::nodes::load_nodes().await,
         )),
@@ -198,7 +200,7 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let _env = set_gewebe_in_dir(&in_dir);
 
     // Setup Auth State with Account
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountPublic {
         id: "weber1".to_string(),
         kind: "garnrolle".to_string(),
@@ -211,15 +213,12 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(
-        account.id.clone(),
-        AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-            webauthn_user_id: uuid::Uuid::new_v4(),
-        },
-    );
+    account_map.insert(AccountInternal {
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));
@@ -385,7 +384,7 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
     );
 
     // Setup Auth State with Account
-    let mut account_map = BTreeMap::new();
+    let mut account_map = AccountStore::new();
     let account = AccountPublic {
         id: "weber1".to_string(),
         kind: "garnrolle".to_string(),
@@ -398,15 +397,12 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
         disabled: false,
         tags: vec![],
     };
-    account_map.insert(
-        account.id.clone(),
-        AccountInternal {
-            public: account,
-            role: Role::Weber,
-            email: Some("weber1@example.com".to_string()),
-            webauthn_user_id: uuid::Uuid::new_v4(),
-        },
-    );
+    account_map.insert(AccountInternal {
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
 
     let mut state = test_state().await?;
     state.accounts = Arc::new(RwLock::new(account_map));

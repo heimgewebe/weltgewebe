@@ -1,4 +1,4 @@
-use crate::auth::role::Role;
+use crate::auth::{accounts::AccountStore, role::Role};
 use crate::state::ApiState;
 use axum::{
     extract::{Path, Query, State},
@@ -7,11 +7,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{
-    collections::{BTreeMap, HashMap},
-    env,
-    path::PathBuf,
-};
+use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
     fs::File,
     io::{AsyncBufReadExt, BufReader},
@@ -265,8 +261,8 @@ fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     })
 }
 
-pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
-    let mut map = BTreeMap::new();
+pub async fn load_all_accounts() -> AccountStore {
+    let mut store = AccountStore::new();
     let path = accounts_path();
 
     let file = match File::open(&path).await {
@@ -277,7 +273,7 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
                 ?e,
                 "Failed to open accounts file, returning empty map"
             );
-            return map;
+            return store;
         }
     };
 
@@ -317,10 +313,10 @@ pub async fn load_all_accounts() -> BTreeMap<String, AccountInternal> {
                 email,
                 webauthn_user_id,
             };
-            map.insert(account.public.id.clone(), account);
+            store.insert(account);
         }
     }
-    map
+    store
 }
 
 pub async fn list_accounts(
@@ -332,10 +328,10 @@ pub async fn list_accounts(
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
 
-    let accounts_map = state.accounts.read().await;
+    let accounts = state.accounts.read().await;
 
     // BTreeMap iterates in ascending key order, so output is deterministic by account id.
-    let accounts: Vec<AccountPublic> = accounts_map
+    let accounts: Vec<AccountPublic> = accounts
         .iter()
         .take(limit)
         .map(|(_id, internal)| internal.public.clone())
@@ -348,8 +344,8 @@ pub async fn get_account(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<AccountPublic>, StatusCode> {
-    let accounts_map = state.accounts.read().await;
-    if let Some(internal) = accounts_map.get(&id) {
+    let accounts = state.accounts.read().await;
+    if let Some(internal) = accounts.get(&id) {
         Ok(Json(internal.public.clone()))
     } else {
         Err(StatusCode::NOT_FOUND)
