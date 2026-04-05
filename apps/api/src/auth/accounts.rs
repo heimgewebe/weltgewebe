@@ -28,38 +28,53 @@ impl AccountStore {
         self.map.get(id)
     }
 
+    fn recompute_email_index_for_key(&mut self, key: &str) {
+        let mut candidates = Vec::new();
+        for (id, acc) in self.map.iter() {
+            if let Some(email) = &acc.email {
+                if normalize_email_key(email) == key {
+                    candidates.push(id.clone());
+                }
+            }
+        }
+
+        if candidates.is_empty() {
+            self.email_index.remove(key);
+        } else {
+            candidates.sort(); // Lexicographical sort based on ID
+            let owner_id = candidates[0].clone();
+            if candidates.len() > 1 {
+                tracing::warn!(
+                    event = "account_store.duplicate_email",
+                    email_key = %key,
+                    owner_id = %owner_id,
+                    count = candidates.len(),
+                    "Duplicate email detected in AccountStore. The deterministically smallest ID is chosen as owner."
+                );
+            }
+            self.email_index.insert(key.to_string(), owner_id);
+        }
+    }
+
     pub fn insert(&mut self, account: AccountInternal) {
         let id = account.public.id.clone();
-        // Remove old email from index if it existed and is different
-        if let Some(existing) = self.map.get(&id) {
-            if let Some(old_email) = &existing.email {
-                let old_key = normalize_email_key(old_email);
-                // Only remove the index entry if it still points to this account.
-                if self
-                    .email_index
-                    .get(&old_key)
-                    .is_some_and(|owner_id| owner_id == &id)
-                {
-                    self.email_index.remove(&old_key);
-                }
-            }
-        }
-        if let Some(email) = &account.email {
-            let key = normalize_email_key(email);
-            if let Some(existing_id) = self.email_index.get(&key) {
-                if existing_id != &id {
-                    tracing::warn!(
-                        event = "account_store.duplicate_email",
-                        email = %email,
-                        existing_account_id = %existing_id,
-                        new_account_id = %id,
-                        "Duplicate email detected in AccountStore. The new account will overwrite the email index entry."
-                    );
-                }
-            }
-            self.email_index.insert(key, id.clone());
-        }
+
+        let old_key = self
+            .map
+            .get(&id)
+            .and_then(|a| a.email.as_ref().map(|e| normalize_email_key(e)));
+        let new_key = account.email.as_ref().map(|e| normalize_email_key(e));
+
         self.map.insert(id, account);
+
+        if let Some(old) = &old_key {
+            self.recompute_email_index_for_key(old);
+        }
+        if let Some(new) = &new_key {
+            if old_key.as_ref() != Some(new) {
+                self.recompute_email_index_for_key(new);
+            }
+        }
     }
 
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, AccountInternal> {
@@ -169,45 +184,44 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_email_overwrites_index_and_warns() {
+    fn test_duplicate_email_lookup_is_deterministic_by_account_id() {
         let mut store = AccountStore::new();
         let acc1 = dummy_account("u1", Some("shared@example.com"));
         let acc2 = dummy_account("u2", Some("shared@example.com"));
+
         store.insert(acc1);
-        // In reality, this warns via tracing, but functionally it overwrites the index.
         store.insert(acc2);
 
         assert_eq!(
             store.get_by_email("shared@example.com").unwrap().public.id,
-            "u2"
+            "u1" // Deterministic fallback to lexicographically smallest ID
         );
-        assert!(store.get("u1").is_some()); // u1 still exists in the ID map
     }
 
     #[test]
-    fn test_reinsert_does_not_remove_other_accounts_shared_email_mapping() {
+    fn test_duplicate_owner_falls_back_to_remaining_account_when_owner_changes_email() {
         let mut store = AccountStore::new();
         let acc1 = dummy_account("u1", Some("shared@example.com"));
         let acc2 = dummy_account("u2", Some("SHARED@example.com"));
+
         store.insert(acc1);
-        // u2 overwrites the index for shared@example.com
         store.insert(acc2);
 
         assert_eq!(
             store.get_by_email("shared@example.com").unwrap().public.id,
-            "u2"
+            "u1" // Owner is deterministically u1
         );
 
-        // Reinsert u1 with a new email.
+        // u1 changes to new@example.com
         let acc1_new = dummy_account("u1", Some("new@example.com"));
         store.insert(acc1_new);
 
-        // The old shared index must NOT have been removed because it belongs to u2.
+        // shared@example.com correctly falls back to u2
         assert_eq!(
             store.get_by_email("shared@example.com").unwrap().public.id,
             "u2"
         );
-        // The new email should work for u1.
+        // new@example.com now points to u1
         assert_eq!(
             store.get_by_email("new@example.com").unwrap().public.id,
             "u1"
