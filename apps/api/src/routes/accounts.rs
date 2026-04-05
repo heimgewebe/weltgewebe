@@ -313,9 +313,10 @@ pub async fn load_all_accounts() -> AccountStore {
                 email,
                 webauthn_user_id,
             };
-            store.insert(account);
+            store.insert_unindexed(account);
         }
     }
+    store.rebuild_email_index();
     store
 }
 

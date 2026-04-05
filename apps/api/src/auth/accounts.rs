@@ -55,6 +55,37 @@ impl AccountStore {
         }
     }
 
+    pub fn rebuild_email_index(&mut self) {
+        self.email_index.clear();
+        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
+
+        for (id, acc) in self.map.iter() {
+            if let Some(email) = &acc.email {
+                let key = normalize_email_key(email);
+                groups.entry(key).or_default().push(id.clone());
+            }
+        }
+
+        for (key, mut ids) in groups {
+            ids.sort(); // Deterministically pick smallest ID
+            let owner_id = ids[0].clone();
+
+            if ids.len() > 1 {
+                tracing::warn!(
+                    event = "account_store.duplicate_email",
+                    owner_id = %owner_id,
+                    count = ids.len(),
+                    "Duplicate email detected in AccountStore bulk load. The deterministically smallest ID is chosen as owner."
+                );
+            }
+            self.email_index.insert(key, owner_id);
+        }
+    }
+
+    pub fn insert_unindexed(&mut self, account: AccountInternal) {
+        self.map.insert(account.public.id.clone(), account);
+    }
+
     pub fn insert(&mut self, account: AccountInternal) {
         let id = account.public.id.clone();
 
