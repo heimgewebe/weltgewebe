@@ -35,7 +35,11 @@ impl AccountStore {
             if let Some(old_email) = &existing.email {
                 let old_key = normalize_email_key(old_email);
                 // Only remove the index entry if it still points to this account.
-                if self.email_index.get(&old_key).is_some_and(|owner_id| owner_id == &id) {
+                if self
+                    .email_index
+                    .get(&old_key)
+                    .is_some_and(|owner_id| owner_id == &id)
+                {
                     self.email_index.remove(&old_key);
                 }
             }
@@ -173,7 +177,10 @@ mod tests {
         // In reality, this warns via tracing, but functionally it overwrites the index.
         store.insert(acc2);
 
-        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+        assert_eq!(
+            store.get_by_email("shared@example.com").unwrap().public.id,
+            "u2"
+        );
         assert!(store.get("u1").is_some()); // u1 still exists in the ID map
     }
 
@@ -186,15 +193,24 @@ mod tests {
         // u2 overwrites the index for shared@example.com
         store.insert(acc2);
 
-        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+        assert_eq!(
+            store.get_by_email("shared@example.com").unwrap().public.id,
+            "u2"
+        );
 
         // Reinsert u1 with a new email.
         let acc1_new = dummy_account("u1", Some("new@example.com"));
         store.insert(acc1_new);
 
         // The old shared index must NOT have been removed because it belongs to u2.
-        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+        assert_eq!(
+            store.get_by_email("shared@example.com").unwrap().public.id,
+            "u2"
+        );
         // The new email should work for u1.
-        assert_eq!(store.get_by_email("new@example.com").unwrap().public.id, "u1");
+        assert_eq!(
+            store.get_by_email("new@example.com").unwrap().public.id,
+            "u1"
+        );
     }
 }
