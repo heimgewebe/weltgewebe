@@ -33,7 +33,11 @@ impl AccountStore {
         // Remove old email from index if it existed and is different
         if let Some(existing) = self.map.get(&id) {
             if let Some(old_email) = &existing.email {
-                self.email_index.remove(&normalize_email_key(old_email));
+                let old_key = normalize_email_key(old_email);
+                // Only remove the index entry if it still points to this account.
+                if self.email_index.get(&old_key).is_some_and(|owner_id| owner_id == &id) {
+                    self.email_index.remove(&old_key);
+                }
             }
         }
         if let Some(email) = &account.email {
@@ -171,5 +175,26 @@ mod tests {
 
         assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
         assert!(store.get("u1").is_some()); // u1 still exists in the ID map
+    }
+
+    #[test]
+    fn test_reinsert_does_not_remove_other_accounts_shared_email_mapping() {
+        let mut store = AccountStore::new();
+        let acc1 = dummy_account("u1", Some("shared@example.com"));
+        let acc2 = dummy_account("u2", Some("SHARED@example.com"));
+        store.insert(acc1);
+        // u2 overwrites the index for shared@example.com
+        store.insert(acc2);
+
+        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+
+        // Reinsert u1 with a new email.
+        let acc1_new = dummy_account("u1", Some("new@example.com"));
+        store.insert(acc1_new);
+
+        // The old shared index must NOT have been removed because it belongs to u2.
+        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+        // The new email should work for u1.
+        assert_eq!(store.get_by_email("new@example.com").unwrap().public.id, "u1");
     }
 }
