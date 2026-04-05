@@ -37,8 +37,19 @@ impl AccountStore {
             }
         }
         if let Some(email) = &account.email {
-            self.email_index
-                .insert(normalize_email_key(email), id.clone());
+            let key = normalize_email_key(email);
+            if let Some(existing_id) = self.email_index.get(&key) {
+                if existing_id != &id {
+                    tracing::warn!(
+                        event = "account_store.duplicate_email",
+                        email = %email,
+                        existing_account_id = %existing_id,
+                        new_account_id = %id,
+                        "Duplicate email detected in AccountStore. The new account will overwrite the email index entry."
+                    );
+                }
+            }
+            self.email_index.insert(key, id.clone());
         }
         self.map.insert(id, account);
     }
@@ -147,5 +158,18 @@ mod tests {
         assert_eq!(store.get_by_email("c@example.com").unwrap().public.id, "u1");
         // Verify u2 is completely unaffected
         assert_eq!(store.get_by_email("b@example.com").unwrap().public.id, "u2");
+    }
+
+    #[test]
+    fn test_duplicate_email_overwrites_index_and_warns() {
+        let mut store = AccountStore::new();
+        let acc1 = dummy_account("u1", Some("shared@example.com"));
+        let acc2 = dummy_account("u2", Some("shared@example.com"));
+        store.insert(acc1);
+        // In reality, this warns via tracing, but functionally it overwrites the index.
+        store.insert(acc2);
+
+        assert_eq!(store.get_by_email("shared@example.com").unwrap().public.id, "u2");
+        assert!(store.get("u1").is_some()); // u1 still exists in the ID map
     }
 }
