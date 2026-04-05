@@ -172,6 +172,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md
 - [relates_to] docs/konzepte/garnrolle.md
+- [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/specs/privacy-api.md
 - [relates_to] docs/specs/privacy-ui.md
 
@@ -186,6 +187,7 @@ Generated automatically. Do not edit.
 
 ## docs/policies/agent-reading-protocol.md
 
+- [depends_on] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 
 ## docs/policies/orientierung.md
@@ -304,6 +306,7 @@ Generated automatically. Do not edit.
 
 ## docs/weltgewebe-agenten-manifest.md
 
+- [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/policies/orientierung.md
 
 ## docs/x-repo/peers-learnings.md
@@ -324,3 +327,4 @@ Generated automatically. Do not edit.
 ## repo.meta.yaml
 
 - [relates_to] docs/policies/agent-reading-protocol.md
+- [relates_to] docs/policies/architecture-critique.md

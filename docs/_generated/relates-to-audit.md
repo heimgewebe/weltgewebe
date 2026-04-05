@@ -14,8 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 144 |
-| — relates_to | 143 |
+| Relationen gesamt | 148 |
+| — depends_on | 1 |
+| — relates_to | 146 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -62,25 +63,35 @@ _Keine Lücken erkannt._
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
 
-**Cluster 2** (17 Dokumente):
+**Cluster 2** (27 Dokumente):
 
+- `AGENTS.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
+- `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
 - `docs/architekturstruktur.md`
 - `docs/datenmodell.md`
 - `docs/domain/modules.md`
 - `docs/domain/vocabulary.md`
 - `docs/geist-und-plan.md`
 - `docs/inhalt.md`
+- `docs/konzepte/garnrolle-und-verortung.md`
+- `docs/konzepte/garnrolle.md`
 - `docs/overview/inhalt.md`
 - `docs/overview/zusammenstellung.md`
+- `docs/policies/agent-reading-protocol.md`
+- `docs/policies/architecture-critique.md`
 - `docs/policies/orientierung.md`
 - `docs/reference/glossar.md`
+- `docs/reports/agent-readiness-audit.md`
 - `docs/specs/contract.md`
+- `docs/specs/privacy-api.md`
+- `docs/specs/privacy-ui.md`
 - `docs/techstack.md`
 - `docs/vision.md`
 - `docs/weltgewebe-agenten-manifest.md`
 - `docs/zusammenstellung.md`
+- `repo.meta.yaml`
 
 **Cluster 3** (12 Dokumente):
 
@@ -97,28 +108,13 @@ _Keine Lücken erkannt._
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
 
-**Cluster 4** (5 Dokumente):
-
-- `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
-- `docs/konzepte/garnrolle-und-verortung.md`
-- `docs/konzepte/garnrolle.md`
-- `docs/specs/privacy-api.md`
-- `docs/specs/privacy-ui.md`
-
-**Cluster 5** (4 Dokumente):
-
-- `AGENTS.md`
-- `docs/policies/agent-reading-protocol.md`
-- `docs/reports/agent-readiness-audit.md`
-- `repo.meta.yaml`
-
-**Cluster 6** (3 Dokumente):
+**Cluster 4** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
 - `docs/x-repo/semantAH.md`
 
-**Cluster 7** (3 Dokumente):
+**Cluster 5** (3 Dokumente):
 
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
