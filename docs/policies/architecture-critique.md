@@ -27,13 +27,14 @@ relations:
 Architekturkritik = Prüfung der Denkstruktur, nicht der Implementierungsdetails.
 
 Bewertet wird:
+
 - nicht primär, ob etwas funktioniert
 - sondern, ob es sinnvoll ist, dass es so gebaut wird
 - und ob es so gebaut wird, wie beschlossen wurde
 
 Dieses Skill operiert im Rahmen des Truth-Modells aus `repo.meta.yaml`:
 
-```
+```text
 domain_contracts
   > canonical_policies
   > runtime_configs_and_code
@@ -76,6 +77,7 @@ Sektionen außerhalb der gewählten Tiefe werden weggelassen — ohne Erklärung
 ## 1. Zweck
 
 Erzwingt:
+
 - strukturelle Architekturkritik
 - Aufdeckung impliziter Annahmen
 - Identifikation systemischer Schwächen
@@ -116,13 +118,16 @@ Jede Interpolation in Sektion 9 muss Typ, Quelle und Grad (0–1) benennen.
 
 Reihenfolge bindend. Ebene 3 darf nicht ohne Ebene 1 und 2 einsetzen.
 
-**Ebene 1 — Evidenz (belegt)**
+### Ebene 1 — Evidenz (belegt)
+
 Was ist nachweisbar vorhanden? Jede Aussage mit Dateipfad oder Verhaltensbeschreibung verankern. Truth-Klasse benennen.
 
-**Ebene 2 — Modellierung (plausibel)**
+### Ebene 2 — Modellierung (plausibel)
+
 Wie ist das System gedacht? Nur Ableitungen aus vorhandener Evidenz — keine freien Hypothesen.
 
-**Ebene 3 — Urteil (kritisch)**
+### Ebene 3 — Urteil (kritisch)
+
 Ist diese Modellierung tragfähig? Darf und soll widersprechen. Unsicherheitsgrad explizit machen.
 
 ---
@@ -132,40 +137,54 @@ Ist diese Modellierung tragfähig? Darf und soll widersprechen. Unsicherheitsgra
 Achsen A–D und G: immer aktiv.
 Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar" deklarieren.
 
-**A. Truth Model**
+### A. Truth Model
+
 - Widersprüche zwischen Wahrheitsquellen?
 - Implizite statt explizite Wahrheit?
 - Klassenverwechslung (`normative_specifications` vs. `runtime_configs_and_code`)?
+
 → Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
 
-**B. Contracts**
+### B. Contracts
+
 - Fehlend, zu schwach, zu strikt oder umgangen?
 - ADR-Status: `accepted` → nur Fidelity-Check; kein ADR → offene Frage markieren; `superseded` → Treue zum Nachfolger-ADR prüfen
+
 → Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
 
-**C. Semantik**
+### C. Semantik
+
 - Begriff ≠ Verhalten?
 - Bedeutungsdrift zwischen Docs und Code?
+
 → Sektion 1 (Dialektik) + Sektion 4 (Versteckte Annahmen)
 
-**D. Runtime vs. Dokumentation**
+### D. Runtime vs. Dokumentation
+
 - Behauptung ≠ Implementierung? Tote Dokumentation?
 - Ist `docs/_generated/architecture-drift.md` relevant?
+
 → Sektion 2 (Diagnose) + Sektion 7 (Risikoanalyse: epistemisch)
 
-**E. Kartenarchitektur** *(aktiv nur bei: Kartenrendering, Basemap-Pipeline, Overlay-Architektur, räumliche Semantik)*
+### E. Kartenarchitektur *(aktiv nur bei: Kartenrendering, Basemap-Pipeline, Overlay-Architektur, räumliche Semantik)*
+
 - Rendering oder semantischer Kern?
 - Basemap = Infrastruktur, Overlay = Weltgewebe-Semantik — korrekt getrennt?
+
 → Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
 
-**F. Identitätssystem** *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
+### F. Identitätssystem *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
+
 - Garnrolle-Modi konsistent (verortet vs. RoN)?
 - Vertrauen als Systemwert modelliert? (im Weltgewebe verboten)
+
 → Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
 
-**G. Komplexität**
+### G. Komplexität
+
 - Notwendig vs. künstlich? Overengineering?
 - Durch Systemgrenzen gerechtfertigt?
+
 → Sektion 3 (Kontrastprüfung) + Sektion 6 (Alternativpfad)
 
 ---
@@ -195,6 +214,7 @@ Befundklasse D: Soundness muss earned sein — „X ist sound, weil Y nachweisba
 Keine blanken Zertifikate.
 
 Dann Evidenzgradierung:
+
 - **Belegt** (mit Quellenangabe)
 - **Plausibel** (strukturelle Ableitung, Interpolationstyp nennen)
 - **Spekulativ** (konzeptuelle Annahme, Interpolationsgrad hoch)
@@ -218,6 +238,7 @@ Dann Evidenzgradierung:
 ### 5. Architekturkritik *(Vollständig, Strukturell)*
 
 Mit Achsenzuordnung (A–G, nur aktive Achsen):
+
 - Strukturelle Schwächen
 - Semantische Brüche
 - Unnötige Komplexität
@@ -245,6 +266,7 @@ Inkl. Folgenabschätzung.
 ### 8. Alternative Sinnachse *(Vollständig)*
 
 Mindestens eine der folgenden Fragen beantworten:
+
 - Ist die Karte das falsche Zentrum?
 - Ist Identität falsch modelliert?
 - Ist Vertrauen falsch gedacht?
@@ -256,7 +278,7 @@ Mindestens eine der folgenden Fragen beantworten:
 
 **Essenz:** Hebel — Entscheidung — nächste Aktion
 
-**Folgepfad:**
+#### Folgepfad
 
 | Befundklasse | Aktion |
 |-------------|--------|
@@ -265,7 +287,8 @@ Mindestens eine der folgenden Fragen beantworten:
 | C | Drift in `docs/_generated/` adressierbar? Markieren. |
 | D | Keine Aktion. Befundklasse D und Begründung dokumentieren. |
 
-**Unsicherheit & Interpolation:**
+#### Unsicherheit & Interpolation
+
 - Unsicherheitsgrad (0–1) + Ursachen
 - Interpolationsgrad (0–1) + Typ (strukturell / konzeptuell) + Quellen
 - Wenn Interpolationsgrad > 0,5: Schlussfolgerungen als vorläufig markieren
@@ -275,6 +298,7 @@ Mindestens eine der folgenden Fragen beantworten:
 ## 7. Anti-Fehler-Regeln
 
 Darf NICHT:
+
 - glätten
 - implizit zustimmen
 - faktisch fehlende Daten ergänzen (→ Abbruch)
@@ -283,6 +307,7 @@ Darf NICHT:
 - Befundklasse D ohne Belegpflicht vergeben
 
 Muss:
+
 - widersprechen können
 - Unsicherheit sichtbar machen
 - alternative Deutungen liefern
@@ -320,9 +345,10 @@ Wahrheit vor Komfort.
 
 ## Unsicherheitsgrad
 
-**0.08**
+0.08
 
 Ursachen:
+
 - Achsen-zu-Sektionen-Zuordnung ist normativ, nicht empirisch validiert
 - Kritiktiefe-Schwellen könnten in der Praxis anders kalibriert werden müssen
 
@@ -333,6 +359,7 @@ Ursachen:
 **0.11** · Typ: konzeptuell
 
 Annahmen:
+
 - LLMs befolgen sequentielle Analysesequenzen kohärenter als parallele Anweisungen
 - Befundklasse D wird nicht als Ausrede für oberflächliche Analyse missbraucht
 - Kritiktiefe `Essenziell` reicht für PR-Diffs ohne kritische Befunde zu unterdrücken
