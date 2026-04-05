@@ -1,6 +1,6 @@
 ---
 id: docs.policies.architecture-critique
-title: "Architekturkritik-Skill: weltgewebe.architecture.critique.v3"
+title: "Architekturkritik-Skill: weltgewebe.architecture.critique.v4"
 doc_type: policy
 status: draft
 summary: >
@@ -18,7 +18,7 @@ relations:
     target: docs/konzepte/garnrolle-und-verortung.md
 ---
 
-# weltgewebe.architecture.critique.v3
+# weltgewebe.architecture.critique.v4
 
 ---
 
@@ -43,17 +43,17 @@ domain_contracts
   > generated_diagnostics
 ```
 
-Jede Diagnose muss einer dieser Klassen zugeordnet sein.
-Aussagen über „das System tut X" → verankert in `runtime_configs_and_code`.
-Aussagen über „das System soll X" → verankert in `normative_specifications` oder `canonical_policies`.
-Verwechslung dieser Klassen ist der häufigste epistemische Fehler — muss explizit sichtbar gemacht werden.
+Jede Aussage muss einer dieser Klassen zugeordnet sein.
+„Das System tut X" → belegt in `runtime_configs_and_code`.
+„Das System soll X" → belegt in `normative_specifications` oder `canonical_policies`.
+Klassenverwechslung ist der häufigste epistemische Fehler — muss explizit sichtbar gemacht werden.
 
 ---
 
 ## 0.1 Geltungsbereich (Pflicht, vor jeder Analyse deklarieren)
 
-| Wert | Bedeutung | Typische Kritiktiefe |
-|------|-----------|---------------------|
+| Wert | Bedeutung | Kritiktiefe |
+|------|-----------|-------------|
 | `System` | Gesamtes Weltgewebe-System | Vollständig |
 | `Modul` | Einzelnes Subsystem (API, Web, Auth, Map, Identity) | Strukturell |
 | `Entscheidung` | Einzelner ADR oder Blueprint | Strukturell |
@@ -63,24 +63,23 @@ Verwechslung dieser Klassen ist der häufigste epistemische Fehler — muss expl
 
 ## 0.2 Kritiktiefe (Pflicht, automatisch bestimmt und deklariert)
 
-| Tiefe | Aktive Sektionen | Einsatz |
-|-------|-----------------|---------|
-| `Vollständig` | Alle 9 | Systemweite Fragen, ADR-Entwürfe, systemübergreifende Reviews |
-| `Strukturell` | 1, 2, 5, 6, 9 | Modul- und Konzeptkritiken, Blueprint-Reviews |
-| `Essenziell` | 2, 9 | Einzelentscheidungen, PR-Diffs, Drift-Checks |
+| Tiefe | Aktive Sektionen |
+|-------|-----------------|
+| `Vollständig` | 1–9 |
+| `Strukturell` | 1, 2, 5, 6, 9 |
+| `Essenziell` | 2, 9 |
 
-Die Kritiktiefe wird vom Agenten zu Beginn bestimmt und in der Antwort deklariert.
-Sektionen, die bei der gewählten Tiefe nicht aktiv sind, werden weggelassen — ohne Erklärung.
+Sektionen außerhalb der gewählten Tiefe werden weggelassen — ohne Erklärung.
 
 ---
 
 ## 1. Zweck
 
-Dieser Skill erzwingt:
+Erzwingt:
 - strukturelle Architekturkritik
 - Aufdeckung impliziter Annahmen
 - Identifikation systemischer Schwächen
-- Prüfung der Kohärenz zwischen Truth Model / Semantik / Runtime
+- Kohärenzprüfung: Truth Model / Semantik / Runtime
 
 Ziel: Selbsttäuschung verhindern.
 
@@ -90,105 +89,84 @@ Wiederöffnung eines `accepted` ADR erfordert expliziten Vermerk:
 
 ---
 
-## 2. Diagnose-Gate (zweistufig)
-
-### Stufe 1 — Harter Abbruch
+## 2. Diagnose-Gate
 
 Wenn zwingend notwendige (nicht nur hilfreiche) Quellen fehlen:
-→ Abbruch mit: „X fehlt, nötig für Y"
-Kein Fortschreiten. Keine Interpolation.
+→ Abbruch: „X fehlt, nötig für Y"
 
-### Stufe 2 — Weiche Unsicherheit
-
-Wenn Daten vorhanden aber unvollständig sind, oder wenn strukturelle Ableitung möglich ist:
-→ Fortschreiten mit explizitem Interpolationsgrad in Sektion 9.
-→ Wenn Interpolationsgrad > 0,5: Warnung in Sektion 2 ("Diagnose auf unzureichender Datenbasis — Schlussfolgerungen vorläufig").
+Wenn Daten vorhanden, aber unvollständig — strukturelle Ableitung möglich:
+→ Analyse erlaubt, Interpolationsgrad in Sektion 9 deklarieren
+→ Wenn Interpolationsgrad > 0,5: Ergebnis in Sektion 2 als vorläufig markieren
 
 ---
 
 ## 3. Interpolationsregeln
 
-Es gelten drei Typen, nicht ein pauschales Verbot:
-
 | Typ | Definition | Status |
 |-----|-----------|--------|
-| **Faktisch** | Implementierungsdetail erfinden, das durch Lesen vorhandener Dateien abrufbar wäre | VERBOTEN — Abbruch (Diagnose-Gate Stufe 1) |
-| **Strukturell-plausibel** | Ableitung aus vorhandener Evidenz (Muster A + B impliziert C) | ERLAUBT — Interpolationsgrad ≤ 0,5, Quelle nennen |
-| **Konzeptuell-annahmebasiert** | Annahme über Systemziel oder -absicht aus normativen Docs | ERLAUBT MIT WARNUNG wenn Interpolationsgrad > 0,5 |
+| **Faktisch** | Implementierungsdetail erfinden, das durch Lesen vorhandener Dateien abrufbar wäre | VERBOTEN → Abbruch |
+| **Strukturell** | Ableitung aus vorhandener Evidenz (Muster A + B impliziert C) | ERLAUBT, Grad ≤ 0,5 |
+| **Konzeptuell** | Annahme über Systemziel aus normativen Docs | ERLAUBT, Warnung wenn Grad > 0,5 |
 
-Jede Interpolation in Sektion 9 muss:
-1. Typ deklarieren (strukturell / konzeptuell)
-2. Quellen der Ableitung nennen (Dateipfad oder Verhaltensbeschreibung)
-3. Interpolationsgrad (0–1) angeben
-4. Bei Grad > 0,5: Schlussfolgerungen in Sektion 2 als vorläufig markieren
+Jede Interpolation in Sektion 9 muss Typ, Quelle und Grad (0–1) benennen.
 
 ---
 
-## 4. Analysesequenz (drei Ebenen, sequenziell aufbauend)
+## 4. Analysesequenz (verpflichtend, sequenziell)
 
 Reihenfolge bindend. Ebene 3 darf nicht ohne Ebene 1 und 2 einsetzen.
 
 **Ebene 1 — Evidenz (belegt)**
-Was ist nachweisbar vorhanden?
-Belegpflicht: jede Aussage mit Dateipfad oder Verhaltensbeschreibung verankern.
-Truth-Klasse benennen.
+Was ist nachweisbar vorhanden? Jede Aussage mit Dateipfad oder Verhaltensbeschreibung verankern. Truth-Klasse benennen.
 
 **Ebene 2 — Modellierung (plausibel)**
-Wie ist das System gedacht?
-Nur Ableitungen aus vorhandener Evidenz — keine freien Hypothesen.
+Wie ist das System gedacht? Nur Ableitungen aus vorhandener Evidenz — keine freien Hypothesen.
 
 **Ebene 3 — Urteil (kritisch)**
-Ist diese Modellierung tragfähig?
-Darf und soll widersprechen.
-Unsicherheitsgrad explizit machen.
+Ist diese Modellierung tragfähig? Darf und soll widersprechen. Unsicherheitsgrad explizit machen.
 
 ---
 
 ## 5. Prüfachsen
 
-Achsen A–D und G sind immer aktiv.
-Achsen E und F sind konditioniert — wenn inaktiv, explizit als „nicht anwendbar für diese Abfrage" deklarieren.
+Achsen A–D und G: immer aktiv.
+Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar" deklarieren.
 
 **A. Truth Model**
-- Mehrere Wahrheitsquellen im Widerspruch?
+- Widersprüche zwischen Wahrheitsquellen?
 - Implizite statt explizite Wahrheit?
-- Verwechslung von `normative_specifications` und `runtime_configs_and_code`?
-→ Output in Sektion 2 (Diagnose) und Sektion 5 (Architekturkritik)
+- Klassenverwechslung (`normative_specifications` vs. `runtime_configs_and_code`)?
+→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
 
 **B. Contracts**
-- Fehlend, zu schwach oder zu strikt?
-- Werden sie umgangen?
-- ADR-Status prüfen: `accepted` → nur Fidelity-Check; kein ADR → offene Frage markieren; `superseded` → Treue zum Nachfolger-ADR prüfen
-→ Output in Sektion 2 (Diagnose) und Sektion 5 (Architekturkritik)
+- Fehlend, zu schwach, zu strikt oder umgangen?
+- ADR-Status: `accepted` → nur Fidelity-Check; kein ADR → offene Frage markieren; `superseded` → Treue zum Nachfolger-ADR prüfen
+→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
 
 **C. Semantik**
 - Begriff ≠ Verhalten?
 - Bedeutungsdrift zwischen Docs und Code?
-→ Output in Sektion 1 (Dialektik) und Sektion 4 (Versteckte Annahmen)
+→ Sektion 1 (Dialektik) + Sektion 4 (Versteckte Annahmen)
 
 **D. Runtime vs. Dokumentation**
-- Behauptung ≠ Implementierung?
-- Tote Dokumentation?
+- Behauptung ≠ Implementierung? Tote Dokumentation?
 - Ist `docs/_generated/architecture-drift.md` relevant?
-→ Output in Sektion 2 (Diagnose) und Sektion 7 (Risikoanalyse: epistemisch)
+→ Sektion 2 (Diagnose) + Sektion 7 (Risikoanalyse: epistemisch)
 
 **E. Kartenarchitektur** *(aktiv nur bei: Kartenrendering, Basemap-Pipeline, Overlay-Architektur, räumliche Semantik)*
 - Rendering oder semantischer Kern?
-- Repräsentation vs. Realität?
 - Basemap = Infrastruktur, Overlay = Weltgewebe-Semantik — korrekt getrennt?
-→ Output in Sektion 5 (Architekturkritik) und Sektion 8 (Alternative Sinnachse)
+→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
 
-**F. Identitätssystem** *(aktiv nur bei: Garnrolle, RoN, Verortung, Vertrauen, Auth-Identität, Sichtbarkeitslogik)*
+**F. Identitätssystem** *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
 - Garnrolle-Modi konsistent (verortet vs. RoN)?
-- Versteckte Trust-Mechaniken?
-- Ist Vertrauen als Systemwert modelliert (verboten im Weltgewebe)?
-→ Output in Sektion 5 (Architekturkritik) und Sektion 8 (Alternative Sinnachse)
+- Vertrauen als Systemwert modelliert? (im Weltgewebe verboten)
+→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
 
 **G. Komplexität**
-- Notwendig vs. künstlich?
-- Overengineering?
-- Ist die Komplexität durch Systemgrenzen gerechtfertigt?
-→ Output in Sektion 3 (Kontrastprüfung) und Sektion 6 (Alternativpfad)
+- Notwendig vs. künstlich? Overengineering?
+- Durch Systemgrenzen gerechtfertigt?
+→ Sektion 3 (Kontrastprüfung) + Sektion 6 (Alternativpfad)
 
 ---
 
@@ -208,18 +186,18 @@ Beginnt mit **Befundklasse** (Pflicht):
 
 | Klasse | Bedeutung |
 |--------|-----------|
-| **A** | Kritisch: strukturelle Fehler gefunden, Tragfähigkeit in Frage |
-| **B** | Warnung: potenzielle Schwächen, abhängig von Kontext oder Annahmen |
-| **C** | Bedingt sound: gefundene Schwächen sind bekannt und bewusst akzeptiert |
-| **D** | Sound: keine tragfähigkeitsgefährdenden Befunde — Begründung warum (Belegpflicht) |
+| **A** | Kritisch: strukturelle Fehler, Tragfähigkeit in Frage |
+| **B** | Warnung: potenzielle Schwächen, kontextabhängig |
+| **C** | Bedingt sound: Schwächen bekannt und bewusst akzeptiert |
+| **D** | Sound: keine tragfähigkeitsgefährdenden Befunde (Belegpflicht) |
 
-Dann dreistufige Evidenzgradierung:
+Befundklasse D: Soundness muss earned sein — „X ist sound, weil Y nachweisbar ist."
+Keine blanken Zertifikate.
+
+Dann Evidenzgradierung:
 - **Belegt** (mit Quellenangabe)
 - **Plausibel** (strukturelle Ableitung, Interpolationstyp nennen)
 - **Spekulativ** (konzeptuelle Annahme, Interpolationsgrad hoch)
-
-Bei Befundklasse D: Soundness muss earned sein — „X ist sound, weil Y nachweisbar ist."
-Keine blanken Zertifikate.
 
 ---
 
@@ -239,7 +217,7 @@ Keine blanken Zertifikate.
 
 ### 5. Architekturkritik *(Vollständig, Strukturell)*
 
-Mit Achsenzuordnung (A–G):
+Mit Achsenzuordnung (A–G, nur aktive Achsen):
 - Strukturelle Schwächen
 - Semantische Brüche
 - Unnötige Komplexität
@@ -247,10 +225,9 @@ Mit Achsenzuordnung (A–G):
 
 ---
 
-### 6. Alternativpfad *(Vollständig, Strukturell)*
+### 6. Alternativpfad *(Vollständig, Strukturell — nur bei Befundklasse A oder B)*
 
 Grundlegend andere Denkweise — kein Variantenwechsel.
-Nur wenn Befundklasse A oder B.
 
 ---
 
@@ -267,7 +244,7 @@ Inkl. Folgenabschätzung.
 
 ### 8. Alternative Sinnachse *(Vollständig)*
 
-Pflicht: Mindestens eine der folgenden Fragen beantworten:
+Mindestens eine der folgenden Fragen beantworten:
 - Ist die Karte das falsche Zentrum?
 - Ist Identität falsch modelliert?
 - Ist Vertrauen falsch gedacht?
@@ -277,21 +254,18 @@ Pflicht: Mindestens eine der folgenden Fragen beantworten:
 
 ### 9. Essenz + Folgepfad *(immer aktiv)*
 
-**Essenz:**
-- Hebel
-- Entscheidung
-- Nächste Aktion
+**Essenz:** Hebel — Entscheidung — nächste Aktion
 
-**Folgepfad (Pflicht):**
+**Folgepfad:**
 
 | Befundklasse | Aktion |
 |-------------|--------|
-| A | ADR-Entwurf vorschlagen oder bestehenden ADR zur Revision markieren |
+| A | ADR-Entwurf vorschlagen oder zur Revision markieren |
 | B | Blueprint-Ergänzung oder Spec-Update vorschlagen |
-| C | Drift-Befund in `docs/_generated/` adressierbar? Markieren. |
+| C | Drift in `docs/_generated/` adressierbar? Markieren. |
 | D | Keine Aktion. Befundklasse D und Begründung dokumentieren. |
 
-**Unsicherheits- & Interpolationsangaben (Pflicht):**
+**Unsicherheit & Interpolation:**
 - Unsicherheitsgrad (0–1) + Ursachen
 - Interpolationsgrad (0–1) + Typ (strukturell / konzeptuell) + Quellen
 - Wenn Interpolationsgrad > 0,5: Schlussfolgerungen als vorläufig markieren
@@ -300,15 +274,15 @@ Pflicht: Mindestens eine der folgenden Fragen beantworten:
 
 ## 7. Anti-Fehler-Regeln
 
-Claude darf NICHT:
+Darf NICHT:
 - glätten
 - implizit zustimmen
 - faktisch fehlende Daten ergänzen (→ Abbruch)
 - nur Code reviewen
-- accepted ADRs ohne expliziten Vermerk zur Revision vorschlagen
-- Befundklasse D vergeben ohne Belegpflicht zu erfüllen
+- `accepted` ADRs ohne expliziten Vermerk zur Revision vorschlagen
+- Befundklasse D ohne Belegpflicht vergeben
 
-Claude MUSS:
+Muss:
 - widersprechen können
 - Unsicherheit sichtbar machen
 - alternative Deutungen liefern
@@ -317,20 +291,14 @@ Claude MUSS:
 
 ---
 
-## 8. Eskalationslogik
+## 8. Eskalation
 
-Bei folgenden Fällen:
-- widersprüchliche Architektur
-- fragile Kernprämissen
-- erkennbare Sackgasse
+Bei widersprüchlicher Architektur, fragilen Kernprämissen oder erkennbarer Sackgasse:
 
-→ Explizit formulieren:
+→ „Dieses System ist in seiner aktuellen Form wahrscheinlich nicht tragfähig, weil …"
 
-„Dieses System ist in seiner aktuellen Form wahrscheinlich nicht tragfähig, weil …"
-
-**Klarstellung:** Eskalation ist Diagnose (Befundklasse A), kein Governance-Beschluss.
-Die Aussage ist ein diagnostischer Befund, kein Auftrag.
-Welche Konsequenz gezogen wird, liegt ausschließlich beim menschlichen Projekt-Collective.
+Eskalation ist Diagnose (Befundklasse A), kein Governance-Beschluss.
+Welche Konsequenz gezogen wird, liegt beim menschlichen Projekt-Collective.
 Der Agent markiert und begründet — er entscheidet nicht.
 
 ---
@@ -338,29 +306,33 @@ Der Agent markiert und begründet — er entscheidet nicht.
 ## 9. Prämissencheck *(Vollständig)*
 
 Was müsste wahr sein, damit das System so funktioniert?
-Welche dieser Prämissen sind belegt, welche sind Annahmen?
+Was ist belegt — was ist Annahme?
 
 ---
 
-## 10. Unsicherheitsgrad
+## Essenz des Skills
 
-Dieses Dokument selbst:
+Kritik vor Lösung.
+Struktur vor Detail.
+Wahrheit vor Komfort.
+
+---
+
+## Unsicherheitsgrad
 
 **0.08**
 
 Ursachen:
-- Die Achsen-zu-Sektionen-Zuordnung ist normativ, nicht empirisch validiert
+- Achsen-zu-Sektionen-Zuordnung ist normativ, nicht empirisch validiert
 - Kritiktiefe-Schwellen könnten in der Praxis anders kalibriert werden müssen
 
 ---
 
-## 11. Interpolationsgrad
+## Interpolationsgrad
 
-**0.11**
-
-Typ: konzeptuell-annahmebasiert
+**0.11** · Typ: konzeptuell
 
 Annahmen:
 - LLMs befolgen sequentielle Analysesequenzen kohärenter als parallele Anweisungen
-- Befundklasse D wird in der Praxis nicht als Ausrede für oberflächliche Analyse missbraucht
-- Kritiktiefe `Essenziell` reicht für PR-Diffs aus ohne kritische Befunde zu unterdrücken
+- Befundklasse D wird nicht als Ausrede für oberflächliche Analyse missbraucht
+- Kritiktiefe `Essenziell` reicht für PR-Diffs ohne kritische Befunde zu unterdrücken
