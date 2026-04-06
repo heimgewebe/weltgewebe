@@ -38,7 +38,7 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `docs/policies/agent-reading-protocol.md`
-- `docs/policies/architecture-critique.md`
+- `docs/policies/architecture-critique.md` (canonical cognitive module; not part of the default reading order, activated via protocol rules)
 
 ## Discovery Rules
 
