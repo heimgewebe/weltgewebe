@@ -184,8 +184,8 @@ Defined across the repository's canonical version files:
 | Node.js | 20.19.0 | `.node-version`, `.nvmrc` |
 | Python | 3.12 | `.python-version`, `toolchain.versions.yml` |
 | pnpm | 9.11.0 | `package.json` |
-| uv | See `toolchain.versions.yml` | `toolchain.versions.yml` |
-| yq | See `toolchain.versions.yml` | `toolchain.versions.yml` |
+| uv | 0.9.11 | `toolchain.versions.yml` |
+| yq | 4.44.3 | `toolchain.versions.yml` |
 | cargo-deny | 0.18.8 | `toolchain.versions.yml` |
 
 ---
