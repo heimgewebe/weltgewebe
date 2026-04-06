@@ -187,7 +187,7 @@ Generated automatically. Do not edit.
 
 ## docs/policies/agent-reading-protocol.md
 
-- [depends_on] docs/policies/architecture-critique.md
+- [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 
 ## docs/policies/orientierung.md

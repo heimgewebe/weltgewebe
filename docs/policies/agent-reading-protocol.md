@@ -103,6 +103,43 @@ Stattdessen:
 
 ---
 
+## 8. Aktivierung kognitiver Protokolle
+
+### Architekturkritik-Skill
+
+Der Architekturkritik-Skill wird NUR aktiviert, wenn mindestens eine der folgenden Bedingungen erfüllt ist:
+
+- Der Task beinhaltet:
+  - Architektur
+  - Systemdesign
+  - strukturelle Analyse
+  - Bewertung oder Kritik
+
+- oder:
+  - widersprüchliche Quellen vorliegen
+  - hohe Unsicherheit besteht
+  - notwendige Informationen fehlen
+
+- oder:
+  - explizite Analyse- oder Kritik-Trigger enthalten sind
+    (z. B. „analysiere“, „bewerte“, „kritisiere“)
+
+### Deaktivierung
+
+Wenn keine der Bedingungen erfüllt ist:
+
+→ Der Architekturkritik-Skill wird NICHT aktiviert.
+
+### Fail-Safe
+
+Wenn die Klassifikation des Tasks unsicher ist:
+
+→ reduzierte Anwendung:
+- keine vollständige Pflichtstruktur
+- nur selektive Nutzung einzelner Analyseelemente
+
+---
+
 ## Essenz
 
 Dieses Protokoll priorisiert:
