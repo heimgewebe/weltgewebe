@@ -54,7 +54,7 @@ Before making any changes, read these files in order:
 
 `docs/index.md` is navigation only. `docs/_generated/*` is diagnostic only — never canonical.
 
-Canonical cognitive modules are not part of the default reading order. If a cognitive module is relevant, it must be loaded only through the activation logic defined in `docs/policies/agent-reading-protocol.md`. For Weltgewebe, this applies in particular to `docs/policies/architecture-critique.md`.
+Canonical cognitive modules are not part of the default reading order. Their structure is defined in `repo.meta.yaml` under `cognitive_modules`. If a cognitive module is relevant, it must be loaded only through the activation logic defined in `docs/policies/agent-reading-protocol.md`. For Weltgewebe, this applies in particular to `docs/policies/architecture-critique.md`.
 
 ---
 
