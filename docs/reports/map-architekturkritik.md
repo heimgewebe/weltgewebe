@@ -1,363 +1,139 @@
-# Architekturkritik: Map-Schiene
+# Architekturkritik: Map-Schiene (v4)
 
-> Stand: 2026-04-05 · Analysierte Revision: Gate A (Click-Dummy vollständig)
+> Stand: 2026-04-06 · Format: weltgewebe.architecture.critique.v4
+> Analysierte Revision: Gate A, 18 Testdateien
 
 ---
 
-## Gesamtbewertung
+## These
 
-Die Kartenimplementierung ist **funktional solide** – Gate A ist erreicht, alle 18 Playwright-Tests sind grün, die UX-Grundstruktur (Navigation / Fokus / Komposition) ist kohärent durchdacht. Als **architektonische Grundlage für Gate B und darüber hinaus taugt der aktuelle Stand jedoch nur eingeschränkt.** Die zentrale Page-Komponente trägt zu viele Verantwortlichkeiten, Overlays folgen keinem einheitlichen Muster, und mehrere Abstraktionen, die das System skalierbar und testbar machen würden, fehlen vollständig.
+Die Map-Schiene funktioniert. Gate A ist erreicht. Die UX-Grundstruktur Navigation / Fokus / Komposition ist kohärent. 18 Playwright-Tests sind grün, darunter ein dedizierter Guard-Test (`no-activity-heatmap.spec.ts`), der das frühere Bereinigen des Activity-Overlays absichert.
 
-| Dimension | Bewertung | Begründung |
+Gleichzeitig trägt `apps/web/src/routes/map/+page.svelte` mindestens acht Verantwortlichkeiten gleichzeitig. Suchalgorithmus und Filter-Derivation liegen nicht in ihren zugehörigen Stores, sondern direkt im Orchestrator. Vier Overlays folgen vier verschiedenen API-Patterns. Die Detail-Panels lesen aus zwei Quellen gleichzeitig. Zustandsinvarianten werden zur Laufzeit bewacht statt durch das Typsystem erzwungen.
+
+Das sind keine Geschmacksfragen. Das sind Stellen, an denen jede neue Funktion in Gate B mit vorhersehbarem Mehraufwand kämpfen wird.
+
+---
+
+## Antithese
+
+Ein Teil der Kritik ist ungenau oder zu stark formuliert.
+
+**`overlayManager.ts` ist kein toter Code.** Die Datei exportiert `toggleSearchExclusive()` und `toggleFilterExclusive()` und wird in `apps/web/src/lib/components/ActionBar.svelte` (L5) importiert und verwendet. Das eigentliche Problem ist ein Namens- und Abstraktionsproblem: Die Datei heißt `overlayManager`, verwaltet aber keine Map-Overlays, sondern die gegenseitige Exklusivität von Search- und Filter-UI-Panels. Der Name suggeriert Verantwortlichkeit, die sie nicht hat.
+
+**Das Activity-Overlay ist kein offener Befund.** `apps/web/src/lib/map/overlay/activity.ts` existiert nicht. Es wurde bereits entfernt. Der Test `no-activity-heatmap.spec.ts` sichert diese Bereinigung dauerhaft ab. Hier gibt es nichts zu korrigieren.
+
+**`O(n)`-Suche ist für den aktuellen Kontext ein vernünftiger MVP-Tradeoff.** Das Skalierungsproblem ist real, aber kein Gate-A-Fehler.
+
+**Die God-Component-Diagnose ist richtig, aber die Wertung bedarf einer Gegenfrage:** Ist `+page.svelte` eine God Component im pathologischen Sinn, oder ist sie ein ehrlicher Orchestrator-Knoten des Kartenmodus? Der Unterschied liegt nicht in der Zeilenzahl, sondern darin, ob Änderungen unbeherrschbar werden. Das ist bisher noch nicht eingetreten – aber das Risiko steigt mit jedem Gate.
+
+---
+
+## Synthese
+
+Die Strukturdiagnose stimmt überwiegend. Die Schlussfolgerungen sind überwiegend tragfähig. Drei Befunde der v1-Kritik müssen korrigiert werden.
+
+### Befunde: belegt
+
+Direkt im Code nachweisbar, keine Interpolation nötig.
+
+| ID | Befund | Nachweis |
 |---|---|---|
-| Separation of Concerns | 4/10 | Page orchestriert Such-, Filter- und Selektionslogik selbst |
-| Kopplung | 4/10 | Direkte Overlay-Instantiierung, implizite DOM-Verträge |
-| Abstraktionstiefe | 3/10 | Kein SelectionService, kein MapOverlayManager |
-| State-Ownership | 5/10 | Stores klar, aber Panels haben Dual-Sources |
-| Testbarkeit | 3/10 | Direkte MapLibre-/API-Aufrufe, kaum Unit-Tests |
-| Typsicherheit | 6/10 | TypeScript vorhanden, Invarianten nicht kodiert |
-| Dokumentation | 5/10 | Roadmap/Status-Docs gut, Komponentenarchitektur fehlt |
+| **B1** | Suchalgorithmus sitzt in `+page.svelte`, nicht in `searchStore` | L87–104: reaktiver Block mit `searchBaseData.filter(...).slice(0,10)`; `searchStore.ts` enthält nur `isSearchOpen` / `searchQuery` |
+| **B2** | Filter-Typderivation sitzt in `+page.svelte`, nicht in `filterStore` | L116–135: `availableFilterTypes`-IIFE; `filterStore.ts` enthält nur Toggles |
+| **B3** | Loader validiert API-Antworten nicht zur Laufzeit | `+page.ts`: `return await res.json()` via Generic `<T>` ohne Guard |
+| **B4** | Panels lesen aus zwei Quellen (Dual-Sources) | `EdgePanel.svelte`: `edgeDetails?.edge_kind \|\| $selection?.data?.edge_kind \|\| 'Faden'` |
+| **B5** | Invarianten-Watcher statt Typsystem | `uiInvariants.ts`: `assertUiStateInvariant()` + `setupUiInvariantWatcher()` |
+| **B6** | Impliziter DOM-Vertrag `.map-marker` + `data-id` | `nodes.ts`: `element.dataset.id = item.id`; `+page.svelte` L279: Click-Delegation auf `.map-marker` |
+| **B7** | Vier inkonsistente Overlay-APIs | `NodesOverlay` (Klasse), `updateEdges` (Funktion), `setupKompositionInteraction` (Setup+Cleanup), `setupFocusInteraction` (Setup+Callback) |
+| **B8** | Fäden-Styling hard-coded | `edges.ts` L88–90: `#ffffff` (Halo), `#888` (Hauptlinie), `[2,1]` Dash, keine CSS-Custom-Properties |
+| **B9** | `overlayManager.ts` falsch benannt | Datei heißt Map-Overlay-Manager, verwaltet aber UI-Panel-Exklusivität; importiert in `ActionBar.svelte` L5 |
+| **B10** | `MapPoint` in `types.ts` ungenutzt | Interface mit `lng` (nicht `lon`) definiert; `RenderableMapPoint` (mit `lon`) wird verwendet |
 
----
+### Befunde: plausibel
 
-## Befunde
+Logisch aus dem Code ableitbar, vollständige Beweiskette fehlt.
 
-### HOCH
-
----
-
-#### H1 – God Component `+page.svelte` (560 Zeilen, 8+ Verantwortlichkeiten)
-
-**Datei:** `apps/web/src/routes/map/+page.svelte`
-
-Das zentrale Routing-Modul ist eine klassische God Component. Es übernimmt alle der folgenden Aufgaben gleichzeitig:
-
-| Verantwortlichkeit | Zeilen |
-|---|---|
-| Rohdaten → `RenderableMapPoint` transformieren | 33–66 |
-| Suchalgorithmus (Substring-Match, Resultate, Match-IDs) | 87–104 |
-| Filter-Typderivation (`availableFilterTypes`) | 116–135 |
-| Gefilterte Marker berechnen | 137–139 |
-| Kanten nach Markersichtbarkeit filtern | 81–84 |
-| Marker-Click-Delegation | 257–270 |
-| Karten-Initialisierung (128-zeiliger `onMount`-Block) | 272–400 |
-| Overlay-Lifecycle (Init, Update, Cleanup) | 318–370 |
-| Fokus-Restauration nach Panel-Schließung | 218–234 |
-| DOM-Styling (CSS-Block) | 386–560 |
-
-**Folge:** Jede Änderung – am Suchalgorithmus, am Filter-UI, an einem Overlay – riskiert Regressionen in völlig unverwandten Bereichen. Die Komponente ist in ihrer jetzigen Form kaum isoliert testbar.
-
-**Empfehlung:**
-- Suchalgorithmus → `SearchService` oder erweiterten `searchStore`
-- Filter-Derivation → `filterStore` als Derived Store
-- Overlay-Lifecycle → `MapOverlayManager`-Klasse
-- Karten-Init → eigene `createMap()`-Utility oder Sub-Komponente
-
----
-
-#### H2 – Fehlende Overlay-Abstraktion / vier inkonsistente Patterns
-
-**Dateien:** `overlay/nodes.ts`, `overlay/edges.ts`, `overlay/komposition.ts`, `overlay/focus.ts`
-
-Die vier Overlays haben fundamental unterschiedliche APIs:
-
-| Overlay | Pattern | API |
+| ID | Befund | Begründung der Einschränkung |
 |---|---|---|
-| `NodesOverlay` | Klasse | `constructor(map)` · `update(...)` · `destroy()` |
-| `updateEdges` | Reine Funktion | Direkt aufgerufen, kein Lifecycle |
-| `setupKompositionInteraction` | Setup + Cleanup-Return | `() => cleanupFn` |
-| `setupFocusInteraction` | Setup + Callback | `(map, getStateFn) => cleanupFn` |
-
-Hinzu kommt: `apps/web/src/lib/stores/overlayManager.ts` (20 Zeilen) existiert, wird aber **nirgends importiert** – toter Code, der die ursprüngliche Absicht andeutet, aber nie realisiert wurde.
-
-**Folge:** Wer ein neues Overlay ergänzt, hat keine kanonische Vorlage. Der Lifecycle wird fragmentiert in `onMount`, in reaktiven Blöcken und im Cleanup-Return der Page-Komponente verwaltet.
-
-**Empfehlung:** Einheitliches Interface einführen:
-
-```ts
-// apps/web/src/lib/map/overlay/types.ts
-export interface MapOverlay {
-  initialize(map: MapLibreMap): void;
-  update(data: MapOverlayData): void;
-  destroy(): void;
-}
-```
-
-Alle Overlays implementieren dieses Interface. `MapOverlayManager` übernimmt Lifecycle-Koordination. `overlayManager.ts` entweder mit Inhalt füllen oder löschen.
-
----
-
-### MITTEL
-
----
-
-#### M1 – Suchalgorithmus am falschen Ort
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L87–104 · `apps/web/src/lib/stores/searchStore.ts`
-
-Der `searchStore` verwaltet nur UI-State (`isSearchOpen`, `searchQuery`). Der eigentliche Suchalgorithmus – inklusive Substring-Matching, Resultateliste und `searchMatchIds` – lebt als reaktiver Block in der Page-Komponente:
-
-```svelte
-$: {
-  if ($isSearchOpen && $searchQuery.trim().length > 0) {
-    const q = $searchQuery.toLowerCase();
-    filteredResults = searchBaseData.filter(m => {
-      const titleMatch = m.title?.toLowerCase().includes(q);
-      const summaryMatch = m.summary?.toLowerCase().includes(q);
-      return titleMatch || summaryMatch;
-    }).slice(0, 10);
-    searchMatchIds = new Set(filteredResults.map(r => r.id));
-  }
-}
-```
-
-`filteredResults` und `searchMatchIds` sind lokaler Component-State. Kein anderes Modul kann die Suchlogik wiederverwenden oder testen.
-
-**Empfehlung:** Suchlogik in `searchStore` oder separaten `SearchService` auslagern. `searchMatchIds` als Derived Store exportieren.
-
----
-
-#### M2 – Filter-Typderivation am falschen Ort
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L116–141
-
-`availableFilterTypes` – die Liste der in der Filter-UI angezeigten Typen mit Zählern – wird in jedem Reactive Cycle der Page-Komponente neu berechnet und als Prop an `FilterOverlay` weitergereicht. Die Hilfsfunktion `getFilterTypeKey()` ist zudem zweifach implementiert (L117 und L194 verwenden identische Logik).
-
-`filterStore` managed nur `isFilterOpen` und `activeFilters`. Wer die Datenhoheit für "welche Typen gibt es?" hat, ist unklar.
-
-**Empfehlung:** `availableFilterTypes` als `derived()`-Store in `filterStore.ts` berechnen, mit Memoizing. `getFilterTypeKey()` einmalig als exportierte Utility definieren.
-
----
-
-#### M3 – Keine Laufzeit-Datenvalidierung im Page Loader
-
-**Datei:** `apps/web/src/routes/map/+page.ts`
-
-```ts
-async function fetchResource<T>(resource: string, fallback: T[] = []): Promise<T[]> {
-  try {
-    const res = await fetch(`${apiUrl}/api/${resource}`);
-    if (res.ok) {
-      return await res.json(); // ← cast via Generic, keine Laufzeitprüfung
-    }
-  } catch (e) { ... }
-  return fallback;
-}
-```
-
-TypeScript-Generics sind eine Compile-Time-Aussage. Zur Laufzeit kann `res.json()` beliebige Daten liefern – z. B. `{"error": "DB unavailable"}` statt `Node[]`. Die Komponente crasht dann bei `n.location.lat`.
-
-**Empfehlung:** Schema-Validierung mit `zod` oder einem einfachen Guard am Fetch-Boundary. Unterscheidung zwischen "API nicht erreichbar" (→ Fallback-Array) und "API antwortet mit ungültigem Schema" (→ Fehlermeldung).
-
----
-
-#### M4 – Dual Data Sources in Panels
-
-**Dateien:** `NodePanel.svelte`, `EdgePanel.svelte`, `AccountPanel.svelte`
-
-Alle Detail-Panels lesen Daten aus zwei Quellen gleichzeitig:
-
-1. `$selection.data` (Store – Schnellanzeige aus dem Lade-Payload)
-2. Eigenständiger API-Fetch beim Öffnen (vollständige Detaildaten)
-
-Fallback-Muster:
-```ts
-{nodeDetails?.title || $selection?.data?.title || $selection?.id}
-```
-
-Wenn Store-Daten und API-Daten divergieren (z. B. nach einem Update), zeigt die UI inkonsistente Inhalte. Es gibt keinen definierten API-Vertrag: Ist `.data` eine vollständige Repräsentation oder nur eine Preview?
-
-**Empfehlung:** Klare Entscheidung treffen:
-- **Option A:** Orchestrator pre-fetcht Details bei Selektion; Panels bekommen vollständige Daten als Prop (kein eigener Fetch).
-- **Option B:** Panels sind alleinige Eigentümer ihres Fetches; `.data` im Selection-Store wird entfernt.
-
-Option A bevorzugt (weniger Netzwerk-Requests, zentrales Error-Handling).
-
----
-
-#### M5 – Kein einheitlicher Selektions-Einstiegspunkt
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L164–184
-
-Zwei getrennte Code-Pfade führen zur gleichen Selektion:
-- Marker-Klick → `focusAndFlyToPoint()` (L257–270)
-- Such-Resultat-Auswahl → ebenfalls `focusAndFlyToPoint()` (L184)
-
-Beide Pfade sind identisch, aber unabhängig verdrahtet. Bei einem zukünftigen dritten Einstiegspunkt (z. B. Deep-Link, Liste) muss erneut dupliziert werden.
-
-**Empfehlung:** `SelectionService` mit einer einzigen `select(item)`-Methode als Einstiegspunkt für alle Selektionspfade.
-
----
-
-### NIEDRIG
-
----
-
-#### N1 – Marker-Click per Event-Delegation mit implizitem DOM-Vertrag
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L257–270 ↔ `overlay/nodes.ts`
-
-Der Click-Handler auf dem Map-Container (`L279`) erwartet Buttons mit CSS-Klasse `.map-marker` und `data-id`-Attribut. Diese werden von `NodesOverlay` erstellt. Der Vertrag ist nirgends dokumentiert – ein Umbenennen der Klasse bricht die Interaktion still.
-
-**Empfehlung:** `NodesOverlay` sollte einen `onMarkerClick`-Callback akzeptieren und die Marker intern verdrahten. Kein globales Event-Delegation auf CSS-Klassen.
-
----
-
-#### N2 – Zustandsinvarianten via Laufzeit-Watcher statt Typsystem
-
-**Datei:** `apps/web/src/lib/stores/uiView.ts` · `apps/web/src/lib/stores/uiInvariants.ts`
-
-Die Invariante "in `fokus` ist immer eine Selektion gesetzt; in `komposition` immer ein Draft" wird durch einen externen Watcher in `uiInvariants.ts` überwacht, nicht durch das Typsystem erzwungen.
-
-**Empfehlung:** `AppState` als Discriminated Union modellieren:
-
-```ts
-export type AppState =
-  | { tag: 'navigation' }
-  | { tag: 'fokus'; selection: Selection }
-  | { tag: 'komposition'; draft: KompositionDraft };
-```
-
-Compiler schließt ungültige Kombinationen aus. `uiInvariants.ts` kann entfallen.
-
----
-
-#### N3 – Fäden-Styling hard-coded, keine `edge_kind`-Differenzierung
-
-**Datei:** `apps/web/src/lib/map/overlay/edges.ts` L88–128
-
-Alle Fäden werden identisch gezeichnet (grau, gestrichelt). Farben und Breiten sind hard-coded (`#ffffff`, `#888`), ohne Referenz auf CSS Custom Properties. Die vier semantischen Typen (`delegation`, `membership`, `ownership`, `reference`) sind visuell nicht unterscheidbar.
-
-**Empfehlung:** `edge_kind` → Farbe/Stil-Mapping in separater Konfigurationsdatei (`edgeStyles.ts`). CSS Custom Properties für Kompatibilität mit Dark Mode.
-
----
-
-#### N4 – Keine Koordinaten-Validierung in `NodesOverlay`
-
-**Datei:** `apps/web/src/lib/map/overlay/nodes.ts` L74–79
-
-`marker.setLngLat([item.lon, item.lat])` wird ohne Guard aufgerufen. `AccountRon`-Instanzen ohne `public_pos` können mit `undefined`-Koordinaten in den Overlay-Update gelangen. MapLibre ignoriert dies still; der Marker erscheint nicht, ohne dass eine Warnung ausgegeben wird.
-
-**Empfehlung:**
-
-```ts
-function isValidCoordinate(lat: number, lon: number): boolean {
-  return isFinite(lat) && isFinite(lon) &&
-    lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-}
-```
-
-Ungültige Punkte vor dem Rendering herausfiltern und als Warning loggen.
-
----
-
-#### N5 – Toter und inkonsistenter Code in `types.ts`
-
-**Datei:** `apps/web/src/lib/map/types.ts`
-
-```ts
-// Definiert, aber nie verwendet:
-export interface MapPoint {
-  id: string;
-  lat: number;
-  lng: number;  // ← 'lng', nicht 'lon'
-  kind: string;
-  data: Node | Account | unknown;
-}
-
-// Im Einsatz:
-export interface RenderableMapPoint {
-  lat: number;
-  lon: number;  // ← 'lon', nicht 'lng'
-  // ...
-}
-```
-
-`MapPoint` ist Dead Code mit abweichender Feldbezeichnung. `RenderableMapPoint.kind` ist als optional (`kind?`) deklariert, ohne dass definiert wäre, was `kind === undefined` für die Rendering-Logik bedeutet.
-
-**Empfehlung:** `MapPoint` löschen. `kind` entweder als required deklarieren oder den Fallback explizit machen.
-
----
-
-#### N6 – Imperative Muster in reaktivem Kontext
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L198–234
-
-Zwei Stellen kämpfen gegen Sveltes Reaktivitätsmodell statt damit zu arbeiten:
-
-**Filter-Tooltip (L198–210):** Manuelles `window.setTimeout` + `window.clearTimeout` + `tick().then()` für einen Animation-Reset-Trick.
-
-**Fokus-Restauration (L218–234):** `tick().then()` mit manuellem Clear-Flag (`lastFocusedElement = null`) um eine Reaktivitätsschleife zu verhindern. Der Kommentar "Clear immediately to prevent loop" ist ein Zeichen dafür, dass das Reaktivitätsmodell hier an seine Grenzen stößt.
-
-**Empfehlung:** Filter-Tooltip in eigene `FilterTooltip.svelte`-Komponente mit eigenem Lifecycle auslagern. Fokus-Restauration als Derived Store oder Action modellieren.
-
----
-
-#### N7 – Suche skaliert nicht
-
-**Datei:** `apps/web/src/routes/map/+page.svelte` L87–104
-
-Client-seitiges O(n)-Substring-Matching über alle Marker. Kein Backend-Suchendpoint. `slice(0, 10)` hard-coded. Kein Fuzzy-Matching.
-
-Für Gate A (< 100 Datenpunkte) akzeptabel. Ab Gate D (tausende Knoten) ungeeignet.
-
-**Empfehlung:** `/api/nodes/search?q=...&limit=10` Backend-Endpoint (Rust), PostgreSQL `tsvector` oder Meili/Typesense. Client-seitige Suche als Offline-Fallback behalten.
+| **P1** | Koordinaten-NaN-Pfad bei `AccountRon` ohne `public_pos` | `nodes.ts` L74–79 vergleicht `item.lon` numerisch ohne Guard; ob ein `AccountRon` tatsächlich mit `undefined`-Koordinaten bis `update()` gelangt, hängt von der Filterung in `+page.svelte` ab – nicht vollständig geprüft |
+| **P2** | Fokus-Restauration fragil bei gefiltertem Marker | `+page.svelte` L218–234 stellt `lastFocusedElement` wieder her; wenn der Marker durch Filter aus dem DOM entfernt wurde, schlägt `focus()` still fehl |
+| **P3** | Suche skaliert nicht ab Gate D | Mechanismus klar (O(n) client-seitig), aber konkrete Grenzwerte sind Schätzungen |
+
+### Befunde: zu korrigieren
+
+In v1 falsch oder unvollständig behauptet.
+
+| ID | v1-Behauptung | Korrektur |
+|---|---|---|
+| **K1** | `overlayManager.ts` = toter Code | Falsch. Importiert in `ActionBar.svelte` L5. Problem ist Namensverwirrung, nicht Nichtverwendung. |
+| **K2** | Activity-Overlay als implizit aktiver Befund | Nicht zutreffend. `activity.ts` existiert nicht. `no-activity-heatmap.spec.ts` sichert die Abwesenheit ab. |
+| **K3** | „18 Tests, Gate A" ohne Kontext | Stimmt zahlenmäßig (18 `.spec.ts`), aber einer davon (`no-activity-heatmap.spec.ts`) ist ein Regressions-Guard für bereits erledigte Bereinigung – keine Gate-A-Neuleistung. |
 
 ---
 
 ## Fehlende Abstraktionen
 
-| Abstraktion | Beschreibung | Dringlichkeit |
+| Abstraktion | Problem, das sie löst | Gate |
 |---|---|---|
-| `SearchService` | Suchalgorithmus, Highlight-IDs, Backend-Delegation | Gate B |
-| `FilterService` | Typderivation, Filter-Anwendung, Memoizing | Gate B |
-| `SelectionService` | Einziger Entry-Point für Selektion (Marker, Suche, zukünftig Deep-Link) | Gate B |
-| `MapOverlayManager` | Einheitliches Interface (`initialize` / `update` / `destroy`) für alle Overlays | Gate B |
-| `AppState` Discriminated Union | `navigation` / `fokus` / `komposition` typsicher als Summentyp | Gate B |
+| `SearchService` | Suchalgorithmus aus `+page.svelte` (B1), testbar, delegierbar | B |
+| Derived Filter-Store | Filter-Derivation aus `+page.svelte` (B2), mit Memoizing | B |
+| `SelectionService` | Zwei unverbundene Einstiegspunkte (Marker-Klick + Suche) vereinen | B |
+| `MapOverlay`-Interface | Einheitliche API für alle Overlays (B7): `initialize / update / destroy` | C |
+| `AppState` Discriminated Union | Invarianten-Watcher (B5) durch Typsystem ersetzen | C |
 
 ---
 
 ## Test-Coverage-Lücken
 
-| Bereich | Aktuell | Lücken |
-|---|---|---|
-| `+page.svelte` | E2E only | Suchalgorithmus, Filterderviation, Datentransformation |
-| `NodePanel` | Keine | Async-Fetch, Request-Abbruch, Stale-Response-Prävention, Tab-Navigation |
-| `EdgePanel` | Keine | Fehlerbehandlung, Source/Target-Auflösung |
-| `AccountPanel` | Keine | Tab-State, Aktivitätsliste |
-| `KompositionPanel` | Integration | Formvalidierung, Submit-Flow, Fehlerfälle |
-| `NodesOverlay` | Keine | Marker-Lifecycle, Suchhervorhebung, Koordinaten-Guard |
-| `updateEdges` | Strukturell | Tatsächliches Layer-Rendering, GeoJSON-Validierung |
-| `setupFocusInteraction` | Keine | State-Transitions, Click-Outside-Verhalten |
+Die Suite hat keine Unit-Test-Schicht. Der Sprung geht direkt von „keine Tests" zu Playwright E2E. Das macht Logik-Regressions-Tests teuer und langsam.
 
-Hauptproblem: Es fehlt eine Unit-Test-Schicht. Die Suite springt direkt von "kein Test" zu "Playwright E2E". Logik in Services auslagern (H1, M1, M2) schafft die nötigen Test-Seams.
+| Bereich | Lücken |
+|---|---|
+| Such- / Filterlogik | Unit-Tests fehlen; Logik liegt in Komponente, kein Test-Seam |
+| `NodePanel` / `EdgePanel` / `AccountPanel` | Async-Fetch, Request-Abbruch, Stale-Response-Prävention |
+| `KompositionPanel` | Formvalidierung, Submit-Flow (funktionales Loch) |
+| `NodesOverlay` | Marker-Lifecycle, Koordinaten-Guard |
+| `setupFocusInteraction` | State-Transitions, Click-Outside |
 
 ---
 
-## Empfohlener Refactoring-Pfad
+## Alternative Sinnachse
 
-### Sofort (Voraussetzung Gate B)
+Die Kritik denkt in klassischer Frontend-Schichtarchitektur: Service hier, Store dort, Manager dort. Das ist sinnvoll. Aber eine andere Lesart wäre: `+page.svelte` ist der ehrliche Orchestrator-Knoten des Kartenmodus – eine Art lokale Regiezentrale, die bewusst alle Fäden hält.
 
-1. **`SearchService` extrahieren** – Suchalgorithmus aus `+page.svelte` heraus, als testbare Utility
-2. **`FilterService` / Derived Store** – Typderivation und Filter-Anwendung in `filterStore.ts`
-3. **`KompositionPanel` Submit implementieren** – Größtes funktionales Loch; ohne dies kein Gate B
+Nicht jede große Komponente ist eine God Component. Manche sind einfach Sammelstellen. Die entscheidende Frage ist nicht „Wieviele Zeilen?", sondern: „Wächst die Änderungsangst schneller als der Nutzen?"
 
-### Kurzfristig (Gate B)
+Für Gate A: noch nicht. Für Gate B, wenn KompositionPanel wirklich submittiert, Edge-Typen visuell unterschieden werden und Echtzeit-Updates hinzukommen: dann wird der Orchestrator eng.
 
-4. **`SelectionService`** – Einheitlicher Einstiegspunkt für alle Selektionspfade
-5. **Datenstrategie in Panels klären** – Dual-Sources auflösen (Empfehlung: Option A, Pre-fetch im Orchestrator)
-6. **Unit-Tests für extrahierte Services**
+---
 
-### Mittelfristig (Gate C)
+## Für Dummies
 
-7. **`MapOverlayManager`** – Einheitliches Overlay-Interface, `overlayManager.ts` entweder implementieren oder löschen
-8. **`AppState` als Discriminated Union** – `uiInvariants.ts` Watcher ersetzen
-9. **Koordinaten-Guard** in `NodesOverlay`
-10. **Fäden-Styling konfigurierbar** (`edge_kind` → Farbe/Stil)
+- Die Karte funktioniert, sieht gut aus, ist gut getestet.
+- Intern ist aber eine Datei dafür zuständig, was eigentlich vier Dateien sein sollten.
+- Die Suchfunktion wohnt am falschen Ort.
+- Drei Behauptungen der letzten Kritik waren zu scharf: eine Datei, die als „tot" bezeichnet wurde, wird tatsächlich benutzt; ein Overlay, das als Problem galt, wurde längst entfernt.
+- Die Karte ist solide für heute. Für morgen braucht sie mehr Struktur.
 
-### Langfristig (Gate D+)
+---
 
-11. **Backend-Suchendpoint** (`/api/nodes/search`)
-12. **SSE / JetStream** für Echtzeit-Updates
-13. **Memoizing** für Filter-Derivation bei großen Datensätzen
-14. **Laufzeit-Datenvalidierung** im Page Loader (z. B. `zod`)
+## Essenz
+
+**Hebel:** Such- und Filterlogik aus `+page.svelte` heraus in testbare Services. Das schafft den größten Gewinn mit dem kleinsten Aufwand – Testbarkeit, klarere Datenhoheit, weniger reaktive Kaskaden.
+
+**Entscheidung:** Diese Kritik ist als Refactoring-Grundlage geeignet, nicht als heilige Schrift. Drei Punkte sind als korrigiert zu markieren (K1–K3).
+
+**Nächste Aktion:** Gate B beginnt mit dem KompositionPanel-Submit – das ist das größte funktionale Loch. Danach: SearchService extrahieren, Filter-Derivation in Store verschieben, Overlay-Interface vereinheitlichen.
+
+---
+
+**Unsicherheitsgrad:** 0.15
+Ursachen: Für P1 (Koordinaten-NaN) fehlt der vollständige Datenpfad von AccountRon bis `setLngLat`. Alles andere ist direkt im Code nachweisbar oder durch den User-Review korrigiert.
+
+**Interpolationsgrad:** 0.12
+Hauptquelle: P3 (Skalierungsgrenzwerte der Suche) beruht auf allgemeinen Faustregeln, nicht auf Profiling.
+
+---
+
+*Architekturkritik ist wie eine Wetterkarte: Sie zeigt die Fronten korrekt, aber nicht, ob es an genau deiner Haustür regnet. Die Fronten hier sind real.*
