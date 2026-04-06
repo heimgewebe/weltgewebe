@@ -2,7 +2,7 @@
 id: docs.policies.architecture-critique
 title: "Architekturkritik-Skill: weltgewebe.architecture.critique.v4"
 doc_type: policy
-status: draft
+status: canonical
 summary: >
   Kognitives Protokoll für strukturelle Architekturkritik im Weltgewebe-Kontext.
   Definiert Analysesequenz, Prüfachsen, Interpolationsregeln und Pflichtstruktur
@@ -19,6 +19,8 @@ relations:
 ---
 
 # weltgewebe.architecture.critique.v4
+
+Status: canonical — maßgebliches kognitives Protokoll für Architekturkritik im Weltgewebe.
 
 ---
 
