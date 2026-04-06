@@ -14,6 +14,8 @@ use axum::{
 use serde_json::{json, Map};
 use sqlx::query_scalar;
 
+#[cfg(test)]
+use crate::auth::accounts::AccountStore;
 use crate::{
     state::ApiState,
     telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
@@ -276,7 +278,7 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::sync::Arc;
     use tokio::sync::RwLock;
 
     fn test_state() -> Result<ApiState> {
@@ -325,7 +327,7 @@ mod tests {
             challenges: Default::default(),
             tokens: crate::auth::tokens::TokenStore::new(),
             step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
-            accounts: Arc::new(RwLock::new(BTreeMap::new())),
+            accounts: Arc::new(RwLock::new(AccountStore::new())),
             nodes: Arc::new(RwLock::new(OrderedCache::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(RwLock::new(OrderedCache::new())),

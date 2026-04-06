@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -12,7 +9,7 @@ use crate::{
     },
     config::AppConfig,
     mailer::Mailer,
-    routes::{accounts::AccountInternal, edges::Edge, nodes::Node},
+    routes::{edges::Edge, nodes::Node},
     telemetry::Metrics,
 };
 
@@ -74,7 +71,7 @@ pub struct ApiState {
     pub challenges: ChallengeStore,
     pub tokens: TokenStore,
     pub step_up_tokens: StepUpTokenStore,
-    pub accounts: Arc<RwLock<BTreeMap<String, AccountInternal>>>,
+    pub accounts: Arc<RwLock<crate::auth::accounts::AccountStore>>,
     pub nodes: Arc<RwLock<OrderedCache<Node>>>,
     pub nodes_persist: Arc<Mutex<()>>,
     pub edges: Arc<RwLock<OrderedCache<Edge>>>,

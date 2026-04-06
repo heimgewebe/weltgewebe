@@ -6,11 +6,11 @@ use axum::{
     Router,
 };
 use serial_test::serial;
-use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{rate_limit::AuthRateLimiter, session::SessionStore},
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
     config::AppConfig,
     routes::api_router,
     state::ApiState,
@@ -38,7 +38,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
-        accounts: Arc::new(RwLock::new(BTreeMap::new())),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
         nodes: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::state::OrderedCache::new(),
         )),
