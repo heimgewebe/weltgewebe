@@ -16,6 +16,7 @@ primary_languages:
   - markdown
 
 entrypoints:
+  - CLAUDE.md
   - README.md
   - AGENTS.md
   - docs/index.md
@@ -61,6 +62,7 @@ generated_artifacts:
   - docs/_generated/agent-readiness.md
 
 safe_read_paths:
+  - CLAUDE.md
   - README.md
   - AGENTS.md
   - docs/
