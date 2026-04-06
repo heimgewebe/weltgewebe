@@ -21,7 +21,12 @@ entrypoints:
   - docs/index.md
 
 cognitive_modules:
-  - docs/policies/architecture-critique.md
+  description: >
+    Kognitive Protokolle / Denkwerkzeuge, die nicht Teil der Reading Order sind.
+    Sie werden ausschließlich über Aktivierungslogik geladen und angewendet.
+    Sie können gleichzeitig kanonische Policies sein, sind jedoch nicht epistemisch verpflichtend zu lesen.
+  modules:
+    - docs/policies/architecture-critique.md
 
 canonical_sources:
   - repo.meta.yaml
