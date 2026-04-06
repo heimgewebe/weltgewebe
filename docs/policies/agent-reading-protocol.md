@@ -105,6 +105,9 @@ Stattdessen:
 
 ## 8. Aktivierung kognitiver Protokolle
 
+Kognitive Module sind NICHT Teil der Reading Order.
+Sie werden ausschließlich über Aktivierungslogik geladen und angewendet.
+
 ### Architekturkritik-Skill
 
 Der Architekturkritik-Skill wird NUR aktiviert, wenn mindestens eine der folgenden Bedingungen erfüllt ist:

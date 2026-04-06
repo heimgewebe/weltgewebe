@@ -20,6 +20,9 @@ entrypoints:
   - AGENTS.md
   - docs/index.md
 
+cognitive_modules:
+  - docs/policies/architecture-critique.md
+
 canonical_sources:
   - repo.meta.yaml
   - AGENTS.md
