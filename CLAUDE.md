@@ -12,14 +12,14 @@ summary: Claude Code operational interface for Weltgewebe — commands, navigati
 > **For Claude Code (AI assistant) working in this repository.**
 > This file is an operational interface. It does NOT define rules, policies, or architecture.
 
-All normative definitions are exclusively defined in:
+This operational document primarily references the following canonical sources:
 
 - `repo.meta.yaml`
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `docs/policies/agent-reading-protocol.md`
 
-If any conflict exists between this document and the canonical sources above, the canonical sources always override this document.
+If any conflict exists between this document and any canonical sources defined in `repo.meta.yaml`, those canonical sources always override this document.
 
 ---
 
