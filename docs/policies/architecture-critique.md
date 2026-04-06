@@ -2,13 +2,13 @@
 id: docs.policies.architecture-critique
 title: "Architekturkritik-Skill: weltgewebe.architecture.critique.v4"
 doc_type: policy
-status: draft
+status: canonical
 summary: >
   Kognitives Protokoll für strukturelle Architekturkritik im Weltgewebe-Kontext.
   Definiert Analysesequenz, Prüfachsen, Interpolationsregeln und Pflichtstruktur
   für Agenten-gestützte Architekturreviews.
 relations:
-  - type: depends_on
+  - type: relates_to
     target: docs/policies/agent-reading-protocol.md
   - type: relates_to
     target: repo.meta.yaml
@@ -19,6 +19,14 @@ relations:
 ---
 
 # weltgewebe.architecture.critique.v4
+
+Status: canonical — maßgebliches kognitives Protokoll für Architekturkritik im Weltgewebe.
+
+Begründung der Kanonisierung:
+Dieser Skill wird als canonical geführt, da Architekturkritik als verbindliches kognitives Protokoll für Agenten im Weltgewebe etabliert wird. Ziel ist die systematische Aufdeckung struktureller Schwächen, semantischer Brüche und epistemischer Inkonsistenzen über alle Module hinweg. Der Skill ersetzt keine fachlichen Entscheidungen, sondern standardisiert deren kritische Prüfung.
+
+Einordnung im Truth Model:
+Dieses Dokument ist ein kanonisches Policy-Dokument. Seine Einordnung und sein normativer Vorrang ergeben sich ausschließlich aus der in `repo.meta.yaml` definierten Truth-Model-Precedence.
 
 ---
 
@@ -96,21 +104,28 @@ Wiederöffnung eines `accepted` ADR erfordert expliziten Vermerk:
 Wenn zwingend notwendige (nicht nur hilfreiche) Quellen fehlen:
 → Abbruch: „X fehlt, nötig für Y"
 
-Wenn Daten vorhanden, aber unvollständig — strukturelle Ableitung möglich:
-→ Analyse erlaubt, Interpolationsgrad in Sektion 9 deklarieren
-→ Wenn Interpolationsgrad > 0,5: Ergebnis in Sektion 2 als vorläufig markieren
+Wenn Quellen vorhanden, aber für eine starke Aussage nicht ausreichen:
+→ nur belegte Teilanalyse;
+→ fehlende Evidenz als Leerstelle markieren;
+→ Schlussfolgerung ggf. als „nicht entscheidbar“ ausweisen
 
 ---
 
-## 3. Interpolationsregeln
+## 3. Evidenz- und Ableitungsregeln
 
-| Typ | Definition | Status |
-|-----|-----------|--------|
-| **Faktisch** | Implementierungsdetail erfinden, das durch Lesen vorhandener Dateien abrufbar wäre | VERBOTEN → Abbruch |
-| **Strukturell** | Ableitung aus vorhandener Evidenz (Muster A + B impliziert C) | ERLAUBT, Grad ≤ 0,5 |
-| **Konzeptuell** | Annahme über Systemziel aus normativen Docs | ERLAUBT, Warnung wenn Grad > 0,5 |
+- **Faktische Interpolation**:
+  Erfinden von Implementierungsdetails oder Tatsachen, die aus vorhandenen Dateien, Contracts oder Outputs ableitbar oder nachlesbar wären.
+  → VERBOTEN, Abbruch
 
-Jede Interpolation in Sektion 9 muss Typ, Quelle und Grad (0–1) benennen.
+- **Strukturelle Ableitung**:
+  Schlussfolgerung aus belegten Mustern oder dokumentierten Zusammenhängen.
+  → ERLAUBT, aber als „plausibel“ markieren; darf keine belegten Aussagen ersetzen
+
+- **Konzeptuelle Hypothese**:
+  Gedankliche Prüfung einer möglichen Systemannahme oder Zielstruktur.
+  → ERLAUBT nur als „spekulativ“; darf keine tragende Diagnosebasis sein
+
+Nur faktische Interpolation ist verboten. Ableitungen und Hypothesen müssen klar als solche markiert werden. Wo keine tragfähige Evidenz vorliegt: „nicht entscheidbar auf Basis der vorliegenden Quellen“.
 
 ---
 
@@ -216,8 +231,8 @@ Keine blanken Zertifikate.
 Dann Evidenzgradierung:
 
 - **Belegt** (mit Quellenangabe)
-- **Plausibel** (strukturelle Ableitung, Interpolationstyp nennen)
-- **Spekulativ** (konzeptuelle Annahme, Interpolationsgrad hoch)
+- **Plausibel** (als strukturelle Ableitung markieren)
+- **Spekulativ** (als konzeptuelle Hypothese markieren)
 
 ---
 
@@ -287,11 +302,15 @@ Mindestens eine der folgenden Fragen beantworten:
 | C | Drift in `docs/_generated/` adressierbar? Markieren. |
 | D | Keine Aktion. Befundklasse D und Begründung dokumentieren. |
 
-#### Unsicherheit & Interpolation
+#### Unsicherheits- und Evidenzlage
 
 - Unsicherheitsgrad (0–1) + Ursachen
-- Interpolationsgrad (0–1) + Typ (strukturell / konzeptuell) + Quellen
-- Wenn Interpolationsgrad > 0,5: Schlussfolgerungen als vorläufig markieren
+- Evidenzstatus:
+  - vollständig belegt
+  - teilweise belegt
+  - nicht entscheidbar
+- Offene Lücken:
+  - X fehlt, nötig für Y
 
 ---
 
@@ -354,9 +373,9 @@ Ursachen:
 
 ---
 
-## Interpolationsgrad
+## Evidenz und Ableitungen
 
-**0.11** · Typ: konzeptuell
+**0.11** · Typ: konzeptuelle Hypothese
 
 Annahmen:
 

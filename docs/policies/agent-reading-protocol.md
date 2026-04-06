@@ -103,6 +103,53 @@ Stattdessen:
 
 ---
 
+## 8. Aktivierung kognitiver Protokolle
+
+Kognitive Module sind NICHT Teil der Reading Order.
+Sie werden ausschließlich über Aktivierungslogik geladen und angewendet.
+
+### Architekturkritik-Skill
+
+Der Architekturkritik-Skill wird NUR aktiviert, wenn mindestens eine der folgenden Bedingungen erfüllt ist:
+
+- Der Task beinhaltet:
+  - Architektur
+  - Systemdesign
+  - strukturelle Analyse
+  - Bewertung oder Kritik
+
+- oder:
+  - widersprüchliche Aussagen zu Architektur, Datenmodell oder Systemverhalten vorliegen
+  - fehlende Informationen eine strukturelle Bewertung verhindern (nicht nur Detailfragen betreffen)
+
+- oder:
+  - explizite Analyse- oder Kritik-Trigger enthalten sind
+    (z. B. „analysiere“, „bewerte“, „kritisiere“)
+
+### Deaktivierung
+
+Wenn keine der Bedingungen erfüllt ist:
+
+→ Der Architekturkritik-Skill wird NICHT aktiviert.
+
+Der Architekturkritik-Skill wird insbesondere NICHT aktiviert bei:
+
+- rein operativen Tasks (z. B. Ausführung, Formatierung, einfache Transformation)
+- eindeutig beantwortbaren Fragen ohne strukturelle Implikationen
+- fehlenden Details, die keine Auswirkungen auf Architektur oder Systemverhalten haben
+
+### Fail-Safe
+
+Wenn die Klassifikation des Tasks unsicher ist:
+
+→ partielle Anwendung:
+
+- keine vollständige Pflichtstruktur (z. B. keine vollständige Dialektik)
+- nur gezielte Nutzung einzelner Analyseelemente, wenn sie direkt zur Klärung beitragen
+
+
+---
+
 ## Essenz
 
 Dieses Protokoll priorisiert:
