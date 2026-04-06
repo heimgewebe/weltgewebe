@@ -135,6 +135,7 @@ Wenn keine der Bedingungen erfüllt ist:
 Wenn die Klassifikation des Tasks unsicher ist:
 
 → reduzierte Anwendung:
+
 - keine vollständige Pflichtstruktur
 - nur selektive Nutzung einzelner Analyseelemente
 
