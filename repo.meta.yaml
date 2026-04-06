@@ -25,6 +25,7 @@ canonical_sources:
   - AGENTS.md
   - agent-policy.yaml
   - docs/policies/agent-reading-protocol.md
+  - docs/policies/architecture-critique.md
 
 discovery_roots:
   - .github/workflows/
@@ -99,7 +100,7 @@ truth_model:
     - class: domain_contracts
       paths: ["contracts/domain/*.schema.json"]
     - class: canonical_policies
-      paths: ["repo.meta.yaml", "AGENTS.md", "agent-policy.yaml", "docs/policies/agent-reading-protocol.md"]
+      paths: ["repo.meta.yaml", "AGENTS.md", "agent-policy.yaml", "docs/policies/agent-reading-protocol.md", "docs/policies/architecture-critique.md"]
     - class: runtime_configs_and_code
       paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
     - class: normative_specifications
