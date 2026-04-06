@@ -30,12 +30,14 @@ This document provides:
 - operational commands
 - navigation guidance
 - workflow shortcuts
+- shortcuts to canonical activation rules
 
 It does NOT provide:
 
 - normative rules
 - architectural decisions
 - truth definitions
+- automatic activation of cognitive modules
 
 For coding conventions, see **AGENTS.md**. For architecture principles, see `repo.meta.yaml` and the canonical policies.
 
@@ -51,6 +53,8 @@ Before making any changes, read these files in order:
 4. `docs/policies/agent-reading-protocol.md` — binding decision and abort protocol
 
 `docs/index.md` is navigation only. `docs/_generated/*` is diagnostic only — never canonical.
+
+Canonical cognitive modules are not part of the default reading order. If a cognitive module is relevant, it must be loaded only through the activation logic defined in `docs/policies/agent-reading-protocol.md`. For Weltgewebe, this applies in particular to `docs/policies/architecture-critique.md`.
 
 ---
 
