@@ -25,6 +25,9 @@ Status: canonical — maßgebliches kognitives Protokoll für Architekturkritik 
 Begründung der Kanonisierung:
 Dieser Skill wird als canonical geführt, da Architekturkritik als verbindliches kognitives Protokoll für Agenten im Weltgewebe etabliert wird. Ziel ist die systematische Aufdeckung struktureller Schwächen, semantischer Brüche und epistemischer Inkonsistenzen über alle Module hinweg. Der Skill ersetzt keine fachlichen Entscheidungen, sondern standardisiert deren kritische Prüfung.
 
+Einordnung im Truth Model:
+Dieses Dokument gehört zur Klasse canonical_policies und definiert ein verbindliches kognitives Protokoll für Architekturkritik. Es ist gegenüber runtime_configs_and_code und diagnostic_reports normativ vorrangig.
+
 ---
 
 ## 0. Meta-Definition
