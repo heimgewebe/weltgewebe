@@ -14,10 +14,10 @@ summary: Claude Code operational interface for Weltgewebe — commands, navigati
 
 All normative definitions are exclusively defined in:
 
-- [`repo.meta.yaml`](repo.meta.yaml)
-- [`AGENTS.md`](AGENTS.md)
-- [`agent-policy.yaml`](agent-policy.yaml)
-- [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md)
+- `repo.meta.yaml`
+- `AGENTS.md`
+- `agent-policy.yaml`
+- `docs/policies/agent-reading-protocol.md`
 
 If any conflict exists between this document and the canonical sources above, the canonical sources always override this document.
 
@@ -39,7 +39,7 @@ It does NOT provide:
 - truth definitions
 - automatic activation of cognitive modules
 
-For coding conventions, see **[AGENTS.md](AGENTS.md)**. For architecture principles, see [`repo.meta.yaml`](repo.meta.yaml) and the canonical policies.
+For coding conventions, see **`AGENTS.md`**. For architecture principles, see `repo.meta.yaml` and the canonical policies.
 
 ---
 
@@ -47,14 +47,14 @@ For coding conventions, see **[AGENTS.md](AGENTS.md)**. For architecture princip
 
 Before making any changes, read these files in order:
 
-1. [`repo.meta.yaml`](repo.meta.yaml) — truth model and precedence rules
-2. [`AGENTS.md`](AGENTS.md) — canonical coding guidelines and operational boundaries
-3. [`agent-policy.yaml`](agent-policy.yaml) — write permissions and required checks
-4. [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md) — binding decision and abort protocol
+1. `repo.meta.yaml` — truth model and precedence rules
+2. `AGENTS.md` — canonical coding guidelines and operational boundaries
+3. `agent-policy.yaml` — write permissions and required checks
+4. `docs/policies/agent-reading-protocol.md` — binding decision and abort protocol
 
-[`docs/index.md`](docs/index.md) is navigation only. `docs/_generated/*` is diagnostic only — never canonical.
+`docs/index.md` is navigation only. `docs/_generated/*` is diagnostic only — never canonical.
 
-Canonical cognitive modules are not part of the default reading order. Their structure is defined in [`repo.meta.yaml`](repo.meta.yaml) under `cognitive_modules`. They represent optional, high-cost reasoning layers and should only be loaded when explicitly required by the task. If a cognitive module is relevant, it must be loaded only through the activation logic defined in [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md). For Weltgewebe, this applies in particular to [`docs/policies/architecture-critique.md`](docs/policies/architecture-critique.md).
+Canonical cognitive modules are not part of the default reading order. Their structure is defined in `repo.meta.yaml` under `cognitive_modules`. They represent optional, high-cost reasoning layers and should only be loaded when explicitly required by the task. If a cognitive module is relevant, it must be loaded only through the activation logic defined in `docs/policies/agent-reading-protocol.md`. For Weltgewebe, this applies in particular to `docs/policies/architecture-critique.md`.
 
 ---
 
@@ -180,17 +180,7 @@ Production uses `.env.prod.example`. Never commit `.env` files.
 
 ## Toolchain Versions
 
-Defined across the repository's canonical version files:
-
-| Tool | Version | Source |
-|---|---|---|
-| Rust | 1.89.0 | `toolchain.versions.yml` |
-| Node.js | 20.19.0 | `.node-version`, `.nvmrc` |
-| Python | 3.12 | `.python-version`, `toolchain.versions.yml` |
-| pnpm | 9.11.0 | `package.json` |
-| uv | 0.9.11 | `toolchain.versions.yml` |
-| yq | 4.44.3 | `toolchain.versions.yml` |
-| cargo-deny | 0.18.8 | `toolchain.versions.yml` |
+Refer to canonical version files (e.g. `toolchain.versions.yml`, `.node-version`) for exact versions.
 
 ---
 
@@ -212,13 +202,13 @@ Defined across the repository's canonical version files:
 
 ## Coding Conventions
 
-All coding conventions are defined in **[AGENTS.md](AGENTS.md)**. This section only highlights common entry points.
+All coding conventions are defined in **`AGENTS.md`**. This section only highlights common entry points.
 
 - **Rust:** `cargo fmt` + `cargo clippy -- -D warnings`; pass `--locked` to all cargo commands.
 - **TypeScript/Svelte:** `pnpm lint` (Prettier + ESLint, `max-warnings=0`); Svelte 5 runes preferred.
 - **Shell scripts:** POSIX/bash; `shfmt -d -i 2 -ci -sr` + `shellcheck -S style`.
 - **Node scripts:** Success messages only after no error thrown; strict type checks on numeric values.
-- **Documentation:** See [AGENTS.md](AGENTS.md) for language, frontmatter, and linking requirements.
+- **Documentation:** See `AGENTS.md` for language, frontmatter, and linking requirements.
 
 ---
 
@@ -275,7 +265,7 @@ Changes here require `just contracts-domain-check` to pass.
 ## Architecture Notes
 
 Architecture principles and the truth model precedence are defined in the canonical sources:
-[`repo.meta.yaml`](repo.meta.yaml), [`AGENTS.md`](AGENTS.md), and [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md).
+`repo.meta.yaml`, `AGENTS.md`, and `docs/policies/agent-reading-protocol.md`.
 
 This file only highlights operational implications:
 
@@ -288,14 +278,14 @@ This file only highlights operational implications:
 
 | File | Purpose |
 |---|---|
-| [`repo.meta.yaml`](repo.meta.yaml) | Machine truth model, precedence, discovery roots |
-| [`AGENTS.md`](AGENTS.md) | Canonical coding guidelines and operational rules |
-| [`agent-policy.yaml`](agent-policy.yaml) | Write permissions and required checks |
-| [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md) | Binding reading and abort protocol |
-| [`docs/index.md`](docs/index.md) | Navigation hub (not a truth source) |
-| [`docs/techstack.md`](docs/techstack.md) | Technology decisions and rationale |
-| [`docs/datenmodell.md`](docs/datenmodell.md) | Database schema and domain model |
-| [`docs/adr/`](docs/adr/) | Architecture Decision Records |
-| [`ci/budget.json`](ci/budget.json) | Frontend performance budgets |
-| [`toolchain.versions.yml`](toolchain.versions.yml) | Pinned toolchain versions |
-| [`Justfile`](Justfile) | All development tasks |
+| `repo.meta.yaml` | Machine truth model, precedence, discovery roots |
+| `AGENTS.md` | Canonical coding guidelines and operational rules |
+| `agent-policy.yaml` | Write permissions and required checks |
+| `docs/policies/agent-reading-protocol.md` | Binding reading and abort protocol |
+| `docs/index.md` | Navigation hub (not a truth source) |
+| `docs/techstack.md` | Technology decisions and rationale |
+| `docs/datenmodell.md` | Database schema and domain model |
+| `docs/adr/` | Architecture Decision Records |
+| `ci/budget.json` | Frontend performance budgets |
+| `toolchain.versions.yml` | Pinned toolchain versions |
+| `Justfile` | All development tasks |
