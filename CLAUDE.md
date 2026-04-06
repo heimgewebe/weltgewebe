@@ -1,16 +1,43 @@
 ---
 id: repo.claude
 title: CLAUDE
-doc_type: policy
+doc_type: runbook
 status: active
 canonicality: supplementary
-summary: Claude Code operational guide for Weltgewebe — codebase structure, workflows, and conventions.
+summary: Claude Code operational interface for Weltgewebe — commands, navigation, and workflow shortcuts.
 ---
 
 # CLAUDE.md — Weltgewebe
 
 > **For Claude Code (AI assistant) working in this repository.**
-> This file is a supplementary guide. It does NOT override canonical sources.
+> This file is an operational interface. It does NOT define rules, policies, or architecture.
+
+All normative definitions are exclusively defined in:
+
+- `repo.meta.yaml`
+- `AGENTS.md`
+- `agent-policy.yaml`
+- `docs/policies/agent-reading-protocol.md`
+
+If any conflict exists between this document and the canonical sources above, the canonical sources always override this document.
+
+---
+
+## Role of This Document
+
+This document provides:
+
+- operational commands
+- navigation guidance
+- workflow shortcuts
+
+It does NOT provide:
+
+- normative rules
+- architectural decisions
+- truth definitions
+
+For coding conventions, see **AGENTS.md**. For architecture principles, see `repo.meta.yaml` and the canonical policies.
 
 ---
 
@@ -44,7 +71,7 @@ Before making any changes, read these files in order:
 
 ## Repository Layout
 
-```
+```text
 weltgewebe/
 ├── apps/
 │   ├── api/          # Rust/Axum HTTP API
@@ -124,9 +151,6 @@ docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
 
 # Optional observability (Prometheus + Grafana)
 docker compose -f infra/compose/compose.observ.yml up -d
-
-# Optional event streaming (NATS JetStream)
-docker compose -f infra/compose/compose.stream.yml up -d
 ```
 
 ---
@@ -152,15 +176,17 @@ Production uses `.env.prod.example`. Never commit `.env` files.
 
 ## Toolchain Versions
 
-Defined in `toolchain.versions.yml`:
+Defined across the repository's canonical version files:
 
-| Tool | Version |
-|---|---|
-| Rust | 1.89.0 |
-| Node.js | 20.19.0 (`.node-version`, `.nvmrc`) |
-| Python | 3.12 (`.python-version`) |
-| pnpm | 9.11.0 |
-| cargo-deny | 0.18.8 |
+| Tool | Version | Source |
+|---|---|---|
+| Rust | 1.89.0 | `toolchain.versions.yml` |
+| Node.js | 20.19.0 | `.node-version`, `.nvmrc` |
+| Python | 3.12 | `.python-version`, `toolchain.versions.yml` |
+| pnpm | 9.11.0 | `package.json` |
+| uv | See `toolchain.versions.yml` | `toolchain.versions.yml` |
+| yq | See `toolchain.versions.yml` | `toolchain.versions.yml` |
+| cargo-deny | 0.18.8 | `toolchain.versions.yml` |
 
 ---
 
@@ -174,7 +200,7 @@ Defined in `toolchain.versions.yml`:
 | `README.md`, `AGENTS.md`, `docs/` | Safe to read |
 
 **Required checks before patching guarded paths:**
-`repo-structure-guard`, `docs-relations-guard`, `generated-files-guard`, `lint`, `test`
+`repo-structure-guard`, `docs-relations-guard`, `generated-files-guard`, `coverage-guard`, `lint`, `test`
 
 **Human review required for:** `security/`, `deployment/`, `credentials/`
 
@@ -182,53 +208,13 @@ Defined in `toolchain.versions.yml`:
 
 ## Coding Conventions
 
-### General
+All coding conventions are defined in **AGENTS.md**. This section only highlights common entry points.
 
-- Always read actual files before suggesting changes. Never guess file content.
-- Show complete affected blocks (full function, full script) — not fragmented lines.
-- Mark omissions explicitly with `// ...` or `# ...` without breaking syntax.
-- All code suggestions must be syntactically correct, runnable, and CI-ready.
-
-### Rust
-
-- Use `cargo fmt` (rustfmt defaults); formatting errors block CI.
-- Clippy is run with `-D warnings` — all warnings are errors.
-- Dependencies locked via `Cargo.lock`; always pass `--locked` to cargo commands.
-- Async runtime: tokio multi-threaded. DB access via sqlx with `PgPool`.
-- Tests use `serial_test` for isolation when needed; `tempfile` for fixtures.
-
-### TypeScript / Svelte
-
-- ESLint 9 flat config (`eslint.config.js`); `max-warnings=0` in CI.
-- Prettier for formatting; `pnpm format` to fix, `pnpm lint` to check.
-- SvelteKit path aliases: `$lib`, `$components`, `$stores`, `$routes`.
-- Adapter: `@sveltejs/adapter-static` (static site generation).
-- No `@html` tags in templates (ESLint rule enforced).
-- Svelte 5 runes syntax preferred for new components.
-
-### Shell Scripts
-
-- POSIX/bash only; always include spaces around `[` and `]`.
-- Use `${VAR:-default}` for variable defaults declared at top of script.
-- Redirections need full paths and slashes: `echo >"/dev/tcp/$HOST/$PORT"`.
-- Never use pseudo-compact tokens (`devtcpHOSTPORT`, `SECONDS end`, etc.).
-- Scripts linted with `bash -n`, `shfmt -d -i 2 -ci -sr`, and `shellcheck -S style`.
-
-### JavaScript (Node scripts, e.g. `assert-web-budget.mjs`)
-
-- Success messages (`console.log(...)`) only execute when no error was thrown.
-- Type-check numeric values: `typeof x !== 'number' || Number.isNaN(x)`.
-- Error messages: clear, single-line, no trailing punctuation.
-- All `throw` paths must prevent any downstream "all OK" output.
-
-### Documentation
-
-- Documentation is in **German**. ADRs, runbooks, and architecture docs are all German.
-- All docs must have YAML frontmatter with `id`, `title`, `doc_type`, `status`, `summary`.
-- `doc_type` must be one of: `adr`, `blueprint`, `spec`, `policy`, `runbook`, `reference`, `overview`.
-- New docs must be linked from `docs/index.md` and cross-referenced where relevant.
-- Do not manually edit anything in `docs/_generated/`.
-- After adding docs, consider if `audit/impl-registry.yaml` needs updating.
+- **Rust:** `cargo fmt` + `cargo clippy -- -D warnings`; pass `--locked` to all cargo commands.
+- **TypeScript/Svelte:** `pnpm lint` (Prettier + ESLint, `max-warnings=0`); Svelte 5 runes preferred.
+- **Shell scripts:** POSIX/bash; `shfmt -d -i 2 -ci -sr` + `shellcheck -S style`.
+- **Node scripts:** Success messages only after no error thrown; strict type checks on numeric values.
+- **Documentation:** See AGENTS.md for language, frontmatter, and linking requirements.
 
 ---
 
@@ -256,12 +242,12 @@ Key workflows in `.github/workflows/`:
 
 | Workflow | Triggers | What it does |
 |---|---|---|
-| `ci.yml` | push main, PRs | Markdown lint, link check, YAML/JSON lint |
+| `ci.yml` | push main, PRs | Full build/test pipeline; conditionally skips for docs-only changes |
 | `web.yml` | `apps/web/**` changes | Build, lint, typecheck, vitest, Playwright E2E |
-| `api.yml` | `apps/api/**` changes | fmt, clippy, build, test, cargo-deny |
+| `api.yml` | `apps/api/**` changes | fmt, clippy, build, test |
 | `docs-guard.yml` | `docs/**` changes | Frontmatter validation, relations, coverage |
 | `contracts-domain.yml` | `contracts/**` | JSON Schema validation |
-| `security.yml` | Dependency changes | cargo-deny + npm audit |
+| `security.yml` | Dependency changes | cargo-deny |
 
 CI enforces: `cargo fmt --check`, `cargo clippy -- -D warnings`, `pnpm lint` (max-warnings=0), Playwright retries=2.
 
@@ -278,18 +264,19 @@ JSON Schema files in `contracts/domain/` define the authoritative domain model:
 - `message.schema.json` — Message
 - `conversation.schema.json` — Conversation
 
-These have the **highest truth precedence** in the canonical hierarchy. Changes here require `just contracts-domain-check` to pass.
+Changes here require `just contracts-domain-check` to pass.
 
 ---
 
 ## Architecture Notes
 
-- **Truth model precedence** (highest to lowest): domain contracts → canonical policies → runtime configs/code → normative specs → diagnostic reports → navigation indices → generated diagnostics.
-- **No silent interpolation:** If information is missing or contradictory, name the gap explicitly rather than guessing.
-- **Abort rule:** If contradictions are unresolvable or required files are missing, stop and report the gap.
+Architecture principles and the truth model precedence are defined in the canonical sources:
+`repo.meta.yaml`, `AGENTS.md`, and `docs/policies/agent-reading-protocol.md`.
+
+This file only highlights operational implications:
+
 - **Small PRs:** Prefer narrow, focused changes with clear scope boundaries.
-- **Gate C:** Current status is Infrastructure-light. NATS JetStream is optional.
-- **Outbox pattern:** Used for reliable event delivery from the API to downstream consumers.
+- **Gate C:** NATS JetStream is optional (Infrastructure-light status).
 
 ---
 
