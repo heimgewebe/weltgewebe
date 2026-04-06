@@ -22,6 +22,9 @@ relations:
 
 Status: canonical — maßgebliches kognitives Protokoll für Architekturkritik im Weltgewebe.
 
+Begründung der Kanonisierung:
+Dieser Skill wird als canonical geführt, da Architekturkritik als verbindliches kognitives Protokoll für Agenten im Weltgewebe etabliert wird. Ziel ist die systematische Aufdeckung struktureller Schwächen, semantischer Brüche und epistemischer Inkonsistenzen über alle Module hinweg. Der Skill ersetzt keine fachlichen Entscheidungen, sondern standardisiert deren kritische Prüfung.
+
 ---
 
 ## 0. Meta-Definition
