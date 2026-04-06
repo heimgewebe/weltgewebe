@@ -116,9 +116,8 @@ Der Architekturkritik-Skill wird NUR aktiviert, wenn mindestens eine der folgend
   - Bewertung oder Kritik
 
 - oder:
-  - widersprüchliche Quellen vorliegen
-  - hohe Unsicherheit besteht
-  - notwendige Informationen fehlen
+  - widersprüchliche Aussagen zu Architektur, Datenmodell oder Systemverhalten vorliegen
+  - fehlende Informationen eine strukturelle Bewertung verhindern (nicht nur Detailfragen betreffen)
 
 - oder:
   - explizite Analyse- oder Kritik-Trigger enthalten sind
@@ -130,14 +129,21 @@ Wenn keine der Bedingungen erfüllt ist:
 
 → Der Architekturkritik-Skill wird NICHT aktiviert.
 
+Der Architekturkritik-Skill wird insbesondere NICHT aktiviert bei:
+
+- rein operativen Tasks (z. B. Ausführung, Formatierung, einfache Transformation)
+- eindeutig beantwortbaren Fragen ohne strukturelle Implikationen
+- fehlenden Details, die keine Auswirkungen auf Architektur oder Systemverhalten haben
+
 ### Fail-Safe
 
 Wenn die Klassifikation des Tasks unsicher ist:
 
-→ reduzierte Anwendung:
+→ partielle Anwendung:
 
-- keine vollständige Pflichtstruktur
-- nur selektive Nutzung einzelner Analyseelemente
+- keine vollständige Pflichtstruktur (z. B. keine vollständige Dialektik)
+- nur gezielte Nutzung einzelner Analyseelemente, wenn sie direkt zur Klärung beitragen
+
 
 ---
 
