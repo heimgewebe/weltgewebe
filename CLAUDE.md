@@ -184,7 +184,7 @@ Defined across the repository's canonical version files:
 
 | Tool | Version | Source |
 |---|---|---|
-| Rust | 1.85.0 | `apps/api/Cargo.toml` |
+| Rust | 1.89.0 | `toolchain.versions.yml` |
 | Node.js | 20.19.0 | `.node-version`, `.nvmrc` |
 | Python | 3.12 | `.python-version`, `toolchain.versions.yml` |
 | pnpm | 9.11.0 | `package.json` |
