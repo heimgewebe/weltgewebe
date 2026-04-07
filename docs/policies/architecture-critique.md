@@ -5,7 +5,7 @@ doc_type: policy
 status: canonical
 summary: >
   Kognitives Protokoll für strukturelle Architekturkritik im Weltgewebe-Kontext.
-  Definiert Analysesequenz, Prüfachsen, Interpolationsregeln und Pflichtstruktur
+  Definiert Analysesequenz, Prüfachsen, Evidenz- und Ableitungsdisziplin und Pflichtstruktur
   für Agenten-gestützte Architekturreviews.
 relations:
   - type: relates_to
@@ -153,7 +153,7 @@ Diese Disziplinregeln steuern, wie die folgenden Prüfachsen und Pflichtsektione
 
 ### 5.1 Evidenz- und Härtedisziplin
 
-- **Klassifikation:** Jeder Hauptbefund ist nach Evidenz zu klassifizieren (belegt, plausibel, spekulativ, zu korrigieren). Beweisart und fehlende Informationen („X fehlt, nötig für Y“) sind zu benennen.
+- **Klassifikation:** Jeder Hauptbefund ist nach Evidenz zu klassifizieren (belegt, plausibel, spekulativ, zu korrigieren). „Zu korrigieren“ markiert dabei explizit zurückzunehmende frühere Fehlannahmen oder überdehnte Diagnosen. Beweisart und fehlende Informationen („X fehlt, nötig für Y“) sind zu benennen.
 - **Saubere Härte:** Begriffe wie „toter Code“, „unbenutzt“ oder „Legacy-Rest“ dürfen nur bei explizitem Nachweis (z.B. Runtime-Unerreichbarkeit) verwendet werden. Sonst: „Verwendung nicht belegt“ oder „möglicherweise obsolet“.
 
 ### 5.2 Gegenlesart und Revisionsprüfung
@@ -405,7 +405,7 @@ Wahrheit vor Komfort.
 
 ## Unsicherheitsgrad
 
-0.05
+0.08
 
 Ursachen:
 
