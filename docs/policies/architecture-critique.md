@@ -147,7 +147,117 @@ Ist diese Modellierung tragfähig? Darf und soll widersprechen. Unsicherheitsgra
 
 ---
 
-## 5. Prüfachsen
+## 5. Kritische Selbstdisziplin
+
+### 5.1 Evidenzklassifikation (Pflicht)
+
+Jeder Hauptbefund MUSS klassifiziert werden:
+
+- belegt → direkt im Code/Artefakt nachweisbar
+- plausibel → logisch ableitbar, aber nicht vollständig belegt
+- spekulativ → Hypothese ohne ausreichende Evidenz
+- zu korrigieren → frühere Fehlannahme erkannt
+
+Zusätzlich:
+
+- Beweisart: direkt / indirekt / inferiert
+- fehlende Information: „X fehlt, nötig für Y“
+
+### 5.2 Verbot unsauberer Härte (Pflichtregel)
+
+Die folgenden Begriffe dürfen nur mit explizitem Nachweis verwendet werden:
+
+- „toter Code“
+- „unbenutzt“
+- „obsolet“
+- „Legacy-Rest“
+
+Zulässig nur wenn:
+
+- Repo-weite Nichtverwendung nachgewiesen ODER
+- Runtime-Unerreichbarkeit belegt
+
+Sonst ersetzen durch:
+
+- „Verwendung nicht belegt“
+- „Namens-/Abstraktionsproblem“
+- „möglicherweise obsolet“
+
+### 5.3 Gegenhypothese (Pflicht pro Hauptbefund)
+
+Zu jedem kritischen Befund MUSS eine alternative, nicht-pathologische Erklärung formuliert werden:
+
+Beispiele:
+
+- God Component → bewusster Orchestrator
+- API-Inkonsistenz → MVP-Evolution
+- O(n)-Suche → akzeptabler Gate-A-Tradeoff
+
+Kurze Abwägung verpflichtend.
+
+### 5.4 Revisionsprüfung (Pflicht)
+
+Jede Kritik MUSS prüfen:
+
+- Welche Befunde sind zeitstandabhängig?
+- Welche Aussagen könnten durch neueren Code bereits überholt sein?
+
+Kennzeichnung:
+
+- frisch geprüft
+- möglicherweise veraltet
+
+### 5.5 Normativitätsprüfung (Pflicht)
+
+Vor jeder strukturellen Kritik klären:
+
+Ist die Referenz:
+
+- kanonisch bindend
+- operativ maßgeblich
+- diagnostisch
+- draft
+
+Regel:
+Draft-Blueprints dürfen NICHT als harte Architekturverstöße gewertet werden.
+
+### 5.6 Problemtyp-Trennung (Pflicht)
+
+Jeder Befund MUSS klassifiziert werden als:
+
+- Namensproblem
+- Abstraktionsproblem
+- Kopplungsproblem
+- Laufzeitproblem
+- Dokumentationsdrift
+
+Mehrfachzuordnung erlaubt, aber muss explizit sein.
+
+### 5.7 Test-Evidenz-Typisierung (Pflicht)
+
+Tests dürfen nicht pauschal als „Beleg“ gelten.
+
+Jeder Test ist zu klassifizieren als:
+
+- Regressions-Guard
+- Strukturtest
+- Integration (Mock)
+- Integration (real)
+- E2E
+- visuelle Abnahme
+- statische Invariante
+
+### 5.8 Selbstkritikmodul (Pflichtsektion am Ende)
+
+Jede Kritik MUSS enthalten:
+
+- wahrscheinlichste Überdehnung der Diagnose
+- unsicherste Aussage
+- Stelle mit größter Interpolation
+
+---
+
+## 6. Prüfachsen
 
 Achsen A–D und G: immer aktiv.
 Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar" deklarieren.
@@ -204,19 +314,19 @@ Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar"
 
 ---
 
-## 6. Pflichtstruktur (je nach Kritiktiefe)
+## 7. Pflichtstruktur (je nach Kritiktiefe)
 
 ### 1. Dialektik *(Vollständig, Strukturell)*
 
 - **These:** Stärkste wohlwollende Lesart
-- **Antithese:** Stärkste kritische Lesart
+- **Antithese:** Stärkste kritische Lesart (MUSS mindestens eine valide Gegenlesart enthalten, nicht nur Abschwächung)
 - **Synthese:** Tragfähige Einordnung
 
 ---
 
 ### 2. Diagnose *(immer aktiv)*
 
-Beginnt mit **Befundklasse** (Pflicht):
+Beginnt mit **Befundklasse** (Pflicht, Befundklasse muss mit Evidenzlage begründet werden, nicht nur summarisch):
 
 | Klasse | Bedeutung |
 |--------|-----------|
@@ -259,11 +369,13 @@ Mit Achsenzuordnung (A–G, nur aktive Achsen):
 - Unnötige Komplexität
 - Mögliche Sackgassen
 
+(Jeder Befund muss enthalten: Evidenzklasse, Problemtyp, Gegenhypothese)
+
 ---
 
 ### 6. Alternativpfad *(Vollständig, Strukturell — nur bei Befundklasse A oder B)*
 
-Grundlegend andere Denkweise — kein Variantenwechsel.
+Grundlegend andere Denkweise — kein Variantenwechsel (Muss anders denken, nicht nur anders implementieren).
 
 ---
 
@@ -293,6 +405,14 @@ Mindestens eine der folgenden Fragen beantworten:
 
 **Essenz:** Hebel — Entscheidung — nächste Aktion
 
+Pflichtstruktur Hebel:
+1. größter Hebel (geringer Aufwand, hohe Wirkung)
+2. struktureller Hebel
+3. später Ausbaupfad
+
+Zusätzlich:
+- wahrscheinlichste Überkorrektur
+
 #### Folgepfad
 
 | Befundklasse | Aktion |
@@ -314,7 +434,7 @@ Mindestens eine der folgenden Fragen beantworten:
 
 ---
 
-## 7. Anti-Fehler-Regeln
+## 8. Anti-Fehler-Regeln
 
 Darf NICHT:
 
@@ -335,7 +455,7 @@ Muss:
 
 ---
 
-## 8. Eskalation
+## 9. Eskalation
 
 Bei widersprüchlicher Architektur, fragilen Kernprämissen oder erkennbarer Sackgasse:
 
@@ -347,7 +467,7 @@ Der Agent markiert und begründet — er entscheidet nicht.
 
 ---
 
-## 9. Prämissencheck *(Vollständig)*
+## 10. Prämissencheck *(Vollständig)*
 
 Was müsste wahr sein, damit das System so funktioniert?
 Was ist belegt — was ist Annahme?
@@ -364,7 +484,7 @@ Wahrheit vor Komfort.
 
 ## Unsicherheitsgrad
 
-0.08
+0.05
 
 Ursachen:
 
