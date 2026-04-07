@@ -46,11 +46,11 @@ Die folgenden Befunde unterscheiden zwischen:
 
 ### Evidenzgradierung der Hauptbefunde
 
-- Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` mit ca. 560 Zeilen).
-- Schwacher Contract `RenderableMapPoint`: **Belegt** (`apps/web/src/lib/map/types.ts`).
+- Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` operiert mit ca. 560 Zeilen als starker Orchestrator: Datentransformation, MapLibre-Init und Event-Delegation konzentriert).
+- Schwacher Contract `RenderableMapPoint`: **Belegt** (`apps/web/src/lib/map/types.ts`: alle semantisch relevanten Felder wie `type`, `kind`, `tags` sind optional).
 - Verwendung `MapPoint`: **Plausibel** ungenutzt (im Overlay de facto nicht verwendet, potenziell obsolet).
 - Asymmetrie der Overlay-Paradigmen: **Belegt** (Nodes expliziter State vs. Edges impliziter State in MapLibre).
-- Typedrift (account vs. garnrolle): **Belegt** (`apps/web/src/lib/map/overlay/nodes.ts`).
+- Typedrift (account vs. garnrolle): **Belegt** (`apps/web/src/lib/map/overlay/nodes.ts`: `getMarkerCategory` behandelt die Strings "account" und "garnrolle" als identische Rendervariante).
 
 ## 3. Kontrastprüfung
 
@@ -65,7 +65,7 @@ Die folgenden Befunde unterscheiden zwischen:
 
 *Befund:* Blueprint empfiehlt Repository-Trennung, Monorepo ist Realität. Kein ADR vorhanden.
 *Einordnung:* Dies ist eine **offene Architekturfrage**, keine normative Abweichung (Blueprint = draft).
-*Befund:* Kommentar in `+page.svelte` behauptet einen strikten Remote-Style, aber `basemap.current.ts` aktiviert den lokalen souveränen Modus in der Entwicklung.
+*Befund:* Kommentar in `+page.svelte` behauptet einen strikten Remote-Style, aber `apps/web/src/lib/map/config/basemap.current.ts` erzwingt in Entwicklungs- und Testumgebungen den lokalen souveränen Modus (`resolvedMode = local-sovereign in dev`).
 *Einordnung:* Normative Unschärfe und Klassenverwechslung (Laufzeit vs. Dokumentation).
 
 ### Achse B: Contracts & Achse C: Semantik
@@ -114,16 +114,13 @@ Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 
 *Jetzt sinnvoll:*
 
-- Spec-Update für `types.ts` vorbereiten (Discriminated Union für Overlay-Entitäten).
-- Kommentar-Drift in `+page.svelte` bereinigen.
-
-*Später sinnvoll:*
-
-- Neues ADR zur Monorepo-Entscheidung verfassen, um die Lücke zum Blueprint zu schließen.
+- **Contract-Klarheit (`types.ts`):** Spec-Update vorbereiten (Discriminated Union für Overlay-Entitäten und Bereinigung toter Typen).
+- **Normstatus-Klärung:** Neues ADR zur Monorepo-Entscheidung verfassen, um die normative Lücke zum Blueprint formal zu schließen.
+- **Kommentar-Drift:** Veraltete Kommentare zum Remote-Style in `+page.svelte` bereinigen.
 
 *Noch nicht erzwingen:*
 
-- Refactoring von `+page.svelte`. Dies sollte erst erfolgen, wenn der beschriebene Kipppunkt erreicht wird.
+- **Refactoring von `+page.svelte`:** Dies sollte erst erfolgen, wenn der beschriebene Kipppunkt erreicht wird (weitere Pipelines oder Overlays).
 
 **Unsicherheits- und Evidenzlage:**
 
