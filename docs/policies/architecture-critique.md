@@ -74,9 +74,9 @@ Klassenverwechslung ist der häufigste epistemische Fehler — muss explizit sic
 
 | Tiefe | Aktive Sektionen |
 |-------|-----------------|
-| `Vollständig` | 1–9 |
-| `Strukturell` | 1, 2, 5, 6, 9 |
-| `Essenziell` | 2, 9 |
+| `Vollständig` | 1–10 |
+| `Strukturell` | 1, 2, 6, 7, 10 |
+| `Essenziell` | 2, 10 |
 
 Sektionen außerhalb der gewählten Tiefe werden weggelassen — ohne Erklärung.
 
