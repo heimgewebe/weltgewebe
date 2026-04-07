@@ -3,7 +3,7 @@ id: map-architekturkritik
 title: Architekturkritik Map-Implementierung
 doc_type: report
 status: active
-summary: Strukturelle Architekturkritik der Map-Implementierung(en) im Weltgewebe-Projekt gemäß weltgewebe.architecture.critique.v4.
+summary: Strukturelle Architekturkritik der Map-Implementierung(en) im Weltgewebe-Projekt gemäß weltgewebe.architecture.critique.
 relations:
   - type: relates_to
     target: docs/blueprints/map-blaupause.md
@@ -17,10 +17,10 @@ relations:
 
 # Architekturkritik Map-Implementierung
 
-Dieses Dokument liefert eine strukturelle Architekturkritik des Map-Subsystems unter strikter Anwendung der `weltgewebe.architecture.critique.v4` Richtlinie. Der Fokus liegt darauf, ob die Denkstruktur tragfähig ist und ob gebaut wird wie beschlossen.
+Dieses Dokument liefert eine strukturelle Architekturkritik des Map-Subsystems unter strikter Anwendung der `weltgewebe.architecture.critique` Richtlinie. Der Fokus liegt darauf, ob die Denkstruktur tragfähig ist und ob gebaut wird wie beschlossen.
 
 Geltungsbereich: Modul (Map-Subsystem, alle Komponenten).
-Kritiktiefe: Strukturell (Sektionen 1, 2, 5, 6, 9 gemäß §7).
+Kritiktiefe: Strukturell.
 
 ## 1. Dialektik
 
@@ -46,9 +46,9 @@ Die folgenden Befunde unterscheiden zwischen:
 
 ### Evidenzgradierung der Hauptbefunde
 
-- Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` mit 560 Zeilen).
+- Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` mit ca. 560 Zeilen).
 - Schwacher Contract `RenderableMapPoint`: **Belegt** (`apps/web/src/lib/map/types.ts`).
-- Toter Code `MapPoint`: **Plausibel** (im Overlay de facto ungenutzt).
+- Verwendung `MapPoint`: **Plausibel** ungenutzt (im Overlay de facto nicht verwendet, potenziell obsolet).
 - Asymmetrie der Overlay-Paradigmen: **Belegt** (Nodes expliziter State vs. Edges impliziter State in MapLibre).
 - Typedrift (account vs. garnrolle): **Belegt** (`apps/web/src/lib/map/overlay/nodes.ts`).
 
@@ -65,7 +65,7 @@ Die folgenden Befunde unterscheiden zwischen:
 
 *Befund:* Blueprint empfiehlt Repository-Trennung, Monorepo ist Realität. Kein ADR vorhanden.
 *Einordnung:* Dies ist eine **offene Architekturfrage**, keine normative Abweichung (Blueprint = draft).
-*Befund:* Kommentar in `+page.svelte` behauptet "strictly on 'remote-style'", aber `basemap.current.ts` aktiviert `local-sovereign` im Dev-Mode.
+*Befund:* Kommentar in `+page.svelte` behauptet einen strikten Remote-Style, aber `basemap.current.ts` aktiviert den lokalen souveränen Modus in der Entwicklung.
 *Einordnung:* Normative Unschärfe und Klassenverwechslung (Laufzeit vs. Dokumentation).
 
 ### Achse B: Contracts & Achse C: Semantik
@@ -79,7 +79,7 @@ Die folgenden Befunde unterscheiden zwischen:
 - Compile-time-Sicherheit statt Fallbacks
 - Genau ein Koordinatenformat (`lon` vs. `lng`).
 
-*Epistemische Lücke:* Der vollständige Datenpfad `AccountRon` → Rendering fehlt, und das ungenutzte `MapPoint` Schema deutet auf toten Code hin (X fehlt, nötig für Y: Klarheit über den Lifecycle von MapPoint fehlt, nötig für die Bereinigung des Typen-Systems).
+*Epistemische Lücke:* Der vollständige Datenpfad `AccountRon` → Rendering fehlt, und das ungenutzte `MapPoint` Schema deutet auf potenziell obsoleten Code hin (X fehlt, nötig für Y: Klarheit über den Lifecycle von MapPoint fehlt, nötig für die Bereinigung des Typen-Systems).
 
 ### Achse G: Komplexität & Achse E: Kartenarchitektur
 
@@ -98,10 +98,10 @@ Die folgenden Befunde unterscheiden zwischen:
 
 ## 5. Alternativpfad (Blueprint-Ergänzungen)
 
-Da es sich um Befundklasse B handelt, werden Blueprint-Ergänzungen empfohlen:
+Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 
 1. **Contract Stabilisierung:** Refactoring von `RenderableMapPoint` zu einer Discriminated Union (z.B. `type: 'node' | 'garnrolle' | 'ron'`).
-2. **Koordinaten-Konvention:** Festlegung auf exakt eine Konvention (z.B. `lat`/`lon`) und Entfernung von totem Code (`MapPoint`).
+2. **Koordinaten-Konvention:** Festlegung auf exakt eine Konvention (z.B. `lat`/`lon`) und Entfernung von obsoletem Code (`MapPoint`).
 3. **Norm-Festigung:** Explizite Entscheidung (via ADR), ob die Monorepo-Struktur beibehalten wird oder die Blueprint-Empfehlung formal abgelehnt wird.
 
 ## 6. Essenz + Folgepfad
@@ -110,11 +110,17 @@ Da es sich um Befundklasse B handelt, werden Blueprint-Ergänzungen empfohlen:
 
 **Entscheidung:** Das System ist pragmatisch tragfähig für die aktuelle Phase. Vor dem Einzug weiterer Komplexität (weitere Overlays, Echtzeit-Updates) müssen die Typ-Contracts (Discriminated Union) gehärtet werden.
 
-**Nächste Aktion (Folgepfad):**
+**Nächste Aktionen (Priorisiert):**
 
+*Jetzt sinnvoll:*
 - Spec-Update für `types.ts` vorbereiten (Discriminated Union für Overlay-Entitäten).
 - Kommentar-Drift in `+page.svelte` bereinigen.
-- Expliziten Vermerk in `repo.meta.yaml` oder einem neuen ADR zur Monorepo-Entscheidung verfassen.
+
+*Später sinnvoll:*
+- Neues ADR zur Monorepo-Entscheidung verfassen, um die Lücke zum Blueprint zu schließen.
+
+*Noch nicht erzwingen:*
+- Refactoring von `+page.svelte`. Dies sollte erst erfolgen, wenn der beschriebene Kipppunkt erreicht wird.
 
 **Unsicherheits- und Evidenzlage:**
 
