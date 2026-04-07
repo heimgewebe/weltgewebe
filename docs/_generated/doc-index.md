@@ -40,7 +40,7 @@ Generated automatically. Do not edit.
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
-| docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique.v4 | policy | canonical | docs/policies/architecture-critique.md |
+| docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
