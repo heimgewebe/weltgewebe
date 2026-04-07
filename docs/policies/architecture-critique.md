@@ -153,12 +153,12 @@ Diese Disziplinregeln steuern, wie die folgenden Prüfachsen und Pflichtsektione
 
 ### 5.1 Evidenz- und Härtedisziplin
 
-- **Klassifikation:** Jeder Hauptbefund ist nach Evidenz zu klassifizieren (belegt, plausibel, spekulativ, zu korrigieren). „Zu korrigieren“ markiert dabei explizit zurückzunehmende frühere Fehlannahmen oder überdehnte Diagnosen. Beweisart und fehlende Informationen („X fehlt, nötig für Y“) sind zu benennen.
-- **Saubere Härte:** Begriffe wie „toter Code“, „unbenutzt“ oder „Legacy-Rest“ dürfen nur bei explizitem Nachweis (z.B. Runtime-Unerreichbarkeit) verwendet werden. Sonst: „Verwendung nicht belegt“ oder „möglicherweise obsolet“.
+- **Klassifikation:** Jeder Hauptbefund ist nach Evidenz zu klassifizieren (belegt, plausibel, spekulativ). Zusätzlich kann ein Befund mit dem Revisions-Flag „zu korrigieren“ markiert werden. Dieses kennzeichnet explizit zurückzunehmende frühere Fehlannahmen oder überdehnte Diagnosen. Beweisart und fehlende Informationen („X fehlt, nötig für Y“) sind zu benennen.
+- **Saubere Härte:** Begriffe wie „toter Code“, „unbenutzt“ oder „Legacy-Rest“ dürfen nur bei explizitem Nachweis (z. B. Runtime-Unerreichbarkeit) verwendet werden. Sonst: „Verwendung nicht belegt“ oder „möglicherweise obsolet“.
 
 ### 5.2 Gegenlesart und Revisionsprüfung
 
-- **Gegenhypothese:** Zu kritischen Befunden soll eine alternative, nicht-pathologische Erklärung bedacht werden (z.B. God Component → bewusster Orchestrator).
+- **Gegenhypothese:** Zu kritischen Befunden soll eine alternative, nicht-pathologische Erklärung bedacht werden (z. B. God Component → bewusster Orchestrator).
 - **Zeitstand:** Es ist verpflichtend zu prüfen, ob Befunde zeitstandabhängig sind oder durch neueren Code bereits überholt sein könnten.
 
 ### 5.3 Normativitäts- und Problemtypprüfung
@@ -184,49 +184,49 @@ Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar"
 - Implizite statt explizite Wahrheit?
 - Klassenverwechslung (`normative_specifications` vs. `runtime_configs_and_code`)?
 
-→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 5 (Architekturkritik)
 
 ### B. Contracts
 
 - Fehlend, zu schwach, zu strikt oder umgangen?
 - ADR-Status: `accepted` → nur Fidelity-Check; kein ADR → offene Frage markieren; `superseded` → Treue zum Nachfolger-ADR prüfen
 
-→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 5 (Architekturkritik)
 
 ### C. Semantik
 
 - Begriff ≠ Verhalten?
 - Bedeutungsdrift zwischen Docs und Code?
 
-→ Sektion 1 (Dialektik) + Sektion 4 (Versteckte Annahmen)
+→ Pflichtstruktur §7 / Punkt 1 (Dialektik) + Punkt 4 (Versteckte Annahmen)
 
 ### D. Runtime vs. Dokumentation
 
 - Behauptung ≠ Implementierung? Tote Dokumentation?
 - Ist `docs/_generated/architecture-drift.md` relevant?
 
-→ Sektion 2 (Diagnose) + Sektion 7 (Risikoanalyse: epistemisch)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 7 (Risikoanalyse: epistemisch)
 
 ### E. Kartenarchitektur *(aktiv nur bei: Kartenrendering, Basemap-Pipeline, Overlay-Architektur, räumliche Semantik)*
 
 - Rendering oder semantischer Kern?
 - Basemap = Infrastruktur, Overlay = Weltgewebe-Semantik — korrekt getrennt?
 
-→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
+→ Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)
 
 ### F. Identitätssystem *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
 
 - Garnrolle-Modi konsistent (verortet vs. RoN)?
 - Vertrauen als Systemwert modelliert? (im Weltgewebe verboten)
 
-→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
+→ Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)
 
 ### G. Komplexität
 
 - Notwendig vs. künstlich? Overengineering?
 - Durch Systemgrenzen gerechtfertigt?
 
-→ Sektion 3 (Kontrastprüfung) + Sektion 6 (Alternativpfad)
+→ Pflichtstruktur §7 / Punkt 3 (Kontrastprüfung) + Punkt 6 (Alternativpfad)
 
 ---
 
