@@ -160,6 +160,7 @@ Jeder Hauptbefund MUSS klassifiziert werden:
 
 Zusätzlich:
 
+
 - Beweisart: direkt / indirekt / inferiert
 - fehlende Information: „X fehlt, nötig für Y“
 
@@ -406,11 +407,13 @@ Mindestens eine der folgenden Fragen beantworten:
 **Essenz:** Hebel — Entscheidung — nächste Aktion
 
 Pflichtstruktur Hebel:
+
 1. größter Hebel (geringer Aufwand, hohe Wirkung)
 2. struktureller Hebel
 3. später Ausbaupfad
 
 Zusätzlich:
+
 - wahrscheinlichste Überkorrektur
 
 #### Folgepfad
