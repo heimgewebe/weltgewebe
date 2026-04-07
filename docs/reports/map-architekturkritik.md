@@ -33,7 +33,9 @@ Kritiktiefe: Strukturell (Sektionen 1, 2, 5, 6, 9 gemäß §7).
 **Befundklasse: B** (Warnung: potenzielle Schwächen, kontextabhängig. Keine der Schwächen gefährdet die aktuelle Tragfähigkeit, aber mehrere akkumulieren strukturelles Risiko bei Wachstum).
 
 ### Normstatus-Klärung
+
 Die folgenden Befunde unterscheiden zwischen:
+
 - **normativer Abweichung** (gegen bestätigte Architekturentscheidung)
 - **offener Architekturfrage** (kein ADR / Blueprint draft)
 
@@ -43,6 +45,7 @@ Die folgenden Befunde unterscheiden zwischen:
 | **Basemap/Overlay-Trennung** | implizit normativ | teilweise normativ, aber nicht formalisiert |
 
 ### Evidenzgradierung der Hauptbefunde
+
 - Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` mit 560 Zeilen).
 - Schwacher Contract `RenderableMapPoint`: **Belegt** (`apps/web/src/lib/map/types.ts`).
 - Toter Code `MapPoint`: **Plausibel** (im Overlay de facto ungenutzt).
@@ -59,35 +62,44 @@ Die folgenden Befunde unterscheiden zwischen:
 ## 4. Architekturkritik
 
 ### Achse A: Truth Model & Achse D: Runtime vs. Docs
+
 *Befund:* Blueprint empfiehlt Repository-Trennung, Monorepo ist Realität. Kein ADR vorhanden.
 *Einordnung:* Dies ist eine **offene Architekturfrage**, keine normative Abweichung (Blueprint = draft).
 *Befund:* Kommentar in `+page.svelte` behauptet "strictly on 'remote-style'", aber `basemap.current.ts` aktiviert `local-sovereign` im Dev-Mode.
 *Einordnung:* Normative Unschärfe und Klassenverwechslung (Laufzeit vs. Dokumentation).
 
 ### Achse B: Contracts & Achse C: Semantik
+
 *Befund:* `RenderableMapPoint` ist als Container semantisch unterdeterminierter (alles optional).
 *Fehlender Zielcontract:* Eine **diskriminierte Union für Map-Entitäten** fehlt.
 *Nötig für:*
+
 - eindeutige Rendering-Logik (ohne Type-Guards/Fallbacks)
 - Eliminierung von Typedrift (`Node` vs. `Garnrolle` vs. `Ron` als explizite Varianten)
 - Compile-time-Sicherheit statt Fallbacks
 - Genau ein Koordinatenformat (`lon` vs. `lng`).
+
 *Epistemische Lücke:* Der vollständige Datenpfad `AccountRon` → Rendering fehlt, und das ungenutzte `MapPoint` Schema deutet auf toten Code hin (X fehlt, nötig für Y: Klarheit über den Lifecycle von MapPoint fehlt, nötig für die Bereinigung des Typen-Systems).
 
 ### Achse G: Komplexität & Achse E: Kartenarchitektur
+
 *Befund:* `+page.svelte` operiert als Gottobjekt (Konzentration von Datentransformation, MapLibre-Init, Event-Delegation).
 *Kipppunkt:* Der Orchestrator kippt von "zentraler Koordinator" zu "Gottobjekt", sobald:
+
 - eine zweite unabhängige Datenpipeline (z. B. Echtzeit-Updates) hinzukommt oder
 - ein weiteres Overlay mit eigener Zustandslogik integriert wird.
+
 *Befund:* Asymmetrie der Overlay-Paradigmen (Nodes mit explizitem Zustand, Edges mit implizitem Zustand in MapLibre) ist historisch gewachsen, nicht dediziert entschieden.
 
 ### Achse E: Kartenarchitektur (Faden-Invariante)
+
 *Befund:* Die Faden-Invariante (Heatmap-Verbot) ist implementiert und durch einen Test (`no-activity-heatmap.spec.ts`) validiert.
 *Einordnung:* Die Invariante ist **testseitig gesichert, aber nicht strukturell erzwungen**. Es gibt keinen Contract auf Design-Ebene, der einen künftigen Layer namens `heatmap` statisch verhindert.
 
 ## 5. Alternativpfad (Blueprint-Ergänzungen)
 
 Da es sich um Befundklasse B handelt, werden Blueprint-Ergänzungen empfohlen:
+
 1. **Contract Stabilisierung:** Refactoring von `RenderableMapPoint` zu einer Discriminated Union (z.B. `type: 'node' | 'garnrolle' | 'ron'`).
 2. **Koordinaten-Konvention:** Festlegung auf exakt eine Konvention (z.B. `lat`/`lon`) und Entfernung von totem Code (`MapPoint`).
 3. **Norm-Festigung:** Explizite Entscheidung (via ADR), ob die Monorepo-Struktur beibehalten wird oder die Blueprint-Empfehlung formal abgelehnt wird.
@@ -99,11 +111,13 @@ Da es sich um Befundklasse B handelt, werden Blueprint-Ergänzungen empfohlen:
 **Entscheidung:** Das System ist pragmatisch tragfähig für die aktuelle Phase. Vor dem Einzug weiterer Komplexität (weitere Overlays, Echtzeit-Updates) müssen die Typ-Contracts (Discriminated Union) gehärtet werden.
 
 **Nächste Aktion (Folgepfad):**
+
 - Spec-Update für `types.ts` vorbereiten (Discriminated Union für Overlay-Entitäten).
 - Kommentar-Drift in `+page.svelte` bereinigen.
 - Expliziten Vermerk in `repo.meta.yaml` oder einem neuen ADR zur Monorepo-Entscheidung verfassen.
 
 **Unsicherheits- und Evidenzlage:**
+
 - *Unsicherheitsgrad:* 0.12 (Ursache: einige Annahmen zu tatsächlicher Nutzung von `MapPoint` und zukünftigen Anforderungen).
 - *Interpolationsgrad:* 0.18 (Ursache: Ableitung von Kipppunkt und Zielcontract, da nicht vollständig im Repo belegt).
 - *Evidenzstatus:* Teilweise belegt (strukturell aus Code abgeleitet, normativ aus Drafts).
