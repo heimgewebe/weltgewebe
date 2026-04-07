@@ -235,7 +235,7 @@ Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar"
 ### 1. Dialektik *(Vollständig, Strukturell)*
 
 - **These:** Stärkste wohlwollende Lesart
-- **Antithese:** Stärkste kritische Lesart (soll mindestens eine valide Gegenlesart enthalten, nicht nur Abschwächung)
+- **Antithese:** Stärkste kritische Lesart (muss mindestens eine valide Gegenlesart enthalten, nicht nur Abschwächung)
 - **Synthese:** Tragfähige Einordnung
 
 ---
