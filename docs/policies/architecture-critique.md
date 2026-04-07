@@ -1,11 +1,11 @@
 ---
 id: docs.policies.architecture-critique
-title: "Architekturkritik-Skill: weltgewebe.architecture.critique.v4"
+title: "Architekturkritik-Skill: weltgewebe.architecture.critique"
 doc_type: policy
 status: canonical
 summary: >
   Kognitives Protokoll für strukturelle Architekturkritik im Weltgewebe-Kontext.
-  Definiert Analysesequenz, Prüfachsen, Interpolationsregeln und Pflichtstruktur
+  Definiert Analysesequenz, Prüfachsen, Evidenz- und Ableitungsdisziplin und Pflichtstruktur
   für Agenten-gestützte Architekturreviews.
 relations:
   - type: relates_to
@@ -18,7 +18,7 @@ relations:
     target: docs/konzepte/garnrolle-und-verortung.md
 ---
 
-# weltgewebe.architecture.critique.v4
+# weltgewebe.architecture.critique
 
 Status: canonical — maßgebliches kognitives Protokoll für Architekturkritik im Weltgewebe.
 
@@ -74,9 +74,9 @@ Klassenverwechslung ist der häufigste epistemische Fehler — muss explizit sic
 
 | Tiefe | Aktive Sektionen |
 |-------|-----------------|
-| `Vollständig` | 1–9 |
-| `Strukturell` | 1, 2, 5, 6, 9 |
-| `Essenziell` | 2, 9 |
+| `Vollständig` | 1–10 |
+| `Strukturell` | 1, 2, 6, 7, 10 |
+| `Essenziell` | 2, 10 |
 
 Sektionen außerhalb der gewählten Tiefe werden weggelassen — ohne Erklärung.
 
@@ -147,7 +147,33 @@ Ist diese Modellierung tragfähig? Darf und soll widersprechen. Unsicherheitsgra
 
 ---
 
-## 5. Prüfachsen
+## 5. Kritische Selbstdisziplin
+
+Diese Disziplinregeln steuern, wie die folgenden Prüfachsen und Pflichtsektionen anzuwenden sind.
+
+### 5.1 Evidenz- und Härtedisziplin
+
+- **Klassifikation:** Jeder Hauptbefund ist nach Evidenz zu klassifizieren (belegt, plausibel, spekulativ). Zusätzlich kann ein Befund mit dem Revisions-Flag „zu korrigieren“ markiert werden. Dieses kennzeichnet explizit zurückzunehmende frühere Fehlannahmen oder überdehnte Diagnosen. Beweisart und fehlende Informationen („X fehlt, nötig für Y“) sind zu benennen.
+- **Saubere Härte:** Begriffe wie „toter Code“, „unbenutzt“ oder „Legacy-Rest“ dürfen nur bei explizitem Nachweis (z. B. Runtime-Unerreichbarkeit) verwendet werden. Sonst: „Verwendung nicht belegt“ oder „möglicherweise obsolet“.
+
+### 5.2 Gegenlesart und Revisionsprüfung
+
+- **Gegenhypothese:** Zu kritischen Befunden soll eine alternative, nicht-pathologische Erklärung bedacht werden (z. B. God Component → bewusster Orchestrator).
+- **Zeitstand:** Es ist verpflichtend zu prüfen, ob Befunde zeitstandabhängig sind oder durch neueren Code bereits überholt sein könnten.
+
+### 5.3 Normativitäts- und Problemtypprüfung
+
+- **Referenztyp:** Klären, ob eine Referenz kanonisch bindend, operativ maßgeblich, diagnostisch oder ein Draft ist. Draft-Blueprints sind keine harten Architekturverstöße.
+- **Problemtyp:** Befunde sind nach Art zu benennen (Namensproblem, Abstraktionsproblem, Kopplungsproblem, Laufzeitproblem, Dokumentationsdrift).
+
+### 5.4 Test- und Selbstkritikdisziplin
+
+- **Test-Evidenz:** Tests sind nach Evidenztyp zu unterscheiden; E2E, reale Integration, Mock-Integration und Strukturtests sind nicht gleichwertig.
+- **Selbstkritik:** Jede Kritik endet mit einer Reflexion über mögliche Überdehnungen der Diagnose.
+
+---
+
+## 6. Prüfachsen
 
 Achsen A–D und G: immer aktiv.
 Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar" deklarieren.
@@ -158,65 +184,65 @@ Achsen E und F: konditioniert — wenn inaktiv, explizit als „nicht anwendbar"
 - Implizite statt explizite Wahrheit?
 - Klassenverwechslung (`normative_specifications` vs. `runtime_configs_and_code`)?
 
-→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 5 (Architekturkritik)
 
 ### B. Contracts
 
 - Fehlend, zu schwach, zu strikt oder umgangen?
 - ADR-Status: `accepted` → nur Fidelity-Check; kein ADR → offene Frage markieren; `superseded` → Treue zum Nachfolger-ADR prüfen
 
-→ Sektion 2 (Diagnose) + Sektion 5 (Architekturkritik)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 5 (Architekturkritik)
 
 ### C. Semantik
 
 - Begriff ≠ Verhalten?
 - Bedeutungsdrift zwischen Docs und Code?
 
-→ Sektion 1 (Dialektik) + Sektion 4 (Versteckte Annahmen)
+→ Pflichtstruktur §7 / Punkt 1 (Dialektik) + Punkt 4 (Versteckte Annahmen)
 
 ### D. Runtime vs. Dokumentation
 
 - Behauptung ≠ Implementierung? Tote Dokumentation?
 - Ist `docs/_generated/architecture-drift.md` relevant?
 
-→ Sektion 2 (Diagnose) + Sektion 7 (Risikoanalyse: epistemisch)
+→ Pflichtstruktur §7 / Punkt 2 (Diagnose) + Punkt 7 (Risikoanalyse: epistemisch)
 
 ### E. Kartenarchitektur *(aktiv nur bei: Kartenrendering, Basemap-Pipeline, Overlay-Architektur, räumliche Semantik)*
 
 - Rendering oder semantischer Kern?
 - Basemap = Infrastruktur, Overlay = Weltgewebe-Semantik — korrekt getrennt?
 
-→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
+→ Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)
 
 ### F. Identitätssystem *(aktiv nur bei: Garnrolle, RoN, Verortung, Auth-Identität, Sichtbarkeitslogik)*
 
 - Garnrolle-Modi konsistent (verortet vs. RoN)?
 - Vertrauen als Systemwert modelliert? (im Weltgewebe verboten)
 
-→ Sektion 5 (Architekturkritik) + Sektion 8 (Alternative Sinnachse)
+→ Pflichtstruktur §7 / Punkt 5 (Architekturkritik) + Punkt 8 (Alternative Sinnachse)
 
 ### G. Komplexität
 
 - Notwendig vs. künstlich? Overengineering?
 - Durch Systemgrenzen gerechtfertigt?
 
-→ Sektion 3 (Kontrastprüfung) + Sektion 6 (Alternativpfad)
+→ Pflichtstruktur §7 / Punkt 3 (Kontrastprüfung) + Punkt 6 (Alternativpfad)
 
 ---
 
-## 6. Pflichtstruktur (je nach Kritiktiefe)
+## 7. Pflichtstruktur (je nach Kritiktiefe)
 
 ### 1. Dialektik *(Vollständig, Strukturell)*
 
 - **These:** Stärkste wohlwollende Lesart
-- **Antithese:** Stärkste kritische Lesart
+- **Antithese:** Stärkste kritische Lesart (muss mindestens eine valide Gegenlesart enthalten, nicht nur Abschwächung)
 - **Synthese:** Tragfähige Einordnung
 
 ---
 
 ### 2. Diagnose *(immer aktiv)*
 
-Beginnt mit **Befundklasse** (Pflicht):
+Beginnt mit **Befundklasse** (Pflicht, Befundklasse muss mit Evidenzlage begründet werden, nicht nur summarisch):
 
 | Klasse | Bedeutung |
 |--------|-----------|
@@ -259,11 +285,13 @@ Mit Achsenzuordnung (A–G, nur aktive Achsen):
 - Unnötige Komplexität
 - Mögliche Sackgassen
 
+(Befunde sollen Evidenzklasse, Problemtyp und Gegenhypothese benennen)
+
 ---
 
 ### 6. Alternativpfad *(Vollständig, Strukturell — nur bei Befundklasse A oder B)*
 
-Grundlegend andere Denkweise — kein Variantenwechsel.
+Grundlegend andere Denkweise — kein Variantenwechsel (erfordert strukturelles Neu-Denken, nicht nur eine andere Implementierungsvariante).
 
 ---
 
@@ -293,6 +321,13 @@ Mindestens eine der folgenden Fragen beantworten:
 
 **Essenz:** Hebel — Entscheidung — nächste Aktion
 
+Strukturierung der Hebel:
+
+1. Größter Hebel (geringer Aufwand, hohe Wirkung)
+2. Struktureller Hebel
+3. Später Ausbaupfad
+4. Wahrscheinlichste Überkorrektur
+
 #### Folgepfad
 
 | Befundklasse | Aktion |
@@ -312,9 +347,15 @@ Mindestens eine der folgenden Fragen beantworten:
 - Offene Lücken:
   - X fehlt, nötig für Y
 
+#### Selbstkritische Restprüfung
+
+- Wahrscheinlichste Überdehnung der Diagnose
+- Unsicherste Aussage
+- Stelle mit größtem Interpretationsanteil
+
 ---
 
-## 7. Anti-Fehler-Regeln
+## 8. Anti-Fehler-Regeln
 
 Darf NICHT:
 
@@ -335,7 +376,7 @@ Muss:
 
 ---
 
-## 8. Eskalation
+## 9. Eskalation
 
 Bei widersprüchlicher Architektur, fragilen Kernprämissen oder erkennbarer Sackgasse:
 
@@ -347,7 +388,7 @@ Der Agent markiert und begründet — er entscheidet nicht.
 
 ---
 
-## 9. Prämissencheck *(Vollständig)*
+## 10. Prämissencheck *(Vollständig)*
 
 Was müsste wahr sein, damit das System so funktioniert?
 Was ist belegt — was ist Annahme?
