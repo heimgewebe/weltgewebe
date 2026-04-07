@@ -113,13 +113,16 @@ Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 **Nächste Aktionen (Priorisiert):**
 
 *Jetzt sinnvoll:*
+
 - Spec-Update für `types.ts` vorbereiten (Discriminated Union für Overlay-Entitäten).
 - Kommentar-Drift in `+page.svelte` bereinigen.
 
 *Später sinnvoll:*
+
 - Neues ADR zur Monorepo-Entscheidung verfassen, um die Lücke zum Blueprint zu schließen.
 
 *Noch nicht erzwingen:*
+
 - Refactoring von `+page.svelte`. Dies sollte erst erfolgen, wenn der beschriebene Kipppunkt erreicht wird.
 
 **Unsicherheits- und Evidenzlage:**
