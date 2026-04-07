@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 148 |
-| — relates_to | 147 |
+| Relationen gesamt | 152 |
+| — relates_to | 151 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,7 +29,41 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (30 Dokumente):
+**Cluster 1** (31 Dokumente):
+
+- `AGENTS.md`
+- `docs/adr/0043-edge-vs-conversation.md`
+- `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
+- `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
+- `docs/architekturstruktur.md`
+- `docs/blueprints/map-blaupause.md`
+- `docs/blueprints/map-roadmap.md`
+- `docs/datenmodell.md`
+- `docs/domain/modules.md`
+- `docs/domain/vocabulary.md`
+- `docs/geist-und-plan.md`
+- `docs/inhalt.md`
+- `docs/konzepte/garnrolle-und-verortung.md`
+- `docs/konzepte/garnrolle.md`
+- `docs/overview/inhalt.md`
+- `docs/overview/zusammenstellung.md`
+- `docs/policies/agent-reading-protocol.md`
+- `docs/policies/architecture-critique.md`
+- `docs/policies/orientierung.md`
+- `docs/reference/glossar.md`
+- `docs/reports/agent-readiness-audit.md`
+- `docs/reports/map-architekturkritik.md`
+- `docs/reports/map-status-matrix.md`
+- `docs/specs/contract.md`
+- `docs/specs/privacy-api.md`
+- `docs/specs/privacy-ui.md`
+- `docs/techstack.md`
+- `docs/vision.md`
+- `docs/weltgewebe-agenten-manifest.md`
+- `docs/zusammenstellung.md`
+- `repo.meta.yaml`
+
+**Cluster 2** (30 Dokumente):
 
 - `docs/adr/ADR-0002__reentry-kriterien.md`
 - `docs/adr/ADR-0004__fahrplan-verweis.md`
@@ -62,36 +96,6 @@ _Keine Lücken erkannt._
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
 
-**Cluster 2** (27 Dokumente):
-
-- `AGENTS.md`
-- `docs/adr/0043-edge-vs-conversation.md`
-- `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
-- `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
-- `docs/architekturstruktur.md`
-- `docs/datenmodell.md`
-- `docs/domain/modules.md`
-- `docs/domain/vocabulary.md`
-- `docs/geist-und-plan.md`
-- `docs/inhalt.md`
-- `docs/konzepte/garnrolle-und-verortung.md`
-- `docs/konzepte/garnrolle.md`
-- `docs/overview/inhalt.md`
-- `docs/overview/zusammenstellung.md`
-- `docs/policies/agent-reading-protocol.md`
-- `docs/policies/architecture-critique.md`
-- `docs/policies/orientierung.md`
-- `docs/reference/glossar.md`
-- `docs/reports/agent-readiness-audit.md`
-- `docs/specs/contract.md`
-- `docs/specs/privacy-api.md`
-- `docs/specs/privacy-ui.md`
-- `docs/techstack.md`
-- `docs/vision.md`
-- `docs/weltgewebe-agenten-manifest.md`
-- `docs/zusammenstellung.md`
-- `repo.meta.yaml`
-
 **Cluster 3** (12 Dokumente):
 
 - `docs/adr/ADR-0005-auth.md`
@@ -112,12 +116,6 @@ _Keine Lücken erkannt._
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
 - `docs/x-repo/semantAH.md`
-
-**Cluster 5** (3 Dokumente):
-
-- `docs/blueprints/map-blaupause.md`
-- `docs/blueprints/map-roadmap.md`
-- `docs/reports/map-status-matrix.md`
 
 ### Konkrete Beispiele zur Prüfung
 
