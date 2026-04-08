@@ -39,6 +39,7 @@ Generated automatically. Do not edit.
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
+| docs.blueprints.kartenklarheit-roadmap | Roadmap – Kartenklarheit | roadmap | draft | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
 | docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
