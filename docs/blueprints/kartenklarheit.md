@@ -41,9 +41,9 @@ Die optimierte Karte besitzt am Ende fünf Eigenschaften:
 
 Die Karte kann sauber unterscheiden zwischen:
 
-- Daten vorhanden
-- Daten teilweise vorhanden
-- Daten konnten nicht geladen werden
+- [ ] Daten vorhanden
+- [ ] Daten teilweise vorhanden
+- [ ] Daten konnten nicht geladen werden
 
 Leere Karte darf nie mehr bedeuten: „Vielleicht ist alles okay, vielleicht ist alles kaputt.“
 
@@ -53,11 +53,11 @@ Zwischen geladenen Domänendaten und sichtbarer Karte existiert eine klar defini
 
 Diese Szene beschreibt:
 
-- welche Entitäten dargestellt werden,
-- welche Overlays sichtbar sind,
-- welcher Ladezustand gilt,
-- welche degradierte Lage vorliegt,
-- welche Fokus- und Suchzustände aktiv sind.
+- [ ] welche Entitäten dargestellt werden,
+- [ ] welche Overlays sichtbar sind,
+- [ ] welcher Ladezustand gilt,
+- [ ] welche degradierte Lage vorliegt,
+- [ ] welche Fokus- und Suchzustände aktiv sind.
 
 ### 1.3 Harte Entitäts-Contracts
 
@@ -87,13 +87,13 @@ Nicht zwingend kleinere Datei, aber weniger versteckte Verantwortung.
 
 Es existieren bereits getrennte Pfade für:
 
-- Basemap-Konfiguration,
-- Overlay-Module,
-- MapLibre-Komponenten,
-- Stores,
-- Route-Loader,
-- Route-View,
-- Tests.
+- [ ] Basemap-Konfiguration,
+- [ ] Overlay-Module,
+- [ ] MapLibre-Komponenten,
+- [ ] Stores,
+- [ ] Route-Loader,
+- [ ] Route-View,
+- [ ] Tests.
 
 Das ist wichtig: Wir bauen nicht aus Chaos Ordnung, sondern aus Vorstruktur Explizitheit.
 
@@ -135,56 +135,56 @@ Die Basemap ist Untergrund. Die eigentliche Karte entsteht aus Szene, Overlays, 
 
 Verantwortlich für:
 
-- API-Zugriffe
-- Fehlererfassung
-- Rohdaten
-- Ladeklassifikation
+- [ ] API-Zugriffe
+- [ ] Fehlererfassung
+- [ ] Rohdaten
+- [ ] Ladeklassifikation
 
 Ort:
 
-- primär `apps/web/src/routes/map/+page.ts`
-- optional Hilfsmodul `apps/web/src/lib/map/load.ts`
+- [ ] primär `apps/web/src/routes/map/+page.ts`
+- [ ] optional Hilfsmodul `apps/web/src/lib/map/load.ts`
 
 #### B. Szenen-Schicht
 
 Verantwortlich für:
 
-- Übersetzung von Rohdaten in Kartenwirklichkeit
-- Vereinheitlichung von Nodes / Accounts / später weiteren Entitäten
-- Bestimmung sichtbarer Overlays
-- Bereitstellung eines stabilen Scene-Contracts
+- [ ] Übersetzung von Rohdaten in Kartenwirklichkeit
+- [ ] Vereinheitlichung von Nodes / Accounts / später weiteren Entitäten
+- [ ] Bestimmung sichtbarer Overlays
+- [ ] Bereitstellung eines stabilen Scene-Contracts
 
 Ort:
 
-- neu: `apps/web/src/lib/map/scene.ts`
-- Typen in `apps/web/src/lib/map/types.ts` oder ausgelagert nach `scene.types.ts`
+- [ ] neu: `apps/web/src/lib/map/scene.ts`
+- [ ] Typen in `apps/web/src/lib/map/types.ts` oder ausgelagert nach `scene.types.ts`
 
 #### C. Render-/Interaktions-Schicht
 
 Verantwortlich für:
 
-- Darstellung
-- UI-Interaktionen
-- Event-Weiterleitung
-- MapLibre-Einbindung
+- [ ] Darstellung
+- [ ] UI-Interaktionen
+- [ ] Event-Weiterleitung
+- [ ] MapLibre-Einbindung
 
 Ort:
 
-- `apps/web/src/routes/map/+page.svelte`
-- bestehende Overlay- und Komponentenmodule
+- [ ] `apps/web/src/routes/map/+page.svelte`
+- [ ] bestehende Overlay- und Komponentenmodule
 
 #### D. Diagnostik-Schicht
 
 Verantwortlich für:
 
-- Anzeige technischer Zustände
-- Trennung von API-Mode und Basemap-Mode
-- DEV-/Test-Diagnostik
+- [ ] Anzeige technischer Zustände
+- [ ] Trennung von API-Mode und Basemap-Mode
+- [ ] DEV-/Test-Diagnostik
 
 Ort:
 
-- zunächst in `+page.svelte`
-- später optional eigene Komponente `MapDiagnostics.svelte`
+- [ ] zunächst in `+page.svelte`
+- [ ] später optional eigene Komponente `MapDiagnostics.svelte`
 
 ---
 
@@ -198,9 +198,9 @@ type MapLoadState = "ok" | "partial" | "failed";
 
 Bedeutung:
 
-- `ok`: alle benötigten Ressourcen erfolgreich
-- `partial`: mindestens eine Ressource fehlt, aber darstellbare Szene vorhanden
-- `failed`: Kernszene nicht sinnvoll aufbaubar
+- [ ] `ok`: alle benötigten Ressourcen erfolgreich
+- [ ] `partial`: mindestens eine Ressource fehlt, aber darstellbare Szene vorhanden
+- [ ] `failed`: Kernszene nicht sinnvoll aufbaubar
 
 #### 4.2.2 MapResourceStatus
 
@@ -264,26 +264,26 @@ Aus stiller Fehlerverdeckung wird explizite Kartenwahrheit.
 **5.1 `+page.ts` erweitern:**
 Die Route liefert nicht mehr nur rohe Listen, sondern auch:
 
-- `loadState`
-- `resourceStatus`
+- [ ] `loadState`
+- [ ] `resourceStatus`
 
 **5.2 Fehler nicht nur loggen, sondern klassifizieren:**
 Jede Ressource bekommt einen Status:
 
-- erfolgreich
-- fehlgeschlagen
+- [ ] erfolgreich
+- [ ] fehlgeschlagen
 
 **5.3 Degradierte Zustände sichtbar machen:**
 `+page.svelte` zeigt:
 
-- bei `partial`: Hinweis auf eingeschränkte Kartensicht
-- bei `failed`: klare Fehlermeldung oder Fallback-Ansicht
+- [ ] bei `partial`: Hinweis auf eingeschränkte Kartensicht
+- [ ] bei `failed`: klare Fehlermeldung oder Fallback-Ansicht
 
 **5.4 Bestehende Tests erweitern:**
 Besonders relevant:
 
-- `apps/web/tests/map-load-fallback.spec.ts`
-- ggf. neue Tests für `partial` und `failed`
+- [ ] `apps/web/tests/map-load-fallback.spec.ts`
+- [ ] ggf. neue Tests für `partial` und `failed`
 
 *Die Testbasis existiert bereits im Web-Testbaum.*
 
@@ -304,8 +304,8 @@ Rohdaten und Kartenwirklichkeit trennen.
 **5.5 Neues Modul `scene.ts`:**
 Neu einführen:
 
-- `buildMapScene(...)`
-- Transformation aus `MapRouteData` in `MapSceneModel`
+- [ ] `buildMapScene(...)`
+- [ ] Transformation aus `MapRouteData` in `MapSceneModel`
 
 **5.6 `+page.svelte` konsumiert Szene statt Rohlisten:**
 Die Svelte-Route soll nicht mehr primär selbst semantisch verdichten, sondern eine vorbereitete Szene erhalten.
@@ -337,10 +337,10 @@ Welche Felder von `RenderableMapPoint` sind heute optional? Welche werden tatsä
 **5.9 Diskriminierte Union einführen:**
 Ersetzen oder parallel einführen:
 
-- `node`
-- `account`
-- `garnrolle`
-- `ron`
+- [ ] `node`
+- [ ] `account`
+- [ ] `garnrolle`
+- [ ] `ron`
 
 **5.10 Marker-Kategorisierung umstellen:**
 `nodes.ts` und verwandte Logik sollen nicht mehr Strings vermischen, sondern auf echte Varianten reagieren.
@@ -368,14 +368,14 @@ API-Herkunft und Basemap-Modus getrennt sichtbar machen.
 **5.12 Debug-Hinweis aufspalten:**
 Statt einem Modus:
 
-- API mode
-- Basemap mode
+- [ ] API mode
+- [ ] Basemap mode
 
 **5.13 Begrifflich säubern:**
 Nicht mehr nur `REMOTE` / `DEMO`, sondern:
 
-- API: `remote` / `local`
-- Basemap: `local-sovereign` / `remote-style`
+- [ ] API: `remote` / `local`
+- [ ] Basemap: `local-sovereign` / `remote-style`
 
 **5.14 Optional: Diagnostik auslagern:**
 Bei Bedarf `MapDiagnostics.svelte`
@@ -383,9 +383,9 @@ Bei Bedarf `MapDiagnostics.svelte`
 **Erfolgskriterium:**
 Ein Entwickler kann sofort sehen:
 
-- woher Daten kommen,
-- wie die Basemap läuft,
-- ob die Karte degradiert ist.
+- [ ] woher Daten kommen,
+- [ ] wie die Basemap läuft,
+- [ ] ob die Karte degradiert ist.
 
 ---
 
@@ -398,18 +398,18 @@ Nicht Datei-Größe bekämpfen, sondern Zuständigkeiten klären.
 **5.15 Ownership-Matrix schreiben:**
 Welche Zustände leben:
 
-- in Stores?
-- in der Route?
-- in MapLibre?
-- in Overlays?
+- [ ] in Stores?
+- [ ] in der Route?
+- [ ] in MapLibre?
+- [ ] in Overlays?
 
 **5.16 Erst danach selektiv extrahieren:**
 Nur wenn nötig:
 
-- Szenenaufbau
-- Interaktionslogik
-- Diagnostik
-- Overlay-Koordination
+- [ ] Szenenaufbau
+- [ ] Interaktionslogik
+- [ ] Diagnostik
+- [ ] Overlay-Koordination
 
 **5.17 Keine kosmetische Zerlegung:**
 Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrücken ohne Umzug.
@@ -420,24 +420,24 @@ Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrück
 
 **Neu:**
 
-- `apps/web/src/lib/map/scene.ts`
-- optional `apps/web/src/lib/map/scene.types.ts`
-- optional `apps/web/src/lib/components/MapDiagnostics.svelte`
+- [ ] `apps/web/src/lib/map/scene.ts`
+- [ ] optional `apps/web/src/lib/map/scene.types.ts`
+- [ ] optional `apps/web/src/lib/components/MapDiagnostics.svelte`
 
 **Anpassen:**
 
-- `apps/web/src/routes/map/+page.ts`
-- `apps/web/src/routes/map/+page.svelte`
-- `apps/web/src/lib/map/types.ts`
-- `apps/web/src/lib/map/overlay/nodes.ts`
-- ggf. `apps/web/src/lib/stores/*`, falls Szene- oder Diagnostikdaten dort besser verankert werden
+- [ ] `apps/web/src/routes/map/+page.ts`
+- [ ] `apps/web/src/routes/map/+page.svelte`
+- [ ] `apps/web/src/lib/map/types.ts`
+- [ ] `apps/web/src/lib/map/overlay/nodes.ts`
+- [ ] ggf. `apps/web/src/lib/stores/*`, falls Szene- oder Diagnostikdaten dort besser verankert werden
 
 **Tests:**
 
-- `apps/web/tests/map-load-fallback.spec.ts`
-- neue Spec für degradierte Zustände
-- neue Spec für Szene- und Modusdiagnostik
-- später Typ-/Renderingtests
+- [ ] `apps/web/tests/map-load-fallback.spec.ts`
+- [ ] neue Spec für degradierte Zustände
+- [ ] neue Spec für Szene- und Modusdiagnostik
+- [ ] später Typ-/Renderingtests
 
 ---
 
@@ -500,10 +500,10 @@ Falls der große Szenenumbau zunächst zu viel ist, gibt es einen kleineren Pfad
 
 **Minimalpfad:**
 
-- `MapLoadState`
-- `resourceStatus`
-- degradiertes UI
-- Debug-Hinweis in zwei Modi trennen
+- [ ] `MapLoadState`
+- [ ] `resourceStatus`
+- [ ] degradiertes UI
+- [ ] Debug-Hinweis in zwei Modi trennen
 
 **Vorteil:**
 Schnell spürbare Verbesserung bei geringem Risiko.
