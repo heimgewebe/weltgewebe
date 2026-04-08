@@ -282,7 +282,7 @@ Jede Ressource bekommt einen Status:
 **5.4 Bestehende Tests erweitern:**
 Besonders relevant:
 
-- `map-load-fallback.spec.ts`
+- `apps/web/tests/map-load-fallback.spec.ts`
 - ggf. neue Tests für `partial` und `failed`
 
 *Die Testbasis existiert bereits im Web-Testbaum.*
