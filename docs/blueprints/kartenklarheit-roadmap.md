@@ -36,10 +36,12 @@ Die Karte soll von einer impliziten Orchestrierung zu einer expliziten, fehlerto
 
 ## Phase 0 – Ausgangslage sichern
 
-### Ziel
+### Ziel (Phase 0)
+
 Vor jeder Änderung die aktuelle Map-Schiene, ihre Pfade und ihre Tests als Referenz sichern.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 0)
+
 - [ ] Relevante Einstiegspfade dokumentieren:
   - `apps/web/src/routes/map/+page.ts`
   - `apps/web/src/routes/map/+page.svelte`
@@ -58,7 +60,8 @@ Vor jeder Änderung die aktuelle Map-Schiene, ihre Pfade und ihre Tests als Refe
   - Szenenmodell fehlt
   - Debug-Semantik ist nur teilweise getrennt
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 0)
+
 - [ ] Die betroffenen Dateien und Tests sind eindeutig benannt.
 - [ ] Es gibt eine kurze Ist-Notiz als Ausgangsbasis für spätere Reviews.
 
@@ -66,10 +69,12 @@ Vor jeder Änderung die aktuelle Map-Schiene, ihre Pfade und ihre Tests als Refe
 
 ## Phase 1 – Laufzeitwahrheit einziehen
 
-### Ziel
+### Ziel (Phase 1)
+
 Aus stiller Fehlerverdeckung wird explizite Kartenwahrheit.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 1)
+
 - [ ] `MapLoadState` definieren (`ok | partial | failed`).
 - [ ] `MapResourceStatus` definieren.
 - [ ] `apps/web/src/routes/map/+page.ts` so erweitern, dass die Route nicht nur `nodes`, `accounts`, `edges`, sondern auch `loadState` und `resourceStatus` zurückgibt.
@@ -81,13 +86,15 @@ Aus stiller Fehlerverdeckung wird explizite Kartenwahrheit.
 - [ ] `apps/web/src/routes/map/+page.svelte` so anpassen, dass `failed` nicht wie normale Leere aussieht.
 - [ ] UI-Texte für degradierte Zustände knapp und eindeutig formulieren.
 
-### Verifikation
+### Verifikation (Phase 1)
+
 - [ ] `apps/web/tests/map-load-fallback.spec.ts` auf neuen Route-/UI-Zustand anpassen.
 - [ ] Neuer Testfall für `partial` ergänzt.
 - [ ] Neuer Testfall für `failed` ergänzt.
 - [ ] Manuell geprüft: Leere Karte ist nicht mehr semantisch doppeldeutig.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 1)
+
 - [ ] Ein API-Ausfall ist im UI als degradierter Zustand erkennbar.
 - [ ] Die Route hat einen expliziten Ladezustand.
 
@@ -95,10 +102,12 @@ Aus stiller Fehlerverdeckung wird explizite Kartenwahrheit.
 
 ## Phase 2 – Explizites Karten-Szenenmodell einziehen
 
-### Ziel
+### Ziel (Phase 2)
+
 Rohdaten und sichtbare Kartenwirklichkeit trennen.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 2)
+
 - [ ] Neues Modul einführen: `apps/web/src/lib/map/scene.ts`
 - [ ] `MapRouteData` definieren.
 - [ ] `MapSceneModel` definieren.
@@ -113,23 +122,27 @@ Rohdaten und sichtbare Kartenwirklichkeit trennen.
   - [ ] Panel-Öffnung
 - [ ] Nur die Logik in der Route belassen, die wirklich View-spezifisch ist.
 
-### Verifikation
+### Verifikation (Phase 2)
+
 - [ ] Szene kann unabhängig von der Route gebaut und geprüft werden.
 - [ ] Mindestens ein Test für `buildMapScene(...)` ergänzt.
 - [ ] `+page.svelte` konsumiert Szene statt selbst Rohdaten zusammenzusetzen.
 - [ ] Keine Funktionsverluste in bestehenden Map-Interaktionstests.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 2)
+
 - [ ] Die Karte lässt sich logisch beschreiben als: „Route lädt Daten, Szene beschreibt Sichtbarkeit.“
 
 ---
 
 ## Phase 3 – Entitäts-Contracts härten
 
-### Ziel
+### Ziel (Phase 3)
+
 `RenderableMapPoint` von einem weichen Sammeltyp zu einem klaren Entitätssystem entwickeln.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 3)
+
 - [ ] Ist-Zustand von `RenderableMapPoint` dokumentieren:
   - [ ] Welche Felder sind optional?
   - [ ] Welche Felder werden real genutzt?
@@ -146,23 +159,27 @@ Rohdaten und sichtbare Kartenwirklichkeit trennen.
 - [ ] Repo-weite Prüfung durchführen, ob `MapPoint` noch gebraucht wird.
 - [ ] `MapPoint` nur dann entfernen oder entwerten, wenn seine tatsächliche Nutzung belegt ausgeschlossen ist.
 
-### Verifikation
+### Verifikation (Phase 3)
+
 - [ ] Typsystem erzwingt Entitätsvarianten explizit.
 - [ ] Marker-/Overlay-Logik arbeitet ohne semantische Ratespiele.
 - [ ] Mindestens ein Test deckt die Variantenlogik ab.
 - [ ] Keine implizite Gleichsetzung von `account` und `garnrolle` mehr ohne explizite Entscheidung.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 3)
+
 - [ ] Die Karten-Entitäten sind compile-time-seitig klar unterscheidbar.
 
 ---
 
 ## Phase 4 – Modus- und Diagnostik-Semantik trennen
 
-### Ziel
+### Ziel (Phase 4)
+
 API-Herkunft und Basemap-Modus separat sichtbar machen.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 4)
+
 - [ ] Diagnostikmodell definieren:
   - [ ] `apiMode`
   - [ ] `basemapMode`
@@ -176,22 +193,26 @@ API-Herkunft und Basemap-Modus separat sichtbar machen.
   - [ ] nur DEV/Test
   - [ ] oder separat aktivierbar
 
-### Verifikation
+### Verifikation (Phase 4)
+
 - [ ] Im Debugzustand sind API-Modus und Basemap-Modus getrennt sichtbar.
 - [ ] Keine trügerische Ein-Modus-Semantik mehr.
 - [ ] Mindestens ein Test oder Snapshot prüft den Diagnostikzustand.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 4)
+
 - [ ] Ein Entwickler kann auf einen Blick erkennen, woher Daten kommen und wie die Basemap läuft.
 
 ---
 
 ## Phase 5 – Zustands-Ownership klären
 
-### Ziel
+### Ziel (Phase 5)
+
 Nicht Dateigröße bekämpfen, sondern Zuständigkeiten explizit machen.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 5)
+
 - [ ] Ownership-Matrix schreiben:
   - [ ] Was lebt in Stores?
   - [ ] Was lebt in `+page.svelte`?
@@ -205,22 +226,26 @@ Nicht Dateigröße bekämpfen, sondern Zuständigkeiten explizit machen.
   - [ ] Interaktionskoordination
   - [ ] Overlay-Koordination
 
-### Verifikation
+### Verifikation (Phase 5)
+
 - [ ] Es gibt eine explizite Ownership-Matrix.
 - [ ] Keine rein kosmetische Datei-Zerlegung.
 - [ ] Extraktion reduziert semantische Last, nicht nur Zeilenanzahl.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 5)
+
 - [ ] Die wichtigsten Zustände haben eine klar benannte Quelle der Wahrheit.
 
 ---
 
 ## Phase 6 – Härtung und Regression
 
-### Ziel
+### Ziel (Phase 6)
+
 Die neue Kartenarchitektur gegen Rückfall schützen.
 
-### Arbeitspakete
+### Arbeitspakete (Phase 6)
+
 - [ ] Relevante Testsuite vollständig durchlaufen.
 - [ ] Fehlerszenarien gezielt prüfen:
   - [ ] Nodes fehlen
@@ -238,19 +263,22 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
   - [ ] `docs/reports/map-status-matrix.md`
   - [ ] ggf. `docs/reports/map-architekturkritik.md`
 
-### Verifikation
+### Verifikation (Phase 6)
+
 - [ ] Keine Regression in Kerninteraktionen.
 - [ ] Dokumentation entspricht dem tatsächlichen Zustand.
 - [ ] Die Roadmap-Punkte können ehrlich abgehakt werden.
 
-### Stop-Kriterium
+### Stop-Kriterium (Phase 6)
+
 - [ ] Die Karte ist expliziter, testbarer und semantisch klarer als zuvor.
 
 ---
 
 ## Minimalpfad, falls Kapazität knapp ist
 
-### Ziel
+### Ziel (Minimalpfad)
+
 Mit kleinem Eingriff maximalen Wahrheitsgewinn erzielen.
 
 - [ ] `MapLoadState` einführen
@@ -259,7 +287,9 @@ Mit kleinem Eingriff maximalen Wahrheitsgewinn erzielen.
 - [ ] `apps/web/tests/map-load-fallback.spec.ts` und neue Fehlerfälle anpassen
 - [ ] API-/Basemap-Modus im Debug-Hinweis trennen
 
-### Minimalpfad erfolgreich, wenn:
+### Minimalpfad erfolgreich, wenn
+
+
 - [ ] Leere Karte nicht mehr still normal wirkt
 - [ ] zentrale Diagnostik klarer geworden ist
 - [ ] ohne großen Umbau spürbare Wahrheitsverbesserung erreicht wurde
