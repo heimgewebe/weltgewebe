@@ -48,7 +48,7 @@ Die folgenden Befunde unterscheiden zwischen:
 
 - Gottobjekt `+page.svelte`: **Belegt** (`apps/web/src/routes/map/+page.svelte` operiert mit ca. 560 Zeilen als starker Orchestrator: Datentransformation, MapLibre-Init und Event-Delegation konzentriert).
 - Schwacher Contract `RenderableMapPoint`: **Belegt** (`apps/web/src/lib/map/types.ts`: alle semantisch relevanten Felder wie `type`, `kind`, `tags` sind optional).
-- Verwendung `MapPoint`: **Plausibel** ungenutzt (im Overlay de facto nicht verwendet, potenziell obsolet).
+- Verwendung `MapPoint`: **Plausibel** ungenutzt (im analysierten Overlay-Pfad de facto nicht verwendet; repo-weite Nichtverwendung bleibt aber vorerst offen).
 - Asymmetrie der Overlay-Paradigmen: **Belegt** (Nodes expliziter State vs. Edges impliziter State in MapLibre).
 - Typedrift (account vs. garnrolle): **Belegt** (`apps/web/src/lib/map/overlay/nodes.ts`: `getMarkerCategory` behandelt die Strings "account" und "garnrolle" als identische Rendervariante).
 
@@ -79,7 +79,7 @@ Die folgenden Befunde unterscheiden zwischen:
 - Compile-time-Sicherheit statt Fallbacks
 - Genau ein Koordinatenformat (`lon` vs. `lng`).
 
-*Epistemische Lücke:* Der vollständige Datenpfad `AccountRon` → Rendering fehlt, und das ungenutzte `MapPoint` Schema deutet auf potenziell obsoleten Code hin (X fehlt, nötig für Y: Klarheit über den Lifecycle von MapPoint fehlt, nötig für die Bereinigung des Typen-Systems).
+*Epistemische Lücke:* Der vollständige Datenpfad `AccountRon` → Rendering fehlt. Das `MapPoint` Schema ist im analysierten Overlay-Kontext ungenutzt (X fehlt, nötig für Y: repo-weite Usage-Prüfung von MapPoint fehlt, nötig für die sichere Bereinigung des Typen-Systems).
 
 ### Achse G: Komplexität & Achse E: Kartenarchitektur
 
@@ -101,7 +101,7 @@ Die folgenden Befunde unterscheiden zwischen:
 Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 
 1. **Contract Stabilisierung:** Refactoring von `RenderableMapPoint` zu einer Discriminated Union (z.B. `type: 'node' | 'garnrolle' | 'ron'`).
-2. **Koordinaten-Konvention:** Festlegung auf exakt eine Konvention (z.B. `lat`/`lon`) und Entfernung von obsoletem Code (`MapPoint`).
+2. **Koordinaten-Konvention:** Festlegung auf exakt eine Konvention (z.B. `lat`/`lon`) und Entfernung von ungenutztem Code (`MapPoint`) erst nach vollständiger repo-weiter Usage-Prüfung.
 3. **Norm-Festigung:** Explizite Entscheidung (via ADR), ob die Monorepo-Struktur beibehalten wird oder die Blueprint-Empfehlung formal abgelehnt wird.
 
 ## 6. Essenz + Folgepfad
@@ -114,7 +114,7 @@ Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 
 *Jetzt sinnvoll:*
 
-- **Contract-Klarheit (`types.ts`):** Spec-Update vorbereiten (Discriminated Union für Overlay-Entitäten und Bereinigung toter Typen).
+- **Contract-Klarheit (`types.ts`):** Spec-Update vorbereiten (Discriminated Union für Overlay-Entitäten und Bereinigung toter Typen nach repo-weiter Prüfung).
 - **Normstatus-Klärung:** Neues ADR zur Monorepo-Entscheidung verfassen, um die normative Lücke zum Blueprint formal zu schließen.
 - **Kommentar-Drift:** Veraltete Kommentare zum Remote-Style in `+page.svelte` bereinigen.
 
