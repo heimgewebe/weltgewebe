@@ -100,12 +100,8 @@ Damit verschiebt sich die Kritik leicht: Nicht nur Typen und Repo-Norm sind weic
 *Befund:* Die Kartenroute besitzt keine explizite Fehlerdomäne. API-Ausfälle werden in `apps/web/src/routes/map/+page.ts` als leere Listen weitergereicht.
 *Einordnung:* Strukturelle Schwäche im Runtime-Contract. Der Zustand „keine Daten vorhanden“ ist derzeit nicht sauber von „Daten konnten nicht geladen werden“ getrennt.
 *Folge:* Leere Welt kann semantisch sowohl „es gibt nichts“ als auch „das System ist degradiert“ bedeuten.
-*Code-Beleg:*
-
-```typescript
-// +page.ts
-return { nodes: [], accounts: [], edges: [] }; // Fallback schluckt Fehlerkontext
-```
+*Beobachtung aus Code:*
+`fetchResource()` loggt Fehler und gibt das jeweilige Fallback-Array zurück. Dadurch werden Ausfälle einzelner Ressourcen implizit in leere Listen übersetzt, bevor die Route am Ende regulär `{ nodes, accounts, edges }` an die UI zurückgibt. Ein expliziter Fehlerkontext fehlt.
 
 *Nötig für:*
 
@@ -137,12 +133,9 @@ return { nodes: [], accounts: [], edges: [] }; // Fallback schluckt Fehlerkontex
 
 - getrennte Begriffe für API-Modus und Basemap-Modus
 - präzisere Debug-/Diagnostik-Signale
-*Code-Beleg:*
 
-```typescript
-// +page.svelte (Badge signalisiert API, aber verdeckt Basemap-Status)
-<Badge>Mode: {isRemote ? 'REMOTE' : 'DEMO'}</Badge>
-```
+*Beobachtung aus Code:*
+Im DEV-/Test-Debugblock der UI (`div.debug-badge`) wird der Modus anhand von `PUBLIC_GEWEBE_API_BASE` als `Mode: REMOTE` oder `Mode: DEMO (local)` signalisiert. Die Konfiguration der Basemap (`local-sovereign` vs. `remote-style`) läuft jedoch getrennt davon, wodurch der Badge eine trügerische Eindeutigkeit vermittelt.
 
 ### Achse E: Kartenarchitektur (Faden-Invariante)
 
