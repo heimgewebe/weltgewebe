@@ -38,6 +38,7 @@ Generated automatically. Do not edit.
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
+| docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
 | docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
