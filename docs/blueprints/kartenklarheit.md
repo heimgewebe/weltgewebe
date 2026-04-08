@@ -3,6 +3,15 @@ id: docs.blueprints.kartenklarheit
 title: Blaupause zur Optimierung der Karte
 doc_type: blueprint
 status: draft
+relations:
+  - type: relates_to
+    target: docs/reports/map-architekturkritik.md
+  - type: relates_to
+    target: docs/blueprints/map-blaupause.md
+  - type: relates_to
+    target: docs/blueprints/map-roadmap.md
+  - type: relates_to
+    target: docs/reports/map-status-matrix.md
 summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu expliziter Szene.
 ---
 # Blaupause zur Optimierung der Karte
@@ -13,14 +22,14 @@ summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu ex
 
 ## 0. Titel und Zweck
 
-**Arbeitstitel::**
+**Arbeitstitel:**
 Kartenklarheit 1.0 – Von stiller Leere zu expliziter Szene
 
-**Zweck::**
+**Zweck:**
 Die Karte soll von einer funktionierenden, aber impliziten Orchestrierung zu einer klar modellierten, fehlertoleranten, testbaren und erweiterbaren Kartenarchitektur weiterentwickelt werden.
 
-*Blaupause bedeutet hier: ein vorgelagerter, verbindender Bauplan.
-Etymologie: „Blaupause“ stammt aus dem historischen Lichtpausverfahren, bei dem technische Zeichnungen mit weißer Linie auf blauem Grund vervielfältigt wurden. Im übertragenen Sinn ist eine Blaupause also kein Endprodukt, sondern ein präziser Bauentwurf.*
+Blaupause bedeutet hier: ein vorgelagerter, verbindender Bauplan.
+Etymologie: „Blaupause“ stammt aus dem historischen Lichtpausverfahren, bei dem technische Zeichnungen mit weißer Linie auf blauem Grund vervielfältigt wurden. Im übertragenen Sinn ist eine Blaupause also kein Endprodukt, sondern ein präziser Bauentwurf.
 
 ---
 
