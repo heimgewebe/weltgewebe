@@ -13,10 +13,10 @@ summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu ex
 
 ## 0. Titel und Zweck
 
-**Arbeitstitel:**
+**Arbeitstitel::**
 Kartenklarheit 1.0 – Von stiller Leere zu expliziter Szene
 
-**Zweck:**
+**Zweck::**
 Die Karte soll von einer funktionierenden, aber impliziten Orchestrierung zu einer klar modellierten, fehlertoleranten, testbaren und erweiterbaren Kartenarchitektur weiterentwickelt werden.
 
 *Blaupause bedeutet hier: ein vorgelagerter, verbindender Bauplan.
@@ -122,7 +122,7 @@ Die Basemap ist Untergrund. Die eigentliche Karte entsteht aus Szene, Overlays, 
 
 ### 4.1 Neue Hauptschichten
 
-**A. Datenlade-Schicht**
+#### A. Datenlade-Schicht
 
 Verantwortlich für:
 
@@ -136,7 +136,7 @@ Ort:
 - primär `apps/web/src/routes/map/+page.ts`
 - optional Hilfsmodul `apps/web/src/lib/map/load.ts`
 
-**B. Szenen-Schicht**
+#### B. Szenen-Schicht
 
 Verantwortlich für:
 
@@ -150,7 +150,7 @@ Ort:
 - neu: `apps/web/src/lib/map/scene.ts`
 - Typen in `apps/web/src/lib/map/types.ts` oder ausgelagert nach `scene.types.ts`
 
-**C. Render-/Interaktions-Schicht**
+#### C. Render-/Interaktions-Schicht
 
 Verantwortlich für:
 
@@ -164,7 +164,7 @@ Ort:
 - `apps/web/src/routes/map/+page.svelte`
 - bestehende Overlay- und Komponentenmodule
 
-**D. Diagnostik-Schicht**
+#### D. Diagnostik-Schicht
 
 Verantwortlich für:
 
@@ -248,31 +248,29 @@ type MapEntityViewModel =
 
 ### Phase 1 – Laufzeitwahrheit einziehen
 
-**Ziel**
-
+**Ziel:**
 Aus stiller Fehlerverdeckung wird explizite Kartenwahrheit.
 
-**Maßnahmen**
-
-**5.1 `+page.ts` erweitern**
+**Maßnahmen:**
+**5.1 `+page.ts` erweitern:**
 Die Route liefert nicht mehr nur rohe Listen, sondern auch:
 
 - `loadState`
 - `resourceStatus`
 
-**5.2 Fehler nicht nur loggen, sondern klassifizieren**
+**5.2 Fehler nicht nur loggen, sondern klassifizieren:**
 Jede Ressource bekommt einen Status:
 
 - erfolgreich
 - fehlgeschlagen
 
-**5.3 Degradierte Zustände sichtbar machen**
+**5.3 Degradierte Zustände sichtbar machen:**
 `+page.svelte` zeigt:
 
 - bei `partial`: Hinweis auf eingeschränkte Kartensicht
 - bei `failed`: klare Fehlermeldung oder Fallback-Ansicht
 
-**5.4 Bestehende Tests erweitern**
+**5.4 Bestehende Tests erweitern:**
 Besonders relevant:
 
 - `map-load-fallback.spec.ts`
@@ -280,63 +278,54 @@ Besonders relevant:
 
 *Die Testbasis existiert bereits im Web-Testbaum.*
 
-**Erfolgskriterium**
-
+**Erfolgskriterium:**
 Ein Entwickler kann im UI sehen, ob die Karte leer ist, weil keine Daten da sind, oder weil das Laden scheitert.
 
-**Risiko**
-
+**Risiko:**
 Gering. Diese Phase verändert keine Grundarchitektur, sondern macht implizite Zustände explizit.
 
 ---
 
 ### Phase 2 – Szenenmodell einziehen
 
-**Ziel**
-
+**Ziel:**
 Rohdaten und Kartenwirklichkeit trennen.
 
-**Maßnahmen**
-
-**5.5 Neues Modul `scene.ts`**
+**Maßnahmen:**
+**5.5 Neues Modul `scene.ts`:**
 Neu einführen:
 
 - `buildMapScene(...)`
 - Transformation aus `MapRouteData` in `MapSceneModel`
 
-**5.6 `+page.svelte` konsumiert Szene statt Rohlisten**
+**5.6 `+page.svelte` konsumiert Szene statt Rohlisten:**
 Die Svelte-Route soll nicht mehr primär selbst semantisch verdichten, sondern eine vorbereitete Szene erhalten.
 
-**5.7 Such-, Filter- und Fokuslogik an Szene koppeln**
+**5.7 Such-, Filter- und Fokuslogik an Szene koppeln:**
 Nicht rohe Listen filtern, sondern explizit modellierte Szene.
 
-**Erfolgskriterium**
-
+**Erfolgskriterium:**
 Die Karte kann logisch beschrieben werden als:
 „Die Route lädt Daten; die Szene beschreibt, was sichtbar ist.“
 
-**Risiko**
-
+**Risiko:**
 Mittel. Hier beginnt echter Umbau. Aber der Hebel ist hoch.
 
-**Nutzen**
-
+**Nutzen:**
 Sehr hoch. Das ist der Schritt, der spätere Erweiterungen überhaupt erst stabil macht.
 
 ---
 
 ### Phase 3 – Entitätstypen härten
 
-**Ziel**
-
+**Ziel:**
 `RenderableMapPoint` verliert seine lose Container-Natur und wird zu einem überprüfbaren Entitätstyp-System.
 
-**Maßnahmen**
-
-**5.8 Ist-Zustand dokumentieren**
+**Maßnahmen:**
+**5.8 Ist-Zustand dokumentieren:**
 Welche Felder von `RenderableMapPoint` sind heute optional? Welche werden tatsächlich genutzt?
 
-**5.9 Diskriminierte Union einführen**
+**5.9 Diskriminierte Union einführen:**
 Ersetzen oder parallel einführen:
 
 - `node`
@@ -344,51 +333,45 @@ Ersetzen oder parallel einführen:
 - `garnrolle`
 - `ron`
 
-**5.10 Marker-Kategorisierung umstellen**
+**5.10 Marker-Kategorisierung umstellen:**
 `nodes.ts` und verwandte Logik sollen nicht mehr Strings vermischen, sondern auf echte Varianten reagieren.
 
-**5.11 MapPoint erst nach Beweis bereinigen**
+**5.11 MapPoint erst nach Beweis bereinigen:**
 Nur nach repo-weitem Nachweis, nicht auf Verdacht.
 
-**Erfolgskriterium**
-
+**Erfolgskriterium:**
 Marker- und Overlay-Logik arbeiten ohne semantische Ratespiele.
 
-**Risiko**
-
+**Risiko:**
 Mittel bis erhöht. Typenumstellungen ziehen gern Folgearbeit nach sich.
 
-**Nutzen**
-
+**Nutzen:**
 Langfristig sehr hoch. Das ist die strukturelle Härtung gegen zukünftigen Drift.
 
 ---
 
 ### Phase 4 – Modus- und Diagnostik-Semantik trennen
 
-**Ziel**
-
+**Ziel:**
 API-Herkunft und Basemap-Modus getrennt sichtbar machen.
 
-**Maßnahmen**
-
-**5.12 Debug-Hinweis aufspalten**
+**Maßnahmen:**
+**5.12 Debug-Hinweis aufspalten:**
 Statt einem Modus:
 
 - API mode
 - Basemap mode
 
-**5.13 Begrifflich säubern**
+**5.13 Begrifflich säubern:**
 Nicht mehr nur `REMOTE` / `DEMO`, sondern:
 
 - API: `remote` / `local`
 - Basemap: `local-sovereign` / `remote-style`
 
-**5.14 Optional: Diagnostik auslagern**
+**5.14 Optional: Diagnostik auslagern:**
 Bei Bedarf `MapDiagnostics.svelte`
 
-**Erfolgskriterium**
-
+**Erfolgskriterium:**
 Ein Entwickler kann sofort sehen:
 
 - woher Daten kommen,
@@ -399,13 +382,11 @@ Ein Entwickler kann sofort sehen:
 
 ### Phase 5 – Zustands-Ownership klären und nur dann zerlegen
 
-**Ziel**
-
+**Ziel:**
 Nicht Datei-Größe bekämpfen, sondern Zuständigkeiten klären.
 
-**Maßnahmen**
-
-**5.15 Ownership-Matrix schreiben**
+**Maßnahmen:**
+**5.15 Ownership-Matrix schreiben:**
 Welche Zustände leben:
 
 - in Stores?
@@ -413,7 +394,7 @@ Welche Zustände leben:
 - in MapLibre?
 - in Overlays?
 
-**5.16 Erst danach selektiv extrahieren**
+**5.16 Erst danach selektiv extrahieren:**
 Nur wenn nötig:
 
 - Szenenaufbau
@@ -421,20 +402,20 @@ Nur wenn nötig:
 - Diagnostik
 - Overlay-Koordination
 
-**5.17 Keine kosmetische Zerlegung**
+**5.17 Keine kosmetische Zerlegung:**
 Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrücken ohne Umzug.
 
 ---
 
 ## 6. Konkrete neue Dateien und Änderungen
 
-**Neu**
+**Neu:**
 
 - `apps/web/src/lib/map/scene.ts`
 - optional `apps/web/src/lib/map/scene.types.ts`
 - optional `apps/web/src/lib/components/MapDiagnostics.svelte`
 
-**Anpassen**
+**Anpassen:**
 
 - `apps/web/src/routes/map/+page.ts`
 - `apps/web/src/routes/map/+page.svelte`
@@ -442,7 +423,7 @@ Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrück
 - `apps/web/src/lib/map/overlay/nodes.ts`
 - ggf. `apps/web/src/lib/stores/*`, falls Szene- oder Diagnostikdaten dort besser verankert werden
 
-**Tests**
+**Tests:**
 
 - `apps/web/tests/map-load-fallback.spec.ts`
 - neue Spec für degradierte Zustände
@@ -453,30 +434,30 @@ Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrück
 
 ## 7. Priorisierung
 
-**Sofort**
+**Sofort:**
 
 1. `MapLoadState`
 2. `resourceStatus`
 3. degradiertes UI
 4. Tests für `partial` / `failed`
 
-**Danach**
+**Danach:**
 
-5. `MapSceneModel`
-6. zentrale Szenenfunktion
-7. Umstellung der Route auf Szenenverbrauch
+1. `MapSceneModel`
+2. zentrale Szenenfunktion
+3. Umstellung der Route auf Szenenverbrauch
 
-**Danach**
+**Danach:**
 
-8. diskriminierte Union
-9. Marker-/Overlay-Härtung
-10. repo-weite Prüfung zu `MapPoint`
+1. diskriminierte Union
+2. Marker-/Overlay-Härtung
+3. repo-weite Prüfung zu `MapPoint`
 
-**Zuletzt**
+**Zuletzt:**
 
-11. Modusdiagnostik polieren
-12. Zustands-Ownership dokumentieren
-13. selektives Refactoring von `+page.svelte`
+1. Modusdiagnostik polieren
+2. Zustands-Ownership dokumentieren
+3. selektives Refactoring von `+page.svelte`
 
 ---
 
@@ -484,22 +465,22 @@ Wenn die semantischen Grenzen nicht klarer werden, ist Aufteilen nur Möbelrück
 
 Die Blaupause gilt als erfolgreich umgesetzt, wenn folgende Sätze wahr sind:
 
-**A**
+**A:**
 Ein API-Fehler erzeugt keinen still normalen Leerzustand mehr.
 
-**B**
+**B:**
 Die Kartenroute gibt ein explizites Route-Modell mit Ladezustand zurück.
 
-**C**
+**C:**
 Die Svelte-Route konsumiert eine Szene statt lose Rohdatenlogik.
 
-**D**
+**D:**
 Map-Entitäten sind typseitig diskriminiert statt weich optional.
 
-**E**
+**E:**
 API-Modus und Basemap-Modus sind separat sichtbar.
 
-**F**
+**F:**
 Ein neues Overlay kann ergänzt werden, ohne dass die Route erneut unsichtbar Verantwortung aufsammelt.
 
 ---
@@ -508,17 +489,17 @@ Ein neues Overlay kann ergänzt werden, ohne dass die Route erneut unsichtbar Ve
 
 Falls der große Szenenumbau zunächst zu viel ist, gibt es einen kleineren Pfad:
 
-**Minimalpfad**
+**Minimalpfad:**
 
 - `MapLoadState`
 - `resourceStatus`
 - degradiertes UI
 - Debug-Hinweis in zwei Modi trennen
 
-**Vorteil**
+**Vorteil:**
 Schnell spürbare Verbesserung bei geringem Risiko.
 
-**Nachteil**
+**Nachteil:**
 Das eigentliche Szenen- und Typenproblem bleibt erst einmal bestehen.
 
 ---
