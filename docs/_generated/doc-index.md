@@ -53,6 +53,7 @@ Generated automatically. Do not edit.
 | inhalt | Inhalt | reference | active | docs/inhalt.md |
 | konzepte.garnrolle | Garnrolle | reference | deprecated | docs/konzepte/garnrolle.md |
 | konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | docs/konzepte/garnrolle-und-verortung.md |
+| map-architekturkritik | Architekturkritik Map-Implementierung | report | active | docs/reports/map-architekturkritik.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
 | map-status-matrix | Map Status Matrix | status-matrix | active | docs/reports/map-status-matrix.md |
