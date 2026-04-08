@@ -54,11 +54,13 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/map-blaupause.md
 
+- [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
 
 ## docs/blueprints/map-roadmap.md
 
+- [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
 - [relates_to] docs/reports/map-architekturkritik.md
 
@@ -230,8 +232,13 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 
+## docs/reports/map-architekturkritik.md
+
+- [relates_to] docs/blueprints/kartenklarheit.md
+
 ## docs/reports/map-status-matrix.md
 
+- [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
 

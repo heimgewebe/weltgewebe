@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 152 |
-| — relates_to | 151 |
+| Relationen gesamt | 156 |
+| — relates_to | 155 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,13 +29,14 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (31 Dokumente):
+**Cluster 1** (32 Dokumente):
 
 - `AGENTS.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
 - `docs/architekturstruktur.md`
+- `docs/blueprints/kartenklarheit.md`
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
 - `docs/datenmodell.md`
@@ -136,12 +137,12 @@ _Keine Lücken erkannt._
 - relates_to → `docs/reports/auth-status-matrix.md`
 - relates_to → `docs/specs/auth-blueprint.md`
 
-**`docs/deployment.md`**:
+**`docs/blueprints/kartenklarheit.md`**:
 
-- relates_to → `docs/deploy/README.md`
-- relates_to → `docs/deploy/security.md`
-- relates_to → `docs/deployment_governance.md`
-- relates_to → `docs/runbook.md`
+- relates_to → `docs/blueprints/map-blaupause.md`
+- relates_to → `docs/blueprints/map-roadmap.md`
+- relates_to → `docs/reports/map-architekturkritik.md`
+- relates_to → `docs/reports/map-status-matrix.md`
 
 ### Hinweise
 

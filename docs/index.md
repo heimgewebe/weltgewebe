@@ -38,6 +38,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 ### Karten-Architektur
 
+– **Kartenklarheit:** [blueprints/kartenklarheit.md](blueprints/kartenklarheit.md) (Blaupause zur Optimierung)
 – **Basemap-Blaupause:** [blueprints/map-blaupause.md](blueprints/map-blaupause.md) (Architektur)
 – **Basemap-Roadmap:** [blueprints/map-roadmap.md](blueprints/map-roadmap.md) (Umsetzung)
 
