@@ -2,7 +2,9 @@ import type {
   Node,
   Account,
   Edge,
-  RenderableMapPoint,
+  MapEntityViewModel,
+  MapEntityNode,
+  MapEntityGarnrolle,
   MapLoadState,
   MapResourceStatus,
   MapDiagnostics,
@@ -14,7 +16,7 @@ import type { BasemapMode } from "$lib/map/config/basemap.current";
  * Transforms raw route data into a structured representation.
  */
 export type MapSceneModel = {
-  entities: RenderableMapPoint[];
+  entities: MapEntityViewModel[];
   edges: Edge[];
   loadState: MapLoadState;
   resourceStatus: MapResourceStatus[];
@@ -42,40 +44,40 @@ export function resolveApiMode(
 }
 
 /**
- * Transforms nodes into RenderableMapPoint[].
+ * Transforms nodes into MapEntityNode[].
  */
-function mapNodesToEntities(nodes: Node[]): RenderableMapPoint[] {
+function mapNodesToEntities(nodes: Node[]): MapEntityNode[] {
   return nodes.map((n) => ({
+    type: "node" as const,
     id: n.id,
     title: n.title,
     lat: n.location.lat,
     lon: n.location.lon,
     summary: n.summary,
     info: n.info,
-    type: "node",
+    kind: n.kind,
+    tags: n.tags,
     modules: n.modules,
     created_at: n.created_at,
     updated_at: n.updated_at,
-    kind: n.kind,
-    tags: n.tags,
   }));
 }
 
 /**
- * Transforms accounts into RenderableMapPoint[].
+ * Transforms accounts into MapEntityGarnrolle[].
  * Only accounts with a public_pos are renderable on the map.
  */
-function mapAccountsToEntities(accounts: Account[]): RenderableMapPoint[] {
-  const result: RenderableMapPoint[] = [];
+function mapAccountsToEntities(accounts: Account[]): MapEntityGarnrolle[] {
+  const result: MapEntityGarnrolle[] = [];
   for (const a of accounts) {
     if (a.public_pos) {
       result.push({
+        type: "garnrolle" as const,
         id: a.id,
         title: a.title,
         lat: a.public_pos.lat,
         lon: a.public_pos.lon,
         summary: a.summary,
-        type: a.type,
         modules: a.modules,
         created_at: a.created_at,
       });

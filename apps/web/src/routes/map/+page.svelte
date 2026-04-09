@@ -10,7 +10,7 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import SearchOverlay from '$lib/components/SearchOverlay.svelte';
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { Edge, RenderableMapPoint } from '$lib/map/types';
+  import type { Edge, MapEntityViewModel } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
@@ -68,7 +68,7 @@
   $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
   // Search logic moved from SearchOverlay to orchestrator
-  let filteredResults: RenderableMapPoint[] = [];
+  let filteredResults: MapEntityViewModel[] = [];
   let searchMatchIds = new Set<string>();
 
   $: {
@@ -97,12 +97,12 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  function getFilterTypeKey(m: RenderableMapPoint): string {
+  function getFilterTypeKey(m: MapEntityViewModel): string {
     return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
   }
 
   let availableFilterTypes: { id: string, label: string, count: number }[] = [];
-  let filteredMarkersData: RenderableMapPoint[] = [];
+  let filteredMarkersData: MapEntityViewModel[] = [];
 
   // Derivation of filterable types
   $: availableFilterTypes = (() => {
@@ -138,14 +138,14 @@
 
 
 
-  function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
-    if (type === 'account' || type === 'garnrolle') {
+  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'account' | 'garnrolle' {
+    if (type === 'garnrolle') {
       return type;
     }
     return 'node';
   }
 
-  function focusAndFlyToPoint(item: RenderableMapPoint) {
+  function focusAndFlyToPoint(item: MapEntityViewModel) {
     const itemType = normalizeSelectionType(item.type);
 
     enterFokus({ type: itemType, id: item.id, data: item });
@@ -163,7 +163,7 @@
     }
   }
 
-  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+  function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
   }
 
@@ -171,8 +171,7 @@
     if (!$authStore.authenticated || !$authStore.account_id) return;
     const accountId = $authStore.account_id;
     // Find the marker corresponding to the user's account
-    // Note: 'account' type is kept for legacy/defensive purposes alongside 'garnrolle'
-    const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
+    const userMarker = markersData.find(m => m.id === accountId && m.type === 'garnrolle');
 
     if (userMarker) {
       const typeKey = getFilterTypeKey(userMarker);

@@ -57,9 +57,7 @@ test.describe("Map Loader Data Resilience", () => {
     // { nodes: [1 item], accounts: [], edges: [] }
     const debugBadge = page.getByTestId("debug-badge");
     await expect(debugBadge).toBeVisible();
-    await expect(debugBadge).toContainText(
-      "Nodes: 1 / Accounts: 0 / Edges: 0",
-    );
+    await expect(debugBadge).toContainText("Nodes: 1 / Accounts: 0 / Edges: 0");
 
     // Phase 1: Verify the degraded state banner is visible for partial failures
     const partialBanner = page.getByTestId("load-state-partial");

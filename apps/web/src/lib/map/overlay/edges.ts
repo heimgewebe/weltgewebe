@@ -1,11 +1,11 @@
 import type { Map as MapLibreMap, GeoJSONSource } from "maplibre-gl";
-import type { Edge, RenderableMapPoint } from "$lib/map/types";
+import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
 export function updateEdges(
   map: MapLibreMap,
   edges: Edge[],
-  points: RenderableMapPoint[],
+  points: MapEntityViewModel[],
   showEdges: boolean,
 ) {
   if (!map) return;
