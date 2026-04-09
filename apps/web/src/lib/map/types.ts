@@ -80,3 +80,19 @@ export interface RenderableMapPoint {
   tags?: string[];
   weight?: number;
 }
+
+// Phase 1: Explicit load state – replaces silent fallback-to-empty semantics
+export type MapLoadState = "ok" | "partial" | "failed";
+
+export type MapResourceStatus = {
+  resource: "nodes" | "accounts" | "edges";
+  status: "ok" | "failed";
+  error?: string;
+};
+
+// Phase 4: Diagnostics – separates API mode from basemap mode
+export type MapDiagnostics = {
+  apiMode: "remote" | "local";
+  basemapMode: "local-sovereign" | "remote-style";
+  degraded: boolean;
+};
