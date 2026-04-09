@@ -289,7 +289,6 @@ Mit kleinem Eingriff maximalen Wahrheitsgewinn erzielen.
 
 ### Minimalpfad erfolgreich, wenn
 
-
 - [ ] Leere Karte nicht mehr still normal wirkt
 - [ ] zentrale Diagnostik klarer geworden ist
 - [ ] ohne großen Umbau spürbare Wahrheitsverbesserung erreicht wurde
