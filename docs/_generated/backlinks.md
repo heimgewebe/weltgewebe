@@ -12,8 +12,12 @@ Generated automatically. Do not edit.
 
 ## AGENTS.md
 
-- [depends_on] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/policies/agent-reading-protocol.md
+
+## agent-policy.yaml
+
+- [relates_to] docs/blueprints/agent-operability-blaupause.md
 
 ## docs/adr/0042-consume-semantah-contracts.md
 

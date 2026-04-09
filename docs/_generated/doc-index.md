@@ -20,7 +20,6 @@ Generated automatically. Do not edit.
 | adr.ADR-0004__fahrplan-verweis | ADR-0004 — Fahrplan-Verweis | reference | active | docs/adr/ADR-0004__fahrplan-verweis.md |
 | adr.ADR-0005-auth | ADR-0005 — Auth (Cookie-basierte Sessions) | reference | active | docs/adr/ADR-0005-auth.md |
 | adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
-| agent-operability-blaupause | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | blueprints.auth-roadmap | Auth Roadmap | roadmap | active | docs/blueprints/auth-roadmap.md |
 | blueprints.weltgewebe.auth-and-ui-routing | Auth und UI-Routing | reference | active | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
 | blueprints.weltgewebe.config.diff | Config Diff | reference | active | docs/blueprints/weltgewebe.config.diff.md |
@@ -39,6 +38,7 @@ Generated automatically. Do not edit.
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
+| docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap – Kartenklarheit | roadmap | draft | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
