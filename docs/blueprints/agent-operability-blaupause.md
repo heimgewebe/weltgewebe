@@ -54,9 +54,7 @@ Kein:
 ### Command Contracts
 
 WICHTIG:
-Diese Commands sind konzeptionelle Contracts und werden perspektivisch als echte Contracts (Schemas) im `contracts/` Layer formalisiert.
-
-*Hinweis: Aktuell keine Schema-Validierung – dient nur als operative Struktur.*
+Diese Commands sind konzeptionelle Contracts und müssen perspektivisch in `contracts/` als maschinenvalidierbare Schemas formalisiert werden. Maßgeblich ist dabei JSON Schema als kanonisches Format, konsistent zur bestehenden Contract-Struktur und Validierung im Repo. Die YAML-Blöcke in dieser Blaupause dienen nur der lesbaren Skizze, nicht als alternative Schema-Quelle.
 
 Zweck (Etymologie):
 Command ← lat. commandare = „anvertrauen, anweisen“
@@ -138,9 +136,9 @@ task:
     - no breaking changes
     - contract compliance
   steps:
-    - command: read_context
-    - command: write_change
-    - command: validate_change
+    - command: command.read_context
+    - command: command.write_change
+    - command: command.validate_change
 ```
 
 WICHTIG:
@@ -281,9 +279,9 @@ agent_operability:
     - id: command.validate_change
   task_template:
     required_steps:
-      - read_context
-      - write_change
-      - validate_change
+      - command.read_context
+      - command.write_change
+      - command.validate_change
   execution:
     type: cli
     entrypoint: scripts/run-task
