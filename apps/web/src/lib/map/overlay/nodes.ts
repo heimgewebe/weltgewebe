@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
-import type { RenderableMapPoint } from "$lib/map/types";
+import type { MapEntityViewModel } from "$lib/map/types";
 import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
 
 export class NodesOverlay {
@@ -8,7 +8,7 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
-      item: RenderableMapPoint;
+      item: MapEntityViewModel;
       cleanup: () => void;
     }
   >();
@@ -16,19 +16,12 @@ export class NodesOverlay {
   constructor(private map: MapLibreMap) {}
 
   private getMarkerCategory(type: string | undefined): "node" | "account" {
-    if (!type) return "node";
-
-    const normalized = type.toLowerCase();
-
-    if (normalized === "account" || normalized === "garnrolle") {
-      return "account";
-    }
-
+    if (type === "garnrolle" || type === "ron" || type === "account") return "account";
     return "node";
   }
 
   public async update(
-    points: RenderableMapPoint[],
+    points: MapEntityViewModel[],
     showNodes: boolean,
     searchMatchIds: Set<string> = new Set(),
   ) {

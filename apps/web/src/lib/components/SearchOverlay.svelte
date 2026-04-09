@@ -2,13 +2,13 @@
   import { tick, createEventDispatcher } from 'svelte';
   import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
   import { contextPanelOpen } from '$lib/stores/uiView';
-  import type { RenderableMapPoint } from '$lib/map/types';
+  import type { MapEntityViewModel } from '$lib/map/types';
   import { restoreTarget } from '$lib/utils/focusManager';
 
-  export let filteredResults: RenderableMapPoint[] = [];
+  export let filteredResults: MapEntityViewModel[] = [];
 
   const dispatch = createEventDispatcher<{
-    select: RenderableMapPoint;
+    select: MapEntityViewModel;
   }>();
 
   let inputEl: HTMLInputElement;
@@ -40,7 +40,7 @@
     activeIndex = -1;
   }
 
-  function onSelect(item: RenderableMapPoint) {
+  function onSelect(item: MapEntityViewModel) {
     dispatch('select', item);
     closeSearch();
   }

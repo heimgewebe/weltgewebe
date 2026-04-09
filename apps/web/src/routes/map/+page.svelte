@@ -10,7 +10,7 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import SearchOverlay from '$lib/components/SearchOverlay.svelte';
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { Edge, RenderableMapPoint } from '$lib/map/types';
+  import type { Edge, MapEntityViewModel } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
@@ -37,17 +37,17 @@
     lon: n.location.lon,
     summary: n.summary,
     info: n.info,
-    type: 'node',
+    type: 'node' as const,
     modules: n.modules,
     created_at: n.created_at,
     updated_at: n.updated_at,
     kind: n.kind,
     tags: n.tags
-  })) satisfies RenderableMapPoint[];
+  })) satisfies MapEntityViewModel[];
 
-  let accountsData: RenderableMapPoint[] = [];
+  let accountsData: MapEntityViewModel[] = [];
   $: {
-    const newAccountsData: RenderableMapPoint[] = [];
+    const newAccountsData: MapEntityViewModel[] = [];
     for (const a of data.accounts || []) {
       if (a.public_pos) {
         newAccountsData.push({
@@ -56,9 +56,10 @@
           lat: a.public_pos.lat,
           lon: a.public_pos.lon,
           summary: a.summary,
-          type: a.type, // Pass through the domain type (e.g., 'garnrolle')
+          type: a.type,
           modules: a.modules,
-          created_at: a.created_at
+          created_at: a.created_at,
+          tags: a.tags
         });
       }
     }
@@ -84,7 +85,7 @@
   $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
   // Search logic moved from SearchOverlay to orchestrator
-  let filteredResults: RenderableMapPoint[] = [];
+  let filteredResults: MapEntityViewModel[] = [];
   let searchMatchIds = new Set<string>();
 
   $: {
@@ -113,12 +114,12 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  function getFilterTypeKey(m: RenderableMapPoint): string {
+  function getFilterTypeKey(m: MapEntityViewModel): string {
     return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
   }
 
   let availableFilterTypes: { id: string, label: string, count: number }[] = [];
-  let filteredMarkersData: RenderableMapPoint[] = [];
+  let filteredMarkersData: MapEntityViewModel[] = [];
 
   // Derivation of filterable types
   $: availableFilterTypes = (() => {
@@ -161,7 +162,7 @@
     return 'node';
   }
 
-  function focusAndFlyToPoint(item: RenderableMapPoint) {
+  function focusAndFlyToPoint(item: MapEntityViewModel) {
     const itemType = normalizeSelectionType(item.type);
 
     enterFokus({ type: itemType, id: item.id, data: item });
@@ -179,7 +180,7 @@
     }
   }
 
-  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+  function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
   }
 

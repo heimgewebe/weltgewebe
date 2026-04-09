@@ -28,7 +28,7 @@ Die Karte soll von einer impliziten Orchestrierung zu einer expliziten, fehlerto
 - [ ] API-Fehler erzeugen keinen still normalen Leerzustand mehr.
 - [ ] Die Kartenroute liefert ein explizites Route-Modell mit Ladezustand.
 - [ ] Die Karten-UI konsumiert eine Szene statt lose Rohdatenlogik.
-- [ ] Map-Entitäten sind typseitig diskriminiert statt weich optional.
+- [x] Map-Entitäten sind typseitig diskriminiert statt weich optional.
 - [ ] API-Modus und Basemap-Modus sind separat sichtbar.
 - [ ] Neue Overlays können ergänzt werden, ohne dass `apps/web/src/routes/map/+page.svelte` erneut unsichtbar Verantwortung aufsammelt.
 
@@ -143,32 +143,26 @@ Rohdaten und sichtbare Kartenwirklichkeit trennen.
 
 ### Arbeitspakete für Phase 3
 
-- [ ] Ist-Zustand von `RenderableMapPoint` dokumentieren:
-  - [ ] Welche Felder sind optional?
-  - [ ] Welche Felder werden real genutzt?
-- [ ] Zielmodell für diskriminierte Union entwerfen.
-- [ ] Varianten definieren:
-  - [ ] `node`
-  - [ ] `account`
-  - [ ] `garnrolle`
-  - [ ] `ron`
-- [ ] `MapEntityViewModel` oder Nachfolger sauber typisieren.
-- [ ] `apps/web/src/lib/map/overlay/nodes.ts` auf echte Varianten umstellen.
-- [ ] Marker-Kategorisierung nicht mehr über lose String-Vermischung laufen lassen.
-- [ ] Genau eine Koordinatenkonvention festlegen.
-- [ ] Repo-weite Prüfung durchführen, ob `MapPoint` noch gebraucht wird.
-- [ ] `MapPoint` nur dann entfernen oder entwerten, wenn seine tatsächliche Nutzung belegt ausgeschlossen ist.
+- [x] Ist-Zustand von `RenderableMapPoint` dokumentieren.
+- [x] Zielmodell für diskriminierte Union entwerfen.
+- [x] Varianten definieren (`node`, `account`, `garnrolle`, `ron`).
+- [x] `MapEntityViewModel` sauber typisieren.
+- [x] `apps/web/src/lib/map/overlay/nodes.ts` auf echte Varianten umstellen.
+- [x] Marker-Kategorisierung nicht mehr über lose String-Vermischung laufen lassen.
+- [x] Genau eine Koordinatenkonvention festlegen (`lat` und `lon`).
+- [x] Repo-weite Prüfung durchführen, ob `MapPoint` noch gebraucht wird.
+- [x] `MapPoint` entfernt.
 
 ### Verifikation für Phase 3
 
-- [ ] Typsystem erzwingt Entitätsvarianten explizit.
-- [ ] Marker-/Overlay-Logik arbeitet ohne semantische Ratespiele.
-- [ ] Mindestens ein Test deckt die Variantenlogik ab.
-- [ ] Keine implizite Gleichsetzung von `account` und `garnrolle` mehr ohne explizite Entscheidung.
+- [x] Typsystem erzwingt Entitätsvarianten explizit.
+- [x] Marker-/Overlay-Logik arbeitet ohne semantische Ratespiele.
+- [x] Mindestens ein Test deckt die Variantenlogik ab.
+- [x] Keine implizite Gleichsetzung von `account` und `garnrolle` mehr ohne explizite Entscheidung.
 
 ### Stop-Kriterium für Phase 3
 
-- [ ] Die Karten-Entitäten sind compile-time-seitig klar unterscheidbar.
+- [x] Die Karten-Entitäten sind compile-time-seitig klar unterscheidbar.
 
 ---
 

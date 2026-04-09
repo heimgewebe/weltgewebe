@@ -50,13 +50,6 @@ export interface AccountRon extends AccountBase {
 
 export type Account = AccountVerortet | AccountRon;
 
-export interface MapPoint {
-  id: string;
-  lat: number;
-  lng: number;
-  kind: string; // 'node' | 'account'
-  data: Node | Account | unknown;
-}
 
 export interface Edge {
   id: string;
@@ -65,18 +58,37 @@ export interface Edge {
   edge_kind: string;
 }
 
-export interface RenderableMapPoint {
+export interface MapEntityBase {
   id: string;
   title: string;
   lat: number;
   lon: number;
   summary?: string | null;
-  info?: string | null;
-  type?: string;
   modules?: Module[];
   created_at?: string;
-  updated_at?: string;
-  kind?: string;
   tags?: string[];
   weight?: number;
 }
+
+export interface MapNodeEntity extends MapEntityBase {
+  type: 'node';
+  info?: string | null;
+  updated_at?: string;
+  kind?: string;
+}
+
+export interface MapGarnrolleEntity extends MapEntityBase {
+  type: 'garnrolle';
+}
+
+export interface MapRonEntity extends MapEntityBase {
+  type: 'ron';
+}
+
+export interface MapAccountEntity extends MapEntityBase {
+  type: 'account'; // Fallback for backwards compatibility if needed, but should be avoided
+}
+
+export type MapEntityViewModel = MapNodeEntity | MapGarnrolleEntity | MapRonEntity | MapAccountEntity;
+
+export type RenderableMapPoint = MapEntityViewModel; // Alias for backward compatibility during refactor, will be phased out in dependent files

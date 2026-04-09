@@ -94,7 +94,6 @@
   let displayLon: number | undefined;
 
   // Typecast or fallback carefully since $selection type doesn't formally export .lat/.lng at the root
-  // even though MapPoint might contain them at runtime
   $: {
     const selectionData = nodeDetails || ($selection?.data as any);
     displayLat = selectionData?.location?.lat ?? selectionData?.lat;
