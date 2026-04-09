@@ -65,8 +65,8 @@ test.describe("Map Loader Data Resilience", () => {
     await expect(partialBanner).toContainText(
       "Einige Kartendaten konnten nicht geladen werden",
     );
-    await expect(partialBanner).toContainText("accounts");
-    await expect(partialBanner).toContainText("edges");
+    await expect(partialBanner).toContainText("Garnrollen");
+    await expect(partialBanner).toContainText("Fäden");
   });
 
   test("shows failed state when all API resources fail", async ({ page }) => {

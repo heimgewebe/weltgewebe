@@ -26,8 +26,9 @@ export const load: PageLoad = async ({ fetch }) => {
     try {
       const res = await fetch(`${apiUrl}/api/${resource}`);
       if (res.ok) {
+        const data = await res.json();
         resourceStatuses.push({ resource, status: "ok" });
-        return await res.json();
+        return data;
       } else {
         const errorText = await res.text();
         console.error(`Failed to fetch ${resource} from`, apiUrl, res.status);

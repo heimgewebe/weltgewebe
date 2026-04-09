@@ -45,6 +45,9 @@
   // Derived from scene for backward-compatible access
   $: loadState = scene.loadState;
   $: failedResources = scene.resourceStatus.filter(r => r.status === 'failed').map(r => r.resource);
+
+  const resourceLabel: Record<string, string> = { nodes: 'Knoten', accounts: 'Garnrollen', edges: 'Fäden' };
+  $: failedResourceLabels = failedResources.map(r => resourceLabel[r] ?? r);
   $: markersData = scene.entities;
 
   // Diagnostic counts for debug badge
@@ -138,7 +141,7 @@
 
 
 
-  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'account' | 'garnrolle' {
+  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'garnrolle' {
     if (type === 'garnrolle') {
       return type;
     }
@@ -535,7 +538,7 @@
 
   {#if loadState === 'partial'}
     <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      Einige Kartendaten konnten nicht geladen werden ({failedResources.join(', ')}).
+      Einige Kartendaten konnten nicht geladen werden ({failedResourceLabels.join(', ')}).
     </div>
   {/if}
   {#if loadState === 'failed'}
