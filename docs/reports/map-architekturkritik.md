@@ -187,3 +187,19 @@ Da es sich um Befundklasse B handelt, werden Architektur-Ergänzungen empfohlen:
 
 *Selbstkritische Restprüfung:*
 Die wahrscheinlichste Überdehnung der Diagnose ist die Bewertung von `+page.svelte` als nahendes Gottobjekt. In einer UI-zentrierten Svelte-Anwendung ist ein gewisser Grad an Kompositionslogik in der Root-Route idiomatischer Standard. Ein vorschnelles Extraktions-Refactoring könnte die Lesbarkeit eher verschlechtern als verbessern.
+
+## 7. Nachtrag – Teilumsetzung Alternativpfad (PR Kartenklarheit)
+
+Folgende Punkte aus Abschnitt 5 (Alternativpfad) wurden im Rahmen der Kartenklarheit-Roadmap teilweise adressiert. Diese Auflistung ist diagnostisch, kein Abnahme-Protokoll.
+
+| Empfehlung (Abschnitt 5) | Stand |
+| :--- | :--- |
+| Runtime-Contract: explizites Lade-/Degradationsmodell | Umgesetzt: `MapLoadState`, `MapResourceStatus`, degradierte Banner in UI |
+| View-Model-Schicht: `MapSceneModel` zwischen Loader und Renderer | Umgesetzt: `scene.ts` mit `buildMapScene()` |
+| Contract-Stabilisierung: Discriminated Union für Overlay-Entitäten | Teilweise: `MapEntityViewModel = MapEntityNode \| MapEntityGarnrolle` eingeführt; `RenderableMapPoint` als Deprecated-Alias erhalten |
+| Koordinaten-Konvention: Festlegung auf `lat`/`lon` | Umgesetzt: `MapEntityViewModel` nutzt konsequent `lat`/`lon`; `MapPoint` (lat/lng) als `@deprecated` markiert, nicht entfernt |
+| Betriebsmodi trennen: API- und Basemap-Modus | Umgesetzt: `MapDiagnostics` mit getrenntem `apiMode` und `basemapMode` |
+| Norm-Festigung: ADR zur Monorepo-Entscheidung | Offen |
+| Refactoring von `+page.svelte` (Gottobjekt) | Bewusst nicht adressiert (Kipppunkt noch nicht erreicht) |
+
+*Evidenzlage des Nachtrags:* Direkt aus dem PR-Diff abgeleitet. E2E-Verifikation der UI-Änderungen (degradierte Banner, Diagnostik-Badge) steht noch aus.

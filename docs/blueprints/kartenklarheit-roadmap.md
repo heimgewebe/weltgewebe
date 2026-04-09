@@ -30,7 +30,7 @@ Die Karte soll von einer impliziten Orchestrierung zu einer expliziten, fehlerto
 - [x] Die Karten-UI konsumiert eine Szene statt lose Rohdatenlogik.
 - [x] Map-Entitäten sind typseitig diskriminiert statt weich optional.
 - [x] API-Modus und Basemap-Modus sind separat sichtbar.
-- [x] Neue Overlays können ergänzt werden, ohne dass `apps/web/src/routes/map/+page.svelte` erneut unsichtbar Verantwortung aufsammelt.
+- [~] Neue Overlays können ergänzt werden, ohne dass `apps/web/src/routes/map/+page.svelte` erneut unsichtbar Verantwortung aufsammelt. → Strukturelle Voraussetzungen (scene.ts, NodesOverlay, edges.ts) sind geschaffen; dies ist eine Architekturfolgebehauptung, kein direkt beweisbares Ergebnis.
 
 ---
 
@@ -245,32 +245,31 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
 
 ### Arbeitspakete für Phase 6
 
-- [x] Relevante Testsuite vollständig durchlaufen. → 35/35 Unit-Tests grün.
-- [x] Fehlerszenarien gezielt prüfen:
-  - [x] Nodes fehlen → Getestet via map-load-fallback (failed state)
-  - [x] Accounts fehlen → Getestet via map-load-fallback (partial state)
-  - [x] Edges fehlen → Getestet via map-load-fallback (partial state)
-  - [x] mehrere Ressourcen fehlen → Getestet via map-load-fallback (failed state)
-- [x] Interaktionsszenarien erneut prüfen:
-  - [x] Suche → SearchOverlay nutzt MapEntityViewModel
-  - [x] Filter → Filter-Logik arbeitet auf scene.entities
-  - [x] Fokus → focus.ts unverändert
-  - [x] Komposition → komposition.ts unverändert
-- [x] Basemap-/Diagnostik-Szenarien erneut prüfen. → Getestet in map-load-fallback (debug badge).
-- [x] Dokumentation aktualisieren:
+- [~] Relevante Testsuite vollständig durchlaufen. → 35/35 Unit-Tests (vitest) grün; E2E-Tests (Playwright) geschrieben, aber Browserverifikation ausstehend.
+- [~] Fehlerszenarien gezielt prüfen. → Playwright-Tests geschrieben, Browserverifikation ausstehend:
+  - [~] Nodes fehlen → Testfall in map-load-fallback.spec.ts (failed state)
+  - [~] Accounts fehlen → Testfall in map-load-fallback.spec.ts (partial state)
+  - [~] Edges fehlen → Testfall in map-load-fallback.spec.ts (partial state)
+  - [~] mehrere Ressourcen fehlen → Testfall in map-load-fallback.spec.ts (failed state)
+- [~] Interaktionsszenarien erneut prüfen. → Code umgestellt, E2E-Verifikation ausstehend:
+  - [~] Suche → SearchOverlay auf MapEntityViewModel umgestellt; E2E ausstehend
+  - [~] Filter → Filter-Logik auf scene.entities umgestellt; E2E ausstehend
+  - [x] Fokus → focus.ts unverändert, kein Regressionrisiko
+  - [x] Komposition → komposition.ts unverändert, kein Regressionrisiko
+- [~] Basemap-/Diagnostik-Szenarien erneut prüfen. → Testfall in map-load-fallback.spec.ts geschrieben, Browserverifikation ausstehend.
+- [~] Dokumentation aktualisieren:
   - [x] `docs/blueprints/kartenklarheit-roadmap.md` → Diese Datei
-  - [ ] `docs/reports/map-status-matrix.md` → Deferred: Diagnostics report, separate review recommended
-  - [ ] `docs/reports/map-architekturkritik.md` → Deferred: Critique report, separate review recommended
+  - [ ] `docs/reports/map-status-matrix.md` → Offen: deckt Basemap-Infrastruktur ab, kein Überschneidungsbereich mit diesem PR
+  - [ ] `docs/reports/map-architekturkritik.md` → Offen: Nachtrag zu adressierten Befunden als separater Schritt
 
 ### Verifikation für Phase 6
 
-- [x] Keine Regression in Kerninteraktionen.
-- [x] Dokumentation entspricht dem tatsächlichen Zustand.
-- [x] Die Roadmap-Punkte können ehrlich abgehakt werden.
+- [~] Keine Regression in Kerninteraktionen. → Unit-Tests grün; E2E-Verifikation ausstehend.
+- [~] Dokumentation entspricht dem tatsächlichen Zustand. → Roadmap aktualisiert; map-status-matrix und map-architekturkritik noch offen.
 
 ### Stop-Kriterium für Phase 6
 
-- [x] Die Karte ist expliziter, testbarer und semantisch klarer als zuvor.
+- [~] Die Karte ist expliziter, testbarer und semantisch klarer als zuvor. → Code und Unit-Tests belegen Verbesserung; vollständige Verifikation (E2E) steht noch aus.
 
 ---
 
@@ -319,4 +318,4 @@ Die Roadmap ist erfüllt, wenn:
 
 **Hebel:** Laufzeitwahrheit → Szenenmodell → Typenhärtung.
 **Entscheidung:** Erst explizit machen, dann aufräumen.
-**Status:** Alle Phasen umgesetzt. E2E-Tests ausstehend (erfordern Playwright-Browser).
+**Status:** Kern von Phase 1–5 umgesetzt. Phase 6 teilweise offen: E2E-Verifikation (Playwright) und Dokumentationsnachzug (map-status-matrix, map-architekturkritik) stehen noch aus.
