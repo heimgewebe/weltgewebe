@@ -1,3 +1,15 @@
+/**
+ * Map Scene Module
+ *
+ * Ownership: This module owns the transformation from raw route data
+ * (nodes, accounts, edges, loadState) into the MapSceneModel.
+ *
+ * It is the single transformation point between data loading (+page.ts)
+ * and map rendering (+page.svelte). No other module should duplicate
+ * the node→entity or account→entity mapping logic.
+ *
+ * The scene is stateless and pure – it has no side effects.
+ */
 import type {
   Node,
   Account,
