@@ -54,7 +54,9 @@ Kein:
 ### Command Contracts
 
 WICHTIG:
-Diese Commands sind konzeptionell Contracts und müssen perspektivisch in `contracts/` als maschinenvalidierbare Schemas überführt werden.
+Diese Commands sind konzeptionelle Contracts und werden perspektivisch als echte Contracts (Schemas) im `contracts/` Layer formalisiert.
+
+*Hinweis: Aktuell keine Schema-Validierung – dient nur als operative Struktur.*
 
 Zweck (Etymologie):
 Command ← lat. commandare = „anvertrauen, anweisen“
