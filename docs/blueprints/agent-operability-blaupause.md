@@ -167,6 +167,159 @@ wgx task run fix_map_submission
 Was passiert intern?
 load task → execute commands sequentially → log results
 
+## Experiment-Framework (Extraktion aus vibe-lab)
+
+Die folgenden Elemente aus dem vibe-lab Forschungsframework werden übernommen, um die Agent-Produktivität gezielt zu erhöhen:
+
+### 1. Experiment-Struktur (Kernmodul)
+
+Zweck: Strukturierte Hypothesenprüfung statt implizitem Trial & Error.
+
+```text
+experiments/
+  <feature>/
+    manifest.yml
+    method.md
+    results/
+      decision.yml
+      evidence.jsonl
+```
+
+**Minimal-Schema (`manifest.yml`)**:
+
+```yaml
+id: map_submission_fix
+hypothesis: "Form submission fails due to missing API binding"
+success_criteria:
+  - submission works end-to-end
+schema_version: 1
+```
+
+Einsatzregel: Nur für architekturkritische oder unsichere Features.
+
+### 2. Evidence-Log (`evidence.jsonl`)
+
+Zweck: Realität wird explizit gemacht.
+
+```json
+{
+  "event_type": "submission_failed",
+  "component": "map_form",
+  "count": 7,
+  "timestamp": "2026-04-09"
+}
+```
+
+Einsatzregel: Minimal starten, nur kritische Events loggen.
+
+### 3. Decision Artifacts
+
+Zweck: Beendet Denk-Schleifen.
+
+```yaml
+decision:
+  id: map_submission_strategy
+  status: adopted
+  choice: "client-side validation + API endpoint"
+  rationale: "..."
+  alternatives:
+    - server-side only
+    - hybrid
+```
+
+Einsatzregel: Pflicht für Architekturentscheidungen und größere PRs.
+
+### 4. Golden Example (Referenzfall)
+
+Zweck: Lebende Dokumentation, Testfall und Onboarding.
+
+```text
+experiments/map_submission/
+  CONTEXT.md
+  INITIAL.md
+  method.md
+  result.md
+  decision.yml
+```
+
+Einsatzregel: Genau 1–2 perfekte Beispiele, regelmäßig aktualisieren.
+
+### 5. Scaffolding-CLI
+
+Zweck: Reduziert Reibung und Fehler bei Struktur.
+
+Beispiel: `wgx new experiment map_submission`
+
+Einsatzregel: Minimal implementieren (kein Overengineering).
+
+### 6. Experiment-Chaining
+
+Zweck: Macht Iteration nachvollziehbar.
+
+```yaml
+manifest:
+  id: map_submission_v2
+  replicated_from: map_submission_v1
+```
+
+Einsatzregel: Optional, aber empfohlen bei Iterationen.
+
+### 7. Minimaler reaktiver Loop (1 Use Case!)
+
+Zweck: Erste Form von „System reagiert selbst“.
+
+```yaml
+state: map_submission_broken
+signal: critical_issue
+policy: create_fix_task
+action: open_task
+```
+
+Einsatzregel: Exakt 1 Loop implementieren, nicht mehr.
+
+### 8. Staleness / Revalidierung
+
+Zweck: Verhindert veraltetes Wissen.
+
+```yaml
+last_validated: 2026-04-01
+next_review_due: 2026-05-01
+```
+
+Einsatzregel: Phase 2 (nicht sofort).
+
+### 9. Schema-Versionierung
+
+Zweck: Verhindert stille Breaking Changes.
+
+```yaml
+schema_version: 1
+```
+
+Einsatzregel: Pflicht für experiments, decisions, catalog.
+
+### 10. Contribution Contract
+
+Zweck: Verhindert Wildwuchs.
+
+```text
+Contribution Types:
+- experiment
+- decision
+- fix
+```
+
+Einsatzregel: Minimal halten.
+
+---
+
+🚫 **Nicht übernehmen (explizit)**
+
+- Vollständige epistemische Dokumentstruktur (zu schwergewichtig)
+- Benchmark-System (zu früh, falscher Fokus)
+- Export-/IR-System (bereits andere Mechaniken vorhanden)
+- Vollständiger Intelligence Layer (Weltgewebe hat bereits eigene Architektur)
+
 ## Aktivierung
 
 Diese Blaupause wird angewendet, wenn:
