@@ -1,3 +1,18 @@
+---
+id: agent-operability-blaupause
+title: Minimaler Agent-Operability-Kern
+doc_type: blueprint
+status: draft
+summary: Definition des minimalen Action-Layers zur Ausführung konkreter Entwicklungsaufgaben.
+relations:
+  - type: relates_to
+    target: docs/policies/agent-reading-protocol.md
+  - type: relates_to
+    target: docs/reports/agent-readiness-audit.md
+  - type: depends_on
+    target: AGENTS.md
+---
+
 Dialektik
 
 These:
@@ -44,6 +59,10 @@ Kein:
 ⸻
 
 2.1 Command Contracts (3 Stück, nicht mehr)
+
+WICHTIG:
+Diese Commands sind konzeptionell Contracts und müssen perspektivisch in `contracts/` als maschinenvalidierbare Schemas überführt werden.
+
 
 Zweck (Etymologie)
 
@@ -131,6 +150,19 @@ Prüfen validate_change
 👉 alles andere ist Overkill
 
 ⸻
+
+## Aktivierung
+
+Diese Blaupause wird angewendet, wenn:
+
+- Agent Entwicklungsaufgaben ausführt
+- Blueprint → Implementation überführt wird
+- PR-Erstellung automatisiert wird
+
+Nicht anzuwenden für:
+
+- reine Analyse
+- Dokumentationsaufgaben ohne Codeänderung
 
 🧩 2.2 Task-System (der eigentliche Hebel)
 
@@ -350,6 +382,14 @@ Annahmen:
 
 ⸻
 
+## Erste Implementierung (verbindlich)
+
+Erste Task im Repo:
+
+agent/tasks/fix_map_submission.yaml
+
+Diese Task dient als Referenzimplementierung und muss real ausführbar sein.
+
 🧠 Humor (präzise)
 
 Du baust gerade den Unterschied zwischen:
@@ -361,3 +401,20 @@ und
 „Der Agent hat es tatsächlich getan“
 
 Spoiler: Nur eines davon zählt.
+
+
+agent_operability:
+  commands:
+    - id: command.read_context
+    - id: command.write_change
+    - id: command.validate_change
+
+  task_template:
+    required_steps:
+      - read_context
+      - write_change
+      - validate_change
+
+  execution:
+    type: cli
+    entrypoint: scripts/run-task

@@ -20,6 +20,7 @@ Generated automatically. Do not edit.
 | adr.ADR-0004__fahrplan-verweis | ADR-0004 — Fahrplan-Verweis | reference | active | docs/adr/ADR-0004__fahrplan-verweis.md |
 | adr.ADR-0005-auth | ADR-0005 — Auth (Cookie-basierte Sessions) | reference | active | docs/adr/ADR-0005-auth.md |
 | adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
+| agent-operability-blaupause | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | blueprints.auth-roadmap | Auth Roadmap | roadmap | active | docs/blueprints/auth-roadmap.md |
 | blueprints.weltgewebe.auth-and-ui-routing | Auth und UI-Routing | reference | active | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
 | blueprints.weltgewebe.config.diff | Config Diff | reference | active | docs/blueprints/weltgewebe.config.diff.md |

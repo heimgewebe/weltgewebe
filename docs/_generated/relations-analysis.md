@@ -15,12 +15,13 @@ Generated automatically. Do not edit.
 | Metrik | Wert |
 | --- | --- |
 | Dokumente gesamt | 79 |
-| Dokumente mit ausgehenden Relationen | 75 |
-| Dokumente als Ziel referenziert | 58 |
-| Relationen gesamt | 160 |
-| — relates_to | 159 |
+| Dokumente mit ausgehenden Relationen | 76 |
+| Dokumente als Ziel referenziert | 59 |
+| Relationen gesamt | 163 |
+| — depends_on | 1 |
+| — relates_to | 161 |
 | — supersedes | 1 |
-| Isolierte Dokumente | 2 |
+| Isolierte Dokumente | 1 |
 | depends_on Zyklen | 0 |
 
 ### Warnungen
@@ -45,6 +46,5 @@ _Keine Zyklen gefunden._
 
 > Dokumente ohne eingehende und ausgehende Relationen (index.md/README.md ausgenommen).
 
-- `docs/blueprints/agent-operability-blaupause.md`
 - `docs/reports/cost-report.md`
 

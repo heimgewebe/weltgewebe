@@ -12,6 +12,7 @@ Generated automatically. Do not edit.
 
 ## AGENTS.md
 
+- [depends_on] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/policies/agent-reading-protocol.md
 
 ## docs/adr/0042-consume-semantah-contracts.md
@@ -196,6 +197,7 @@ Generated automatically. Do not edit.
 
 ## docs/policies/agent-reading-protocol.md
 
+- [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 
@@ -231,6 +233,10 @@ Generated automatically. Do not edit.
 ## docs/quickstart-gate-c.md
 
 - [relates_to] docs/dev/codespaces.md
+
+## docs/reports/agent-readiness-audit.md
+
+- [relates_to] docs/blueprints/agent-operability-blaupause.md
 
 ## docs/reports/auth-status-matrix.md
 

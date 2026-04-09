@@ -14,8 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 160 |
-| — relates_to | 159 |
+| Relationen gesamt | 163 |
+| — depends_on | 1 |
+| — relates_to | 161 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,13 +30,14 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (33 Dokumente):
+**Cluster 1** (34 Dokumente):
 
 - `AGENTS.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
 - `docs/architekturstruktur.md`
+- `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/kartenklarheit-roadmap.md`
 - `docs/blueprints/kartenklarheit.md`
 - `docs/blueprints/map-blaupause.md`
