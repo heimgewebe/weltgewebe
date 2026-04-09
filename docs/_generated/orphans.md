@@ -10,4 +10,5 @@ summary: Automatisch generierte Liste verwaister Dokumente.
 
 Generated automatically. Do not edit.
 
+- docs/blueprints/agent-operability-blaupause.md
 - docs/reports/cost-report.md
