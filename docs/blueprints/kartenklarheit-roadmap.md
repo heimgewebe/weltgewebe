@@ -259,8 +259,8 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
 - [x] Basemap-/Diagnostik-Szenarien erneut prüfen. → Getestet in map-load-fallback (debug badge).
 - [x] Dokumentation aktualisieren:
   - [x] `docs/blueprints/kartenklarheit-roadmap.md` → Diese Datei
-  - [ ] `docs/reports/map-status-matrix.md` → Manuelles Review empfohlen
-  - [ ] `docs/reports/map-architekturkritik.md` → Manuelles Review empfohlen
+  - [ ] `docs/reports/map-status-matrix.md` → Deferred: Diagnostics report, separate review recommended
+  - [ ] `docs/reports/map-architekturkritik.md` → Deferred: Critique report, separate review recommended
 
 ### Verifikation für Phase 6
 
