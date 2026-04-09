@@ -16,7 +16,8 @@ export class NodesOverlay {
   constructor(private map: MapLibreMap) {}
 
   private getMarkerCategory(type: string | undefined): "node" | "account" {
-    if (type === "garnrolle" || type === "ron" || type === "account") return "account";
+    if (type === "garnrolle" || type === "ron" || type === "account")
+      return "account";
     return "node";
   }
 

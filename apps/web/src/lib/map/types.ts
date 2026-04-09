@@ -50,7 +50,6 @@ export interface AccountRon extends AccountBase {
 
 export type Account = AccountVerortet | AccountRon;
 
-
 export interface Edge {
   id: string;
   source_id: string;
@@ -71,24 +70,28 @@ export interface MapEntityBase {
 }
 
 export interface MapNodeEntity extends MapEntityBase {
-  type: 'node';
+  type: "node";
   info?: string | null;
   updated_at?: string;
   kind?: string;
 }
 
 export interface MapGarnrolleEntity extends MapEntityBase {
-  type: 'garnrolle';
+  type: "garnrolle";
 }
 
 export interface MapRonEntity extends MapEntityBase {
-  type: 'ron';
+  type: "ron";
 }
 
 export interface MapAccountEntity extends MapEntityBase {
-  type: 'account'; // Fallback for backwards compatibility if needed, but should be avoided
+  type: "account"; // Fallback for backwards compatibility if needed, but should be avoided
 }
 
-export type MapEntityViewModel = MapNodeEntity | MapGarnrolleEntity | MapRonEntity | MapAccountEntity;
+export type MapEntityViewModel =
+  | MapNodeEntity
+  | MapGarnrolleEntity
+  | MapRonEntity
+  | MapAccountEntity;
 
 export type RenderableMapPoint = MapEntityViewModel; // Alias for backward compatibility during refactor, will be phased out in dependent files
