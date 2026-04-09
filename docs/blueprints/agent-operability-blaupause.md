@@ -210,11 +210,24 @@ Zweck: Realität wird explizit gemacht.
 }
 ```
 
+Pflicht-Vokabular (Minimal):
+`event_type`:
+
+- `error`
+- `success`
+- `retry`
+- `manual_intervention`
+- `unexpected_behavior`
+
+**Regel:** Agenten dürfen nur diese Event-Typen verwenden, Erweiterungen müssen explizit dokumentiert werden.
+
 Einsatzregel: Minimal starten, nur kritische Events loggen.
 
 ### 3. Decision Artifacts
 
 Zweck: Beendet Denk-Schleifen.
+
+Das folgende Minimal-Schema ist verpflichtend:
 
 ```yaml
 decision:
@@ -226,6 +239,8 @@ decision:
     - server-side only
     - hybrid
 ```
+
+**Regel:** Jede architekturrelevante Änderung MUSS ein Decision Artifact erzeugen.
 
 Einsatzregel: Pflicht für Architekturentscheidungen und größere PRs.
 
@@ -240,7 +255,15 @@ experiments/map_submission/
   method.md
   result.md
   decision.yml
+  evidence.jsonl
 ```
+
+**Definition:** Ein Golden Example gilt nur als vollständig, wenn:
+
+- `CONTEXT.md` vorhanden
+- `INITIAL.md` vorhanden
+- `decision.yml` vorhanden
+- `evidence.jsonl` vorhanden
 
 Einsatzregel: Genau 1–2 perfekte Beispiele, regelmäßig aktualisieren.
 
@@ -275,6 +298,8 @@ policy: create_fix_task
 action: open_task
 ```
 
+**Regel:** Der reaktive Loop darf initial nur für EINEN Use Case verwendet werden. Eine Ausweitung erfordert ein Decision Artifact.
+
 Einsatzregel: Exakt 1 Loop implementieren, nicht mehr.
 
 ### 8. Staleness / Revalidierung
@@ -296,18 +321,25 @@ Zweck: Verhindert stille Breaking Changes.
 schema_version: 1
 ```
 
+`schema_version` ist Pflicht für:
+
+- `manifest.yml`
+- `decision.yml`
+- catalog entries
+
 Einsatzregel: Pflicht für experiments, decisions, catalog.
 
 ### 10. Contribution Contract
 
 Zweck: Verhindert Wildwuchs.
 
-```text
-Contribution Types:
-- experiment
-- decision
-- fix
-```
+Jede Änderung muss einem Typ entsprechen:
+
+- **experiment** → erzeugt oder verändert `experiments/`
+- **decision** → verändert Entscheidungslogik
+- **fix** → direkte Code-/Doc-Korrektur ohne Experiment
+
+**Regel:** Jede PR muss einen dieser Typen explizit angeben.
 
 Einsatzregel: Minimal halten.
 
