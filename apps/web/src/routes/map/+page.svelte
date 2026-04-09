@@ -22,7 +22,7 @@
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
   import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
-  import { buildMapScene, resolveApiMode } from '$lib/map/scene';
+  import { buildMapScene } from '$lib/map/scene';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
