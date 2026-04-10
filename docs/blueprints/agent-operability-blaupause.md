@@ -365,20 +365,58 @@ Einsatzregel: Minimal halten.
 
 ## Roadmap
 
-- [ ] **Phase 1: Minimaler Kern (Command & Task Definitionen)**
-  - [ ] Erstelle `agent/commands/read_context.yaml`
-  - [ ] Erstelle `agent/commands/write_change.yaml`
-  - [ ] Erstelle `agent/commands/validate_change.yaml`
-  - [ ] Definiere erste Test-Task in `agent/tasks/fix_map_submission.yaml`
-- [ ] **Phase 2: Execution Engine**
-  - [ ] Implementiere Basis-Runner `scripts/run-task` (z.B. in Python oder TS)
-  - [ ] Verbinde Runner mit lokaler Agent-Ausführungsumgebung
-- [ ] **Phase 3: Integration & Erprobung**
-  - [ ] Führe `fix_map_submission` erfolgreich durch den gesamten Loop (read -> write -> validate)
-  - [ ] Überprüfe Ergebnisse und passe Commands ggf. an
-- [ ] **Phase 4: Erweiterung (Optionales Experiment-Framework)**
-  - [ ] Scaffolding für `experiments/` anlegen
-  - [ ] `manifest.yml` und `evidence.jsonl` Schema etablieren
+### Ausführungsprinzip
+
+- Jede Phase beginnt mit Diagnose (Ist-Zustand erfassen)
+- Keine Implementierung ohne Target-Proof
+- Jede Aktion muss auf konkrete Dateien/Outputs referenzieren
+- Die Roadmap ist kein To-do, sondern ein kontrollierter Ausführungsprozess
+
+### Phase 1: Minimaler Kern (Command & Task Definitionen)
+
+- **Ziel:** Erstellung der ersten drei Commands und einer validen Task.
+- **Diagnose:** Existieren bereits ähnliche Strukturen? Gibt es bestehende Command-Definitionen?
+- **Erwartete Outputs:** Nachweise über den aktuellen Zustand in `agent/commands/` und `agent/tasks/`.
+- **Stop-Kriterium:** Klarheit darüber, wo und wie die YAMLs angelegt werden müssen.
+- **Umsetzung (erst danach):**
+  - Lege Zielpfade fest (z.B. `agent/commands/*.yaml`).
+  - Erstelle `agent/commands/read_context.yaml`.
+  - Erstelle `agent/commands/write_change.yaml`.
+  - Erstelle `agent/commands/validate_change.yaml`.
+  - Definiere erste Test-Task in `agent/tasks/fix_map_submission.yaml`.
+
+### Phase 2: Execution Engine
+
+- **Ziel:** Minimaler Ausführungs-Runner für Agenten-Tasks.
+- **Diagnose:** Gibt es bereits Scripts oder CLI-Strukturen, die genutzt oder erweitert werden können?
+- **Erwartete Outputs:** Entscheidung für ein Tooling (z.B. Python oder TS) inklusive Begründung.
+- **Stop-Kriterium:** Ein konkretes Minimalziel: Der Runner kann genau 1 Task ausführen (kein Framework bauen!).
+- **Umsetzung (erst danach):**
+  - Implementiere Basis-Runner `scripts/run-task`.
+  - Verbinde Runner mit lokaler Agent-Ausführungsumgebung.
+
+### Phase 3: Integration & Erprobung
+
+- **Ziel:** Vollständiger Durchlauf einer Task.
+- **Diagnose:** Ist die Task `fix_map_submission` lauffähig und fehlerfrei definiert?
+- **Erwartete Outputs:**
+  - Welche Logs beweisen den Erfolg?
+  - Welche Dateien wurden durch den Lauf verändert?
+- **Stop-Kriterium:** Eindeutiger Erfolgsnachweis des gesamten Loops (read -> write -> validate).
+- **Umsetzung (erst danach):**
+  - Führe `fix_map_submission` aus.
+  - Überprüfe Ergebnisse und passe Commands ggf. an.
+
+### Phase 4: Erweiterung (Optionales Experiment-Framework)
+
+- **WICHTIG:** NICHT vor erfolgreichem Abschluss von Phase 3 beginnen.
+- **Ziel:** Etablierung des Vibe-Lab Experimentier-Schemas.
+- **Diagnose:** Sind die grundlegenden Tasks stabil und verlässlich?
+- **Erwartete Outputs:** Scaffolding für `experiments/`.
+- **Stop-Kriterium:** Valides Schema für `manifest.yml` und `evidence.jsonl` existiert.
+- **Umsetzung (erst danach):**
+  - Lege Scaffolding für `experiments/` an.
+  - Etabliere Schema für `manifest.yml` und `evidence.jsonl`.
 
 ## Aktivierung
 
