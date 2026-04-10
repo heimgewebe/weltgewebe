@@ -409,10 +409,10 @@ Einsatzregel: Minimal halten.
 - **WICHTIG:** NICHT vor erfolgreichem Abschluss von Phase 3 beginnen.
 - **Ziel:** Etablierung eines leichtgewichtigen Experiment-Schemas für Weltgewebe.
 - **Diagnose:** Sind die grundlegenden Tasks stabil und verlässlich?
-- **Erwartete Outputs:** Scaffolding für `experiments/`.
-- **Stop-Kriterium:** Valides Schema für `manifest.yml` und `evidence.jsonl` existiert.
+- **Erwartete Outputs:** Diagnostisch begründetes Scaffolding für ein experimentelles Verzeichnis und dessen Kernartefakte.
+- **Stop-Kriterium:** Belegter Zielpfad und valides Schema für `manifest.yml` und `evidence.jsonl` existieren.
 - **Umsetzung (erst danach):**
-  - Lege Scaffolding für `experiments/` an.
+  - Lege minimales Scaffolding im diagnostisch festgelegten Zielpfad an.
   - Etabliere Schema für `manifest.yml` und `evidence.jsonl`.
 
 ## Aktivierung
