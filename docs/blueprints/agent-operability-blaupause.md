@@ -403,7 +403,7 @@ Einsatzregel: Minimal halten.
   - Führe `fix_map_submission` aus.
   - Wenn belegtes Fehlverhalten oder fehlende Ausführbarkeit vorliegt, passe die betroffenen Commands gezielt an und validiere den gesamten Loop erneut. Die Ursache ist im Runner-Output, Log oder einem zugehörigen Entscheidungsartefakt zu dokumentieren.
 
-### Phase 4: Erweiterung (Optionales Experiment-Framework)
+### Phase 4: Optionale experimentelle Erweiterungen
 
 - **WICHTIG:** NICHT vor erfolgreichem Abschluss von Phase 3 beginnen.
 - **Ziel:** Etablierung eines leichtgewichtigen Experiment-Schemas für Weltgewebe.
