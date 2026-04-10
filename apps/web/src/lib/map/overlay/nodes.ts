@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
-import type { RenderableMapPoint } from "$lib/map/types";
+import type { MapEntityViewModel } from "$lib/map/types";
 import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
 
 export class NodesOverlay {
@@ -8,27 +8,21 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
-      item: RenderableMapPoint;
+      item: MapEntityViewModel;
       cleanup: () => void;
     }
   >();
 
   constructor(private map: MapLibreMap) {}
 
-  private getMarkerCategory(type: string | undefined): "node" | "account" {
-    if (!type) return "node";
-
-    const normalized = type.toLowerCase();
-
-    if (normalized === "account" || normalized === "garnrolle") {
-      return "account";
-    }
-
-    return "node";
+  private getMarkerCategory(
+    type: MapEntityViewModel["type"],
+  ): "node" | "account" {
+    return type === "garnrolle" ? "account" : "node";
   }
 
   public async update(
-    points: RenderableMapPoint[],
+    points: MapEntityViewModel[],
     showNodes: boolean,
     searchMatchIds: Set<string> = new Set(),
   ) {
@@ -82,7 +76,7 @@ export class NodesOverlay {
           element.title = item.title;
           element.setAttribute("aria-label", item.title);
         }
-        element.dataset.testid = `marker-${item.type || "node"}-${item.id}`;
+        element.dataset.testid = `marker-${item.type}-${item.id}`;
 
         if (searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
@@ -104,7 +98,7 @@ export class NodesOverlay {
         element.dataset.id = item.id;
 
         // Robust testing selector based on domain semantics (and unique ID for stability)
-        element.dataset.testid = `marker-${item.type || "node"}-${item.id}`;
+        element.dataset.testid = `marker-${item.type}-${item.id}`;
 
         if (markerCategory === "account") {
           element.style.setProperty(

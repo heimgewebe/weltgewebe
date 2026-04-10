@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
-  import type { Map as MapLibreMap, GeoJSONSource, Marker } from 'maplibre-gl';
+  import type { Map as MapLibreMap } from 'maplibre-gl';
 
   import TopBar from '$lib/components/TopBar.svelte';
   import ContextPanel from '$lib/components/ContextPanel.svelte';
   import ActionBar from '$lib/components/ActionBar.svelte';
   import SearchOverlay from '$lib/components/SearchOverlay.svelte';
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { Edge, RenderableMapPoint } from '$lib/map/types';
+  import type { Edge, MapEntityViewModel } from '$lib/map/types';
 
   import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
   import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
@@ -22,6 +22,7 @@
 
   import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
   import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
+  import { buildMapScene } from '$lib/map/scene';
 
   import { NodesOverlay } from '$lib/map/overlay/nodes';
   import { updateEdges } from '$lib/map/overlay/edges';
@@ -30,42 +31,28 @@
 
   export let data: PageData;
 
-  $: nodesData = (data.nodes || []).map((n) => ({
-    id: n.id,
-    title: n.title,
-    lat: n.location.lat,
-    lon: n.location.lon,
-    summary: n.summary,
-    info: n.info,
-    type: 'node',
-    modules: n.modules,
-    created_at: n.created_at,
-    updated_at: n.updated_at,
-    kind: n.kind,
-    tags: n.tags
-  })) satisfies RenderableMapPoint[];
+  // Phase 2: Build scene from route data – single transformation point
+  $: scene = buildMapScene({
+    nodes: data.nodes || [],
+    accounts: data.accounts || [],
+    edges: data.edges || [],
+    loadState: data.loadState ?? 'ok',
+    resourceStatus: data.resourceStatus ?? [],
+    apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
+    basemapMode: currentBasemap.mode,
+  });
 
-  let accountsData: RenderableMapPoint[] = [];
-  $: {
-    const newAccountsData: RenderableMapPoint[] = [];
-    for (const a of data.accounts || []) {
-      if (a.public_pos) {
-        newAccountsData.push({
-          id: a.id,
-          title: a.title,
-          lat: a.public_pos.lat,
-          lon: a.public_pos.lon,
-          summary: a.summary,
-          type: a.type, // Pass through the domain type (e.g., 'garnrolle')
-          modules: a.modules,
-          created_at: a.created_at
-        });
-      }
-    }
-    accountsData = newAccountsData;
-  }
+  // Derived from scene for backward-compatible access
+  $: loadState = scene.loadState;
+  $: failedResources = scene.resourceStatus.filter(r => r.status === 'failed').map(r => r.resource);
 
-  $: markersData = [...nodesData, ...accountsData];
+  const resourceLabel: Record<string, string> = { nodes: 'Knoten', accounts: 'Garnrollen', edges: 'Fäden' };
+  $: failedResourceLabels = failedResources.map(r => resourceLabel[r] ?? r);
+  $: markersData = scene.entities;
+
+  // Diagnostic counts for debug badge
+  $: nodeCount = scene.entities.filter(e => e.type === 'node').length;
+  $: accountCount = scene.entities.filter(e => e.type !== 'node').length;
 
   // Robust type guards
   function isEdge(e: unknown): e is Edge {
@@ -78,13 +65,13 @@
     );
   }
 
-  $: validEdges = (data.edges || []).filter(isEdge);
+  $: validEdges = scene.edges.filter(isEdge);
 
   $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
   $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
 
   // Search logic moved from SearchOverlay to orchestrator
-  let filteredResults: RenderableMapPoint[] = [];
+  let filteredResults: MapEntityViewModel[] = [];
   let searchMatchIds = new Set<string>();
 
   $: {
@@ -113,12 +100,12 @@
 
   let nodesOverlay: NodesOverlay | null = null;
 
-  function getFilterTypeKey(m: RenderableMapPoint): string {
+  function getFilterTypeKey(m: MapEntityViewModel): string {
     return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
   }
 
   let availableFilterTypes: { id: string, label: string, count: number }[] = [];
-  let filteredMarkersData: RenderableMapPoint[] = [];
+  let filteredMarkersData: MapEntityViewModel[] = [];
 
   // Derivation of filterable types
   $: availableFilterTypes = (() => {
@@ -154,14 +141,14 @@
 
 
 
-  function normalizeSelectionType(type: string | undefined): 'node' | 'account' | 'garnrolle' {
-    if (type === 'account' || type === 'garnrolle') {
+  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'garnrolle' {
+    if (type === 'garnrolle') {
       return type;
     }
     return 'node';
   }
 
-  function focusAndFlyToPoint(item: RenderableMapPoint) {
+  function focusAndFlyToPoint(item: MapEntityViewModel) {
     const itemType = normalizeSelectionType(item.type);
 
     enterFokus({ type: itemType, id: item.id, data: item });
@@ -179,7 +166,7 @@
     }
   }
 
-  function handleSearchSelect(event: CustomEvent<RenderableMapPoint>) {
+  function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
   }
 
@@ -187,8 +174,7 @@
     if (!$authStore.authenticated || !$authStore.account_id) return;
     const accountId = $authStore.account_id;
     // Find the marker corresponding to the user's account
-    // Note: 'account' type is kept for legacy/defensive purposes alongside 'garnrolle'
-    const userMarker = markersData.find(m => m.id === accountId && (m.type === 'account' || m.type === 'garnrolle'));
+    const userMarker = markersData.find(m => m.id === accountId && m.type === 'garnrolle');
 
     if (userMarker) {
       const typeKey = getFilterTypeKey(userMarker);
@@ -520,6 +506,27 @@
     90% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -10px); }
   }
+
+  .degraded-banner {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 8px 16px;
+    background: rgba(180, 130, 0, 0.9);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .degraded-banner--failed {
+    background: rgba(180, 40, 40, 0.9);
+  }
 </style>
 
 <main class="shell">
@@ -529,20 +536,28 @@
     </div>
   {/if}
 
+  {#if loadState === 'partial'}
+    <div class="degraded-banner" role="alert" data-testid="load-state-partial">
+      Einige Kartendaten konnten nicht geladen werden ({failedResourceLabels.join(', ')}).
+    </div>
+  {/if}
+  {#if loadState === 'failed'}
+    <div class="degraded-banner degraded-banner--failed" role="alert" data-testid="load-state-failed">
+      Kartendaten konnten nicht geladen werden.
+    </div>
+  {/if}
+
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
   <FilterOverlay availableTypes={availableFilterTypes} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {nodesData.length} / Accounts: {accountsData.length} / Edges: {edgesData.length}
+      Nodes: {nodeCount} / Accounts: {accountCount} / Edges: {edgesData.length}
       <br>
-      {#if import.meta.env.PUBLIC_GEWEBE_API_BASE}
-        Mode: REMOTE<br>
-        API: {import.meta.env.PUBLIC_GEWEBE_API_BASE}
-      {:else}
-        Mode: DEMO (local)<br>
-        Origin: {typeof window !== 'undefined' ? window.location.origin : 'server'}
+      API: {scene.diagnostics.apiMode} / Basemap: {scene.diagnostics.basemapMode}
+      {#if scene.diagnostics.degraded}
+        <br>⚠ Load: {loadState}
       {/if}
       <br>
       <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
