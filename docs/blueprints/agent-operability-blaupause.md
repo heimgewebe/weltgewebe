@@ -375,34 +375,31 @@ Einsatzregel: Minimal halten.
 ### Phase 1: Minimaler Kern (Command & Task Definitionen)
 
 - **Ziel:** Erstellung der ersten drei Commands und einer validen Task.
-- **Diagnose:** Existieren bereits ähnliche Strukturen? Gibt es bestehende Command-Definitionen?
-- **Erwartete Outputs:** Nachweise über den aktuellen Zustand in `agent/commands/` und `agent/tasks/`.
-- **Stop-Kriterium:** Klarheit darüber, wo und wie die YAMLs angelegt werden müssen.
+- **Diagnose:** Existieren bereits `agent/`-Ordner oder analoge Strukturen im Repo? Müssen die vorgeschlagenen Zielpfade neu angelegt werden?
+- **Erwartete Outputs:** Konkrete Nachweise aus Repo-Struktur/Suchtreffern über belegte Pfade oder belegte Nicht-Existenz.
+- **Stop-Kriterium:** Konkret festgelegte und belegte Zielpfade für Commands und Task.
 - **Umsetzung (erst danach):**
-  - Lege Zielpfade fest (z.B. `agent/commands/*.yaml`).
-  - Erstelle `agent/commands/read_context.yaml`.
-  - Erstelle `agent/commands/write_change.yaml`.
-  - Erstelle `agent/commands/validate_change.yaml`.
-  - Definiere erste Test-Task in `agent/tasks/fix_map_submission.yaml`.
+  - Erstelle `read_context.yaml` im diagnostisch festgelegten Pfad.
+  - Erstelle `write_change.yaml` im diagnostisch festgelegten Pfad.
+  - Erstelle `validate_change.yaml` im diagnostisch festgelegten Pfad.
+  - Definiere erste Test-Task (`fix_map_submission.yaml`) im diagnostisch festgelegten Pfad.
 
 ### Phase 2: Execution Engine
 
 - **Ziel:** Minimaler Ausführungs-Runner für Agenten-Tasks.
-- **Diagnose:** Gibt es bereits Scripts oder CLI-Strukturen, die genutzt oder erweitert werden können?
-- **Erwartete Outputs:** Entscheidung für ein Tooling (z.B. Python oder TS) inklusive Begründung.
-- **Stop-Kriterium:** Ein konkretes Minimalziel: Der Runner kann genau 1 Task ausführen (kein Framework bauen!).
+- **Diagnose:** Gibt es bereits bestehende CLI-/Script-Einstiegspunkte, die genutzt werden können?
+- **Erwartete Outputs:** Explizite Entscheidung für eine Sprache (z. B. Python oder TS) und einen Dateipfad.
+- **Stop-Kriterium:** Sprache entschieden, Zielpfad entschieden, Minimalumfang (Runner kann genau 1 Task ausführen) entschieden.
 - **Umsetzung (erst danach):**
-  - Implementiere Basis-Runner `scripts/run-task`.
+  - Implementiere den zuvor festgelegten Basis-Runner im diagnostisch gewählten Zielpfad.
   - Verbinde Runner mit lokaler Agent-Ausführungsumgebung.
 
 ### Phase 3: Integration & Erprobung
 
 - **Ziel:** Vollständiger Durchlauf einer Task.
 - **Diagnose:** Ist die Task `fix_map_submission` lauffähig und fehlerfrei definiert?
-- **Erwartete Outputs:**
-  - Welche Logs beweisen den Erfolg?
-  - Welche Dateien wurden durch den Lauf verändert?
-- **Stop-Kriterium:** Eindeutiger Erfolgsnachweis des gesamten Loops (read -> write -> validate).
+- **Erwartete Outputs:** Konkreter Mindestnachweis (Runner-Output/Exit-Signal, konkret veränderte Dateien, Ergebnis der Validierungsschritte).
+- **Stop-Kriterium:** Eindeutiger, nachweisbarer Erfolgsnachweis des gesamten Loops (read -> write -> validate).
 - **Umsetzung (erst danach):**
   - Führe `fix_map_submission` aus.
   - Überprüfe Ergebnisse und passe Commands ggf. an.
