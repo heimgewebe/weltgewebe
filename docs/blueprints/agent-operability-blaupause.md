@@ -176,8 +176,8 @@ load task → execute commands sequentially → log results
 
 ## Experiment-Framework (Extraktion aus vibe-lab)
 
-Hinweis: Die folgenden Elemente erweitern den minimalen Operability-Kern optional.
-Sie sind nur für komplexere oder unsichere Entwicklungsaufgaben vorgesehen und nicht Teil des zwingenden Minimalumfangs.
+Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern.
+Sie sind als optionale Erweiterungen für spätere Iterationen gedacht, wenn der minimale Operability-Pfad bereits praktisch funktioniert.
 
 Die folgenden Elemente aus dem vibe-lab Forschungsframework werden übernommen, um die Agent-Produktivität gezielt zu erhöhen:
 
@@ -442,9 +442,9 @@ Risiken:
 
 Das funktioniert nur, wenn:
 
-- Agenten aktiv nutzt
-- Echte Tasks definierst (keine Theorie)
-- Struktur durchsetzt
+- Agenten aktiv eingesetzt werden
+- echte Tasks definiert werden (keine Theorie)
+- die Struktur konsequent durchgesetzt wird
 
 Konkrete nächste Aktion:
 Schritt 1: 3 Command YAMLs anlegen
