@@ -382,7 +382,7 @@ Einsatzregel: Minimal halten.
   - Erstelle `read_context.yaml` im diagnostisch festgelegten Pfad.
   - Erstelle `write_change.yaml` im diagnostisch festgelegten Pfad.
   - Erstelle `validate_change.yaml` im diagnostisch festgelegten Pfad.
-  - Definiere erste Test-Task (`fix_map_submission.yaml`) im diagnostisch festgelegten Pfad.
+  - Definiere erste Test-Task-Datei `fix_map_submission.yaml` mit der Task-ID `fix_map_submission` im diagnostisch festgelegten Pfad (Task-ID und Dateiname können übereinstimmen, sind aber konzeptionell zu unterscheiden).
 
 ### Phase 2: Execution Engine
 
