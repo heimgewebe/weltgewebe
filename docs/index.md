@@ -23,6 +23,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Techstack:** [techstack.md](techstack.md)
 – **Datenmodell:** [datenmodell.md](datenmodell.md)
 – **Vision:** [vision.md](vision.md)
+– **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
 
 ### Domäne
 

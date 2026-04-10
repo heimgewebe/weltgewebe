@@ -38,6 +38,7 @@ Generated automatically. Do not edit.
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
+| docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap – Kartenklarheit | roadmap | active | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
