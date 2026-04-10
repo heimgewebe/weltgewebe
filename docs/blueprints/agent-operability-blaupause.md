@@ -178,8 +178,7 @@ load task → execute commands sequentially → log results
 
 ## Optionale spätere Erweiterungen
 
-Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern. Sie sind nicht Voraussetzung für Phase 1–3 der Roadmap und werden nur nach erfolgreicher Basiserprobung relevant.
-Sie sind als konzeptionelle Erweiterungen für spätere Iterationen gedacht, um die Agent-Produktivität gezielt zu erhöhen:
+Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern. Sie orientieren sich teilweise an erprobten experimentellen Mustern aus anderen Repos, werden hier aber ausschließlich als optionale, native Erweiterungen für Weltgewebe geführt. Sie sind nicht Voraussetzung für Phase 1–3 der Roadmap und werden nur nach erfolgreicher Basiserprobung relevant, um die Agent-Produktivität gezielt zu erhöhen:
 
 ### 1. Experiment-Struktur (Kernmodul)
 
