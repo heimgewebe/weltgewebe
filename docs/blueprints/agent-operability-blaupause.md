@@ -362,6 +362,24 @@ Einsatzregel: Minimal halten.
 - Export-/IR-System (bereits andere Mechaniken vorhanden)
 - Vollständiger Intelligence Layer (Weltgewebe hat bereits eigene Architektur)
 
+
+## Roadmap
+
+- [ ] **Phase 1: Minimaler Kern (Command & Task Definitionen)**
+  - [ ] Erstelle `agent/commands/read_context.yaml`
+  - [ ] Erstelle `agent/commands/write_change.yaml`
+  - [ ] Erstelle `agent/commands/validate_change.yaml`
+  - [ ] Definiere erste Test-Task in `agent/tasks/fix_map_submission.yaml`
+- [ ] **Phase 2: Execution Engine**
+  - [ ] Implementiere Basis-Runner `scripts/run-task` (z.B. in Python oder TS)
+  - [ ] Verbinde Runner mit lokaler Agent-Ausführungsumgebung
+- [ ] **Phase 3: Integration & Erprobung**
+  - [ ] Führe `fix_map_submission` erfolgreich durch den gesamten Loop (read -> write -> validate)
+  - [ ] Überprüfe Ergebnisse und passe Commands ggf. an
+- [ ] **Phase 4: Erweiterung (Optionales Experiment-Framework)**
+  - [ ] Scaffolding für `experiments/` anlegen
+  - [ ] `manifest.yml` und `evidence.jsonl` Schema etablieren
+
 ## Aktivierung
 
 Diese Blaupause wird angewendet, wenn:
