@@ -392,7 +392,7 @@ Einsatzregel: Minimal halten.
 - **Stop-Kriterium:** Sprache entschieden, Zielpfad entschieden, Minimalumfang (Runner kann genau 1 Task ausführen) entschieden.
 - **Umsetzung (erst danach):**
   - Implementiere den zuvor festgelegten Basis-Runner im diagnostisch gewählten Zielpfad.
-  - Verbinde Runner mit lokaler Agent-Ausführungsumgebung.
+  - Dokumentiere die diagnostisch gewählte lokale Ausführungsform und binde den Runner an diese konkrete Ausführungsform an.
 
 ### Phase 3: Integration & Erprobung
 
@@ -402,7 +402,7 @@ Einsatzregel: Minimal halten.
 - **Stop-Kriterium:** Eindeutiger, nachweisbarer Erfolgsnachweis des gesamten Loops (read -> write -> validate).
 - **Umsetzung (erst danach):**
   - Führe `fix_map_submission` aus.
-  - Überprüfe Ergebnisse und passe Commands ggf. an.
+  - Wenn belegtes Fehlverhalten oder fehlende Ausführbarkeit vorliegt, passe die betroffenen Commands gezielt an und validiere den gesamten Loop erneut. Die Ursache ist zu dokumentieren.
 
 ### Phase 4: Erweiterung (Optionales Experiment-Framework)
 
