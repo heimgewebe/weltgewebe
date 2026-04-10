@@ -37,7 +37,16 @@ Agents sollen konkrete Entwicklungsaufgaben strukturiert ausführen können.
 
 Nicht mehr. Nicht weniger.
 
+
 ## Architektur
+
+### Status
+
+Diese Blaupause beschreibt einen Zielzustand.
+Die beschriebenen Strukturen (z. B. `/agent/`, `wgx task run`, `experiments/`) sind konzeptionell und derzeit nicht vollständig im Repository implementiert.
+
+Sie dienen als Referenz für zukünftige Implementierungen und dürfen nicht als bestehende Systemstruktur interpretiert werden.
+
 
 Blueprint → Task → Commands → Execution → Ergebnis
 
@@ -47,7 +56,7 @@ Kein:
 - Policy Engine
 - Emergenz
 
-👉 nur Durchstich von Denken → Handeln
+Nur Durchstich von Denken → Handeln
 
 ## Kernkomponenten
 
@@ -56,9 +65,8 @@ Kein:
 WICHTIG:
 Diese Commands sind konzeptionelle Contracts und müssen perspektivisch in `contracts/` als maschinenvalidierbare Schemas formalisiert werden. Maßgeblich ist dabei JSON Schema als kanonisches Format, konsistent zur bestehenden Contract-Struktur und Validierung im Repo. Die YAML-Blöcke in dieser Blaupause dienen nur der lesbaren Skizze, nicht als alternative Schema-Quelle.
 
-Zweck (Etymologie):
-Command ← lat. commandare = „anvertrauen, anweisen“
-→ bei dir: strukturierte, überprüfbare Aktion
+Zweck:
+Strukturierte, überprüfbare Aktion.
 
 #### C1: command.read_context
 
@@ -74,7 +82,7 @@ constraints:
   - must_reference_files
 ```
 
-👉 ersetzt:
+Ersetzt:
 
 - „lies repo“
 - „analysiere code“
@@ -93,7 +101,7 @@ constraints:
   - no_generated_files
 ```
 
-👉 verbindet mit deiner bestehenden Diagnose-Regel
+Verbindet mit der bestehenden Diagnose-Regel.
 
 #### C3: command.validate_change
 
@@ -111,20 +119,19 @@ checks:
   - docs-guard
 ```
 
-👉 Warum genau diese 3?
+Warum genau diese drei?
 Weil sie exakt abdecken:
 
 - Phase Verstehen: `read_context`
 - Phase Handeln: `write_change`
 - Phase Prüfen: `validate_change`
 
-👉 alles andere ist Overkill
+Weitere Commands sind in dieser Phase iterativer Overhead.
 
 ### Task-System
 
-Etymologie:
-Task ← altengl. tæscan = „auferlegte Arbeit“
-→ bei dir: strukturierte Arbeitssequenz
+Zweck:
+Strukturierte Arbeitssequenz.
 
 #### Minimal-Template
 
@@ -142,8 +149,8 @@ task:
 ```
 
 WICHTIG:
-👉 Task ≠ Beschreibung
-👉 Task = ausführbare Struktur
+Task ≠ Beschreibung
+Task = ausführbare Struktur
 
 ### Agent-Loop
 
@@ -154,7 +161,7 @@ WICHTIG:
 4. validate_change
 ```
 
-👉 kein Planner-Agent nötig (noch nicht)
+Kein Planner-Agent in dieser Iteration erforderlich.
 
 ### Execution
 
@@ -168,6 +175,9 @@ Was passiert intern?
 load task → execute commands sequentially → log results
 
 ## Experiment-Framework (Extraktion aus vibe-lab)
+
+Hinweis: Die folgenden Elemente erweitern den minimalen Operability-Kern optional.
+Sie sind nur für komplexere oder unsichere Entwicklungsaufgaben vorgesehen und nicht Teil des zwingenden Minimalumfangs.
 
 Die folgenden Elemente aus dem vibe-lab Forschungsframework werden übernommen, um die Agent-Produktivität gezielt zu erhöhen:
 
@@ -345,7 +355,7 @@ Einsatzregel: Minimal halten.
 
 ---
 
-🚫 **Nicht übernehmen (explizit)**
+### Nicht übernehmen (explizit)
 
 - Vollständige epistemische Dokumentstruktur (zu schwergewichtig)
 - Benchmark-System (zu früh, falscher Fokus)
@@ -390,15 +400,14 @@ Schon vorhanden (stark!):
 - Contracts → Wahrheit
 
 Neuer Layer macht:
-👉 diese Dinge ausführbar
+Macht diese Dinge ausführbar.
 
 ## Typische Fehler
 
-❌ Fehler 1: Zu viele Commands
-→ du brauchst keine 10
-→ du brauchst 3 gute
+Fehler 1: Zu viele Commands
+→ Es werden drei Commands verwendet.
 
-❌ Fehler 2: Tasks als Text
+Fehler 2: Tasks als Text
 → nein:
 
 ```yaml
@@ -408,12 +417,12 @@ steps:
 
 → wertlos
 
-❌ Fehler 3: Keine echte Nutzung
-→ erste Task MUSS echten Bug fixen
+Fehler 3: Keine echte Nutzung
+→ Erste Task muss echten Bug fixen.
 
 Alternative Sinnachse:
-Statt: 👉 „Wir bauen ein Agent-System“
-Denk: 👉 „Wir bauen ein Makefile für Intelligenz“
+Statt: „Wir bauen ein Agent-System“
+Zielbild: „Wir bauen ein Makefile für Intelligenz“
 
 ## Risiko–Nutzen
 
@@ -433,9 +442,9 @@ Risiken:
 
 Das funktioniert nur, wenn:
 
-- du Agents aktiv nutzt
-- du echte Tasks definierst (keine Theorie)
-- du Struktur durchsetzt
+- Agenten aktiv nutzt
+- Echte Tasks definierst (keine Theorie)
+- Struktur durchsetzt
 
 Konkrete nächste Aktion:
 Schritt 1: 3 Command YAMLs anlegen
@@ -482,15 +491,3 @@ Unsicherheitsgrad: 0.14
 Ursachen: genaue CLI-/Tooling-Struktur im Repo nicht vollständig bekannt
 Interpolationsgrad: 0.19
 Annahmen: kein bestehender Task-Runner, YAML als praktikables Format
-
-## Humor
-
-Du baust gerade den Unterschied zwischen:
-
-„Der Agent hat verstanden, was zu tun ist“
-
-und
-
-„Der Agent hat es tatsächlich getan“
-
-Spoiler: Nur eines davon zählt.
