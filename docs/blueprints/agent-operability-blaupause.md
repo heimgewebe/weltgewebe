@@ -171,15 +171,15 @@ CLI (bewusst simpel):
 wgx task run fix_map_submission
 ```
 
+*(Hinweis: `wgx` dient hier als möglicher CLI-Einstiegspunkt; daraus folgt keine allgemeine Repo-Abhängigkeit des Weltgewebe-Kerns von externen Systemstrukturen. Weltgewebe bleibt eigenständig.)*
+
 Was passiert intern?
 load task → execute commands sequentially → log results
 
-## Experiment-Framework (Extraktion aus vibe-lab)
+## Optionale spätere Erweiterungen
 
-Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern.
-Sie sind als optionale Erweiterungen für spätere Iterationen gedacht, wenn der minimale Operability-Pfad bereits praktisch funktioniert.
-
-Die folgenden Elemente aus dem vibe-lab Forschungsframework werden übernommen, um die Agent-Produktivität gezielt zu erhöhen:
+Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern. Sie sind nicht Voraussetzung für Phase 1–3 der Roadmap und werden nur nach erfolgreicher Basiserprobung relevant.
+Sie sind als konzeptionelle Erweiterungen für spätere Iterationen gedacht, um die Agent-Produktivität gezielt zu erhöhen:
 
 ### 1. Experiment-Struktur (Kernmodul)
 
@@ -460,21 +460,21 @@ Fehler 1: Zu viele Commands
 → Es werden drei Commands verwendet.
 
 Fehler 2: Tasks als Text
-→ nein:
+→ ineffektiv:
 
 ```yaml
 steps:
   - "analysiere code"
 ```
 
-→ wertlos
+→ nicht maschinenvalidierbar
 
 Fehler 3: Keine echte Nutzung
 → Erste Task muss echten Bug fixen.
 
 Alternative Sinnachse:
 Statt: „Wir bauen ein Agent-System“
-Zielbild: „Wir bauen ein Makefile für Intelligenz“
+Zielbild: „Wir bauen einen strikten, maschinenlesbaren Ausführungsvertrag“
 
 ## Risiko–Nutzen
 
