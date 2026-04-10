@@ -362,6 +362,8 @@ Einsatzregel: Minimal halten.
 - Vollständiger Intelligence Layer (Weltgewebe hat bereits eigene Architektur)
 
 
+Die folgende Roadmap priorisiert ausschließlich den operativen Minimalpfad. Die im vorigen Abschnitt beschriebenen optionalen Erweiterungen gehören nicht zum Initialumfang und werden erst nach erfolgreicher Basiserprobung des Kerns relevant.
+
 ## Roadmap
 
 ### Ausführungsprinzip
