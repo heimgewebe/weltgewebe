@@ -402,12 +402,12 @@ Einsatzregel: Minimal halten.
 - **Stop-Kriterium:** Eindeutiger, nachweisbarer Erfolgsnachweis des gesamten Loops (read -> write -> validate).
 - **Umsetzung (erst danach):**
   - Führe `fix_map_submission` aus.
-  - Wenn belegtes Fehlverhalten oder fehlende Ausführbarkeit vorliegt, passe die betroffenen Commands gezielt an und validiere den gesamten Loop erneut. Die Ursache ist zu dokumentieren.
+  - Wenn belegtes Fehlverhalten oder fehlende Ausführbarkeit vorliegt, passe die betroffenen Commands gezielt an und validiere den gesamten Loop erneut. Die Ursache ist im Runner-Output, Log oder einem zugehörigen Entscheidungsartefakt zu dokumentieren.
 
 ### Phase 4: Erweiterung (Optionales Experiment-Framework)
 
 - **WICHTIG:** NICHT vor erfolgreichem Abschluss von Phase 3 beginnen.
-- **Ziel:** Etablierung des Vibe-Lab Experimentier-Schemas.
+- **Ziel:** Etablierung eines leichtgewichtigen Experiment-Schemas für Weltgewebe.
 - **Diagnose:** Sind die grundlegenden Tasks stabil und verlässlich?
 - **Erwartete Outputs:** Scaffolding für `experiments/`.
 - **Stop-Kriterium:** Valides Schema für `manifest.yml` und `evidence.jsonl` existiert.
