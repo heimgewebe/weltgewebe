@@ -23,6 +23,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Techstack:** [techstack.md](techstack.md)
 – **Datenmodell:** [datenmodell.md](datenmodell.md)
 – **Vision:** [vision.md](vision.md)
+– **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
 
 ### Domäne
 
@@ -79,7 +80,6 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Orientierung:** [policies/orientierung.md](policies/orientierung.md)
 – **Agent Reading Protocol:** [policies/agent-reading-protocol.md](policies/agent-reading-protocol.md) (Bindend)
 – **Architekturkritik-Skill:** [policies/architecture-critique.md](policies/architecture-critique.md) (Kognitives Protokoll)
-– **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
 – **Agenten-Manifest:** [weltgewebe-agenten-manifest.md](weltgewebe-agenten-manifest.md)
 – **Privacy:** [specs/privacy-api.md](specs/privacy-api.md), [specs/privacy-ui.md](specs/privacy-ui.md)
 

@@ -399,8 +399,7 @@ Schon vorhanden (stark!):
 - CI → Validierung
 - Contracts → Wahrheit
 
-Neuer Layer macht:
-Macht diese Dinge ausführbar.
+Der neue Layer macht die bereits vorhandenen Regeln, Guardrails und Validierungsmechanismen operativ ausführbar.
 
 ## Typische Fehler
 
