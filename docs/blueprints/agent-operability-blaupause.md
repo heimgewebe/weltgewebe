@@ -176,7 +176,7 @@ wgx task run fix_map_submission
 Was passiert intern?
 load task → execute commands sequentially → log results
 
-## Optionale spätere Erweiterungen
+## Optionale spätere Erweiterungen nach Phase 3
 
 Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern. Sie orientieren sich teilweise an erprobten experimentellen Mustern aus anderen Repos, werden hier aber ausschließlich als optionale, native Erweiterungen für Weltgewebe geführt. Sie sind nicht Voraussetzung für Phase 1–3 der Roadmap und werden nur nach erfolgreicher Basiserprobung relevant, um die Agent-Produktivität gezielt zu erhöhen:
 
