@@ -171,15 +171,14 @@ CLI (bewusst simpel):
 wgx task run fix_map_submission
 ```
 
+*(Hinweis: `wgx` dient hier als möglicher CLI-Einstiegspunkt; daraus folgt keine allgemeine Repo-Abhängigkeit des Weltgewebe-Kerns von externen Systemstrukturen. Weltgewebe bleibt eigenständig.)*
+
 Was passiert intern?
 load task → execute commands sequentially → log results
 
-## Experiment-Framework (Extraktion aus vibe-lab)
+## Optionale spätere Erweiterungen nach Phase 3
 
-Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern.
-Sie sind als optionale Erweiterungen für spätere Iterationen gedacht, wenn der minimale Operability-Pfad bereits praktisch funktioniert.
-
-Die folgenden Elemente aus dem vibe-lab Forschungsframework werden übernommen, um die Agent-Produktivität gezielt zu erhöhen:
+Die folgenden Elemente gehören nicht zum zwingenden Minimal-Kern. Sie orientieren sich teilweise an erprobten experimentellen Mustern aus anderen Repos, werden hier aber ausschließlich als optionale, native Erweiterungen für Weltgewebe geführt. Sie sind nicht Voraussetzung für Phase 1–3 der Roadmap und werden nur nach erfolgreicher Basiserprobung relevant, um die Agent-Produktivität gezielt zu erhöhen:
 
 ### 1. Experiment-Struktur (Kernmodul)
 
@@ -362,6 +361,61 @@ Einsatzregel: Minimal halten.
 - Export-/IR-System (bereits andere Mechaniken vorhanden)
 - Vollständiger Intelligence Layer (Weltgewebe hat bereits eigene Architektur)
 
+
+Die folgende Roadmap priorisiert ausschließlich den operativen Minimalpfad. Die im vorigen Abschnitt beschriebenen optionalen Erweiterungen gehören nicht zum Initialumfang und werden erst nach erfolgreicher Basiserprobung des Kerns relevant.
+
+## Roadmap
+
+### Ausführungsprinzip
+
+- Jede Phase beginnt mit Diagnose (Ist-Zustand erfassen)
+- Keine Implementierung ohne Target-Proof
+- Jede Aktion muss auf konkrete Dateien/Outputs referenzieren
+- Die Roadmap ist kein To-do, sondern ein kontrollierter Ausführungsprozess
+
+### Phase 1: Minimaler Kern (Command & Task Definitionen)
+
+- **Ziel:** Erstellung der ersten drei Commands und einer validen Task.
+- **Diagnose:** Existieren bereits `agent/`-Ordner oder analoge Strukturen im Repo? Müssen die vorgeschlagenen Zielpfade neu angelegt werden?
+- **Erwartete Outputs:** Konkrete Nachweise aus Repo-Struktur/Suchtreffern über belegte Pfade oder belegte Nicht-Existenz.
+- **Stop-Kriterium:** Konkret festgelegte und belegte Zielpfade für Commands und Task.
+- **Umsetzung (erst danach):**
+  - Erstelle `read_context.yaml` im diagnostisch festgelegten Pfad.
+  - Erstelle `write_change.yaml` im diagnostisch festgelegten Pfad.
+  - Erstelle `validate_change.yaml` im diagnostisch festgelegten Pfad.
+  - Definiere erste Test-Task-Datei `fix_map_submission.yaml` mit der Task-ID `fix_map_submission` im diagnostisch festgelegten Pfad (Task-ID und Dateiname können übereinstimmen, sind aber konzeptionell zu unterscheiden).
+
+### Phase 2: Execution Engine
+
+- **Ziel:** Minimaler Ausführungs-Runner für Agenten-Tasks.
+- **Diagnose:** Gibt es bereits bestehende CLI-/Script-Einstiegspunkte, die genutzt werden können?
+- **Erwartete Outputs:** Explizite Entscheidung für eine Sprache (z. B. Python oder TS) und einen Dateipfad.
+- **Stop-Kriterium:** Sprache entschieden, Zielpfad entschieden, Minimalumfang (Runner kann genau 1 Task ausführen) entschieden.
+- **Umsetzung (erst danach):**
+  - Implementiere den zuvor festgelegten Basis-Runner im diagnostisch gewählten Zielpfad.
+  - Dokumentiere die diagnostisch gewählte lokale Ausführungsform und binde den Runner an diese konkrete Ausführungsform an.
+
+### Phase 3: Integration & Erprobung
+
+- **Ziel:** Vollständiger Durchlauf einer Task.
+- **Diagnose:** Ist die Task `fix_map_submission` lauffähig und fehlerfrei definiert?
+- **Erwartete Outputs:** Konkreter Mindestnachweis (Runner-Output/Exit-Signal, konkret veränderte Dateien, Ergebnis der Validierungsschritte).
+- **Stop-Kriterium:** Eindeutiger, nachweisbarer Erfolgsnachweis des gesamten Loops (read -> write -> validate).
+- **Umsetzung (erst danach):**
+  - Führe `fix_map_submission` aus.
+  - Wenn belegtes Fehlverhalten oder fehlende Ausführbarkeit vorliegt, passe die betroffenen Commands gezielt an und validiere den gesamten Loop erneut. Die Ursache ist im Runner-Output, Log oder einem zugehörigen Entscheidungsartefakt zu dokumentieren.
+
+### Phase 4: Optionale experimentelle Erweiterungen
+
+- **WICHTIG:** NICHT vor erfolgreichem Abschluss von Phase 3 beginnen.
+- **Ziel:** Etablierung eines leichtgewichtigen Experiment-Schemas für Weltgewebe.
+- **Diagnose:** Sind die grundlegenden Tasks stabil und verlässlich?
+- **Erwartete Outputs:** Diagnostisch begründetes Scaffolding für ein experimentelles Verzeichnis und dessen Kernartefakte.
+- **Stop-Kriterium:** Belegter Zielpfad und valides Schema für `manifest.yml` und `evidence.jsonl` existieren.
+- **Umsetzung (erst danach):**
+  - Lege minimales Scaffolding im diagnostisch festgelegten Zielpfad an.
+  - Etabliere Schema für `manifest.yml` und `evidence.jsonl`.
+
 ## Aktivierung
 
 Diese Blaupause wird angewendet, wenn:
@@ -407,21 +461,21 @@ Fehler 1: Zu viele Commands
 → Es werden drei Commands verwendet.
 
 Fehler 2: Tasks als Text
-→ nein:
+→ ineffektiv:
 
 ```yaml
 steps:
   - "analysiere code"
 ```
 
-→ wertlos
+→ nicht maschinenvalidierbar
 
 Fehler 3: Keine echte Nutzung
 → Erste Task muss echten Bug fixen.
 
 Alternative Sinnachse:
 Statt: „Wir bauen ein Agent-System“
-Zielbild: „Wir bauen ein Makefile für Intelligenz“
+Zielbild: „Wir bauen einen strikten, maschinenlesbaren Ausführungsvertrag“
 
 ## Risiko–Nutzen
 
