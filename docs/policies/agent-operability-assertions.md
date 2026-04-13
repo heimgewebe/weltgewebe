@@ -2,9 +2,8 @@
 id: docs.policies.agent-operability-assertions
 title: Agent Operability Assertions
 doc_type: policy
-status: active
-scope: global
-summary: "Prüfbare Invarianten für deterministische Agenten-Ausführung. Grundlage für Task-Validierung und spätere Formalisierung des Agent-Operability-Kerns."
+status: canonical
+summary: "Bindende Abbruchbedingungen für agent-generierte Änderungen. Vier prüfbare Invarianten (A0.1, A0–A3) für deterministische Task-Validierung vor jeder Formalisierung oder Ausführung."
 relations:
   - type: relates_to
     target: docs/blueprints/agent-operability-blaupause.md
@@ -29,12 +28,12 @@ erzeugen – und wann nicht.
 
 ---
 
-## Voraussetzung: Discovery-Prädikat (A0.1)
+## A0.1 — Discovery-Prädikat (Gate: vor A0 zwingend)
 
-Jeder Task muss vor der Ausführung explizit definieren, **was als Fundstelle gilt**.
-
-Ohne explizites Discovery-Prädikat ist A0 nicht prüfbar, weil `read_context` keine
-definierte Vollständigkeitsgrenze hat.
+**Ein Task ohne explizites Discovery-Prädikat ist nicht gültig definierbar.**
+A0.1 ist kein optionaler Schritt vor A0, sondern eine Eingangsbedingung: ohne sie
+kann `read_context` keine prüfbare Vollständigkeitsgrenze haben und A0 ist
+nicht anwendbar.
 
 **Formale Anforderung:**
 
