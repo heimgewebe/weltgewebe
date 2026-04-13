@@ -15,9 +15,9 @@
 <!-- Pflicht für agent-generierte Änderungen. Für manuelle PRs optional, aber empfohlen. -->
 <!-- Vollständige Definition: docs/policies/agent-operability-assertions.md -->
 
-**A0.1 – Discovery-Prädikat**
-- Was zählt als Fundstelle?
-- Was zählt ausdrücklich nicht?
+**A0.1 – Discovery-Prädikat** *(Gate: Pflicht vor A0 — ohne diesen Eintrag ist der Task nicht gültig definierbar)*
+- counts_as_usage:
+- does_not_count:
 
 **A0 – Kontext vollständig?**
 - [ ] Alle Entscheidungen waren aus read_context allein begründbar.

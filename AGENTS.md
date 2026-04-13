@@ -73,20 +73,23 @@ Files in `docs/_generated/` are automatically generated and protected.
 
 ## Agent Task Validation Protocol
 
-Before any code change, agents MUST validate the task against the four operability
-assertions defined in [`docs/policies/agent-operability-assertions.md`](docs/policies/agent-operability-assertions.md).
+Before any code change, agents MUST first pass the prerequisite gate (A0.1) and then
+validate against the four assertions (A0–A3) defined in
+[`docs/policies/agent-operability-assertions.md`](docs/policies/agent-operability-assertions.md).
 
-A change is **not validated** without explicit answers to all four:
+**A0.1 is a blocking gate** — without it, A0–A3 cannot be applied. A change is
+**not validated** without explicit answers to all five checkpoints:
 
-| # | Assertion | Question |
+| # | Type | Question |
 |---|---|---|
-| A0.1 | Discovery-Prädikat | What counts as a match? What does not? |
-| A0 | Kontext-Vollständigkeit | Can every decision be made from read_context alone? |
-| A1 | Kausalkette | Is there a reconstructible causal chain from goal to every changed artifact? |
-| A2 | Unabhängigkeitstest | Would any discovered change make sense as a standalone task without the core goal? If yes: abort. |
-| A3 | Lokalität | Can every decision be grounded in local context without requiring external lookup? |
+| A0.1 | **Gate** (prerequisite) | What counts as a match? What does not? |
+| A0 | Assertion | Can every decision be made from read_context alone? |
+| A1 | Assertion | Is there a reconstructible causal chain from goal to every changed artifact? |
+| A2 | Assertion | Would any discovered change make sense as a standalone task without the core goal? If yes: abort. |
+| A3 | Assertion | Can every decision be grounded in local context without requiring external lookup? |
 
-**If any assertion fails: abort and re-scope the task.**
+**If A0.1 is missing: task is not yet defined — do not proceed.**
+**If any assertion (A0–A3) fails: abort and re-scope the task.**
 
 This applies to all agent-generated changes, regardless of size. The assertions are not
 guidelines – they are abort conditions.
