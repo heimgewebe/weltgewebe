@@ -63,6 +63,7 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/kartenklarheit.md
 
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 
 ## docs/blueprints/map-blaupause.md
@@ -259,7 +260,7 @@ Generated automatically. Do not edit.
 
 ## docs/reports/map-status-matrix.md
 
-- [depends_on] docs/blueprints/kartenklarheit-phase6.md
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md

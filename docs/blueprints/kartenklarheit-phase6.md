@@ -6,10 +6,12 @@ status: "in progress"
 doc_type: blueprint
 relations:
   - type: relates_to
+    target: docs/blueprints/kartenklarheit.md
+  - type: relates_to
     target: docs/blueprints/kartenklarheit-roadmap.md
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
-  - type: depends_on
+  - type: relates_to
     target: docs/reports/map-status-matrix.md
 ---
 
@@ -63,9 +65,8 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-# 4. lädt Karte vollständig ohne Fallback?
-
-# (manuell + devtools prüfen: keine 404/Tile errors)
+1. lädt Karte vollständig ohne Fallback?
+   (manuell + devtools prüfen: keine 404/Tile errors)
 
 Stop-Kriterium:
 → Erst wenn diese Checks deterministisch reproduzierbar sind, darf gebaut werden.
