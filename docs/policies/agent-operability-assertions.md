@@ -3,7 +3,7 @@ id: docs.policies.agent-operability-assertions
 title: Agent Operability Assertions
 doc_type: policy
 status: canonical
-summary: "Bindende Abbruchbedingungen für agent-generierte Änderungen. Vier prüfbare Invarianten (A0.1, A0–A3) für deterministische Task-Validierung vor jeder Formalisierung oder Ausführung."
+summary: "Bindende Abbruchbedingungen für agent-generierte Änderungen. A0.1 als vorgelagerte Eingangsbedingung (Gate) plus vier prüfbare Invarianten (A0–A3) für deterministische Task-Validierung vor jeder Formalisierung oder Ausführung."
 relations:
   - type: relates_to
     target: docs/blueprints/agent-operability-blaupause.md
