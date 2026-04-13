@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 79 |
+| Dokumente gesamt | 80 |
 | Dokumente mit ausgehenden Relationen | 76 |
 | Dokumente als Ziel referenziert | 59 |
 | Relationen gesamt | 164 |
 | — relates_to | 163 |
 | — supersedes | 1 |
-| Isolierte Dokumente | 1 |
+| Isolierte Dokumente | 2 |
 | depends_on Zyklen | 0 |
 
 ### Warnungen
@@ -45,5 +45,6 @@ _Keine Zyklen gefunden._
 
 > Dokumente ohne eingehende und ausgehende Relationen (index.md/README.md ausgenommen).
 
+- `docs/blueprints/kartenklarheit-phase6.md`
 - `docs/reports/cost-report.md`
 
