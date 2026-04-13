@@ -71,6 +71,26 @@ Files in `docs/_generated/` are automatically generated and protected.
 - `generated-files-guard`
 - `coverage-guard`
 
+## Agent Task Validation Protocol
+
+Before any code change, agents MUST validate the task against the four operability
+assertions defined in [`docs/policies/agent-operability-assertions.md`](docs/policies/agent-operability-assertions.md).
+
+A change is **not validated** without explicit answers to all four:
+
+| # | Assertion | Question |
+|---|---|---|
+| A0.1 | Discovery-Prädikat | What counts as a match? What does not? |
+| A0 | Kontext-Vollständigkeit | Can every decision be made from read_context alone? |
+| A1 | Kausalkette | Is there a reconstructible causal chain from goal to every changed artifact? |
+| A2 | Unabhängigkeitstest | Would any discovered change make sense as a standalone task without the core goal? If yes: abort. |
+| A3 | Lokalität | Can every decision be grounded in local context without requiring external lookup? |
+
+**If any assertion fails: abort and re-scope the task.**
+
+This applies to all agent-generated changes, regardless of size. The assertions are not
+guidelines – they are abort conditions.
+
 ## Common Traps
 
 Do not manually edit `docs/_generated/` files. Ensure new code or docs are linked.
