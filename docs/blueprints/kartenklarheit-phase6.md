@@ -65,8 +65,7 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-1. lädt Karte vollständig ohne Fallback?
-   (manuell + devtools prüfen: keine 404/Tile errors)
+- 1. lädt Karte vollständig ohne Fallback? (manuell + devtools prüfen: keine 404/Tile errors)
 
 Stop-Kriterium:
 → Erst wenn diese Checks deterministisch reproduzierbar sind, darf gebaut werden.
@@ -195,6 +194,39 @@ Du darfst Phase 6 nur schließen, wenn:
 
 ---
 
+## 6. CI-Verankerung (Pflicht)
+
+Inhalt:
+
+- Definition der Beweispflicht:
+  - Welche Checks müssen automatisiert laufen?
+  - Welche sind Blocking?
+
+Beispiel (Konzept, abhängig von CI-Workflow-Ausbau):
+
+- Playwright Tests → Pflicht (blocking)
+- Basemap curl Checks → Pflicht
+- Screenshot Tests → optional
+
+Form:
+
+Phase 6 ist in der Theorie definiert, aber erst systemisch erzwungen, wenn diese Checks in einem aktiven CI-Workflow grün sind.
+
+## 7. Beweis-Artefakte
+
+Gewünschte Nachweisarten:
+
+- Logs
+- Screenshots
+- Testresultate
+
+Beispielhafte Pfade (Ablageorte abhängig von Workflow-Design):
+
+- `/artifacts/map-e2e/`
+- `/artifacts/basemap-check/`
+
+---
+
 ## Alternative Sinnachse (wichtig)
 
 Du denkst gerade:
@@ -250,36 +282,3 @@ Vorher war alles nur Bauplan + Simulation.
 
 Hebel: echte Ausführung statt Annahme
 Entscheidung: jetzt Beweis bauen, nicht Features
-
----
-
-## 6. CI-Verankerung (Pflicht)
-
-Inhalt:
-
-- Definition:
-  - Welche Checks müssen automatisiert laufen?
-  - Welche sind Blocking?
-
-Beispiel:
-
-- Playwright Tests → Pflicht (blocking)
-- Basemap curl Checks → Pflicht
-- Screenshot Tests → optional
-
-Form:
-
-„Phase 6 ist nur erfüllt, wenn diese Checks in CI grün sind.“
-
-## 7. Beweis-Artefakte
-
-Definiere:
-
-- logs
-- screenshots
-- test results
-
-Beispiel:
-
-- `/artifacts/map-e2e/`
-- `/artifacts/basemap-check/`
