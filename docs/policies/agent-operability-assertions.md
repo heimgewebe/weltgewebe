@@ -102,11 +102,11 @@ muss: Kette gebrochen, Erweiterung nicht erlaubt.
 
 **Was als gültiger Link zählt:**
 Ein Link ist gültig, wenn das entdeckte Artefakt ohne die Kernänderung in einem
-inkonsistenten, misleadenden oder funktional falschen Zustand verbleibt.
+inkonsistenten, irreführenden oder funktional falschen Zustand verbleibt.
 
 **Positivbeispiel (Task B):**
 Kette: `MapPoint` entfernen → Kommentar in `NodePanel.svelte` referenziert `MapPoint`
-→ Kommentar wird misleading → Kommentar muss mitgeändert werden.
+→ Kommentar wird irreführend → Kommentar muss mitgeändert werden.
 Drei Links, alle aus lokalem Kontext rekonstruierbar. A1 erfüllt.
 
 **Negativbeispiel (Task C):**
@@ -136,7 +136,7 @@ Artefakt B ist unabhängig von Kernziel A, wenn:
 
 **Positivbeispiel (A2 korrekt negativ, Task B):**
 NodePanel-Kommentar-Update ohne `MapPoint`-Entfernung sinnvoll? Nein – der Kommentar
-ist nur misleading, wenn `MapPoint` entfernt wird. Nicht unabhängig. A2 nicht getriggert.
+ist nur irreführend, wenn `MapPoint` entfernt wird. Nicht unabhängig. A2 nicht getriggert.
 
 **Negativbeispiel (Task C):**
 `NodePanel.svelte`-Refactoring ohne `MapPoint`-Entfernung sinnvoll? Ja – es ist ein
@@ -206,7 +206,7 @@ Z. 269–272 (behauptet `remote-style`, Code nutzt `local-sovereign` in lokalem 
 | :--- | :--- | :--- |
 | A0.1 | ✓ | Discovery: TypeScript-Typreferenzen in `apps/web/src/`, keine Kommentare |
 | A0 | ✓ | 0 Typverwendungen + 1 Kommentarreferenz: vollständig |
-| A1 | ✓ | Kette: Typ weg → Kommentar referenziert weg → Kommentar misleading → update |
+| A1 | ✓ | Kette: Typ weg → Kommentar referenziert weg → Kommentar irreführend → update |
 | A2 | ✓ | NodePanel-Kommentar ohne MapPoint-Entfernung nicht änderungswürdig |
 | A3 | ✓ | Alle Entscheidungen aus read_context-Ergebnis begründbar |
 
