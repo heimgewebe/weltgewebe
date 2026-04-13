@@ -57,6 +57,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/specs/auth-blueprint.md
 
+## docs/blueprints/kartenklarheit-roadmap.md
+
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
+
 ## docs/blueprints/kartenklarheit.md
 
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
@@ -249,11 +253,13 @@ Generated automatically. Do not edit.
 
 ## docs/reports/map-architekturkritik.md
 
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 
 ## docs/reports/map-status-matrix.md
 
+- [depends_on] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md

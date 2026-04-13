@@ -243,6 +243,8 @@ Nicht Dateigröße bekämpfen, sondern Zuständigkeiten explizit machen.
 
 Die neue Kartenarchitektur gegen Rückfall schützen.
 
+*Hinweis: Phase 6 gilt als „Beweisdefinition“ und ist nur abgeschlossen, wenn die harten Kriterien aus [Kartenklarheit Phase 6](kartenklarheit-phase6.md) erfüllt sind.*
+
 ### Arbeitspakete für Phase 6
 
 - [~] Relevante Testsuite vollständig durchlaufen. → 35/35 Unit-Tests (vitest) grün; E2E-Tests (Playwright) geschrieben, aber Browserverifikation ausstehend.

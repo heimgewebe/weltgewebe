@@ -4,6 +4,13 @@ title: Kartenklarheit Phase 6: Der Wahrheitsbeweis
 description: Der Abschlussplan für Phase 6 der Kartenklarheit, definiert als Wahrheits-Upgrade und Beweis-Framework.
 status: "in progress"
 doc_type: blueprint
+relations:
+  - type: relates_to
+    target: docs/blueprints/kartenklarheit-roadmap.md
+  - type: relates_to
+    target: docs/reports/map-architekturkritik.md
+  - type: depends_on
+    target: docs/reports/map-status-matrix.md
 ---
 
 # Kartenklarheit Phase 6: Der Wahrheitsbeweis
@@ -244,3 +251,34 @@ Hebel: echte Ausführung statt Annahme
 Entscheidung: jetzt Beweis bauen, nicht Features
 
 ---
+
+## 6. CI-Verankerung (Pflicht)
+
+Inhalt:
+
+- Definition:
+  - Welche Checks müssen automatisiert laufen?
+  - Welche sind Blocking?
+
+Beispiel:
+
+- Playwright Tests → Pflicht (blocking)
+- Basemap curl Checks → Pflicht
+- Screenshot Tests → optional
+
+Form:
+
+„Phase 6 ist nur erfüllt, wenn diese Checks in CI grün sind.“
+
+## 7. Beweis-Artefakte
+
+Definiere:
+
+- logs
+- screenshots
+- test results
+
+Beispiel:
+
+- `/artifacts/map-e2e/`
+- `/artifacts/basemap-check/`

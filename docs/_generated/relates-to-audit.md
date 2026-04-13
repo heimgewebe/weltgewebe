@@ -14,8 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 164 |
-| — relates_to | 163 |
+| Relationen gesamt | 167 |
+| — depends_on | 1 |
+| — relates_to | 165 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (35 Dokumente):
+**Cluster 1** (36 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
@@ -38,6 +39,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
+- `docs/blueprints/kartenklarheit-phase6.md`
 - `docs/blueprints/kartenklarheit-roadmap.md`
 - `docs/blueprints/kartenklarheit.md`
 - `docs/blueprints/map-blaupause.md`

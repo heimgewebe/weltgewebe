@@ -10,5 +10,4 @@ summary: Automatisch generierte Liste verwaister Dokumente.
 
 Generated automatically. Do not edit.
 
-- docs/blueprints/kartenklarheit-phase6.md
 - docs/reports/cost-report.md
