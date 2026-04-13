@@ -28,15 +28,17 @@ Phase 6 ist ein Beweis-Framework, kein Test-Framework.
 
 ## Phase-6-Abschlussplan (präzise, umsetzbar)
 
-### 0. Diagnose-Gate (Pflicht vor Umsetzung)
+## 0. Diagnose-Gate (Pflicht vor Umsetzung)
 
 Ist-Zustand (belegt):
+
 - Playwright-Tests existieren (`apps/web/tests/...`)
 - Basemap-Tests existieren (Client + Fallback)
 - API-Tests existieren
 - ABER: kein durchgehender Systembeweis von UI → Map → Basemap → Netzwerk
 
 Hypothesen:
+
 1. E2E deckt UI ab, aber nicht Infrastruktur (Caddy/PMTiles)
 2. Basemap läuft lokal, aber nicht deterministisch unter CI
 3. „funktioniert“ ist aktuell nur komponentenweise wahr
@@ -55,6 +57,7 @@ curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
 # 4. lädt Karte vollständig ohne Fallback?
+
 # (manuell + devtools prüfen: keine 404/Tile errors)
 
 Stop-Kriterium:
@@ -62,11 +65,12 @@ Stop-Kriterium:
 
 ---
 
-### 1. E2E-Testmatrix (Kern)
+## 1. E2E-Testmatrix (Kern)
 
 Ziel: User-Realität simulieren
 
-#### 1.1 Minimalfälle (müssen grün sein)
+### 1.1 Minimalfälle (müssen grün sein)
+
 - Map lädt initial korrekt
 - Nodes erscheinen
 - Filter verändert sichtbare Nodes
@@ -85,7 +89,8 @@ test('map basic flow', async ({ page }) => {
 });
 ```
 
-#### 1.2 Degradationsfälle (entscheidend!)
+### 1.2 Degradationsfälle (entscheidend!)
+
 - Basemap fällt aus → UI bleibt stabil
 - API fällt aus → UI zeigt sinnvolle Zustände
 - langsames Netzwerk → keine UI-Kollision
@@ -94,18 +99,20 @@ test('map basic flow', async ({ page }) => {
 
 ---
 
-### 2. Basemap-Runtime-Beweis (kritischster Punkt)
+## 2. Basemap-Runtime-Beweis (kritischster Punkt)
 
-#### 2.1 Was wirklich bewiesen werden muss
+### 2.1 Was wirklich bewiesen werden muss
 
 Nicht:
+
 - „style.json existiert“
 - „pmtiles gebaut“
 
 Sondern:
+
 - Browser → HTTP → Caddy → PMTiles → Range Request → Rendering
 
-#### 2.2 Minimal-Setup
+### 2.2 Minimal-Setup
 
 ```bash
 # Basemap bauen
@@ -118,7 +125,8 @@ docker compose up caddy -d
 curl -I http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-#### 2.3 Beweisfälle
+### 2.3 Beweisfälle
+
 - Range Requests funktionieren (206 Partial Content)
 - Tiles werden geladen (keine 404/ERR)
 - Karte rendert ohne Fallback
@@ -127,7 +135,7 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 
 ---
 
-### 3. Visuelle Abnahme (der unterschätzte Teil)
+## 3. Visuelle Abnahme (der unterschätzte Teil)
 
 Warum wichtig:
 Karten können formal korrekt und visuell falsch sein.
@@ -135,6 +143,7 @@ Karten können formal korrekt und visuell falsch sein.
 Optionen:
 
 A) Minimal (schnell)
+
 - Screenshot-Tests (Playwright)
 
 ```typescript
@@ -142,6 +151,7 @@ expect(await page.screenshot()).toMatchSnapshot('map.png');
 ```
 
 B) Besser
+
 - gezielte Layer-Checks:
 - Farben stimmen
 - Labels sichtbar
@@ -149,11 +159,12 @@ B) Besser
 
 ---
 
-### 4. Doku-Konsolidierung
+## 4. Doku-Konsolidierung
 
 Nach bestandenem Beweis:
 
 Muss synchron sein:
+
 - `docs/blueprints/kartenklarheit-roadmap.md`
 - `docs/reports/map-status-matrix.md`
 - `docs/reports/map-architekturkritik.md`
@@ -164,9 +175,10 @@ Kein [x], ohne reproduzierbaren Beweis.
 
 ---
 
-### 5. Definition von „fertig“ (harte Kriterien)
+## 5. Definition von „fertig“ (harte Kriterien)
 
 Du darfst Phase 6 nur schließen, wenn:
+
 - E2E läuft stabil lokal + CI
 - Basemap läuft über echtes Caddy + PMTiles
 - visuelle Darstellung ist geprüft
@@ -184,6 +196,7 @@ Alternative Frage:
 → „Welche unserer Wahrheiten sind aktuell unbegründet?“
 
 Das kippt die Logik:
+
 - Nicht: „Was fehlt noch?“
 - Sondern: „Was glauben wir, ohne es bewiesen zu haben?“
 
@@ -194,11 +207,13 @@ Das ist der eigentliche Kern von Kartenklarheit.
 ## Risiken & Nebenwirkungen
 
 Nutzen:
+
 - drastisch höhere Systemzuverlässigkeit
 - keine „funktioniert bei mir“-Illusion mehr
 - echte Release-Fähigkeit
 
 Risiken:
+
 - Setup-Aufwand für Basemap + CI
 - flaky Tests, wenn schlecht geschrieben
 - visuelle Tests können nervig sein
@@ -214,6 +229,7 @@ Und Zukunft hat die unangenehme Eigenschaft, plötzlich Produktion zu heißen.
 
 Du hast ein Haus gebaut (Map, API, UI).
 Phase 6 ist jetzt:
+
 - Strom anschalten
 - Wasser aufdrehen
 - schauen, ob die Tür wirklich aufgeht
