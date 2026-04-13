@@ -32,33 +32,35 @@ erzeugen – und wann nicht.
 
 **Ein Task ohne explizites Discovery-Prädikat ist nicht gültig definierbar.**
 A0.1 ist kein optionaler Schritt vor A0, sondern eine Eingangsbedingung: ohne sie
-kann \`read_context\` keine prüfbare Vollständigkeitsgrenze haben und A0 ist
+kann `read_context` keine prüfbare Vollständigkeitsgrenze haben und A0 ist
 nicht anwendbar.
 
 **Formale Anforderung:**
 
-\`\`\`
+```yaml
 task.discovery_predicate:
   scope: <Verzeichnis oder Muster>
   counts_as_usage:
     - <explizite Auflistung, z. B. "TypeScript-Typreferenz">
   does_not_count:
     - <explizite Ausschlüsse, z. B. "Kommentar", "String-Literal">
-\`\`\`
+```
 
-**Beispiel (Task: \`MapPoint\` entfernen):**
+**Beispiel (Task: `MapPoint` entfernen):**
 
-\`\`\`
+```yaml
 scope: apps/web/src/
 counts_as_usage:
+
   - TypeScript-Typreferenz (Import oder Typannotation)
 does_not_count:
+
   - Kommentare
   - String-Literale
   - JSDoc-Kommentare (außer in der Typdefinition selbst)
-\`\`\`
+```
 
-**Failure Mode:** Wenn das Discovery-Prädikat fehlt, kann \`read_context\` formal vollständig
+**Failure Mode:** Wenn das Discovery-Prädikat fehlt, kann `read_context` formal vollständig
 wirken, aber operativ Fundstellen übersehen oder falsch einschließen. Das System wird
 deterministisch falsch.
 
@@ -66,21 +68,21 @@ deterministisch falsch.
 
 ## A0 — Kontext-Vollständigkeit
 
-> \`read_context\` ist ausreichend, wenn jede Entscheidung im \`decide\`-Schritt ohne
+> `read_context` ist ausreichend, wenn jede Entscheidung im `decide`-Schritt ohne
 > externe Information getroffen werden kann.
 
 **Testprädikat:**
-Nimm alle Artefakte aus \`read_context\`. Gibt es eine Entscheidung, für die du etwas
-nachschlagen müsstest, das nicht drin ist? Wenn ja: \`read_context\` unvollständig.
+Nimm alle Artefakte aus `read_context`. Gibt es eine Entscheidung, für die du etwas
+nachschlagen müsstest, das nicht drin ist? Wenn ja: `read_context` unvollständig.
 
-**Positivbeispiel (Task B: \`MapPoint\` entfernen):**
-\`read_context\` liefert: Typdefinition in \`types.ts\` + Kommentarreferenz in
-\`NodePanel.svelte\`. Beide Entscheidungen (\`in scope?\`, \`abort?\`) sind aus diesen
+**Positivbeispiel (Task B: `MapPoint` entfernen):**
+`read_context` liefert: Typdefinition in `types.ts` + Kommentarreferenz in
+`NodePanel.svelte`. Beide Entscheidungen (`in scope?`, `abort?`) sind aus diesen
 Artefakten allein begründbar. A0 erfüllt.
 
 **Negativbeispiel (Task D: unklares Discovery-Prädikat):**
-\`read_context\` liefert: 0 TypeScript-Typverwendungen. Zusätzlich existiert ein
-dynamischer String \`"MapPoint"\` in einer Konfigurationsdatei. Ohne explizites
+`read_context` liefert: 0 TypeScript-Typverwendungen. Zusätzlich existiert ein
+dynamischer String `"MapPoint"` in einer Konfigurationsdatei. Ohne explizites
 Discovery-Prädikat (A0.1) ist unklar, ob das eine Fundstelle ist. Die Entscheidung
 erfordert externe Klärung. A0 verletzt.
 
@@ -105,13 +107,13 @@ Ein Link ist gültig, wenn das entdeckte Artefakt ohne die Kernänderung in eine
 inkonsistenten, irreführenden oder funktional falschen Zustand verbleibt.
 
 **Positivbeispiel (Task B):**
-Kette: \`MapPoint\` entfernen → Kommentar in \`NodePanel.svelte\` referenziert \`MapPoint\`
+Kette: `MapPoint` entfernen → Kommentar in `NodePanel.svelte` referenziert `MapPoint`
 → Kommentar wird irreführend → Kommentar muss mitgeändert werden.
 Drei Links, alle aus lokalem Kontext rekonstruierbar. A1 erfüllt.
 
 **Negativbeispiel (Task C):**
-Ziel: \`MapPoint\` entfernen. Zusätzlich entdeckt: \`NodePanel.svelte\` hat ein allgemeines
-Refactoring-Potenzial. Das Refactoring ist nicht durch die Entfernung von \`MapPoint\`
+Ziel: `MapPoint` entfernen. Zusätzlich entdeckt: `NodePanel.svelte` hat ein allgemeines
+Refactoring-Potenzial. Das Refactoring ist nicht durch die Entfernung von `MapPoint`
 verursacht. Kein gültiger Link. A1 nicht anwendbar → A2 prüfen → Abort.
 
 **Failure Mode:** Scope wird auf kausal nicht verbundene Artefakte ausgeweitet. Der Task
@@ -135,11 +137,11 @@ Artefakt B ist unabhängig von Kernziel A, wenn:
 (b) die Entscheidung für B keine Fakten aus der A-Änderung benötigt.
 
 **Positivbeispiel (A2 korrekt negativ, Task B):**
-NodePanel-Kommentar-Update ohne \`MapPoint\`-Entfernung sinnvoll? Nein – der Kommentar
-ist nur irreführend, wenn \`MapPoint\` entfernt wird. Nicht unabhängig. A2 nicht getriggert.
+NodePanel-Kommentar-Update ohne `MapPoint`-Entfernung sinnvoll? Nein – der Kommentar
+ist nur irreführend, wenn `MapPoint` entfernt wird. Nicht unabhängig. A2 nicht getriggert.
 
 **Negativbeispiel (Task C):**
-\`NodePanel.svelte\`-Refactoring ohne \`MapPoint\`-Entfernung sinnvoll? Ja – es ist ein
+`NodePanel.svelte`-Refactoring ohne `MapPoint`-Entfernung sinnvoll? Ja – es ist ein
 eigenständiger Qualitätsgewinn. Unabhängig. A2 getriggert → Abort.
 
 **Failure Mode:** Zwei unabhängige Veränderungen werden in einem Task gebündelt. Review
@@ -162,11 +164,11 @@ haltbar ist – unabhängig davon, wie viele Artefakte dieser Kontext enthält.
 
 **Positivbeispiel (Task B):**
 Alle Entscheidungen (scope erweitern?, abort?) wurden aus dem Ergebnis von
-\`read_context\` allein getroffen. Kein externes Wissen nötig. A3 erfüllt.
+`read_context` allein getroffen. Kein externes Wissen nötig. A3 erfüllt.
 
 **Negativbeispiel (Task E, lange Kette):**
 Kette umspannt 5 Artefakte. Zwischen Artefakt 3 und 4 ist eine Zwischenentscheidung
-nötig, die einen neuen \`read_context\`-Lauf erfordern würde (z. B. ob Artefakt 4 überhaupt
+nötig, die einen neuen `read_context`-Lauf erfordern würde (z. B. ob Artefakt 4 überhaupt
 existiert, was in A0 nicht erfasst wurde). Diese Entscheidung ist nicht mehr lokal.
 A3 verletzt → Task neu schneiden, nicht erweitern.
 
@@ -183,8 +185,8 @@ geprüft werden, bevor er formalisiert wird.
 
 ### Task A – Trivial (1 Datei, kein Entscheidungsbedarf)
 
-**Task:** Korrigiere irreführenden Kommentar in \`apps/web/src/routes/map/+page.svelte\`
-Z. 269–272 (behauptet \`remote-style\`, Code nutzt \`local-sovereign\` in lokalem Kontext).
+**Task:** Korrigiere irreführenden Kommentar in `apps/web/src/routes/map/+page.svelte`
+Z. 269–272 (behauptet `remote-style`, Code nutzt `local-sovereign` in lokalem Kontext).
 
 | Assertion | Ergebnis | Begründung |
 | :--- | :--- | :--- |
@@ -200,23 +202,23 @@ Z. 269–272 (behauptet \`remote-style\`, Code nutzt \`local-sovereign\` in loka
 
 ### Task B – Kausal erweitert (2 Dateien, 1 Entscheidung)
 
-**Task:** Entferne \`@deprecated MapPoint\`-Interface aus \`apps/web/src/lib/map/types.ts\`.
+**Task:** Entferne `@deprecated MapPoint`-Interface aus `apps/web/src/lib/map/types.ts`.
 
 | Assertion | Ergebnis | Begründung |
 | :--- | :--- | :--- |
-| A0.1 | ✓ | Discovery: TypeScript-Typreferenzen in \`apps/web/src/\`, keine Kommentare |
+| A0.1 | ✓ | Discovery: TypeScript-Typreferenzen in `apps/web/src/`, keine Kommentare |
 | A0 | ✓ | 0 Typverwendungen + 1 Kommentarreferenz: vollständig |
 | A1 | ✓ | Kette: Typ weg → Kommentar referenziert weg → Kommentar irreführend → update |
 | A2 | ✓ | NodePanel-Kommentar ohne MapPoint-Entfernung nicht änderungswürdig |
 | A3 | ✓ | Alle Entscheidungen aus read_context-Ergebnis begründbar |
 
-**Erwartetes Verhalten:** Gültig. Scope-Erweiterung auf \`NodePanel.svelte\` korrekt.
+**Erwartetes Verhalten:** Gültig. Scope-Erweiterung auf `NodePanel.svelte` korrekt.
 
 ---
 
 ### Task C – Abort (unabhängige Änderung)
 
-**Task:** Entferne \`MapPoint\` + refactore \`NodePanel.svelte\`.
+**Task:** Entferne `MapPoint` + refactore `NodePanel.svelte`.
 
 | Assertion | Ergebnis | Begründung |
 | :--- | :--- | :--- |
@@ -228,7 +230,7 @@ Z. 269–272 (behauptet \`remote-style\`, Code nutzt \`local-sovereign\` in loka
 
 ### Task D – A0-Verletzung durch fehlendes Discovery-Prädikat
 
-**Task:** Entferne \`MapPoint\` wenn ungenutzt – ohne Definition von „Verwendung".
+**Task:** Entferne `MapPoint` wenn ungenutzt – ohne Definition von „Verwendung".
 
 | Assertion | Ergebnis | Begründung |
 | :--- | :--- | :--- |
@@ -241,7 +243,7 @@ Z. 269–272 (behauptet \`remote-style\`, Code nutzt \`local-sovereign\` in loka
 ### Task E – Grenzfall lange Kausalkette
 
 **Task:** Entferne Typ X, dessen Entfernung eine 5-Link-Kette über 5 Dateien auslöst.
-Zwischen Link 3 und 4 ist ein zusätzlicher \`read_context\`-Lauf nötig.
+Zwischen Link 3 und 4 ist ein zusätzlicher `read_context`-Lauf nötig.
 
 | Assertion | Ergebnis | Begründung |
 | :--- | :--- | :--- |
@@ -254,7 +256,7 @@ Kein Zahlen-Limit, aber: Eine Entscheidungseinheit = ein Kontext.
 
 ## Entscheidungslogik (Zusammenfassung)
 
-\`\`\`
+```text
 Task definiert Discovery-Prädikat?  →  Nein: Abort (A0.1)
                                          Ja: weiter
 
@@ -272,7 +274,7 @@ A2 (Artefakt unabhängig)?           →  Ja: Abort
 
 A3 (Entscheidung lokal)?            →  Nein: Abort, Task neu schneiden
                                          Ja: write_change ausführen
-\`\`\`
+```
 
 ---
 
@@ -281,11 +283,13 @@ A3 (Entscheidung lokal)?            →  Nein: Abort, Task neu schneiden
 Dieses Dokument definiert **keine** Implementierungsstruktur.
 
 Es legt fest:
+
 - **nicht**: wie Commands implementiert werden
 - **nicht**: wie der Runner aufgebaut ist
 - **nicht**: welche Verzeichnisstruktur verwendet wird
 
 Es legt fest:
+
 - **ja**: wann ein Task gültig ist
 - **ja**: wann abgebrochen werden muss
 - **ja**: was Deterministik im Agent-Loop bedeutet
