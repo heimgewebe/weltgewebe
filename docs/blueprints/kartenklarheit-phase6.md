@@ -1,7 +1,7 @@
 ---
 id: docs.blueprints.kartenklarheit-phase6
 title: Kartenklarheit Phase 6: Der Wahrheitsbeweis
-description: Der Abschlussplan für Phase 6 der Kartenklarheit, definiert als Wahrheits-Upgrade und Beweis-Framework.
+summary: Der Abschlussplan für Phase 6 der Kartenklarheit, definiert als Wahrheits-Upgrade und Beweis-Framework.
 status: "in progress"
 doc_type: blueprint
 relations:
@@ -65,8 +65,10 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-1. Lädt die Karte vollständig ohne Fallback?
-   (manuell + devtools prüfen: keine 404/Tile errors)
+Zusätzlicher manueller Check:
+
+- Lädt die Karte vollständig ohne Fallback?
+- In DevTools: keine 404, keine Tile Errors
 
 Stop-Kriterium:
 → Erst wenn diese Checks deterministisch reproduzierbar sind, darf gebaut werden.
