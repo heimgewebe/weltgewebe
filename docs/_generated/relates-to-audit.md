@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 173 |
-| — relates_to | 172 |
+| Relationen gesamt | 168 |
+| — relates_to | 167 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,7 +29,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (37 Dokumente):
+**Cluster 1** (36 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
@@ -52,7 +52,6 @@ _Keine Lücken erkannt._
 - `docs/konzepte/garnrolle.md`
 - `docs/overview/inhalt.md`
 - `docs/overview/zusammenstellung.md`
-- `docs/policies/agent-operability-assertions.md`
 - `docs/policies/agent-reading-protocol.md`
 - `docs/policies/architecture-critique.md`
 - `docs/policies/orientierung.md`
@@ -127,14 +126,6 @@ _Keine Lücken erkannt._
 
 > Dokumente mit den meisten relates_to-Zielen und ihren konkreten Relationen.
 
-**`docs/blueprints/agent-operability-blaupause.md`**:
-
-- relates_to → `AGENTS.md`
-- relates_to → `agent-policy.yaml`
-- relates_to → `docs/policies/agent-operability-assertions.md`
-- relates_to → `docs/policies/agent-reading-protocol.md`
-- relates_to → `docs/reports/agent-readiness-audit.md`
-
 **`docs/deploy/README.md`**:
 
 - relates_to → `docs/deploy/heimserver.deployment.md`
@@ -149,6 +140,13 @@ _Keine Lücken erkannt._
 - relates_to → `docs/blueprints/auth-roadmap.md`
 - relates_to → `docs/reports/auth-status-matrix.md`
 - relates_to → `docs/specs/auth-blueprint.md`
+
+**`docs/blueprints/agent-operability-blaupause.md`**:
+
+- relates_to → `AGENTS.md`
+- relates_to → `agent-policy.yaml`
+- relates_to → `docs/policies/agent-reading-protocol.md`
+- relates_to → `docs/reports/agent-readiness-audit.md`
 
 ### Hinweise
 

@@ -13,8 +13,6 @@ relations:
     target: AGENTS.md
   - type: relates_to
     target: agent-policy.yaml
-  - type: relates_to
-    target: docs/policies/agent-operability-assertions.md
 ---
 
 # Minimaler Agent-Operability-Kern
