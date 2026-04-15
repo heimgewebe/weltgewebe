@@ -37,7 +37,7 @@ Phase 6 ist ein Beweis-Framework, kein Test-Framework.
 
 ## Phase-6-Abschlussplan (präzise, umsetzbar)
 
-## 0. Diagnose-Gate (Pflicht vor Umsetzung)
+### 0. Diagnose-Gate (Pflicht vor Umsetzung)
 
 Ist-Zustand (belegt):
 
@@ -65,18 +65,19 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-- 1. lädt Karte vollständig ohne Fallback? (manuell + devtools prüfen: keine 404/Tile errors)
+1. Lädt die Karte vollständig ohne Fallback?
+   (manuell + devtools prüfen: keine 404/Tile errors)
 
 Stop-Kriterium:
 → Erst wenn diese Checks deterministisch reproduzierbar sind, darf gebaut werden.
 
 ---
 
-## 1. E2E-Testmatrix (Kern)
+### 1. E2E-Testmatrix (Kern)
 
 Ziel: User-Realität simulieren
 
-### 1.1 Minimalfälle (müssen grün sein)
+#### 1.1 Minimalfälle (müssen grün sein)
 
 - Map lädt initial korrekt
 - Nodes erscheinen
@@ -96,7 +97,7 @@ test('map basic flow', async ({ page }) => {
 });
 ```
 
-### 1.2 Degradationsfälle (entscheidend!)
+#### 1.2 Degradationsfälle (entscheidend!)
 
 - Basemap fällt aus → UI bleibt stabil
 - API fällt aus → UI zeigt sinnvolle Zustände
@@ -106,9 +107,9 @@ test('map basic flow', async ({ page }) => {
 
 ---
 
-## 2. Basemap-Runtime-Beweis (kritischster Punkt)
+### 2. Basemap-Runtime-Beweis (kritischster Punkt)
 
-### 2.1 Was wirklich bewiesen werden muss
+#### 2.1 Was wirklich bewiesen werden muss
 
 Nicht:
 
@@ -119,7 +120,7 @@ Sondern:
 
 - Browser → HTTP → Caddy → PMTiles → Range Request → Rendering
 
-### 2.2 Minimal-Setup
+#### 2.2 Minimal-Setup
 
 ```bash
 # Basemap bauen
@@ -132,7 +133,7 @@ docker compose up caddy -d
 curl -I http://localhost:8080/tiles/hamburg.pmtiles
 ```
 
-### 2.3 Beweisfälle
+#### 2.3 Beweisfälle
 
 - Range Requests funktionieren (206 Partial Content)
 - Tiles werden geladen (keine 404/ERR)
@@ -142,7 +143,7 @@ curl -I http://localhost:8080/tiles/hamburg.pmtiles
 
 ---
 
-## 3. Visuelle Abnahme (der unterschätzte Teil)
+### 3. Visuelle Abnahme (der unterschätzte Teil)
 
 Warum wichtig:
 Karten können formal korrekt und visuell falsch sein.
@@ -166,7 +167,7 @@ B) Besser
 
 ---
 
-## 4. Doku-Konsolidierung
+### 4. Doku-Konsolidierung
 
 Nach bestandenem Beweis:
 
@@ -182,7 +183,7 @@ Kein [x], ohne reproduzierbaren Beweis.
 
 ---
 
-## 5. Definition von „fertig“ (harte Kriterien)
+### 5. Definition von „fertig“ (harte Kriterien)
 
 Du darfst Phase 6 nur schließen, wenn:
 
@@ -194,7 +195,7 @@ Du darfst Phase 6 nur schließen, wenn:
 
 ---
 
-## 6. CI-Verankerung (Pflicht)
+### 6. CI-Verankerung (Pflicht)
 
 Inhalt:
 
@@ -212,7 +213,7 @@ Form:
 
 Phase 6 ist in der Theorie definiert, aber erst systemisch erzwungen, wenn diese Checks in einem aktiven CI-Workflow grün sind.
 
-## 7. Beweis-Artefakte
+### 7. Beweis-Artefakte
 
 Gewünschte Nachweisarten:
 
