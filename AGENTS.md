@@ -71,6 +71,18 @@ Files in `docs/_generated/` are automatically generated and protected.
 - `generated-files-guard`
 - `coverage-guard`
 
+## Agent Task Validation Protocol
+
+Before any agent-generated change, agents MUST pass the prerequisite gate (A0.1)
+and then validate against assertions A0–A3, as defined in
+[`docs/policies/agent-operability-assertions.md`](docs/policies/agent-operability-assertions.md).
+
+- **A0.1 missing** → task is not yet defined, do not proceed
+- **A0 fails** → extend `read_context`, do not write yet
+- **A1 fails** → proceed to A2 check (not yet abort)
+- **A2 fails** → abort and re-scope
+- **A3 fails** → abort and re-scope
+
 ## Common Traps
 
 Do not manually edit `docs/_generated/` files. Ensure new code or docs are linked.

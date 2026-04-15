@@ -13,11 +13,13 @@ Generated automatically. Do not edit.
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/policies/agent-operability-assertions.md
 - [relates_to] docs/policies/agent-reading-protocol.md
 
 ## agent-policy.yaml
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/policies/agent-operability-assertions.md
 
 ## docs/adr/0042-consume-semantah-contracts.md
 
@@ -50,6 +52,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/techstack.md
 - [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
+
+## docs/blueprints/agent-operability-blaupause.md
+
+- [relates_to] docs/policies/agent-operability-assertions.md
 
 ## docs/blueprints/auth-roadmap.md
 
@@ -204,9 +210,14 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/overview/zusammenstellung.md
 
+## docs/policies/agent-operability-assertions.md
+
+- [relates_to] docs/blueprints/agent-operability-blaupause.md
+
 ## docs/policies/agent-reading-protocol.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/policies/agent-operability-assertions.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 
