@@ -51,10 +51,8 @@ task.discovery_predicate:
 ```yaml
 scope: apps/web/src/
 counts_as_usage:
-
   - TypeScript-Typreferenz (Import oder Typannotation)
 does_not_count:
-
   - Kommentare
   - String-Literale
   - JSDoc-Kommentare (außer in der Typdefinition selbst)

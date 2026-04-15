@@ -35,6 +35,7 @@ Wie getestet? Logs / Screenshots / Kommandos.
 
 **A0.1 – Discovery-Prädikat** *(Gate: Pflicht vor A0 — ohne diesen Eintrag ist der Task nicht gültig definierbar)*
 
+- scope:
 - counts_as_usage:
 - does_not_count:
 
