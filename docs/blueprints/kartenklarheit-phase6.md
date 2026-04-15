@@ -95,7 +95,8 @@ test('map basic flow', async ({ page }) => {
   await expect(page.locator('.map')).toBeVisible();
 
   await page.fill('[data-test=search]', 'Hamburg');
-  await expect(page.locator('.node')).toHaveCountGreaterThan(0);
+  // Hinweis: Selektoren sind illustrativ. Im realen Test die korrekten data-testids des Repos verwenden.
+  expect(await page.locator('.node').count()).toBeGreaterThan(0);
 });
 ```
 
