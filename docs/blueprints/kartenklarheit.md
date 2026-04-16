@@ -534,3 +534,9 @@ Das eigentliche Problem ist, dass sie an mehreren Stellen mehr verschweigt als s
 
 **Interpolationsgrad:** 0.18
 **Hauptquellen:** Zielarchitektur und empfohlene Reihenfolge sind teilweise Entwurf, nicht bereits im Repo vorgegeben.
+
+---
+
+## 12. Phase 6: Der Wahrheitsbeweis
+
+Der vollständige Blueprint für Phase 6 befindet sich in [Kartenklarheit Phase 6](kartenklarheit-phase6.md). Er definiert den Abschluss der Kartenklarheit nicht als weiteres Feature-Building, sondern als Beweis-Framework, um alle getroffenen Annahmen real auszuführen, zu messen und zu bestätigen.

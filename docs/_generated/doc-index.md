@@ -40,9 +40,9 @@ Generated automatically. Do not edit.
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
+| docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | in progress | docs/blueprints/kartenklarheit-phase6.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap – Kartenklarheit | roadmap | active | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.index | Weltgewebe - Doku-Index | index | active | docs/index.md |
-| docs.policies.agent-operability-assertions | Agent Operability Assertions | policy | canonical | docs/policies/agent-operability-assertions.md |
 | docs.policies.agent-reading-protocol | Agent Reading Protocol | policy | canonical | docs/policies/agent-reading-protocol.md |
 | docs.policies.architecture-critique | Architekturkritik-Skill: weltgewebe.architecture.critique | policy | canonical | docs/policies/architecture-critique.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |

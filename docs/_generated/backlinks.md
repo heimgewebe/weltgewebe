@@ -13,13 +13,11 @@ Generated automatically. Do not edit.
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
-- [relates_to] docs/policies/agent-operability-assertions.md
 - [relates_to] docs/policies/agent-reading-protocol.md
 
 ## agent-policy.yaml
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
-- [relates_to] docs/policies/agent-operability-assertions.md
 
 ## docs/adr/0042-consume-semantah-contracts.md
 
@@ -53,18 +51,19 @@ Generated automatically. Do not edit.
 - [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
 
-## docs/blueprints/agent-operability-blaupause.md
-
-- [relates_to] docs/policies/agent-operability-assertions.md
-
 ## docs/blueprints/auth-roadmap.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/specs/auth-blueprint.md
 
+## docs/blueprints/kartenklarheit-roadmap.md
+
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
+
 ## docs/blueprints/kartenklarheit.md
 
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 
 ## docs/blueprints/map-blaupause.md
@@ -205,14 +204,9 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/overview/zusammenstellung.md
 
-## docs/policies/agent-operability-assertions.md
-
-- [relates_to] docs/blueprints/agent-operability-blaupause.md
-
 ## docs/policies/agent-reading-protocol.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
-- [relates_to] docs/policies/agent-operability-assertions.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 
@@ -260,11 +254,13 @@ Generated automatically. Do not edit.
 
 ## docs/reports/map-architekturkritik.md
 
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 
 ## docs/reports/map-status-matrix.md
 
+- [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/kartenklarheit-roadmap.md
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md

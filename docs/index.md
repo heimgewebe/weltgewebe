@@ -43,6 +43,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Roadmap Kartenklarheit:** [blueprints/kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) (Umsetzung)
 – **Basemap-Blaupause:** [blueprints/map-blaupause.md](blueprints/map-blaupause.md) (Architektur)
 – **Basemap-Roadmap:** [blueprints/map-roadmap.md](blueprints/map-roadmap.md) (Umsetzung)
+– **Kartenklarheit Phase 6:** [blueprints/kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) (Der Wahrheitsbeweis)
 
 ### Auth-Architektur (Kanonisch)
 
@@ -79,7 +80,6 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 – **Orientierung:** [policies/orientierung.md](policies/orientierung.md)
 – **Agent Reading Protocol:** [policies/agent-reading-protocol.md](policies/agent-reading-protocol.md) (Bindend)
-– **Agent Operability Assertions:** [policies/agent-operability-assertions.md](policies/agent-operability-assertions.md) (Bindend – Task-Validierung)
 – **Architekturkritik-Skill:** [policies/architecture-critique.md](policies/architecture-critique.md) (Kognitives Protokoll)
 – **Agenten-Manifest:** [weltgewebe-agenten-manifest.md](weltgewebe-agenten-manifest.md)
 – **Privacy:** [specs/privacy-api.md](specs/privacy-api.md), [specs/privacy-ui.md](specs/privacy-ui.md)
