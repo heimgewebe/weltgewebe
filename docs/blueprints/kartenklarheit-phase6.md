@@ -59,10 +59,10 @@ Checks (minimal, copyfähig):
 cd apps/web && pnpm test
 
 # 2. gibt es echten Netzwerkverkehr zur Basemap?
-curl -I http://localhost:8080/tiles/hamburg.pmtiles
+curl -I http://localhost:8081/basemap/hamburg.pmtiles
 
 # 3. liefert Caddy Range Requests korrekt?
-curl -H "Range: bytes=0-1000" http://localhost:8080/tiles/hamburg.pmtiles
+curl -H "Range: bytes=0-1000" http://localhost:8081/basemap/hamburg.pmtiles
 ```
 
 Zusätzlicher manueller Check:
@@ -130,10 +130,10 @@ Sondern:
 ./scripts/basemap/build-hamburg-pmtiles.sh
 
 # Caddy starten
-docker compose up caddy -d
+docker compose up -d caddy
 
 # prüfen:
-curl -I http://localhost:8080/tiles/hamburg.pmtiles
+curl -I http://localhost:8081/basemap/hamburg.pmtiles
 ```
 
 #### 2.3 Beweisfälle
