@@ -14,8 +14,8 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 168 |
-| — relates_to | 167 |
+| Relationen gesamt | 172 |
+| — relates_to | 171 |
 | — supersedes | 1 |
 | relates_to Anteil | 99% |
 
@@ -29,7 +29,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (36 Dokumente):
+**Cluster 1** (37 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
@@ -52,6 +52,7 @@ _Keine Lücken erkannt._
 - `docs/konzepte/garnrolle.md`
 - `docs/overview/inhalt.md`
 - `docs/overview/zusammenstellung.md`
+- `docs/policies/agent-operability-assertions.md`
 - `docs/policies/agent-reading-protocol.md`
 - `docs/policies/architecture-critique.md`
 - `docs/policies/orientierung.md`

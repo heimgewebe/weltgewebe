@@ -33,6 +33,7 @@ canonical_sources:
   - AGENTS.md
   - agent-policy.yaml
   - docs/policies/agent-reading-protocol.md
+  - docs/policies/agent-operability-assertions.md
   - docs/policies/architecture-critique.md
 
 discovery_roots:
@@ -113,6 +114,7 @@ truth_model:
         - "AGENTS.md"
         - "agent-policy.yaml"
         - "docs/policies/agent-reading-protocol.md"
+        - "docs/policies/agent-operability-assertions.md"
         - "docs/policies/architecture-critique.md"
     - class: runtime_configs_and_code
       paths: ["infra/compose/*.yml", "apps/api/src/*", "apps/web/src/*", ".github/workflows/*.yml"]
