@@ -164,6 +164,18 @@ Um Tasks sauber zu begrenzen, sind folgende Assertions als geplante Invarianten 
   - `counts_as_usage`
   - `does_not_count`
 
+  Im Zielbild würde dies z. B. wie folgt konkretisiert:
+
+  ```yaml
+  task.discovery_predicate:
+    scope: apps/web/src/
+    counts_as_usage:
+      - TypeScript-Typreferenz
+    does_not_count:
+      - Kommentare
+      - String-Literale
+  ```
+
 - **A0 – Kontext-Vollständigkeit**
   `read_context` ist nur dann ausreichend, wenn alle Entscheidungen daraus allein begründbar sind.
 
@@ -190,9 +202,9 @@ Im Zielzustand würde daraus im Task-Schnitt und Agent-Loop folgende kompakte En
 4. A1 gültig?
    - nein → A2 prüfen
 5. A2 verletzt?
-   - ja → abort / re-scope
+   - ja → abbrechen / Scope neu schneiden
 6. A3 verletzt?
-   - ja → abort / task neu schneiden
+   - ja → abbrechen / Task neu schneiden
 7. sonst → `write_change`, danach `validate_change`
 
 Dieser Validierungslayer ist nicht Teil der initialen Minimal-Implementierung, sondern ein geplanter Präzisierungsschritt für die Pilot-Erprobung realer Tasks.
