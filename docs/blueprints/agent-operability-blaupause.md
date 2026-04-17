@@ -156,7 +156,7 @@ Task = ausführbare Struktur
 
 **Wichtig:** Dies beschreibt das **Zielbild und die Sollstruktur**. Die folgenden Assertions sind **noch nicht kanonisch** und **noch keine bindende Repo-Policy**. Eine spätere Extraktion und Kanonisierung (z. B. in `docs/policies/`) ist erst nach einer Pilot-Erprobung an realen Tasks denkbar.
 
-Um Tasks sauber zu begrenzen, werden folgende Assertions als geplante Invarianten eingeführt:
+Um Tasks sauber zu begrenzen, sind folgende Assertions als geplante Invarianten vorgesehen:
 
 - **A0.1 – Discovery-Prädikat**
   Ein Task ist erst gültig definierbar, wenn explizit festgelegt ist:
@@ -178,7 +178,7 @@ Um Tasks sauber zu begrenzen, werden folgende Assertions als geplante Invariante
 
 #### Geplante Entscheidungslogik
 
-Die Assertions ergeben im Task-Schnitt und Agent-Loop folgende kompakte Entscheidungslogik:
+Im Zielzustand würde daraus im Task-Schnitt und Agent-Loop folgende kompakte Entscheidungslogik folgen:
 
 1. Discovery-Prädikat vorhanden?
    - nein → Task noch nicht gültig definierbar
@@ -194,6 +194,8 @@ Die Assertions ergeben im Task-Schnitt und Agent-Loop folgende kompakte Entschei
 6. A3 verletzt?
    - ja → abort / task neu schneiden
 7. sonst → `write_change`, danach `validate_change`
+
+Dieser Validierungslayer ist nicht Teil der initialen Minimal-Implementierung, sondern ein geplanter Präzisierungsschritt für die Pilot-Erprobung realer Tasks.
 
 ### Agent-Loop
 
