@@ -152,6 +152,63 @@ WICHTIG:
 Task ≠ Beschreibung
 Task = ausführbare Struktur
 
+### Geplanter Validierungslayer für Agent-Tasks
+
+**Wichtig:** Dies beschreibt das **Zielbild und die Sollstruktur**. Die folgenden Assertions sind **noch nicht kanonisch** und **noch keine bindende Repo-Policy**. Eine spätere Extraktion und Kanonisierung (z. B. in `docs/policies/`) ist erst nach einer Pilot-Erprobung an realen Tasks denkbar.
+
+Um Tasks sauber zu begrenzen, sind folgende Assertions als geplante Invarianten vorgesehen:
+
+- **A0.1 – Discovery-Prädikat**
+  Ein Task ist erst gültig definierbar, wenn explizit festgelegt ist:
+  - `scope`
+  - `counts_as_usage`
+  - `does_not_count`
+
+  Im Zielbild würde dies z. B. wie folgt konkretisiert:
+
+  ```yaml
+  task.discovery_predicate:
+    scope: apps/web/src/
+    counts_as_usage:
+      - TypeScript-Typreferenz
+    does_not_count:
+      - Kommentare
+      - String-Literale
+  ```
+
+- **A0 – Kontext-Vollständigkeit**
+  `read_context` ist nur dann ausreichend, wenn alle Entscheidungen daraus allein begründbar sind.
+
+- **A1 – Kausalkette**
+  Eine Scope-Erweiterung ist nur zulässig, wenn eine rekonstruierbare Kausalkette vom Ziel zur neu betroffenen Datei vorliegt.
+
+- **A2 – Unabhängigkeitstest**
+  Wenn eine entdeckte Änderung auch ohne das Kernziel als eigener sinnvoller Task bestehen könnte, muss abgebrochen und neu geschnitten werden.
+
+- **A3 – Lokalität**
+  Alle Entscheidungen müssen innerhalb eines gemeinsamen Entscheidungskontexts haltbar sein; wenn externer Zusatzkontext nötig wird, ist der Task neu zu schneiden.
+
+#### Geplante Entscheidungslogik
+
+Im Zielzustand würde daraus im Task-Schnitt und Agent-Loop folgende kompakte Entscheidungslogik folgen:
+
+1. Discovery-Prädikat vorhanden?
+   - nein → Task noch nicht gültig definierbar
+2. `read_context` vollständig?
+   - nein → Kontext erweitern
+3. neue Artefakte entdeckt?
+   - nein → `write_change`
+   - ja → A1 prüfen
+4. A1 gültig?
+   - nein → A2 prüfen
+5. A2 verletzt?
+   - ja → abbrechen / Scope neu schneiden
+6. A3 verletzt?
+   - ja → abbrechen / Task neu schneiden
+7. sonst → `write_change`, danach `validate_change`
+
+Dieser Validierungslayer ist nicht Teil der initialen Minimal-Implementierung, sondern ein geplanter Präzisierungsschritt für die Pilot-Erprobung realer Tasks.
+
 ### Agent-Loop
 
 ```text
