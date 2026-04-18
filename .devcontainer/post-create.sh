@@ -115,7 +115,7 @@ safe_install_web() {
   (cd "$web_dir" && pnpm install)
 }
 
-# existing setup
+# bestehendes Setup
 sudo apt-get update
 sudo apt-get install -y jq ripgrep shfmt just httpie
 
@@ -125,16 +125,17 @@ export PATH="$HOME/.local/bin:$PATH"
 install_vale
 install_hadolint
 
-# Node/PNPM setup
+# Node/PNPM vorbereiten (Version aus package.json)
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 corepack enable || true
 
-# Frontend install with targeted ownership fallback
+# Frontend-Install mit gezieltem Rechte-Fallback
 safe_install_web
 
-# uv install (official installer)
-# Source: Astral Docs - Standalone installer
+# --- uv installieren (offizieller Installer von Astral) ---
+# Quelle: Astral Docs – Standalone installer
 # https://docs.astral.sh/uv/getting-started/installation/
+# Download the installer script to a temporary file
 tmpfile=$(mktemp) || {
   echo "Failed to create temp file" >&2
   exit 1
@@ -144,7 +145,7 @@ curl -LsSf https://astral.sh/uv/install.sh -o "$tmpfile" || {
   rm -f "$tmpfile"
   exit 1
 }
-# Optional: verify installer checksum if Astral publishes one
+# (Optional) Here you could verify the checksum if Astral provides one
 sh "$tmpfile" || {
   echo "uv install failed" >&2
   rm -f "$tmpfile"
@@ -152,6 +153,7 @@ sh "$tmpfile" || {
 }
 rm -f "$tmpfile"
 
+# Version anzeigen, damit man im Devcontainer-Log sieht, dass es geklappt hat
 uv --version
 
 echo "uv installed and ready"
