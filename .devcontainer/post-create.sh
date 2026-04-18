@@ -14,6 +14,9 @@ install_vale() {
   local tarball
   local base_url
   local tmpdir
+  cleanup_vale_tmpdir() {
+    rm -rf "$tmpdir"
+  }
 
   case "$(uname -m)" in
     x86_64)
@@ -31,16 +34,18 @@ install_vale() {
   tarball="vale_${vale_version}_${vale_os}.tar.gz"
   base_url="https://github.com/errata-ai/vale/releases/download/v${vale_version}"
   tmpdir=$(mktemp -d)
+  trap cleanup_vale_tmpdir RETURN
 
   curl "${CURL_COMMON[@]}" -L -o "$tmpdir/$tarball" "${base_url}/${tarball}"
   curl "${CURL_COMMON[@]}" -L -o "$tmpdir/checksums.txt" "${base_url}/vale_${vale_version}_checksums.txt"
   (
     cd "$tmpdir"
-    grep "$tarball" checksums.txt | sha256sum -c -
+    grep -F -- "$tarball" checksums.txt | sha256sum -c -
     tar -xzf "$tarball"
     install -m 0755 vale "$HOME/.local/bin/vale"
   )
-  rm -rf "$tmpdir"
+  trap - RETURN
+  cleanup_vale_tmpdir
 
   vale --version
 }
@@ -54,6 +59,9 @@ install_hadolint() {
   local tmpdir
   local expected_hash
   local actual_hash
+  cleanup_hadolint_tmpdir() {
+    rm -rf "$tmpdir"
+  }
 
   case "$(uname -m)" in
     x86_64)
@@ -72,6 +80,7 @@ install_hadolint() {
   checksum_name="${binary_name}.sha256"
   base_url="https://github.com/hadolint/hadolint/releases/download/v${hadolint_version}"
   tmpdir=$(mktemp -d)
+  trap cleanup_hadolint_tmpdir RETURN
 
   curl "${CURL_COMMON[@]}" -L -o "$tmpdir/$binary_name" "${base_url}/${binary_name}"
   curl "${CURL_COMMON[@]}" -L -o "$tmpdir/$checksum_name" "${base_url}/${checksum_name}"
@@ -84,7 +93,8 @@ install_hadolint() {
   fi
 
   install -m 0755 "$tmpdir/$binary_name" "$HOME/.local/bin/hadolint"
-  rm -rf "$tmpdir"
+  trap - RETURN
+  cleanup_hadolint_tmpdir
 
   hadolint --version
 }
