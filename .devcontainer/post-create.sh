@@ -49,8 +49,11 @@ install_hadolint() {
   local hadolint_version="2.12.0"
   local hadolint_arch
   local binary_name
+  local checksum_name
   local base_url
   local tmpdir
+  local expected_hash
+  local actual_hash
 
   case "$(uname -m)" in
     x86_64)
@@ -66,27 +69,53 @@ install_hadolint() {
   esac
 
   binary_name="hadolint-linux-${hadolint_arch}"
+  checksum_name="${binary_name}.sha256"
   base_url="https://github.com/hadolint/hadolint/releases/download/v${hadolint_version}"
   tmpdir=$(mktemp -d)
 
   curl "${CURL_COMMON[@]}" -L -o "$tmpdir/$binary_name" "${base_url}/${binary_name}"
+  curl "${CURL_COMMON[@]}" -L -o "$tmpdir/$checksum_name" "${base_url}/${checksum_name}"
+
+  expected_hash=$(awk '{print $1}' "$tmpdir/$checksum_name")
+  actual_hash=$(sha256sum "$tmpdir/$binary_name" | awk '{print $1}')
+  if [ "$expected_hash" != "$actual_hash" ]; then
+    printf 'hadolint checksum mismatch: expected %s, got %s\n' "$expected_hash" "$actual_hash" >&2
+    return 1
+  fi
+
   install -m 0755 "$tmpdir/$binary_name" "$HOME/.local/bin/hadolint"
   rm -rf "$tmpdir"
 
   hadolint --version
 }
 
-ensure_user_can_write() {
-  local target_dir="$1"
+repair_web_install_paths_if_needed() {
+  local web_dir="$1"
 
-  if [ -w "$target_dir" ]; then
+  for mutable_path in "$web_dir/node_modules" "$web_dir/.pnpm-store"; do
+    if [ -e "$mutable_path" ] && [ ! -w "$mutable_path" ]; then
+      sudo chown -R "$(id -u):$(id -g)" "$mutable_path"
+    fi
+  done
+}
+
+safe_install_web() {
+  local web_dir="apps/web"
+
+  if [ ! -d "$web_dir" ] || [ ! -f "$web_dir/package.json" ]; then
     return 0
   fi
 
-  sudo chown -R "$(id -u):$(id -g)" "$target_dir"
+  if (cd "$web_dir" && pnpm install); then
+    return 0
+  fi
+
+  echo "pnpm install failed, attempting targeted ownership fix..."
+  repair_web_install_paths_if_needed "$web_dir"
+  (cd "$web_dir" && pnpm install)
 }
 
-# bestehendes Setup
+# existing setup
 sudo apt-get update
 sudo apt-get install -y jq ripgrep shfmt just httpie
 
@@ -96,20 +125,16 @@ export PATH="$HOME/.local/bin:$PATH"
 install_vale
 install_hadolint
 
-# Node/PNPM vorbereiten (Version aus package.json)
+# Node/PNPM setup
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 corepack enable || true
 
-# Frontend-Install, wenn apps/web existiert
-if [ -d "apps/web" ] && [ -f "apps/web/package.json" ]; then
-  ensure_user_can_write "apps/web"
-  (cd apps/web && pnpm install)
-fi
+# Frontend install with targeted ownership fallback
+safe_install_web
 
-# --- uv installieren (offizieller Installer von Astral) ---
-# Quelle: Astral Docs – Standalone installer
+# uv install (official installer)
+# Source: Astral Docs - Standalone installer
 # https://docs.astral.sh/uv/getting-started/installation/
-# Download the installer script to a temporary file
 tmpfile=$(mktemp) || {
   echo "Failed to create temp file" >&2
   exit 1
@@ -119,7 +144,7 @@ curl -LsSf https://astral.sh/uv/install.sh -o "$tmpfile" || {
   rm -f "$tmpfile"
   exit 1
 }
-# (Optional) Here you could verify the checksum if Astral provides one
+# Optional: verify installer checksum if Astral publishes one
 sh "$tmpfile" || {
   echo "uv install failed" >&2
   rm -f "$tmpfile"
@@ -127,7 +152,6 @@ sh "$tmpfile" || {
 }
 rm -f "$tmpfile"
 
-# Version anzeigen, damit man im Devcontainer-Log sieht, dass es geklappt hat
 uv --version
 
 echo "uv installed and ready"
