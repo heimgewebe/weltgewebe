@@ -47,7 +47,11 @@ export function resolveNodeParticipants(nodeId: string) {
 
   return relatedEdges
     .map((edge) => {
-      const account = accountMap.get(edge.source_id);
+      // Optimization: Only lookup account if source_type is account
+      const account =
+        edge.source_type === "account"
+          ? accountMap.get(edge.source_id)
+          : undefined;
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,

@@ -9,7 +9,7 @@ export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 export function GET({ params }: RequestEvent) {
   const { id } = params;
 
-  if (!id) {
+  if (!id || id.trim() === "") {
     throw error(400, "ID is required");
   }
 
