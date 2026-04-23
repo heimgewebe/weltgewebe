@@ -16,10 +16,6 @@ yanked = "warn"
 id = "RUSTSEC-2025-0134"
 reason = "Transitive dependency via async-nats; waiting for upstream update"
 
-[[advisories.ignore]]
-id = "RUSTSEC-2026-0049"
-reason = "Transitive via async-nats; no non-breaking upgrade path currently removes rustls-webpki 0.102.x. Temporary exception pending upstream updates in async-nats/lettre rustls stacks."
-
 # RUSTSEC-2026-0098: rustls-webpki name constraints for URI names were accepted incorrectly.
 # Transitive via async-nats and lettre through rustls/rustls-webpki; no direct non-breaking
 # upgrade path from this workspace without upstream ecosystem updates.
