@@ -1,13 +1,13 @@
 import { json, error } from "@sveltejs/kit";
 import { demoNodes } from "$lib/demo/demoData";
 import { resolveNodeParticipants } from "$lib/demo/resolvers";
-import type { RequestEvent } from "@sveltejs/kit";
+import type { RequestHandler } from "./$types";
 
 export const prerender = true;
 export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 
-export function GET({ params }: RequestEvent) {
-  const id = params.id as string;
+export const GET: RequestHandler = ({ params }) => {
+  const { id } = params;
 
   const node = demoNodes.find((n) => n.id === id);
 
@@ -37,4 +37,4 @@ export function GET({ params }: RequestEvent) {
         : []),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   });
-}
+};
