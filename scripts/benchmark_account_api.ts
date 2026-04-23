@@ -42,6 +42,8 @@ function baseline() {
 
 function optimized() {
   const start = performance.now();
+  // Note: We include Map creation in the measurement because the API endpoint
+  // also creates the Map per-request.
   const nodeMap = new Map(demoNodes.map((n) => [n.id, n]));
   const nodes = relatedEdges
     .map((edge) => {
