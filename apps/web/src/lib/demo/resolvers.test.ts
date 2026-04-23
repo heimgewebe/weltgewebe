@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   resolveAccountNodes,
   resolveNodeParticipants,
@@ -39,5 +39,45 @@ describe("Demo Resolvers", () => {
     const details = resolveEdgeParticipants("non-existent");
     expect(details.source_details).toBeNull();
     expect(details.target_details).toBeNull();
+  });
+});
+
+describe("resolveNodeParticipants — source_type contract", () => {
+  afterEach(() => {
+    vi.doUnmock("./demoData");
+    vi.resetModules();
+  });
+
+  it("excludes edges whose source_type is not 'account'", async () => {
+    vi.resetModules();
+    const NODE_ID = "node-x";
+    vi.doMock("./demoData", () => ({
+      demoNodes: [],
+      demoAccounts: [{ id: "acct-1", title: "Konto A", type: "garnrolle" }],
+      demoEdges: [
+        {
+          id: "e-account",
+          source_id: "acct-1",
+          source_type: "account",
+          target_id: NODE_ID,
+          target_type: "node",
+          edge_kind: "ref",
+          note: "",
+        },
+        {
+          id: "e-node",
+          source_id: "node-y",
+          source_type: "node",
+          target_id: NODE_ID,
+          target_type: "node",
+          edge_kind: "ref",
+          note: "",
+        },
+      ],
+    }));
+    const { resolveNodeParticipants: resolve } = await import("./resolvers");
+    const result = resolve(NODE_ID);
+    expect(result).toHaveLength(1);
+    expect(result[0].account_id).toBe("acct-1");
   });
 });
