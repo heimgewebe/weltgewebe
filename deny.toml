@@ -7,33 +7,6 @@ yanked = "warn"
 # cargo-deny bekannte, noch nicht gefahrlos upgradebare Abhängigkeiten
 # nicht als Fehler markiert.
 
-# RUSTSEC-2025-0134: rustls-pemfile is unmaintained (transitive via async-nats)
-# The crate has been archived and users should migrate to rustls-pki-types.
-# This is a transitive dependency through async-nats v0.35.1, which we cannot
-# directly control. We accept this advisory until async-nats updates or we
-# find an alternative NATS client.
-[[advisories.ignore]]
-id = "RUSTSEC-2025-0134"
-reason = "Transitive dependency via async-nats; waiting for upstream update"
-
-[[advisories.ignore]]
-id = "RUSTSEC-2026-0049"
-reason = "Transitive via async-nats; no non-breaking upgrade path currently removes rustls-webpki 0.102.x. Temporary exception pending upstream updates in async-nats/lettre rustls stacks."
-
-# RUSTSEC-2026-0098: rustls-webpki name constraints for URI names were accepted incorrectly.
-# Transitive via async-nats and lettre through rustls/rustls-webpki; no direct non-breaking
-# upgrade path from this workspace without upstream ecosystem updates.
-[[advisories.ignore]]
-id = "RUSTSEC-2026-0098"
-reason = "Transitive via async-nats/lettre through rustls-webpki; temporary exception until upstream versions ship fixed rustls-webpki."
-
-# RUSTSEC-2026-0099: rustls-webpki accepted wildcard certificates under constrained DNS names.
-# Same transitive chain as above (async-nats and lettre); retained as temporary exception
-# until an upstream-compatible dependency update is available.
-[[advisories.ignore]]
-id = "RUSTSEC-2026-0099"
-reason = "Transitive via async-nats/lettre through rustls-webpki; temporary exception until upstream versions ship fixed rustls-webpki."
-
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
