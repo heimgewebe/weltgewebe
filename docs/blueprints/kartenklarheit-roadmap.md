@@ -247,31 +247,32 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
 
 ### Arbeitspakete für Phase 6
 
-- [~] Relevante Testsuite vollständig durchlaufen. → 35/35 Unit-Tests (vitest) grün; E2E-Tests (Playwright) geschrieben, aber Browserverifikation ausstehend.
-- [~] Fehlerszenarien gezielt prüfen. → Playwright-Tests geschrieben, Browserverifikation ausstehend:
-  - [~] Nodes fehlen → Testfall in map-load-fallback.spec.ts (failed state)
-  - [~] Accounts fehlen → Testfall in map-load-fallback.spec.ts (partial state)
-  - [~] Edges fehlen → Testfall in map-load-fallback.spec.ts (partial state)
-  - [~] mehrere Ressourcen fehlen → Testfall in map-load-fallback.spec.ts (failed state)
-- [~] Interaktionsszenarien erneut prüfen. → Code umgestellt, E2E-Verifikation ausstehend:
-  - [~] Suche → SearchOverlay auf MapEntityViewModel umgestellt; E2E ausstehend
-  - [~] Filter → Filter-Logik auf scene.entities umgestellt; E2E ausstehend
-  - [x] Fokus → focus.ts unverändert, kein Regressionrisiko
-  - [x] Komposition → komposition.ts unverändert, kein Regressionrisiko
-- [~] Basemap-/Diagnostik-Szenarien erneut prüfen. → Testfall in map-load-fallback.spec.ts geschrieben, Browserverifikation ausstehend.
-- [~] Dokumentation aktualisieren:
+- [x] Relevante Testsuite vollständig durchlaufen. → 39/39 Unit-Tests (vitest) grün; 22/22 E2E-Tests (Playwright/Chromium) grün (2026-04-23).
+- [x] Fehlerszenarien gezielt prüfen. → Playwright-Tests im echten Browser verifiziert:
+  - [x] Nodes fehlen → `map-load-fallback.spec.ts` (failed state) grün
+  - [x] Accounts fehlen → `map-load-fallback.spec.ts` (partial state) grün
+  - [x] Edges fehlen → `map-load-fallback.spec.ts` (partial state) grün
+  - [x] mehrere Ressourcen fehlen → `map-load-fallback.spec.ts` (failed state) grün
+- [x] Interaktionsszenarien erneut prüfen. → `map-interaction.spec.ts` im echten Browser verifiziert:
+  - [x] Suche → `map-interaction.spec.ts` grün
+  - [x] Filter → `map-interaction.spec.ts` grün
+  - [x] Fokus → `map-interaction.spec.ts` grün, kein Regressionrisiko
+  - [x] Komposition → `map-interaction.spec.ts` grün, kein Regressionrisiko
+- [x] Basemap-/Diagnostik-Szenarien erneut prüfen. → `map-load-fallback.spec.ts` (Debug-Badge), `basemap-sovereignty-testbuild.spec.ts`, `basemap-client-integration.spec.ts` im echten Browser grün.
+- [~] Basemap-Runtime-Beweis (Caddy + echtes PMTiles-Artefakt + HTTP 206). → Ausstehend: erfordert vollständigen Docker-Stack mit realem PMTiles-Byte-Stream.
+- [x] Dokumentation aktualisieren:
   - [x] `docs/blueprints/kartenklarheit-roadmap.md` → Diese Datei
-  - [ ] `docs/reports/map-status-matrix.md` → Offen: deckt Basemap-Infrastruktur ab, kein Überschneidungsbereich mit diesem PR
-  - [ ] `docs/reports/map-architekturkritik.md` → Offen: Nachtrag zu adressierten Befunden als separater Schritt
+  - [x] `docs/reports/map-status-matrix.md` → Aktualisiert mit Kartenklarheit-Nachtrag und verifizierten Testständen (2026-04-23)
+  - [x] `docs/reports/map-architekturkritik.md` → Nachtrag-Evidenzlage mit E2E-Verifikationsstand ergänzt (2026-04-23)
 
 ### Verifikation für Phase 6
 
-- [~] Keine Regression in Kerninteraktionen. → Unit-Tests grün; E2E-Verifikation ausstehend.
-- [~] Dokumentation entspricht dem tatsächlichen Zustand. → Roadmap aktualisiert; map-status-matrix und map-architekturkritik noch offen.
+- [x] Keine Regression in Kerninteraktionen. → 39/39 Unit-Tests + 22/22 E2E-Tests grün (2026-04-23).
+- [x] Dokumentation entspricht dem tatsächlichen Zustand. → Roadmap, map-status-matrix und map-architekturkritik aktualisiert.
 
 ### Stop-Kriterium für Phase 6
 
-- [~] Die Karte ist expliziter, testbarer und semantisch klarer als zuvor. → Code und Unit-Tests belegen Verbesserung; vollständige Verifikation (E2E) steht noch aus.
+- [x] Die Karte ist expliziter, testbarer und semantisch klarer als zuvor. → Code, Unit-Tests und E2E-Tests belegen Verbesserung. Einzig ausstehend: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream (infrastruktureller CI-Ausbau).
 
 ---
 
@@ -320,4 +321,4 @@ Die Roadmap ist erfüllt, wenn:
 
 **Hebel:** Laufzeitwahrheit → Szenenmodell → Typenhärtung.
 **Entscheidung:** Erst explizit machen, dann aufräumen.
-**Status:** Kern von Phase 1–5 umgesetzt. Phase 6 teilweise offen: E2E-Verifikation (Playwright) und Dokumentationsnachzug (map-status-matrix, map-architekturkritik) stehen noch aus.
+**Status:** Phasen 1–6 umgesetzt. 39/39 Unit-Tests + 22/22 E2E-Tests grün (2026-04-23). Dokumentation aktualisiert. Einzig ausstehend: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream.
