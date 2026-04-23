@@ -1,5 +1,9 @@
 import { demoAccounts, demoEdges, demoNodes } from "./demoData";
 
+type DemoNode = (typeof demoNodes)[number];
+type DemoAccount = (typeof demoAccounts)[number];
+type DemoEntity = DemoNode | DemoAccount;
+
 /**
  * Resolves nodes associated with an account.
  * Replaces N+1 query pattern with a Map-based lookup.
@@ -59,26 +63,31 @@ export function resolveNodeParticipants(nodeId: string) {
  */
 export function resolveEdgeParticipants(edgeId: string) {
   const edge = demoEdges.find((e) => e.id === edgeId);
-  if (!edge) return null;
+  if (!edge) {
+    return {
+      source_details: null,
+      target_details: null,
+    };
+  }
 
   const nodeMap = new Map(demoNodes.map((n) => [n.id, n]));
   const accountMap = new Map(demoAccounts.map((a) => [a.id, a]));
 
-  function getEntity(id: string, type: string) {
+  function getEntity(id: string, type: string): DemoEntity | undefined {
     if (type === "account") return accountMap.get(id);
     if (type === "node") return nodeMap.get(id);
-    return null;
+    return undefined;
   }
 
   const source = getEntity(edge.source_id, edge.source_type);
   const target = getEntity(edge.target_id, edge.target_type);
 
-  function toDetails(entity: any) {
+  function toDetails(entity: DemoEntity | undefined) {
     if (!entity) return null;
     return {
       id: entity.id,
       title: entity.title,
-      type: entity.type || (entity as any).kind,
+      type: "type" in entity ? entity.type : entity.kind,
     };
   }
 

@@ -100,7 +100,3 @@ Maus-Drags die Swipe-Gesten simulieren können.
 ## Benchmarks
 
 An algorithm optimization benchmark for the Account API is available in `scripts/benchmark_account_api.ts`. Run it with `pnpm run benchmark:account-api` from the root.
-
-## Benchmarks
-
-An algorithm optimization benchmark for the Account API is available in `scripts/benchmark_account_api.ts`. Run it with `pnpm run benchmark:account-api` from the root.
