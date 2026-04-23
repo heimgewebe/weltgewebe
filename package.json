@@ -3,7 +3,8 @@
   "private": true,
   "packageManager": "pnpm@9.11.0",
   "scripts": {
-    "contracts:domain:check": "bash ./scripts/contracts-domain-check.sh"
+    "contracts:domain:check": "bash ./scripts/contracts-domain-check.sh",
+    "benchmark:account-api": "tsx scripts/benchmark_account_api.ts"
   },
   "devDependencies": {
     "ajv": "^8.18.0",

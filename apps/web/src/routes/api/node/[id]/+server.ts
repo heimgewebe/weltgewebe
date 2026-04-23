@@ -3,11 +3,6 @@ import { demoNodes } from "$lib/demo/demoData";
 import { resolveNodeParticipants } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
-// For static export (Path A), but with dynamic routes we typically prerender
-// by providing a list of entries, but for demo we can just let it fall back or prerender known IDs.
-// Using 'auto' or 'true' here with a dynamic route without explicitly defining entries
-// breaks the static adapter.
-// Prerender explicit entries for the static adapter to crawl.
 export const prerender = true;
 export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 
