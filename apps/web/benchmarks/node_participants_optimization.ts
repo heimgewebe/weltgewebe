@@ -63,8 +63,10 @@ function originalApproach(accounts: Account[], relatedEdges: Edge[]) {
 }
 
 // Mimic the resolver logic with Map-based lookup
-function resolverApproach(accounts: Account[], relatedEdges: Edge[]) {
-  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+function resolverApproach(
+  accountMap: Map<string, Account>,
+  relatedEdges: Edge[],
+) {
   return relatedEdges
     .map((edge) => {
       const account =
@@ -95,10 +97,11 @@ function runBenchmark() {
 
   for (const count of counts) {
     const { accounts, edges } = generateData(count);
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
     // Warmup
     originalApproach(accounts, edges);
-    resolverApproach(accounts, edges);
+    resolverApproach(accountMap, edges);
 
     const startOrig = performance.now();
     for (let i = 0; i < 10; i++) originalApproach(accounts, edges);
@@ -106,7 +109,7 @@ function runBenchmark() {
     const avgOrig = (endOrig - startOrig) / 10;
 
     const startOpt = performance.now();
-    for (let i = 0; i < 10; i++) resolverApproach(accounts, edges);
+    for (let i = 0; i < 10; i++) resolverApproach(accountMap, edges);
     const endOpt = performance.now();
     const avgOpt = (endOpt - startOpt) / 10;
 
