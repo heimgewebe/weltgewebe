@@ -7,11 +7,7 @@ export const prerender = true;
 export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 
 export function GET({ params }: RequestEvent) {
-  const { id } = params;
-
-  if (!id) {
-    throw error(400, "ID is required");
-  }
+  const id = params.id as string;
 
   const node = demoNodes.find((n) => n.id === id);
 

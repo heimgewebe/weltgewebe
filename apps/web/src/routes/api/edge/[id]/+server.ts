@@ -7,11 +7,7 @@ export const prerender = true;
 export const entries = () => demoEdges.map((e) => ({ id: e.id }));
 
 export function GET({ params }: RequestEvent) {
-  const { id } = params;
-
-  if (!id) {
-    throw error(400, "ID is required");
-  }
+  const id = params.id as string;
 
   const edge = demoEdges.find((e) => e.id === id);
 
