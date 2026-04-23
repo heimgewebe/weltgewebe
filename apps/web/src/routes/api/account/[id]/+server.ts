@@ -22,9 +22,10 @@ export function GET({ params }: RequestEvent) {
       e.target_type === "node",
   );
 
+  const nodeMap = new Map(demoNodes.map((n) => [n.id, n]));
   const nodes = relatedEdges
     .map((edge) => {
-      const node = demoNodes.find((n) => n.id === edge.target_id);
+      const node = nodeMap.get(edge.target_id);
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
