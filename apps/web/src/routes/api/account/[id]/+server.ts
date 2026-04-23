@@ -1,5 +1,6 @@
 import { json, error } from "@sveltejs/kit";
-import { demoAccounts, demoEdges, demoNodes } from "$lib/demo/demoData";
+import { demoAccounts } from "$lib/demo/demoData";
+import { resolveAccountNodes } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
@@ -8,33 +9,17 @@ export const entries = () => demoAccounts.map((a) => ({ id: a.id }));
 export function GET({ params }: RequestEvent) {
   const { id } = params;
 
+  if (!id) {
+    throw error(400, "ID is required");
+  }
+
   const account = demoAccounts.find((a) => a.id === id);
 
   if (!account) {
     throw error(404, "Account not found");
   }
 
-  // Find associated nodes (where account is source)
-  const relatedEdges = demoEdges.filter(
-    (e) =>
-      e.source_id === id &&
-      e.source_type === "account" &&
-      e.target_type === "node",
-  );
-
-  const nodes = relatedEdges
-    .map((edge) => {
-      const node = demoNodes.find((n) => n.id === edge.target_id);
-      return {
-        edge_id: edge.id,
-        edge_kind: edge.edge_kind,
-        note: edge.note,
-        node_id: node?.id,
-        node_title: node?.title,
-        node_kind: node?.kind,
-      };
-    })
-    .filter((n) => n.node_id);
+  const nodes = resolveAccountNodes(id);
 
   return json({
     ...account,

@@ -1,5 +1,6 @@
 import { json, error } from "@sveltejs/kit";
-import { demoNodes, demoEdges, demoAccounts } from "$lib/demo/demoData";
+import { demoNodes } from "$lib/demo/demoData";
+import { resolveNodeParticipants } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 // For static export (Path A), but with dynamic routes we typically prerender
@@ -13,36 +14,17 @@ export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 export function GET({ params }: RequestEvent) {
   const { id } = params;
 
+  if (!id) {
+    throw error(400, "ID is required");
+  }
+
   const node = demoNodes.find((n) => n.id === id);
 
   if (!node) {
     throw error(404, "Node not found");
   }
 
-  // Find associated edges and participants
-  const relatedEdges = demoEdges.filter(
-    (e) => e.target_id === id && e.target_type === "node",
-  );
-
-  // Optimization: Pre-compute a map of accounts for O(1) lookup
-  const accountMap = new Map(demoAccounts.map((a) => [a.id, a]));
-
-  const participants = relatedEdges
-    .map((edge) => {
-      const account =
-        edge.source_type === "account"
-          ? accountMap.get(edge.source_id)
-          : undefined;
-      return {
-        edge_id: edge.id,
-        edge_kind: edge.edge_kind,
-        note: edge.note,
-        account_id: account?.id,
-        account_title: account?.title,
-        account_type: account?.type,
-      };
-    })
-    .filter((p) => p.account_id);
+  const participants = resolveNodeParticipants(id);
 
   // Return the complete domain object with enriched participant data
   return json({

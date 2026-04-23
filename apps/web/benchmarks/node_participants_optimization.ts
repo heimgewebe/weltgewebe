@@ -62,7 +62,8 @@ function originalApproach(accounts: Account[], relatedEdges: Edge[]) {
     .filter((p) => p.account_id);
 }
 
-function optimizedApproach(accounts: Account[], relatedEdges: Edge[]) {
+// Mimic the resolver logic with Map-based lookup
+function resolverApproach(accounts: Account[], relatedEdges: Edge[]) {
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
   return relatedEdges
     .map((edge) => {
@@ -86,7 +87,7 @@ function runBenchmark() {
   const counts = [100, 500, 1000, 2000];
 
   console.log(
-    "| Data Size (N) | Original (ms) | Optimized (ms) | Improvement |",
+    "| Data Size (N) | Original (ms) | Resolver (ms) | Improvement |",
   );
   console.log(
     "|---------------|---------------|----------------|-------------|",
@@ -97,7 +98,7 @@ function runBenchmark() {
 
     // Warmup
     originalApproach(accounts, edges);
-    optimizedApproach(accounts, edges);
+    resolverApproach(accounts, edges);
 
     const startOrig = performance.now();
     for (let i = 0; i < 10; i++) originalApproach(accounts, edges);
@@ -105,7 +106,7 @@ function runBenchmark() {
     const avgOrig = (endOrig - startOrig) / 10;
 
     const startOpt = performance.now();
-    for (let i = 0; i < 10; i++) optimizedApproach(accounts, edges);
+    for (let i = 0; i < 10; i++) resolverApproach(accounts, edges);
     const endOpt = performance.now();
     const avgOpt = (endOpt - startOpt) / 10;
 
