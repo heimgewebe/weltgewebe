@@ -4,6 +4,12 @@ type DemoNode = (typeof demoNodes)[number];
 type DemoAccount = (typeof demoAccounts)[number];
 type DemoEntity = DemoNode | DemoAccount;
 
+// Module-level caches for static demo data lookups
+const nodeMap = new Map<string, DemoNode>(demoNodes.map((n) => [n.id, n]));
+const accountMap = new Map<string, DemoAccount>(
+  demoAccounts.map((a) => [a.id, a]),
+);
+
 /**
  * Resolves nodes associated with an account.
  * Replaces N+1 query pattern with a Map-based lookup.
@@ -15,8 +21,6 @@ export function resolveAccountNodes(accountId: string) {
       e.source_type === "account" &&
       e.target_type === "node",
   );
-
-  const nodeMap = new Map(demoNodes.map((n) => [n.id, n]));
 
   return relatedEdges
     .map((edge) => {
@@ -40,8 +44,6 @@ export function resolveNodeParticipants(nodeId: string) {
   const relatedEdges = demoEdges.filter(
     (e) => e.target_id === nodeId && e.target_type === "node",
   );
-
-  const accountMap = new Map(demoAccounts.map((a) => [a.id, a]));
 
   return relatedEdges
     .map((edge) => {
@@ -69,9 +71,6 @@ export function resolveEdgeParticipants(edgeId: string) {
       target_details: null,
     };
   }
-
-  const nodeMap = new Map(demoNodes.map((n) => [n.id, n]));
-  const accountMap = new Map(demoAccounts.map((a) => [a.id, a]));
 
   function getEntity(id: string, type: string): DemoEntity | undefined {
     if (type === "account") return accountMap.get(id);
