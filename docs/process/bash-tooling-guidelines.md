@@ -1,3 +1,13 @@
+---
+id: process.bash-tooling-guidelines
+title: Bash Tooling Guidelines
+doc_type: reference
+status: active
+summary: Richtlinien für Shell-Skripting und Bash-Tooling im Projekt.
+relations:
+  - type: relates_to
+    target: docs/process/README.md
+---
 # Bash-Tooling-Richtlinien
 
 Diese Richtlinien beschreiben, wie wir Shell-Skripte im Weltgewebe-Projekt

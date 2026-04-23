@@ -1,3 +1,13 @@
+---
+id: adr.ADR-0004__fahrplan-verweis
+title: ADR-0004 — Fahrplan-Verweis
+doc_type: reference
+status: active
+summary: Entscheidung zur Verknüpfung des Fahrplans mit der Architekturplanung.
+relations:
+  - type: relates_to
+    target: docs/process/fahrplan.md
+---
 # ADR-0004 — Fahrplan als kanonischer Verweis
 
 Datum: 2025-02-14
@@ -24,4 +34,4 @@ stabile, versionierte Referenz auf diesen kanonischen Speicherort und vermeidet 
 
 ## Siehe auch
 
-- [ADR-0003 — Privacy: Unschärferadius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-unschaerferadius-ron.md)
+- [ADR-0003 — Privacy: Ungenauigkeitsradius & RoN-Platzhalterrolle (v1)](ADR-0003__privacy-ungenauigkeitsradius-ron.md)

@@ -1,3 +1,15 @@
+---
+id: specs.contract
+title: Datenvertrag
+doc_type: reference
+status: active
+summary: Spezifikation der Datenverträge zwischen Frontend und API.
+relations:
+  - type: relates_to
+    target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/datenmodell.md
+---
 # Weltgewebe Contract – Löschkonzept (Tombstone & Key-Erase)
 
 **Status:** Draft v0.1 · **Scope:** Beiträge, Kommentare, Artefakte
@@ -45,6 +57,13 @@
 
 - Wöchentliche Veröffentlichung eines **Transparency-Anchors** (Root-Hash der Woche).
 - Öffentliche Statistik: Anzahl Tombstones, Takedown-Holds, mediane Löschzeit.
+
+## 7. Identität & Verortung
+
+- Der Contract trägt nur die basale Kernunterscheidung (keine Vertrauenswerte oder komplexe Zwischenstufen):
+  - **Modus (`mode`)**: Eine Garnrolle ist entweder "verortet" (hat eine genaue Adresse) oder der "ron" (Rolle ohne Namen) zugeordnet.
+  - **Ungenauigkeitsradius (`radius_m`)**: Steuert ausschließlich die öffentliche Anzeige von verorteten Garnrollen.
+  - **Interne Verortung**: Nur "verortete" Garnrollen besitzen eine `location`.
 
 ---
 

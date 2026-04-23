@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# json_escape: Escape a string for use in JSON.
+# Reads from stdin and writes the JSON-escaped string to stdout.
+#
+# Requires either python3 or jq to be installed.
+
+set -euo pipefail
+
+if command -v python3 >/dev/null 2>&1; then
+  # Use python3 and its json module. The input is read from stdin.
+  # The result is a single JSON string literal, including the quotes.
+  exec python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()))'
+elif command -v jq >/dev/null 2>&1; then
+  # Use jq with --raw-input (--slurp) to read the entire input into a single string.
+  # The '.' filter then outputs this string in JSON format.
+  exec jq -R -s .
+else
+  # If neither tool is found, print the required error message to stderr and exit.
+  echo "json_escape: requires python3 or jq" >&2
+  exit 1
+fi

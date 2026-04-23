@@ -1,22 +1,25 @@
+---
 name: python-tooling
 
-on:
+"on":
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
       - "**/requirements*.txt"
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
+      - ".python-version"
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "**/*.py"
       - "**/pyproject.toml"
       - "**/requirements*.txt"
       - "**/uv.lock"
       - ".github/workflows/python-tooling.yml"
+      - ".python-version"
   workflow_dispatch: {}
 
 permissions:
@@ -36,7 +39,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version-file: '.python-version'
 
       # Official uv setup (adds `uv` to PATH)
       - uses: astral-sh/setup-uv@v1
@@ -73,7 +76,8 @@ jobs:
               (cd "$dir" && uv sync)
               echo "::endgroup::"
             fi
-          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) -exec dirname {} \; | sort -u)
+          done < <(find . -type f \( -name "uv.lock" -o -name "requirements.txt" -o -name "pyproject.toml" \) \
+            -exec dirname {} \; | sort -u)
           if [ "$found" -eq 0 ]; then
             echo "No Python dependency manifests found. Skipping sync."
           fi

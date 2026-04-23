@@ -1,7 +1,8 @@
+---
 name: seo-archive
 permissions:
   contents: read
-on:
+"on":
   pull_request:
     paths:
       - "apps/web/**"

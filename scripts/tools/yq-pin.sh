@@ -3,10 +3,10 @@ set -euo pipefail
 
 # Minimaler Installer/Pinner für mikefarah/yq v4.x
 # Usage: scripts/tools/yq-pin.sh ensure [<version>]
-# Default: 4.48.1
+# Default: 4.44.3
 
 CMD="${1:-ensure}"
-REQ_VER="${2:-${YQ_VERSION:-4.48.1}}"
+REQ_VER="${2:-${YQ_VERSION:-4.44.3}}"
 BIN_DIR="${HOME}/.local/bin"
 BIN="${BIN_DIR}/yq"
 
@@ -16,7 +16,7 @@ ensure_path() {
     *":${BIN_DIR}:"*) ;;
     *)
       if [[ -n "${GITHUB_PATH:-}" ]]; then
-        echo "${BIN_DIR}" >> "${GITHUB_PATH}" 2>/dev/null || true
+        echo "${BIN_DIR}" >> "${GITHUB_PATH}" 2> /dev/null || true
       fi
       ;;
   esac
@@ -24,7 +24,7 @@ ensure_path() {
 
 parse_version() {
   local out ver
-  if ! out="$("$@" --version 2>/dev/null)"; then
+  if ! out="$("$@" --version 2> /dev/null)"; then
     echo ""
     return
   fi
@@ -35,7 +35,7 @@ parse_version() {
 }
 
 current_version() {
-  if command -v yq >/dev/null 2>&1; then
+  if command -v yq > /dev/null 2>&1; then
     parse_version yq || true
   elif [[ -x "${BIN}" ]]; then
     parse_version "${BIN}" || true
@@ -49,15 +49,21 @@ download_yq() {
   local os arch sys
   sys="$(uname | tr '[:upper:]' '[:lower:]')"
   case "${sys}" in
-    linux|darwin) os="${sys}" ;;
-    *) echo "unsupported operating system for yq: ${sys}" >&2; exit 1 ;;
+    linux | darwin) os="${sys}" ;;
+    *)
+      echo "unsupported operating system for yq: ${sys}" >&2
+      exit 1
+      ;;
   esac
 
   arch="$(uname -m)"
   case "${arch}" in
     x86_64) arch="amd64" ;;
-    aarch64|arm64) arch="arm64" ;;
-    *) echo "unsupported architecture for yq: ${arch}" >&2; exit 1 ;;
+    aarch64 | arm64) arch="arm64" ;;
+    *)
+      echo "unsupported architecture for yq: ${arch}" >&2
+      exit 1
+      ;;
   esac
 
   local base="yq_${os}_${arch}"
@@ -68,15 +74,15 @@ download_yq() {
   tmp_dir="$(mktemp -d)"
   trap 'rm -rf "${tmp_dir:-}"' EXIT INT TERM
 
-  if ! command -v curl >/dev/null 2>&1; then
+  if ! command -v curl > /dev/null 2>&1; then
     echo "curl is required to install yq" >&2
     exit 1
   fi
 
   local -a SHA256_CMD
-  if command -v sha256sum >/dev/null 2>&1; then
+  if command -v sha256sum > /dev/null 2>&1; then
     SHA256_CMD=(sha256sum)
-  elif command -v shasum >/dev/null 2>&1; then
+  elif command -v shasum > /dev/null 2>&1; then
     SHA256_CMD=(shasum -a 256)
   else
     echo "no SHA256 tool found (need sha256sum or shasum)" >&2
@@ -93,14 +99,14 @@ download_yq() {
   CURL_HEAD=(-I --connect-timeout 3 --max-time 10)
   CURL_RANGE=(--connect-timeout 5 --max-time 10 -H 'Range: bytes=0-1023')
 
-  if ! curl_help="$(curl --help all 2>/dev/null)"; then
-    curl_help="$(curl --help 2>/dev/null || true)"
+  if ! curl_help="$(curl --help all 2> /dev/null)"; then
+    curl_help="$(curl --help 2> /dev/null || true)"
   fi
   if [[ -n "${curl_help}" ]]; then
-    if grep -q -- '--retry-all-errors' <<<"${curl_help}"; then
+    if grep -q -- '--retry-all-errors' <<< "${curl_help}"; then
       CURL_RETRY+=(--retry-all-errors)
     fi
-    if grep -q -- '--retry-connrefused' <<<"${curl_help}"; then
+    if grep -q -- '--retry-connrefused' <<< "${curl_help}"; then
       CURL_RETRY+=(--retry-connrefused)
     fi
   fi
@@ -108,16 +114,16 @@ download_yq() {
   CURL_FAIL=(--fail)
 
   echo "Probing available yq assets at ${url_base}..." >&2
-  if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" >/dev/null; then
+  if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}" > /dev/null; then
     asset="${base}"
-  elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
+  elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_HEAD[@]}" "${url_base}/${base}.tar.gz" > /dev/null; then
     asset="${base}.tar.gz"
   else
     echo "HEAD probe failed, retrying with Range 0-0…" >&2
     # Fallback für Server, die HEAD-Anfragen blockieren (Range 0-0 vermeidet vollen Download)
-    if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}" >/dev/null; then
+    if curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}" > /dev/null; then
       asset="${base}"
-    elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}.tar.gz" >/dev/null; then
+    elif curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_FAIL[@]}" "${CURL_RANGE[@]}" "${url_base}/${base}.tar.gz" > /dev/null; then
       asset="${base}.tar.gz"
     else
       echo "no yq asset for ${os}/${arch} v${ver} at ${url_base}" >&2
@@ -131,7 +137,7 @@ download_yq() {
     echo "Found yq binary asset: ${asset}"
   fi
 
-  if [[ "${asset}" == *.tar.gz ]] && ! command -v tar >/dev/null 2>&1; then
+  if [[ "${asset}" == *.tar.gz ]] && ! command -v tar > /dev/null 2>&1; then
     echo "tar is required to extract yq archives" >&2
     exit 1
   fi
@@ -141,22 +147,34 @@ download_yq() {
 
   echo "Downloading yq v${ver} from ${url_base}/${asset}"
   curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}" -o "${asset_path}"
-  curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}"
+
+  # Try individual sha256 first, then 'checksums'
+  if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/${asset}.sha256" -o "${sha_path}" 2>/dev/null; then
+    echo "Individual sha256 not found, trying 'checksums'..." >&2
+    if ! curl "${CURL_COMMON[@]}" "${CURL_RETRY[@]}" "${CURL_DOWNLOAD[@]}" "${CURL_FAIL[@]}" "${url_base}/checksums" -o "${sha_path}"; then
+      echo "checksums file not found at ${url_base}/checksums" >&2
+      exit 1
+    fi
+  fi
 
   if [[ ! -s "${sha_path}" ]]; then
-    echo "missing yq sha256 file at ${sha_path}" >&2
+    echo "missing yq checksum file at ${sha_path}" >&2
     exit 1
   fi
 
-  local expected actual asset_name expected_line line
+  local actual asset_name expected_line line
   asset_name="${asset##*/}"
   expected_line=""
 
   while IFS= read -r line || [[ -n "${line}" ]]; do
     [[ -z "${line}" ]] && continue
-    [[ -z "${expected_line}" ]] && expected_line="${line}"
+    # Don't default expected_line to the first line; wait for a match
+    # [[ -z "${expected_line}" ]] && expected_line="${line}"
     case "${line}" in
-      *" ${asset_name}"|*"*${asset_name}") expected_line="${line}"; break ;;
+      "${asset_name} "* | *" ${asset_name}" | *"*${asset_name}")
+        expected_line="${line}"
+        break
+        ;;
     esac
   done < "${sha_path}"
 
@@ -165,37 +183,42 @@ download_yq() {
     exit 1
   fi
 
-  if command -v awk >/dev/null 2>&1; then
-    expected="$(printf '%s\n' "${expected_line}" | awk '{print $1}')"
-    actual="$(${SHA256_CMD[@]} "${asset_path}" | awk '{print $1}')"
+  if command -v awk > /dev/null 2>&1; then
+    actual="$("${SHA256_CMD[@]}" "${asset_path}" | awk '{print $1}')"
   else
-    expected="$(printf '%s\n' "${expected_line}" | cut -d' ' -f1)"
-    actual="$(${SHA256_CMD[@]} "${asset_path}" | cut -d' ' -f1)"
+    actual="$("${SHA256_CMD[@]}" "${asset_path}" | cut -d' ' -f1)"
   fi
 
-  if [[ "${expected}" != "${actual}" ]]; then
-    echo "yq checksum mismatch: expected ${expected}, got ${actual}" >&2
+  # Check if the actual checksum matches any part of the expected line
+  if [[ "${expected_line}" != *"${actual}"* ]]; then
+    echo "yq checksum mismatch: calculated ${actual} not found in checksums entry" >&2
     exit 1
   fi
 
   local extracted="${tmp_dir}/${base}"
   if [[ "${asset}" == *.tar.gz ]]; then
-    tar -xzf "${asset_path}" -C "${tmp_dir}" || { echo "failed to extract yq archive" >&2; exit 1; }
+    tar -xzf "${asset_path}" -C "${tmp_dir}" || {
+      echo "failed to extract yq archive" >&2
+      exit 1
+    }
   else
     [[ "${asset_path}" != "${extracted}" ]] && cp -f "${asset_path}" "${extracted}"
   fi
-  [[ -f "${extracted}" ]] || { echo "yq binary not found after extraction" >&2; exit 1; }
+  [[ -f "${extracted}" ]] || {
+    echo "yq binary not found after extraction" >&2
+    exit 1
+  }
 
-  if ! command -v install >/dev/null 2>&1; then
+  if ! command -v install > /dev/null 2>&1; then
     echo "install not found; falling back to mv" >&2
   fi
 
-  install -m 0755 "${extracted}" "${BIN}" 2>/dev/null || {
+  install -m 0755 "${extracted}" "${BIN}" 2> /dev/null || {
     chmod 0755 "${extracted}"
     mv -f "${extracted}" "${BIN}"
   }
 
-  hash -r 2>/dev/null || true
+  hash -r 2> /dev/null || true
   local installed_ver
   installed_ver="$(parse_version "${BIN}")"
   if [[ -z "${installed_ver}" ]]; then
@@ -210,14 +233,14 @@ download_yq() {
   echo "✅ yq v${installed_ver} downloaded & verified"
 
   if [[ "${os}" == "darwin" ]] && [[ ":$PATH:" != *":${BIN_DIR}:"* ]]; then
-    cat >&2 <<EOF
+    cat >&2 << EOF
 Note: ${BIN_DIR} is not currently in your PATH on macOS.
 Add the following to your shell profile:
   export PATH="${BIN_DIR}:\$PATH"
 EOF
   fi
 
-  rm -rf "${tmp_dir}" 2>/dev/null || true
+  rm -rf "${tmp_dir}" 2> /dev/null || true
   trap - EXIT INT TERM
 }
 

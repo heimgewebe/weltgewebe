@@ -24,52 +24,65 @@
 
   $: ({ style: _omitStyle, ...containerProps } = $$restProps);
 
-  onMount(async () => {
-    const maplibreModule = await import("maplibre-gl");
-    context.maplibre = maplibreModule;
+  onMount(() => {
+    let destroyed = false;
 
-    if (!container) {
-      return;
-    }
+    const initialise = async () => {
+      const maplibreModule = await import("maplibre-gl");
 
-    const initialOptions: MapOptions = {
-      container,
-      style,
-      attributionControl,
-      ...options
-    } as MapOptions;
+      if (destroyed) {
+        return;
+      }
 
-    if (center) {
-      initialOptions.center = normalizeLngLat(center);
-    }
+      context.maplibre = maplibreModule;
 
-    if (zoom !== undefined) {
-      initialOptions.zoom = zoom;
-    }
+      if (!container) {
+        context.maplibre = null;
+        return;
+      }
 
-    if (minZoom !== undefined) {
-      initialOptions.minZoom = minZoom;
-    }
+      const initialOptions: MapOptions = {
+        container,
+        style,
+        attributionControl,
+        ...options
+      } as MapOptions;
 
-    if (maxZoom !== undefined) {
-      initialOptions.maxZoom = maxZoom;
-    }
+      if (center) {
+        initialOptions.center = normalizeLngLat(center);
+      }
 
-    if (interactive !== undefined) {
-      initialOptions.interactive = interactive;
-    }
+      if (zoom !== undefined) {
+        initialOptions.zoom = zoom;
+      }
 
-    map = new maplibreModule.Map(initialOptions);
-    context.map.set(map);
+      if (minZoom !== undefined) {
+        initialOptions.minZoom = minZoom;
+      }
 
-    map.on("load", () => dispatch("load", { map }));
-    map.on("error", (event) => dispatch("error", event));
+      if (maxZoom !== undefined) {
+        initialOptions.maxZoom = maxZoom;
+      }
 
-    if (bounds) {
-      map.fitBounds(bounds, fitBoundsOptions);
-    }
+      if (interactive !== undefined) {
+        initialOptions.interactive = interactive;
+      }
+
+      map = new maplibreModule.Map(initialOptions);
+      context.map.set(map);
+
+      map.on("load", () => dispatch("load", { map }));
+      map.on("error", (event: unknown) => dispatch("error", event));
+
+      if (bounds) {
+        map.fitBounds(bounds, fitBoundsOptions);
+      }
+    };
+
+    initialise();
 
     return () => {
+      destroyed = true;
       map?.remove();
       map = null;
       context.map.set(null);
@@ -94,7 +107,26 @@
       return value;
     }
 
-    return [value.lng, value.lat];
+    if (typeof value === "object" && value !== null) {
+      if ("lng" in value && "lat" in value) {
+        return [value.lng as number, value.lat as number];
+      }
+
+      if ("lon" in value && "lat" in value) {
+        return [value.lon as number, value.lat as number];
+      }
+
+      if (
+        "toArray" in value &&
+        typeof (value as { toArray?: () => LngLatLike }).toArray === "function"
+      ) {
+        return (value as { toArray: () => LngLatLike }).toArray();
+      }
+    }
+
+    throw new Error(
+      `Invalid LngLatLike value passed to normalizeLngLat: ${JSON.stringify(value)}`
+    );
   }
 </script>
 

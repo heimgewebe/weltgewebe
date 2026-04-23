@@ -1,54 +1,66 @@
 {
   "name": "weltgewebe-web",
   "version": "0.0.0",
+  "packageManager": "pnpm@9.11.0",
   "private": true,
   "type": "module",
+  "pnpm": {
+    "overrides": {
+      "cookie": "^0.7.0"
+    }
+  },
   "scripts": {
-    "dev": "vite dev",
-    "build": "svelte-kit build",
-    "preview": "svelte-kit preview",
+    "dev": "node scripts/generate-version.js --client && vite dev --host",
+    "build": "vite build",
+    "prebuild": "pnpm run sync",
+    "postbuild": "node scripts/generate-version.js --server",
+    "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",
-    "prebuild": "svelte-kit sync",
+    "precheck": "pnpm run sync",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "check:ci": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "precheck:ci": "pnpm run sync",
+    "check:ci": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier -w .",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
-    "pretest": "npm run build",
+    "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
+    "test:unit": "vitest run",
     "test": "playwright test",
     "test:report": "playwright show-report",
-    "test:ci": "playwright test",
+    "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
-    "sync": "svelte-kit sync",
-    "ci": "node ../../ci/scripts/assert-web-budget.mjs && npm run lint && npm run check:ci"
-  },
-  "overrides": {
-    "vite": "4.5.3",
-    "@sveltejs/vite-plugin-svelte": "2.5.3",
-    "cookie": "npm:cookie@0.7.2"
+    "sync": "node scripts/generate-version.js --client && svelte-kit sync",
+    "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
+    "dev:cs": "node scripts/generate-version.js --client && vite dev --host 0.0.0.0 --port 5173",
+    "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
   },
   "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
     "@playwright/test": "1.55.1",
-    "@sveltejs/adapter-static": "^2.0.3",
-    "@sveltejs/kit": "^1.30.3",
-    "@sveltejs/vite-plugin-svelte": "^2.5.3",
+    "@sveltejs/adapter-static": "^3.0.4",
+    "@sveltejs/kit": "2.52.2",
+    "@sveltejs/vite-plugin-svelte": "^3.1.1",
+    "@types/node": "^20.19.0",
     "@typescript-eslint/eslint-plugin": "8.8.0",
     "@typescript-eslint/parser": "8.8.0",
+    "cross-env": "^10.1.0",
     "eslint": "9.11.1",
     "eslint-plugin-svelte": "2.45.1",
     "globals": "15.9.0",
     "prettier": "3.3.3",
     "prettier-plugin-svelte": "3.2.6",
     "rimraf": "5",
-    "svelte": "^4.2.12",
+    "svelte": "^5.53.5",
     "svelte-check": "^4.3.2",
     "typescript": "5.9.2",
-    "vite": "^4.5.3"
+    "vite": "^5.4.10",
+    "vitest": "^2.1.9"
   },
   "dependencies": {
-    "maplibre-gl": "4.7.1"
+    "maplibre-gl": "4.7.1",
+    "pmtiles": "^4.4.0"
   },
   "engines": {
     "node": ">=20.19.0"

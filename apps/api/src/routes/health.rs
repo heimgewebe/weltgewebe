@@ -1,7 +1,8 @@
 use std::{
-    env, fs,
+    env,
     path::{Path, PathBuf},
 };
+use tokio::fs;
 
 use axum::{
     extract::State,
@@ -13,6 +14,8 @@ use axum::{
 use serde_json::{json, Map};
 use sqlx::query_scalar;
 
+#[cfg(test)]
+use crate::auth::accounts::AccountStore;
 use crate::{
     state::ApiState,
     telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
@@ -33,23 +36,38 @@ async fn live() -> Response {
     response
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+enum CheckStatus {
+    #[default]
+    Ready,
+    Skipped,
+    Failed,
+}
+
 #[derive(Debug, Default)]
 struct CheckResult {
-    ready: bool,
+    status: CheckStatus,
     errors: Vec<String>,
 }
 
 impl CheckResult {
     fn ready() -> Self {
         Self {
-            ready: true,
+            status: CheckStatus::Ready,
+            errors: Vec::new(),
+        }
+    }
+
+    fn skipped() -> Self {
+        Self {
+            status: CheckStatus::Skipped,
             errors: Vec::new(),
         }
     }
 
     fn failure(errors: Vec<String>) -> Self {
         Self {
-            ready: false,
+            status: CheckStatus::Failed,
             errors,
         }
     }
@@ -68,20 +86,29 @@ fn readiness_verbose() -> bool {
         .unwrap_or(false)
 }
 
-fn check_policy_file(path: &Path) -> Result<(), String> {
-    fs::read_to_string(path).map(|_| ()).map_err(|error| {
+async fn check_policy_file(path: &Path) -> Result<(), String> {
+    let metadata = fs::metadata(path).await.map_err(|error| {
         format!(
-            "failed to read policy file at {}: {}",
+            "failed to access policy file at {}: {}",
             path.display(),
             error
         )
-    })
+    })?;
+
+    if !metadata.is_file() {
+        return Err(format!(
+            "policy file at {} is not a regular file",
+            path.display()
+        ));
+    }
+
+    Ok(())
 }
 
-fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
+async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
     let mut errors = Vec::new();
     for path in paths {
-        match check_policy_file(path) {
+        match check_policy_file(path).await {
             Ok(()) => return CheckResult::ready(),
             Err(message) => errors.push(message),
         }
@@ -109,7 +136,7 @@ fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
 
 async fn check_nats(state: &ApiState) -> CheckResult {
     if !state.nats_configured {
-        return CheckResult::ready();
+        return CheckResult::skipped();
     }
 
     match state.nats_client.as_ref() {
@@ -131,7 +158,7 @@ async fn check_nats(state: &ApiState) -> CheckResult {
 
 async fn check_database(state: &ApiState) -> CheckResult {
     if !state.db_pool_configured {
-        return CheckResult::ready();
+        return CheckResult::skipped();
     }
 
     match state.db_pool.as_ref() {
@@ -154,7 +181,7 @@ async fn check_database(state: &ApiState) -> CheckResult {
     }
 }
 
-fn check_policy() -> CheckResult {
+async fn check_policy() -> CheckResult {
     // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
     // Fallbacks stay for dev/CI convenience.
     let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
@@ -165,7 +192,7 @@ fn check_policy() -> CheckResult {
     ];
 
     if let Some(path) = env_path {
-        match check_policy_file(&path) {
+        match check_policy_file(&path).await {
             Ok(()) => CheckResult::ready(),
             Err(message) => {
                 readiness_check_failed("policy", &message);
@@ -173,19 +200,21 @@ fn check_policy() -> CheckResult {
             }
         }
     } else {
-        check_policy_fallbacks(&fallback_paths)
+        check_policy_fallbacks(&fallback_paths).await
     }
 }
 
 async fn ready(State(state): State<ApiState>) -> Response {
-    let nats = check_nats(&state).await;
-    let database = check_database(&state).await;
-    let policy = check_policy();
+    let (nats, database, policy) =
+        tokio::join!(check_nats(&state), check_database(&state), check_policy());
 
-    let status = if database.ready && nats.ready && policy.ready {
-        StatusCode::OK
-    } else {
+    let status = if matches!(database.status, CheckStatus::Failed)
+        || matches!(nats.status, CheckStatus::Failed)
+        || matches!(policy.status, CheckStatus::Failed)
+    {
         StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        StatusCode::OK
     };
 
     if status == StatusCode::OK {
@@ -197,9 +226,9 @@ async fn ready(State(state): State<ApiState>) -> Response {
     let body = Json(json!({
         "status": if status == StatusCode::OK { "ok" } else { "error" },
         "checks": {
-            "database": database.ready,
-            "nats": nats.ready,
-            "policy": policy.ready,
+            "database": matches!(database.status, CheckStatus::Ready),
+            "nats": matches!(nats.status, CheckStatus::Ready),
+            "policy": matches!(policy.status, CheckStatus::Ready),
         }
     }));
 
@@ -238,7 +267,9 @@ async fn ready(State(state): State<ApiState>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::OrderedCache;
     use crate::{
+        auth::{rate_limit::AuthRateLimiter, session::SessionStore},
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
@@ -247,6 +278,8 @@ mod tests {
     use axum::{body, extract::State, http::header};
     use serde_json::Value;
     use serial_test::serial;
+    use std::sync::Arc;
+    use tokio::sync::RwLock;
 
     fn test_state() -> Result<ApiState> {
         let metrics = Metrics::try_new(BuildInfo {
@@ -255,18 +288,53 @@ mod tests {
             build_timestamp: "test",
         })?;
 
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_pass: None,
+            smtp_from: None,
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
         Ok(ApiState {
             db_pool: None,
             db_pool_configured: false,
             nats_client: None,
             nats_configured: false,
-            config: AppConfig {
-                fade_days: 7,
-                ron_days: 84,
-                anonymize_opt_in: true,
-                delegation_expire_days: 28,
-            },
+            config,
             metrics,
+            sessions: SessionStore::new(),
+            challenges: Default::default(),
+            tokens: crate::auth::tokens::TokenStore::new(),
+            step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
+            accounts: Arc::new(RwLock::new(AccountStore::new())),
+            nodes: Arc::new(RwLock::new(OrderedCache::new())),
+            nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+            edges: Arc::new(RwLock::new(OrderedCache::new())),
+            rate_limiter,
+            mailer: None,
+            webauthn: None,
+            passkey_registrations: Default::default(),
         })
     }
 
@@ -306,8 +374,8 @@ mod tests {
             Some("no-store")
         );
         assert_eq!(body["status"], "ok");
-        assert_eq!(body["checks"]["database"], true);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
@@ -331,8 +399,8 @@ mod tests {
             Some("no-store")
         );
         assert_eq!(body["status"], "error");
-        assert_eq!(body["checks"]["database"], true);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], false);
 
         Ok(())
@@ -351,7 +419,7 @@ mod tests {
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(body["checks"]["database"], false);
-        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
         Ok(())
@@ -369,7 +437,7 @@ mod tests {
         let body: Value = serde_json::from_slice(&body_bytes)?;
 
         assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(body["checks"]["database"], true);
+        assert_eq!(body["checks"]["database"], false);
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
@@ -396,7 +464,7 @@ mod tests {
         assert!(errors
             .iter()
             .filter_map(|value| value.as_str())
-            .any(|message| message.contains("failed to read policy file")));
+            .any(|message| message.contains("failed to access policy file")));
 
         Ok(())
     }

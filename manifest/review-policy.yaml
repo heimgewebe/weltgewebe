@@ -1,0 +1,4 @@
+---
+warn_days: 90
+fail_days: 180
+mode: warn

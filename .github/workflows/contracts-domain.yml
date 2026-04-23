@@ -1,0 +1,49 @@
+---
+name: "Validate Domain Schemas"
+permissions:
+  contents: read
+"on":
+  push:
+    paths:
+      - 'contracts/domain/**.schema.json'
+      - 'contracts/domain/examples/**.json'
+      - '.node-version'
+  pull_request:
+    paths:
+      - 'contracts/domain/**.schema.json'
+      - 'contracts/domain/examples/**.json'
+      - '.node-version'
+
+jobs:
+  validate-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+
+      - name: Install ajv-cli and ajv-formats
+        run: pnpm install -g ajv-cli ajv-formats
+
+      - name: Compile schemas
+        run: |
+          for schema in contracts/domain/*.schema.json; do
+            echo "Compiling $schema"
+            ajv compile -s "$schema" --strict=false -c ajv-formats
+          done
+
+      - name: Validate example instances
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          for example in contracts/domain/examples/*.example.json; do
+            filename=$(basename "$example")
+            entity="${filename%.example.json}"
+            schema="contracts/domain/${entity}.schema.json"
+            echo "Validating $example against $schema"
+            ajv validate -s "$schema" -d "$example" -c ajv-formats
+          done

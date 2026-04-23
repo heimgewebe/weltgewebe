@@ -1,4 +1,19 @@
-# Runbook
+---
+id: docs.runbook
+title: Runbook
+doc_type: runbook
+status: active
+summary: >
+  Allgemeines operatives Runbook.
+relations:
+  - type: relates_to
+    target: docs/runbook.observability.md
+  - type: relates_to
+    target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/README.md
+---
+## Runbook
 
 Dieses Dokument enthält praxisorientierte Anleitungen für den Betrieb, die
 Wartung und das Onboarding im Weltgewebe-Projekt.
@@ -106,17 +121,18 @@ einer sauberen Umgebung wiederhergestellt werden.
 5. **Verifikation & Abschluss:**
     - **Datenkonsistenz prüfen:** Stichprobenartige Überprüfung der wiederhergestellten Daten in den
       Lese-Modellen.
-    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Thread
+    - **Funktionstests:** Manuelle oder automatisierte Smoke-Tests durchführen (z.B. Login, Gesprächsraum
       erstellen).
     - **Zeitmessung:** Die benötigte Zeit für die Wiederherstellung stoppen und mit dem RTO
       vergleichen.
     - **Datenverlust bewerten:** Den Zeitpunkt des letzten wiederhergestellten
       WAL-Segments mit dem Zeitpunkt des "Ausfalls" vergleichen, um den
       Datenverlust zu ermitteln (sollte RPO nicht überschreiten).
-6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse dokumentieren.
+6. **Drill beenden:** Die Testumgebung herunterfahren und die Ergebnisse
+   dokumentieren.
 
-| Startzeit | Endzeit | RTO erreicht? | RPO erreicht? |
-|-----------|---------|---------------|---------------|
+| Startzeit | Endzeit | RTO erreicht?     | RPO erreicht?     |
+|-----------|---------|-------------------|-------------------|
 |           |         | [ ] Ja / [ ] Nein | [ ] Ja / [ ] Nein |
 
 ### Nachbereitung
@@ -126,3 +142,194 @@ einer sauberen Umgebung wiederhergestellt werden.
 - **Runbook aktualisieren:** Dieses Runbook bei Bedarf mit den gewonnenen Erkenntnissen anpassen.
 - **Automatisierung nutzen:** `just drill` ausführen, um den Drill reproduzierbar zu starten und
   Smoke-Tests anzustoßen.
+
+---
+
+## 3. Public Login Configuration
+
+The system supports a Magic Link-based public login flow. This feature is
+gated by environment variables and requires specific infrastructure
+configuration for security.
+
+### Enable Public Login
+
+To enable public login, set the following environment variables in your `.env` file (or deployment configuration):
+
+```bash
+# Enable the public login feature
+AUTH_PUBLIC_LOGIN=1
+
+# The base URL of the application (required for generating magic links)
+APP_BASE_URL=https://weltgewebe.net
+
+# Trusted proxies
+# CRITICAL: In production, set this to the actual IP/CIDR of your reverse proxy (e.g. Caddy).
+# See "How to Determine Trusted Proxies CIDR" below.
+AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.16.0.0/12
+
+# Rate Limiting (Application Level)
+# Keyed by IP and Email. Defaults are infinite if unset.
+AUTH_RL_IP_PER_MIN=5
+AUTH_RL_IP_PER_HOUR=100
+AUTH_RL_EMAIL_PER_MIN=3
+AUTH_RL_EMAIL_PER_HOUR=10
+
+# SMTP Configuration (Required for Magic Links)
+# If unset, magic links are NOT deliverable. They are only logged if AUTH_LOG_MAGIC_TOKEN=1 (Dev).
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=secret
+SMTP_FROM=noreply@weltgewebe.net
+
+# Development / Debugging
+# If true, the magic link token is logged to stdout. DO NOT ENABLE IN PROD.
+AUTH_LOG_MAGIC_TOKEN=0
+```
+
+### How to Determine Trusted Proxies CIDR
+
+Correct configuration of trusted proxies is vital for security (IP rate limiting)
+and audit logs. There are two layers:
+
+1. **Caddy (Edge):** Needs to know the IP of any upstream Load Balancer or Proxy to extract the client IP.
+2. **App (Backend):** Needs to know the IP of Caddy (or the Docker network) to trust the headers sent by Caddy.
+
+#### Step-by-Step: Finding the Docker Network CIDR
+
+If Caddy and the App run in the same Docker Compose stack, the App sees requests coming from the Docker network
+gateway or Caddy's container IP. You must trust the entire Docker subnet. Only do this if your reverse proxy
+container is the direct upstream of the app container in the same Docker network; otherwise trust only the real
+proxy IPs.
+
+1. **Find the Network Subnet:**
+
+   Run this command to inspect the default bridge network (usually `infra_default`) and extract the Subnet:
+
+   ```bash
+   # Replace 'infra_default' if your network is named differently
+   docker network inspect infra_default --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+   # Output example: 172.18.0.0/16
+   ```
+
+2. **Configure `.env`:**
+   Add this CIDR to `AUTH_TRUSTED_PROXIES` alongside localhost.
+
+   ```bash
+   AUTH_TRUSTED_PROXIES=127.0.0.1,::1,172.18.0.0/16
+   ```
+
+### Rate Limiting (Backend Enforcement)
+
+To protect the authentication endpoints from abuse, rate limiting is primarily enforced by the backend API.
+The Edge Proxy (Caddy) passes the client IP to the backend.
+
+> **Warning:** Rate limits rely on accurate client IP resolution. Ensure your Edge Proxy
+> configuration correctly sets headers (e.g., `X-Forwarded-For`) and the API backend
+> trusts the correct proxy IPs (`AUTH_TRUSTED_PROXIES`), especially if behind another proxy.
+> Otherwise, you risk rate-limiting the proxy itself because all requests appear to come from the proxy IP.
+
+#### Check Client IP Visibility
+
+Before enforcing strict limits, verify that the API sees the correct client IP:
+
+1. **Check Access Logs:** Inspect the API logs to confirm the remote IP matches the client, not the Edge proxy.
+
+   ```bash
+   # Check the Weltgewebe stack API logs
+   docker compose -f infra/compose/compose.prod.yml logs -n 200 api
+
+   # Alternatively, check the Heimserver Edge-Caddy logs (outside this repository)
+   # e.g., cd /opt/heimgewebe/edge && docker compose logs -n 200 edge-caddy
+   ```
+
+2. **Verify Proxy Visibility:**
+   > **Critical Warning:** If the API is behind an Edge Proxy or Load Balancer, it will likely
+   > receive the proxy's IP instead of the user's if trust is misconfigured. This causes **all users**
+   > to share the same rate limit bucket.
+
+   **Mitigation:**
+   - **Edge-Caddy:** If running behind a secondary Edge/LB, you **must** configure `trusted_proxies` in your Edge Caddyfile.
+     Ensure you properly pass down the real IP:
+
+     ```caddy
+     {
+         # Uncomment and add your LB/CDN CIDRs here:
+         # servers {
+         #     trusted_proxies static 10.0.0.0/8 172.16.0.0/12 ...
+         # }
+     }
+     ```
+
+   - **App:** Check `AUTH_TRUSTED_PROXIES` in `.env` for application-level IP resolution (rate limits and
+     audit logs). The API must trust the IP of the Edge-Caddy to parse the forwarded headers.
+   - **Do not blindly trust headers** if the API is directly exposed to the internet
+     (which violates the proxy-first contract).
+
+3. **Practical Test (Device Isolation):**
+   - **Step A:** Connect Device A (e.g., WiFi) and trigger 10 requests -> Expect `429 Too Many Requests`.
+   - **Step B:** Connect Device B (e.g., Mobile Data) and trigger 1 request -> Expect `200 OK`.
+   - **Result:**
+     - If Device B gets `200 OK`: Rate limiting is correctly keyed by Client IP.
+     - If Device B gets `429`: The API sees the upstream Proxy IP. **Action required:**
+       Fix `AUTH_TRUSTED_PROXIES` and Edge-Caddy headers.
+
+#### Request Endpoint (`login_limit`)
+
+- **Rate:** 5 requests per minute (per IP)
+- **Window:** 1 minute
+- **Endpoint:** `POST /api/auth/magic-link/request`
+
+#### Consume Endpoint (`login_consume_limit`)
+
+- **Rate:** 30 requests per minute (per IP)
+- **Window:** 1 minute
+- **Endpoint:** `POST /api/auth/magic-link/consume`
+- **Note:** The consume endpoint is typically called once per flow. Frequent
+  429s here indicate abuse or incorrect client IP resolution.
+
+This configuration is defined in `infra/caddy/Caddyfile.prod`.
+
+**Tuning Limits:**
+To adjust the rate limits, modify `infra/caddy/Caddyfile.prod`:
+
+```caddy
+rate_limit {
+    zone login_limit {
+        key {remote_host}
+        events 10   # Increase to 10 requests
+        window 1m
+    }
+}
+```
+
+**Verification:**
+To verify rate limiting is active, use a loop to trigger the limit. Using `curl`
+with output suppression (`-sS`) and write-out (`-w`) makes it easier to spot
+the `429` status code.
+
+> **Note:** The verification loop must send a valid JSON body. A `400 Bad Request` or `422 Unprocessable Entity`
+> response indicates an invalid payload, not a failure of the rate limit.
+
+```bash
+# Expect 5x 200, then 429
+for i in {1..10}; do \
+  curl -sS -o /dev/null -w "%{http_code}\n" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{"email":"test@example.com"}' \
+    https://weltgewebe.net/api/auth/magic-link/request; \
+done
+```
+
+### Required Env for Caddy
+
+The production Caddy configuration (`infra/compose/compose.prod.yml`) enforces the presence of specific environment
+variables to prevent silent failures or misconfiguration loops. If these are missing, `docker compose config` (and
+deployment) will fail fast.
+
+- `WEB_UPSTREAM_URL`: The full URL of the upstream web application (e.g., `https://weltgewebe-web.pages.dev`).
+- `WEB_UPSTREAM_HOST`: The hostname of the upstream web application (e.g., `weltgewebe-web.pages.dev`), used
+  for `Host` header forwarding.
+
+Ensure these are set in your `.env` file or deployment secrets.

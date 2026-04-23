@@ -1,14 +1,15 @@
+---
 name: docs-style
 
-on:
+"on":
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "docs/**"
       - ".vale/**"
       - ".vale.ini"
       - ".github/workflows/docs-style.yml"
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 permissions:
   contents: read

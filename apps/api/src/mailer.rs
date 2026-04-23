@@ -1,0 +1,240 @@
+use crate::config::AppConfig;
+use anyhow::{Context, Result};
+use lettre::{
+    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
+    AsyncTransport, Message, Tokio1Executor,
+};
+
+#[derive(Debug)]
+pub struct Mailer {
+    transport: AsyncSmtpTransport<Tokio1Executor>,
+    host: String,
+    port: u16,
+    user: Option<String>,
+    from: String,
+    // Note: Nur Test-Unterstützung, kein Produktionspfad.
+    // Bewusst minimaler Hook zur Verifikation des Empfängers in Integrationstests.
+    #[allow(clippy::type_complexity)]
+    test_sink: Option<std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>>,
+}
+
+impl Mailer {
+    pub fn new(config: &AppConfig) -> Result<Self> {
+        let host = config.smtp_host.as_deref().context("SMTP_HOST missing")?;
+        let port = config.smtp_port.unwrap_or(587);
+        let from = config.smtp_from.clone().context("SMTP_FROM missing")?;
+
+        // Determine Auth Policy
+        // auto: use creds if present
+        // on: require creds
+        // off: ignore creds
+        let auth_policy = std::env::var("SMTP_AUTH")
+            .unwrap_or_else(|_| "auto".to_string())
+            .to_lowercase();
+
+        let (user, pass) = match auth_policy.as_str() {
+            "off" => (None, None),
+            "on" => {
+                let u = config
+                    .smtp_user
+                    .as_deref()
+                    .context("SMTP_USER missing (SMTP_AUTH=on)")?;
+                let p = config
+                    .smtp_pass
+                    .as_deref()
+                    .context("SMTP_PASS missing (SMTP_AUTH=on)")?;
+                (Some(u), Some(p))
+            }
+            _ => {
+                // auto
+                if let (Some(u), Some(p)) =
+                    (config.smtp_user.as_deref(), config.smtp_pass.as_deref())
+                {
+                    (Some(u), Some(p))
+                } else {
+                    (None, None)
+                }
+            }
+        };
+
+        let creds = if let (Some(u), Some(p)) = (user, pass) {
+            Some(Credentials::new(u.to_string(), p.to_string()))
+        } else {
+            None
+        };
+
+        // Validate from address format early
+        if from.parse::<lettre::message::Mailbox>().is_err() {
+            anyhow::bail!("invalid from address: {}", from);
+        }
+        // SMTP transport:
+        // - 465: Implicit TLS
+        // - 587: STARTTLS (typisch, u.a. IONOS)
+        // - sonst: nur für lokale Relays wie 1025 ohne TLS
+        let transport = if port == 465 {
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::relay(host)
+                .context("failed to init SMTP relay (implicit TLS, port 465)")?
+                .port(port);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
+            }
+            builder.build()
+        } else if port == 587 {
+            let mut builder = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(host)
+                .context("failed to init SMTP relay (STARTTLS, port 587)")?
+                .port(port);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
+            }
+            builder.build()
+        } else {
+            let mut builder =
+                AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(host).port(port);
+            if let Some(c) = creds.as_ref() {
+                builder = builder.credentials(c.clone());
+            }
+            builder.build()
+        };
+
+        Ok(Self {
+            transport,
+            from,
+            host: host.to_string(),
+            port,
+            user: user.map(|s| s.to_string()),
+            test_sink: None,
+        })
+    }
+
+    /// Nur Test-Unterstützung, kein Produktionspfad.
+    /// Bewusst minimaler Hook zur Verifikation des Empfängers in Integrationstests.
+    pub fn with_test_sink(
+        mut self,
+        sink: std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>,
+    ) -> Self {
+        self.test_sink = Some(sink);
+        self
+    }
+
+    pub async fn send_step_up_magic_link(&self, to: &str, link: &str) -> Result<()> {
+        if let Some(sink) = &self.test_sink {
+            sink.lock()
+                .unwrap()
+                .push((to.to_string(), link.to_string()));
+            return Ok(());
+        }
+
+        let email = Message::builder()
+            .from(self.from.parse().context("invalid from address")?)
+            .to(to.parse().context("invalid to address")?)
+            .subject("Confirm sensitive action in Weltgewebe")
+            .header(ContentType::TEXT_HTML)
+            .body(format!(
+                r#"<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; padding: 20px;">
+    <h2>Confirm your action in Weltgewebe</h2>
+    <p>Click the link below to confirm your sensitive action. This link is strictly bound to your current session.</p>
+    <p style="margin: 20px 0;">
+        <a href="{}" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Confirm Action</a>
+    </p>
+    <p style="color: #666; font-size: 0.9em;">This link expires in a few minutes.</p>
+    <p style="color: #666; font-size: 0.9em;">If you did not request this email, please secure your account.</p>
+</body>
+</html>"#,
+                link
+            ))
+            .context("failed to build email")?;
+
+        self.transport
+            .send(email)
+            .await
+            .context("failed to send step-up magic link email")?;
+        Ok(())
+    }
+
+    pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
+        if let Some(sink) = &self.test_sink {
+            sink.lock()
+                .unwrap()
+                .push((to.to_string(), link.to_string()));
+            return Ok(());
+        }
+
+        let email = Message::builder()
+            .from(self.from.parse().context("invalid from address")?)
+            .to(to.parse().context("invalid to address")?)
+            .subject("Log in to Weltgewebe")
+            .header(ContentType::TEXT_HTML)
+            .body(format!(
+                r#"<!DOCTYPE html>
+<html>
+<body style="font-family: sans-serif; padding: 20px;">
+    <h2>Log in to Weltgewebe</h2>
+    <p>Click the link below to sign in:</p>
+    <p style="margin: 20px 0;">
+        <a href="{}" style="background-color: #0070f3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Sign In</a>
+    </p>
+    <p style="color: #666; font-size: 0.9em;">This link expires soon.</p>
+    <p style="color: #666; font-size: 0.9em;">If you did not request this email, you can safely ignore it.</p>
+</body>
+</html>"#,
+                link
+            ))
+            .context("failed to build email")?;
+
+        self.transport.send(email).await.with_context(|| {
+            format!(
+                "smtp send failed (host={:?} port={:?} user={:?} from={:?})",
+                self.host, self.port, self.user, self.from
+            )
+        })?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppConfig;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn mailer_fails_with_invalid_from_address() {
+        // Construct AppConfig manually to avoid dependency on config validation logic
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: Some("127.0.0.1".to_string()),
+            smtp_port: Some(1025),
+            smtp_user: Some("user".to_string()),
+            smtp_pass: Some("pass".to_string()),
+            smtp_from: Some("not-an-email".to_string()),
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        // This should fail because "not-an-email" cannot be parsed into a Mailbox
+        let res = Mailer::new(&config);
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("invalid from address"));
+    }
+}

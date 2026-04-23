@@ -3,36 +3,43 @@
 // - setzt aria-hidden, solange inert aktiv ist
 // Safari < 16.4 & ältere iPadOS-Versionen profitieren davon.
 
-const previousAriaHidden = new WeakMap<Element, string | null>();
+// Speichert den ursprünglichen aria-hidden-Wert für Knoten, deren Subtree wir ausblenden.
+// Hinweis: Diese Variante isoliert ausschließlich innerhalb des inert-Subtrees und modelliert
+// keine verschachtelten inert-Container. Verschachtelte inert-Bereiche sollten daher vermieden
+// oder bewusst sequentiell aktiviert werden.
+const previousSubtreeAriaHidden = new WeakMap<Element, string | null>();
 
-function applyAriaHidden(el: Element, on: boolean) {
-  const element = el as HTMLElement;
-
+function toggleAriaHidden(element: Element, on: boolean) {
   if (on) {
-    if (!previousAriaHidden.has(element)) {
-      previousAriaHidden.set(element, element.getAttribute('aria-hidden'));
+    if (!previousSubtreeAriaHidden.has(element)) {
+      previousSubtreeAriaHidden.set(
+        element,
+        element.getAttribute("aria-hidden"),
+      );
     }
-    if (element.getAttribute('aria-hidden') !== 'true') {
-      element.setAttribute('aria-hidden', 'true');
+    if (element.getAttribute("aria-hidden") !== "true") {
+      element.setAttribute("aria-hidden", "true");
     }
-    return;
-  }
-
-  const previous = previousAriaHidden.get(element);
-  previousAriaHidden.delete(element);
-
-  if (previous === undefined) {
-    // Wir haben den ursprünglichen Zustand nicht gesehen → defensiv säubern.
-    if (element.getAttribute('aria-hidden') === 'true') {
-      element.removeAttribute('aria-hidden');
-    }
-    return;
-  }
-
-  if (previous === null) {
-    element.removeAttribute('aria-hidden');
   } else {
-    element.setAttribute('aria-hidden', previous);
+    if (!previousSubtreeAriaHidden.has(element)) return;
+
+    const previous = previousSubtreeAriaHidden.get(element);
+    previousSubtreeAriaHidden.delete(element);
+
+    if (previous === null) {
+      element.removeAttribute("aria-hidden");
+    } else {
+      element.setAttribute("aria-hidden", previous as string);
+    }
+  }
+}
+
+function setSubtreeAriaHidden(root: Element, on: boolean) {
+  toggleAriaHidden(root, on);
+
+  const descendants = root.querySelectorAll<HTMLElement>("*");
+  for (let i = 0; i < descendants.length; i++) {
+    toggleAriaHidden(descendants[i], on);
   }
 }
 
@@ -42,7 +49,8 @@ function applyAriaHidden(el: Element, on: boolean) {
  */
 export function ensureInertPolyfill() {
   // SSR-Schutz und moderne Browser mit nativer inert-Unterstützung überspringen.
-  if (typeof document === 'undefined' || typeof HTMLElement === 'undefined') return;
+  if (typeof document === "undefined" || typeof HTMLElement === "undefined")
+    return;
 
   const win = window as typeof window & {
     __FORCE_INERT_POLYFILL__?: boolean;
@@ -50,16 +58,16 @@ export function ensureInertPolyfill() {
   };
 
   const forcePolyfill = win.__FORCE_INERT_POLYFILL__ === true;
-  if (!forcePolyfill && 'inert' in HTMLElement.prototype) return;
+  if (!forcePolyfill && "inert" in HTMLElement.prototype) return;
 
   // Idempotenz: nur einmal aktivieren
   if (win.__INERT_POLYFILL_ACTIVE__) return;
   win.__INERT_POLYFILL_ACTIVE__ = true;
 
   // Style-Schutz nur einmal injizieren (Pointer & Selection aus).
-  const styleId = 'wg-inert-polyfill-style';
+  const styleId = "wg-inert-polyfill-style";
   if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
+    const style = document.createElement("style");
     style.id = styleId;
     style.textContent = `
       [inert] {
@@ -75,87 +83,95 @@ export function ensureInertPolyfill() {
   // aria-hidden initial anwenden
   const syncAll = () => {
     document
-      .querySelectorAll<HTMLElement>('[inert]')
-      .forEach((el) => applyAriaHidden(el, true));
+      .querySelectorAll<HTMLElement>("[inert]")
+      .forEach((el) => setSubtreeAriaHidden(el, true));
   };
   syncAll();
 
   // Fokus-, Click- & Tastatur-Blocker
   document.addEventListener(
-    'focusin',
+    "focusin",
     (e) => {
       const t = e.target as HTMLElement | null;
-      if (t && t.closest('[inert]')) {
+      if (t && t.closest("[inert]")) {
         t.blur?.();
         (document.activeElement as HTMLElement | null)?.blur?.();
       }
     },
-    { capture: true }
+    { capture: true },
   );
 
   document.addEventListener(
-    'click',
+    "click",
     (e) => {
       const t = e.target as HTMLElement | null;
-      if (t && t.closest('[inert]')) {
+      if (t && t.closest("[inert]")) {
         e.preventDefault();
         e.stopPropagation();
       }
     },
-    { capture: true }
+    { capture: true },
   );
 
   document.addEventListener(
-    'keydown',
+    "keydown",
     (e) => {
       const active = document.activeElement as HTMLElement | null;
       const target = e.target as HTMLElement | null;
       const withinInert = (node: HTMLElement | null) =>
-        !!node && !!node.closest?.('[inert]');
+        !!node && !!node.closest?.("[inert]");
 
       if (withinInert(active) || withinInert(target)) {
         // Tab-/Enter-/Space-Interaktionen blocken
-        if (e.key === 'Tab') {
+        if (e.key === "Tab") {
           e.preventDefault();
           e.stopPropagation();
           active?.blur?.();
           return;
         }
-        if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'Enter') {
+        if (e.key === " " || e.key === "Spacebar" || e.key === "Enter") {
           e.preventDefault();
           e.stopPropagation();
         }
       }
     },
-    { capture: true }
+    { capture: true },
   );
 
   // Beobachte nachträgliche Änderungen an 'inert' und neu eingefügte Knoten
   const mo = new MutationObserver((muts) => {
+    let hasAddedNodes = false;
+
     for (const m of muts) {
-      if (m.type === 'attributes' && m.attributeName === 'inert' && m.target instanceof HTMLElement) {
+      if (
+        m.type === "attributes" &&
+        m.attributeName === "inert" &&
+        m.target instanceof HTMLElement
+      ) {
         const el = m.target as HTMLElement;
-        const on = el.hasAttribute('inert');
-        applyAriaHidden(el, on);
+        const on = el.hasAttribute("inert");
+        setSubtreeAriaHidden(el, on);
         continue;
       }
 
-      if (m.type === 'childList') {
-        for (const node of m.addedNodes) {
-          if (!(node instanceof HTMLElement)) continue;
-
-          if (node.hasAttribute('inert')) {
-            applyAriaHidden(node, true);
+      if (m.type === "childList" && m.addedNodes.length > 0) {
+        for (let i = 0; i < m.addedNodes.length; i++) {
+          if (m.addedNodes[i].nodeType === Node.ELEMENT_NODE) {
+            hasAddedNodes = true;
+            break;
           }
-          node.querySelectorAll('[inert]').forEach((el) => applyAriaHidden(el, true));
         }
       }
+    }
+
+    if (hasAddedNodes) {
+      syncAll();
     }
   });
 
   mo.observe(document.documentElement, {
     attributes: true,
-    attributeFilter: ['inert'],
+    attributeFilter: ["inert"],
     childList: true,
     subtree: true,
   });

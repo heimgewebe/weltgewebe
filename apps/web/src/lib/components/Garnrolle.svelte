@@ -1,29 +1,170 @@
 <script lang="ts">
-  export let label = 'Mein Konto';
-  export let tooltip = 'Garnrolle – Konto';
+  import { createEventDispatcher } from 'svelte';
+  import { ICONS, MARKER_SIZES } from '$lib/ui/icons';
+  import { authStore } from '$lib/auth/store';
+  import { browser } from '$app/environment';
+
+  export let label = 'Kontoeinstellungen';
+
+  const dispatch = createEventDispatcher<{ requestZoomToOwnGarnrolle: void }>();
+  let menuOpen = false;
+
+  function handleZoomToOwnGarnrolle() {
+    menuOpen = false;
+    dispatch('requestZoomToOwnGarnrolle');
+  }
+
+  function toggleMenu() {
+    menuOpen = !menuOpen;
+  }
+
+  function closeMenu(event: MouseEvent) {
+    if (!menuOpen) return;
+    const target = event.target as HTMLElement;
+    if (!target.closest('.garnrolle-container')) {
+      menuOpen = false;
+    }
+  }
+
+  // Capture phase so this handler fires before bubble-phase Escape listeners
+  // (e.g. ContextPanel, SearchOverlay). preventDefault() signals that the
+  // Garnrolle menu owns this Escape press; ContextPanel checks
+  // event.defaultPrevented and skips its own close logic accordingly.
+  function handleKeydown(event: KeyboardEvent) {
+    if (!menuOpen) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      menuOpen = false;
+    }
+  }
+
+  async function logout() {
+    if (!browser) return;
+    await authStore.logout();
+    menuOpen = false;
+  }
 </script>
 
-<style>
-  .wrap{ position:relative; }
-  .roll{
-    width:34px; height:34px; border-radius:50%;
-    background: radial-gradient(circle at 30% 30%, #6aa6ff 0%, #2c6de0 60%, #1b3f7a 100%);
-    border:1px solid rgba(255,255,255,0.12);
-    box-shadow: var(--shadow);
-    display:grid; place-items:center; cursor:pointer;
-  }
-  .hole{ width:10px; height:10px; border-radius:50%; background:#0f1a2f; box-shadow: inset 0 0 8px rgba(0,0,0,.6); }
-  .tip{
-    position:absolute; right:0; transform:translateY(calc(-100% - 8px));
-    background:var(--panel); border:1px solid var(--panel-border); color:var(--text);
-    padding:6px 8px; font-size:12px; border-radius:8px; white-space:nowrap;
-    opacity:0; pointer-events:none; transition:.15s ease;
-  }
-  .wrap:hover .tip{ opacity:1; }
-</style>
+<svelte:window on:click={closeMenu} on:keydown|capture={handleKeydown} />
 
-<div class="wrap" aria-label={label}>
-  <div class="roll" title={tooltip}><div class="hole" /></div>
-  <div class="tip">{tooltip}</div>
+<div class="garnrolle-container wrap">
+  <button
+    class="roll wrap-btn"
+    aria-label={label}
+    aria-expanded={menuOpen}
+    on:click={toggleMenu}
+    style="width: {MARKER_SIZES.account}px; height: {MARKER_SIZES.account}px;"
+  >
+    <img src={ICONS.garnrolle} alt={label} />
+  </button>
+
+  {#if menuOpen}
+    <div class="menu">
+      {#if $authStore.authenticated}
+        <div class="menu-header">
+          <span class="role-badge" class:admin={$authStore.role === 'admin'} class:weber={$authStore.role === 'weber'} class:gast={$authStore.role === 'gast'}>
+            {$authStore.role}
+          </span>
+        </div>
+        <button class="menu-item" on:click={handleZoomToOwnGarnrolle}>Meine Garnrolle auf Karte zeigen</button>
+        <a href="/settings" class="menu-item" on:click={() => menuOpen = false}>Einstellungen</a>
+        <button class="menu-item logout-btn" on:click={logout}>Logout</button>
+      {:else}
+        <div class="menu-header">
+          <span class="role-badge gast">gast</span>
+        </div>
+        <a href="/login" class="menu-item" on:click={() => menuOpen = false}>Login</a>
+      {/if}
+    </div>
+  {/if}
 </div>
 
+<style>
+  .wrap { position: relative; display: inline-block; }
+  .wrap-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-decoration: none;
+    color: inherit;
+    outline: none;
+    appearance: none;
+  }
+  .wrap-btn:focus-visible { outline: 2px solid var(--primary); border-radius: 4px; }
+
+  .roll {
+    display: block;
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  .roll img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .roll:active { transform: scale(0.95); }
+
+  .menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    min-width: 150px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  .menu-header {
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid var(--panel-border);
+    background: var(--bg);
+  }
+
+  .role-badge {
+    padding: 0.1rem 0.5rem;
+    border-radius: 99px;
+    background: rgba(255, 255, 255, 0.05);
+    text-transform: uppercase;
+    font-weight: bold;
+    font-size: 0.7rem;
+    display: inline-block;
+  }
+  .role-badge.admin { background: var(--accent); color: var(--panel); }
+  .role-badge.weber { background: #54e1a6; color: var(--panel); }
+  .role-badge.gast { background: var(--muted); color: var(--bg); }
+
+  .menu-item {
+    display: block;
+    padding: 12px 16px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-weight: 500;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.1s ease;
+  }
+  .menu-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .logout-btn {
+    color: #ff6b6b;
+    border-top: 1px solid var(--panel-border);
+  }
+  .logout-btn:hover {
+    background: #ff6b6b;
+    color: white;
+  }
+</style>

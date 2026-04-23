@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/message.schema.json",
+  "title": "Message",
+  "description": "A single message within a conversation.",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "conversation_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "author_role_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "content": {
+      "type": "string"
+    },
+    "in_reply_to_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional metadata for the message (z.B. Client-Infos oder Rendering-Hinweise).",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean", "null"]
+      }
+    }
+  },
+  "required": [
+    "id",
+    "conversation_id",
+    "author_role_id",
+    "created_at",
+    "content"
+  ]
+}

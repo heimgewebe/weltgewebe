@@ -1,0 +1,94 @@
+{
+# 	order rate_limit before basicauth
+
+	# If running behind a Load Balancer or CDN (e.g. Cloudflare), you MUST configure trusted_proxies
+	# so that Caddy can resolve the actual client IP for rate limiting.
+	# Without this, {remote_host} will be the LB IP, causing rate limits to block everyone.
+	#
+	# servers {
+	# 	trusted_proxies static 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 fc00::/7
+	# }
+}
+
+weltgewebe.net {
+	log {
+		output stdout
+		level INFO
+	}
+
+	encode zstd gzip
+
+	# NOTE: The rate_limit directive is disabled because it requires a non-standard Caddy plugin.
+	# Expected enforcement: upstream LB/WAF/firewall (preferred) or host-level protections (e.g. fail2ban on access logs).
+	# Risk: login endpoints are more susceptible to brute-force without compensating controls.
+# 	rate_limit {
+# 		zone login_limit {
+# 			key {remote_host}
+# 			events 5
+# 			window 1m
+# 		}
+# 		zone login_consume_limit {
+# 			key {remote_host}
+# 			events 30
+# 			window 1m
+# 		}
+# 		zone login_consume_get_limit {
+# 			key {remote_host}
+# 			events 60
+# 			window 1m
+# 		}
+# 	}
+
+	# Handle API requests (stripping the prefix implies using handle_path)
+	handle_path /api/* {
+		# Note: /api prefix is stripped here, so we match /auth/magic-link/request directly
+		@login_request {
+			method POST
+			path /auth/magic-link/request
+		}
+# 		rate_limit @login_request login_limit
+
+		@login_consume {
+			method POST
+			path /auth/magic-link/consume
+		}
+# 		rate_limit @login_consume login_consume_limit
+
+		# GET /auth/magic-link/consume may be triggered by link scanners or prefetchers.
+		# A relaxed rate limit prevents abuse without impacting normal login flows.
+		@login_consume_get {
+			method GET
+			path /auth/magic-link/consume
+		}
+# 		rate_limit @login_consume_get login_consume_get_limit
+
+		reverse_proxy api:8080
+	}
+
+	# Explicitly forward health checks to the API
+	handle /health/* {
+		reverse_proxy api:8080
+	}
+
+	# Proxy internal health check
+	handle /health/proxy {
+		respond 200
+	}
+
+	# Proxy everything else to the configured web upstream (Cloudflare Pages or Vercel)
+	reverse_proxy /* {env.WEB_UPSTREAM_URL} {
+		header_up Host {env.WEB_UPSTREAM_HOST}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		header_up X-Forwarded-For {remote_host}
+	}
+
+	header {
+		# Security headers
+		# CSP removed for v0 to avoid side-effects with external upstreams.
+		# Should be tightened later when asset domains are stable.
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+	}
+}

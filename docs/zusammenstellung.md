@@ -1,3 +1,17 @@
+---
+id: zusammenstellung
+title: Zusammenstellung
+doc_type: reference
+status: active
+summary: Systematische Zusammenfassung von Prinzipien, Domänenmodell, Governance und UI-Architektur.
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/inhalt.md
+  - type: relates_to
+    target: docs/architekturstruktur.md
+---
 # Zusammenstellung (MANDATORISCH)
 
 Das Weltgewebe: Eine Systematische Zusammenfassung
@@ -36,7 +50,7 @@ Nutzer (Garnrollen)
 Inhalte (Knoten, Fäden, Garn)
 
 - Knoten: Dies sind ortsbezogene Bündel von Informationen, wie Ideen, Veranstaltungen, Ressourcen, Werkzeuge oder
-  Schlafplätze. Jeder Knoten eröffnet einen eigenen Raum, der Threads, Informationen und Anträge enthalten kann.
+  Schlafplätze. Jeder Knoten eröffnet einen eigenen Raum, der Gesprächsräume, Informationen und Anträge enthalten kann.
   Informationen können alternativ auch direkt auf der eigenen Garnrolle verortet werden. Knoten sind auf der Karte
   filter- und einblendbar.
 - Fäden: Jede Nutzeraktion erzeugt einen "Faden" von der Garnrolle des Nutzers zu einem Knoten. Es gibt verschiedene
@@ -96,9 +110,9 @@ IV. Governance und Demokratische Prozesse
 V. Benutzeroberfläche und Nutzererlebnis
 
 - Karten-Interface: Die primäre Oberfläche ist eine Vollbildkarte (MapLibre GL).
-- Drawer-System:
-  - Links: Zugriff auf Webrat und Nähstübchen (Governance und Kommunikation).
-  - Rechts: Filter für Knoten- und Fadenarten, ein Zeitfenster und ein Suchmenü.
+- UI-Architektur:
+  - Kontextpanel (für Details zu Knoten, Garnrollen und Fäden).
+  - Aktionsleiste (Navigation und Suche).
 - Suchfunktion: Über das Suchmenü können die von Nutzern zur Verfügung gestellten Güter und Kompetenzen abgefragt
   werden. Treffer werden als aufleuchtende Rollen oder Knoten auf der Karte sowie in einer nach Entfernung sortierten
   Liste angezeigt. Ein Klick auf einen Listeneintrag zentriert die Karte auf den entsprechenden Nutzer.

@@ -1,0 +1,31 @@
+---
+services:
+  api:
+    # Deliberate Heimserver layout assumption: .env must exist at this absolute path.
+    # This injects all variables from the host's .env into the container runtime.
+    # Override via WELTGEWEBE_ENV_FILE for non-standard deployments.
+    # Note: WELTGEWEBE_ENV_FILE must be set for both Compose interpolation (CLI) and env_file (Runtime).
+    env_file:
+      - ${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}
+    environment:
+      POLICY_LIMITS_PATH: /app/policies/limits.yaml
+      APP_BASE_URL: https://weltgewebe.home.arpa
+      AUTH_PUBLIC_LOGIN: '1'
+      AUTH_LOG_MAGIC_TOKEN: '0'
+      AUTH_AUTO_PROVISION: '1'
+      # Open Registration (Option C) requires strict rate limits
+      AUTH_ALLOW_EMAILS: ""
+      AUTH_RL_IP_PER_MIN: "5"
+      AUTH_RL_IP_PER_HOUR: "30"
+      AUTH_RL_EMAIL_PER_MIN: "2"
+      AUTH_RL_EMAIL_PER_HOUR: "10"
+      WEB_UPSTREAM_HOST: weltgewebe.home.arpa
+      WEB_UPSTREAM_URL: https://weltgewebe.home.arpa
+    volumes:
+      - type: bind
+        source: ${REPO_DIR:-/opt/weltgewebe}/policies/limits.yaml
+        target: /app/policies/limits.yaml
+        read_only: true
+  caddy:
+    environment: {}
+    ports: []

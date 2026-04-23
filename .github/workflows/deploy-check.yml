@@ -1,0 +1,55 @@
+---
+name: Deploy Check
+permissions:
+  contents: read
+
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/web/**'
+      - 'infra/caddy/**'
+      - 'scripts/preflight/**'
+      - '.github/workflows/deploy-check.yml'
+      - '.node-version'
+  pull_request:
+    paths:
+      - 'apps/web/**'
+      - 'infra/caddy/**'
+      - 'scripts/preflight/**'
+      - '.github/workflows/deploy-check.yml'
+      - '.node-version'
+
+jobs:
+  csp-contract-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Web App
+        run: pnpm build
+
+      - name: Run CSP contract guard
+        working-directory: .
+        run: |
+          ROOT=$GITHUB_WORKSPACE \
+          CADDYFILE_PATH=infra/caddy/Caddyfile.heim \
+          CADDY_TARGET_SITE=weltgewebe.home.arpa \
+          scripts/preflight/csp_contract_static.sh

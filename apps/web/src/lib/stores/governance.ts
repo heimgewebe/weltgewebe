@@ -27,7 +27,9 @@ export function createLoopingCountdown(durationMs: number): LoopingCountdown {
   const start = () => {
     if (!browser || interval !== null) return;
     interval = setInterval(() => {
-      update((previous) => (previous > TICK_MS ? previous - TICK_MS : durationMs));
+      update((previous) =>
+        previous > TICK_MS ? previous - TICK_MS : durationMs,
+      );
     }, TICK_MS);
   };
 
@@ -56,7 +58,7 @@ export function createLoopingCountdown(durationMs: number): LoopingCountdown {
       if (!browser) return;
       stop();
       if (activeSubscribers > 0) start();
-    }
+    },
   };
 }
 
@@ -66,6 +68,6 @@ export function createBooleanToggle(initial = false): BooleanToggle {
     subscribe,
     open: () => set(true),
     close: () => set(false),
-    toggle: () => update((value) => !value)
+    toggle: () => update((value) => !value),
   };
 }

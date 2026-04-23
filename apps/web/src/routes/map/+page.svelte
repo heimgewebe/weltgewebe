@@ -1,300 +1,371 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { onMount, tick } from 'svelte';
+  import type { PageData } from './$types';
   import '$lib/styles/tokens.css';
   import 'maplibre-gl/dist/maplibre-gl.css';
   import type { Map as MapLibreMap } from 'maplibre-gl';
+
   import TopBar from '$lib/components/TopBar.svelte';
-  import Drawer from '$lib/components/Drawer.svelte';
-  import TimelineDock from '$lib/components/TimelineDock.svelte';
-  import points from '$lib/data/dummy.json';
+  import ContextPanel from '$lib/components/ContextPanel.svelte';
+  import ActionBar from '$lib/components/ActionBar.svelte';
+  import SearchOverlay from '$lib/components/SearchOverlay.svelte';
+  import FilterOverlay from '$lib/components/FilterOverlay.svelte';
+  import type { Edge, MapEntityViewModel } from '$lib/map/types';
 
-  type MapPoint = {
-    id: string;
-    title: string;
-    lat: number;
-    lon: number;
-  };
+  import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
+  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import { activeFilters } from '$lib/stores/filterStore';
+  import { authStore } from '$lib/auth/store';
+  import { isRecord } from '$lib/utils/guards';
 
-  const markersData = points satisfies MapPoint[];
+  import { get } from 'svelte/store';
+
+  import { currentBasemap, HAMMER_PARK_CENTER } from '$lib/map/config/basemap.current';
+  import { resolveBasemapStyle, rewritePmtilesUrl } from '$lib/map/basemap';
+  import { buildMapScene } from '$lib/map/scene';
+
+  import { NodesOverlay } from '$lib/map/overlay/nodes';
+  import { updateEdges } from '$lib/map/overlay/edges';
+  import { setupKompositionInteraction } from '$lib/map/overlay/komposition';
+  import { setupFocusInteraction } from '$lib/map/overlay/focus';
+
+  export let data: PageData;
+
+  // Phase 2: Build scene from route data – single transformation point
+  $: scene = buildMapScene({
+    nodes: data.nodes || [],
+    accounts: data.accounts || [],
+    edges: data.edges || [],
+    loadState: data.loadState ?? 'ok',
+    resourceStatus: data.resourceStatus ?? [],
+    apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
+    basemapMode: currentBasemap.mode,
+  });
+
+  // Derived from scene for backward-compatible access
+  $: loadState = scene.loadState;
+  $: failedResources = scene.resourceStatus.filter(r => r.status === 'failed').map(r => r.resource);
+
+  const resourceLabel: Record<string, string> = { nodes: 'Knoten', accounts: 'Garnrollen', edges: 'Fäden' };
+  $: failedResourceLabels = failedResources.map(r => resourceLabel[r] ?? r);
+  $: markersData = scene.entities;
+
+  // Diagnostic counts for debug badge
+  $: nodeCount = scene.entities.filter(e => e.type === 'node').length;
+  $: accountCount = scene.entities.filter(e => e.type !== 'node').length;
+
+  // Robust type guards
+  function isEdge(e: unknown): e is Edge {
+    if (!isRecord(e)) return false;
+    return (
+      typeof e.id === 'string' &&
+      typeof e.source_id === 'string' &&
+      typeof e.target_id === 'string' &&
+      typeof e.edge_kind === 'string'
+    );
+  }
+
+  $: validEdges = scene.edges.filter(isEdge);
+
+  $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
+  $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
+
+  // Search logic moved from SearchOverlay to orchestrator
+  let filteredResults: MapEntityViewModel[] = [];
+  let searchMatchIds = new Set<string>();
+
+  $: {
+    if ($isSearchOpen && $searchQuery.trim().length > 0) {
+      const q = $searchQuery.toLowerCase();
+      // Search operates strictly on currently visible/filtered markers
+      filteredResults = searchBaseData.filter(m => {
+        const titleMatch = m.title?.toLowerCase().includes(q);
+        const summaryMatch = m.summary?.toLowerCase().includes(q);
+        return titleMatch || summaryMatch;
+      }).slice(0, 10);
+      searchMatchIds = new Set(filteredResults.map(r => r.id));
+    } else {
+      filteredResults = [];
+      searchMatchIds = new Set();
+    }
+  }
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
+  let mapStyleReady = false;
+  let isLoading = true;
+  let lastFocusedElement: HTMLElement | null = null;
+  let showFilterTooltip = false;
+  let filterTooltipTimeout: number | null = null;
 
-  let leftOpen = true;     // linke Spalte (Webrat/Nähstübchen)
-  let rightOpen = false;   // Filter / Info
-  let topOpen = false;     // Gewebekonto
+  let nodesOverlay: NodesOverlay | null = null;
 
-  let selected: MapPoint | null = null;
-  const markerCleanupFns: Array<() => void> = [];
+  function getFilterTypeKey(m: MapEntityViewModel): string {
+    return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
+  }
 
-  type DrawerInstance = InstanceType<typeof Drawer> & {
-    setOpener?: (el: HTMLElement | null) => void;
-    focus?: () => void;
-  };
-  let rightDrawerRef: DrawerInstance | null = null;
-  let topDrawerRef: DrawerInstance | null = null;
-  let openerButtons: {
-    left: HTMLButtonElement | null;
-    right: HTMLButtonElement | null;
-    top: HTMLButtonElement | null;
-  } = { left: null, right: null, top: null };
+  let availableFilterTypes: { id: string, label: string, count: number }[] = [];
+  let filteredMarkersData: MapEntityViewModel[] = [];
 
-  const defaultQueryState = { l: leftOpen, r: rightOpen, t: topOpen } as const;
+  // Derivation of filterable types
+  $: availableFilterTypes = (() => {
+    const counts = new Map<string, number>();
+    for (const m of markersData) {
+      const typeKey = getFilterTypeKey(m);
+      counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([id, count]) => ({
+      id,
+      label: id.charAt(0).toUpperCase() + id.slice(1),
+      count
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  })();
 
-  function setQuery(next: { l?: boolean; r?: boolean; t?: boolean }) {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    if (next.l !== undefined) {
-      if (next.l === defaultQueryState.l) {
-        url.searchParams.delete('l');
+  $: filteredMarkersData = $activeFilters.size === 0
+    ? markersData
+    : markersData.filter(m => $activeFilters.has(getFilterTypeKey(m)));
+
+  $: searchBaseData = $activeFilters.size === 0 ? markersData : filteredMarkersData;
+
+  // Reactive update for markers and search highlight strictly handled in overlay update
+  $: if (nodesOverlay && filteredMarkersData && $view) {
+    (async () => {
+      await nodesOverlay.update(filteredMarkersData, $view.showNodes, searchMatchIds);
+    })();
+  }
+
+  // Reactive update for edges – only after map style is fully loaded
+  $: if (map && mapStyleReady && edgesData && $view) {
+     updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
+  }
+
+
+
+  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'garnrolle' {
+    if (type === 'garnrolle') {
+      return type;
+    }
+    return 'node';
+  }
+
+  function focusAndFlyToPoint(item: MapEntityViewModel) {
+    const itemType = normalizeSelectionType(item.type);
+
+    enterFokus({ type: itemType, id: item.id, data: item });
+
+    const lat = item.lat;
+    const lon = item.lon;
+    if (map && typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+      const currentZoom = map.getZoom();
+      map.flyTo({
+        center: [lon, lat],
+        zoom: Math.max(currentZoom, 14),
+        speed: 0.8,
+        curve: 1
+      });
+    }
+  }
+
+  function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
+    focusAndFlyToPoint(event.detail);
+  }
+
+  function handleZoomToOwnGarnrolle() {
+    if (!$authStore.authenticated || !$authStore.account_id) return;
+    const accountId = $authStore.account_id;
+    // Find the marker corresponding to the user's account
+    const userMarker = markersData.find(m => m.id === accountId && m.type === 'garnrolle');
+
+    if (userMarker) {
+      const typeKey = getFilterTypeKey(userMarker);
+      const isFilteredOut = $activeFilters.size > 0 && !$activeFilters.has(typeKey);
+
+      // Do not override filters: if the user's marker is filtered out, inform the user instead of mutating filter state.
+      if (isFilteredOut) {
+        if (filterTooltipTimeout !== null) {
+          window.clearTimeout(filterTooltipTimeout);
+        }
+        showFilterTooltip = false; // brief reset for animation restart
+
+        tick().then(() => {
+          showFilterTooltip = true;
+          filterTooltipTimeout = window.setTimeout(() => {
+            showFilterTooltip = false;
+            filterTooltipTimeout = null;
+          }, 4000);
+        });
       } else {
-        url.searchParams.set('l', next.l ? '1' : '0');
+        focusAndFlyToPoint(userMarker);
       }
     }
-    if (next.r !== undefined) {
-      if (next.r === defaultQueryState.r) {
-        url.searchParams.delete('r');
-      } else {
-        url.searchParams.set('r', next.r ? '1' : '0');
+    // Note: If no marker is found (e.g. not public/placed), this deliberately silently no-ops
+  }
+
+  // Restore focus when selection is closed or state becomes navigation
+  $: if (($systemState === 'navigation' || !$selection) && lastFocusedElement) {
+    const elToFocus = lastFocusedElement;
+    lastFocusedElement = null; // Clear immediately to prevent loop
+
+    // Use tick() to wait for DOM updates (e.g. context panel removed)
+    // and try to focus safely.
+    tick().then(() => {
+      if (elToFocus && document.body.contains(elToFocus)) {
+        try {
+          elToFocus.focus();
+        } catch (e) {
+          // ignore focus errors
+        }
+      }
+    });
+  }
+
+  async function toggleLogin() {
+    if ($authStore.authenticated) {
+      await authStore.logout();
+    } else {
+      try {
+        await authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8');
+      } catch (e: any) {
+        // Simple UI feedback for dev login issues
+        window.alert(`Login failed: ${e.message}\nCheck console for details.`);
       }
     }
-    if (next.t !== undefined) {
-      if (next.t === defaultQueryState.t) {
-        url.searchParams.delete('t');
-      } else {
-        url.searchParams.set('t', next.t ? '1' : '0');
-      }
-    }
-    history.replaceState(history.state, '', url);
   }
 
-  function syncFromLocation() {
-    if (typeof window === 'undefined') return;
-    const q = new URLSearchParams(window.location.search);
-    leftOpen = q.has('l') ? q.get('l') === '1' : defaultQueryState.l;
-    rightOpen = q.has('r') ? q.get('r') === '1' : defaultQueryState.r;
-    if (!rightOpen) {
-      selected = null;
-    }
-    topOpen = q.has('t') ? q.get('t') === '1' : defaultQueryState.t;
-  }
+  let cleanupKomposition: (() => void) | undefined = undefined;
+  let cleanupFocus: (() => void) | undefined = undefined;
+  let unsubscribeSysState: (() => void) | undefined = undefined;
 
-  function toggleLeft(){ leftOpen = !leftOpen; setQuery({ l: leftOpen }); }
-  function setRightOpen(next: boolean) {
-    if (rightOpen === next) return;
-    rightOpen = next;
-    if (!rightOpen) {
-      selected = null;
-    }
-    setQuery({ r: rightOpen });
-  }
-  function toggleRight(){ setRightOpen(!rightOpen); }
-  function toggleTop(){ topOpen = !topOpen; setQuery({ t: topOpen }); }
+  const shouldExposeTestMap = import.meta.env.DEV || import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === 'true';
 
-  type SwipeIntent =
-    | 'open-left'
-    | 'close-left'
-    | 'open-right'
-    | 'close-right'
-    | 'open-top'
-    | 'close-top';
-
-  type SwipeState = {
-    pointerId: number;
-    intent: SwipeIntent;
-    startX: number;
-    startY: number;
-  } | null;
-
-  let swipeState: SwipeState = null;
-
-  function startSwipe(e: PointerEvent, intent: SwipeIntent) {
-    const allowMouse = (window as any).__E2E__ === true;
-    if (e.pointerType !== 'touch' && e.pointerType !== 'pen' && !allowMouse) return;
-
-    if (
-      (intent === 'open-left' && leftOpen) ||
-      (intent === 'close-left' && !leftOpen) ||
-      (intent === 'open-right' && rightOpen) ||
-      (intent === 'close-right' && !rightOpen) ||
-      (intent === 'open-top' && topOpen) ||
-      (intent === 'close-top' && !topOpen)
-    ) {
-      return;
-    }
-
-    swipeState = {
-      pointerId: e.pointerId,
-      intent,
-      startX: e.clientX,
-      startY: e.clientY
-    };
-  }
-
-  function finishSwipe(e: PointerEvent) {
-    if (!swipeState || swipeState.pointerId !== e.pointerId) return;
-
-    const dx = e.clientX - swipeState.startX;
-    const dy = e.clientY - swipeState.startY;
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-    const threshold = 60;
-    const { intent } = swipeState;
-    swipeState = null;
-
-    switch (intent) {
-      case 'open-left':
-        if (!leftOpen && dx > threshold && absX > absY) {
-          leftOpen = true;
-          setQuery({ l: true });
-        }
-        break;
-      case 'close-left':
-        if (leftOpen && -dx > threshold && absX > absY) {
-          leftOpen = false;
-          setQuery({ l: false });
-        }
-        break;
-      case 'open-right':
-        if (!rightOpen && -dx > threshold && absX > absY) {
-          setRightOpen(true);
-        }
-        break;
-      case 'close-right':
-        if (rightOpen && dx > threshold && absX > absY) {
-          setRightOpen(false);
-        }
-        break;
-      case 'open-top':
-        if (!topOpen && dy > threshold && absY > absX) {
-          topOpen = true;
-          setQuery({ t: true });
-        }
-        break;
-      case 'close-top':
-        if (topOpen && -dy > threshold && absY > absX) {
-          topOpen = false;
-          setQuery({ t: false });
-        }
-        break;
-    }
-  }
-
-  function cancelSwipe(e: PointerEvent) {
-    if (swipeState && swipeState.pointerId === e.pointerId) {
-      swipeState = null;
-    }
-  }
-
-  function handleOpeners(
-    event: CustomEvent<{
-      left: HTMLButtonElement | null;
-      right: HTMLButtonElement | null;
-      top: HTMLButtonElement | null;
-    }>
-  ) {
-    openerButtons = event.detail;
-  }
-
-  $: if (rightDrawerRef) {
-    rightDrawerRef.setOpener?.(openerButtons.right ?? null);
-  }
-  $: if (topDrawerRef) {
-    topDrawerRef.setOpener?.(openerButtons.top ?? null);
-  }
-
-  let keyHandler: ((e: KeyboardEvent) => void) | null = null;
-  let popHandler: ((event: PopStateEvent) => void) | null = null;
   onMount(() => {
-    const pointerUp = (event: PointerEvent) => finishSwipe(event);
-    const pointerCancel = (event: PointerEvent) => cancelSwipe(event);
-    window.addEventListener('pointerup', pointerUp);
-    window.addEventListener('pointercancel', pointerCancel);
+    let maplibreModule: any = null;
+    const handleMarkerClick = (e: Event) => {
+      const target = e.target as HTMLElement;
+      const markerBtn = target.closest('.map-marker') as HTMLButtonElement | null;
+      if (!markerBtn || !nodesOverlay) return;
 
-    syncFromLocation();
-    popHandler = () => syncFromLocation();
-    window.addEventListener('popstate', popHandler);
+      const id = markerBtn.dataset.id;
+      if (!id) return;
+
+      const entry = nodesOverlay.getActiveMarker(id);
+      if (!entry) return;
+
+      lastFocusedElement = markerBtn;
+      focusAndFlyToPoint(entry.item);
+    };
 
     (async () => {
       const maplibregl = await import('maplibre-gl');
+      maplibreModule = maplibregl;
       const container = mapContainer;
       if (!container) {
         return;
       }
-      // Hamburg-Hamm grob: 10.05, 53.55 — Zoom 13
-      map = new maplibregl.Map({
-        container,
-        style: 'https://demotiles.maplibre.org/style.json',
-        center: [10.05, 53.55],
-        zoom: 13
-      });
-      map.addControl(new maplibregl.NavigationControl({ showZoom:true }), 'bottom-right');
+      container.addEventListener('click', handleMarkerClick);
 
-      markerCleanupFns.forEach((fn) => fn());
-      markerCleanupFns.length = 0;
+      let transformRequestFn: ((url: string, resourceType?: any) => { url: string }) | undefined = undefined;
 
-      for (const item of markersData) {
-        const element = document.createElement('button');
-        element.type = 'button';
-        element.className = 'map-marker';
-        element.setAttribute('aria-label', item.title);
-        element.title = item.title;
-        const handleClick = async () => {
-          selected = item;
-          setRightOpen(true);
-          await tick();
-          rightDrawerRef?.focus?.();
-        };
-        element.addEventListener('click', handleClick);
-
-        const marker = new maplibregl.Marker({ element, anchor: 'bottom' })
-          .setLngLat([item.lon, item.lat])
-          .addTo(map);
-
-        markerCleanupFns.push(() => {
-          element.removeEventListener('click', handleClick);
-          marker.remove();
-        });
-      }
-
-      keyHandler = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          if (topOpen) {
-            topOpen = false;
-            setQuery({ t: false });
-            return;
-          }
-          if (rightOpen) {
-            setRightOpen(false);
-            return;
-          }
-          if (leftOpen) {
-            leftOpen = false;
-            setQuery({ l: false });
-            return;
+      // PMTiles dev infrastructure is intentionally prepared now, including the runtime
+      // dependency 'pmtiles'. The current runtime stays strictly on 'remote-style', since
+      // real local artifact proof is still missing. This setup exists solely to reduce later
+      // activation cost and does NOT claim that 'local-sovereign' is already working end-to-end.
+      if (currentBasemap.mode === 'local-sovereign') {
+        const pmtiles = await import('pmtiles');
+        try {
+          maplibregl.addProtocol('pmtiles', new pmtiles.Protocol().tile);
+        } catch (e: any) {
+          if (!e.message?.includes('already registered')) {
+            console.warn('Unexpected error registering PMTiles protocol:', e);
           }
         }
-        if (e.key === '[') toggleLeft();
-        if (e.key === ']') toggleRight();
-        if (e.altKey && (e.key === 'g' || e.key === 'G')) toggleTop();
+
+        transformRequestFn = (url: string, resourceType?: any) => {
+          return { url: rewritePmtilesUrl(url, window.location.origin) };
+        };
+      }
+
+      map = new maplibregl.Map({
+        container,
+        style: resolveBasemapStyle(currentBasemap),
+        center: currentBasemap.center,
+        zoom: currentBasemap.zoom,
+        minZoom: currentBasemap.minZoom ?? 10,
+        maxZoom: currentBasemap.maxZoom ?? 18,
+        pitch: currentBasemap.pitch ?? 0,
+        bearing: currentBasemap.bearing ?? 0,
+        attributionControl: false,
+        transformRequest: transformRequestFn,
+      });
+      map.addControl(new maplibregl.NavigationControl({ showZoom: true }), 'bottom-right');
+      map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors' }), 'bottom-right');
+
+      // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
+      nodesOverlay = new NodesOverlay(map);
+      cleanupKomposition = setupKompositionInteraction(map);
+      let sysStateStr = '';
+      unsubscribeSysState = systemState.subscribe(val => { sysStateStr = val; });
+      cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
+
+      const loadingTimeout = setTimeout(() => {
+        isLoading = false;
+      }, 10000);
+
+      const finishLoading = () => {
+        clearTimeout(loadingTimeout);
+        isLoading = false;
+        mapStyleReady = true;
+
+        const currentSelection = get(selection);
+        const currentSystemState = get(systemState);
+
+        if (!currentSelection && currentSystemState === 'navigation') {
+          const currentZoom = map?.getZoom() ?? 14;
+          map?.flyTo({
+            center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
+            zoom: Math.max(currentZoom, 14),
+            speed: 0.8,
+            curve: 1
+          });
+        }
       };
-      window.addEventListener('keydown', keyHandler);
+
+      map.once('load', finishLoading);
+      map.on('error', () => {
+        clearTimeout(loadingTimeout);
+        isLoading = false;
+      });
+
+      // Expose map for testing
+      if (shouldExposeTestMap) {
+        (window as any).__TEST_MAP__ = map;
+      }
     })();
 
     return () => {
-      window.removeEventListener('pointerup', pointerUp);
-      window.removeEventListener('pointercancel', pointerCancel);
-      if (popHandler) window.removeEventListener('popstate', popHandler);
-      markerCleanupFns.forEach((fn) => fn());
-      markerCleanupFns.length = 0;
+      if (filterTooltipTimeout !== null) {
+        window.clearTimeout(filterTooltipTimeout);
+        filterTooltipTimeout = null;
+      }
+      if (shouldExposeTestMap) {
+        delete (window as any).__TEST_MAP__;
+      }
+      cleanupKomposition?.();
+      cleanupFocus?.();
+      unsubscribeSysState?.();
+      nodesOverlay?.destroy();
+      if (map && typeof map.remove === 'function') map.remove();
+      mapContainer?.removeEventListener('click', handleMarkerClick);
+      if (currentBasemap.mode === 'local-sovereign' && maplibreModule) {
+        try {
+          maplibreModule.removeProtocol('pmtiles');
+        } catch (e: any) {
+          if (!e.message?.includes('not registered')) {
+            console.warn('Unexpected error removing PMTiles protocol:', e);
+          }
+        }
+      }
     };
-  });
-  onDestroy(() => {
-    if (keyHandler) window.removeEventListener('keydown', keyHandler);
-    if (popHandler) window.removeEventListener('popstate', popHandler);
-    if (map && typeof map.remove === 'function') map.remove();
-    markerCleanupFns.forEach((fn) => fn());
-    markerCleanupFns.length = 0;
   });
 </script>
 
@@ -302,7 +373,6 @@
   .shell{
     position:relative;
     height:100dvh;
-    /* keep the raw dynamic viewport height as a fallback for browsers missing safe-area support */
     height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     width:100vw;
     overflow:hidden;
@@ -313,32 +383,7 @@
   }
   #map{ position:absolute; inset:0; }
   #map :global(canvas){ filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95); }
-  /* Swipe-Edge-Zonen über Tokens (OS-Gesten-freundlich) */
-  .edge{ position:absolute; z-index:27; }
-  .edge.left{ left:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-left-width); touch-action: pan-y; }
-  .edge.right{ right:var(--edge-inset-x); top:80px; bottom:80px; width:var(--edge-right-width); touch-action: pan-y; }
-  .edge.top{ left:var(--edge-inset-x); right:var(--edge-inset-x); top:var(--edge-inset-top); height:var(--edge-top-height); touch-action: pan-x; }
-  .edgeHit{ position:absolute; inset:0; }
-  /* Linke Spalte: oben Webrat, unten Nähstübchen (hälftig) */
-  .leftStack{
-    position:absolute;
-    left: var(--drawer-gap);
-    top:calc(var(--toolbar-offset) + env(safe-area-inset-top));
-    bottom:calc(var(--toolbar-offset) + env(safe-area-inset-bottom));
-    width:var(--drawer-width);
-    z-index:26;
-    display:grid; grid-template-rows: 1fr 1fr; gap:var(--drawer-gap);
-    transform: translateX(calc(-1 * var(--drawer-width) - var(--drawer-slide-offset)));
-    transition: transform .18s ease;
-  }
-  .leftStack.open{ transform:none; }
-  .panel{
-    background:var(--panel); border:1px solid var(--panel-border); border-radius: var(--radius);
-    box-shadow: var(--shadow); color:var(--text); padding:var(--drawer-gap); overflow:auto;
-  }
-  .panel h3{ margin:0 0 8px 0; font-size:14px; color:var(--muted); letter-spacing:.2px; }
-  .muted{ color:var(--muted); font-size:13px; }
-  .infoPanel{ margin-bottom: var(--drawer-gap); }
+
   #map :global(.map-marker){
     width:24px;
     height:24px;
@@ -350,101 +395,181 @@
     color:var(--bg);
     cursor:pointer;
     box-shadow:0 0 0 2px rgba(0,0,0,0.25);
+    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
   }
+
+  #map :global(.marker-account) {
+    background-image: var(--marker-icon);
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+
+    width: var(--marker-size, 34px);
+    height: var(--marker-size, 34px);
+    transform: none;
+    border-radius: 0;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    #map :global(.map-marker:hover){
+      transform: scale(1.2);
+      z-index: 10;
+    }
+    #map :global(.marker-account:hover){
+      transform: scale(1.2);
+    }
+  }
+
   #map :global(.map-marker:focus-visible){
     outline:2px solid var(--fg);
     outline-offset:2px;
+    z-index: 10;
   }
-  @media (max-width: 900px){
-    .leftStack{ --drawer-width: 320px; }
+
+  #map :global(.map-marker.search-highlight) {
+    outline: 2px solid var(--primary, #005fcc);
+    outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
+    z-index: 5;
   }
-  @media (max-width: 380px){
-    .leftStack{ --drawer-width: 300px; }
+
+  #map :global(.marker-account.search-highlight) {
+    outline: 2px solid var(--primary, #005fcc);
+    outline-offset: 2px;
+    box-shadow: 0 0 8px 2px var(--primary, rgba(0,95,204,0.6));
   }
-  @media (prefers-reduced-motion: reduce){
-    .leftStack{ transition: none; }
+
+  #map :global(.marker-account:focus-visible) {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    z-index: 50;
+    transition: opacity 0.3s;
+  }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255,255,255,0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .debug-badge {
+    position: absolute;
+    top: 60px;
+    right: 10px;
+    z-index: 20;
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    font-family: monospace;
+  }
+
+  .filter-tooltip {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    color: var(--text);
+    padding: 12px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 1000;
+    font-size: 0.9rem;
+    font-weight: 500;
+    pointer-events: none;
+    text-align: center;
+    animation: fadeInOut 4s ease forwards;
+  }
+
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translate(-50%, -10px); }
+    10% { opacity: 1; transform: translate(-50%, 0); }
+    90% { opacity: 1; transform: translate(-50%, 0); }
+    100% { opacity: 0; transform: translate(-50%, -10px); }
+  }
+
+  .degraded-banner {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 8px 16px;
+    background: rgba(180, 130, 0, 0.9);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 6px;
+    pointer-events: none;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .degraded-banner--failed {
+    background: rgba(180, 40, 40, 0.9);
   }
 </style>
 
 <main class="shell">
-  <TopBar
-    onToggleLeft={toggleLeft}
-    onToggleRight={toggleRight}
-    onToggleTop={toggleTop}
-    {leftOpen}
-    {rightOpen}
-    {topOpen}
-    on:openers={handleOpeners}
-  />
-
-  <!-- Linke Spalte: Webrat / Nähstübchen -->
-  <div
-    id="left-stack"
-    class="leftStack"
-    class:open={leftOpen}
-    aria-hidden={!leftOpen}
-    inert={!leftOpen ? true : undefined}
-    on:pointerdown={(event) => startSwipe(event, 'close-left')}
-  >
-    <div class="panel">
-      <h3>Webrat</h3>
-      <div class="muted">Beratung, Anträge, Matrix (Stub)</div>
+  {#if showFilterTooltip}
+    <div class="filter-tooltip" role="status" aria-live="polite">
+      Du hast Garnrollen per Filter ausgeblendet – auch deine eigene.
     </div>
-    <div class="panel">
-      <h3>Nähstübchen</h3>
-      <div class="muted">Ideen, Entwürfe, Skizzen (Stub)</div>
-    </div>
-  </div>
+  {/if}
 
-  <!-- Rechter Drawer: Suche/Filter -->
-  <Drawer
-    bind:this={rightDrawerRef}
-    id="filter-drawer"
-    title="Suche & Filter"
-    side="right"
-    open={rightOpen}
-    on:pointerdown={(event) => startSwipe(event, 'close-right')}
-  >
-    {#if selected}
-      <div class="panel infoPanel">
-        <strong>{selected.title}</strong>
-        <div class="muted">Kurzbeschreibung folgt (Stub)</div>
-        <div class="muted">Weitere Details folgen (Stub)</div>
-      </div>
-    {/if}
-    <div class="panel" style="padding:8px;">
-      <div class="muted">Typ · Zeit · H3 · Delegation · Radius (Stub)</div>
+  {#if loadState === 'partial'}
+    <div class="degraded-banner" role="alert" data-testid="load-state-partial">
+      Einige Kartendaten konnten nicht geladen werden ({failedResourceLabels.join(', ')}).
     </div>
-  </Drawer>
-
-  <!-- Top Drawer: Gewebekonto -->
-  <Drawer
-    bind:this={topDrawerRef}
-    id="account-drawer"
-    title="Gewebekonto"
-    side="top"
-    open={topOpen}
-    on:pointerdown={(event) => startSwipe(event, 'close-top')}
-  >
-    <div class="panel" style="padding:8px;">
-      <div class="muted">Saldo / Delegationen / Verbindlichkeiten (Stub)</div>
+  {/if}
+  {#if loadState === 'failed'}
+    <div class="degraded-banner degraded-banner--failed" role="alert" data-testid="load-state-failed">
+      Kartendaten konnten nicht geladen werden.
     </div>
-  </Drawer>
+  {/if}
 
-  <!-- Karte -->
+  <ContextPanel />
+  <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
+  <FilterOverlay availableTypes={availableFilterTypes} />
+  <ActionBar />
+  {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
+    <div class="debug-badge" data-testid="debug-badge">
+      Nodes: {nodeCount} / Accounts: {accountCount} / Edges: {edgesData.length}
+      <br>
+      API: {scene.diagnostics.apiMode} / Basemap: {scene.diagnostics.basemapMode}
+      {#if scene.diagnostics.degraded}
+        <br>⚠ Load: {loadState}
+      {/if}
+      <br>
+      <button on:click={toggleLogin} style="pointer-events: auto; margin-top: 4px; font-size: 10px; cursor: pointer;" data-testid="debug-logout">
+        {$authStore.authenticated ? 'Logout' : 'Login Demo'}
+      </button>
+    </div>
+  {/if}
+  <TopBar on:zoomToOwnGarnrolle={handleZoomToOwnGarnrolle} />
   <div id="map" bind:this={mapContainer}></div>
-
-  <div class="edge left" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-left')}>
-    <div class="edgeHit"></div>
-  </div>
-  <div class="edge right" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-right')}>
-    <div class="edgeHit"></div>
-  </div>
-  <div class="edge top" role="presentation" on:pointerdown={(event) => startSwipe(event, 'open-top')}>
-    <div class="edgeHit"></div>
-  </div>
-
-  <!-- Zeitleiste -->
-  <TimelineDock />
+  {#if isLoading}
+    <div class="loading-overlay">
+      <div class="spinner"></div>
+    </div>
+  {/if}
 </main>
-

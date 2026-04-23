@@ -1,3 +1,15 @@
+---
+id: overview.zusammenstellung
+title: Zusammenstellung (Übersicht)
+doc_type: reference
+status: active
+summary: Systematische Zusammenfassung aus der Übersichtsperspektive.
+relations:
+  - type: relates_to
+    target: docs/zusammenstellung.md
+  - type: relates_to
+    target: docs/overview/inhalt.md
+---
 # Systematik & Strukturüberblick
 
 Diese Zusammenstellung führt durch die zentralen Orientierungspunkte der Weltgewebe-Dokumentation.
@@ -6,20 +18,23 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 
 ## Kernartefakte
 
-| Bereich | Zweck | Primäre Ressourcen |
-| --- | --- | --- |
-| **Ethik & Wirkung** | Leitplanken, Risiken, Schutzbedarfe | `policies/`, `docs/ethik/`, `docs/process/fahrplan.md` |
-| **User Experience** | UX-Guidelines, Prototypen, Feedback | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/` |
-| **Architektur** | Technische Boundaries, Integrationen | `architekturstruktur.md`, `docs/architecture/` |
-|                 | Datenflüsse                          | `contracts/` |
-| **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml` |
+| Bereich                | Zweck                                | Primäre Ressourcen                                     |
+|------------------------|--------------------------------------|--------------------------------------------------------|
+| **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/konzepte/garnrolle-und-verortung.md`, `docs/ethik/`, `docs/process/fahrplan.md` |
+| **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
+| **Architektur**        | Technische Boundaries, Integrationen | `docs/architekturstruktur.md`, `docs/architecture/`    |
+|                        | UI-Blaupause                         | `docs/blueprints/ui-blaupause.md`                      |
+|                        | UI State Machine                     | `docs/blueprints/ui-state-machine.md`                  |
+|                        | UI Roadmap                           | `docs/blueprints/ui-roadmap.md`                        |
+|                        | Datenflüsse                          | `contracts/`                                           |
+| **Betrieb & Qualität** | Gates, CI/CD, Observability, Budgets | `docs/process/`, `ci/`, `policies/limits.yaml`         |
 
 ## Navigationspfad für Außenstehende
 
 1. **Einführung lesen:** `docs/overview/inhalt.md` liefert Vision, Prinzipien und Scope.
 2. **Systematik prüfen:** Dieses Dokument zeigt, wo welche Detailtiefe zu finden ist.
 3. **Architektur & Fahrplan vertiefen:**
-   - `architekturstruktur.md` für Domänen & Komponenten.
+   - `docs/architekturstruktur.md` für Domänen & Komponenten.
    - `docs/process/fahrplan.md` für Timeline, Gates und Verantwortlichkeiten.
 4. **Ethik & UX-Vertiefung:**
    - `docs/ethik/` für Entscheidungskriterien und Risikokataloge.

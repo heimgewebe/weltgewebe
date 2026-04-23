@@ -1,0 +1,45 @@
+---
+safe_read_paths:
+  - README.md
+  - AGENTS.md
+  - docs/
+
+guarded_write_paths:
+  - .github/workflows/
+  - apps/
+  - contracts/
+  - docs/
+  - infra/
+  - scripts/
+  - src/
+
+forbidden_write_paths:
+  - docs/_generated/
+  - secrets/
+  - snapshots/
+
+requires_target_proof_for:
+  - .github/workflows/
+  - apps/
+  - deployment/
+  - infra/
+  - src/
+
+required_checks_before_patch:
+  - repo-structure-guard
+  - docs-relations-guard
+  - generated-files-guard
+  - lint
+  - test
+
+human_review_required_for:
+  - security/
+  - deployment/
+  - credentials/
+
+# Note: These agent_rules are normative guidelines for agent execution behavior,
+# not mechanically enforced by a specific CI runner or tooling engine.
+agent_rules:
+  abort_on_conflict: true
+  interpolation_allowed: false
+  require_explicit_reading_order: true

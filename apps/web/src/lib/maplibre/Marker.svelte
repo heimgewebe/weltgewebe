@@ -1,11 +1,13 @@
 <script lang="ts">
-  import type { Anchor, LngLatLike, MarkerOptions, PointLike } from "maplibre-gl";
+  import type { LngLatLike, MarkerOptions, PointLike } from "maplibre-gl";
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { useMapContext } from "./context";
 
+  type MarkerAnchor = NonNullable<MarkerOptions["anchor"]>;
+
   export let lngLat: LngLatLike;
-  export let anchor: Anchor = "center";
+  export let anchor: MarkerAnchor = "center";
   export let draggable = false;
   export let offset: PointLike | undefined;
 
@@ -14,13 +16,15 @@
   let element: HTMLDivElement | undefined;
   let marker: import("maplibre-gl").Marker | null = null;
   let markerProps: Record<string, unknown> = {};
-  let currentAnchor: Anchor = anchor;
+  let currentAnchor: MarkerAnchor = anchor;
 
   $: markerProps = $$restProps;
 
   const unsubscribe = context.map.subscribe((map) => {
     recreateMarker(map);
   });
+
+  onDestroy(unsubscribe);
 
   $: if (marker && lngLat) {
     marker.setLngLat(lngLat);
@@ -63,8 +67,6 @@
   }
 
   onDestroy(() => {
-    unsubscribe();
-
     if (marker) {
       marker.remove();
       marker = null;

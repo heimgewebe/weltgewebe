@@ -1,0 +1,66 @@
+---
+implementations:
+  - id: impl.service.api
+    path: apps/api/
+    impl_type: service
+    status: active
+    documented_by: []
+    verified_by: []
+    supersedes: []
+    deprecated_by: []
+
+  - id: impl.workflow.ci
+    path: .github/workflows/
+    impl_type: workflow
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.service.web
+    path: apps/web/
+    impl_type: service
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.infra.compose
+    path: infra/compose/
+    impl_type: config
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.contracts
+    path: contracts/
+    impl_type: schema
+    status: active
+    documented_by: []
+    verified_by: []
+
+  - id: impl.pipeline.basemap
+    path: scripts/basemap/
+    impl_type: workflow
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+      - docs/blueprints/map-roadmap.md
+    verified_by:
+      - scripts/guard/caddy-basemap-route-guard.sh
+
+  - id: impl.assets.map-style
+    path: map-style/
+    impl_type: config
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+      - map-style/ASSETS.md
+    verified_by: []
+
+  - id: impl.infra.caddy
+    path: infra/caddy/
+    impl_type: config
+    status: active
+    documented_by:
+      - docs/blueprints/map-blaupause.md
+    verified_by:
+      - scripts/guard/caddy-basemap-route-guard.sh

@@ -1,11 +1,12 @@
+---
 name: CI
 
 permissions:
   contents: read
 
-on:
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -13,9 +14,13 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Verwende die Standard-Bash von GitHub Actions, ohne eigenes Template.
 defaults:
   run:
-    shell: bash --noprofile --norc -euo pipefail {0}
+    shell: bash
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   docs-changes:
@@ -36,11 +41,8 @@ jobs:
           filters: |
             docs:
               - '**/*.md'
-              - '**/*.yml'
-              - '**/*.yaml'
               - '.markdownlint.*'
               - '.yamllint*'
-              - '.github/workflows/ci.yml'
 
   ci:
     needs: docs-changes
@@ -49,30 +51,69 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     # skip heavy CI when it's a docs-only change (unless manually dispatched)
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true' }}
+    if: github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs != 'true'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Ensure yq is available
-        env:
-          YQ_VERSION: 4.48.1
+      - name: Install yq
         run: |
-          set -euo pipefail
-          export PATH="$HOME/.local/bin:$PATH"
-          scripts/tools/yq-pin.sh ensure "${YQ_VERSION}"
-          yq --version
+          set -e
+          YQ_VERSION="4.44.3"
+          YQ_DIR="$HOME/.local/bin"
+          YQ_BIN="$YQ_DIR/yq"
+          mkdir -p "$YQ_DIR"
+
+          if [[ ! -f "$YQ_BIN" ]] || ! "$YQ_BIN" --version 2>/dev/null | grep -q "$YQ_VERSION"; then
+            echo "Installing yq v${YQ_VERSION}..."
+            wget -qO "$YQ_BIN" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
+            chmod +x "$YQ_BIN"
+          else
+            echo "yq v${YQ_VERSION} already installed"
+          fi
+
+          echo "$YQ_DIR" >> "$GITHUB_PATH"
+
+      - name: Verify yq
+        run: $HOME/.local/bin/yq --version
 
       - name: Read toolchain versions
         run: |
-          test -f toolchain.versions.yml || { echo "toolchain.versions.yml not found"; exit 1; }
-          RUST=$(yq -r '.rust' toolchain.versions.yml)
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+
+          if [ ! -x "$HOME/.local/bin/yq" ]; then
+            echo "yq is not installed or not executable at $HOME/.local/bin/yq" >&2
+            exit 1
+          fi
+
+          if [ ! -f toolchain.versions.yml ]; then
+            echo "toolchain.versions.yml not found" >&2
+            exit 1
+          fi
+
+          # Function to extract and validate version
+          get_version() {
+            local key=$1
+            local val
+            val=$("$HOME/.local/bin/yq" -r ".${key} // \"\"" toolchain.versions.yml | xargs)
+            if [ -z "$val" ] || [ "$val" == "null" ]; then
+              echo "failed to parse ${key} version from toolchain.versions.yml" >&2
+              exit 1
+            fi
+            echo "$val"
+          }
+
+          RUST=$(get_version "rust")
+          UV=$(get_version "uv")
+          DENY=$(get_version "cargo-deny")
+
+          echo "Found versions: Rust=$RUST, uv=$UV, cargo-deny=$DENY"
+
           echo "RUST_VERSION=${RUST}" >> "$GITHUB_ENV"
-          PY=$(yq -r '.python' toolchain.versions.yml)
-          echo "PYTHON_VERSION=${PY}" >> "$GITHUB_ENV"
-          UV=$(yq -r '.uv' toolchain.versions.yml)
           echo "UV_VERSION=${UV}" >> "$GITHUB_ENV"
+          echo "DENY_VERSION=${DENY}" >> "$GITHUB_ENV"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -89,58 +130,61 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: >-
+            ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: '20.19.0'
-          check-latest: true
-          cache: 'npm'
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          check-latest: false
+          cache: 'pnpm'
           cache-dependency-path: |
-            package-lock.json
-            apps/web/package-lock.json
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version-file: '.python-version'
 
-      - name: Cache uv artifacts
-        uses: actions/cache@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-${{ hashFiles('toolchain.versions.yml') }}-
-            ${{ runner.os }}-uv-
+          version: "0.9.11"
+          enable-cache: true
+          ignore-nothing-to-cache: true
 
-      - name: Install uv (pinned via toolchain.versions.yml)
+      - name: Install cargo-deny
         run: |
           set -euo pipefail
-          VER="$(yq -r '.uv' toolchain.versions.yml)"
-          if [ -z "${VER:-}" ]; then
-            echo "failed to parse uv version from toolchain.versions.yml" >&2
-            exit 1
+          DENY_VERSION="0.18.8"
+          DENY_DIR="$HOME/.local/bin"
+          DENY_BIN="$DENY_DIR/cargo-deny"
+          mkdir -p "$DENY_DIR"
+
+          if [[ ! -f "$DENY_BIN" ]] || ! "$DENY_BIN" --version 2>/dev/null | grep -q "${DENY_VERSION}"; then
+            echo "Installing cargo-deny v${DENY_VERSION}..."
+            # Use mktemp for robust extraction
+            INSTALL_TMPDIR=$(mktemp -d)
+            TARBALL_URL="https://github.com/EmbarkStudios/cargo-deny/releases/download"
+            TARBALL_URL="${TARBALL_URL}/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+            curl -sLf "$TARBALL_URL" | tar xz -C "$INSTALL_TMPDIR" --strip-components=1
+            mv "$INSTALL_TMPDIR/cargo-deny" "$DENY_BIN"
+            rm -rf "$INSTALL_TMPDIR"
+            chmod +x "$DENY_BIN"
+          else
+            echo "cargo-deny v${DENY_VERSION} already installed"
           fi
-          echo "Installing uv v${VER} via official installer…"
-          curl -LsSf --connect-timeout 10 --retry 3 --retry-all-errors \
-            https://astral.sh/uv/install.sh | sh -s -- --version "v${VER}" --force
-          # ensure PATH for subsequent steps
-          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
-          hash -r
-          INSTALLED="$(uv --version 2>/dev/null || uv version 2>/dev/null || uv -V 2>/dev/null)"
-          if [ -z "$INSTALLED" ]; then
-            echo "Could not determine uv version - is uv correctly installed?" >&2
-            exit 1
-          fi
-          echo "${INSTALLED}"
-          if ! grep -F " ${VER}" <<<"${INSTALLED}"; then
-            echo "uv version mismatch" >&2
-            exit 1
-          fi
+
+          echo "$DENY_DIR" >> "$GITHUB_PATH"
 
       - name: Setup Just
         uses: extractions/setup-just@v2
@@ -150,12 +194,29 @@ jobs:
           rustc --version
           python --version
           uv --version
+          cargo-deny --version
           just --version
 
+      # CI Test Architecture:
+      #   ci.yml — build, lint, typecheck (web + API), cargo test, cargo-deny (via just ci),
+      #            plus guard script tests (compose, token-leak, metrics-ref).
+      #   web.yml (Gate A) — web unit tests (vitest) + Playwright E2E. Path-scoped to apps/web/**.
+      #   Vitest deliberately runs only in web.yml to avoid double execution on PRs
+      #   that trigger both workflows. See also: Justfile ci recipe, web.yml header.
       - name: Validate project
         env:
           CARGO_TERM_COLOR: always
         run: just ci
+
+      - name: Guard script tests
+        run: |
+          set -euo pipefail
+          for t in scripts/tests/test_token_leak_guard.sh \
+                   scripts/tests/test_compose_volumes_guard.sh \
+                   scripts/tests/test_metrics_ref_guard.sh; do
+            echo "── $t ──"
+            bash "$t"
+          done
 
   web-e2e:
     name: Web E2E
@@ -167,59 +228,63 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
       FORCE_COLOR: "1"
-      PW_TEST_REPORTER: dot,html,junit
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      PREVIEW_PORT: "5173"
     defaults:
       run:
-        shell: bash --noprofile --norc -euo pipefail {0}
+        shell: bash
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: '20.19.0'
-          check-latest: true
-          cache: 'npm'
-          cache-dependency-path: apps/web/package-lock.json
+          run_install: false
 
-      - name: Enable Corepack (npm)
-        run: corepack enable
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          check-latest: false
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Cache Playwright browser binaries
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/package-lock.json') }}
+          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-ms-playwright-
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        run: pnpm playwright install --with-deps
 
-      - name: Build application
-        run: npm run build
+      - name: Generate demo data
+        run: scripts/dev/generate-demo-data.sh
+        working-directory: .
 
-      - name: Start preview server
+      - name: Start demo API
         run: |
-          npm run preview -- --host 127.0.0.1 --port 4173 &> /tmp/preview.log &
-          npx --yes wait-on http://127.0.0.1:4173
+          PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
+        working-directory: .
+
+      - name: Wait for API
+        run: scripts/ci/wait-for-api.sh
+        working-directory: .
 
       - name: Run Playwright tests
         env:
-          PLAYWRIGHT_SKIP_WEBSERVER: "1"
           PLAYWRIGHT_HTML_REPORT: playwright-report
-        run: npm run test:ci
-
-      - name: Dump preview log on failure
-        if: ${{ failure() }}
-        run: cat /tmp/preview.log || true
+        run: pnpm test:ci
 
       - name: Upload Playwright report
         if: ${{ always() }}
@@ -232,7 +297,7 @@ jobs:
   lint-docs:
     name: Docs & Shell Hygiene
     needs: docs-changes
-    if: ${{ github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true' }}
+    if: github.event_name == 'workflow_dispatch' || needs.docs-changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -264,10 +329,11 @@ jobs:
         continue-on-error: true
         uses: lycheeverse/lychee-action@v2
         with:
+          failIfEmpty: false
           # lychee v0.15 expects integer seconds for retry wait time
-          args: >-
+          args: >
             --no-progress
-            --accept 200,206,301,302,308,429,999
+            --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3
             --retry-wait-time 3
@@ -276,8 +342,8 @@ jobs:
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path 'node_modules'
             --exclude-path 'dist'
+            --exclude-path '.git'
             --cache
-            --max-cache-age 1d
             '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -286,9 +352,10 @@ jobs:
         if: ${{ steps.lychee.outcome == 'failure' }}
         uses: lycheeverse/lychee-action@v2
         with:
-          args: >-
+          failIfEmpty: false
+          args: >
             --no-progress
-            --accept 200,206,301,302,308,429,999
+            --accept "200,206,301,302,308,429,999"
             --timeout 20
             --max-concurrency 3
             --retry-wait-time 3
@@ -298,35 +365,28 @@ jobs:
             --exclude 'https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?(/.*)?'
             --exclude-path 'node_modules'
             --exclude-path 'dist'
+            --exclude-path '.git'
             --cache
             --max-cache-age 1d
             '**/*.md'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: YAML lint
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: |
-            .
-          strict: true
-
-      - name: Ensure jq is available
+      - name: Lint YAML and JSON files
         run: |
           set -euo pipefail
+          echo "Linting YAML files..."
+          python -m pip install --user yamllint
+          export PATH="$HOME/.local/bin:$PATH"
+          git ls-files -z -- '*.yml' '*.yaml' | xargs -r -0 --no-run-if-empty \
+            yamllint --strict -c .yamllint.yml
+          echo "Checking for jq..."
           if ! command -v jq >/dev/null 2>&1; then
+            echo "jq not found, installing..."
             sudo apt-get update -qq
-            # Install jq without recommended packages and avoid interactive prompts
             sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends jq
           fi
-
-      - name: JSON lint
-        run: |
-          set -euo pipefail
-          mapfile -d '' files < <(git ls-files -z '*.json' ':!:**/package-lock.json' || true)
-          if (( ${#files[@]} )); then
-            jq -n 'inputs' "${files[@]}" >/dev/null
-            echo "Validated $(( ${#files[@]} )) JSON files with jq."
-          else
-            echo "No JSON files to lint"
-          fi
+          echo "Linting JSON files..."
+          git ls-files -z -- '*.json' ':!:**/package-lock.json' | xargs -r -0 --no-run-if-empty \
+            jq -n 'inputs' >/dev/null
+          echo "Linting completed."

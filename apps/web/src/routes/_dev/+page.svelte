@@ -1,6 +1,11 @@
 <script lang="ts">
   const links = [
     {
+      href: '/_dev/auth',
+      title: 'Login / Auth',
+      description: 'Entwickler-Login mit verschiedenen Rollen (Admin, Weber, Gast).'
+    },
+    {
       href: '/_dev/gestures',
       title: 'Swipe Playground',
       description:

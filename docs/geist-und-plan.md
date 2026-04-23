@@ -1,3 +1,15 @@
+---
+id: geist-und-plan
+title: Geist und Plan
+doc_type: reference
+status: active
+summary: Philosophie-Extraktion und Planaufschlüsselung für das Weltgewebe-Projekt.
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/inhalt.md
+---
 Hier ist eine (meinerseits strukturierte) Analyse und Extraktion des „Geistes und Plans“ der
 Weltweberei basierend auf der Website weltweberei.org.
 Ich ziehe aus den öffentlich verfügbaren Texten, sortiere nach Themen und ziehe Schlussfolgerungen —
@@ -178,7 +190,7 @@ Extraktion: Geist der Weltweberei
   offene Abstimmungen.
 - Freiheit plus Absicherung: Jeder kann Ressourcen freigeben oder Aktionen starten, Anträge werden
   nur blockiert, wenn Widerspruch entsteht.
-- Datenschutz: Privacy by Design, RoN-System für Anonymisierung, Unschärferadien für Ortsdaten.
+- Datenschutz: Privacy by Design, RoN-System für Anonymisierung, Ungenauigkeitsradien für Ortsdaten.
 
 ⸻
 

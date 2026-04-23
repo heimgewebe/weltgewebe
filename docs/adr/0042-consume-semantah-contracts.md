@@ -1,6 +1,16 @@
+---
+id: adr.0042-consume-semantah-contracts
+title: ADR-0042 — SemanticAH-Contracts konsumieren
+doc_type: reference
+status: active
+summary: Entscheidung zur Integration und zum Konsum von SemanticAH-Contracts.
+relations:
+  - type: relates_to
+    target: docs/x-repo/semantAH.md
+---
 # ADR-0042: semantAH-Contracts konsumieren
 
-Status: accepted
+Status: superseded
 
 Beschluss:
 
@@ -10,3 +20,6 @@ Beschluss:
 Konsequenzen:
 
 - CI validiert nur Formate; Import-Job später.
+- **Diese Entscheidung ist vorerst ausgesetzt.**
+  - semantAH wird aktuell nicht als Datenquelle im Weltgewebe konsumiert.
+  - Import-Jobs und CI-Validierungen wurden entfernt.

@@ -1,0 +1,67 @@
+weltgewebe.home.arpa {
+  # Deterministic internal TLS for home environment
+  tls internal
+
+
+  # Sovereign Basemap Style & Assets Routing
+  # Mirrored from Vite dev-server: `.pmtiles` and `.meta.json` from basemap dir, others from map-style dir
+  handle_path /local-basemap/* {
+    @pmtiles path_regexp \.pmtiles$
+    handle @pmtiles {
+      root * /srv/weltgewebe-basemap
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+      header Access-Control-Expose-Headers "Content-Range, Accept-Ranges, Content-Length"
+      header Access-Control-Allow-Headers "Range, If-None-Match"
+      @options {
+        method OPTIONS
+      }
+      respond @options 204
+      file_server
+    }
+
+    @meta path_regexp \.meta\.json$
+    handle @meta {
+      root * /srv/weltgewebe-basemap
+      file_server
+    }
+
+    handle {
+      root * /srv/weltgewebe-map-style
+      file_server
+    }
+  }
+
+  handle_path /api/* {
+    reverse_proxy api:8080
+  }
+
+  # Phase B: Immutable Assets (aggressive caching)
+  handle /_app/immutable/* {
+    root * /srv/weltgewebe-web
+    header Cache-Control "public, max-age=31536000, immutable"
+    file_server
+  }
+
+  # Phase B: Diagnose Contract (never cache)
+  handle /_app/version.json {
+    root * /srv/weltgewebe-web
+    header Cache-Control "no-store"
+    file_server
+  }
+
+  # Phase B: HTML & mutable assets (revalidating caching)
+  handle {
+    root * /srv/weltgewebe-web
+    try_files {path} /index.html
+    header Cache-Control "no-cache, must-revalidate"
+    file_server
+  }
+
+  header {
+    # Security headers (Heim-first specific)
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none';"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+  }
+}

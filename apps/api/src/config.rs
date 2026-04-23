@@ -6,9 +6,41 @@ use serde::Deserialize;
 macro_rules! apply_env_override {
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
-            $self.$field = value
-                .parse()
-                .with_context(|| format!("failed to parse {} override: {value}", $env_var))?;
+            match value.trim().parse() {
+                Ok(parsed) => {
+                    $self.$field = parsed;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        env_var = $env_var,
+                        value = %value,
+                        error = %e,
+                        "failed to parse environment override; keeping configured value"
+                    );
+                }
+            }
+        }
+    };
+}
+
+macro_rules! apply_env_override_option {
+    ($self:ident, $field:ident, $type:ty, $env_var:literal) => {
+        if let Ok(value) = env::var($env_var) {
+            if !value.trim().is_empty() {
+                match value.trim().parse::<$type>() {
+                    Ok(parsed) => {
+                        $self.$field = Some(parsed);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            env_var = $env_var,
+                            value = %value,
+                            error = %e,
+                            "failed to parse environment override; keeping configured value"
+                        );
+                    }
+                }
+            }
         }
     };
 }
@@ -19,20 +51,91 @@ pub struct AppConfig {
     pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
+
+    // Public Login Configuration
+    #[serde(default)]
+    pub auth_public_login: bool,
+    #[serde(default)]
+    pub app_base_url: Option<String>,
+    #[serde(default)]
+    pub auth_trusted_proxies: Option<String>,
+
+    // Entry Policy Configuration
+    #[serde(default)]
+    pub auth_allow_emails: Option<Vec<String>>,
+    #[serde(default)]
+    pub auth_allow_email_domains: Option<Vec<String>>,
+    #[serde(default)]
+    pub auth_auto_provision: bool,
+
+    // Rate Limiting Configuration
+    #[serde(default)]
+    pub auth_rl_ip_per_min: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_ip_per_hour: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_email_per_min: Option<u32>,
+    #[serde(default)]
+    pub auth_rl_email_per_hour: Option<u32>,
+
+    // SMTP Configuration
+    #[serde(default)]
+    pub smtp_host: Option<String>,
+    #[serde(default)]
+    pub smtp_port: Option<u16>,
+    #[serde(default)]
+    pub smtp_user: Option<String>,
+    #[serde(default)]
+    pub smtp_pass: Option<String>,
+    #[serde(default)]
+    pub smtp_from: Option<String>,
+
+    // WebAuthn / Passkey Configuration
+    #[serde(default)]
+    pub webauthn_rp_id: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_origin: Option<String>,
+    #[serde(default)]
+    pub webauthn_rp_name: Option<String>,
+
+    // Dev/Ops Configuration
+    #[serde(default)]
+    pub auth_log_magic_token: bool,
 }
 
 impl AppConfig {
     const DEFAULT_CONFIG: &'static str = include_str!("../../../configs/app.defaults.yml");
 
     pub fn load() -> Result<Self> {
-        match env::var("APP_CONFIG_PATH") {
-            Ok(path) => Self::load_from_path(path),
-            Err(_) => {
-                let config: Self = serde_yaml::from_str(Self::DEFAULT_CONFIG)
-                    .context("failed to parse embedded default configuration")?;
-                config.apply_env_overrides()
+        let config = match env::var("APP_CONFIG_PATH") {
+            Ok(path) => {
+                if !Path::new(&path).is_file() {
+                    tracing::warn!(
+                        path,
+                        "configuration file specified but not found or is not a regular file; falling back to defaults"
+                    );
+                    serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                        .context("failed to parse embedded default configuration")?
+                } else {
+                    match Self::load_from_path(&path) {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            tracing::warn!(
+                                path,
+                                error = %e,
+                                "failed to load configuration file; falling back to defaults"
+                            );
+                            serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                                .context("failed to parse embedded default configuration")?
+                        }
+                    }
+                }
             }
-        }
+            Err(_) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
+                .context("failed to parse embedded default configuration")?,
+        };
+
+        config.apply_env_overrides()
     }
 
     pub fn load_from_path(path: impl AsRef<Path>) -> Result<Self> {
@@ -44,11 +147,278 @@ impl AppConfig {
         config.apply_env_overrides()
     }
 
+    /// Parse configuration from a YAML string (primarily for tests).
+    pub fn load_from_str(yaml: &str) -> Result<Self> {
+        let config: Self =
+            serde_yaml::from_str(yaml).context("failed to parse YAML configuration string")?;
+        config.apply_env_overrides()
+    }
+
     fn apply_env_overrides(mut self) -> Result<Self> {
         apply_env_override!(self, fade_days, "HA_FADE_DAYS");
         apply_env_override!(self, ron_days, "HA_RON_DAYS");
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
+
+        // Auth Overrides
+        if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
+            let val = val.trim();
+            self.auth_public_login = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+        if let Ok(val) = env::var("APP_BASE_URL") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.app_base_url = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("AUTH_TRUSTED_PROXIES") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.auth_trusted_proxies = Some(val.to_string());
+            }
+        }
+
+        // Entry Policy Overrides
+        if let Ok(val) = env::var("AUTH_ALLOW_EMAILS") {
+            let entries: Vec<String> = val
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !entries.is_empty() {
+                self.auth_allow_emails = Some(entries);
+            }
+        }
+        if let Ok(val) = env::var("AUTH_ALLOW_EMAIL_DOMAINS") {
+            let entries: Vec<String> = val
+                .split(',')
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            if !entries.is_empty() {
+                self.auth_allow_email_domains = Some(entries);
+            }
+        }
+        if let Ok(val) = env::var("AUTH_AUTO_PROVISION") {
+            let val = val.trim();
+            self.auth_auto_provision = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+
+        // Rate Limit Overrides
+        apply_env_override_option!(self, auth_rl_ip_per_min, u32, "AUTH_RL_IP_PER_MIN");
+        apply_env_override_option!(self, auth_rl_ip_per_hour, u32, "AUTH_RL_IP_PER_HOUR");
+        apply_env_override_option!(self, auth_rl_email_per_min, u32, "AUTH_RL_EMAIL_PER_MIN");
+        apply_env_override_option!(self, auth_rl_email_per_hour, u32, "AUTH_RL_EMAIL_PER_HOUR");
+
+        // SMTP Overrides
+        if let Ok(val) = env::var("SMTP_HOST") {
+            if !val.trim().is_empty() {
+                self.smtp_host = Some(val.trim().to_string());
+            }
+        }
+        apply_env_override_option!(self, smtp_port, u16, "SMTP_PORT");
+        if let Ok(val) = env::var("SMTP_USER") {
+            if !val.trim().is_empty() {
+                self.smtp_user = Some(val.trim().to_string());
+            }
+        }
+        if let Ok(val) = env::var("SMTP_PASS") {
+            if !val.trim().is_empty() {
+                self.smtp_pass = Some(val.trim().to_string());
+            }
+        }
+        if let Ok(val) = env::var("SMTP_FROM") {
+            if !val.trim().is_empty() {
+                self.smtp_from = Some(val.trim().to_string());
+            }
+        }
+
+        // Dev/Ops Overrides
+        if let Ok(val) = env::var("AUTH_LOG_MAGIC_TOKEN") {
+            let val = val.trim();
+            self.auth_log_magic_token = val == "1" || val.eq_ignore_ascii_case("true");
+        }
+
+        // WebAuthn Overrides
+        if let Ok(val) = env::var("WEBAUTHN_RP_ID") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_id = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("WEBAUTHN_RP_ORIGIN") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_origin = Some(val.to_string());
+            }
+        }
+        if let Ok(val) = env::var("WEBAUTHN_RP_NAME") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.webauthn_rp_name = Some(val.to_string());
+            }
+        }
+
+        self.normalize().validate()
+    }
+
+    fn normalize(mut self) -> Self {
+        // Ensure empty vectors are treated as None to prevent empty allowlists
+        // from being interpreted as "allowlist present but empty" (which is unsafe).
+        if let Some(emails) = self.auth_allow_emails {
+            let normalized: Vec<String> = emails
+                .into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.auth_allow_emails = if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            };
+        }
+
+        if let Some(domains) = self.auth_allow_email_domains {
+            let normalized: Vec<String> = domains
+                .into_iter()
+                .map(|s| s.trim().to_ascii_lowercase())
+                .filter(|s| !s.is_empty())
+                .collect();
+            self.auth_allow_email_domains = if normalized.is_empty() {
+                None
+            } else {
+                Some(normalized)
+            };
+        }
+
+        self
+    }
+
+    pub fn is_open_registration(&self) -> bool {
+        self.auth_public_login
+            && self.auth_auto_provision
+            && self.auth_allow_emails.is_none()
+            && self.auth_allow_email_domains.is_none()
+            && self.auth_rl_ip_per_min.unwrap_or(0) > 0
+            && self.auth_rl_ip_per_hour.unwrap_or(0) > 0
+            && self.auth_rl_email_per_min.unwrap_or(0) > 0
+            && self.auth_rl_email_per_hour.unwrap_or(0) > 0
+    }
+
+    fn validate(self) -> Result<Self> {
+        if self.auth_public_login && self.app_base_url.is_none() {
+            anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
+        }
+
+        if self.auth_auto_provision {
+            let has_email_allowlist = self
+                .auth_allow_emails
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+            let has_domain_allowlist = self
+                .auth_allow_email_domains
+                .as_ref()
+                .map(|v| !v.is_empty())
+                .unwrap_or(false);
+
+            if !has_email_allowlist && !has_domain_allowlist {
+                // Open Registration Mode (Option C)
+                // Require all rate limits to be set and > 0
+                let rl_ok = self.auth_rl_ip_per_min.unwrap_or(0) > 0
+                    && self.auth_rl_ip_per_hour.unwrap_or(0) > 0
+                    && self.auth_rl_email_per_min.unwrap_or(0) > 0
+                    && self.auth_rl_email_per_hour.unwrap_or(0) > 0;
+
+                if !rl_ok {
+                    anyhow::bail!("AUTH_AUTO_PROVISION is enabled without allowlist, but strict rate limits are missing. Configure AUTH_RL_* variables > 0 to proceed.");
+                } else {
+                    tracing::info!("Starting with Open Registration (No Allowlist) and Strict Rate Limits active.");
+                }
+            } else {
+                tracing::info!("Starting with Allowlist-restricted Registration.");
+            }
+        }
+
+        if self.auth_public_login {
+            // Check for valid SMTP configuration
+            // Note: smtp_user/pass might be missing if SMTP_AUTH=off or auto (with no creds)
+            // Mailer::new handles strict checks if SMTP_AUTH=on.
+            // Here we check for delivery mechanism presence (HOST+FROM).
+            let smtp_valid = self.smtp_host.is_some() && self.smtp_from.is_some();
+
+            // Check if dev logging fallback is enabled
+            let dev_logging = self.auth_log_magic_token;
+
+            if dev_logging {
+                tracing::warn!(
+                    "SECURITY WARNING: AUTH_LOG_MAGIC_TOKEN is enabled. Do not use in production."
+                );
+            }
+
+            if !smtp_valid && !dev_logging {
+                anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but no delivery mechanism is configured. Configure SMTP_* or set AUTH_LOG_MAGIC_TOKEN=1 for dev.");
+            }
+        } else if self.smtp_host.is_some() && self.smtp_from.is_none() {
+            // Only check this consistency if we didn't already bail above,
+            // though the above check implies strictness when public login is on.
+            // This clause catches "SMTP partially configured but Public Login OFF" edge cases.
+            anyhow::bail!(
+                "SMTP_HOST is set but SMTP_FROM is missing. Please set SMTP_FROM (e.g. noreply@example.com)."
+            );
+        }
+
+        // WebAuthn Configuration Validation
+        // rp_id and rp_origin must both be set (or both unset).
+        // When set, rp_origin must be a valid URL whose host matches rp_id.
+        let has_rp_id = self.webauthn_rp_id.is_some();
+        let has_rp_origin = self.webauthn_rp_origin.is_some();
+        if has_rp_id != has_rp_origin {
+            anyhow::bail!(
+                "WEBAUTHN_RP_ID and WEBAUTHN_RP_ORIGIN must both be set or both be unset."
+            );
+        }
+        if let (Some(rp_id), Some(rp_origin)) = (&self.webauthn_rp_id, &self.webauthn_rp_origin) {
+            let origin_url = url::Url::parse(rp_origin).map_err(|e| {
+                anyhow::anyhow!("WEBAUTHN_RP_ORIGIN is not a valid URL: {rp_origin} ({e})")
+            })?;
+
+            // WEBAUTHN_RP_ORIGIN must be a strict Origin value: scheme + host [+ port].
+            // Paths, queries, fragments and credentials are not valid Origin components.
+            let scheme = origin_url.scheme();
+            if scheme != "http" && scheme != "https" {
+                anyhow::bail!(
+                    "WEBAUTHN_RP_ORIGIN scheme must be 'http' or 'https', got '{scheme}'"
+                );
+            }
+            if !origin_url.username().is_empty() || origin_url.password().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain credentials (userinfo)");
+            }
+            if origin_url.query().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a query string");
+            }
+            if origin_url.fragment().is_some() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a fragment");
+            }
+            let path = origin_url.path();
+            if path != "/" && !path.is_empty() {
+                anyhow::bail!("WEBAUTHN_RP_ORIGIN must not contain a path component, got '{path}'");
+            }
+
+            let origin_host = origin_url.host_str().unwrap_or("");
+            // rp_id must equal the origin host, or the origin host must be a proper
+            // subdomain of rp_id (i.e. host ends with ".<rp_id>").
+            // A bare ends_with check is intentionally NOT used here because it would
+            // accept "evil-example.com" when rp_id is "example.com".
+            let host_matches =
+                origin_host == rp_id.as_str() || origin_host.ends_with(&format!(".{rp_id}"));
+            if !host_matches {
+                anyhow::bail!(
+                    "WEBAUTHN_RP_ORIGIN host '{origin_host}' does not match WEBAUTHN_RP_ID '{rp_id}'. \
+                     The origin host must equal the RP ID or be a subdomain of it."
+                );
+            }
+        }
 
         Ok(self)
     }
@@ -85,6 +455,33 @@ delegation_expire_days: 28
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn allowlist_is_ignored_if_empty_string() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Case 1: Empty string -> Should fail without rate limits
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("strict rate limits are missing"));
+
+        // Case 2: Comma only -> Should fail without rate limits
+        let _emails_comma = EnvGuard::set("AUTH_ALLOW_EMAILS", ",,");
+        let res2 = AppConfig::load_from_path(file.path());
+        assert!(res2.is_err());
 
         Ok(())
     }
@@ -128,6 +525,468 @@ delegation_expire_days: 28
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_falls_back_to_defaults_when_config_path_is_invalid() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let invalid_path = temp_dir.path().join("does-not-exist.yml");
+
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            invalid_path.to_str().expect("path is valid utf-8"),
+        );
+        let _fade = EnvGuard::unset("HA_FADE_DAYS");
+        let _ron = EnvGuard::unset("HA_RON_DAYS");
+        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+
+        let cfg = AppConfig::load()?;
+        assert_eq!(cfg.fade_days, 7);
+        assert_eq!(cfg.ron_days, 84);
+        assert!(cfg.anonymize_opt_in);
+        assert_eq!(cfg.delegation_expire_days, 28);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_public_login_enabled_without_base_url() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::unset("APP_BASE_URL");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("APP_BASE_URL is not set"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_public_login_and_base_url() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "https://example.com");
+        // Enable token logging to satisfy delivery requirement for this test
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_public_login);
+        assert_eq!(cfg.app_base_url.unwrap(), "https://example.com");
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn auth_fields_default_correctly() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Ensure envs are unset
+        let _public = EnvGuard::unset("AUTH_PUBLIC_LOGIN");
+        let _url = EnvGuard::unset("APP_BASE_URL");
+        let _proxies = EnvGuard::unset("AUTH_TRUSTED_PROXIES");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        let _auto = EnvGuard::unset("AUTH_AUTO_PROVISION");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.auth_public_login);
+        assert!(cfg.app_base_url.is_none());
+        assert!(cfg.auth_trusted_proxies.is_none());
+        assert!(cfg.auth_allow_emails.is_none());
+        assert!(cfg.auth_allow_email_domains.is_none());
+        assert!(!cfg.auth_auto_provision);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_auto_provision_enabled_without_allowlist_and_no_limits() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+        // Ensure rate limits are missing or zero
+        let _rl_ip_min = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("strict rate limits are missing"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_if_auto_provision_without_allowlist_and_strict_limits() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        // Set mandatory rate limits
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
+        let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert!(cfg.auth_allow_emails.is_none());
+        assert!(cfg.auth_allow_email_domains.is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_auto_provision_and_email_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "test@example.com, foo@bar.com");
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert_eq!(cfg.auth_allow_emails.unwrap().len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_with_auto_provision_and_domain_allowlist() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _emails = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+        let _domains = EnvGuard::set("AUTH_ALLOW_EMAIL_DOMAINS", "example.com");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_auto_provision);
+        assert_eq!(cfg.auth_allow_email_domains.unwrap().len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_normalizes_mixed_case_inputs() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        // Simulate YAML input with mixed case
+        let yaml_content = format!(
+            "{}\nauth_allow_email_domains: [\"Example.COM\", \"  Space.net \"]\n",
+            YAML
+        );
+        std::fs::write(file.path(), yaml_content)?;
+
+        // Ensure env doesn't override
+        let _domains = EnvGuard::unset("AUTH_ALLOW_EMAIL_DOMAINS");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        let domains = cfg.auth_allow_email_domains.expect("domains set");
+
+        assert_eq!(domains.len(), 2);
+        assert!(domains.contains(&"example.com".to_string()));
+        assert!(domains.contains(&"space.net".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_fails_if_public_login_without_delivery() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        // Ensure no SMTP and no dev logging
+        let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _smtp_user = EnvGuard::unset("SMTP_USER");
+        let _smtp_pass = EnvGuard::unset("SMTP_PASS");
+        let _smtp_from = EnvGuard::unset("SMTP_FROM");
+        let _smtp_port = EnvGuard::unset("SMTP_PORT");
+        let _log_token = EnvGuard::unset("AUTH_LOG_MAGIC_TOKEN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+        assert!(res
+            .unwrap_err()
+            .to_string()
+            .contains("no delivery mechanism is configured"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn validation_succeeds_if_public_login_with_auth_log_magic_token() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _url = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        // No SMTP but enable dev logging
+        let _smtp_host = EnvGuard::unset("SMTP_HOST");
+        let _smtp_user = EnvGuard::unset("SMTP_USER");
+        let _smtp_pass = EnvGuard::unset("SMTP_PASS");
+        let _smtp_from = EnvGuard::unset("SMTP_FROM");
+        let _smtp_port = EnvGuard::unset("SMTP_PORT");
+        let _log_token = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.auth_public_login);
+        assert!(cfg.auth_log_magic_token);
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn is_open_registration_logic_is_correct() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // Default: False
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.is_open_registration());
+
+        // Enable all requirements
+        let _public = EnvGuard::set("AUTH_PUBLIC_LOGIN", "1");
+        let _base = EnvGuard::set("APP_BASE_URL", "http://localhost");
+        let _auto = EnvGuard::set("AUTH_AUTO_PROVISION", "1");
+        let _rl_ip_min = EnvGuard::set("AUTH_RL_IP_PER_MIN", "5");
+        let _rl_ip_hour = EnvGuard::set("AUTH_RL_IP_PER_HOUR", "30");
+        let _rl_email_min = EnvGuard::set("AUTH_RL_EMAIL_PER_MIN", "2");
+        let _rl_email_hour = EnvGuard::set("AUTH_RL_EMAIL_PER_HOUR", "10");
+        let _log = EnvGuard::set("AUTH_LOG_MAGIC_TOKEN", "1");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(cfg.is_open_registration());
+
+        // Add Allowlist -> False
+        let _emails = EnvGuard::set("AUTH_ALLOW_EMAILS", "foo@bar.com");
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert!(!cfg.is_open_registration());
+        let _emails_unset = EnvGuard::unset("AUTH_ALLOW_EMAILS");
+
+        // Missing Rate Limit -> False (and actually validation would fail, but let's check method behavior on constructed struct if possible or via validation error)
+        let _rl_missing = EnvGuard::unset("AUTH_RL_IP_PER_MIN");
+        // Validation fails so we can't get a cfg object via load_from_path
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err());
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_env_overrides_are_applied() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com");
+        let _rp_name = EnvGuard::set("WEBAUTHN_RP_NAME", "My App");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.webauthn_rp_id.as_deref(), Some("example.com"));
+        assert_eq!(
+            cfg.webauthn_rp_origin.as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(cfg.webauthn_rp_name.as_deref(), Some("My App"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_rp_id_without_origin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::unset("WEBAUTHN_RP_ORIGIN");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "rp_id without rp_origin must be rejected at config load"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_mismatched_origin() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // rp_id is "example.com" but origin host is "other.org" — must be rejected.
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://other.org");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin that does not end with rp_id must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_allows_exact_host_match() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_ok(),
+            "exact host match (origin host == rp_id) must be accepted"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_allows_true_subdomain() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // sub.example.com ends_with ".example.com" — valid subdomain
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://app.example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_ok(),
+            "true subdomain (app.example.com for rp_id=example.com) must be accepted"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_suffix_attack() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        // evil-example.com ends_with "example.com" as a bare string but is NOT a subdomain
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://evil-example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "suffix attack (evil-example.com) must be rejected for rp_id=example.com"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_path() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com/app");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin with a path component must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_query() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com?foo=bar");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "origin with a query string must be rejected");
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_non_http_scheme() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "ftp://example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "non-http/https scheme must be rejected");
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_credentials() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://user@example.com");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "origin with userinfo credentials must be rejected"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn webauthn_validation_rejects_origin_with_fragment() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        let _rp_id = EnvGuard::set("WEBAUTHN_RP_ID", "example.com");
+        let _rp_origin = EnvGuard::set("WEBAUTHN_RP_ORIGIN", "https://example.com#frag");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(res.is_err(), "origin with a fragment must be rejected");
         Ok(())
     }
 }

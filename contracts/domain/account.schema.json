@@ -1,0 +1,159 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/domain/account.schema.json",
+  "title": "Account",
+  "description": "An account representing a user or actor in the Weltgewebe, either anchored to a location (Garnrolle) or operating as a Rolle ohne Namen (RoN).",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "garnrolle",
+        "ron"
+      ]
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "verortet",
+        "ron"
+      ],
+      "description": "The fundamental identity mode. 'verortet' implies an exact residence location is known internally. 'ron' implies no personal info and no individual location."
+    },
+    "title": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "location": {
+      "type": "object",
+      "description": "The internal, exact location (residence). Should only be present and required if mode=verortet.",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "additionalProperties": false
+    },
+    "public_pos": {
+      "type": "object",
+      "description": "The calculated public position based on location and radius_m (for verortete). RoN accounts do not have a public_pos.",
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "additionalProperties": false
+    },
+    "radius_m": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Fuzziness radius in meters for the public display of a verortete Garnrolle."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "id",
+    "type",
+    "mode",
+    "title"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "verortet"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "location"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "mode": {
+            "const": "ron"
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "location"
+              ]
+            },
+            {
+              "required": [
+                "public_pos"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "garnrolle"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "const": "verortet"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "ron"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "mode": {
+            "const": "ron"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,4 +1,15 @@
-# Observability – Local Profile
+---
+id: docs.runbook.observability
+title: Observability Runbook
+doc_type: runbook
+status: active
+summary: >
+  Runbook für Systembeobachtung und Metriken.
+relations:
+  - type: relates_to
+    target: docs/runbook.md
+---
+## Observability – Local Profile
 
 ## Start
 

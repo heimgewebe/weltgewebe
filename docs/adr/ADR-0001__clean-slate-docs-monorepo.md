@@ -1,3 +1,13 @@
+---
+id: adr.ADR-0001__clean-slate-docs-monorepo
+title: ADR-0001 — Clean Slate und Docs-Monorepo
+doc_type: reference
+status: active
+summary: Entscheidung für Clean-Slate-Ansatz und Docs-Monorepo-Struktur.
+relations:
+  - type: relates_to
+    target: docs/architekturstruktur.md
+---
 # ADR-0001 — Clean-Slate als Docs-Monorepo
 
 Datum: 2025-09-12

@@ -7,8 +7,11 @@
   import { setUAClasses } from '$lib/utils/ua-flags';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
+  import type { LayoutData } from './$types';
+  import { updateStore } from '$lib/stores/updateStore';
+  import UpdateBanner from '$lib/components/UpdateBanner.svelte';
 
-  export let data: any;
+  export let data: LayoutData;
 
   onMount(() => {
     setUAClasses();
@@ -16,6 +19,9 @@
     const q = new URLSearchParams(get(page).url.search);
     const disable = q.get('noinert') === '1' || (window as any).__NO_INERT__ === true;
     if (!disable) ensureInertPolyfill();
+
+    // Initialize update polling for controlled self-updating
+    updateStore.init();
   });
 </script>
 
@@ -24,5 +30,7 @@
     <link rel="canonical" href={data.canonical} />
   {/if}
 </svelte:head>
+
+<UpdateBanner />
 
 <slot />

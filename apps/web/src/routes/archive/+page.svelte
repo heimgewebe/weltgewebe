@@ -1,9 +1,11 @@
 <script lang="ts">
-  const archiveMonths = [
-    { label: "Mai 2024", path: "/archive/2024/05" },
-    { label: "April 2024", path: "/archive/2024/04" },
-    { label: "März 2024", path: "/archive/2024/03" }
-  ];
+  const archiveMonths: { label: string; path: string }[] = [];
+  // Beispiel-Daten (auskommentiert, da Routen noch nicht existieren)
+  // [
+  //   { label: "Mai 2024", path: "/archive/2024/05" },
+  //   { label: "April 2024", path: "/archive/2024/04" },
+  //   { label: "März 2024", path: "/archive/2024/03" }
+  // ];
 </script>
 
 <svelte:head>
@@ -25,11 +27,17 @@
 
   <section aria-labelledby="archive-months">
     <h2 id="archive-months">Monate</h2>
-    <ul>
-      {#each archiveMonths as month}
-        <li><a href={month.path}>{month.label}</a></li>
-      {/each}
-    </ul>
+    {#if archiveMonths.length > 0}
+      <ul>
+        {#each archiveMonths as month}
+          <li><a href={month.path}>{month.label}</a></li>
+        {/each}
+      </ul>
+    {:else}
+      <p style="color: var(--muted); font-style: italic;">
+        Das Archiv ist derzeit noch leer oder befindet sich im Aufbau.
+      </p>
+    {/if}
   </section>
 </main>
 
@@ -57,7 +65,8 @@
   }
 
   section li {
-    background: #f7f7f7;
+    background: var(--panel, #141a21);
+    border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.06));
     border-radius: 0.5rem;
     padding: 0.85rem 1rem;
     transition: background 0.2s ease-in-out, transform 0.2s ease-in-out;
@@ -65,7 +74,7 @@
 
   section li:hover,
   section li:focus-within {
-    background: #ececec;
+    background: var(--accent-soft, #ececec);
     transform: translateY(-1px);
   }
 

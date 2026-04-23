@@ -1,0 +1,23 @@
+---
+# Thin consumer wrapper — contract ownership stays in metarepo.
+# Delegates to the canonical reusable metrics workflow; no local
+# fetch / validate / schema-normalization logic needed here.
+name: "📊 Metrics Snapshot & Validation"
+
+permissions:
+  contents: read
+  actions: write
+  checks: write
+
+"on":
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
+
+jobs:
+  metrics:
+    uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@77b9fc21be6a9eaf2126931ede60232e53e74bcc
+    with:
+      metarepo_ref: "77b9fc21be6a9eaf2126931ede60232e53e74bcc"
+      post_url: ${{ secrets.HAUSKI_METRICS_URL }}
+    secrets: inherit

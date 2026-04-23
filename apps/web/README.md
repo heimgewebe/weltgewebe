@@ -1,24 +1,45 @@
 # weltgewebe-web (Gate A Click-Dummy)
 
 Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten,
-Fäden, Drawer, Zeitachse).
+Fäden, Kontextpanel, Aktionsleiste).
 
-## Dev
+## Development & Preview
+
+Das Projekt verwendet pnpm via Corepack. Aktiviere es mit `corepack enable`.
+
+### Development (HMR)
+
+Für schnelle Iterationen mit Hot Module Replacement:
 
 ```bash
 cd apps/web
-npm ci
-npm run dev
+pnpm install
+pnpm dev -- --host 0.0.0.0 --port 5173
 ```
 
-Standardmäßig läuft der Dev-Server auf `http://localhost:5173/map`.
-In Container- oder Codespaces-Umgebungen kannst du optional `npm run dev -- --host --port 5173`
-verwenden.
+- **Port:** 5173
+- **URL:** [http://localhost:5173/map](http://localhost:5173/map)
+- **Hinweis:** In Codespaces/Containern ist `--host 0.0.0.0` zwingend nötig. Alternativ: `pnpm dev:cs`.
 
+### Preview (Production Build)
+
+Um den echten Build (wie in CI) zu testen und das Layout final zu prüfen (**idealer Weg**):
+
+```bash
+cd apps/web
+pnpm build
+pnpm preview -- --host 0.0.0.0 --port 4173
+```
+
+- **Port:** 4173
+- **URL:** [http://localhost:4173/map](http://localhost:4173/map)
+- **Hinweis:** Playwright-Tests nutzen lokal standardmäßig diesen Port. Wenn Playwright-Tests manuell gegen diesen Server laufen sollen (z.B. über `PLAYWRIGHT_SKIP_WEBSERVER=1`), muss der Server mit `pnpm run build:e2e` anstelle von `pnpm build` gebaut werden. Alternativ: `pnpm preview:cs`.
+
+<!-- prettier-ignore-start -->
 > [!TIP]
 > **E2E-Tests:** Playwright nutzt lokal Port `4173` (Preview-Server) und fällt in CI automatisch
 > auf `5173` zurück (siehe [`playwright.config.ts`](./playwright.config.ts)). Setze `PORT=<nummer>`
-> und führe `npm run test:ci` aus, um den Port explizit vorzugeben.
+> und führe `pnpm test:ci` aus, um den Port explizit vorzugeben.
 > HTML-Reports landen unter `apps/web/playwright-report` (überschreibbar via
 > `PLAYWRIGHT_HTML_REPORT`). CI-Artefakt-Uploads sollten sowohl den Ordner als auch die Datei
 > `apps/web/playwright-report/results.xml` einsammeln.
@@ -27,6 +48,7 @@ verwenden.
 > **Node-Version:** Bitte Node.js ≥ 20.19 (oder ≥ 22.12) verwenden – darunter
 > verweigern Vite und Freunde den Dienst. Per `nvm use` kannst du via
 > `.nvmrc` im Projektverzeichnis direkt auf die richtige Version springen.
+<!-- prettier-ignore-end -->
 
 ### Polyfill-Debugging
 
@@ -36,10 +58,10 @@ Falls du das native Verhalten prüfen möchtest, hänge `?noinert=1` an die URL
 
 ### Screenshot aufnehmen
 
-In einem zweiten Terminal (während `npm run dev` läuft):
+In einem zweiten Terminal (während `pnpm dev` läuft):
 
 ```bash
-npm run screenshot
+pnpm screenshot
 ```
 
 Legt `public/demo.png` an.
@@ -47,7 +69,7 @@ Legt `public/demo.png` an.
 ## Was kann das?
 
 - Vollbild-Karte (MapLibre) mit 4 Strukturknoten (Platzhalter).
-- Linker/rechter Drawer (UI-Stubs), Legende, Zeitachsen-Stub im Footer.
+- Kontextpanel (UI-Stubs), Legende, Aktionsleisten-Stub.
 - Keine Persistenz, keine echten Filter/Abfragen (Ethik → UX → Gemeinschaft →
   Zukunft → Autonomie → Kosten).
 
@@ -63,14 +85,18 @@ Legt `public/demo.png` an.
 ### Tests & Reports
 
 Playwright legt lokale HTML-Reports unter `apps/web/playwright-report` ab. Öffne sie bei
-Bedarf mit `npx playwright show-report playwright-report`.
+Bedarf mit `pnpm exec playwright show-report playwright-report`.
 
-### Playwright (Drawer + Keyboard)
+### Playwright (UI-Interaktionen)
 
 ```bash
-npx playwright install --with-deps  # einmalig
-npx playwright test tests/drawers.spec.ts
+pnpm exec playwright install --with-deps  # einmalig
+pnpm exec playwright test tests/map-interaction.spec.ts
 ```
 
 Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit
 Maus-Drags die Swipe-Gesten simulieren können.
+
+## Benchmarks
+
+An algorithm optimization benchmark for the Account API is available in `scripts/benchmark_account_api.ts`. Run it with `pnpm run benchmark:account-api` from the root.

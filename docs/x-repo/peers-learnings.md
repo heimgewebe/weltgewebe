@@ -1,3 +1,13 @@
+---
+id: x-repo.peers-learnings
+title: Peers Learnings
+doc_type: reference
+status: active
+summary: Erkenntnisse und Learnings aus verwandten Peer-Projekten.
+relations:
+  - type: relates_to
+    target: docs/x-repo/semantAH.md
+---
 
 # Kurzfassung: Übertragbare Praktiken aus HausKI, semantAH und WGX-Profil
 
@@ -17,8 +27,8 @@
   Standard-Tasks (`up/lint/test/build/smoke`) und vermeidet Drift zwischen lokal & CI.
 - **Health/Readiness mit Policies koppeln:** Die bestehenden `/health/live` und `/health/ready` um
   Policy-Signale (Rate-Limits, Retention, Governance-Timer) ergänzen und in Runbooks verankern.
-- **UI/Produkt-Definition testbar machen:** UI-Spezifika (Map-UI, Drawer,
-  Zeitleiste, Knotentypen) als Playwright-/Vitest-Szenarien automatisieren, um
+- **UI/Produkt-Definition testbar machen:** UI-Spezifika (Map-UI, ContextPanel,
+  Aktionsleiste, Knotentypen) als Playwright-/Vitest-Szenarien automatisieren, um
   Regressionen früh zu erkennen.
 - **Föderierung & Archiv-Strategie festigen:** Hybrid-Indexierung durch
   wiederkehrende Archiv-Validierung, URL-Kanonisierungstests und CI-Jobs
@@ -33,7 +43,7 @@
 
 ## Nächste Schritte (knapp & machbar)
 
-- [x] `docs/README.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
+- [x] `docs/index.md`: Abschnitt **„X-Repo Learnings“** mit Link auf dieses Dokument ergänzen.
 - [ ] `.wgx/profile.yml`: Standard-Tasks `up|lint|test|build|smoke` definieren (Repo-SSoT).
 - [ ] `/health/ready`: Policy-Signal-Platzhalter ausgeben (z. B. als JSON-Objekt wie
   `{ "governance_timer_ok": true, "rate_limit_ok": true }`), um den Status relevanter Policies

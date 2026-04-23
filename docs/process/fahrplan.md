@@ -1,3 +1,13 @@
+---
+id: process.fahrplan
+title: Fahrplan
+doc_type: reference
+status: active
+summary: Zeitlicher Ablauf und Meilensteine des Projekts (Gates A–D).
+relations:
+  - type: relates_to
+    target: docs/process/README.md
+---
 # Fahrplan
 
 **Stand:** 2025-10-20
@@ -6,7 +16,7 @@
 
 - ADR-0001 (Clean Slate & Monorepo)
 - ADR-0002 (Re-Entry-Kriterien)
-- ADR-0003 (Privacy: Unschärferadius & RoN)
+- ADR-0003 (Privacy: Ungenauigkeitsradius & RoN)
 
 ## Prinzipien: mobile-first, audit-ready, klein schneiden, Metriken vor Features
 
@@ -38,7 +48,7 @@
 #### Checkliste „bereit für Gate B“
 
 - [ ] Interaktiver UX-Click-Dummy ist verlinkt (README) und deckt Karte → Knoten → Zeit-UI ab.
-- [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `thread` abgestimmt und dokumentiert.
+- [ ] Contracts-Schemas (`contracts/`) für `node`, `role`, `conversation`, `edge` abgestimmt und dokumentiert.
 - [ ] README-Landing beschreibt Click-Dummy, Contracts und verweist auf diesen Fahrplan.
 - [ ] Vale-Regeln laufen gegen README/Fahrplan ohne Verstöße.
 - [ ] PWA installierbar, Offline-Shell lädt Grundlayout.
@@ -52,7 +62,7 @@
 
 - [ ] Axum-Service liefert `/health/live`, `/health/ready`, `/version`.
 - [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
-- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`) als Stubs
+- [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`) als Stubs
   implementiert.
 - [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`,
   `cargo test` aus.
@@ -101,7 +111,7 @@
 ### Gate A: Umfang
 
 - PWA: `manifest.webmanifest`, Offline-Shell, App-Icon.
-- Layout: Header-Slot, Drawer-Platzhalter (links: Webrat/Nähstübchen, rechts: Filter/Zeitleiste).
+- Layout: ActionBar-Slot, ContextPanel-Platzhalter (Details, Webrat/Nähstübchen, Filter).
 - Route `/`: Überschrift + Dummy-Karte (MapLibre einbinden, Tiles später).
 - Budgets: **≤60 KB Initial-JS**, **TTI ≤2 s** (Mess-Skript + Budgetdatei).
 - Telemetrie (Client): PerformanceObserver für Long-Tasks (nur Log/console bis Gate C).
@@ -110,7 +120,7 @@
 
 - **UX-Click-Dummy:** Interaktiver Ablauf für Karte → Knoten → Zeit-UI. Figma/Tool-Link im README
   vermerken.
-- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `thread`
+- **Contracts-Schemas:** JSON-Schemas/OpenAPI für `node`, `role`, `conversation`, `edge`
   abstimmen (Basis für Gate B). Ablage unter `contracts/` und im README
   verlinken.
 - **README-Landing:** Landing-Abschnitt aktualisieren (Screenshot/Diagramm +
@@ -128,13 +138,13 @@
 
 ## Gate B — API (Axum) *Health & Kernverträge* — Phaseziele
 
-**Ziel:** API lebt, dokumentiert und testet minimal **Kernobjekte**: Knoten, Rolle, Faden.
+**Ziel:** API lebt, dokumentiert und testet minimal **Kernobjekte**: Knoten, Rolle, Gesprächsraum, Faden.
 
 ### Gate B: Umfang
 
 - Axum-Service mit `/health/live`, `/health/ready`, `/version`.
 - OpenAPI-Stub (utoipa) generiert.
-- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /threads`
+- **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`
   (Stub-Implementierung).
 - `migrations/` vorbereitet (ohne Fachtabellen).
 - CI: `cargo fmt`, `clippy -D warnings`, `cargo test`.
@@ -188,17 +198,17 @@
 - Zeit-Slider (UI) ohne Datenwirkung, nur State/URL-Sync.
 - **Knoten anlegen (UI)**: kleines Formular (Name), flüchtige Speicherung (Client/Mem), Marker
   erscheint.
-- Mobile-Nav-Gesten (Drawer wischen).
+- Mobile-Nav-Gesten (ContextPanel wischen).
 
 **Akzeptanz:** Mobile Lighthouse ≥ 90; TTI ≤ 2 s; UI-Flows klickbar; Knoten-Form erzeugt Marker.
 
 ---
 
-## Phase B (Woche 3–4): **Kernmodell — Knoten, Rolle, Faden**
+## Phase B (Woche 3–4): **Kernmodell — Knoten, Rolle, Gesprächsraum, Faden**
 
-- Domain-Events: `node.created`, `role.created`, `thread.created`.
-- Tabellen (PG): `nodes`, `roles`, `threads` (nur ID/Meta), Outbox (leer, aber vorhanden).
-- API: `POST /nodes`, `GET /nodes/{id}` echt (PG); `POST /roles`, `POST /threads` stub.
+- Domain-Events: `node.created`, `role.created`, `conversation.created`, `edge.created`.
+- Tabellen (PG): `nodes`, `roles`, `conversations`, `edges` (nur ID/Meta), Outbox (leer, aber vorhanden).
+- API: `POST /nodes`, `GET /nodes/{id}` echt (PG); `POST /roles`, `POST /conversations` stub.
 - Web: „Rolle drehen 7 Sekunden“ (UI-Effekt), Faden-Stub Linie Rolle→Knoten (Fake-Data).
 
 **Akzeptanz:** Knoten persistiert in PG; Faden-Stub sichtbar; E2E-Flow „Knoten knüpfen“ klickbar.
@@ -207,7 +217,7 @@
 
 ## Phase C (Woche 5–6): **Privacy-UI (ADR-0003) & 7-Tage-Verblassen**
 
-- UI: **Unschärferadius-Slider** + **RoN-Toggle** (Profil-State; Fake-Persist).
+- UI: **Ungenauigkeitsradius-Slider** + **RoN-Toggle** (Profil-State; Fake-Persist).
 - Zeitleiste wirkt auf Sichtbarkeit (Fäden/Knoten blenden weich aus; Client-seitig).
 - `public_pos` im View-Modell (Fake-Backend oder Local-Derivation).
 

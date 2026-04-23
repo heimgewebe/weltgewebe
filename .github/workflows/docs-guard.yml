@@ -1,0 +1,52 @@
+---
+name: Docs Guard
+
+"on":
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    paths:
+      - 'manifest/**'
+      - 'architecture/**'
+      - 'runtime/**'
+      - 'runbooks/**'
+      - 'scripts/docmeta/**'
+      - 'docs/_generated/system-map.md'
+      - 'AGENTS.md'
+      - 'repo.meta.yaml'
+      - 'agent-policy.yaml'
+      - 'audit/impl-registry.yaml'
+      - '.python-version'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  docmeta-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Run Docs Guard
+        run: make docs-guard
+
+      - name: Run Architecture & Coverage Guards
+        run: |
+          bash scripts/docmeta/repo-structure-guard.sh
+          bash scripts/docmeta/docs-relations-guard.sh
+          bash scripts/docmeta/generated-files-guard.sh
+          bash scripts/docmeta/coverage-guard.sh

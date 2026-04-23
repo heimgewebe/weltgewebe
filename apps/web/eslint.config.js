@@ -10,19 +10,32 @@ const IGNORE = [
   "dist/",
   "node_modules/",
   "public/demo.png",
-  "scripts/record-screenshot.mjs"
+  "scripts/record-screenshot.mjs",
 ];
 
 export default [
   {
-    ignores: IGNORE
+    ignores: IGNORE,
   },
   ...svelte.configs["flat/recommended"],
   {
     files: ["**/*.svelte"],
+    languageOptions: {
+      parserOptions: {
+        parser: tsParser,
+      },
+    },
     rules: {
-      "svelte/no-at-html-tags": "error"
-    }
+      "svelte/no-at-html-tags": "error",
+    },
+  },
+  {
+    files: ["playwright.config.ts", "scripts/**/*.js"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
   },
   {
     files: ["**/*.ts", "**/*.js"],
@@ -30,17 +43,18 @@ export default [
       parser: tsParser,
       parserOptions: {
         ecmaVersion: 2023,
-        sourceType: "module"
+        sourceType: "module",
       },
-      globals: globals.browser
+      globals: globals.browser,
     },
     plugins: {
-      "@typescript-eslint": tsPlugin
+      "@typescript-eslint": tsPlugin,
     },
     rules: {
       ...js.configs.recommended.rules,
       ...tsPlugin.configs["recommended"].rules,
-      "@typescript-eslint/no-explicit-any": "off"
-    }
-  }
+      "no-undef": "off", // TypeScript handles this
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ];

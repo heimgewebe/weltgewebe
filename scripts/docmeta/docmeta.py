@@ -1,0 +1,313 @@
+import os
+import re
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+def normalize_list_field(value):
+    """
+    Normalizes a frontmatter list field (like relations or verifies_with)
+    which could be a string, a stringified list, a list, or None,
+    and returns a clean list of strings.
+    """
+    if isinstance(value, str):
+        if value.startswith('[') and value.endswith(']'):
+            return [v.strip() for v in value[1:-1].split(',') if v.strip()]
+        else:
+            return [value.strip()] if value.strip() else []
+    elif isinstance(value, list):
+        return value
+    return []
+
+
+def extract_depends_on(frontmatter):
+    """
+    Extract depends_on targets from the relations array.
+    Returns a list of target strings where type == 'depends_on'.
+    For zone files with relations: [], returns [].
+    """
+    relations = frontmatter.get('relations', [])
+    if not isinstance(relations, list):
+        return []
+    deps = []
+    for entry in relations:
+        if isinstance(entry, dict) and entry.get('type') == 'depends_on':
+            target = entry.get('target', '')
+            if target:
+                deps.append(target)
+    return deps
+
+def parse_frontmatter(file_path):
+    if not os.path.exists(file_path):
+        return None
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Robust matching of YAML Frontmatter allowing CRLF, ending at EOF, with spacing
+    match = re.match(r'^---\r?\n(.*?)(?:\r?\n---\r?\n|\r?\n---$)', content, re.DOTALL)
+    if not match:
+        return None
+
+    frontmatter_text = match.group(1)
+    data = {}
+    current_key = None
+    current_dict_entry = None
+
+    for line in frontmatter_text.splitlines():
+        # Keep original indentation to identify block lists
+        stripped_line = line.strip()
+        if not stripped_line or stripped_line.startswith('#'):
+            continue
+
+        if line.startswith(' ') and stripped_line.startswith('- ') and current_key:
+            if current_key == 'relations':
+                # Flush any pending dict entry
+                if current_dict_entry is not None:
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(current_dict_entry)
+                    current_dict_entry = None
+
+                val = stripped_line[2:].strip()
+                if ':' in val:
+                    # Dict-style list item: "- type: relates_to"
+                    k, v = val.split(':', 1)
+                    current_dict_entry = {k.strip(): v.strip()}
+                else:
+                    # Bare list item
+                    if isinstance(data[current_key], list):
+                        data[current_key].append(val)
+                continue
+            elif current_key in ['verifies_with', 'audit_gaps', 'depends_on']:
+                # It's a block list item (string values)
+                val = stripped_line[2:].strip()
+                # Handle quoted strings in lists
+                if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                    val = val[1:-1]
+                if isinstance(data[current_key], list):
+                    data[current_key].append(val)
+                else:
+                    # Convert existing string to list and append
+                    if data[current_key]:
+                        data[current_key] = [data[current_key], val]
+                    else:
+                        data[current_key] = [val]
+                continue
+
+        # Handle continuation keys within a relations dict entry
+        if (line.startswith(' ') and current_key == 'relations'
+                and current_dict_entry is not None and ':' in stripped_line
+                and not stripped_line.startswith('- ')):
+            k, v = stripped_line.split(':', 1)
+            current_dict_entry[k.strip()] = v.strip()
+            continue
+
+        if ':' in line:
+            # Flush pending dict entry before processing new top-level key
+            if current_dict_entry is not None and current_key == 'relations':
+                if isinstance(data.get(current_key), list):
+                    data[current_key].append(current_dict_entry)
+                current_dict_entry = None
+
+            key, val = line.split(':', 1)
+            key = key.strip()
+            val = val.strip()
+
+            if val.startswith('[') and val.endswith(']'):
+                items = [item.strip() for item in val[1:-1].split(',') if item.strip()]
+                # Handle quoted strings in inline lists
+                for i, item in enumerate(items):
+                    if (item.startswith('"') and item.endswith('"')) or (item.startswith("'") and item.endswith("'")):
+                        items[i] = item[1:-1]
+                val = items
+                current_key = None # Completed inline list
+            elif val == '' and key in ['relations', 'verifies_with', 'audit_gaps', 'depends_on']:
+                # Initialize empty list for potential block list parsing on valid fields
+                val = []
+                current_key = key # Track to append items
+            elif val == '':
+                # Explicitly unset tracking for unknown empty fields
+                current_key = None
+            elif (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+                val = val[1:-1]
+                current_key = None # Scalar completed
+            else:
+                current_key = None # Scalar completed
+
+            data[key] = val
+
+    # Flush any remaining dict entry
+    if current_dict_entry is not None and current_key == 'relations':
+        if isinstance(data.get(current_key), list):
+            data[current_key].append(current_dict_entry)
+
+    return data
+
+def parse_repo_index(manifest_path=None, strict_manifest=False):
+    if not manifest_path:
+        manifest_path = os.environ.get("REPO_INDEX_PATH", os.path.join(REPO_ROOT, "manifest", "repo-index.yaml"))
+
+    if not os.path.exists(manifest_path):
+        raise ValueError(f"Repo index file not found: {manifest_path}")
+
+    with open(manifest_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    data = {'zones': {}, 'checks': []}
+    current_zone = None
+    in_zones = False
+    in_checks = False
+    in_canonical_docs = False
+    has_zones_key = False
+
+    # Track hierarchy implicitly via state to validate indentation.
+    for line_num, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#') or stripped == '---':
+            continue
+
+        indent = len(line) - len(line.lstrip())
+
+        # Validate that no unhandled text exists at indent 0
+        if indent == 0:
+            if ':' not in stripped:
+                raise ValueError(f"Line {line_num}: Expected key-value or key: at root level. Found: '{stripped}'")
+            key = stripped.split(':')[0].strip()
+
+            if key == 'zones':
+                in_zones = True
+                in_checks = False
+                has_zones_key = True
+            elif key == 'checks':
+                in_checks = True
+                in_zones = False
+            else:
+                if strict_manifest:
+                    raise ValueError(f"Line {line_num}: Unknown key at root level '{key}' (strict_manifest=True).")
+                in_zones = False
+                in_checks = False
+            continue
+
+        if ':' not in stripped and not stripped.startswith('-'):
+            raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon or list indicator: '{stripped}'")
+
+        if in_zones:
+            if indent == 2:
+                if not stripped.endswith(':'):
+                    raise ValueError(f"Line {line_num}: Expected zone key ending with colon, found: '{stripped}'")
+                current_zone = stripped.rstrip(':')
+                data['zones'][current_zone] = {'path': '', 'canonical_docs': []}
+                in_canonical_docs = False
+            elif indent == 4 and current_zone:
+                key = stripped.split(':')[0].strip()
+                if key == 'path':
+                    data['zones'][current_zone]['path'] = stripped.split(':', 1)[1].strip()
+                    in_canonical_docs = False
+                elif key == 'canonical_docs':
+                    in_canonical_docs = True
+                else:
+                    in_canonical_docs = False
+                    if strict_manifest:
+                        raise ValueError(f"Line {line_num}: Unknown key in zone '{current_zone}': '{key}' (strict_manifest=True).")
+            elif indent == 6 and in_canonical_docs:
+                if not stripped.startswith('- '):
+                    raise ValueError(f"Line {line_num}: Expected list item for canonical_docs, found: '{stripped}'")
+                doc = stripped.split('-', 1)[1].strip()
+                data['zones'][current_zone]['canonical_docs'].append(doc)
+            else:
+                raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in zones.")
+
+        elif in_checks:
+            if indent == 2:
+                if not stripped.startswith('- '):
+                    raise ValueError(f"Line {line_num}: Expected list item for checks, found: '{stripped}'")
+                check = stripped.split('-', 1)[1].strip()
+                data['checks'].append(check)
+            else:
+                raise ValueError(f"Line {line_num}: Unexpected indentation level {indent} in checks.")
+
+    if not has_zones_key:
+        raise ValueError("Missing required key 'zones' in repo-index.")
+
+    if strict_manifest:
+        if not data['zones']:
+            raise ValueError("The 'zones' section cannot be empty when strict_manifest=True.")
+        for z_name, z_data in data['zones'].items():
+            if not z_data.get('canonical_docs'):
+                raise ValueError(f"Strict Mode: Zone '{z_name}' has no canonical_docs.")
+
+    return data
+
+def parse_review_policy(policy_path=None, strict_manifest=False):
+    if not policy_path:
+        policy_path = os.environ.get("REVIEW_POLICY_PATH", os.path.join(REPO_ROOT, "manifest", "review-policy.yaml"))
+
+    if not os.path.exists(policy_path):
+        raise ValueError(f"Review policy file not found: {policy_path}")
+
+    with open(policy_path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+
+    data = {}
+    known_keys = {'warn_days', 'fail_days', 'mode', 'strict_manifest'}
+
+    for line_num, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#') or stripped == '---':
+            continue
+
+        if ':' not in line:
+            raise ValueError(f"Line {line_num}: Invalid YAML syntax, missing colon: '{stripped}'")
+
+        key, val = line.split(':', 1)
+        key = key.strip()
+        val = val.strip()
+
+        # Unquote if necessary
+        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            val = val[1:-1]
+
+        data[key] = val
+
+        if strict_manifest and key not in known_keys:
+            raise ValueError(f"Line {line_num}: Unknown key '{key}' in review policy (strict_manifest=True).")
+
+    # Validation
+    if 'warn_days' not in data:
+        raise ValueError("Missing required key 'warn_days' in review policy.")
+    try:
+        val = int(data['warn_days'])
+        if val <= 0:
+            raise ValueError
+        data['warn_days'] = val
+    except ValueError:
+        raise ValueError(f"Invalid warn_days: '{data['warn_days']}'. Must be a positive integer.")
+
+    if 'fail_days' not in data:
+        raise ValueError("Missing required key 'fail_days' in review policy.")
+    try:
+        val = int(data['fail_days'])
+        if val <= 0:
+            raise ValueError
+        data['fail_days'] = val
+    except ValueError:
+        raise ValueError(f"Invalid fail_days: '{data['fail_days']}'. Must be a positive integer.")
+
+    if data['fail_days'] <= data['warn_days']:
+        raise ValueError(f"Invalid review policy: fail_days ({data['fail_days']}) must be greater than warn_days ({data['warn_days']}).")
+
+    if 'mode' not in data:
+        raise ValueError("Missing required key 'mode' in review policy.")
+    mode = data['mode'].lower()
+    if mode not in ['warn', 'strict', 'fail-closed']:
+        raise ValueError(f"Invalid mode: '{data['mode']}'. Must be 'warn', 'strict', or 'fail-closed'.")
+    data['mode'] = mode
+
+    if 'strict_manifest' in data:
+        val = data['strict_manifest'].lower()
+        if val not in ['true', 'false']:
+            raise ValueError(f"Invalid strict_manifest: '{data['strict_manifest']}'. Must be true or false.")
+        data['strict_manifest'] = (val == 'true')
+    else:
+        data['strict_manifest'] = False
+
+    return data

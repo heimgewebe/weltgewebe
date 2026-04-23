@@ -1,3 +1,15 @@
+---
+id: inhalt
+title: Inhalt
+doc_type: reference
+status: active
+summary: Konzeptuelle Beschreibung des Weltgewebe – Funktionsweise, UI, Organisation.
+relations:
+  - type: relates_to
+    target: docs/vision.md
+  - type: relates_to
+    target: docs/zusammenstellung.md
+---
 # Inhalt (MANDATORISCH)
 
 ## Was bedeutet Weltweberei?
@@ -27,7 +39,7 @@ der bekommt eine Garnrolle auf seinen Wohnsitz gesteckt. Diese Rolle ermöglicht
 ins Weltgewebe einzuweben, solange er eingeloggt (sichtbar durch Drehung der Rolle) ist. Er kann nun also
 neue Knoten (auf der Karte lokalisierte Informationsbündel, beispielsweise über geplante oder ständige
 Ereignisse, Fragen, Ideen) knüpfen, sich mit bestehenden verbinden (Zustimmung, Interesse, Ablehnung,
-Zusage, Verantwortungsübernahme, etc.), an Gesprächen (Threads auf einem Knoten) teilnehmen, oder Geld an
+Zusage, Verantwortungsübernahme, etc.), an Gesprächen (Gesprächsräumen auf einem Knoten) teilnehmen, oder Geld an
 ein Ortsgewebekonto (Gemeinschaftskonto) spenden.
 
 Jede dieser Aktionen erzeugt einen Faden, der von der Rolle zu dem jeweiligen Knoten führt. Jeder Faden
@@ -39,19 +51,14 @@ Faden zu ihm führt.
 
 ### Benutzeroberfläche und Navigation
 
-Der linke Drawer enthält den Webrat und das Nähstübchen. Hier wird über alle ortsunabhängigen Themen
-beraten (und abgestimmt. Generell kann jeder jederzeit Abstimmungen einleiten). Im Nähstübchen wird
-einfach (orts-/kartenunabhängig) geplaudert. Das Ortsgewebekonto (oberer Slider) ist das
-Gemeinschaftskonto. Hier gehen sowohl anonyme Spenden, als auch sichtbare Spenden (als Goldfäden von der
-jeweiligen Rolle) ein. Hier, wie auch überall im Gewebe können Weber Anträge (auf Auszahlung, Anschaffung,
-Veränderung, etc.) stellen.
+Alle Detailinformationen und Funktionen, wie der Webrat, das Nähstübchen, und das Ortsgewebekonto, werden im Kontextpanel und über die Aktionsleiste angezeigt. Hier wird über alle ortsunabhängigen Themen beraten (und abgestimmt. Generell kann jeder jederzeit Abstimmungen einleiten). Im Nähstübchen wird einfach (orts-/kartenunabhängig) geplaudert. Das Ortsgewebekonto ist das Gemeinschaftskonto. Hier gehen sowohl anonyme Spenden, als auch sichtbare Spenden (als Goldfäden von der jeweiligen Rolle) ein. Hier, wie auch überall im Gewebe können Weber Anträge (auf Auszahlung, Anschaffung, Veränderung, etc.) stellen.
 
 Solch ein Antrag ist ebenso durch einen speziellen Antragsfaden mit der Rolle des Webers verbunden und
 enthält sichtbar einen 7-Tage Timer. Nun haben alle Weber 7 Tage lang Zeit Einspruch einzulegen.
 Geschieht dies nicht, dann geht der Antrag durch, bei Einspruch verlängert sich die Entscheidungszeit um
 weitere 7 Tage bis schlussendlich abgestimmt wird. Jeder Antrag eröffnet automatisch einen Raum mitsamt
-Thread und Informationen. Überhaupt entsteht mit jedem Knoten ein eigener Raum (Fenster), in dem man
-Informationen, Threads, etc. nebeneinander gestalten kann. Alles, was man gestaltet, kann von allen anderen
+Gesprächsraum und Informationen. Überhaupt entsteht mit jedem Knoten ein eigener Raum (Fenster), in dem man
+Informationen, Gesprächsräume, etc. nebeneinander gestalten kann. Alles, was man gestaltet, kann von allen anderen
 verändert werden, es sei denn man verzwirnt es. Dies führt automatisch dazu, dass der Faden, der zu dem
 Knoten führt und von der Rolle des Verzwirners ausgeht, zu einem Garn wird. Solange also eine Verzwirnung
 besteht, solange kann ein Knoten sich nicht auflösen. Die Verzwirnung kann einzelne Elemente in einem
@@ -64,13 +71,13 @@ eigenen Garnrolle einen privaten Bereich (Kontoeinstellungen, etc.) und einen ö
 dem öffentlich einsehbaren kann man unter anderem Güter und Kompetenzen, die man der Gesamtheit zur
 Verfügung stellen möchte, angeben.
 
-Über eine Suche im rechten Drawer kann man alle möglichen Aspekte suchen. Sie werden per Glow auf dem
+Über eine Suche in der Aktionsleiste kann man alle möglichen Aspekte suchen. Sie werden per Glow auf dem
 verorteten Knoten oder Garnrolle und auf einer Liste dargestellt. Die Liste ist geordnet nach Entfernung
 zur Bildmitte bei Suchbeginn. Von der Liste springt man zu dem verorteten Knoten oder Garnrolle, wenn man
 den Treffer anklickt.
 
-All diese Ebenen (links, oben, Ecke rechts oben, rechts) werden aus der jeweiligen Ecke oder Kante
-herausgezogen. Die Standardansicht zeigt nur die Karte. Kleine Symbole zeigen die herausziehbaren Ebenen an.
+Die Benutzeroberfläche basiert auf einer Mobile-First Architektur mit drei Hauptflächen: der Karte, dem
+Kontextpanel und der Aktionsleiste.
 
 ### Fadenarten und Knotentypen
 
