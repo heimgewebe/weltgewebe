@@ -1,14 +1,17 @@
 import { json, error } from "@sveltejs/kit";
 import { demoNodes } from "$lib/demo/demoData";
 import { resolveNodeParticipants } from "$lib/demo/resolvers";
-import type { RequestHandler } from "./$types";
+import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-// For static adapter + dynamic segment routes, entries must enumerate concrete ids.
 export const entries = () => demoNodes.map((n) => ({ id: n.id }));
 
-export const GET: RequestHandler = ({ params }) => {
+export function GET({ params }: RequestEvent) {
   const { id } = params;
+
+  if (!id) {
+    throw error(400, "ID is required");
+  }
 
   const node = demoNodes.find((n) => n.id === id);
 
@@ -38,4 +41,4 @@ export const GET: RequestHandler = ({ params }) => {
         : []),
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   });
-};
+}

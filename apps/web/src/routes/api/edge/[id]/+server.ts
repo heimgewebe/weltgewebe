@@ -1,14 +1,17 @@
 import { json, error } from "@sveltejs/kit";
 import { demoEdges } from "$lib/demo/demoData";
 import { resolveEdgeParticipants } from "$lib/demo/resolvers";
-import type { RequestHandler } from "./$types";
+import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-// For static adapter + dynamic segment routes, entries must enumerate concrete ids.
 export const entries = () => demoEdges.map((e) => ({ id: e.id }));
 
-export const GET: RequestHandler = ({ params }) => {
+export function GET({ params }: RequestEvent) {
   const { id } = params;
+
+  if (!id) {
+    throw error(400, "ID is required");
+  }
 
   const edge = demoEdges.find((e) => e.id === id);
 
@@ -23,4 +26,4 @@ export const GET: RequestHandler = ({ params }) => {
     ...edge,
     ...participants,
   });
-};
+}
