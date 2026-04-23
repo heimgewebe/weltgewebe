@@ -42,10 +42,7 @@ export function resolveAccountNodes(accountId: string) {
  */
 export function resolveNodeParticipants(nodeId: string) {
   const relatedEdges = demoEdges.filter(
-    (e) =>
-      e.target_id === nodeId &&
-      e.target_type === "node" &&
-      e.source_type === "account",
+    (e) => e.target_id === nodeId && e.target_type === "node",
   );
 
   return relatedEdges
