@@ -96,3 +96,11 @@ pnpm exec playwright test tests/map-interaction.spec.ts
 
 Die Tests setzen in `beforeEach` das Flag `window.__E2E__ = true`, damit
 Maus-Drags die Swipe-Gesten simulieren können.
+
+## Benchmarks
+
+An algorithm optimization benchmark for the Account API is available in `scripts/benchmark_account_api.ts`. Run it with `pnpm run benchmark:account-api` from the root.
+
+## Benchmarks
+
+An algorithm optimization benchmark for the Account API is available in `scripts/benchmark_account_api.ts`. Run it with `pnpm run benchmark:account-api` from the root.
