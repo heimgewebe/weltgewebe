@@ -79,9 +79,11 @@ Ergänzender Status zur Kartenklarheit-Roadmap (Phasen 1–6):
 | PMTiles-URL-Rewriting | Erledigt | Unit-Tests: `basemap.test.ts` (7 Tests) |
 
 **Teststand (lokaler Testlauf 2026-04-23, Chromium):**
+
 - Unit-Tests (vitest): 39/39 grün (`src/lib/map/scene.test.ts`, `basemap.test.ts`, `resolvers.test.ts`, `guards.test.ts`, `uiInvariants.test.ts`, `governance.test.ts`)
 - Playwright-Browser-Tests: 22 grün (21 Map-/Basemap-Tests aus 5 Testdateien + 1 Sovereignty-Test)
 
 **Noch ausstehend (nicht durch automatisierte Tests abgedeckt):**
+
 - Echter Caddy+PMTiles-E2E-Nachweis (HTTP 206 im CI)
 - Manuelle / VRT-basierte visuelle Abnahme der Overlay-Lesbarkeit
