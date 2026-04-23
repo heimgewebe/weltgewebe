@@ -1,96 +1,99 @@
 {
   "generated_from": [
-    "docs/blueprints/map-blaupause.md",
-    "docs/blueprints/map-roadmap.md",
-    "docs/deployment.md",
-    "infra/caddy/Caddyfile",
-    "apps/web/src/lib/map/overlay/edges.ts",
-    "infra/caddy/Caddyfile.heim"
+    "apps/web/src/routes/map/+page.svelte",
+    "apps/web/src/lib/data/dummy.json",
+    "apps/web/tests/map-smoke.spec.ts",
+    "apps/web/tests/map-marker-panel.spec.ts",
+    "infra/caddy/Caddyfile"
   ],
   "areas": {
-    "basemap_grundlage": {
-      "soll": "Lokales Artefakt generieren (planetiler, PMTiles)",
-      "ist": "Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung des Artefakts sind vorhanden.",
-      "status": "Erledigt",
-      "documentation_evidence": [
-        "docs/blueprints/map-roadmap.md"
-      ],
-      "missing_evidence": [],
-      "risk": "gering",
-      "code_runtime_evidence": [
-        "scripts/basemap/build-hamburg-pmtiles.sh"
-      ]
-    },
-    "style_souveraenitaet": {
-      "soll": "Eigenes style.json, Glyphs lokal, keine fremden Abh\u00e4ngigkeiten",
-      "ist": "style.json vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap ist strukturell durch Playwright-Tests validiert, die echte visuelle Abnahme kann aktuell nur manuell erfolgen.",
+    "kartendatenquelle": {
+      "soll": "Klare, explizite Datenquelle fuer die Karte",
+      "ist": "Die Route importiert dummy.json direkt in +page.svelte; ein Loader- oder API-Vertrag ist nicht belegt.",
       "status": "Teil",
       "documentation_evidence": [
-        "docs/blueprints/map-roadmap.md"
+        "docs/blueprints/kartenklarheit-roadmap.md"
       ],
       "missing_evidence": [
-        "Echte visuelle Abnahme (Manual QA / VRT)"
-      ],
-      "risk": "gering",
-      "code_runtime_evidence": [
-        "map-style/style.json",
-        "apps/web/tests/edge-visibility.spec.ts"
-      ]
-    },
-    "runtime_integration": {
-      "soll": "MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls",
-      "ist": "Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in Caddyfile/Caddyfile.heim und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.",
-      "status": "Teil",
-      "documentation_evidence": [
-        "docs/blueprints/map-roadmap.md",
-        "docs/deployment.md"
-      ],
-      "missing_evidence": [
-        "Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream"
+        "Loader/API-Vertrag",
+        "Ladezustand",
+        "Fehlerzustand"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
-        "apps/web/tests/basemap-client-integration.spec.ts",
-        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
-        "infra/caddy/Caddyfile",
-        "infra/caddy/Caddyfile.heim",
-        "scripts/guard/caddy-basemap-route-guard.sh"
+        "apps/web/src/routes/map/+page.svelte",
+        "apps/web/src/lib/data/dummy.json"
       ]
     },
-    "versionierung": {
-      "soll": "basemap-vX.pmtiles, meta.json Sentinel Contract, Atomic Switch",
-      "ist": "Sentinel Contract und Rollback-Logik in Scripts implementiert und dokumentiert.",
+    "interaktion_und_panel": {
+      "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich",
+      "ist": "Marker-Klick setzt die Auswahl und oeffnet das rechte Panel; dieses Verhalten ist per Browser-Test belegt.",
       "status": "Erledigt",
       "documentation_evidence": [
-        "docs/blueprints/map-blaupause.md"
+        "docs/reports/map-architekturkritik.md"
       ],
       "missing_evidence": [],
       "risk": "gering",
       "code_runtime_evidence": [
-        "scripts/basemap/publish-basemap.sh",
-        "scripts/basemap/rollback-basemap.sh"
+        "apps/web/src/routes/map/+page.svelte",
+        "apps/web/tests/map-marker-panel.spec.ts"
       ]
     },
-    "ausbau": {
-      "soll": "Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit",
-      "ist": "Regionale Scripts f\u00fcr Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschlie\u00dflich \u00fcber F\u00e4den).",
+    "basemap_abhaengigkeit": {
+      "soll": "Dokumentierte und bewusst entschiedene Basemap-Strategie",
+      "ist": "MapLibre wird mit dem externen Demo-Style von demotiles.maplibre.org initialisiert; eine repo-kontrollierte Basemap-Strategie ist nicht belegt.",
       "status": "Teil",
       "documentation_evidence": [
-        "docs/blueprints/map-roadmap.md"
+        "docs/blueprints/kartenklarheit-roadmap.md",
+        "docs/reports/map-architekturkritik.md"
       ],
       "missing_evidence": [
-        "Offline-Modus Konzept",
-        "Clustering ohne Semantikbruch"
+        "Entscheidung fuer oder gegen externe Basemap-Assets",
+        "Dokumentierter Runtime-Nachweis der gewuenschten Basemap-Quelle"
       ],
-      "risk": "gering",
+      "risk": "mittel",
       "code_runtime_evidence": [
-        "scripts/basemap/build-hamburg-pmtiles.sh",
-        "scripts/basemap/build-germany-pmtiles.sh",
-        "apps/web/tests/no-activity-heatmap.spec.ts"
+        "apps/web/src/routes/map/+page.svelte"
+      ]
+    },
+    "infrastruktur_kopplung": {
+      "soll": "Web-Runtime, Proxy und Kartenabhaengigkeiten sind dokumentiert aufeinander abgestimmt",
+      "ist": "Caddy reverse-proxyt Web und API; eine spezifische repo-eigene Basemap-Konfiguration ist dort nicht hinterlegt.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/reports/map-status-matrix.md"
+      ],
+      "missing_evidence": [
+        "Dokumentierte Zuordnung zwischen Basemap-Strategie, CSP und Runtime"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": [
+        "infra/caddy/Caddyfile"
+      ]
+    },
+    "testabdeckung": {
+      "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
+      "ist": "Smoke-Test und Marker-Panel-Test sind vorhanden; Fehler-, Lade- und Basemap-Ausfallpfade sind nicht belegt.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/kartenklarheit-roadmap.md",
+        "docs/reports/map-status-matrix.md"
+      ],
+      "missing_evidence": [
+        "Tests fuer leere Daten",
+        "Tests fuer Fehlerzustaende",
+        "Tests fuer Basemap-Probleme",
+        "Tests fuer Offline-Verhalten"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": [
+        "apps/web/tests/map-smoke.spec.ts",
+        "apps/web/tests/map-marker-panel.spec.ts"
       ]
     }
   },
   "open_architectural_decisions": {
-    "Visuelle_Abnahme": "Mit der aktuellen Testarchitektur nicht automatisiert nachgewiesen (erfordert manuelle QA oder zus\u00e4tzliche VRT-Pipeline)."
+    "Basemap_Strategie": "Offen: externe Demo-Basemap bewusst akzeptieren oder durch repo-kontrollierte Strategie ersetzen.",
+    "Kartendatenquelle": "Offen: direkte Demo-Daten in +page.svelte beibehalten oder auf expliziten Loader/API-Vertrag umstellen."
   }
 }

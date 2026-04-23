@@ -3,46 +3,60 @@ id: map-status-matrix
 title: Map Status Matrix
 doc_type: status-matrix
 status: active
-summary: >
-  Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist-Zustand der Basemap-Architektur ab.
+summary: Repo-wahre Statusmatrix fuer die aktuelle Kartenimplementierung.
+relations:
+  - type: relates_to
+    target: docs/blueprints/kartenklarheit-roadmap.md
+  - type: relates_to
+    target: docs/reports/map-architekturkritik.md
 ---
 
-# Map Status Matrix
+Dieses Dokument beschreibt den belegbaren Ist-Zustand der aktuellen
+Kartenimplementierung. Massgeblich sind nur Dateien, die im aktuellen
+Repo-Stand tatsaechlich vorhanden sind.
 
-Dieses Dokument bildet den auf Basis der vorhandenen Repo-Evidenz belegbaren Ist-Zustand ab. Es ist rein diagnostisch und ersetzt nicht die normative [Roadmap](../blueprints/map-roadmap.md), sondern dokumentiert den belegbaren Stand gegenüber diesem Zielbild.
+## 1. Kartendatenquelle
 
-Das Feld `generated_from` (bzw. die Metadaten) benennt bewusst nur die zentralen Primärquellen der Diagnosebildung (Blueprints, zentrale Codepfade). Die vollständigen, konkreten Belege finden sich transparent im `code_runtime_evidence` der jeweiligen JSON-Bereiche.
+- **Soll**: Klare, explizite Datenquelle fuer die Karte.
+- **Ist**: Die Route importiert `apps/web/src/lib/data/dummy.json` direkt in `apps/web/src/routes/map/+page.svelte`.
+- **Status**: Teil
+- **Nachweis**: `apps/web/src/routes/map/+page.svelte`, `apps/web/src/lib/data/dummy.json`
+- **Fehlend**: Loader/API-Vertrag, Lade- und Fehlerzustaende.
 
-## 1. Basemap Grundlage
+## 2. Interaktion und Panel
 
-- **Soll**: Lokales Artefakt generieren (planetiler, PMTiles).
-- **Ist**: Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung des Artefakts sind vorhanden.
+- **Soll**: Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich.
+- **Ist**: Marker-Click setzt die Auswahl und oeffnet das rechte Panel.
 - **Status**: Erledigt
-- **Nachweis**: `scripts/basemap/build-hamburg-pmtiles.sh`
+- **Nachweis**: `apps/web/tests/map-marker-panel.spec.ts`
 
-## 2. Style-Souveränität
+## 3. Basemap-Abhaengigkeit
 
-- **Soll**: Eigenes `style.json`, Glyphs lokal, keine fremden Abhängigkeiten.
-- **Ist**: `style.json` vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap ist strukturell durch Playwright-Tests validiert (`edge-visibility.spec.ts`), die echte visuelle Abnahme kann aktuell nur manuell erfolgen.
+- **Soll**: Dokumentierte und bewusst entschiedene Basemap-Strategie.
+- **Ist**: MapLibre wird mit `https://demotiles.maplibre.org/style.json` initialisiert.
 - **Status**: Teil
-- **Fehlend**: Echte visuelle Abnahme (Manual QA / VRT).
+- **Nachweis**: `apps/web/src/routes/map/+page.svelte`
+- **Fehlend**: Entscheidung, ob externe Demo-Assets akzeptiert oder ersetzt werden.
 
-## 3. Runtime-Integration
+## 4. Infrastruktur-Kopplung
 
-- **Soll**: MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls.
-- **Ist**: Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock `basemap-client-integration.spec.ts`). Route-Contract ist belegt (Caddy-Route existiert in `Caddyfile`/`Caddyfile.heim` und wird per Guard `caddy-basemap-route-guard.sh` validiert). `PUBLIC_BASEMAP_MODE` Contract ist verankert.
+- **Soll**: Web-Runtime, Caddy-Proxy und Kartenabhaengigkeiten passen dokumentiert zusammen.
+- **Ist**: `infra/caddy/Caddyfile` reverse-proxyt Web und API; eine
+  spezifische repo-eigene Basemap-Konfiguration ist dort nicht hinterlegt.
 - **Status**: Teil
-- **Fehlend**: Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream im CI.
+- **Nachweis**: `infra/caddy/Caddyfile`
+- **Fehlend**: Dokumentierte Zuordnung zwischen Basemap-Strategie, CSP und Runtime.
 
-## 4. Betrieb und Versionierung
+## 5. Testabdeckung
 
-- **Soll**: `basemap-vX.pmtiles`, `meta.json` Sentinel Contract, Atomic Switch.
-- **Ist**: Sentinel Contract und Rollback-Logik in Scripts implementiert.
-- **Status**: Erledigt
-
-## 5. Ausbau
-
-- **Soll**: Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit.
-- **Ist**: Regionale Scripts für Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschließlich über Fäden).
+- **Soll**: Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt.
+- **Ist**: Smoke-Test und Marker-Panel-Test vorhanden; Fehler-, Lade- und Basemap-Ausfallpfade sind nicht belegt.
 - **Status**: Teil
-- **Fehlend**: Offline-Modus-Konzept, Clustering ohne Semantikbruch.
+- **Nachweis**: `apps/web/tests/map-smoke.spec.ts`, `apps/web/tests/map-marker-panel.spec.ts`
+- **Fehlend**: Tests fuer leere Daten, Fehlerzustaende, Basemap-Probleme und Offline-Verhalten.
+
+## Essenz
+
+Die Karte ist als Demo-Navigation mit Marker-Interaktion belegt. Nicht belegt
+sind derzeit ein expliziter Datenvertrag, eine geklaerte Basemap-Strategie und
+belastbare Fehlerpfade.
