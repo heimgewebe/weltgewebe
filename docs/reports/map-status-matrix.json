@@ -23,7 +23,7 @@
     },
     "style_souveraenitaet": {
       "soll": "Eigenes style.json, Glyphs lokal, keine fremden Abh\u00e4ngigkeiten",
-      "ist": "style.json vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap ist strukturell durch Playwright-Tests validiert, die echte visuelle Abnahme kann aktuell nur manuell erfolgen.",
+      "ist": "style.json vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap strukturell durch Playwright-Tests validiert. Basemap-Client-Verhalten E2E-verifiziert: basemap-sovereignty-testbuild.spec.ts best\u00e4tigt, dass isStyleLoaded() ohne externe CDN-Abh\u00e4ngigkeiten aufl\u00f6st (lokaler Testlauf 2026-04-23, Playwright/Chromium). Echte visuelle Abnahme kann aktuell nur manuell erfolgen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md"
@@ -34,7 +34,8 @@
       "risk": "gering",
       "code_runtime_evidence": [
         "map-style/style.json",
-        "apps/web/tests/edge-visibility.spec.ts"
+        "apps/web/tests/edge-visibility.spec.ts",
+        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
       ]
     },
     "runtime_integration": {
@@ -73,7 +74,7 @@
     },
     "ausbau": {
       "soll": "Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit",
-      "ist": "Regionale Scripts f\u00fcr Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschlie\u00dflich \u00fcber F\u00e4den).",
+      "ist": "Regionale Scripts f\u00fcr Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschlie\u00dflich \u00fcber F\u00e4den). Heatmap-Invariante durch no-activity-heatmap.spec.ts E2E-verifiziert (lokaler Testlauf 2026-04-23, Playwright/Chromium).",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md"

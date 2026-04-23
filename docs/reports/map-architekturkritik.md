@@ -202,7 +202,7 @@ Folgende Punkte aus Abschnitt 5 (Alternativpfad) wurden im Rahmen der Kartenklar
 | Norm-Festigung: ADR zur Monorepo-Entscheidung | Offen |
 | Refactoring von `+page.svelte` (Gottobjekt) | Bewusst nicht adressiert (Kipppunkt noch nicht erreicht) |
 
-*Evidenzlage des Nachtrags:* Direkt aus dem PR-Diff abgeleitet und durch E2E-Tests verifiziert (2026-04-23):
-- Degradierte Banner (`partial` / `failed`): `map-load-fallback.spec.ts` — 4/4 Tests grün im echten Browser (Playwright/Chromium).
+*Evidenzlage des Nachtrags:* Direkt aus dem PR-Diff abgeleitet und durch E2E-Tests verifiziert (lokaler Testlauf 2026-04-23, Playwright/Chromium):
+- Degradierte Banner (`partial` / `failed`): `map-load-fallback.spec.ts` — alle 4 Testfälle (partial, failed, ok, Debug-Badge) grün im echten Browser.
 - Diagnostik-Badge (`apiMode` / `basemapMode` getrennt): `map-load-fallback.spec.ts` Debug-Badge-Test grün.
-- Gesamt-Teststand: 39/39 Unit-Tests (vitest), 22/22 E2E-Tests (Playwright) grün.
+- Gesamt-Teststand: 39/39 Unit-Tests (vitest), 22 Playwright-Browser-Tests (21 Map-/Basemap-Tests + 1 Sovereignty-Test) grün.

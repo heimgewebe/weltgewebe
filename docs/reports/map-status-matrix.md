@@ -58,27 +58,29 @@ Das Feld `generated_from` (bzw. die Metadaten) benennt bewusst nur die zentralen
 
 ## 6. Kartenklarheit-Architektur (Nachtrag 2026-04-23)
 
+> **Scope-Hinweis:** Dieser Abschnitt wird bewusst nur im Markdown geführt. Die zugehörige `map-status-matrix.json` bildet ausschließlich den Basemap-Infrastrukturstatus (Bereiche 1–5) ab und bleibt unverändert. Der Kartenklarheit-Nachtrag gehört zur [`kartenklarheit-roadmap.md`](../blueprints/kartenklarheit-roadmap.md), nicht zur Basemap-Infrastrukturmatrix. Beide Dokumente teilen sich diese Markdown-Datei als Brücke, bleiben aber in ihrer JSON-Repräsentation getrennt.
+
 Ergänzender Status zur Kartenklarheit-Roadmap (Phasen 1–6):
 
 | Bereich | Status | Nachweis |
 | :--- | :--- | :--- |
-| MapLoadState (`ok \| partial \| failed`) | Erledigt | Unit-Tests: `scene.test.ts` (10/10), E2E: `map-load-fallback.spec.ts` (4/4 grün) |
-| MapSceneModel / `buildMapScene()` | Erledigt | Unit-Tests: `scene.test.ts` (10/10) |
-| Diskriminierte Union `MapEntityViewModel` | Erledigt | Unit-Tests: `scene.test.ts` (10/10) |
+| MapLoadState (`ok \| partial \| failed`) | Erledigt | Unit-Tests: `scene.test.ts` (10 Tests), E2E: `map-load-fallback.spec.ts` (alle 4 Testfälle grün) |
+| MapSceneModel / `buildMapScene()` | Erledigt | Unit-Tests: `scene.test.ts` (10 Tests) |
+| Diskriminierte Union `MapEntityViewModel` | Erledigt | Unit-Tests: `scene.test.ts` (10 Tests) |
 | Getrennte Diagnostics (`apiMode` / `basemapMode`) | Erledigt | E2E: `map-load-fallback.spec.ts` — Debug-Badge-Test grün |
 | Zustands-Ownership dokumentiert | Erledigt | JSDoc-Ownership-Matrix in `uiView.ts` |
 | Degradierte UI-Zustände (Banner) | Erledigt | E2E: `map-load-fallback.spec.ts` (partial + failed) grün |
 | Suchlogik auf `scene.entities` | Erledigt | E2E: `map-interaction.spec.ts` grün |
 | Filterlogik auf `scene.entities` | Erledigt | E2E: `map-interaction.spec.ts` grün |
 | Fokus/Komposition | Erledigt | E2E: `map-interaction.spec.ts` grün (unverändert) |
-| Faden-Invariante (kein Heatmap) | Erledigt | E2E: `no-activity-heatmap.spec.ts` (1/1 grün) |
-| Default-View (Hammer Park) | Erledigt | E2E: `map-default-view.spec.ts` (1/1 grün) |
-| Basemap-Modus-Auflösung | Erledigt | Unit-Tests: `basemap.test.ts` (7/7) |
-| PMTiles-URL-Rewriting | Erledigt | Unit-Tests: `basemap.test.ts` (7/7) |
+| Faden-Invariante (kein Heatmap) | Erledigt | E2E: `no-activity-heatmap.spec.ts` grün |
+| Default-View (Hammer Park) | Erledigt | E2E: `map-default-view.spec.ts` grün |
+| Basemap-Modus-Auflösung | Erledigt | Unit-Tests: `basemap.test.ts` (7 Tests) |
+| PMTiles-URL-Rewriting | Erledigt | Unit-Tests: `basemap.test.ts` (7 Tests) |
 
-**Teststand (2026-04-23):**
-- Unit-Tests (vitest): 39/39 grün
-- E2E-Tests (Playwright, Chromium): 22/22 grün (inkl. Basemap-Sovereignty, Client-Integration, Map-Interaktion, Load-Fallback, Heatmap-Guard, Default-View)
+**Teststand (lokaler Testlauf 2026-04-23, Chromium):**
+- Unit-Tests (vitest): 39/39 grün (`src/lib/map/scene.test.ts`, `basemap.test.ts`, `resolvers.test.ts`, `guards.test.ts`, `uiInvariants.test.ts`, `governance.test.ts`)
+- Playwright-Browser-Tests: 22 grün (21 Map-/Basemap-Tests aus 5 Testdateien + 1 Sovereignty-Test)
 
 **Noch ausstehend (nicht durch automatisierte Tests abgedeckt):**
 - Echter Caddy+PMTiles-E2E-Nachweis (HTTP 206 im CI)

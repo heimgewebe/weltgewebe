@@ -247,7 +247,7 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
 
 ### Arbeitspakete für Phase 6
 
-- [x] Relevante Testsuite vollständig durchlaufen. → 39/39 Unit-Tests (vitest) grün; 22/22 E2E-Tests (Playwright/Chromium) grün (2026-04-23).
+- [x] Relevante Testsuite vollständig durchlaufen. → 39/39 Unit-Tests (vitest) grün; 22 Playwright-Browser-Tests grün (21 Map-/Basemap-Tests + 1 Sovereignty-Test, lokaler Testlauf 2026-04-23, Chromium).
 - [x] Fehlerszenarien gezielt prüfen. → Playwright-Tests im echten Browser verifiziert:
   - [x] Nodes fehlen → `map-load-fallback.spec.ts` (failed state) grün
   - [x] Accounts fehlen → `map-load-fallback.spec.ts` (partial state) grün
@@ -267,7 +267,7 @@ Die neue Kartenarchitektur gegen Rückfall schützen.
 
 ### Verifikation für Phase 6
 
-- [x] Keine Regression in Kerninteraktionen. → 39/39 Unit-Tests + 22/22 E2E-Tests grün (2026-04-23).
+- [x] Keine Regression in Kerninteraktionen. → 39/39 Unit-Tests (vitest) + 22 Playwright-Browser-Tests grün, lokaler Testlauf 2026-04-23.
 - [x] Dokumentation entspricht dem tatsächlichen Zustand. → Roadmap, map-status-matrix und map-architekturkritik aktualisiert.
 
 ### Stop-Kriterium für Phase 6
@@ -321,4 +321,4 @@ Die Roadmap ist erfüllt, wenn:
 
 **Hebel:** Laufzeitwahrheit → Szenenmodell → Typenhärtung.
 **Entscheidung:** Erst explizit machen, dann aufräumen.
-**Status:** Phasen 1–6 umgesetzt. 39/39 Unit-Tests + 22/22 E2E-Tests grün (2026-04-23). Dokumentation aktualisiert. Einzig ausstehend: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream.
+**Status:** Phasen 1–6 umgesetzt. 39/39 Unit-Tests + 22 Playwright-Browser-Tests grün (lokaler Testlauf 2026-04-23, Chromium). Dokumentation aktualisiert. Einzig ausstehend: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream.
