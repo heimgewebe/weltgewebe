@@ -4,6 +4,7 @@ import { resolveEdgeParticipants } from "$lib/demo/resolvers";
 import type { RequestHandler } from "./$types";
 
 export const prerender = true;
+// For static adapter + dynamic segment routes, entries must enumerate concrete ids.
 export const entries = () => demoEdges.map((e) => ({ id: e.id }));
 
 export const GET: RequestHandler = ({ params }) => {
