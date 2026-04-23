@@ -1,0 +1,96 @@
+{
+  "generated_from": [
+    "docs/blueprints/map-blaupause.md",
+    "docs/blueprints/map-roadmap.md",
+    "docs/deployment.md",
+    "infra/caddy/Caddyfile",
+    "apps/web/src/lib/map/overlay/edges.ts",
+    "infra/caddy/Caddyfile.heim"
+  ],
+  "areas": {
+    "basemap_grundlage": {
+      "soll": "Lokales Artefakt generieren (planetiler, PMTiles)",
+      "ist": "Alle infrastrukturellen Werkzeuge und Prozesse zur Offline-Generierung des Artefakts sind vorhanden.",
+      "status": "Erledigt",
+      "documentation_evidence": [
+        "docs/blueprints/map-roadmap.md"
+      ],
+      "missing_evidence": [],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "scripts/basemap/build-hamburg-pmtiles.sh"
+      ]
+    },
+    "style_souveraenitaet": {
+      "soll": "Eigenes style.json, Glyphs lokal, keine fremden Abh\u00e4ngigkeiten",
+      "ist": "style.json vorhanden, Glyphs lokal. Overlay-Lesbarkeit gegen Basemap ist strukturell durch Playwright-Tests validiert, die echte visuelle Abnahme kann aktuell nur manuell erfolgen.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/map-roadmap.md"
+      ],
+      "missing_evidence": [
+        "Echte visuelle Abnahme (Manual QA / VRT)"
+      ],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "map-style/style.json",
+        "apps/web/tests/edge-visibility.spec.ts"
+      ]
+    },
+    "runtime_integration": {
+      "soll": "MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls",
+      "ist": "Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in Caddyfile/Caddyfile.heim und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/map-roadmap.md",
+        "docs/deployment.md"
+      ],
+      "missing_evidence": [
+        "Echter E2E-Nachweis gegen reales Caddy-Backend mit echtem PMTiles-Byte-Stream"
+      ],
+      "risk": "mittel",
+      "code_runtime_evidence": [
+        "apps/web/tests/basemap-client-integration.spec.ts",
+        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
+        "infra/caddy/Caddyfile",
+        "infra/caddy/Caddyfile.heim",
+        "scripts/guard/caddy-basemap-route-guard.sh"
+      ]
+    },
+    "versionierung": {
+      "soll": "basemap-vX.pmtiles, meta.json Sentinel Contract, Atomic Switch",
+      "ist": "Sentinel Contract und Rollback-Logik in Scripts implementiert und dokumentiert.",
+      "status": "Erledigt",
+      "documentation_evidence": [
+        "docs/blueprints/map-blaupause.md"
+      ],
+      "missing_evidence": [],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "scripts/basemap/publish-basemap.sh",
+        "scripts/basemap/rollback-basemap.sh"
+      ]
+    },
+    "ausbau": {
+      "soll": "Offline-Modus, regionale Tilesets, mehrskalige Projektionen, verbesserte Faden-Lesbarkeit",
+      "ist": "Regionale Scripts f\u00fcr Hamburg und Deutschland vorhanden. Heatmap bewusst entfernt (Dichtevisualisierung erfolgt ausschlie\u00dflich \u00fcber F\u00e4den).",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/map-roadmap.md"
+      ],
+      "missing_evidence": [
+        "Offline-Modus Konzept",
+        "Clustering ohne Semantikbruch"
+      ],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "scripts/basemap/build-hamburg-pmtiles.sh",
+        "scripts/basemap/build-germany-pmtiles.sh",
+        "apps/web/tests/no-activity-heatmap.spec.ts"
+      ]
+    }
+  },
+  "open_architectural_decisions": {
+    "Visuelle_Abnahme": "Mit der aktuellen Testarchitektur nicht automatisiert nachgewiesen (erfordert manuelle QA oder zus\u00e4tzliche VRT-Pipeline)."
+  }
+}
