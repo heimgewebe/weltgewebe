@@ -59,12 +59,12 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
 - **Ist**: Guard-Script vorhanden (`scripts/guard/basemap-runtime-proof.sh`); prueft HTTP 206, Range-Header und
-  unterscheidet explizit zwischen PROVEN und NOT_PROVEN. CI-Job vorhanden
-  (`.github/workflows/basemap-runtime-proof.yml`), non-blocking.
+  unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Non-blocking Guard-Workflow vorhanden
+  (`.github/workflows/basemap-runtime-proof.yml`); laeuft ohne Artefakt und ohne Caddy, meldet nur NOT_PROVEN.
 - **Status**: Teil
 - **Nachweis**: `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`
-- **Fehlend**: Echter CI-Nachweis; PMTiles-Artefakt ist im CI aktuell nicht verfuegbar.
-  Solange kein reales Artefakt im CI-Stack vorhanden ist, bleibt der HTTP-206-Beweis offen.
+- **Fehlend**: Echter CI-Nachweis; PMTiles-Artefakt ist im CI aktuell nicht verfuegbar; kein Caddy-Stack im CI.
+  Solange kein reales Artefakt und kein laufender Caddy im CI-Stack vorhanden sind, bleibt der HTTP-206-Beweis offen.
   Der gemockte Client-Test (`apps/web/tests/basemap-client-integration.spec.ts`) ist kein Ersatz.
 
 ## Essenz

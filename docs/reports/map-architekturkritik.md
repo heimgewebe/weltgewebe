@@ -129,18 +129,20 @@ explizit machen; erst danach lohnt groessere Strukturarbeit.
 Ein Guard-Script fuer den echten Basemap Runtime-Beweis wurde eingezogen:
 `scripts/guard/basemap-runtime-proof.sh`
 
-Dieses Script prueft:
+Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
 - Caddy-Endpoint erreichbar
 - Range-GET-Request liefert HTTP 206 (kein stiller 200 OK)
 - Accept-Ranges oder Content-Range-Header vorhanden
 - Unterscheidung zwischen PROVEN und NOT_PROVEN
 
-Dazugehoeriger CI-Job: `.github/workflows/basemap-runtime-proof.yml` (non-blocking,
-`continue-on-error: true`).
+Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml`
+(non-blocking, `continue-on-error: true`).
+Der Workflow startet **keinen** Caddy-Stack und baut **kein** PMTiles-Artefakt.
+Ohne beides meldet der Guard nur `NOT_PROVEN` — das ist der aktuelle CI-Status.
 
 **Bewertung:** Der Runtime-Beweis ist vorbereitet, aber noch nicht vollstaendig geschlossen.
-Im aktuellen CI-Stack ist kein echtes PMTiles-Artefakt verfuegbar; der Guard meldet
-`NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
+Im aktuellen CI-Stack fehlen sowohl das echte PMTiles-Artefakt als auch ein laufendes
+Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
 
 **Kein Ersatz fuer den Runtime-Beweis:**
 - `apps/web/tests/basemap-client-integration.spec.ts` ist ein gemockter Client-Test.

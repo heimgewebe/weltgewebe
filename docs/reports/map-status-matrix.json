@@ -93,7 +93,7 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Guard-Script vorhanden (scripts/guard/basemap-runtime-proof.sh); CI-Job non-blocking vorhanden. Echter CI-Nachweis fehlt, da kein PMTiles-Artefakt im CI verfuegbar.",
+      "ist": "Guard-Script vorhanden (scripts/guard/basemap-runtime-proof.sh); non-blocking Guard-Workflow vorhanden. Workflow startet keinen Caddy-Stack und baut kein PMTiles-Artefakt; ohne beides meldet der Guard nur NOT_PROVEN.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
@@ -101,6 +101,7 @@
       ],
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
+        "Laufender Caddy-Stack im CI",
         "HTTP-206-Beweis in CI-Lauf (PROVEN-Status des Guards)"
       ],
       "risk": "hoch",

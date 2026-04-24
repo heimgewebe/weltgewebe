@@ -1,30 +1,35 @@
 ---
-name: Basemap Runtime Proof (non-blocking)
+name: Basemap Runtime Proof — not-proven detector (non-blocking)
 
-# This workflow exercises the actual Caddy PMTiles Range delivery chain:
-#   curl → Caddy → PMTiles artefact → HTTP 206 Partial Content
+# This workflow is a NOT_PROVEN detector / proof guard dry-run.
+# It does NOT start a Caddy instance. It does NOT build or supply a PMTiles artefact.
+#
+# What this workflow does:
+#   Runs scripts/guard/basemap-runtime-proof.sh in skip mode.
+#   Without a live Caddy and a real PMTiles artefact, the guard exits with NOT_PROVEN.
+#   The job summary marks the result explicitly as NOT_PROVEN — never a false green.
+#
+# What this workflow does NOT do:
+#   - Does not start Docker / Caddy
+#   - Does not build a PMTiles artefact
+#   - Does not execute the actual HTTP 206 Range delivery chain
 #
 # Current CI status: NOT_PROVEN
-#   The PMTiles artefact is not committed to the repository and is not built
-#   as part of this workflow. Until a real artefact is available and Caddy is
-#   running, the "basemap-runtime-proof" job will report NOT_PROVEN.
+#   The guard infrastructure is ready. The proof chain requires a live Caddy stack
+#   serving a real PMTiles artefact. That is not provided in this workflow.
+#   This is intentional and epistemically correct.
 #
-# This is intentional and epistemically correct:
-#   - A mocked client test (basemap-client-integration.spec.ts) is NOT a
-#     runtime proof. It validates MapLibre protocol handling without a real
-#     HTTP backend.
-#   - A static config guard (caddy-basemap-route-guard.sh) is NOT a runtime
-#     proof. It validates Caddyfile structure without executing delivery.
-#   - Only this guard — with a live Caddy and a real artefact — constitutes
-#     proof of HTTP 206 Range delivery.
+# What is NOT a substitute for this proof:
+#   - A mocked client test (basemap-client-integration.spec.ts) validates MapLibre
+#     protocol handling without a real HTTP backend — not a runtime proof.
+#   - A static config guard (caddy-basemap-route-guard.sh) validates Caddyfile
+#     structure without executing delivery — not a runtime proof.
 #
-# To unlock a real proof, the following must hold:
-#   1. A PMTiles artefact is built and available at build/basemap/*.pmtiles
-#   2. A Caddy instance serves /local-basemap/ from that directory
-#   3. This guard returns PROVEN with HTTP 206 confirmed
-#
-# Until then: continue-on-error keeps CI green; the job summary marks the
-# result clearly as NOT_PROVEN, not as a false success.
+# To unlock a real proof:
+#   1. Build a PMTiles artefact and place it at build/basemap/*.pmtiles
+#   2. Start a Caddy instance serving /local-basemap/ from that directory
+#   3. Set BASEMAP_PROOF_MODE=require and re-run this guard
+#   4. Guard returns PROVEN — only then is Phase 6 closable
 
 "on":
   pull_request:

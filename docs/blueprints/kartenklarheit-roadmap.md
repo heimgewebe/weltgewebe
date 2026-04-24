@@ -192,8 +192,9 @@ Sondern:
   - Prueft: PMTiles-Artefakt vorhanden, Caddy erreichbar, Range-Request liefert HTTP 206,
     Accept-Ranges/Content-Range-Header vorhanden, kein stiller 200-OK.
   - Unterscheidet explizit zwischen PROVEN und NOT_PROVEN.
-- [x] CI-Job vorhanden: `.github/workflows/basemap-runtime-proof.yml`
-  - Non-blocking (`continue-on-error: true`); meldet NOT_PROVEN solange kein echtes Artefakt im CI.
+- [x] Non-blocking Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
+  - Laeuft ohne Artefakt und ohne Caddy; meldet `NOT_PROVEN` — kein falsches Gruen.
+  - Startet keinen Docker-Stack, baut kein PMTiles-Artefakt.
 - [ ] Echter CI-Nachweis: HTTP 206 gegen reales Caddy-Backend mit realem PMTiles-Byte-Stream.
   - **Offen:** PMTiles-Artefakt wird aktuell nicht im CI gebaut und steht dort nicht zur Verfuegung.
   - Solange kein echtes Artefakt im CI vorhanden ist, bleibt dieser Punkt offen.

@@ -42,6 +42,18 @@ BASEMAP_CADDY_URL="${BASEMAP_CADDY_URL:-http://localhost:8081}"
 BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
 BASEMAP_PROOF_MODE="${BASEMAP_PROOF_MODE:-require}"
 
+# Validate BASEMAP_PROOF_MODE
+if [[ "${BASEMAP_PROOF_MODE}" != "require" && "${BASEMAP_PROOF_MODE}" != "skip" ]]; then
+  printf 'ERROR: BASEMAP_PROOF_MODE must be "require" or "skip", got: %s\n' "${BASEMAP_PROOF_MODE}" >&2
+  exit 1
+fi
+
+# Validate BASEMAP_ENDPOINT_PATH starts with "/" if explicitly set
+if [[ -n "${BASEMAP_ENDPOINT_PATH:-}" && "${BASEMAP_ENDPOINT_PATH}" != /* ]]; then
+  printf 'ERROR: BASEMAP_ENDPOINT_PATH must start with "/", got: %s\n' "${BASEMAP_ENDPOINT_PATH}" >&2
+  exit 1
+fi
+
 # ---------------------------------------------------------------------------
 # Cleanup
 # ---------------------------------------------------------------------------
