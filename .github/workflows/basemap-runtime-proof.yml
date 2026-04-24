@@ -1,0 +1,122 @@
+---
+name: Basemap Runtime Proof — not-proven detector (non-blocking)
+
+# This workflow is a NOT_PROVEN detector / proof guard dry-run.
+# It does NOT start a Caddy instance. It does NOT build or supply a PMTiles artefact.
+#
+# What this workflow does:
+#   Runs scripts/guard/basemap-runtime-proof.sh in skip mode.
+#   Without a live Caddy and a real PMTiles artefact, the guard exits with NOT_PROVEN.
+#   The job summary marks the result explicitly as NOT_PROVEN — never a false green.
+#
+# What this workflow does NOT do:
+#   - Does not start Docker / Caddy
+#   - Does not build a PMTiles artefact
+#   - Does not execute the actual HTTP 206 Range delivery chain
+#
+# Current CI status: NOT_PROVEN
+#   The guard infrastructure is ready. The proof chain requires a live Caddy stack
+#   serving a real PMTiles artefact. That is not provided in this workflow.
+#   This is intentional and epistemically correct.
+#
+# What is NOT a substitute for this proof:
+#   - A mocked client test (basemap-client-integration.spec.ts) validates MapLibre
+#     protocol handling without a real HTTP backend — not a runtime proof.
+#   - A static config guard (caddy-basemap-route-guard.sh) validates Caddyfile
+#     structure without executing delivery — not a runtime proof.
+#
+# To unlock a real proof:
+#   1. Build a PMTiles artefact and place it at build/basemap/*.pmtiles
+#   2. Start a Caddy instance serving /local-basemap/ from that directory
+#   3. Set BASEMAP_PROOF_MODE=require and re-run this guard
+#   4. Guard returns PROVEN — only then is Phase 6 closable
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/caddy/**"
+      - "scripts/guard/basemap-runtime-proof.sh"
+      - ".github/workflows/basemap-runtime-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/caddy/**"
+      - "scripts/guard/basemap-runtime-proof.sh"
+      - ".github/workflows/basemap-runtime-proof.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  basemap-runtime-proof:
+    name: basemap-runtime-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Skip cleanly when no artefact is present; real script regressions still fail the job.
+      BASEMAP_PROOF_MODE: skip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check guard script is executable
+        run: test -x scripts/guard/basemap-runtime-proof.sh
+
+      - name: Run basemap runtime proof guard
+        id: proof
+        run: |
+          set -euo pipefail
+          scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/proof-output.txt
+          echo "guard_output<<EOF" >> "${GITHUB_OUTPUT}"
+          cat /tmp/proof-output.txt >> "${GITHUB_OUTPUT}"
+          echo "EOF" >> "${GITHUB_OUTPUT}"
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          OUTPUT_FILE="/tmp/proof-output.txt"
+
+          printf '## Basemap Runtime Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
+
+          if grep -q '^PROVEN:' "${OUTPUT_FILE}" 2>/dev/null; then
+            printf '%s\n\n' '✅ **PROVEN** — Caddy PMTiles HTTP 206 Range delivery confirmed' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'Real runtime proof: `curl` → Caddy → PMTiles → 206 Partial Content' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          elif grep -q '^NOT_PROVEN:' "${OUTPUT_FILE}" 2>/dev/null; then
+            printf '%s\n\n' '⚠️ **NOT_PROVEN** — PMTiles artefact not available in this CI run' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'This is expected: the artefact is not committed to the repo and not built here.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'The job stays non-blocking because skip mode returns exit 0 for NOT_PROVEN.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'Errors are not masked.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '**What is NOT a substitute for this proof:**' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '- `basemap-client-integration.spec.ts` — mocked client test only' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '- `caddy-basemap-route-guard.sh` — static config check only' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '**To close this gap:** build a PMTiles artefact, run Caddy, and re-run this guard.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '%s\n\n' '❌ **FAILED** — Guard exited with an unexpected error' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'See guard output above for details.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+          printf '\n<details><summary>Guard output</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${OUTPUT_FILE}" ]]; then
+            cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No guard output file was produced.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"

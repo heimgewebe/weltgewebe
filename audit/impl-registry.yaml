@@ -64,3 +64,15 @@ implementations:
       - docs/blueprints/map-blaupause.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
+
+  - id: impl.guard.basemap-runtime-proof
+    path: scripts/guard/basemap-runtime-proof.sh
+    impl_type: guard
+    status: active
+    documented_by:
+      - docs/blueprints/kartenklarheit-roadmap.md
+      - docs/blueprints/kartenklarheit-phase6.md
+      - docs/reports/map-status-matrix.md
+      - docs/reports/map-architekturkritik.md
+    verified_by:
+      - .github/workflows/basemap-runtime-proof.yml
