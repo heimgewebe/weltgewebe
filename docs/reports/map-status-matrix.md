@@ -55,6 +55,18 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Nachweis**: `apps/web/tests/map-smoke.spec.ts`, `apps/web/tests/map-marker-panel.spec.ts`
 - **Fehlend**: Tests fuer leere Daten, Fehlerzustaende, Basemap-Probleme und Offline-Verhalten.
 
+## 6. Runtime-Integration
+
+- **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
+- **Ist**: Guard-Script vorhanden (`scripts/guard/basemap-runtime-proof.sh`); prueft HTTP 206, Range-Header und
+  unterscheidet explizit zwischen PROVEN und NOT_PROVEN. CI-Job vorhanden
+  (`.github/workflows/basemap-runtime-proof.yml`), non-blocking.
+- **Status**: Teil
+- **Nachweis**: `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`
+- **Fehlend**: Echter CI-Nachweis; PMTiles-Artefakt ist im CI aktuell nicht verfuegbar.
+  Solange kein reales Artefakt im CI-Stack vorhanden ist, bleibt der HTTP-206-Beweis offen.
+  Der gemockte Client-Test (`apps/web/tests/basemap-client-integration.spec.ts`) ist kein Ersatz.
+
 ## Essenz
 
 Die Karte ist als Demo-Navigation mit Marker-Interaktion belegt. Nicht belegt

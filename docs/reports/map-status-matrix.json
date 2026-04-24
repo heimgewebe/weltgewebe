@@ -90,6 +90,28 @@
         "apps/web/tests/map-smoke.spec.ts",
         "apps/web/tests/map-marker-panel.spec.ts"
       ]
+    },
+    "runtime_integration": {
+      "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
+      "ist": "Guard-Script vorhanden (scripts/guard/basemap-runtime-proof.sh); CI-Job non-blocking vorhanden. Echter CI-Nachweis fehlt, da kein PMTiles-Artefakt im CI verfuegbar.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/blueprints/kartenklarheit-roadmap.md",
+        "docs/blueprints/kartenklarheit-phase6.md"
+      ],
+      "missing_evidence": [
+        "Echtes PMTiles-Artefakt im CI-Stack",
+        "HTTP-206-Beweis in CI-Lauf (PROVEN-Status des Guards)"
+      ],
+      "risk": "hoch",
+      "code_runtime_evidence": [
+        "scripts/guard/basemap-runtime-proof.sh",
+        ".github/workflows/basemap-runtime-proof.yml"
+      ],
+      "not_a_substitute": [
+        "apps/web/tests/basemap-client-integration.spec.ts (gemockter Client-Test, kein Runtime-Beweis)",
+        "scripts/guard/caddy-basemap-route-guard.sh (statischer Konfigurations-Check, kein Runtime-Beweis)"
+      ]
     }
   },
   "open_architectural_decisions": {

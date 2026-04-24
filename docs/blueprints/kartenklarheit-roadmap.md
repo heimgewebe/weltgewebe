@@ -146,12 +146,80 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 
 ---
 
+## Phase 5 — Souveraene Basemap-Infrastruktur einziehen
+
+### Ziel der Phase 5
+
+Die souveraene Basemap-Infrastruktur (PMTiles-Pipeline, Caddy-Route, Style-Souveraenitaet) ist operational verankert.
+
+### Arbeitspakete der Phase 5
+
+- [x] PMTiles-Pipeline und Build-Skripte vorhanden (`scripts/basemap/`).
+- [x] Caddy-Route `/local-basemap/*` in produktionsrelevanten Caddyfiles korrekt konfiguriert.
+- [x] Caddy-Route-Guard eingezogen (`scripts/guard/caddy-basemap-route-guard.sh`).
+- [x] Souveraenes `style.json` im `map-style`-Verzeichnis vorhanden.
+- [x] PMTiles-Protokoll im Frontend registriert; Frontend-Flag (`PUBLIC_BASEMAP_MODE`) vorhanden.
+
+### Stop-Kriterium der Phase 5
+
+- [x] Infrastruktur-Seite ist konfiguriert und statisch verifiziert.
+  Echter Runtime-Nachweis (HTTP 206 gegen reales Caddy-Backend) ist noch offen und Thema von Phase 6.
+
+---
+
+## Phase 6 — Wahrheitsbeweis: Basemap Runtime Proof
+
+### Ziel der Phase 6
+
+[~] **In Arbeit** — Vollstaendiger Nachweis ist erst erledigt, wenn HTTP-206-Beweis im CI vorliegt.
+
+Der vollstaendige Abschlussplan fuer Phase 6 ist in
+[`docs/blueprints/kartenklarheit-phase6.md`](kartenklarheit-phase6.md) definiert.
+
+### Was in Phase 6 bewiesen werden muss
+
+Nicht:
+- „style.json existiert"
+- „pmtiles gebaut"
+- „Playwright-Test gruenlich"
+
+Sondern:
+- Browser / curl → HTTP → Caddy → PMTiles-Byte-Stream → HTTP 206 Partial Content → Rendering
+
+### Arbeitspakete der Phase 6
+
+- [x] Basemap-Runtime-Proof-Guard vorhanden: `scripts/guard/basemap-runtime-proof.sh`
+  - Prueft: PMTiles-Artefakt vorhanden, Caddy erreichbar, Range-Request liefert HTTP 206,
+    Accept-Ranges/Content-Range-Header vorhanden, kein stiller 200-OK.
+  - Unterscheidet explizit zwischen PROVEN und NOT_PROVEN.
+- [x] CI-Job vorhanden: `.github/workflows/basemap-runtime-proof.yml`
+  - Non-blocking (`continue-on-error: true`); meldet NOT_PROVEN solange kein echtes Artefakt im CI.
+- [ ] Echter CI-Nachweis: HTTP 206 gegen reales Caddy-Backend mit realem PMTiles-Byte-Stream.
+  - **Offen:** PMTiles-Artefakt wird aktuell nicht im CI gebaut und steht dort nicht zur Verfuegung.
+  - Solange kein echtes Artefakt im CI vorhanden ist, bleibt dieser Punkt offen.
+- [ ] Visuelle Abnahme: Karte rendert ohne Fallback nach realem Tile-Load.
+
+### Abgrenzung: Was kein Ersatz fuer den Runtime-Beweis ist
+
+- `apps/web/tests/basemap-client-integration.spec.ts` ist ein **gemockter Client-Test**.
+  Er validiert MapLibre-Protokoll-Handling ohne echtes HTTP-Backend — kein Runtime-Beweis.
+- `scripts/guard/caddy-basemap-route-guard.sh` ist ein **statischer Konfigurations-Check**.
+  Er prueft Caddyfile-Struktur ohne reale Auslieferung — kein Runtime-Beweis.
+
+### Stop-Kriterium der Phase 6
+
+- [ ] Guard-Script liefert PROVEN (HTTP 206 bestaetigt) in einem reproduzierbaren CI-Lauf mit
+  echtem PMTiles-Artefakt und laufendem Caddy-Backend.
+
+---
+
 ## Minimalpfad
 
 - [x] Aktuellen Demo-Stand wahrheitsgetreu dokumentieren.
 - [ ] Datenquelle explizit machen.
 - [ ] Externe Basemap-Abhaengigkeit klar entscheiden.
 - [ ] Fehlerpfade testbar machen.
+- [~] Basemap-Runtime-Beweis: Guard vorhanden, echter CI-Nachweis noch offen.
 
 ---
 
@@ -161,3 +229,5 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 **Entscheidung:** Erst den realen Demo-Stand sauber beschreiben, dann Datenquelle, Zustand und Basemap schrittweise haerten.
 **Status:** Ausgangslage dokumentiert. Interaktion grob abgesichert.
 Datenmodell, Fehlerdomaene und Basemap-Strategie bleiben offen.
+Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job non-blocking vorhanden.
+Echter HTTP-206-Nachweis gegen reales Caddy-Backend steht noch aus.

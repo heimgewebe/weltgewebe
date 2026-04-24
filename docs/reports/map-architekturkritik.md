@@ -121,3 +121,33 @@ Erweiterung riskant.
 **Entscheidung:** Die aktuelle Karte ist ein brauchbarer MVP, aber noch keine ausformulierte Kartenarchitektur.
 **Naechster sinnvoller Schritt:** Erst Datenquelle und Basemap-Strategie
 explizit machen; erst danach lohnt groessere Strukturarbeit.
+
+---
+
+## Nachtrag: Basemap Runtime-Beweis vorbereitet, aber nicht vollstaendig geschlossen
+
+Ein Guard-Script fuer den echten Basemap Runtime-Beweis wurde eingezogen:
+`scripts/guard/basemap-runtime-proof.sh`
+
+Dieses Script prueft:
+- Caddy-Endpoint erreichbar
+- Range-GET-Request liefert HTTP 206 (kein stiller 200 OK)
+- Accept-Ranges oder Content-Range-Header vorhanden
+- Unterscheidung zwischen PROVEN und NOT_PROVEN
+
+Dazugehoeriger CI-Job: `.github/workflows/basemap-runtime-proof.yml` (non-blocking,
+`continue-on-error: true`).
+
+**Bewertung:** Der Runtime-Beweis ist vorbereitet, aber noch nicht vollstaendig geschlossen.
+Im aktuellen CI-Stack ist kein echtes PMTiles-Artefakt verfuegbar; der Guard meldet
+`NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
+
+**Kein Ersatz fuer den Runtime-Beweis:**
+- `apps/web/tests/basemap-client-integration.spec.ts` ist ein gemockter Client-Test.
+  Er beweist MapLibre-Protokoll-Handling, nicht echte HTTP-Auslieferung.
+- `scripts/guard/caddy-basemap-route-guard.sh` ist ein statischer Konfigurations-Check.
+  Er beweist Caddyfile-Struktur, nicht reale Delivery.
+
+**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) und Achse D (Runtime vs. Tests)
+bleiben offen. Phase 6 wird erst geschlossen, wenn der Guard PROVEN meldet — mit echtem
+Artefakt, laufendem Caddy und belegbarem HTTP-206-Nachweis im CI.
