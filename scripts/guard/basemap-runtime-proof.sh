@@ -107,19 +107,7 @@ fi
 FULL_URL="${BASEMAP_CADDY_URL}${ENDPOINT_PATH}"
 
 # ---------------------------------------------------------------------------
-# Step 2: Check Caddy reachability
-# ---------------------------------------------------------------------------
-
-printf 'Checking Caddy reachability at %s ...\n' "${BASEMAP_CADDY_URL}"
-if ! curl --silent --fail --max-time 5 --output /dev/null --head "${BASEMAP_CADDY_URL}" 2>/dev/null; then
-  printf 'ERROR: Caddy endpoint %s is not reachable\n' "${BASEMAP_CADDY_URL}" >&2
-  printf 'Ensure Caddy is running before invoking this guard.\n' >&2
-  exit 1
-fi
-printf 'Caddy is reachable at %s\n' "${BASEMAP_CADDY_URL}"
-
-# ---------------------------------------------------------------------------
-# Step 3: Issue GET Range request — capture HTTP status code and response headers
+# Step 2: Issue GET Range request — capture HTTP status code and response headers
 # ---------------------------------------------------------------------------
 
 printf 'Issuing Range GET request: %s (Range: bytes=0-511)\n' "${FULL_URL}"
@@ -140,7 +128,7 @@ HTTP_STATUS="$(
 }
 
 # ---------------------------------------------------------------------------
-# Step 4: Validate HTTP 206 — reject silent 200 OK on Range requests
+# Step 3: Validate HTTP 206 — reject silent 200 OK on Range requests
 # ---------------------------------------------------------------------------
 
 if [[ "${HTTP_STATUS}" == "200" ]]; then
@@ -162,7 +150,7 @@ fi
 printf 'HTTP status: %s (206 Partial Content confirmed)\n' "${HTTP_STATUS}"
 
 # ---------------------------------------------------------------------------
-# Step 5: Verify Accept-Ranges or Content-Range header is present
+# Step 4: Verify Accept-Ranges or Content-Range header is present
 # ---------------------------------------------------------------------------
 
 HAS_ACCEPT_RANGES=0

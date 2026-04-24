@@ -24,7 +24,7 @@ Kartenimplementierung weiterentwickelt werden.
 - [x] Kartenroute ist als Loader-/UI-Paar vorhanden (`apps/web/src/routes/map/+page.ts`, `apps/web/src/routes/map/+page.svelte`).
 - [x] Kartendaten werden in `+page.ts` aus `/api/nodes`, `/api/accounts` und `/api/edges` geladen; `loadState` und `resourceStatus` werden explizit zur UI durchgereicht.
 - [x] `buildMapScene(...)` transformiert Route-Daten in ein explizites Kartenmodell (`apps/web/src/lib/map/scene.ts`).
-- [x] Marker-Interaktion und Context Panel sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
+- [x] Marker-Interaktion und Kontextbereich sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
 - [x] Degradierte Ladezustaende sind durch `apps/web/tests/map-load-fallback.spec.ts` belegt.
 - [x] Basemap-Modus ist explizit: lokal/test standardmaessig `local-sovereign`, Produktion standardmaessig `remote-style`, optional via `PUBLIC_BASEMAP_MODE` ueberschreibbar.
 
@@ -141,7 +141,7 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 
 ### Arbeitspakete der Phase 4
 
-- [x] Kerninteraktion und Context Panel pruefen (`map-interaction.spec.ts`).
+- [x] Kerninteraktion und Kontextbereich pruefen (`map-interaction.spec.ts`).
 - [x] Fehler-, Leere- und Ladezustaende absichern (`map-load-fallback.spec.ts`).
 - [x] Basemap-Verhalten separat absichern (`basemap.spec.ts`, `basemap-client-integration.spec.ts`, `basemap-sovereignty-testbuild.spec.ts`).
 - [ ] Tastatur- und Query-Parameter-Navigation gezielt absichern.

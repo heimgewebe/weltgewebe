@@ -41,7 +41,7 @@ heute vorliegt. Massgeblich sind dabei vor allem
 
 - `apps/web/src/routes/map/+page.ts` liefert einen expliziten Loader-Contract mit `loadState` und `resourceStatus`.
 - `apps/web/src/lib/map/scene.ts` ist der zentrale Transformationspunkt zwischen Loader und Rendering.
-- Marker-Interaktion, Context Panel und Escape-/Karteninteraktionen sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
+- Marker-Interaktion, Kontextbereich und Escape-/Karteninteraktionen sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
 - Partielle und komplette API-Fehlerzustaende sind durch `apps/web/tests/map-load-fallback.spec.ts` belegt.
 - Der clientseitige lokale Basemap-Pfad ist durch `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts` und `apps/web/tests/basemap-sovereignty-testbuild.spec.ts` belegt.
 - URL-Parameter fuer Drawer-Zustaende (`l`, `r`, `t`) sind in der Route
@@ -141,7 +141,7 @@ Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
 - Unterscheidung zwischen PROVEN und NOT_PROVEN
 
 Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml`
-(non-blocking, `continue-on-error: true`).
+(non-blocking ueber `BASEMAP_PROOF_MODE=skip`, nicht ueber Fehler-Maskierung).
 Der Workflow startet **keinen** Caddy-Stack und baut **kein** PMTiles-Artefakt.
 Ohne beides meldet der Guard nur `NOT_PROVEN` — das ist der aktuelle CI-Status.
 

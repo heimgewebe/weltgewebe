@@ -34,7 +34,7 @@
     },
     "interaktion_und_panel": {
       "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich",
-      "ist": "Marker-Klick setzt die Auswahl, oeffnet das Context Panel und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt.",
+      "ist": "Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt.",
       "status": "Erledigt",
       "documentation_evidence": [
         "docs/reports/map-architekturkritik.md"

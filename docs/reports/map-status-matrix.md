@@ -25,7 +25,7 @@ Repo-Stand tatsaechlich vorhanden sind.
 ## 2. Interaktion und Panel
 
 - **Soll**: Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich.
-- **Ist**: Marker-Click setzt die Auswahl, oeffnet das Context Panel und laesst sich per Escape bzw. Karteninteraktion wieder schliessen.
+- **Ist**: Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen.
 - **Status**: Erledigt
 - **Nachweis**: `apps/web/tests/map-interaction.spec.ts`
 

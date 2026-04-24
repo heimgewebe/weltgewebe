@@ -58,11 +58,8 @@ jobs:
     name: basemap-runtime-proof
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Non-blocking: the PMTiles artefact is not available in standard CI.
-    # The guard will report NOT_PROVEN (exit 0 in skip mode), never a false green.
-    continue-on-error: true
     env:
-      # Skip cleanly when no artefact is present; never claim false success.
+      # Skip cleanly when no artefact is present; real script regressions still fail the job.
       BASEMAP_PROOF_MODE: skip
     steps:
       - uses: actions/checkout@v4
@@ -96,6 +93,10 @@ jobs:
             printf '%s\n\n' '⚠️ **NOT_PROVEN** — PMTiles artefact not available in this CI run' \
               >> "${GITHUB_STEP_SUMMARY}"
             printf '%s\n\n' 'This is expected: the artefact is not committed to the repo and not built here.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'The job stays non-blocking because skip mode returns exit 0 for NOT_PROVEN.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'Errors are not masked.' \
               >> "${GITHUB_STEP_SUMMARY}"
             printf '%s\n' '**What is NOT a substitute for this proof:**' \
               >> "${GITHUB_STEP_SUMMARY}"
