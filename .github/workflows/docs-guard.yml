@@ -91,7 +91,8 @@ jobs:
         run: |
           set -euo pipefail
           if grep -q '^Generated drift detected' generated-drift-report.txt; then
-            echo "::warning title=Generated diagnostics drift::docs/_generated drift detected. See generated-diagnostics artifact."
+            msg="docs/_generated drift detected. See generated-diagnostics artifact."
+            echo "::warning title=Generated diagnostics drift::$msg"
           fi
 
       - name: upload-generated-diagnostics
