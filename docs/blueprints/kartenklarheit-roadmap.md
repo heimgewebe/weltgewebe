@@ -321,4 +321,4 @@ Die Roadmap ist erfüllt, wenn:
 
 **Hebel:** Laufzeitwahrheit → Szenenmodell → Typenhärtung.
 **Entscheidung:** Erst explizit machen, dann aufräumen.
-**Status:** Phasen 1–6 umgesetzt. 39/39 Unit-Tests + 22 Playwright-Browser-Tests grün (lokaler Testlauf 2026-04-23, Chromium). Dokumentation aktualisiert. Einzig ausstehend: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream.
+**Status:** Phasen 1–6 implementiert. Ein Infrastrukturpunkt offen: Caddy+PMTiles-E2E-Nachweis mit echtem Byte-Stream (erfordert vollständigen Docker-Stack, kein CI-Blocker). 39/39 Unit-Tests + 22 Playwright-Browser-Tests grün (lokaler Testlauf 2026-04-23, Chromium). Dokumentation aktualisiert.

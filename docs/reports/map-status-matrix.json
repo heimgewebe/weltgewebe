@@ -40,7 +40,7 @@
     },
     "runtime_integration": {
       "soll": "MapLibre nutzt PMTiles-Artefakt via Caddy ohne externe CDN-Calls",
-      "ist": "Client-Verhalten ist belegt (Frontend parst PMTiles-Protokoll und sendet Range-Header im Mock). Route-Contract ist belegt (Caddy-Route existiert in Caddyfile/Caddyfile.heim und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.",
+      "ist": "Client-Verhalten ist belegt: Frontend parst PMTiles-Protokoll und sendet Range-Header (E2E-verifiziert 2026-04-23, 1/1 grün — gegen Mock-Server, nicht echtes Caddy-Backend). Route-Contract ist belegt (Caddy-Route existiert in Caddyfile/Caddyfile.heim und wird per Guard validiert). Der echte E2E-Nachweis gegen das physische Artefakt (HTTP 206 Byte-Stream) bleibt im CI offen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/map-roadmap.md",
