@@ -162,9 +162,10 @@ CI-Gates (brechen Builds):
 - Tests (npm test, cargo test).
 - Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
 
-Generated files are derived diagnostics. They are not required for commit validity. CI regenerates selected diagnostics for observability, and generated drift is reported as non-blocking diagnostics.
+Generierte Dateien sind abgeleitete Diagnoseartefakte. Sie sind nicht erforderlich für die Commit-Validität. CI regeneriert ausgewählte Diagnosen für die Beobachtbarkeit, und Drift in generierten Dateien wird nicht-blockierend berichtet.
 
-Blocking docs validation is deterministic between local and CI via `make ci-validate` (alias to `make validate`).
+Blockierende Docs-Validierung ist zwischen lokal und CI deterministisch über `make ci-validate` (Alias zu `make validate`).
+Bei gemeldetem Drift in den Diagnoseartefakten soll der Drift zeitnah behoben oder bewusst dokumentiert werden.
 
 ### Domain-Contracts lokal validieren
 
