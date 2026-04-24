@@ -162,6 +162,8 @@ CI-Gates (brechen Builds):
 - Tests (npm test, cargo test).
 - Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
 
+Generated files are derived diagnostics. They are not required for commit validity. CI regenerates selected diagnostics for observability, and generated drift is reported as non-blocking diagnostics.
+
 ### Domain-Contracts lokal validieren
 
 Um die JSON-Schemas und Beispiele unter `contracts/domain/` lokal zu prüfen und sicherzustellen, dass sie

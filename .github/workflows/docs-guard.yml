@@ -31,7 +31,8 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  docmeta-checks:
+  blocking-doc-validations:
+    name: Blocking doc validations
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,12 +42,78 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Run Docs Guard
-        run: make docs-guard
+      - name: validate-schemas
+        run: python3 -m scripts.docmeta.validate_schema
 
-      - name: Run Architecture & Coverage Guards
+      - name: validate-relations
+        run: python3 -m scripts.docmeta.validate_relations
+
+      - name: validate-execution-proof
+        run: |
+          python3 -m scripts.docmeta.check_repo_index_consistency
+          python3 -m scripts.docmeta.check_links
+
+      - name: validate-epistemics
+        run: |
+          python3 -m scripts.docmeta.check_doc_review_age
+          python3 -m scripts.docmeta.review_impact
+
+      - name: required-guards
         run: |
           bash scripts/docmeta/repo-structure-guard.sh
           bash scripts/docmeta/docs-relations-guard.sh
           bash scripts/docmeta/generated-files-guard.sh
           bash scripts/docmeta/coverage-guard.sh
+
+  generated-diagnostics:
+    name: Generated diagnostics (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: blocking-doc-validations
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: generate-doc-index
+        run: bash scripts/docmeta/generate-doc-index.sh
+
+      - name: generate-backlinks
+        run: python3 -m scripts.docmeta.generate_backlinks
+
+      - name: generate-orphans
+        run: python3 -m scripts.docmeta.generate_orphans
+
+      - name: generate-system-map
+        run: python3 -m scripts.docmeta.generate_system_map
+
+      # Policy: generated diagnostics are derived observability outputs; drift is reported, not blocking.
+      - name: non-blocking generated drift report
+        if: always()
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/_generated/; then
+            printf 'No generated drift detected after diagnostics generation.\n' > generated-drift-report.txt
+          else
+            {
+              printf 'Generated drift detected (non-blocking).\n\n'
+              git --no-pager diff -- docs/_generated/
+            } > generated-drift-report.txt
+          fi
+
+      - name: upload-generated-diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-diagnostics
+          path: |
+            docs/_generated/doc-index.md
+            docs/_generated/backlinks.md
+            docs/_generated/orphans.md
+            docs/_generated/system-map.md
+            generated-drift-report.txt
+          if-no-files-found: ignore

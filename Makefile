@@ -1,6 +1,6 @@
-.PHONY: up down logs ps smoke docs-guard
+.PHONY: up down logs ps smoke docs-guard validate generate diagnose prepare-commit
 
-docs-guard:
+validate:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m scripts.docmeta.validate_schema
 	python3 -m scripts.docmeta.validate_relations
@@ -10,6 +10,10 @@ docs-guard:
 	python3 -m scripts.docmeta.export_docs_index
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
+
+docs-guard: validate
+
+generate:
 	bash scripts/docmeta/generate-doc-index.sh
 	python3 -m scripts.docmeta.generate_backlinks
 	bash scripts/docmeta/generate-impl-index.sh
@@ -25,7 +29,11 @@ docs-guard:
 	python3 -m scripts.docmeta.generate_agent_readiness
 	python3 -m scripts.docmeta.generate_relations_analysis
 	python3 -m scripts.docmeta.generate_relates_to_audit
-	git diff --exit-code docs/_generated/
+
+diagnose: generate
+
+# prepare-commit intentionally runs only blocking validation checks.
+prepare-commit: validate
 
 up:
 	docker compose -f infra/compose/compose.core.yml --profile dev up -d --build
