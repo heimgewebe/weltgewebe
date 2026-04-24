@@ -165,7 +165,7 @@ CI-Gates (brechen Builds):
 Generierte Dateien sind abgeleitete Diagnoseartefakte. Sie sind nicht erforderlich für die Commit-Validität. CI regeneriert ausgewählte Diagnosen für die Beobachtbarkeit, und Drift in generierten Dateien wird nicht-blockierend berichtet.
 
 Blockierende Docs-Validierung ist zwischen lokal und CI deterministisch über `make ci-validate` (Alias zu `make validate`).
-Bei gemeldetem Drift in den Diagnoseartefakten soll der Drift zeitnah behoben oder bewusst dokumentiert werden.
+Bei gemeldetem Drift in den Diagnoseartefakten soll der Drift zeitnah behoben oder bewusst dokumentiert werden. CI macht den Drift zusätzlich über Warning-Hinweise und Artefakt-Upload sichtbar.
 
 ### Domain-Contracts lokal validieren
 
