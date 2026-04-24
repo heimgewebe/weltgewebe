@@ -114,5 +114,9 @@ jobs:
           fi
 
           printf '\n<details><summary>Guard output</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
-          cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${OUTPUT_FILE}" ]]; then
+            cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No guard output file was produced.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
           printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
