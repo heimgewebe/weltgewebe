@@ -88,18 +88,28 @@ jobs:
           printf '## Basemap Runtime Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
 
           if grep -q '^PROVEN:' "${OUTPUT_FILE}" 2>/dev/null; then
-            printf '✅ **PROVEN** — Caddy PMTiles HTTP 206 Range delivery confirmed\n\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf 'Real runtime proof: `curl` → Caddy → PMTiles → 206 Partial Content\n' >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '✅ **PROVEN** — Caddy PMTiles HTTP 206 Range delivery confirmed' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'Real runtime proof: `curl` → Caddy → PMTiles → 206 Partial Content' \
+              >> "${GITHUB_STEP_SUMMARY}"
           elif grep -q '^NOT_PROVEN:' "${OUTPUT_FILE}" 2>/dev/null; then
-            printf '⚠️ **NOT_PROVEN** — PMTiles artefact not available in this CI run\n\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf 'This is expected: the artefact is not committed to the repo and not built here.\n\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf '**What is NOT a substitute for this proof:**\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf '- `basemap-client-integration.spec.ts` — mocked client test only\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf '- `caddy-basemap-route-guard.sh` — static config check only\n\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf '**To close this gap:** build a PMTiles artefact, run Caddy, and re-run this guard.\n' >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '⚠️ **NOT_PROVEN** — PMTiles artefact not available in this CI run' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'This is expected: the artefact is not committed to the repo and not built here.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '**What is NOT a substitute for this proof:**' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '- `basemap-client-integration.spec.ts` — mocked client test only' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '- `caddy-basemap-route-guard.sh` — static config check only' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' '**To close this gap:** build a PMTiles artefact, run Caddy, and re-run this guard.' \
+              >> "${GITHUB_STEP_SUMMARY}"
           else
-            printf '❌ **FAILED** — Guard exited with an unexpected error\n\n' >> "${GITHUB_STEP_SUMMARY}"
-            printf 'See guard output above for details.\n' >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '❌ **FAILED** — Guard exited with an unexpected error' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n' 'See guard output above for details.' \
+              >> "${GITHUB_STEP_SUMMARY}"
           fi
 
           printf '\n<details><summary>Guard output</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
