@@ -13,22 +13,25 @@ relations:
 
 Dieses Dokument bewertet die aktuelle Kartenimplementierung so, wie sie im Repo
 heute vorliegt. Massgeblich sind dabei vor allem
-`apps/web/src/routes/map/+page.svelte`,
-`apps/web/src/lib/data/dummy.json`, `apps/web/tests/map-smoke.spec.ts`,
-`apps/web/tests/map-marker-panel.spec.ts` und `infra/caddy/Caddyfile`.
+`apps/web/src/routes/map/+page.ts`, `apps/web/src/routes/map/+page.svelte`,
+`apps/web/src/lib/map/scene.ts`, `apps/web/src/lib/map/config/basemap.current.ts`,
+`apps/web/src/lib/map/basemap.ts`, `apps/web/tests/map-interaction.spec.ts`,
+`apps/web/tests/map-load-fallback.spec.ts`,
+`apps/web/tests/basemap-client-integration.spec.ts`,
+`apps/web/tests/basemap-sovereignty-testbuild.spec.ts` und `infra/caddy/Caddyfile`.
 
 ## 1. Dialektik
 
-- **These:** Die Kartenroute ist fuer einen Demo- und Interaktionsstand
-  brauchbar. Marker werden gerendert, das rechte Panel reagiert auf Auswahl,
-  und die Kerninteraktion ist durch Browser-Tests abgesichert.
-- **Antithese:** Die Implementierung verdrahtet Demo-Daten,
-  Karteninitialisierung, Markererzeugung, Drawer-Orchestrierung und
-  Query-Parameter-Verhalten in einer einzelnen Routendatei. Damit fehlen
-  belastbare Grenzen fuer Datenquelle, Fehlerzustand und Basemap-Strategie.
-- **Synthese:** Der Stand ist als MVP tragfaehig, aber nicht als geklaerte
-  Kartenarchitektur. Die naechsten Schritte muessen weniger auf kosmetische
-  Extraktion als auf explizite Daten- und Betriebsvertraege zielen.
+- **These:** Die Kartenroute besitzt inzwischen einen expliziten Loader-Contract,
+  ein Szenenmodell, degradierte Ladezustaende und belastbare Browser-Tests fuer
+  Interaktion und Fehlerpfade.
+- **Antithese:** Die Produktionswahrheit der Basemap bleibt hybrid und der
+  echte Live-Nachweis gegen Caddy plus PMTiles-Artefakt ist noch offen. Zudem
+  bleibt `+page.svelte` ein starker Orchestrator fuer mehrere Verantwortlichkeiten.
+- **Synthese:** Der Stand ist deutlich weiter als ein Demo-MVP, aber noch keine
+  vollstaendig geschlossene Kartenarchitektur. Die offenen Fragen liegen heute
+  weniger im Datenvertrag als in Produktionsmodus, Artefaktverfuegbarkeit und
+  Runtime-Beweis.
 
 ## 2. Diagnose
 
@@ -36,8 +39,11 @@ heute vorliegt. Massgeblich sind dabei vor allem
 
 ### Belegte Staerken
 
-- Marker-Interaktion ist vorhanden und durch `apps/web/tests/map-marker-panel.spec.ts` belegt.
-- Die Route `/map` wird im Browser geladen und zeigt die erwarteten Grundelemente; belegt durch `apps/web/tests/map-smoke.spec.ts`.
+- `apps/web/src/routes/map/+page.ts` liefert einen expliziten Loader-Contract mit `loadState` und `resourceStatus`.
+- `apps/web/src/lib/map/scene.ts` ist der zentrale Transformationspunkt zwischen Loader und Rendering.
+- Marker-Interaktion, Context Panel und Escape-/Karteninteraktionen sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
+- Partielle und komplette API-Fehlerzustaende sind durch `apps/web/tests/map-load-fallback.spec.ts` belegt.
+- Der clientseitige lokale Basemap-Pfad ist durch `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts` und `apps/web/tests/basemap-sovereignty-testbuild.spec.ts` belegt.
 - URL-Parameter fuer Drawer-Zustaende (`l`, `r`, `t`) sind in der Route
   explizit implementiert statt rein implizit im DOM versteckt.
 
@@ -46,18 +52,20 @@ heute vorliegt. Massgeblich sind dabei vor allem
 - **Zentrale Orchestrierung in einer Datei:**
   `apps/web/src/routes/map/+page.svelte` bundelt Datenimport, lokalen Typ,
   Kartenaufbau, Marker-Lifecycle, Tastatursteuerung und Drawer-Zustand.
-- **Direkt verdrahtete Datenquelle:** Die Karte importiert
-  `apps/web/src/lib/data/dummy.json` unmittelbar. Es gibt keinen expliziten
-  Loader-, API- oder Fehlervertrag.
-- **Lokaler statt wiederverwendbarer Datencontract:** `MapPoint` ist aktuell
-  ein lokaler Typ in `+page.svelte`, nicht ein benannter Contract mit klarer
-  Verantwortlichkeit.
+- **Hybridmodus statt geschlossener Basemap-Wahrheit:**
+  `currentBasemap` schaltet lokal/test standardmaessig auf `local-sovereign`,
+  Produktion aber standardmaessig auf `remote-style`. Diese Hybridentscheidung
+  ist technisch explizit, aber noch nicht architektonisch geschlossen.
+- **Kompatibilitaetsalias statt vollstaendig bereinigtem Contract:** `MapPoint`
+  existiert in `apps/web/src/lib/map/types.ts` nur noch als Deprecated-Alias;
+  die Route arbeitet bereits auf `MapEntityViewModel`, aber die Typmigration
+  ist noch nicht vollstaendig bereinigt.
 - **Externe Basemap-Abhaengigkeit:** Die Route initialisiert MapLibre mit
-  `https://demotiles.maplibre.org/style.json`. Damit ist die Basemap derzeit
-  weder repo-souveraen noch durch Caddy im Projekt kontrolliert.
-- **Testabdeckung fokussiert nur den Glueckspfad:** Vorhanden sind Smoke- und
-  Marker-Panel-Tests; nicht belegt sind Fehlerfaelle, leere Daten,
-  Basemap-Ausfall oder Offline-Verhalten.
+  einer produktionsseitigen `remote-style`-Fallback-Konfiguration, solange
+  `PUBLIC_BASEMAP_MODE` nicht explizit auf `local-sovereign` gesetzt wird.
+- **Artefaktverfuegbarkeit bleibt unbelegt:** Infrastruktur und Guard fuer
+  `/local-basemap/` sind vorhanden, aber ein reproduzierbarer CI-Nachweis mit
+  echtem PMTiles-Artefakt und laufendem Caddy-Stack fehlt.
 
 ## 3. Kontrastpruefung
 
@@ -76,51 +84,47 @@ Architektur zu behaupten.
 
 ### Achse A - Truth Model
 
-Die groesste Schwaeche ist derzeit nicht fehlende Abstraktion, sondern
-fehlende Klarheit ueber den Wahrheitsort der Kartendaten. Solange `dummy.json`
-direkt in der Route importiert wird, existiert kein belastbarer Unterschied
-zwischen Demo-Stand, Entwicklungsquelle und spaeterem Runtime-Modell.
+Die groesste Schwaeche liegt nicht mehr im Loader-Contract, sondern in der
+Produktionswahrheit der Basemap. Datenquelle, `loadState` und Szene sind heute
+explizit; offen bleibt, wann `local-sovereign` in Produktion verbindlich ist
+und wie der Live-Runtime-Beweis systemisch erzwungen wird.
 
 ### Achse B - Contracts
 
-`MapPoint` ist lokal definiert und nicht als repo-weiter Kartencontract
-beschrieben. Damit bleibt offen, ob Marker semantisch nur Demo-Objekte oder
-schon ein fachlicher Datentyp sind.
+`MapEntityViewModel` und `MapSceneModel` sind heute benannte Kartencontracts.
+Offen bleibt die Bereinigung des Deprecated-Alias `MapPoint`, nicht der
+grundsaetzliche Kartenvertrag.
 
 ### Achse C - Betriebsmodi
 
-Die Basemap nutzt derzeit einen externen Demo-Style. Gleichzeitig erlaubt die
-aktuelle CSP in `infra/caddy/Caddyfile` keine expliziten externen Tile-Hosts
-in `img-src`. Das ist kein unmittelbarer Laufzeitbeweis fuer einen Fehler,
-aber ein klarer Hinweis darauf, dass Basemap-Strategie und
-Infrastruktur-Dokumentation noch nicht sauber zusammenlaufen.
+Die Basemap-Modi sind technisch klar getrennt: `local-sovereign` fuer dev/test,
+`remote-style` als Produktionsdefault. Offen ist nicht die Implementierung,
+sondern die Entscheidung, welcher Modus produktiv als Wahrheit gelten soll.
 
 ### Achse D - Runtime vs. Tests
 
-Die vorhandenen Tests belegen erfolgreiche Darstellung und Marker-Auswahl. Sie
-belegen nicht, wie sich die Karte bei fehlenden Daten, langsamer Datenquelle
-oder Basemap-Ausfall verhaelt.
+Die vorhandenen Tests belegen Interaktion, degradierte API-Zustaende,
+Basemap-Modi und den clientseitigen lokalen PMTiles-Pfad. Nicht belegt ist
+der echte Live-Pfad `curl/browser -> Caddy -> PMTiles-Artefakt -> HTTP 206`.
 
 ### Achse E - Komplexitaet
 
-Die Route ist mit aktuell rund 450 Zeilen noch kein unrettbares Gottobjekt,
-aber bereits der zentrale Sammelpunkt fuer mehrere Verantwortlichkeiten. Ohne
-explizite Entkopplung von Datenquelle und Kartenzustand ist weitere
-Erweiterung riskant.
+Die Route ist trotz Loader- und Szenenextraktion weiterhin ein starker
+Orchestrator. Weitere Erweiterungen bleiben riskant, wenn Runtime-Beweis,
+Basemap-Modus und Interaktionslogik weiter in derselben Schicht zusammenlaufen.
 
 ## 5. Folgepfad
 
-1. **Datenvertrag explizit machen:** Datenquelle aus `+page.svelte` loesen und Lade-/Fehlerzustaende definieren.
-2. **Basemap-Entscheidung treffen:** Externe Demo-Basemap bewusst dokumentieren oder auf repo-kontrollierte Assets umstellen.
-3. **Kartencontract benennen:** `MapPoint` oder Nachfolger aus der Route loesen und als klaren Contract beschreiben.
-4. **Regressionen verbreitern:** Tests fuer Fehlerpfade, Query-Parameter-Navigation und Basemap-Verhalten nachziehen.
+1. **Live-Runtime-Beweis schliessen:** Caddy plus PMTiles-Artefakt im CI bereitstellen und den HTTP-206-Nachweis erzwingen.
+2. **Produktionsmodus entscheiden:** `remote-style` als bewusstes Produktionsfallback behalten oder `local-sovereign` verbindlich machen.
+3. **Contract-Bereinigung abschliessen:** Deprecated-Alias `MapPoint` entfernen, sobald keine Consumer mehr existieren.
+4. **Regressionen verbreitern:** Query-Parameter-Navigation und visuelle Abnahme gezielt nachziehen.
 
 ## 6. Essenz
 
 **Hebel:** Wahrheit vor Komplexitaet.
-**Entscheidung:** Die aktuelle Karte ist ein brauchbarer MVP, aber noch keine ausformulierte Kartenarchitektur.
-**Naechster sinnvoller Schritt:** Erst Datenquelle und Basemap-Strategie
-explizit machen; erst danach lohnt groessere Strukturarbeit.
+**Entscheidung:** Die aktuelle Karte ist kein blosser Demo-Stand mehr, aber die Produktionswahrheit der Basemap ist noch nicht geschlossen.
+**Naechster sinnvoller Schritt:** Runtime-Beweis und Produktionsmodus der Basemap explizit entscheiden; erst danach lohnt groessere Strukturarbeit.
 
 ---
 
@@ -130,6 +134,7 @@ Ein Guard-Script fuer den echten Basemap Runtime-Beweis wurde eingezogen:
 `scripts/guard/basemap-runtime-proof.sh`
 
 Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
+
 - Caddy-Endpoint erreichbar
 - Range-GET-Request liefert HTTP 206 (kein stiller 200 OK)
 - Accept-Ranges oder Content-Range-Header vorhanden
@@ -145,6 +150,7 @@ Im aktuellen CI-Stack fehlen sowohl das echte PMTiles-Artefakt als auch ein lauf
 Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
 
 **Kein Ersatz fuer den Runtime-Beweis:**
+
 - `apps/web/tests/basemap-client-integration.spec.ts` ist ein gemockter Client-Test.
   Er beweist MapLibre-Protokoll-Handling, nicht echte HTTP-Auslieferung.
 - `scripts/guard/caddy-basemap-route-guard.sh` ist ein statischer Konfigurations-Check.

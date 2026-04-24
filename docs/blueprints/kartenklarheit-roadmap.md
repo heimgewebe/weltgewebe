@@ -21,11 +21,12 @@ Kartenimplementierung weiterentwickelt werden.
 
 ## Gesicherte Ausgangslage
 
-- [x] Kartenroute existiert in `apps/web/src/routes/map/+page.svelte`.
-- [x] Kartendaten kommen aktuell direkt aus `apps/web/src/lib/data/dummy.json`.
-- [x] Marker-Interaktion oeffnet das rechte Panel; dieser Ablauf ist durch `apps/web/tests/map-marker-panel.spec.ts` belegt.
-- [x] Grundlegende Sichtbarkeit der Kartenroute ist durch `apps/web/tests/map-smoke.spec.ts` belegt.
-- [x] Die Basemap verwendet derzeit einen externen Style (`https://demotiles.maplibre.org/style.json`).
+- [x] Kartenroute ist als Loader-/UI-Paar vorhanden (`apps/web/src/routes/map/+page.ts`, `apps/web/src/routes/map/+page.svelte`).
+- [x] Kartendaten werden in `+page.ts` aus `/api/nodes`, `/api/accounts` und `/api/edges` geladen; `loadState` und `resourceStatus` werden explizit zur UI durchgereicht.
+- [x] `buildMapScene(...)` transformiert Route-Daten in ein explizites Kartenmodell (`apps/web/src/lib/map/scene.ts`).
+- [x] Marker-Interaktion und Context Panel sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
+- [x] Degradierte Ladezustaende sind durch `apps/web/tests/map-load-fallback.spec.ts` belegt.
+- [x] Basemap-Modus ist explizit: lokal/test standardmaessig `local-sovereign`, Produktion standardmaessig `remote-style`, optional via `PUBLIC_BASEMAP_MODE` ueberschreibbar.
 
 ---
 
@@ -39,17 +40,23 @@ gegen einen klaren Referenzpunkt bewertet werden koennen.
 ### Arbeitspakete der Phase 0
 
 - [x] Relevante Einstiegspfade benannt:
+  - `apps/web/src/routes/map/+page.ts`
   - `apps/web/src/routes/map/+page.svelte`
-  - `apps/web/src/lib/data/dummy.json`
-  - `apps/web/src/lib/maplibre/MapLibre.svelte`
-  - `apps/web/src/lib/maplibre/Marker.svelte`
+  - `apps/web/src/lib/map/scene.ts`
+  - `apps/web/src/lib/map/types.ts`
+  - `apps/web/src/lib/map/config/basemap.current.ts`
+  - `apps/web/src/lib/map/basemap.ts`
 - [x] Relevante Tests benannt:
-  - `apps/web/tests/map-smoke.spec.ts`
-  - `apps/web/tests/map-marker-panel.spec.ts`
+  - `apps/web/tests/map-interaction.spec.ts`
+  - `apps/web/tests/map-load-fallback.spec.ts`
+  - `apps/web/tests/basemap.spec.ts`
+  - `apps/web/tests/basemap-client-integration.spec.ts`
+  - `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`
 - [x] Ist-Notiz festgehalten:
-  - lokale Demo-Daten statt Loader/API
-  - lokaler `MapPoint`-Typ direkt in `+page.svelte`
-  - externer MapLibre-Demo-Style statt repo-eigener Basemap-Konfiguration
+  - Loader laedt API-Ressourcen mit explizitem `loadState` und `resourceStatus`
+  - `buildMapScene(...)` ist der zentrale Transformationspunkt zwischen Loader und Rendering
+  - `MapEntityViewModel` ist der aktuelle Kartencontract; `MapPoint` lebt nur noch als Deprecated-Alias
+  - Basemap laeuft in dev/test standardmaessig `local-sovereign`, in Produktion standardmaessig `remote-style`
 
 ### Stop-Kriterium der Phase 0
 
@@ -65,19 +72,19 @@ Die Kartenroute soll nicht dauerhaft direkt auf Demo-Daten verdrahtet bleiben.
 
 ### Arbeitspakete der Phase 1
 
-- [ ] Datenbeschaffung aus `+page.svelte` herausloesen.
-- [ ] Entscheiden, ob die Karte aus Loader, API oder versionierter lokaler Quelle gespeist wird.
-- [ ] Zwischen "keine Daten", "Laden" und "Fehler" unterscheiden.
-- [ ] Den heute lokalen `MapPoint`-Typ in einen wiederverwendbaren Contract ueberfuehren.
+- [x] Datenbeschaffung aus `+page.svelte` herausloesen.
+- [x] Route auf einen expliziten API-/Loader-Contract umstellen (`+page.ts`).
+- [x] Zwischen "keine Daten", "Laden" und degradierten Fehlerzustaenden unterscheiden.
+- [x] Den frueher lokalen Kartentyp durch `MapEntityViewModel` und `MapSceneModel` ersetzen.
 
 ### Verifikation der Phase 1
 
-- [ ] Testfall fuer fehlende oder leere Datenquelle.
-- [ ] Testfall fuer sichtbaren Fehlerzustand statt stiller Leere.
+- [x] Partielle und komplette API-Fehler werden in `apps/web/tests/map-load-fallback.spec.ts` geprueft.
+- [x] Sichtbarer Fehlerzustand statt stiller Leere ist ueber `load-state-partial` und `load-state-failed` belegt.
 
 ### Stop-Kriterium der Phase 1
 
-- [ ] Die Kartenroute hat eine explizite Datenquelle und einen nachvollziehbaren Ladezustand.
+- [x] Die Kartenroute hat eine explizite Datenquelle und einen nachvollziehbaren Ladezustand.
 
 ---
 
@@ -89,17 +96,17 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
 
 ### Arbeitspakete der Phase 2
 
-- [ ] Auswahlzustand, Markerbeschreibung und Paneldaten aus `+page.svelte` entkoppeln.
-- [ ] Ein kleines Karten-View-Model oder Szenenmodell definieren.
+- [~] Auswahlzustand, Markerbeschreibung und Paneldaten aus `+page.svelte` entkoppeln.
+- [x] Ein kleines Karten-View-Model oder Szenenmodell definieren.
 - [ ] Query-Parameter-Zustand (`l`, `r`, `t`) und Kartenzustand getrennt dokumentieren.
 
 ### Verifikation der Phase 2
 
-- [ ] Mindestens ein Test fuer Auswahl/Panel-Zustand ohne implizite DOM-Nebenannahmen.
+- [x] `apps/web/src/lib/map/scene.test.ts` prueft das Szenenmodell als reine Transformation.
 
 ### Stop-Kriterium der Phase 2
 
-- [ ] Die Route ist nicht mehr alleinige Quelle fuer Kartenrendering, Markerzustand und Panel-Orchestrierung.
+- [~] Die Route ist nicht mehr alleinige Quelle fuer Kartenrendering; Interaktions- und Panel-Orchestrierung leben aber noch teilweise im Routenorchestrator.
 
 ---
 
@@ -111,18 +118,18 @@ Die Basemap-Strategie soll dem tatsaechlichen Runtime-Verhalten entsprechen.
 
 ### Arbeitspakete der Phase 3
 
-- [ ] Entscheiden, ob die externe Demo-Basemap bewusst akzeptiert oder ersetzt wird.
-- [ ] Falls Ersatz gewuenscht ist: Style-, Asset- und Tile-Strategie im Repo dokumentieren.
-- [ ] CSP- und Caddy-Konfiguration mit der realen Basemap-Abhaengigkeit abgleichen.
+- [~] Hybridmodus explizit halten: `local-sovereign` fuer dev/test, `remote-style` als Produktionsdefault, optional ueberschreibbar.
+- [~] Style-, Asset- und Tile-Strategie fuer `local-sovereign` dokumentieren und gegen Deploy-Realitaet halten.
+- [~] CSP- und Caddy-Konfiguration mit dem `/local-basemap/`-Contract abgleichen; echter Runtime-Beweis bleibt offen.
 
 ### Verifikation der Phase 3
 
-- [ ] Dokumentierter Nachweis, ob externe Kartenassets erlaubt, benoetigt oder verboten sind.
-- [ ] Browser-Test oder manuelle Pruefanleitung fuer die effektive Basemap-Aufloesung.
+- [x] `apps/web/tests/basemap.spec.ts` prueft Modus- und Style-Aufloesung.
+- [x] `apps/web/tests/basemap-client-integration.spec.ts` und `apps/web/tests/basemap-sovereignty-testbuild.spec.ts` belegen den clientseitigen lokalen Modus im Testkontext.
 
 ### Stop-Kriterium der Phase 3
 
-- [ ] Es gibt keine implizite Basemap-Annahme mehr; die Abhaengigkeit ist dokumentiert und pruefbar.
+- [~] Die Basemap-Abhaengigkeit ist expliziter geworden, aber die Produktionsentscheidung und der Live-Runtime-Beweis bleiben offen.
 
 ---
 
@@ -134,10 +141,9 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 
 ### Arbeitspakete der Phase 4
 
-- [x] Grundlegende Sichtbarkeit der Route pruefen (`map-smoke.spec.ts`).
-- [x] Marker-Panel-Interaktion pruefen (`map-marker-panel.spec.ts`).
-- [ ] Fehler-, Leere- und Ladezustaende absichern.
-- [ ] Basemap-Verhalten separat absichern.
+- [x] Kerninteraktion und Context Panel pruefen (`map-interaction.spec.ts`).
+- [x] Fehler-, Leere- und Ladezustaende absichern (`map-load-fallback.spec.ts`).
+- [x] Basemap-Verhalten separat absichern (`basemap.spec.ts`, `basemap-client-integration.spec.ts`, `basemap-sovereignty-testbuild.spec.ts`).
 - [ ] Tastatur- und Query-Parameter-Navigation gezielt absichern.
 
 ### Stop-Kriterium der Phase 4
@@ -179,11 +185,13 @@ Der vollstaendige Abschlussplan fuer Phase 6 ist in
 ### Was in Phase 6 bewiesen werden muss
 
 Nicht:
+
 - „style.json existiert"
 - „pmtiles gebaut"
 - „Playwright-Test gruenlich"
 
 Sondern:
+
 - Browser / curl → HTTP → Caddy → PMTiles-Byte-Stream → HTTP 206 Partial Content → Rendering
 
 ### Arbeitspakete der Phase 6
@@ -217,9 +225,9 @@ Sondern:
 ## Minimalpfad
 
 - [x] Aktuellen Demo-Stand wahrheitsgetreu dokumentieren.
-- [ ] Datenquelle explizit machen.
+- [x] Datenquelle explizit machen.
 - [ ] Externe Basemap-Abhaengigkeit klar entscheiden.
-- [ ] Fehlerpfade testbar machen.
+- [x] Fehlerpfade testbar machen.
 - [~] Basemap-Runtime-Beweis: Guard vorhanden, echter CI-Nachweis noch offen.
 
 ---
@@ -227,8 +235,8 @@ Sondern:
 ## Essenz
 
 **Hebel:** Ehrliche Bestandsaufnahme vor Ausbau.
-**Entscheidung:** Erst den realen Demo-Stand sauber beschreiben, dann Datenquelle, Zustand und Basemap schrittweise haerten.
-**Status:** Ausgangslage dokumentiert. Interaktion grob abgesichert.
-Datenmodell, Fehlerdomaene und Basemap-Strategie bleiben offen.
+**Entscheidung:** Route-Contract, Szenenmodell und degradiertes Laufzeitverhalten sind jetzt explizit; offen bleibt vor allem die Produktionswahrheit der Basemap.
+**Status:** Loader, Szene, Interaktion, Fehlerbanner und clientseitiger Basemap-Modus sind belegt.
+Produktionsdefault, Artefaktverfuegbarkeit und echter HTTP-206-Runtime-Beweis bleiben offen.
 Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job non-blocking vorhanden.
 Echter HTTP-206-Nachweis gegen reales Caddy-Backend steht noch aus.

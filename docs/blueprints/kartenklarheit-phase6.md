@@ -41,16 +41,16 @@ Phase 6 ist ein Beweis-Framework, kein Test-Framework.
 
 Ist-Zustand (belegt):
 
-- Playwright-Tests existieren (`apps/web/tests/...`)
-- Basemap-Tests existieren (Client + Fallback)
-- API-Tests existieren
-- ABER: kein durchgehender Systembeweis von UI → Map → Basemap → Netzwerk
+- Playwright-Tests fuer Karteninteraktion, degradierte API-Zustaende und Basemap-Clientverhalten existieren
+- `basemap.spec.ts` prueft Modus- und Style-Aufloesung
+- `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext
+- ABER: kein durchgehender Live-Systembeweis von Browser oder curl → Caddy → PMTiles-Artefakt → HTTP 206 im CI
 
 Hypothesen:
 
-1. E2E deckt UI ab, aber nicht Infrastruktur (Caddy/PMTiles)
-2. Basemap läuft lokal, aber nicht deterministisch unter CI
-3. „funktioniert“ ist aktuell nur komponentenweise wahr
+1. E2E deckt UI und den clientseitigen lokalen Pfad ab, aber nicht die Live-Infrastruktur (Caddy plus Artefakt)
+2. Der Runtime-Beweis ist vorbereitet, aber ohne Artefakt und Caddy im CI bewusst nur `NOT_PROVEN`
+3. „funktioniert“ ist fuer Interaktion und Loader-Verhalten bereits belegt, fuer den Live-Basemap-Pfad aber noch nicht systemisch erzwungen
 
 Checks (minimal, copyfähig):
 

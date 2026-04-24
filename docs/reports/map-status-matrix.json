@@ -1,33 +1,40 @@
 {
   "generated_from": [
+    "apps/web/src/routes/map/+page.ts",
     "apps/web/src/routes/map/+page.svelte",
-    "apps/web/src/lib/data/dummy.json",
-    "apps/web/tests/map-smoke.spec.ts",
-    "apps/web/tests/map-marker-panel.spec.ts",
-    "infra/caddy/Caddyfile"
+    "apps/web/src/lib/map/scene.ts",
+    "apps/web/src/lib/map/config/basemap.current.ts",
+    "apps/web/src/lib/map/basemap.ts",
+    "apps/web/tests/map-interaction.spec.ts",
+    "apps/web/tests/map-load-fallback.spec.ts",
+    "apps/web/tests/basemap.spec.ts",
+    "apps/web/tests/basemap-client-integration.spec.ts",
+    "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
+    "infra/caddy/Caddyfile",
+    "infra/caddy/Caddyfile.heim",
+    "scripts/guard/caddy-basemap-route-guard.sh",
+    "scripts/guard/basemap-runtime-proof.sh"
   ],
   "areas": {
     "kartendatenquelle": {
-      "soll": "Klare, explizite Datenquelle fuer die Karte",
-      "ist": "Die Route importiert dummy.json direkt in +page.svelte; ein Loader- oder API-Vertrag ist nicht belegt.",
-      "status": "Teil",
+      "soll": "Expliziter Route-Contract fuer Kartenressourcen",
+      "ist": "+page.ts laedt /api/nodes, /api/accounts und /api/edges, klassifiziert Fehler pro Ressource und gibt loadState sowie resourceStatus explizit an die UI weiter.",
+      "status": "Erledigt",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md"
       ],
-      "missing_evidence": [
-        "Loader/API-Vertrag",
-        "Ladezustand",
-        "Fehlerzustand"
-      ],
-      "risk": "mittel",
+      "missing_evidence": [],
+      "risk": "gering",
       "code_runtime_evidence": [
+        "apps/web/src/routes/map/+page.ts",
         "apps/web/src/routes/map/+page.svelte",
-        "apps/web/src/lib/data/dummy.json"
+        "apps/web/src/lib/map/scene.ts",
+        "apps/web/tests/map-load-fallback.spec.ts"
       ]
     },
     "interaktion_und_panel": {
       "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich",
-      "ist": "Marker-Klick setzt die Auswahl und oeffnet das rechte Panel; dieses Verhalten ist per Browser-Test belegt.",
+      "ist": "Marker-Klick setzt die Auswahl, oeffnet das Context Panel und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt.",
       "status": "Erledigt",
       "documentation_evidence": [
         "docs/reports/map-architekturkritik.md"
@@ -36,64 +43,71 @@
       "risk": "gering",
       "code_runtime_evidence": [
         "apps/web/src/routes/map/+page.svelte",
-        "apps/web/tests/map-marker-panel.spec.ts"
+        "apps/web/tests/map-interaction.spec.ts"
       ]
     },
     "basemap_abhaengigkeit": {
       "soll": "Dokumentierte und bewusst entschiedene Basemap-Strategie",
-      "ist": "MapLibre wird mit dem externen Demo-Style von demotiles.maplibre.org initialisiert; eine repo-kontrollierte Basemap-Strategie ist nicht belegt.",
+      "ist": "resolveBasemapMode() schaltet in dev/test standardmaessig auf local-sovereign und in Produktion standardmaessig auf remote-style; PUBLIC_BASEMAP_MODE kann die Produktionswahl explizit ueberschreiben.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/reports/map-architekturkritik.md"
       ],
       "missing_evidence": [
-        "Entscheidung fuer oder gegen externe Basemap-Assets",
-        "Dokumentierter Runtime-Nachweis der gewuenschten Basemap-Quelle"
+        "Produktentscheidung, ob remote-style nur Fallback oder dauerhafter Produktionsmodus ist",
+        "Live-Runtime-Nachweis der gewuenschten Produktionsquelle"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
-        "apps/web/src/routes/map/+page.svelte"
+        "apps/web/src/lib/map/config/basemap.current.ts",
+        "apps/web/src/lib/map/basemap.ts",
+        "apps/web/tests/basemap.spec.ts"
       ]
     },
     "infrastruktur_kopplung": {
       "soll": "Web-Runtime, Proxy und Kartenabhaengigkeiten sind dokumentiert aufeinander abgestimmt",
-      "ist": "Caddy reverse-proxyt Web und API; eine spezifische repo-eigene Basemap-Konfiguration ist dort nicht hinterlegt.",
+      "ist": "Caddyfile und Caddyfile.heim bedienen den oeffentlichen /local-basemap/-Contract; der Route-Guard validiert diese deploy-relevanten Caddyfiles. In dev wird /local-basemap/ ueber die Vite-Middleware statt ueber Caddy bereitgestellt.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/reports/map-status-matrix.md"
       ],
       "missing_evidence": [
-        "Dokumentierte Zuordnung zwischen Basemap-Strategie, CSP und Runtime"
+        "Durchgehender Live-Nachweis mit echtem PMTiles-Artefakt und laufendem Caddy-Stack"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
-        "infra/caddy/Caddyfile"
+        "infra/caddy/Caddyfile",
+        "infra/caddy/Caddyfile.heim",
+        "scripts/guard/caddy-basemap-route-guard.sh",
+        "apps/web/vite.config.ts"
       ]
     },
     "testabdeckung": {
       "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
-      "ist": "Smoke-Test und Marker-Panel-Test sind vorhanden; Fehler-, Lade- und Basemap-Ausfallpfade sind nicht belegt.",
+      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/reports/map-status-matrix.md"
       ],
       "missing_evidence": [
-        "Tests fuer leere Daten",
-        "Tests fuer Fehlerzustaende",
-        "Tests fuer Basemap-Probleme",
-        "Tests fuer Offline-Verhalten"
+        "Gezielte Query-Parameter-Navigation",
+        "Visuelle Abnahme",
+        "Live-Runtime-Beweis gegen Caddy plus Artefakt"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
-        "apps/web/tests/map-smoke.spec.ts",
-        "apps/web/tests/map-marker-panel.spec.ts"
+        "apps/web/tests/map-interaction.spec.ts",
+        "apps/web/tests/map-load-fallback.spec.ts",
+        "apps/web/tests/basemap.spec.ts",
+        "apps/web/tests/basemap-client-integration.spec.ts",
+        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
       ]
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Guard-Script vorhanden (scripts/guard/basemap-runtime-proof.sh); non-blocking Guard-Workflow vorhanden. Workflow startet keinen Caddy-Stack und baut kein PMTiles-Artefakt; ohne beides meldet der Guard nur NOT_PROVEN.",
+      "ist": "Clientseitige Tests belegen den lokalen Basemap-Pfad und Range-Requests im Testkontext. Das Guard-Script prueft den echten Live-Pfad gegen Caddy plus PMTiles-Artefakt und unterscheidet zwischen PROVEN und NOT_PROVEN; im CI bleibt der Workflow ohne Artefakt und ohne Caddy bewusst bei NOT_PROVEN.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
@@ -102,21 +116,23 @@
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
         "Laufender Caddy-Stack im CI",
-        "HTTP-206-Beweis in CI-Lauf (PROVEN-Status des Guards)"
+        "HTTP-206-Beweis in einem reproduzierbaren CI-Lauf"
       ],
       "risk": "hoch",
       "code_runtime_evidence": [
+        "apps/web/tests/basemap-client-integration.spec.ts",
+        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
         "scripts/guard/basemap-runtime-proof.sh",
         ".github/workflows/basemap-runtime-proof.yml"
       ],
       "not_a_substitute": [
-        "apps/web/tests/basemap-client-integration.spec.ts (gemockter Client-Test, kein Runtime-Beweis)",
+        "apps/web/tests/basemap-client-integration.spec.ts (clientseitiger Mock-Test, kein Live-Caddy-Beweis)",
         "scripts/guard/caddy-basemap-route-guard.sh (statischer Konfigurations-Check, kein Runtime-Beweis)"
       ]
     }
   },
   "open_architectural_decisions": {
-    "Basemap_Strategie": "Offen: externe Demo-Basemap bewusst akzeptieren oder durch repo-kontrollierte Strategie ersetzen.",
-    "Kartendatenquelle": "Offen: direkte Demo-Daten in +page.svelte beibehalten oder auf expliziten Loader/API-Vertrag umstellen."
+    "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
+    "Deploy_Artefakt": "Offen: wie PMTiles-Artefakt, Caddy-Stack und HTTP-206-Beweis reproduzierbar im CI zusammengefuehrt werden."
   }
 }
