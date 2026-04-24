@@ -1,7 +1,9 @@
-.PHONY: up down logs ps smoke docs-guard validate generate diagnose prepare-commit
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards generate diagnose prepare-commit
 
-validate:
+validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
+
+validate-core:
 	python3 -m scripts.docmeta.validate_schema
 	python3 -m scripts.docmeta.validate_relations
 	python3 -m scripts.docmeta.check_repo_index_consistency
@@ -10,6 +12,16 @@ validate:
 	python3 -m scripts.docmeta.export_docs_index
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
+
+validate-guards:
+	bash scripts/docmeta/repo-structure-guard.sh
+	bash scripts/docmeta/docs-relations-guard.sh
+	bash scripts/docmeta/generated-files-guard.sh
+	bash scripts/docmeta/coverage-guard.sh
+
+validate: validate-tests validate-core validate-guards
+
+ci-validate: validate
 
 docs-guard: validate
 

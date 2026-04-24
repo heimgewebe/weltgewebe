@@ -164,6 +164,8 @@ CI-Gates (brechen Builds):
 
 Generated files are derived diagnostics. They are not required for commit validity. CI regenerates selected diagnostics for observability, and generated drift is reported as non-blocking diagnostics.
 
+Blocking docs validation is deterministic between local and CI via `make ci-validate` (alias to `make validate`).
+
 ### Domain-Contracts lokal validieren
 
 Um die JSON-Schemas und Beispiele unter `contracts/domain/` lokal zu prüfen und sicherzustellen, dass sie

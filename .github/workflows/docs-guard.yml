@@ -42,28 +42,9 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: validate-schemas
-        run: python3 -m scripts.docmeta.validate_schema
+      - name: run-ci-validate
+        run: make ci-validate
 
-      - name: validate-relations
-        run: python3 -m scripts.docmeta.validate_relations
-
-      - name: validate-execution-proof
-        run: |
-          python3 -m scripts.docmeta.check_repo_index_consistency
-          python3 -m scripts.docmeta.check_links
-
-      - name: validate-epistemics
-        run: |
-          python3 -m scripts.docmeta.check_doc_review_age
-          python3 -m scripts.docmeta.review_impact
-
-      - name: required-guards
-        run: |
-          bash scripts/docmeta/repo-structure-guard.sh
-          bash scripts/docmeta/docs-relations-guard.sh
-          bash scripts/docmeta/generated-files-guard.sh
-          bash scripts/docmeta/coverage-guard.sh
 
   generated-diagnostics:
     name: Generated diagnostics (non-blocking)
