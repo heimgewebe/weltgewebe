@@ -132,3 +132,73 @@ async fn accounts_list_is_sorted_and_limited() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn accounts_offset_pagination() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+
+    // Insert in unsorted order; BTreeMap sorts lexicographically: a1, b2, c3
+    for id in &["b2", "a1", "c3"] {
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: id.to_string(),
+                kind: "garnrolle".to_string(),
+                title: format!("Title {}", id),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: Role::Gast,
+            email: None,
+            webauthn_user_id: uuid::Uuid::new_v4(),
+        });
+    }
+
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // limit=1&offset=0 liefert erstes Element (a1 — BTreeMap sort)
+    let req = Request::get("/accounts?limit=1&offset=0").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "a1");
+
+    // limit=1&offset=1 liefert zweites Element (b2)
+    let req = Request::get("/accounts?limit=1&offset=1").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "b2");
+
+    // Offset außerhalb der Ergebnislänge liefert leere Liste
+    let req = Request::get("/accounts?limit=10&offset=100").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 0);
+
+    // Ungültiger Offset (negativ) -> 400
+    let req = Request::get("/accounts?offset=-1").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Ungültiger Offset (kein Integer) -> 400
+    let req = Request::get("/accounts?offset=abc").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}

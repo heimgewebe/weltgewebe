@@ -116,7 +116,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
 pub async fn list_edges(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Json<Vec<Edge>> {
+) -> Result<Json<Vec<Edge>>, StatusCode> {
     let src = params.get("source_id");
     let dst = params.get("target_id");
     let limit: usize = params
@@ -124,6 +124,10 @@ pub async fn list_edges(
         .and_then(|s| s.parse().ok())
         .unwrap_or(250)
         .min(MAX_PAGE_SIZE);
+    let offset: usize = match params.get("offset") {
+        Some(raw) => raw.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
+        None => 0,
+    };
 
     let cache = state.edges.read().await;
 
@@ -142,11 +146,12 @@ pub async fn list_edges(
             }
             true
         })
+        .skip(offset)
         .take(limit)
         .cloned()
         .collect();
 
-    Json(out)
+    Ok(Json(out))
 }
 
 pub async fn get_edge(

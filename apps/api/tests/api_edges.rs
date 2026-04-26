@@ -137,3 +137,74 @@ async fn edges_filter_src_dst() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn edges_offset_pagination() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
+            r#"{"id":"e3","source_id":"n2","target_id":"n3","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // limit=1&offset=0 liefert erstes Element (e1)
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?limit=1&offset=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "e1");
+
+    // limit=1&offset=1 liefert zweites Element (e2)
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?limit=1&offset=1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "e2");
+
+    // Offset außerhalb der Ergebnislänge liefert leere Liste
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?limit=10&offset=100").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 0);
+
+    // Ungültiger Offset (negativ) -> 400
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?offset=-1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Ungültiger Offset (kein Integer) -> 400
+    let res = app
+        .oneshot(Request::get("/edges?offset=abc").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
