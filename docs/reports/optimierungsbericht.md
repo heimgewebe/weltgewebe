@@ -42,7 +42,7 @@ relations:
 
 ### 1.1 Kritisch: Session-Persistenz fehlt
 
-**Problem:** Sessions liegen ausschliesslich in-memory (`RWLock<HashMap>`). Bei jedem Deployment werden alle Nutzer ausgeloggt.
+**Problem:** Sessions liegen ausschließlich in-memory (`RwLock<HashMap>`). Bei jedem Deployment werden alle Nutzer ausgeloggt.
 
 **Empfehlung:** Redis- oder Datenbank-Backend für Sessions einführen. Alternativ: signierte JWT-Tokens als Fallback.
 
@@ -60,7 +60,7 @@ relations:
 
 ### 1.4 Mittel: WebAuthn/Passkeys unvollständig
 
-**Problem:** Framework integriert, aber Verify/Consume-Endpunkte fehlen. Passkey-Registrierung nicht abschliessbar.
+**Problem:** Framework integriert, aber Verify/Consume-Endpunkte fehlen. Passkey-Registrierung nicht abschließbar.
 
 **Empfehlung:** Endpoints fertigstellen. Persistenz für `webauthn_user_id` hinzufügen.
 
@@ -70,9 +70,9 @@ relations:
 
 **Empfehlung:** Background-Task (Tokio-Interval) für stündlichen Cleanup.
 
-### 1.6 Mittel: Globale RWLocks als Engpass
+### 1.6 Mittel: Globale RwLocks als Engpass
 
-**Problem:** Alle Sessions, Tokens, Challenges nutzen je einen einzelnen `RWLock`. Bei hoher Concurrency entsteht Lock-Contention.
+**Problem:** Alle Sessions, Tokens, Challenges nutzen je einen einzelnen `RwLock`. Bei hoher Concurrency entsteht Lock-Contention.
 
 **Empfehlung:** Sharding nach Account-ID oder `dashmap` / `concurrent-hashmap` evaluieren.
 
@@ -111,11 +111,11 @@ relations:
 - `MapControls.svelte` (Keyboard + UI-Interaktion)
 - `MapDataLoader.svelte` (Daten-Fetching + Transformation)
 
-### 2.3 Mittel: Keine Error Boundaries / Fehleranzeigen
+### 2.3 Mittel: Fehlerbehandlung nicht als wiederverwendbare Infrastruktur abstrahiert
 
-**Problem:** Fehlgeschlagene Ressourcen-Fetches fallen stillschweigend auf leere Arrays zurück. Nutzer sehen keinen Fehlerhinweis.
+**Problem:** Fehlgeschlagene Ressourcen-Fetches geben `loadState`/`resourceStatus` aus, und die Map-UI zeigt bei `partial`/`failed`-Zuständen sichtbare Warnbanner (`role="alert"`). Die Fehlerbehandlung ist jedoch eng an die Map-Route gekoppelt und nicht als generische Error-Boundary oder Toast-Infrastruktur abstrahiert.
 
-**Empfehlung:** Error-Toasts oder Banner-Komponente bei `MapResourceStatus !== "ok"`.
+**Empfehlung:** Wiederverwendbare Error-Boundary/Toast-Komponente extrahieren, die über alle Routen einsetzbar ist.
 
 ### 2.4 Mittel: Typ-Sicherheitslücken
 
@@ -127,7 +127,7 @@ relations:
 
 ### 2.5 Mittel: Zu wenige Unit-Tests
 
-**Problem:** Nur 3 Unit-Test-Dateien (governance, uiInvariants, guards). Stores, Utils und Komponenten-Logik sind untested.
+**Problem:** Unit-Tests decken Governance, UI-Invarianten und Guards ab; Map-nahe Module (`basemap.test.ts`, `scene.test.ts`) sind vorhanden. Stores, allgemeine Utils und der größte Teil der Komponenten-Logik sind aber noch nicht ausreichend getestet.
 
 **Empfehlung:** Test-Coverage auf alle Stores und kritische Utils ausweiten. Ziel: >60% Coverage für `/lib/`.
 
@@ -163,17 +163,17 @@ relations:
 
 **Problem:** `security.yml` generiert SBOM (syft), aber scannt keine Container-Images auf Schwachstellen.
 
-**Empfehlung:** Trivy-Step in `security.yml` hinzufügen:
+**Empfehlung:** Trivy-Step in `security.yml` hinzufügen (gepinnter Release-Tag oder Commit-SHA — kein `@master`, das ist ein Supply-Chain-Risiko):
 ```yaml
 - name: Trivy scan
-  uses: aquasecurity/trivy-action@master
+  uses: aquasecurity/trivy-action@<gepinnter-release-tag-oder-commit-sha>
 ```
 
-### 3.3 Mittel: PgBouncer fehlt im Dev-Stack
+### 3.3 Niedrig: Dev/Prod PgBouncer-Konfiguration nicht validiert
 
-**Problem:** `compose.core.yml` (dev) verbindet direkt zu PostgreSQL. Produktion nutzt PgBouncer. Dev/Prod-Parität verletzt.
+**Problem:** PgBouncer ist im Dev-Stack vorhanden — `compose.core.yml` verbindet die API über `pgbouncer:6432`. Offen bleibt, ob Dev- und Prod-Konfiguration (Pool-Mode, Pool-Size, Timeouts) regelmäßig auf Parität geprüft werden.
 
-**Empfehlung:** PgBouncer zum Dev-Profil hinzufügen (mit niedrigerem Pool-Size).
+**Empfehlung:** Prod- und Dev-PgBouncer-Konfigurationen explizit vergleichen und Abweichungen dokumentieren oder angleichen.
 
 ### 3.4 Mittel: Relative Volume-Mounts in Produktion
 
@@ -212,11 +212,11 @@ relations:
 
 **Empfehlung:** Workflow-Komposition via `workflow_call` (Setup-once, Run-multiple-Gates). `heavy.yml` nur manuell/label-basiert.
 
-### 4.2 Mittel: Bundle-Budget nicht integriert
+### 4.2 Niedrig: Bundle-Budget-Assertion in `web.yml` nicht als eigener Schritt sichtbar
 
-**Problem:** `ci/budget.json` definiert JS-Budget (60KB), TTI (2s), INP (200ms) — aber `assert-web-budget.mjs` ist Platzhalter, nicht in Pipeline integriert.
+**Problem:** `ci/budget.json` definiert JS-Budget, TTI und INP. `assert-web-budget.mjs` ist kein Platzhalter — es prüft konkrete Budgetwerte und ist über `apps/web/package.json` im `ci`-Script eingebunden (`node ../../ci/scripts/assert-web-budget.mjs`). Das Script läuft damit bei `pnpm run ci`, ist aber kein benannter, eigenständiger Schritt in `.github/workflows/web.yml`.
 
-**Empfehlung:** Budget-Assertion in `web.yml` nach Build-Step einhängen.
+**Empfehlung:** Budget-Assertion als expliziten, benannten Step in `web.yml` sichtbar machen, damit Budget-Überschreitungen im CI-Log klar zuordenbar sind.
 
 ### 4.3 Mittel: Kein Dependency-Update-Automation
 
@@ -337,7 +337,7 @@ relations:
 
 **Problem:** UI-Texte sind hardcoded (deutsch). Keine i18n-Infrastruktur vorhanden.
 
-**Empfehlung:** Falls mehrsprachigkeit geplant: i18n-Framework frühzeitig einführen (z.B. `svelte-i18n` oder `paraglide`). Falls nicht: bewusst dokumentieren.
+**Empfehlung:** Falls Mehrsprachigkeit geplant: i18n-Framework frühzeitig einführen (z.B. `svelte-i18n` oder `paraglide`). Falls nicht: bewusst dokumentieren.
 
 ### 7.3 Mittel: JSONL als Datenquelle nicht skalierbar
 
@@ -361,7 +361,7 @@ relations:
 
 ## Zusammenfassung: Top-10-Prioritäten
 
-| # | Bereich | Massnahme | Aufwand |
+| # | Bereich | Maßnahme | Aufwand |
 |---|---------|-----------|---------|
 | 1 | API | Session-Persistenz (Redis/DB) | Mittel |
 | 2 | Frontend | Svelte 5 Runes Migration starten | Hoch |
