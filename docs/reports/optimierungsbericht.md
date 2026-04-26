@@ -1,9 +1,21 @@
 ---
+id: reports.optimierungsbericht
 title: "Optimierungsbericht Weltgewebe"
 doc_type: report
 status: active
 created: 2026-04-19
 lang: de
+summary: >
+  Umfassende Optimierungsanalyse aller Schichten — API, Frontend, Infrastruktur,
+  CI/CD, Dokumentation und Domain-Contracts — mit priorisierten
+  Handlungsempfehlungen und Aufwandsschätzungen.
+relations:
+  - type: relates_to
+    target: docs/techstack.md
+  - type: relates_to
+    target: docs/datenmodell.md
+  - type: relates_to
+    target: docs/policies/agent-reading-protocol.md
 ---
 
 # Optimierungsbericht Weltgewebe
