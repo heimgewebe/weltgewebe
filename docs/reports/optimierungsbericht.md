@@ -52,11 +52,11 @@ relations:
 
 **Empfehlung:** `sqlx migrate` oder `refinery` einführen. Migrations-Ordner unter `apps/api/migrations/`.
 
-### 1.3 Hoch: Keine Paginierung bei Listen-Endpunkten
+### 1.3 Hoch: Keine echte Paginierung bei Listen-Endpunkten
 
-**Problem:** `/nodes`, `/edges`, `/accounts` liefern alle Einträge auf einmal zurück. Bei wachsendem Datenbestand explodiert der Speicher- und Netzwerkverbrauch.
+**Problem:** `/nodes`, `/edges` und `/accounts` unterstützen bereits `?limit=`, aber kein echtes Weiterblättern über mehrere Seiten (Cursor oder Offset). Bei wachsendem Datenbestand fehlen damit konsistente Folgeabrufe und stabile Abfragen über mehrere Requests hinweg.
 
-**Empfehlung:** Cursor-basierte Paginierung implementieren (`?cursor=...&limit=50`).
+**Empfehlung:** Cursor- oder Offset-basierte Paginierung mit stabiler Sortierung implementieren (`?cursor=...&limit=50` oder `?offset=...&limit=50`).
 
 ### 1.4 Mittel: WebAuthn/Passkeys unvollständig
 
@@ -103,7 +103,7 @@ relations:
 
 ### 2.2 Hoch: Monolithische Map-Komponente
 
-**Problem:** `/src/routes/map/+page.svelte` hat 575 Zeilen — Map-Rendering, Overlays, Keyboard-Shortcuts, Daten-Transformation in einer Datei.
+**Problem:** `/src/routes/map/+page.svelte` hat rund 575 Zeilen — Map-Rendering, Overlays, Keyboard-Shortcuts, Daten-Transformation in einer Datei.
 
 **Empfehlung:** Aufteilen in:
 - `MapContainer.svelte` (Rendering + Lifecycle)
@@ -222,7 +222,7 @@ relations:
 
 **Problem:** Keine Dependabot- oder Renovate-Konfiguration sichtbar.
 
-**Empfehlung:** Renovate einrichten für automatische Dependency-PRs (Rust + Node).
+**Empfehlung:** Renovate einrichten für automatische Dependency-PRs (Rust + `Node.js`).
 
 ### 4.4 Niedrig: Kein Branch-Protection dokumentiert
 
@@ -246,7 +246,7 @@ relations:
 
 **Empfehlung:**
 - `minLength: 1` für Pflichtfelder
-- `maxLength` je nach Feld (z.B. title: 255, body: 10000)
+- `maxLength` je nach Feld (z. B. title: 255, body: 10 000)
 - `pattern` für strukturierte Felder (E-Mail, Domains)
 
 ### 5.3 Mittel: Permissions-Feld im Role-Schema zu permissiv
@@ -291,7 +291,7 @@ relations:
 
 ### 6.2 Mittel: Blueprint-Status inkonsistent
 
-**Problem:** 6 Blueprints seit 6+ Monaten im Status "draft", werden aber als kanonisch referenziert (z.B. `map-blaupause`, `kartenklarheit`).
+**Problem:** 6 Blueprints seit 6+ Monaten im Status "draft", werden aber als kanonisch referenziert (z. B. `map-blaupause`, `kartenklarheit`).
 
 **Empfehlung:** Status-Review: Entweder auf "active" setzen oder als explizit unfertig markieren mit Fortschrittsindikator.
 
@@ -333,11 +333,11 @@ relations:
 
 **Problem:** UI-Texte sind hardcoded (deutsch). Keine i18n-Infrastruktur vorhanden.
 
-**Empfehlung:** Falls Mehrsprachigkeit geplant: i18n-Framework frühzeitig einführen (z.B. `svelte-i18n` oder `paraglide`). Falls nicht: bewusst dokumentieren.
+**Empfehlung:** Falls Mehrsprachigkeit geplant: i18n-Framework frühzeitig einführen (z. B. `svelte-i18n` oder `paraglide`). Falls nicht: bewusst dokumentieren.
 
 ### 7.3 Mittel: JSONL als Datenquelle nicht skalierbar
 
-**Problem:** Nodes, Edges, Accounts werden aus JSONL-Dateien geladen. PostgreSQL ist konfiguriert, wird aber nicht genutzt. Bei wachsendem Datenbestand wird das unhaltbar.
+**Problem:** Knoten, Fäden und Garnrollen werden aus JSONL-Dateien geladen. PostgreSQL ist konfiguriert, wird aber nicht genutzt. Bei wachsendem Datenbestand wird das unhaltbar.
 
 **Empfehlung:** Migration auf PostgreSQL als primäre Datenquelle. JSONL nur noch für Seed/Demo-Daten.
 
@@ -365,7 +365,7 @@ relations:
 | 4 | Contracts | `additionalProperties: false` + String-Constraints | Niedrig |
 | 5 | Infra | Container-Image-Scanning (Trivy) | Niedrig |
 | 6 | API | Paginierung für Listen-Endpunkte | Mittel |
-| 7 | Frontend | Map-Komponente aufteilen (575 Zeilen) | Mittel |
+| 7 | Frontend | Map-Komponente aufteilen (~575 Zeilen) | Mittel |
 | 8 | CI/CD | Workflow-Redundanz reduzieren | Mittel |
 | 9 | Docs | Deployment- und Incident-Runbooks | Niedrig |
 | 10 | Architektur | JSONL zu PostgreSQL Migration planen | Hoch |
