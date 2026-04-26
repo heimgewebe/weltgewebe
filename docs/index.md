@@ -66,6 +66,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 ### Berichte & Audits
 
 – **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
+– **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
 
 ### Prozess
 
