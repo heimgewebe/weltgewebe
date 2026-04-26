@@ -202,3 +202,41 @@ async fn accounts_offset_pagination() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn accounts_invalid_limit() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+
+    accounts.insert(AccountInternal {
+        public: AccountPublic {
+            id: "a1".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Title a1".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: None,
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
+
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // limit=abc -> 400
+    let req = Request::get("/accounts?limit=abc").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // limit=-1 -> 400
+    let req = Request::get("/accounts?limit=-1").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}

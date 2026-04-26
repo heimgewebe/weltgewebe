@@ -567,14 +567,8 @@ pub async fn list_nodes(
         Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
     };
-    let limit: usize = params
-        .get("limit")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(100);
-    let offset: usize = match params.get("offset") {
-        Some(raw) => raw.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
-        None => 0,
-    };
+    let limit: usize = crate::utils::parse_usize_param(&params, "limit", 100)?;
+    let offset: usize = crate::utils::parse_usize_param(&params, "offset", 0)?;
 
     let cache = state.nodes.read().await;
 

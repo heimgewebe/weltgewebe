@@ -324,14 +324,8 @@ pub async fn list_accounts(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
-    let limit: usize = params
-        .get("limit")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(100);
-    let offset: usize = match params.get("offset") {
-        Some(raw) => raw.parse().map_err(|_| StatusCode::BAD_REQUEST)?,
-        None => 0,
-    };
+    let limit: usize = crate::utils::parse_usize_param(&params, "limit", 100)?;
+    let offset: usize = crate::utils::parse_usize_param(&params, "offset", 0)?;
 
     let accounts = state.accounts.read().await;
 
