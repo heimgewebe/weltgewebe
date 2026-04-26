@@ -1,0 +1,17 @@
+{
+  "id": "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
+  "type": "garnrolle",
+  "mode": "verortet",
+  "title": "weltgewebeknoten1",
+  "summary": "Lokale Garnrolle",
+  "location": {
+    "lat": 53.5604148,
+    "lon": 10.0629844
+  },
+  "public_pos": {
+    "lat": 53.5604148,
+    "lon": 10.0629844
+  },
+  "radius_m": 0,
+  "tags": ["demo", "garnrolle"]
+}

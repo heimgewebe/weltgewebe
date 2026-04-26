@@ -10,10 +10,12 @@
       "format": "uuid"
     },
     "kind": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "created_at": {
       "type": "string",
@@ -29,12 +31,14 @@
     },
     "summary": {
       "type": "string",
+      "minLength": 1,
       "description": "Short summary. A longer 'description' field is reserved for future use."
     },
     "tags": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1
       }
     },
     "location": {
@@ -51,5 +55,6 @@
       "additionalProperties": false
     }
   },
-  "required": ["id", "kind", "title", "created_at", "updated_at"]
+  "required": ["id", "kind", "title", "created_at", "updated_at"],
+  "additionalProperties": false
 }
