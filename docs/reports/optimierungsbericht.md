@@ -155,9 +155,9 @@ relations:
 
 ### 3.1 Hoch: Rate-Limiting in Caddy-Produktion deaktiviert
 
-**Problem:** `rate_limit`-Direktiven in `Caddyfile.prod` auskommentiert (benötigt Plugin). Login-Endpunkte sind auf Applikationsebene ungeschützt — Schutz wird an Upstream-LB/WAF delegiert, ist aber nicht garantiert.
+**Problem:** `rate_limit`-Direktiven in `Caddyfile.prod` auskommentiert (benötigt Plugin). API-seitiges Rate-Limiting für Login-Requests ist über `governor` vorhanden (`AuthRateLimiter` prüft IP und E-Mail-Hash, gibt bei Limit `429` zurück). Ein zusätzlicher Edge-/Proxy-Layer fehlt jedoch und der Schutz hängt damit von Upstream-LB/WAF ab.
 
-**Empfehlung:** Entweder Caddy-Rate-Limit-Plugin aktivieren oder API-seitiges Rate-Limiting für Auth-Endpunkte sicherstellen (bereits vorhanden via `governor`, aber Caddy-Layer fehlt).
+**Empfehlung:** Caddy-Rate-Limit-Plugin aktivieren oder Upstream-Absicherung dokumentieren und als bewusste Architekturentscheidung festhalten.
 
 ### 3.2 Hoch: Kein Container-Image-Scanning
 
@@ -283,15 +283,11 @@ relations:
 
 ## 6. Dokumentation
 
-### 6.1 Hoch: Runbooks unvollständig
+### 6.1 Hoch: Runbooks vorhanden, aber verstreut und operativ unvollständig
 
-**Problem:** Nur 3 Runbooks (Codespaces-Recovery, Ops, uv-Tooling). Es fehlen:
-- Deployment-Runbook (Blue-Green, Rollback)
-- Incident-Response-Runbook
-- Monitoring/Alerting-Runbook
-- Datenbank-Recovery-Runbook
+**Problem:** Runbooks existieren (allgemeines Runbook, Observability-Runbook, Selfhost-Deploy-Runbook, Codespaces-Recovery), sind aber nicht als kohärenter Betriebssatz strukturiert. Offen bleiben: standardisierte Rollback-Prozeduren, Incident-Response-Ablauf, Datenbank-Recovery und Alert-Eskalation.
 
-**Empfehlung:** Mindestens Deployment- und Incident-Response-Runbooks erstellen.
+**Empfehlung:** Runbooks unter `docs/runbooks/` konsolidieren; mindestens Incident-Response und Datenbank-Recovery hinzufügen.
 
 ### 6.2 Mittel: Blueprint-Status inkonsistent
 
@@ -299,11 +295,11 @@ relations:
 
 **Empfehlung:** Status-Review: Entweder auf "active" setzen oder als explizit unfertig markieren mit Fortschrittsindikator.
 
-### 6.3 Mittel: Verwaiste Dokumente
+### 6.3 Mittel: Statusunklare und verwaiste Dokumente
 
-**Problem:** `cost-report.md` nicht im Index verlinkt. `garnrolle.md` als deprecated markiert, aber in ADR-0003 referenziert.
+**Problem:** `cost-report.md` war nicht im Index verlinkt und wird mit diesem PR nachgetragen. Offen bleibt `garnrolle.md`: als deprecated markiert, aber noch in ADR-0003 referenziert — ohne klare Supersession.
 
-**Empfehlung:** Orphan-Report auswerten und Referenzen bereinigen.
+**Empfehlung:** Orphan-Report regelmäßig auswerten; für deprecated Dokumente eine Supersession-Relation (`supersedes`) eintragen oder die verweisenden ADRs aktualisieren.
 
 ### 6.4 Mittel: Worker/Projector-Schicht nicht dokumentiert
 
@@ -311,11 +307,11 @@ relations:
 
 **Empfehlung:** Spec erstellen, bevor `apps/worker/` implementiert wird.
 
-### 6.5 Mittel: Keine SLI/SLO-Definitionen
+### 6.5 Mittel: SLOs vorhanden, Alerting-Ableitung fehlt
 
-**Problem:** Kein definiertes Verfügbarkeits-, Latenz- oder Fehlerraten-Ziel. Prometheus-Alerting-Rules nicht dokumentiert.
+**Problem:** `policies/slo.yaml` definiert bereits Availability-, Latenz- und Error-Budget-Ziele. Offen ist die operative Ableitung: Prometheus-Alerting-Rules, Eskalationswege und Runbook-Verknüpfung sind nicht dokumentiert bzw. nicht sichtbar verdrahtet.
 
-**Empfehlung:** SLI/SLO-Dokument in `docs/specs/` erstellen.
+**Empfehlung:** SLO-Policy mit Prometheus-Alerting-Rules und Observability-Runbook verbinden.
 
 ### 6.6 Niedrig: AGENTS.md ohne Rust/Svelte-Richtlinien
 
