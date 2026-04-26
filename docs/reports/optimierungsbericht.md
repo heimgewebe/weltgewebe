@@ -97,6 +97,7 @@ relations:
 **Problem:** Svelte 5.53.5 ist installiert, aber die gesamte Codebasis nutzt Legacy-Patterns (Svelte-4-Stores, `$:` Reactive Statements, `createEventDispatcher`). Runes (`$state`, `$derived`, `$effect`, `$props`) kommen nirgends vor.
 
 **Empfehlung:** Schrittweise Migration zu Runes. Priorisierung:
+
 1. Neue Komponenten direkt mit Runes schreiben
 2. Stores durch `$state` + `$derived` ersetzen
 3. `$:` Blöcke durch `$effect` / `$derived` ablösen
@@ -106,6 +107,7 @@ relations:
 **Problem:** `/src/routes/map/+page.svelte` hat rund 575 Zeilen — Map-Rendering, Overlays, Keyboard-Shortcuts, Daten-Transformation in einer Datei.
 
 **Empfehlung:** Aufteilen in:
+
 - `MapContainer.svelte` (Rendering + Lifecycle)
 - `MapOverlays.svelte` (Layer-Management)
 - `MapControls.svelte` (Keyboard + UI-Interaktion)
@@ -122,6 +124,7 @@ relations:
 **Problem:** `data?: any` in Selection-Type. API-Responses werden nur mit `isRecord()` geprüft — keine Schema-Validierung.
 
 **Empfehlung:**
+
 - `any` durch konkrete Typen ersetzen
 - Zod oder valibot für Runtime-Validierung von API-Responses
 
@@ -164,6 +167,7 @@ relations:
 **Problem:** `security.yml` generiert SBOM (syft), aber scannt keine Container-Images auf Schwachstellen.
 
 **Empfehlung:** Trivy-Step in `security.yml` hinzufügen (gepinnter Release-Tag oder Commit-SHA — kein `@master`, das ist ein Supply-Chain-Risiko):
+
 ```yaml
 - name: Trivy scan
   uses: aquasecurity/trivy-action@<gepinnter-release-tag-oder-commit-sha>
@@ -206,6 +210,7 @@ relations:
 ### 4.1 Hoch: Workflow-Redundanz
 
 **Problem:** 27 Workflows mit Überschneidungen:
+
 - `web.yml` + `heavy.yml` duplizieren Playwright-Tests
 - `ci.yml` + `web.yml` + `api.yml` + `api-smoke.yml` überlappen
 - Lychee-Link-Check läuft in `ci.yml`, `docs-guard.yml` und `links.yml`
@@ -245,6 +250,7 @@ relations:
 **Problem:** Felder wie `title`, `body`, `display_name` haben keine `minLength`, `maxLength` oder `pattern`-Validierung. Leere Strings und unbegrenzte Längen sind möglich.
 
 **Empfehlung:**
+
 - `minLength: 1` für Pflichtfelder
 - `maxLength` je nach Feld (z. B. title: 255, body: 10 000)
 - `pattern` für strukturierte Felder (E-Mail, Domains)
@@ -367,5 +373,5 @@ relations:
 | 6 | API | Paginierung für Listen-Endpunkte | Mittel |
 | 7 | Frontend | Map-Komponente aufteilen (~575 Zeilen) | Mittel |
 | 8 | CI/CD | Workflow-Redundanz reduzieren | Mittel |
-| 9 | Docs | Deployment- und Incident-Runbooks | Niedrig |
+| 9 | Docs | Incident- und Datenbank-Recovery-Runbooks | Niedrig |
 | 10 | Architektur | JSONL zu PostgreSQL Migration planen | Hoch |
