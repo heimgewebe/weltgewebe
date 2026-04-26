@@ -16,6 +16,22 @@ async function loadSchema(name) {
   return JSON.parse(await readFile(path, "utf-8"));
 }
 
+// Domain projections: strip UI/demo-only fields before validating against
+// domain contracts. Demo data may carry UI-enriched fields (e.g. modules)
+// that are not part of the domain contract.
+const DOMAIN_NODE_KEYS = new Set(["id", "kind", "title", "created_at", "updated_at", "info", "summary", "tags", "location"]);
+const DOMAIN_ACCOUNT_KEYS = new Set(["id", "type", "mode", "title", "summary", "location", "public_pos", "radius_m", "tags", "created_at"]);
+const DOMAIN_EDGE_KEYS = new Set(["id", "source_type", "source_id", "target_type", "target_id", "edge_kind", "created_at", "expires_at", "note"]);
+
+function project(keys: Set<string>) {
+  return (obj: Record<string, unknown>) =>
+    Object.fromEntries(Object.entries(obj).filter(([k]) => keys.has(k)));
+}
+
+const toDomainNode = project(DOMAIN_NODE_KEYS);
+const toDomainAccount = project(DOMAIN_ACCOUNT_KEYS);
+const toDomainEdge = project(DOMAIN_EDGE_KEYS);
+
 async function validate() {
   console.log("🔍 Validating Demo Data against Contracts (Source)...");
 
@@ -38,7 +54,8 @@ async function validate() {
 
   console.log(`   Checking ${demoNodes.length} nodes...`);
   demoNodes.forEach((item, i) => {
-    if (!validators.node(item)) {
+    const projected = toDomainNode(item as Record<string, unknown>);
+    if (!validators.node(projected)) {
       console.error(`❌ Node[${i}] invalid:`, validators.node.errors);
       hasError = true;
     }
@@ -46,7 +63,8 @@ async function validate() {
 
   console.log(`   Checking ${demoAccounts.length} accounts...`);
   demoAccounts.forEach((item, i) => {
-    if (!validators.account(item)) {
+    const projected = toDomainAccount(item as Record<string, unknown>);
+    if (!validators.account(projected)) {
       console.error(`❌ Account[${i}] invalid:`, validators.account.errors);
       hasError = true;
     }
@@ -54,7 +72,8 @@ async function validate() {
 
   console.log(`   Checking ${demoEdges.length} edges...`);
   demoEdges.forEach((item, i) => {
-    if (!validators.edge(item)) {
+    const projected = toDomainEdge(item as Record<string, unknown>);
+    if (!validators.edge(projected)) {
       console.error(`❌ Edge[${i}] invalid:`, validators.edge.errors);
       hasError = true;
     }

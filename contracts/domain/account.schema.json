@@ -78,13 +78,18 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [
     "id",
     "type",
     "mode",
-    "title"
+    "title",
+    "created_at"
   ],
   "additionalProperties": false,
   "allOf": [
