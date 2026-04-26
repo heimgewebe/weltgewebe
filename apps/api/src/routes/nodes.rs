@@ -571,6 +571,10 @@ pub async fn list_nodes(
         .get("limit")
         .and_then(|s| s.parse().ok())
         .unwrap_or(100);
+    let offset: usize = params
+        .get("offset")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
 
     let cache = state.nodes.read().await;
 
@@ -583,6 +587,7 @@ pub async fn list_nodes(
                 true
             }
         })
+        .skip(offset)
         .take(limit)
         .cloned()
         .collect();

@@ -124,6 +124,10 @@ pub async fn list_edges(
         .and_then(|s| s.parse().ok())
         .unwrap_or(250)
         .min(MAX_PAGE_SIZE);
+    let offset: usize = params
+        .get("offset")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
 
     let cache = state.edges.read().await;
 
@@ -142,6 +146,7 @@ pub async fn list_edges(
             }
             true
         })
+        .skip(offset)
         .take(limit)
         .cloned()
         .collect();

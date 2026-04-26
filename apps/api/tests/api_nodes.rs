@@ -435,6 +435,59 @@ async fn nodes_patch_without_origin_fails() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn nodes_offset_pagination() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[
+            r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#,
+            r#"{"id":"n2","location":{"lon":10.1,"lat":53.6},"title":"B"}"#,
+            r#"{"id":"n3","location":{"lon":10.2,"lat":53.7},"title":"C"}"#,
+        ],
+    )
+    .await;
+
+    // limit=1&offset=0 liefert erstes Element (n1)
+    let res = app
+        .clone()
+        .oneshot(Request::get("/nodes?limit=1&offset=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "n1");
+
+    // limit=1&offset=1 liefert zweites Element (n2)
+    let res = app
+        .clone()
+        .oneshot(Request::get("/nodes?limit=1&offset=1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["id"], "n2");
+
+    // Offset außerhalb der Ergebnislänge liefert leere Liste
+    let res = app
+        .oneshot(Request::get("/nodes?limit=10&offset=100").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let arr = v.as_array().context("must be array")?;
+    assert_eq!(arr.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
