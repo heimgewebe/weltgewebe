@@ -475,6 +475,7 @@ async fn nodes_offset_pagination() -> anyhow::Result<()> {
 
     // Offset außerhalb der Ergebnislänge liefert leere Liste
     let res = app
+        .clone()
         .oneshot(Request::get("/nodes?limit=10&offset=100").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
@@ -482,6 +483,19 @@ async fn nodes_offset_pagination() -> anyhow::Result<()> {
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     let arr = v.as_array().context("must be array")?;
     assert_eq!(arr.len(), 0);
+
+    // Ungültiger Offset (negativ) -> 400
+    let res = app
+        .clone()
+        .oneshot(Request::get("/nodes?offset=-1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // Ungültiger Offset (kein Integer) -> 400
+    let res = app
+        .oneshot(Request::get("/nodes?offset=abc").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
 
     Ok(())
 }
