@@ -63,6 +63,11 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Runbook:** [runbook.md](runbook.md)
 – **Observability:** [runbook.observability.md](runbook.observability.md)
 
+### Berichte & Audits
+
+– **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
+– **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
+
 ### Prozess
 
 – **Prozess & Fahrplan:** [process/README.md](process/README.md), [process/fahrplan.md](process/fahrplan.md)
