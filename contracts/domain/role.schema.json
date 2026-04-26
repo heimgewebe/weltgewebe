@@ -28,5 +28,6 @@
     "user_id",
     "permissions",
     "created_at"
-  ]
+  ],
+  "additionalProperties": false
 }

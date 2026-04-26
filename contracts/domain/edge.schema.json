@@ -38,8 +38,10 @@
       "format": "date-time"
     },
     "note": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     }
   },
-  "required": ["id", "source_type", "source_id", "target_type", "target_id", "edge_kind", "created_at"]
+  "required": ["id", "source_type", "source_id", "target_type", "target_id", "edge_kind", "created_at"],
+  "additionalProperties": false
 }

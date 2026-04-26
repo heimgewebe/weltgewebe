@@ -23,7 +23,8 @@
       "description": "Role that created the conversation."
     },
     "title": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1
     },
     "created_at": {
       "type": "string",
@@ -41,5 +42,6 @@
     "title",
     "created_at",
     "updated_at"
-  ]
+  ],
+  "additionalProperties": false
 }
