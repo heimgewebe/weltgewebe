@@ -4,6 +4,7 @@ pub mod edges;
 pub mod health;
 pub mod meta;
 pub mod nodes;
+mod query;
 
 use axum::{
     middleware::from_fn,

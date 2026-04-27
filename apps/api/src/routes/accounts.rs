@@ -1,3 +1,4 @@
+use super::query::parse_usize_param;
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::state::ApiState;
 use axum::{
@@ -324,8 +325,8 @@ pub async fn list_accounts(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
-    let limit: usize = crate::utils::parse_usize_param(&params, "limit", 100)?;
-    let offset: usize = crate::utils::parse_usize_param(&params, "offset", 0)?;
+    let limit: usize = parse_usize_param(&params, "limit", 100)?;
+    let offset: usize = parse_usize_param(&params, "offset", 0)?;
 
     let accounts = state.accounts.read().await;
 

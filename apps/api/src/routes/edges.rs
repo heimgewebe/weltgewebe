@@ -1,3 +1,4 @@
+use super::query::parse_usize_param;
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
@@ -119,8 +120,8 @@ pub async fn list_edges(
 ) -> Result<Json<Vec<Edge>>, StatusCode> {
     let src = params.get("source_id");
     let dst = params.get("target_id");
-    let limit: usize = crate::utils::parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
-    let offset: usize = crate::utils::parse_usize_param(&params, "offset", 0)?;
+    let limit: usize = parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
+    let offset: usize = parse_usize_param(&params, "offset", 0)?;
 
     let cache = state.edges.read().await;
 
