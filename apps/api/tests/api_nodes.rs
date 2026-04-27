@@ -502,6 +502,34 @@ async fn nodes_offset_pagination() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
+async fn nodes_invalid_limit() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#],
+    )
+    .await;
+
+    // limit=abc -> 400
+    let res = app
+        .clone()
+        .oneshot(Request::get("/nodes?limit=abc").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // limit=-1 -> 400
+    let res = app
+        .oneshot(Request::get("/nodes?limit=-1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
 async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");

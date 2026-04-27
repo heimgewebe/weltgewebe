@@ -208,3 +208,35 @@ async fn edges_offset_pagination() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn edges_invalid_limit() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // limit=abc -> 400
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?limit=abc").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    // limit=-1 -> 400
+    let res = app
+        .oneshot(Request::get("/edges?limit=-1").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
