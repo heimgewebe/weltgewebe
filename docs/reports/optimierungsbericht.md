@@ -8,7 +8,8 @@ lang: de
 summary: >
   Umfassende Optimierungsanalyse aller Schichten — API, Frontend, Infrastruktur,
   CI/CD, Dokumentation und Domain-Contracts — mit priorisierten
-  Handlungsempfehlungen und Aufwandsschätzungen.
+  Handlungsempfehlungen; operative Status- und Aufwandspflege erfolgt in
+  docs/reports/optimierungsstatus.md.
 relations:
   - type: relates_to
     target: docs/techstack.md
@@ -16,6 +17,8 @@ relations:
     target: docs/datenmodell.md
   - type: relates_to
     target: docs/policies/agent-reading-protocol.md
+  - type: relates_to
+    target: docs/reports/optimierungsstatus.md
 ---
 
 # Optimierungsbericht Weltgewebe
@@ -24,7 +27,18 @@ relations:
 
 ---
 
-## Gesamtbewertung
+## Statusführung
+
+Dieser Bericht ist die Diagnosequelle, nicht die operative Fortschrittswahrheit.
+Der aktuelle Umsetzungsstand der Maßnahmen wird in
+`docs/reports/optimierungsstatus.md` geführt.
+`done` darf dort nur vergeben werden, wenn Nachweis, reproduzierbarer Test
+und keine Restlücke dokumentiert sind. Ohne Guard-/Schema-Prüfung bleibt die
+Statusmatrix eine operative Orientierung, keine maschinell erzwungene Wahrheit.
+
+---
+
+## Gesamtbewertung (Diagnose, nicht Fortschrittswahrheit)
 
 | Bereich | Score | Einordnung |
 |---------|-------|------------|
@@ -361,17 +375,10 @@ relations:
 
 ---
 
-## Zusammenfassung: Top-10-Prioritäten
+## Zusammenfassung: priorisierte nächste Schritte
 
-| # | Bereich | Maßnahme | Aufwand |
-|---|---------|-----------|---------|
-| 1 | API | Session-Persistenz (Redis/DB) | Mittel |
-| 2 | Frontend | Svelte 5 Runes Migration starten | Hoch |
-| 3 | API | Datenbank-Migrationen einführen | Niedrig |
-| 4 | Contracts | `additionalProperties: false` + String-Constraints | Niedrig |
-| 5 | Infra | Container-Image-Scanning (Trivy) | Niedrig |
-| 6 | API | Paginierung für Listen-Endpunkte | Mittel |
-| 7 | Frontend | Map-Komponente aufteilen (~575 Zeilen) | Mittel |
-| 8 | CI/CD | Workflow-Redundanz reduzieren | Mittel |
-| 9 | Docs | Incident- und Datenbank-Recovery-Runbooks | Niedrig |
-| 10 | Architektur | JSONL zu PostgreSQL Migration planen | Hoch |
+1. Die operative Statusmatrix in `docs/reports/optimierungsstatus.md` pflegen (mit `nachweis`, `test`, `restlücke`, `zuletzt_geprüft`); verbindlich wird sie erst mit Guard-/Schema-Prüfung.
+2. Bereits teilumgesetzte Punkte explizit auf `partial` setzen statt erneut als unqualifiziert „offen“ zu führen.
+3. Kritische offene Risiken zuerst bearbeiten: Session-Persistenz, DB-Migrationen, Produktions-Guards, Runtime-Proofs.
+4. `done` nur mit reproduzierbarem Code-/Test-/Doku-Nachweis vergeben.
+5. Bei fehlender Evidenz den Status als `open` lassen und Lücke explizit benennen (keine stille Interpolation).
