@@ -314,7 +314,9 @@ pub struct DbSessionStore {
 
 ### Schritt 5: Conditional Init in `ApiState`
 
-```rust
+Pseudocode, nicht direkt kopierbar:
+
+```text
 let sessions: /* SessionBackend */ = match (db_pool_configured, db_pool.as_ref()) {
     (true, Some(pool)) => {
         // DbSessionStore::new(pool.clone())
