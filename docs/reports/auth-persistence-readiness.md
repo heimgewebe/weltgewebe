@@ -1,6 +1,6 @@
 ---
 id: reports.auth-persistence-readiness
-title: "Auth Persistence Readiness — OPT-API-002"
+title: "Auth-Persistenzbereitschaft — OPT-API-002"
 doc_type: report
 status: active
 created: 2026-04-28
@@ -10,9 +10,9 @@ summary: >
   Abgrenzung des AccountStore, fehlende DB-Strukturen,
   Entscheidung zur Persistenzstrategie und Minimal-Migrationsplan.
   Keine Implementierung, kein Umbau — ausschließlich belegter Ist-Zustand.
+depends_on:
+  - docs/reports/optimierungsstatus.md
 relations:
-  - type: depends_on
-    target: docs/reports/optimierungsstatus.md
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - type: relates_to
@@ -21,7 +21,7 @@ relations:
     target: docs/blueprints/auth-roadmap.md
 ---
 
-# Auth Persistence Readiness — OPT-API-002
+# Auth-Persistenzbereitschaft — OPT-API-002
 
 > **Zweck:** Diagnosebericht. Kein Patch, kein Umbau.
 > Ziel: belegter Ist-Zustand, fehlende Strukturen, Entscheidung, Testplan.
@@ -121,12 +121,16 @@ Methoden: `create`, `get`, `delete`, `touch`, `list_by_account`,
 `delete_by_device`, `delete_all_by_account`.
 
 **Fachliche Methodenoberfläche ist klar, technisch aber noch nicht DB-drop-in-fähig.**
-Die aktuelle `SessionStore`-API ist vollständig synchron (`pub fn create`, `pub fn get`, …).
-Ein SQLx-basierter Store wäre async. Damit ist ein reiner Typ-Austausch nicht möglich:
-Der Implementierungs-PR muss eine async-fähige Abstraktion einführen — entweder
-`async_trait`-basierter `SessionOps`-Trait oder ein `SessionBackend`-Enum — und alle
-Aufrufstellen in Middleware und Routen anpassen.
-Befund: `docs/blueprints/auth-roadmap.md`, Abschnitt „Phase 2“ / „Persistenzentscheidung“.
+Die Roadmap bewertet die `SessionStore`-Schnittstelle als ausreichend gekapselt
+für eine spätere Persistenzmigration ohne fachliche Route-Neustrukturierung
+(`docs/blueprints/auth-roadmap.md`, Abschnitt „Phase 2“ / „Persistenzentscheidung“).
+Der aktuelle Code-Befund ergänzt diesen Zielrahmen: Die bestehende
+`SessionStore`-API ist vollständig synchron (`pub fn create`, `pub fn get`, …).
+Ein SQLx-basierter Store wäre async. Der Implementierungs-PR muss deshalb
+entweder eine async-fähige Abstraktion einführen oder eine explizite
+Backend-Dispatch-Schicht definieren. Aufrufstellen in Middleware und Routen
+müssen mindestens dort angepasst werden, wo Session-Operationen künftig
+asynchron ausgeführt werden.
 
 ### `TokenStore` — kurzlebig, Verlust tolerierbar
 
@@ -311,10 +315,19 @@ pub struct DbSessionStore {
 ### Schritt 5: Conditional Init in `ApiState`
 
 ```rust
-let sessions: /* SessionStore oder DbSessionStore */ = if db_pool_configured {
-    // DbSessionStore::new(pool.clone())
-} else {
-    SessionStore::new()
+let sessions: /* SessionBackend */ = match (db_pool_configured, db_pool.as_ref()) {
+    (true, Some(pool)) => {
+        // DbSessionStore::new(pool.clone())
+    }
+    (true, None) => {
+        // Konfigurationsfehler: DB ist gefordert, aber kein Pool verfügbar.
+        // Nicht still auf In-Memory zurückfallen.
+        return Err(anyhow::anyhow!("database configured but pool unavailable"));
+    }
+    (false, _) => {
+        // Nur für Dev/Test oder expliziten Single-Instance-Betrieb.
+        SessionStore::new()
+    }
 };
 ```
 
