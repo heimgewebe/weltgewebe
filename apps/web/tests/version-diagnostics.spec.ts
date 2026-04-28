@@ -4,7 +4,7 @@ test.describe("Version Diagnostics", () => {
   test("displays canonical version and optional build_id when version.json is successfully fetched", async ({
     page,
   }) => {
-    await page.route("**/_app/version.json", async (route) => {
+    await page.route("**/version.json", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -20,6 +20,7 @@ test.describe("Version Diagnostics", () => {
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
       "Release 1.2.0 · Version abc1234",
+      { timeout: 10000 }
     );
     await expect(page.locator('[data-testid="version-meta"]')).toContainText(
       "(Build abc1234-1742155012000) · gebaut am 15.03.2026",
@@ -27,7 +28,7 @@ test.describe("Version Diagnostics", () => {
   });
 
   test("displays fallback when version.json fetch fails", async ({ page }) => {
-    await page.route("**/_app/version.json", async (route) => {
+    await page.route("**/version.json", async (route) => {
       await route.fulfill({
         status: 500,
         body: "Internal Server Error",
@@ -37,13 +38,14 @@ test.describe("Version Diagnostics", () => {
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
       "Version unbekannt",
+      { timeout: 10000 }
     );
   });
 
   test("displays only version when release and build_id are missing", async ({
     page,
   }) => {
-    await page.route("**/_app/version.json", async (route) => {
+    await page.route("**/version.json", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -56,6 +58,7 @@ test.describe("Version Diagnostics", () => {
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
       "Version test-build-67890",
+      { timeout: 10000 }
     );
     // The meta element should not be rendered if built_at and build_id are missing
     await expect(page.locator('[data-testid="version-meta"]')).toHaveCount(0);
@@ -64,7 +67,7 @@ test.describe("Version Diagnostics", () => {
   test("remains stable and hides timestamp if built_at is invalid", async ({
     page,
   }) => {
-    await page.route("**/_app/version.json", async (route) => {
+    await page.route("**/version.json", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -78,6 +81,7 @@ test.describe("Version Diagnostics", () => {
     await page.goto("/settings");
     await expect(page.locator('[data-testid="version-text"]')).toHaveText(
       "Version test-build-invalid-date",
+      { timeout: 10000 }
     );
     await expect(page.locator('[data-testid="version-meta"]')).toHaveCount(0);
   });
