@@ -29,7 +29,9 @@ relations:
 
 ## 1. Belegter Ist-Zustand
 
-Alle Auth-Stores sind ausschließlich in-memory.
+Alle transienten Auth-Stores sind in-memory.
+`AccountStore` ist ein separater Account-Cache auf Basis der JSONL-Datenquelle
+und gehört zu OPT-ARC-001 — er ist nicht Teil dieser Diagnose.
 Basis: direkter Code-Befund in `apps/api/src/auth/` und `apps/api/src/state.rs`.
 
 ### Stores in `ApiState` (`apps/api/src/state.rs`)
@@ -46,6 +48,21 @@ Basis: direkter Code-Befund in `apps/api/src/auth/` und `apps/api/src/state.rs`.
 `db_pool: Option<PgPool>` und `db_pool_configured: bool` sind in `ApiState` vorhanden,
 aber **ausschließlich für den Health-/Bereitschaftscheck verdrahtet** — keine Auth-Operation
 nutzt den Pool.
+
+Beleg (`grep -rn "db_pool\|db_pool_configured\|query_scalar\|PgPool" apps/api/src/`):
+
+```text
+apps/api/src/state.rs:      pub db_pool: Option<PgPool>,
+apps/api/src/state.rs:      pub db_pool_configured: bool,
+apps/api/src/lib.rs:        let (db_pool, db_pool_configured) = initialise_database_pool().await;
+apps/api/src/lib.rs:        db_pool,
+apps/api/src/lib.rs:        db_pool_configured,
+apps/api/src/routes/health.rs: if !state.db_pool_configured { ... }
+apps/api/src/routes/health.rs: match query_scalar::<_, i32>("SELECT 1") ...
+```
+
+Beleg (`find apps/api -maxdepth 2 -type d -name migrations`): keine Ausgabe.
+Beleg (`find . -name "*.sql"`): ausschließlich `infra/compose/sql/init/00_extensions.sql`.
 
 Startup-Code (`apps/api/src/lib.rs`, Zeilen 49–52):
 
@@ -72,8 +89,12 @@ SessionStore { store: Arc<RwLock<HashMap<String, Session>>> }
 Methoden: `create`, `get`, `delete`, `touch`, `list_by_account`,
 `delete_by_device`, `delete_all_by_account`.
 
-**Schnittstelle ist abstrakt genug** — alle Route-Handler greifen ausschließlich
-über diese Methoden zu. Ein persistenter Adapter würde keine Route-Änderung erfordern.
+**Fachliche Methodenoberfläche ist klar, technisch aber noch nicht DB-drop-in-fähig.**
+Die aktuelle `SessionStore`-API ist vollständig synchron (`pub fn create`, `pub fn get`, …).
+Ein SQLx-basierter Store wäre async. Damit ist ein reiner Typ-Austausch nicht möglich:
+Der Implementierungs-PR muss eine async-fähige Abstraktion einführen — entweder
+`async_trait`-basierter `SessionOps`-Trait oder ein `SessionBackend`-Enum — und alle
+Aufrufstellen in Middleware und Routen anpassen.
 Befund: `auth-roadmap.md`, Phase 2, Persistenzentscheidung, Zeile 213.
 
 ### `TokenStore` — kurzlebig, Verlust tolerierbar
@@ -159,8 +180,8 @@ reiner In-Memory-Zugriff, keine Datenbankabfrage.
   Compose-Profil Pflichtbestandteil.
 - Die DB-Extensions `uuid-ossp` und `pgcrypto` sind bereits aktiv
   (`infra/compose/sql/init/00_extensions.sql`).
-- `SessionStore`-Schnittstelle ist durch ihre Methoden-API abstrakt genug
-  für eine Drop-in-Ersetzung ohne Route-Änderungen.
+- `SessionStore`-Methodenoberfläche deckt alle nötigen Operationen ab;
+  der Implementierungs-PR muss eine async-fähige Abstraktion einführen (siehe Abschnitt 2).
 
 **Gegen Redis-first:**
 
@@ -199,16 +220,18 @@ bleiben **in-memory**. Begründung:
 
 ```bash
 mkdir apps/api/migrations
-# Erste Migration anlegen:
-sqlx migrate add create_sessions
+# Reversible Migration anlegen (-r erzeugt .up.sql + .down.sql):
+sqlx migrate add -r create_sessions
 ```
 
-Resultat: `apps/api/migrations/0001_create_sessions.up.sql`
+Resultat: `apps/api/migrations/<timestamp>_create_sessions.up.sql`
+und `apps/api/migrations/<timestamp>_create_sessions.down.sql`
+(sqlx verwendet Unix-Timestamp als Präfix, nicht `0001`).
 
 ### Schritt 2: `sessions`-Tabelle
 
 ```sql
--- apps/api/migrations/0001_create_sessions.up.sql
+-- apps/api/migrations/<timestamp>_create_sessions.up.sql
 CREATE TABLE sessions (
     id          TEXT        PRIMARY KEY,
     account_id  TEXT        NOT NULL,
@@ -223,8 +246,8 @@ CREATE INDEX sessions_expires_at ON sessions (expires_at);
 ```
 
 ```sql
--- apps/api/migrations/0001_create_sessions.down.sql
-DROP TABLE IF EXISTS sessions;
+-- apps/api/migrations/<timestamp>_create_sessions.down.sql
+DROP TABLE sessions;
 ```
 
 ### Schritt 3: Startup-Integration
@@ -261,8 +284,14 @@ let sessions: /* SessionStore oder DbSessionStore */ = if db_pool_configured {
 };
 ```
 
-Alternativ: Enum `SessionBackend { InMemory(SessionStore), Db(DbSessionStore) }`
-mit gemeinsamer `SessionOps`-Trait-Implementierung.
+Da die aktuelle `SessionStore`-API synchron ist, ist ein Typ-Austausch nicht trivial.
+Der Implementierungs-PR muss wählen zwischen:
+
+- `async_trait`-basierter `SessionOps`-Trait + Impl für beide Backends
+- Enum `SessionBackend { InMemory(SessionStore), Db(DbSessionStore) }` mit `match`-Dispatch
+
+In beiden Fällen sind alle Aufrufstellen (Middleware `auth.rs`, Route-Handler in `auth.rs`)
+auf `await` umzustellen.
 
 ### Schritt 6: CI-Anpassung
 
@@ -313,7 +342,7 @@ mit gleicher Schnittstelle parallel für beide Backends bestehen.
 |---|---|---|---|
 | API-Neustart löscht alle Sessions (Ist-Zustand) | hoch | bei jedem Deploy | `sessions`-Tabelle einführen |
 | DB-Ausfall bei persistentem Store → alle Auth-Ops fehlerhaft | hoch | niedrig (PgBouncer + Retry) | Klar scheitern statt In-Memory-Fallback (Silent Fail wäre schlimmer) |
-| Migration läuft nicht idempotent → CI-Bruch | mittel | niedrig | `IF NOT EXISTS` in DDL; sqlx-Migrationsprotokoll schützt vor Doppelausführung |
+| Migration läuft nicht idempotent → CI-Bruch | mittel | niedrig | Keine `IF NOT EXISTS`-Kaschierung in der Up-Migration; die Migration soll bei unerwartetem Vorzustand scheitern. Das sqlx-Migrationsprotokoll verhindert reguläre Doppelausführung. |
 | `DbSessionStore` verdrängt `SessionStore` → In-Memory-Testharness bricht | niedrig | niedrig | `test_state()` nutzt `db_pool: None` → bleibt in-memory |
 | Falsche Indexwahl → Performance bei hoher Session-Zahl | niedrig | niedrig | `sessions_account_id` + `sessions_expires_at` decken alle Abfragen ab |
 | Token-Stores bleiben in-memory → Verlust bei Neustart | akzeptiert | bei jedem Deploy | TTL ≤ 15 min; dokumentiertes Design-Entscheid |
@@ -333,6 +362,6 @@ mit gleicher Schnittstelle parallel für beide Backends bestehen.
 | Was ist in-memory? | Alle Auth-Stores: Sessions (24 h), Tokens (15 min), Step-up-Tokens (5 min), Challenges (5 min), Passkey-Registrierungen (5 min) |
 | Was ist kritisch? | Ausschließlich `SessionStore` — langlebig (24 h), Verlust = Logout aller Nutzer |
 | Welche DB-Strukturen fehlen? | `apps/api/migrations/` (kein Verzeichnis), `sessions`-Tabelle (nicht vorhanden) |
-| Strategie? | DB-first (PostgreSQL); `db_pool` bereits in `ApiState`; Schnittstelle migrationsbereit |
-| Nächster Schritt? | Migrationsverzeichnis + `0001_create_sessions`, dann `DbSessionStore` |
+| Strategie? | DB-first (PostgreSQL); `db_pool` bereits in `ApiState`; Implementierungs-PR muss async-Abstraktion einführen |
+| Nächster Schritt? | Migrationsverzeichnis + `sqlx migrate add -r create_sessions`, dann `DbSessionStore` mit `SessionOps`-Trait |
 | Bestehende Tests? | Alle laufen ohne DB (In-Memory-Fallback); müssen erhalten bleiben |
