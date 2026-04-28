@@ -99,6 +99,34 @@ By default, dev-login is restricted to requests originating from **localhost**.
 - `GET /health/live` and `GET /health/ready` expose liveness and readiness information.
 - `GET /metrics` renders Prometheus metrics including `http_requests_total{method,path}` and `build_info`.
 
+## Database Migrations
+
+Migrations live in `apps/api/migrations/` and are managed with the
+[sqlx-cli](https://github.com/launchbadge/sqlx/tree/main/sqlx-cli).
+
+Install once:
+
+```bash
+cargo install sqlx-cli --no-default-features --features postgres
+```
+
+Run from the **repository root** with `DATABASE_URL` set:
+
+```bash
+export DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe
+sqlx migrate run --source apps/api/migrations     # apply pending migrations
+sqlx migrate revert --source apps/api/migrations  # roll back last migration
+```
+
+Or use the Justfile shortcut (requires `DATABASE_URL` in the environment):
+
+```bash
+just db-migrate
+```
+
+> **Note:** This PR introduces the migration schema only. Auth-session persistence
+> (`DbSessionStore`) and startup/CI migration automation are not yet activated.
+
 ## Development tasks
 
 ```bash

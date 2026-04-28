@@ -83,8 +83,8 @@ drill:     # run disaster recovery drill smoke sequence
 db-wait:    # wait for database to be ready
 	./ci/scripts/db-wait.sh
 
-db-migrate:    # run database migrations
-	cargo run -p api -- migrate
+db-migrate:    # run database migrations (requires sqlx-cli: cargo install sqlx-cli --no-default-features --features postgres)
+	sqlx migrate run --source apps/api/migrations
 
 seed:          # seed database with initial data
 	cargo run -p api -- seed
