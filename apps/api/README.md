@@ -107,7 +107,7 @@ Migrations live in `apps/api/migrations/` and are managed with the
 Install once:
 
 ```bash
-cargo install sqlx-cli --no-default-features --features postgres
+cargo install sqlx-cli --version 0.8.1 --no-default-features --features postgres
 ```
 
 Run from the **repository root** with `DATABASE_URL` set:
