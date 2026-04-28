@@ -64,7 +64,7 @@ let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
 
 Datei: `apps/api/src/auth/session.rs`
 
-```
+```rust
 Session { id, account_id, device_id, created_at, last_active, expires_at }
 SessionStore { store: Arc<RwLock<HashMap<String, Session>>> }
 ```
@@ -80,7 +80,7 @@ Befund: `auth-roadmap.md`, Phase 2, Persistenzentscheidung, Zeile 213.
 
 Datei: `apps/api/src/auth/tokens.rs`
 
-```
+```rust
 TokenData { email, expires_at }
 TokenStore { store: Arc<RwLock<HashMap<String, TokenData>>> }
 ```
@@ -91,7 +91,7 @@ SHA-256-gehasht. TTL 15 min. Verlust bei Neustart: Nutzer muss neu anfragen — 
 
 Datei: `apps/api/src/auth/step_up_tokens.rs`
 
-```
+```rust
 StepUpTokenData { challenge_id, account_id, device_id, expires_at }
 StepUpTokenStore { store: Arc<RwLock<HashMap<String, StepUpTokenData>>> }
 ```
@@ -121,7 +121,7 @@ zugehörig zu OPT-ARC-001 (JSONL → PostgreSQL).
 
 ### Kein Migrationsverzeichnis
 
-```
+```text
 apps/api/migrations/   ← existiert nicht
 ```
 
