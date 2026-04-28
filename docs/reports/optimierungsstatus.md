@@ -13,6 +13,8 @@ relations:
     target: docs/reports/optimierungsbericht.md
   - type: relates_to
     target: docs/policies/agent-reading-protocol.md
+  - type: relates_to
+    target: docs/reports/auth-persistence-readiness.md
 ---
 
 # Optimierungsstatus Weltgewebe
