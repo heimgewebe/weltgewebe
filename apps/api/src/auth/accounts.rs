@@ -57,34 +57,31 @@ impl AccountStore {
 
     pub(crate) fn rebuild_email_index(&mut self) {
         self.email_index.clear();
+        self.email_index.reserve(self.map.len());
 
-        let mut groups: HashMap<String, (String, usize)> = HashMap::with_capacity(self.map.len());
+        let mut duplicates: HashMap<String, usize> = HashMap::new();
 
-        // BTreeMap.iter() iterates in key order (lexicographically by id)
-        // Since id is already sorted, the first id we encounter for any email
-        // will naturally be the smallest. We track count to emit warnings.
         for (id, acc) in self.map.iter() {
             if let Some(email) = &acc.email {
                 let key = normalize_email_key(email);
-                groups
-                    .entry(key)
-                    .and_modify(|(_, count)| *count += 1)
-                    .or_insert_with(|| (id.clone(), 1));
+                if self.email_index.contains_key(&key) {
+                    *duplicates.entry(key).or_insert(1) += 1;
+                } else {
+                    self.email_index.insert(key, id.clone());
+                }
             }
         }
 
-        self.email_index.reserve(groups.len());
-
-        for (key, (owner_id, count)) in groups {
-            if count > 1 {
+        for (key, extra_count) in duplicates {
+            if let Some(owner_id) = self.email_index.get(&key) {
                 tracing::warn!(
                     event = "account_store.duplicate_email",
                     owner_id = %owner_id,
-                    count = count,
+                    count = extra_count + 1,
                     "Duplicate email detected in AccountStore bulk load. The deterministically smallest ID is chosen as owner."
                 );
+                self.email_index.insert(key, owner_id.clone());
             }
-            self.email_index.insert(key, owner_id);
         }
     }
 
