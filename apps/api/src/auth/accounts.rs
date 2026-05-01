@@ -1,4 +1,5 @@
 use crate::routes::accounts::AccountInternal;
+use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Default)]
@@ -64,10 +65,13 @@ impl AccountStore {
         for (id, acc) in self.map.iter() {
             if let Some(email) = &acc.email {
                 let key = normalize_email_key(email);
-                if self.email_index.contains_key(&key) {
-                    *duplicates.entry(key).or_insert(1) += 1;
-                } else {
-                    self.email_index.insert(key, id.clone());
+                match self.email_index.entry(key.clone()) {
+                    Entry::Occupied(_) => {
+                        *duplicates.entry(key).or_insert(1) += 1;
+                    }
+                    Entry::Vacant(e) => {
+                        e.insert(id.clone());
+                    }
                 }
             }
         }
