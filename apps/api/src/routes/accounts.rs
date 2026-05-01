@@ -519,13 +519,14 @@ mod tests {
         let lat = 60.0;
         let max_deg = radius_m as f64 / METERS_PER_DEGREE; // ~1.0 degree
 
-        // We test a specific ID that we know generates a random offset close to the maximum
-        // possible displacement (where r2 approaches 1.0 or -1.0).
-        // For this specific stable_hash implementation, "0" gives an r2 near 1.0.
-        // This avoids iterating through 10,000 hashes in a loop while still proving
-        // that the longitude jitter correctly scales with latitude.
-        let id = "0";
-        let pos = calculate_jittered_pos(lat, 0.0, radius_m, id);
+        // We do a small deterministic search to find an ID that triggers a large
+        // longitude jitter. This avoids testing 10,000 hashes while remaining robust
+        // against future changes to the stable_hash implementation.
+        let id = (0..100)
+            .map(|i| i.to_string())
+            .find(|id| calculate_jittered_pos(lat, 0.0, radius_m, id).lon.abs() > max_deg * 1.2)
+            .expect("expected at least one deterministic id to exercise high longitude jitter");
+        let pos = calculate_jittered_pos(lat, 0.0, radius_m, &id);
         let max_observed = pos.lon.abs();
 
         // Assert that we observed a jitter significantly larger than max_deg.
