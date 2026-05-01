@@ -28,21 +28,48 @@ impl Challenge {
 }
 
 #[derive(Clone, Default)]
+struct ChallengeState {
+    // Maps challenge_id -> Challenge
+    challenges: HashMap<String, Challenge>,
+    // Maps account_id -> list of challenge_ids
+    account_index: HashMap<String, Vec<String>>,
+}
+
+#[derive(Clone, Default)]
 pub struct ChallengeStore {
-    store: Arc<RwLock<HashMap<String, Challenge>>>,
+    state: Arc<RwLock<ChallengeState>>,
 }
 
 impl ChallengeStore {
     pub fn new() -> Self {
         Self {
-            store: Arc::new(RwLock::new(HashMap::new())),
+            state: Arc::new(RwLock::new(ChallengeState::default())),
         }
     }
 
     pub fn cleanup_expired(&self) {
-        if let Ok(mut store) = self.store.write() {
+        if let Ok(mut state) = self.state.write() {
             let now = Utc::now();
-            store.retain(|_, challenge| challenge.expires_at > now);
+
+            // Keep track of expired challenge IDs to remove from the index
+            let mut expired_ids = Vec::new();
+            state.challenges.retain(|id, challenge| {
+                let keep = challenge.expires_at > now;
+                if !keep {
+                    expired_ids.push((id.clone(), challenge.account_id.clone()));
+                }
+                keep
+            });
+
+            // Remove expired IDs from the index
+            for (id, account_id) in expired_ids {
+                if let Some(ids) = state.account_index.get_mut(&account_id) {
+                    ids.retain(|x| x != &id);
+                    if ids.is_empty() {
+                        state.account_index.remove(&account_id);
+                    }
+                }
+            }
         }
     }
 
@@ -53,19 +80,22 @@ impl ChallengeStore {
         intent: ChallengeIntent,
     ) -> Challenge {
         // Atomic block: take a single write lock to avoid race conditions
-        let mut store = self.store.write().expect("ChallengeStore lock poisoned");
+        let mut state = self.state.write().expect("ChallengeStore lock poisoned");
 
         let now = Utc::now();
-        // Inline cleanup to avoid double-locking
-        store.retain(|_, challenge| challenge.expires_at > now);
 
         // 1. Try to find and reuse an existing active challenge with identical context
-        for existing_challenge in store.values() {
-            if existing_challenge.account_id == account_id
-                && existing_challenge.device_id == device_id
-                && existing_challenge.intent == intent
-            {
-                return existing_challenge.clone();
+        // Search ONLY within challenges for this account (O(1) lookup + small scan)
+        if let Some(ids) = state.account_index.get(&account_id) {
+            for id in ids {
+                if let Some(existing_challenge) = state.challenges.get(id) {
+                    if existing_challenge.expires_at > now
+                        && existing_challenge.device_id == device_id
+                        && existing_challenge.intent == intent
+                    {
+                        return existing_challenge.clone();
+                    }
+                }
             }
         }
 
@@ -76,21 +106,30 @@ impl ChallengeStore {
 
         let challenge = Challenge {
             id: id.clone(),
-            account_id,
+            account_id: account_id.clone(),
             device_id,
             intent,
             created_at: now,
             expires_at,
         };
 
-        store.insert(id, challenge.clone());
+        state.challenges.insert(id.clone(), challenge.clone());
+        state.account_index.entry(account_id).or_default().push(id);
 
         challenge
     }
 
     pub fn consume(&self, challenge_id: &str) -> Option<Challenge> {
-        let mut store = self.store.write().expect("ChallengeStore lock poisoned");
-        if let Some(challenge) = store.remove(challenge_id) {
+        let mut state = self.state.write().expect("ChallengeStore lock poisoned");
+        if let Some(challenge) = state.challenges.remove(challenge_id) {
+            // Clean up index
+            if let Some(ids) = state.account_index.get_mut(&challenge.account_id) {
+                ids.retain(|x| x != challenge_id);
+                if ids.is_empty() {
+                    state.account_index.remove(&challenge.account_id);
+                }
+            }
+
             if !challenge.is_expired() {
                 return Some(challenge);
             }
@@ -100,8 +139,8 @@ impl ChallengeStore {
 
     pub fn get(&self, challenge_id: &str) -> Option<Challenge> {
         let is_expired = {
-            let store = self.store.read().expect("ChallengeStore lock poisoned");
-            if let Some(challenge) = store.get(challenge_id) {
+            let state = self.state.read().expect("ChallengeStore lock poisoned");
+            if let Some(challenge) = state.challenges.get(challenge_id) {
                 if !challenge.is_expired() {
                     return Some(challenge.clone());
                 }
@@ -112,8 +151,16 @@ impl ChallengeStore {
         };
 
         if is_expired {
-            let mut store = self.store.write().expect("ChallengeStore lock poisoned");
-            store.remove(challenge_id);
+            let mut state = self.state.write().expect("ChallengeStore lock poisoned");
+            if let Some(challenge) = state.challenges.remove(challenge_id) {
+                // Clean up index
+                if let Some(ids) = state.account_index.get_mut(&challenge.account_id) {
+                    ids.retain(|x| x != challenge_id);
+                    if ids.is_empty() {
+                        state.account_index.remove(&challenge.account_id);
+                    }
+                }
+            }
         }
 
         None
@@ -165,20 +212,28 @@ mod tests {
 
         // Manually expire the challenge
         {
-            let mut w = store.store.write().unwrap();
-            let challenge = w.get_mut(&c.id).unwrap();
+            let mut w = store.state.write().unwrap();
+            let challenge = w.challenges.get_mut(&c.id).unwrap();
             challenge.expires_at = Utc::now() - Duration::minutes(10);
         }
 
         // Before get, it's still in the map
-        assert!(store.store.read().unwrap().contains_key(&c.id));
+        assert!(store.state.read().unwrap().challenges.contains_key(&c.id));
 
         // get() should return None and remove it
         let retrieved = store.get(&c.id);
         assert!(retrieved.is_none());
 
         // After get, it should be removed from the map
-        assert!(!store.store.read().unwrap().contains_key(&c.id));
+        assert!(!store.state.read().unwrap().challenges.contains_key(&c.id));
+        // And index should be empty/removed
+        assert!(store
+            .state
+            .read()
+            .unwrap()
+            .account_index
+            .get("acc-1")
+            .map_or(true, |ids| ids.is_empty()));
     }
 
     #[test]
