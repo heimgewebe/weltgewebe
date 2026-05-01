@@ -234,6 +234,29 @@ mod tests {
         );
     }
 
+    // Regression test: validates the core assumption of the rebuild_email_index
+    // optimisation — that BTreeMap iterates keys in lexicographic order, so the
+    // first id encountered for any email is always the lexicographically smallest,
+    // regardless of insertion order.
+    #[test]
+    fn test_rebuild_email_index_selects_lexicographically_smallest_id() {
+        let mut store = AccountStore::new();
+
+        // Insert in reverse lexicographic order to prove the optimization does
+        // not depend on insertion order — BTreeMap will sort them.
+        store.insert_unindexed(dummy_account("u3", Some("dup@example.com")));
+        store.insert_unindexed(dummy_account("u1", Some("dup@example.com")));
+        store.insert_unindexed(dummy_account("u2", Some("dup@example.com")));
+
+        store.rebuild_email_index();
+
+        assert_eq!(
+            store.get_by_email("dup@example.com").unwrap().public.id,
+            "u1",
+            "rebuild_email_index must select the lexicographically smallest id as the email owner"
+        );
+    }
+
     #[test]
     fn test_duplicate_owner_falls_back_to_remaining_account_when_owner_changes_email() {
         let mut store = AccountStore::new();
