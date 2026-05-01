@@ -298,6 +298,48 @@ mod invariants_tests {
             "Context index should be cleaned up"
         );
     }
+
+    #[test]
+    fn test_create_generates_new_challenge_for_different_device() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-2".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        assert_ne!(
+            c1.id, c2.id,
+            "Changing device should produce a new challenge ID"
+        );
+    }
+
+    #[test]
+    fn test_create_generates_new_challenge_for_different_account() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-2".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        assert_ne!(
+            c1.id, c2.id,
+            "Changing account should produce a new challenge ID"
+        );
+    }
 }
 
 #[cfg(test)]
