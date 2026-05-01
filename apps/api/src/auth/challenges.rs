@@ -65,7 +65,11 @@ impl ChallengeStore {
     fn remove_challenge(state: &mut ChallengeState, challenge_id: &str) -> Option<Challenge> {
         let challenge = state.challenges.remove(challenge_id)?;
         let key = Self::context_key(&challenge);
-        if state.active_by_context.get(&key).is_none_or(|id| id == challenge_id) {
+        if state
+            .active_by_context
+            .get(&key)
+            .is_none_or(|id| id == challenge_id)
+        {
             state.active_by_context.remove(&key);
         }
         Some(challenge)
@@ -75,7 +79,8 @@ impl ChallengeStore {
         let expired_ids: Vec<String> = state
             .challenges
             .iter()
-            .filter(|(_, challenge)| challenge.expires_at <= now).map(|(id, _)| id.clone())
+            .filter(|(_, challenge)| challenge.expires_at <= now)
+            .map(|(id, _)| id.clone())
             .collect();
 
         for id in expired_ids {
@@ -199,15 +204,25 @@ mod invariants_tests {
         assert_ne!(c1.id, c2.id, "Should create a new challenge");
 
         let state = store.state.read().unwrap();
-        assert!(!state.challenges.contains_key(&c1.id), "Old challenge should be removed");
-        assert!(state.challenges.contains_key(&c2.id), "New challenge should exist");
+        assert!(
+            !state.challenges.contains_key(&c1.id),
+            "Old challenge should be removed"
+        );
+        assert!(
+            state.challenges.contains_key(&c2.id),
+            "New challenge should exist"
+        );
 
         let key = ChallengeContextKey {
             account_id: "acc-1".to_string(),
             device_id: "dev-1".to_string(),
             intent: ChallengeIntent::LogoutAll,
         };
-        assert_eq!(state.active_by_context.get(&key).unwrap(), &c2.id, "Index should point to new ID");
+        assert_eq!(
+            state.active_by_context.get(&key).unwrap(),
+            &c2.id,
+            "Index should point to new ID"
+        );
     }
 
     #[test]
@@ -228,7 +243,10 @@ mod invariants_tests {
             ChallengeIntent::LogoutAll,
         );
 
-        assert_ne!(c1.id, c2.id, "Should create a new challenge after consumption");
+        assert_ne!(
+            c1.id, c2.id,
+            "Should create a new challenge after consumption"
+        );
 
         let state = store.state.read().unwrap();
         let key = ChallengeContextKey {
@@ -236,7 +254,11 @@ mod invariants_tests {
             device_id: "dev-1".to_string(),
             intent: ChallengeIntent::LogoutAll,
         };
-        assert_eq!(state.active_by_context.get(&key).unwrap(), &c2.id, "Index should point to new ID and no stale index remained");
+        assert_eq!(
+            state.active_by_context.get(&key).unwrap(),
+            &c2.id,
+            "Index should point to new ID and no stale index remained"
+        );
     }
 
     #[test]
@@ -255,16 +277,25 @@ mod invariants_tests {
             challenge.expires_at = Utc::now() - Duration::minutes(10);
         }
 
-        assert!(store.get(&c1.id).is_none(), "Should return None for expired challenge");
+        assert!(
+            store.get(&c1.id).is_none(),
+            "Should return None for expired challenge"
+        );
 
         let state = store.state.read().unwrap();
-        assert!(!state.challenges.contains_key(&c1.id), "Old challenge should be removed");
+        assert!(
+            !state.challenges.contains_key(&c1.id),
+            "Old challenge should be removed"
+        );
 
         let key = ChallengeContextKey {
             account_id: "acc-1".to_string(),
             device_id: "dev-1".to_string(),
             intent: ChallengeIntent::LogoutAll,
         };
-        assert!(!state.active_by_context.contains_key(&key), "Context index should be cleaned up");
+        assert!(
+            !state.active_by_context.contains_key(&key),
+            "Context index should be cleaned up"
+        );
     }
 }
