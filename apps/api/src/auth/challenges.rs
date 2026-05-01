@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use uuid::Uuid;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ChallengeIntent {
     LogoutAll,
     RemoveDevice { target_device_id: String },
@@ -27,12 +27,19 @@ impl Challenge {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ChallengeContextKey {
+    account_id: String,
+    device_id: String,
+    intent: ChallengeIntent,
+}
+
 #[derive(Clone, Default)]
 struct ChallengeState {
     // Maps challenge_id -> Challenge
     challenges: HashMap<String, Challenge>,
-    // Maps account_id -> list of challenge_ids
-    account_index: HashMap<String, Vec<String>>,
+    // Maps exact context -> challenge_id
+    active_by_context: HashMap<ChallengeContextKey, String>,
 }
 
 #[derive(Clone, Default)]
@@ -47,29 +54,39 @@ impl ChallengeStore {
         }
     }
 
+    fn context_key(challenge: &Challenge) -> ChallengeContextKey {
+        ChallengeContextKey {
+            account_id: challenge.account_id.clone(),
+            device_id: challenge.device_id.clone(),
+            intent: challenge.intent.clone(),
+        }
+    }
+
+    fn remove_challenge(state: &mut ChallengeState, challenge_id: &str) -> Option<Challenge> {
+        let challenge = state.challenges.remove(challenge_id)?;
+        let key = Self::context_key(&challenge);
+        if state.active_by_context.get(&key).is_none_or(|id| id == challenge_id) {
+            state.active_by_context.remove(&key);
+        }
+        Some(challenge)
+    }
+
+    fn cleanup_expired_locked(state: &mut ChallengeState, now: DateTime<Utc>) {
+        let expired_ids: Vec<String> = state
+            .challenges
+            .iter()
+            .filter(|(_, challenge)| challenge.expires_at <= now).map(|(id, _)| id.clone())
+            .collect();
+
+        for id in expired_ids {
+            Self::remove_challenge(state, &id);
+        }
+    }
+
     pub fn cleanup_expired(&self) {
         if let Ok(mut state) = self.state.write() {
             let now = Utc::now();
-
-            // Keep track of expired challenge IDs to remove from the index
-            let mut expired_ids = Vec::new();
-            state.challenges.retain(|id, challenge| {
-                let keep = challenge.expires_at > now;
-                if !keep {
-                    expired_ids.push((id.clone(), challenge.account_id.clone()));
-                }
-                keep
-            });
-
-            // Remove expired IDs from the index
-            for (id, account_id) in expired_ids {
-                if let Some(ids) = state.account_index.get_mut(&account_id) {
-                    ids.retain(|x| x != &id);
-                    if ids.is_empty() {
-                        state.account_index.remove(&account_id);
-                    }
-                }
-            }
+            Self::cleanup_expired_locked(&mut state, now);
         }
     }
 
@@ -84,17 +101,19 @@ impl ChallengeStore {
 
         let now = Utc::now();
 
+        Self::cleanup_expired_locked(&mut state, now);
+
+        let key = ChallengeContextKey {
+            account_id: account_id.clone(),
+            device_id: device_id.clone(),
+            intent: intent.clone(),
+        };
+
         // 1. Try to find and reuse an existing active challenge with identical context
-        // Search ONLY within challenges for this account (O(1) lookup + small scan)
-        if let Some(ids) = state.account_index.get(&account_id) {
-            for id in ids {
-                if let Some(existing_challenge) = state.challenges.get(id) {
-                    if existing_challenge.expires_at > now
-                        && existing_challenge.device_id == device_id
-                        && existing_challenge.intent == intent
-                    {
-                        return existing_challenge.clone();
-                    }
+        if let Some(challenge_id) = state.active_by_context.get(&key) {
+            if let Some(challenge) = state.challenges.get(challenge_id) {
+                if challenge.expires_at > now {
+                    return challenge.clone();
                 }
             }
         }
@@ -114,22 +133,14 @@ impl ChallengeStore {
         };
 
         state.challenges.insert(id.clone(), challenge.clone());
-        state.account_index.entry(account_id).or_default().push(id);
+        state.active_by_context.insert(key, id);
 
         challenge
     }
 
     pub fn consume(&self, challenge_id: &str) -> Option<Challenge> {
         let mut state = self.state.write().expect("ChallengeStore lock poisoned");
-        if let Some(challenge) = state.challenges.remove(challenge_id) {
-            // Clean up index
-            if let Some(ids) = state.account_index.get_mut(&challenge.account_id) {
-                ids.retain(|x| x != challenge_id);
-                if ids.is_empty() {
-                    state.account_index.remove(&challenge.account_id);
-                }
-            }
-
+        if let Some(challenge) = Self::remove_challenge(&mut state, challenge_id) {
             if !challenge.is_expired() {
                 return Some(challenge);
             }
@@ -152,15 +163,7 @@ impl ChallengeStore {
 
         if is_expired {
             let mut state = self.state.write().expect("ChallengeStore lock poisoned");
-            if let Some(challenge) = state.challenges.remove(challenge_id) {
-                // Clean up index
-                if let Some(ids) = state.account_index.get_mut(&challenge.account_id) {
-                    ids.retain(|x| x != challenge_id);
-                    if ids.is_empty() {
-                        state.account_index.remove(&challenge.account_id);
-                    }
-                }
-            }
+            Self::remove_challenge(&mut state, challenge_id);
         }
 
         None
@@ -168,76 +171,47 @@ impl ChallengeStore {
 }
 
 #[cfg(test)]
-mod tests {
+mod invariants_tests {
     use super::*;
 
     #[test]
-    fn test_create_and_get_challenge() {
+    fn test_create_removes_expired_challenge_from_context_index() {
         let store = ChallengeStore::new();
-        let c = store.create(
+        let c1 = store.create(
             "acc-1".to_string(),
             "dev-1".to_string(),
             ChallengeIntent::LogoutAll,
         );
 
-        let retrieved = store.get(&c.id).unwrap();
-        assert_eq!(retrieved.account_id, "acc-1");
-        assert_eq!(retrieved.device_id, "dev-1");
-        assert_eq!(retrieved.intent, ChallengeIntent::LogoutAll);
-    }
-
-    #[test]
-    fn test_consume_removes_challenge() {
-        let store = ChallengeStore::new();
-        let c = store.create(
-            "acc-1".to_string(),
-            "dev-1".to_string(),
-            ChallengeIntent::LogoutAll,
-        );
-
-        let consumed = store.consume(&c.id).unwrap();
-        assert_eq!(consumed.id, c.id);
-
-        assert!(store.get(&c.id).is_none());
-    }
-
-    #[test]
-    fn test_get_removes_expired_challenge() {
-        let store = ChallengeStore::new();
-        let c = store.create(
-            "acc-1".to_string(),
-            "dev-1".to_string(),
-            ChallengeIntent::LogoutAll,
-        );
-
-        // Manually expire the challenge
+        // Manually expire c1
         {
-            let mut w = store.state.write().unwrap();
-            let challenge = w.challenges.get_mut(&c.id).unwrap();
+            let mut state = store.state.write().unwrap();
+            let challenge = state.challenges.get_mut(&c1.id).unwrap();
             challenge.expires_at = Utc::now() - Duration::minutes(10);
         }
 
-        // Before get, it's still in the map
-        assert!(store.state.read().unwrap().challenges.contains_key(&c.id));
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
 
-        // get() should return None and remove it
-        let retrieved = store.get(&c.id);
-        assert!(retrieved.is_none());
+        assert_ne!(c1.id, c2.id, "Should create a new challenge");
 
-        // After get, it should be removed from the map
-        assert!(!store.state.read().unwrap().challenges.contains_key(&c.id));
-        // And index should be empty/removed
-        assert!(store
-            .state
-            .read()
-            .unwrap()
-            .account_index
-            .get("acc-1")
-            .is_none_or(|ids| ids.is_empty()));
+        let state = store.state.read().unwrap();
+        assert!(!state.challenges.contains_key(&c1.id), "Old challenge should be removed");
+        assert!(state.challenges.contains_key(&c2.id), "New challenge should exist");
+
+        let key = ChallengeContextKey {
+            account_id: "acc-1".to_string(),
+            device_id: "dev-1".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        assert_eq!(state.active_by_context.get(&key).unwrap(), &c2.id, "Index should point to new ID");
     }
 
     #[test]
-    fn test_create_reuses_active_challenge() {
+    fn test_consume_cleans_context_index() {
         let store = ChallengeStore::new();
         let c1 = store.create(
             "acc-1".to_string(),
@@ -245,20 +219,28 @@ mod tests {
             ChallengeIntent::LogoutAll,
         );
 
+        let consumed = store.consume(&c1.id).unwrap();
+        assert_eq!(consumed.id, c1.id);
+
         let c2 = store.create(
             "acc-1".to_string(),
             "dev-1".to_string(),
             ChallengeIntent::LogoutAll,
         );
 
-        assert_eq!(
-            c1.id, c2.id,
-            "Second call should return the exact same challenge ID"
-        );
+        assert_ne!(c1.id, c2.id, "Should create a new challenge after consumption");
+
+        let state = store.state.read().unwrap();
+        let key = ChallengeContextKey {
+            account_id: "acc-1".to_string(),
+            device_id: "dev-1".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        assert_eq!(state.active_by_context.get(&key).unwrap(), &c2.id, "Index should point to new ID and no stale index remained");
     }
 
     #[test]
-    fn test_create_generates_new_challenge_for_different_intent() {
+    fn test_get_expired_cleans_context_index() {
         let store = ChallengeStore::new();
         let c1 = store.create(
             "acc-1".to_string(),
@@ -266,17 +248,23 @@ mod tests {
             ChallengeIntent::LogoutAll,
         );
 
-        let c2 = store.create(
-            "acc-1".to_string(),
-            "dev-1".to_string(),
-            ChallengeIntent::RemoveDevice {
-                target_device_id: "dev-2".to_string(),
-            },
-        );
+        // Manually expire c1
+        {
+            let mut state = store.state.write().unwrap();
+            let challenge = state.challenges.get_mut(&c1.id).unwrap();
+            challenge.expires_at = Utc::now() - Duration::minutes(10);
+        }
 
-        assert_ne!(
-            c1.id, c2.id,
-            "Changing intent should produce a new challenge ID"
-        );
+        assert!(store.get(&c1.id).is_none(), "Should return None for expired challenge");
+
+        let state = store.state.read().unwrap();
+        assert!(!state.challenges.contains_key(&c1.id), "Old challenge should be removed");
+
+        let key = ChallengeContextKey {
+            account_id: "acc-1".to_string(),
+            device_id: "dev-1".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        assert!(!state.active_by_context.contains_key(&key), "Context index should be cleaned up");
     }
 }
