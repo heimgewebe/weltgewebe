@@ -57,24 +57,30 @@ impl AccountStore {
 
     pub(crate) fn rebuild_email_index(&mut self) {
         self.email_index.clear();
-        let mut groups: HashMap<String, Vec<String>> = HashMap::new();
 
+        let mut groups: HashMap<String, (String, usize)> = HashMap::with_capacity(self.map.len());
+
+        // BTreeMap.iter() iterates in key order (lexicographically by id)
+        // Since id is already sorted, the first id we encounter for any email
+        // will naturally be the smallest. We track count to emit warnings.
         for (id, acc) in self.map.iter() {
             if let Some(email) = &acc.email {
                 let key = normalize_email_key(email);
-                groups.entry(key).or_default().push(id.clone());
+                groups
+                    .entry(key)
+                    .and_modify(|(_, count)| *count += 1)
+                    .or_insert_with(|| (id.clone(), 1));
             }
         }
 
-        for (key, mut ids) in groups {
-            ids.sort(); // Deterministically pick smallest ID
-            let owner_id = ids[0].clone();
+        self.email_index.reserve(groups.len());
 
-            if ids.len() > 1 {
+        for (key, (owner_id, count)) in groups {
+            if count > 1 {
                 tracing::warn!(
                     event = "account_store.duplicate_email",
                     owner_id = %owner_id,
-                    count = ids.len(),
+                    count = count,
                     "Duplicate email detected in AccountStore bulk load. The deterministically smallest ID is chosen as owner."
                 );
             }
@@ -254,6 +260,25 @@ mod tests {
         // new@example.com now points to u1
         assert_eq!(
             store.get_by_email("new@example.com").unwrap().public.id,
+            "u1"
+        );
+    }
+    #[test]
+    fn test_rebuild_email_index_picks_smallest_id_for_duplicate_email() {
+        let mut store = AccountStore::new();
+        // Insert in unsorted order
+        store.insert_unindexed(dummy_account("u3", Some("shared@example.com")));
+        store.insert_unindexed(dummy_account("u1", Some("shared@example.com")));
+        store.insert_unindexed(dummy_account("u2", Some("shared@example.com")));
+
+        store.rebuild_email_index();
+
+        assert_eq!(
+            store.get_by_email("shared@example.com").unwrap().public.id,
+            "u1" // Deterministic fallback to lexicographically smallest ID
+        );
+        assert_eq!(
+            store.get_by_email("SHARED@example.com").unwrap().public.id,
             "u1"
         );
     }
