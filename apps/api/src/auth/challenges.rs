@@ -233,7 +233,7 @@ mod tests {
             .unwrap()
             .account_index
             .get("acc-1")
-            .map_or(true, |ids| ids.is_empty()));
+            .is_none_or(|ids| ids.is_empty()));
     }
 
     #[test]
