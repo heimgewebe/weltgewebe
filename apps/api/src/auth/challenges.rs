@@ -299,3 +299,82 @@ mod invariants_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_and_get_challenge() {
+        let store = ChallengeStore::new();
+        let c = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let retrieved = store.get(&c.id).unwrap();
+        assert_eq!(retrieved.account_id, "acc-1");
+        assert_eq!(retrieved.device_id, "dev-1");
+        assert_eq!(retrieved.intent, ChallengeIntent::LogoutAll);
+    }
+
+    #[test]
+    fn test_consume_removes_challenge() {
+        let store = ChallengeStore::new();
+        let c = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let consumed = store.consume(&c.id).unwrap();
+        assert_eq!(consumed.id, c.id);
+
+        assert!(store.get(&c.id).is_none());
+    }
+
+    #[test]
+    fn test_create_reuses_active_challenge() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        assert_eq!(
+            c1.id, c2.id,
+            "Second call should return the exact same challenge ID"
+        );
+    }
+
+    #[test]
+    fn test_create_generates_new_challenge_for_different_intent() {
+        let store = ChallengeStore::new();
+        let c1 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::RemoveDevice {
+                target_device_id: "dev-2".to_string(),
+            },
+        );
+
+        assert_ne!(
+            c1.id, c2.id,
+            "Changing intent should produce a new challenge ID"
+        );
+    }
+}
