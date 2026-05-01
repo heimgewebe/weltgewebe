@@ -511,36 +511,36 @@ mod tests {
     #[test]
     fn test_jitter_scaling_at_high_latitudes() {
         // At 60 degrees latitude, cos(60) = 0.5.
-        // A radius of 111km (1 deg lat) should result in approx 2 deg longitude jitter max.
-        // Since we scale by 1/cos(lat), the longitude jitter range should be [-2.0, 2.0] degrees.
-        // If the code incorrectly clamps to 1 deg (max_deg), the max observed will be ~1.0.
+        // The longitude offset should be scaled by exactly 1 / cos(latitude) compared to the equator.
 
         let radius_m = 111_000;
         let lat = 60.0;
-        let max_deg = radius_m as f64 / METERS_PER_DEGREE; // ~1.0 degree
 
-        // We iterate through many IDs to find the maximum extent of the jitter
-        let mut max_observed = 0.0;
+        // Find any ID that produces a non-zero longitude jitter to avoid divide-by-zero.
+        let id = (0..100)
+            .map(|i| i.to_string())
+            .find(|id| calculate_jittered_pos(0.0, 0.0, radius_m, id).lon.abs() > 1e-6)
+            .expect("expected deterministic id with non-zero longitude jitter");
 
-        for i in 0..10000 {
-            // Use simple varying string for hash distribution
-            let id = i.to_string();
-            let pos = calculate_jittered_pos(lat, 0.0, radius_m, &id);
-            let d_lon = pos.lon.abs();
+        let equator = calculate_jittered_pos(0.0, 0.0, radius_m, &id);
+        let high_lat = calculate_jittered_pos(lat, 0.0, radius_m, &id);
 
-            if d_lon > max_observed {
-                max_observed = d_lon;
-            }
-        }
+        let equator_lon = equator.lon.abs();
+        let high_lat_lon = high_lat.lon.abs();
 
-        // Assert that we observed a jitter significantly larger than max_deg.
-        // Theoretical max is 2.0 * max_deg. We check for > 1.2 to be robust against hash distribution variance
-        // while still proving that the value is not clamped to 1.0.
         assert!(
-            max_observed > max_deg * 1.2,
-            "Longitude jitter should scale with latitude. Expected > {}, got max {}",
-            max_deg * 1.2,
-            max_observed
+            equator_lon > 1e-6,
+            "fixture id must produce non-zero longitude jitter"
+        );
+
+        let expected_scale = 1.0 / lat.to_radians().cos();
+        let observed_scale = high_lat_lon / equator_lon;
+
+        assert!(
+            (observed_scale - expected_scale).abs() < 1e-6,
+            "longitude jitter should scale by 1/cos(latitude); expected {}, got {}",
+            expected_scale,
+            observed_scale
         );
     }
 
