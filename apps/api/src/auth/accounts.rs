@@ -1,5 +1,4 @@
 use crate::routes::accounts::AccountInternal;
-use std::collections::hash_map::Entry;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone, Default)]
@@ -60,32 +59,28 @@ impl AccountStore {
         self.email_index.clear();
         self.email_index.reserve(self.map.len());
 
-        let mut duplicates: HashMap<String, usize> = HashMap::new();
+        let mut groups: HashMap<String, (String, usize)> = HashMap::with_capacity(self.map.len());
 
         for (id, acc) in self.map.iter() {
             if let Some(email) = &acc.email {
                 let key = normalize_email_key(email);
-                match self.email_index.entry(key.clone()) {
-                    Entry::Occupied(_) => {
-                        *duplicates.entry(key).or_insert(1) += 1;
-                    }
-                    Entry::Vacant(e) => {
-                        e.insert(id.clone());
-                    }
-                }
+                groups
+                    .entry(key)
+                    .and_modify(|(_, count)| *count += 1)
+                    .or_insert_with(|| (id.clone(), 1));
             }
         }
 
-        for (key, extra_count) in duplicates {
-            if let Some(owner_id) = self.email_index.get(&key) {
+        for (key, (owner_id, count)) in groups {
+            if count > 1 {
                 tracing::warn!(
                     event = "account_store.duplicate_email",
                     owner_id = %owner_id,
-                    count = extra_count + 1,
+                    count = count,
                     "Duplicate email detected in AccountStore bulk load. The deterministically smallest ID is chosen as owner."
                 );
-                self.email_index.insert(key, owner_id.clone());
             }
+            self.email_index.insert(key, owner_id);
         }
     }
 
