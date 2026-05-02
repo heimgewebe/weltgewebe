@@ -61,6 +61,8 @@ impl AccountStore {
 
         let mut groups: HashMap<String, (String, usize)> = HashMap::with_capacity(self.map.len());
 
+        // self.map is a BTreeMap, so iteration is lexicographic by account ID.
+        // The first ID observed for an email key is therefore the deterministic smallest owner.
         for (id, acc) in self.map.iter() {
             if let Some(email) = &acc.email {
                 let key = normalize_email_key(email);
@@ -259,6 +261,7 @@ mod tests {
             "u1"
         );
     }
+
     #[test]
     fn test_rebuild_email_index_picks_smallest_id_for_duplicate_email() {
         let mut store = AccountStore::new();
