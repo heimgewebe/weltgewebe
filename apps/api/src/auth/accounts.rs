@@ -265,10 +265,10 @@ mod tests {
     #[test]
     fn test_rebuild_email_index_picks_smallest_id_for_duplicate_email() {
         let mut store = AccountStore::new();
-        // Insert in unsorted order
-        store.insert_unindexed(dummy_account("u3", Some("shared@example.com")));
+        // Insert in unsorted order with mixed cases to test normalization
+        store.insert_unindexed(dummy_account("u3", Some("Shared@example.com")));
         store.insert_unindexed(dummy_account("u1", Some("shared@example.com")));
-        store.insert_unindexed(dummy_account("u2", Some("shared@example.com")));
+        store.insert_unindexed(dummy_account("u2", Some("SHARED@example.com")));
 
         store.rebuild_email_index();
 
@@ -278,6 +278,10 @@ mod tests {
         );
         assert_eq!(
             store.get_by_email("SHARED@example.com").unwrap().public.id,
+            "u1"
+        );
+        assert_eq!(
+            store.get_by_email("Shared@example.com").unwrap().public.id,
             "u1"
         );
     }
