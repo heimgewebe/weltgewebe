@@ -1,13 +1,16 @@
 //! Poison-tolerant `RwLock` access for the in-memory auth stores.
 //!
-//! These stores hold simple `HashMap`/`BTreeMap` collections of independent
-//! entries (sessions, tokens, challenges). A panic in one request handler
-//! while holding the write lock leaves at most one half-written entry — never
-//! a structurally corrupted collection — so it is safe to recover from
-//! poisoning instead of crashing every subsequent auth request.
+//! These helpers are for stores whose inner data is a flat collection of
+//! independent entries (e.g. `SessionStore`, `TokenStore`, `StepUpTokenStore`).
+//! A panic in one request handler while holding the write lock can leave at
+//! most one half-written entry — never a structurally corrupted collection —
+//! so it is safe to recover via `PoisonError::into_inner()` and clear the
+//! poison flag so subsequent acquisitions succeed normally.
 //!
-//! Do NOT use this pattern for stores whose inner data has cross-mutation
-//! invariants that a partial write could violate.
+//! Do NOT use this helper for `ChallengeStore`. It maintains a
+//! `challenges` ↔ `active_by_context` cross-map invariant that a plain
+//! `into_inner()` does not restore; it has its own store-specific repair
+//! logic in `auth::challenges::ChallengeStore::write_locked_repaired`.
 
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
