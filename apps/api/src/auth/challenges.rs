@@ -1,8 +1,7 @@
-use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockWriteGuard};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -55,6 +54,48 @@ impl ChallengeStore {
         }
     }
 
+    /// Rebuilds `active_by_context` from `challenges`, discarding expired entries.
+    ///
+    /// Called after lock-poison recovery to repair the cross-map invariant:
+    /// `active_by_context[key]` must point to a valid, non-expired entry in
+    /// `challenges`. First entry wins per context, consistent with `create()`'s
+    /// deduplication policy.
+    fn rebuild_active_by_context_locked(state: &mut ChallengeState) {
+        state.active_by_context.clear();
+        for (id, challenge) in state.challenges.iter() {
+            if !challenge.is_expired() {
+                let key = Self::context_key(challenge);
+                state
+                    .active_by_context
+                    .entry(key)
+                    .or_insert_with(|| id.clone());
+            }
+        }
+    }
+
+    /// Acquires the write lock, repairing the context index if the lock is poisoned.
+    ///
+    /// Do NOT replace this with the generic `RwLockRecover` helper — `ChallengeStore`
+    /// has a `challenges` ↔ `active_by_context` cross-map invariant that a plain
+    /// `into_inner()` does not restore.
+    fn write_locked_repaired(&self) -> RwLockWriteGuard<'_, ChallengeState> {
+        match self.state.write() {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                tracing::warn!(
+                    event = "auth.challenge_store.poison_recovered",
+                    "Recovered from poisoned ChallengeStore lock; rebuilding context index"
+                );
+                let mut guard = poisoned.into_inner();
+                Self::rebuild_active_by_context_locked(&mut guard);
+                // Clear poison only after successful rebuild so future lock
+                // acquisitions succeed without repeating this warning.
+                self.state.clear_poison();
+                guard
+            }
+        }
+    }
+
     fn context_key(challenge: &Challenge) -> ChallengeContextKey {
         ChallengeContextKey {
             account_id: challenge.account_id.clone(),
@@ -90,10 +131,9 @@ impl ChallengeStore {
     }
 
     pub fn cleanup_expired(&self) {
-        if let Ok(mut state) = self.state.write() {
-            let now = Utc::now();
-            Self::cleanup_expired_locked(&mut state, now);
-        }
+        let mut state = self.write_locked_repaired();
+        let now = Utc::now();
+        Self::cleanup_expired_locked(&mut state, now);
     }
 
     pub fn create(
@@ -103,7 +143,7 @@ impl ChallengeStore {
         intent: ChallengeIntent,
     ) -> Challenge {
         // Atomic block: take a single write lock to avoid race conditions
-        let mut state = self.state.write_recover();
+        let mut state = self.write_locked_repaired();
 
         let now = Utc::now();
 
@@ -145,7 +185,7 @@ impl ChallengeStore {
     }
 
     pub fn consume(&self, challenge_id: &str) -> Option<Challenge> {
-        let mut state = self.state.write_recover();
+        let mut state = self.write_locked_repaired();
         if let Some(challenge) = Self::remove_challenge(&mut state, challenge_id) {
             if !challenge.is_expired() {
                 return Some(challenge);
@@ -156,7 +196,15 @@ impl ChallengeStore {
 
     pub fn get(&self, challenge_id: &str) -> Option<Challenge> {
         let is_expired = {
-            let state = self.state.read_recover();
+            // Read path does not use `active_by_context`; plain into_inner()
+            // recovery is safe. The next write will rebuild the index.
+            let state = self.state.read().unwrap_or_else(|poisoned| {
+                tracing::warn!(
+                    event = "auth.challenge_store.poison_recovered",
+                    "Recovered from poisoned ChallengeStore lock (read path); index will be rebuilt on next write"
+                );
+                poisoned.into_inner()
+            });
             if let Some(challenge) = state.challenges.get(challenge_id) {
                 if !challenge.is_expired() {
                     return Some(challenge.clone());
@@ -168,7 +216,7 @@ impl ChallengeStore {
         };
 
         if is_expired {
-            let mut state = self.state.write_recover();
+            let mut state = self.write_locked_repaired();
             Self::remove_challenge(&mut state, challenge_id);
         }
 
@@ -419,5 +467,136 @@ mod tests {
             c1.id, c2.id,
             "Changing intent should produce a new challenge ID"
         );
+    }
+}
+
+#[cfg(test)]
+mod poison_recovery_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::thread;
+
+    fn poison_write_lock(state: &Arc<RwLock<ChallengeState>>) {
+        let s = Arc::clone(state);
+        let _ = thread::spawn(move || {
+            let _guard = s.write().unwrap();
+            panic!("intentional poison");
+        })
+        .join();
+    }
+
+    #[test]
+    fn write_locked_repaired_rebuilds_index_after_poison() {
+        let store = ChallengeStore::new();
+
+        // Insert a valid challenge directly so we have one entry to rebuild from.
+        let challenge_id = {
+            let c = store.create(
+                "acc-1".to_string(),
+                "dev-1".to_string(),
+                ChallengeIntent::LogoutAll,
+            );
+            c.id.clone()
+        };
+
+        // Poison the lock while holding a write guard — simulates a panic mid-mutation.
+        poison_write_lock(&store.state);
+        assert!(store.state.write().is_err(), "lock should be poisoned");
+
+        // write_locked_repaired must recover and present a consistent store.
+        let c2 = store.create(
+            "acc-1".to_string(),
+            "dev-1".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        // Same context → should reuse the existing challenge (deduplication).
+        assert_eq!(
+            c2.id, challenge_id,
+            "Recovered store should reuse the existing active challenge"
+        );
+
+        // Lock must no longer be poisoned after repair.
+        assert!(
+            store.state.write().is_ok(),
+            "lock should be healthy after recovery"
+        );
+
+        // Index invariant: active_by_context points to the challenge.
+        let key = ChallengeContextKey {
+            account_id: "acc-1".to_string(),
+            device_id: "dev-1".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        let state = store.state.read().unwrap();
+        assert_eq!(state.active_by_context.get(&key).unwrap(), &challenge_id);
+    }
+
+    #[test]
+    fn poisoned_store_discards_expired_entries_during_rebuild() {
+        let store = ChallengeStore::new();
+
+        // Insert a challenge and manually expire it.
+        let c = store.create(
+            "acc-2".to_string(),
+            "dev-2".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+        {
+            let mut state = store.state.write().unwrap();
+            state.challenges.get_mut(&c.id).unwrap().expires_at =
+                Utc::now() - Duration::minutes(10);
+        }
+
+        poison_write_lock(&store.state);
+
+        // After recovery, creating a new challenge for the same context must
+        // produce a new ID, not the expired one.
+        let c2 = store.create(
+            "acc-2".to_string(),
+            "dev-2".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+        assert_ne!(
+            c.id, c2.id,
+            "Should not reuse expired challenge after recovery"
+        );
+
+        let key = ChallengeContextKey {
+            account_id: "acc-2".to_string(),
+            device_id: "dev-2".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        let state = store.state.read().unwrap();
+        assert_eq!(state.active_by_context.get(&key).unwrap(), &c2.id);
+    }
+
+    #[test]
+    fn consume_works_after_lock_poison() {
+        let store = ChallengeStore::new();
+        let c = store.create(
+            "acc-3".to_string(),
+            "dev-3".to_string(),
+            ChallengeIntent::LogoutAll,
+        );
+
+        poison_write_lock(&store.state);
+
+        let consumed = store.consume(&c.id);
+        assert!(
+            consumed.is_some(),
+            "consume should succeed after lock recovery"
+        );
+        assert_eq!(consumed.unwrap().id, c.id);
+
+        // Challenge must be gone and index cleaned up.
+        let state = store.state.read().unwrap();
+        assert!(!state.challenges.contains_key(&c.id));
+        let key = ChallengeContextKey {
+            account_id: "acc-3".to_string(),
+            device_id: "dev-3".to_string(),
+            intent: ChallengeIntent::LogoutAll,
+        };
+        assert!(!state.active_by_context.contains_key(&key));
     }
 }

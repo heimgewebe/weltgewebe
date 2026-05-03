@@ -153,3 +153,56 @@ mod tests {
         assert_eq!(store.consume(&token), None);
     }
 }
+
+#[cfg(test)]
+mod poison_recovery_tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+    use std::thread;
+
+    fn poison_write_lock(lock: &Arc<RwLock<HashMap<String, TokenData>>>) {
+        let l = Arc::clone(lock);
+        let _ = thread::spawn(move || {
+            let _guard = l.write().unwrap();
+            panic!("intentional poison");
+        })
+        .join();
+    }
+
+    #[test]
+    fn token_store_recovers_from_poisoned_lock() {
+        let store = TokenStore::new();
+        let token = store.create("user@example.com".to_string());
+
+        poison_write_lock(&store.store);
+        assert!(store.store.write().is_err(), "lock should be poisoned");
+
+        // peek() and consume() must work after recovery.
+        assert_eq!(
+            store.peek(&token),
+            Some("user@example.com".to_string()),
+            "peek should return email after recovery"
+        );
+        assert_eq!(
+            store.consume(&token),
+            Some("user@example.com".to_string()),
+            "consume should return email after recovery"
+        );
+
+        // Lock must be healthy now.
+        assert!(
+            store.store.read().is_ok(),
+            "lock should be healthy after recovery"
+        );
+    }
+
+    #[test]
+    fn token_store_create_after_poison_issues_usable_token() {
+        let store = TokenStore::new();
+        poison_write_lock(&store.store);
+
+        let token = store.create("new@example.com".to_string());
+        assert_eq!(store.consume(&token), Some("new@example.com".to_string()));
+    }
+}

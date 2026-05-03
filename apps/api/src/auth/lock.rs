@@ -26,7 +26,11 @@ impl<T: ?Sized> RwLockRecover<T> for RwLock<T> {
                     kind = "read",
                     "Recovered from poisoned auth store lock; continuing with existing data"
                 );
-                poisoned.into_inner()
+                let guard = poisoned.into_inner();
+                // Clear the poison flag so subsequent lock acquisitions succeed
+                // normally and this warning does not repeat on every access.
+                self.clear_poison();
+                guard
             }
         }
     }
@@ -40,7 +44,9 @@ impl<T: ?Sized> RwLockRecover<T> for RwLock<T> {
                     kind = "write",
                     "Recovered from poisoned auth store lock; continuing with existing data"
                 );
-                poisoned.into_inner()
+                let guard = poisoned.into_inner();
+                self.clear_poison();
+                guard
             }
         }
     }
@@ -62,19 +68,22 @@ mod tests {
     }
 
     #[test]
-    fn read_recover_returns_data_after_poisoning() {
+    fn read_recover_returns_data_and_clears_poison() {
         let lock = Arc::new(RwLock::new(42_u32));
         poison(&lock);
         assert!(lock.read().is_err(), "lock should be poisoned");
         assert_eq!(*lock.read_recover(), 42);
+        // Poison must be cleared so subsequent accesses do not warn again.
+        assert!(lock.read().is_ok(), "lock should no longer be poisoned");
     }
 
     #[test]
-    fn write_recover_allows_mutation_after_poisoning() {
+    fn write_recover_allows_mutation_and_clears_poison() {
         let lock = Arc::new(RwLock::new(0_u32));
         poison(&lock);
         assert!(lock.write().is_err(), "lock should be poisoned");
         *lock.write_recover() = 7;
-        assert_eq!(*lock.read_recover(), 7);
+        assert!(lock.read().is_ok(), "lock should no longer be poisoned");
+        assert_eq!(*lock.read().unwrap(), 7);
     }
 }
