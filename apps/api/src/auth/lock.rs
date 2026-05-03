@@ -27,6 +27,7 @@ impl<T: ?Sized> RwLockRecover<T> for RwLock<T> {
                 tracing::warn!(
                     event = "auth.lock.poison_recovered",
                     kind = "read",
+                    store_type = std::any::type_name::<T>(),
                     "Recovered from poisoned auth store lock; continuing with existing data"
                 );
                 let guard = poisoned.into_inner();
@@ -45,6 +46,7 @@ impl<T: ?Sized> RwLockRecover<T> for RwLock<T> {
                 tracing::warn!(
                     event = "auth.lock.poison_recovered",
                     kind = "write",
+                    store_type = std::any::type_name::<T>(),
                     "Recovered from poisoned auth store lock; continuing with existing data"
                 );
                 let guard = poisoned.into_inner();
