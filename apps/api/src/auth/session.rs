@@ -1,3 +1,4 @@
+use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -33,10 +34,9 @@ impl SessionStore {
     }
 
     pub fn cleanup_expired(&self) {
-        if let Ok(mut store) = self.store.write() {
-            let now = Utc::now();
-            store.retain(|_, session| session.expires_at > now);
-        }
+        let mut store = self.store.write_recover();
+        let now = Utc::now();
+        store.retain(|_, session| session.expires_at > now);
     }
 
     pub fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
@@ -56,14 +56,14 @@ impl SessionStore {
             expires_at,
         };
 
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.insert(session_id, session.clone());
 
         session
     }
 
     pub fn get(&self, session_id: &str) -> Option<Session> {
-        let store = self.store.read().expect("SessionStore lock poisoned");
+        let store = self.store.read_recover();
         if let Some(session) = store.get(session_id) {
             if !session.is_expired() {
                 return Some(session.clone());
@@ -73,7 +73,7 @@ impl SessionStore {
     }
 
     pub fn delete(&self, session_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.remove(session_id);
     }
 
@@ -82,7 +82,7 @@ impl SessionStore {
 
         // Optimistic read first to check if update is necessary
         let needs_update = {
-            let store = self.store.read().expect("SessionStore lock poisoned");
+            let store = self.store.read_recover();
             if let Some(session) = store.get(session_id) {
                 // Only update if older than 5 minutes to prevent lock contention
                 now.signed_duration_since(session.last_active) > Duration::minutes(5)
@@ -92,7 +92,7 @@ impl SessionStore {
         };
 
         if needs_update {
-            let mut store = self.store.write().expect("SessionStore lock poisoned");
+            let mut store = self.store.write_recover();
             if let Some(session) = store.get_mut(session_id) {
                 session.last_active = now;
             }
@@ -100,7 +100,7 @@ impl SessionStore {
     }
 
     pub fn list_by_account(&self, account_id: &str) -> Vec<Session> {
-        let store = self.store.read().expect("SessionStore lock poisoned");
+        let store = self.store.read_recover();
         let now = Utc::now();
         store
             .values()
@@ -110,12 +110,12 @@ impl SessionStore {
     }
 
     pub fn delete_by_device(&self, account_id: &str, device_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, s| !(s.account_id == account_id && s.device_id == device_id));
     }
 
     pub fn delete_all_by_account(&self, account_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, s| s.account_id != account_id);
     }
 }
@@ -227,5 +227,60 @@ mod tests {
         let store = SessionStore::new();
         let session = store.create("account-1".to_string(), None);
         assert!(!session.is_expired());
+    }
+}
+
+#[cfg(test)]
+mod poison_recovery_tests {
+    use super::*;
+    use std::sync::Arc;
+    use std::thread;
+
+    fn poison_write_lock(lock: &Arc<RwLock<std::collections::HashMap<String, Session>>>) {
+        let l = Arc::clone(lock);
+        let _ = thread::spawn(move || {
+            let _guard = l.write().unwrap();
+            panic!("intentional poison");
+        })
+        .join();
+    }
+
+    #[test]
+    fn session_store_recovers_from_poisoned_lock() {
+        let store = SessionStore::new();
+        let s1 = store.create("acc-1".to_string(), None);
+
+        poison_write_lock(&store.store);
+        assert!(store.store.write().is_err(), "lock should be poisoned");
+
+        // create() must succeed after recovery.
+        let s2 = store.create("acc-2".to_string(), None);
+        assert_ne!(s1.id, s2.id);
+
+        // Lock must be healthy after recovery.
+        assert!(
+            store.store.read().is_ok(),
+            "lock should be healthy after recovery"
+        );
+
+        // Both sessions retrievable.
+        assert!(store.get(&s1.id).is_some());
+        assert!(store.get(&s2.id).is_some());
+    }
+
+    #[test]
+    fn cleanup_expired_recovers_from_poisoned_lock() {
+        let store = SessionStore::new();
+        store.create("acc-1".to_string(), None);
+
+        poison_write_lock(&store.store);
+
+        // cleanup_expired must not panic on a poisoned lock.
+        store.cleanup_expired();
+
+        assert!(
+            store.store.read().is_ok(),
+            "lock should be healthy after cleanup recovery"
+        );
     }
 }
