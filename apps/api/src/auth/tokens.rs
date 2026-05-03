@@ -1,3 +1,4 @@
+use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -34,7 +35,7 @@ impl TokenStore {
     pub fn peek(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
-        let store = self.store.read().expect("TokenStore lock poisoned");
+        let store = self.store.read_recover();
 
         if let Some(data) = store.get(&hash) {
             if data.expires_at > now {
@@ -57,7 +58,7 @@ impl TokenStore {
 
         let data = TokenData { email, expires_at };
 
-        let mut store = self.store.write().expect("TokenStore lock poisoned");
+        let mut store = self.store.write_recover();
         // Cleanup expired tokens on every write to keep memory check in check
         store.retain(|_, v| v.expires_at > now);
 
@@ -69,7 +70,7 @@ impl TokenStore {
     pub fn consume(&self, token: &str) -> Option<String> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
-        let mut store = self.store.write().expect("TokenStore lock poisoned");
+        let mut store = self.store.write_recover();
 
         // Cleanup expired tokens
         store.retain(|_, v| v.expires_at > now);

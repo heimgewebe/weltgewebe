@@ -1,3 +1,4 @@
+use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -44,7 +45,7 @@ impl StepUpTokenStore {
     pub fn peek(&self, token: &str) -> Option<StepUpTokenData> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
-        let store = self.store.read().expect("StepUpTokenStore lock poisoned");
+        let store = self.store.read_recover();
 
         if let Some(data) = store.get(&hash) {
             if data.expires_at > now {
@@ -79,7 +80,7 @@ impl StepUpTokenStore {
             expires_at,
         };
 
-        let mut store = self.store.write().expect("StepUpTokenStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, v| v.expires_at > now);
         store.insert(hash, data);
 
@@ -95,7 +96,7 @@ impl StepUpTokenStore {
     ) -> ConsumeMatchResult {
         let now = Utc::now();
         let hash = Self::hash_token(token);
-        let mut store = self.store.write().expect("StepUpTokenStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, v| v.expires_at > now);
 
         match store.get(&hash) {
@@ -119,7 +120,7 @@ impl StepUpTokenStore {
     pub fn consume(&self, token: &str) -> Option<StepUpTokenData> {
         let now = Utc::now();
         let hash = Self::hash_token(token);
-        let mut store = self.store.write().expect("StepUpTokenStore lock poisoned");
+        let mut store = self.store.write_recover();
 
         store.retain(|_, v| v.expires_at > now);
 

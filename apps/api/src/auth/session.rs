@@ -1,3 +1,4 @@
+use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,14 +57,14 @@ impl SessionStore {
             expires_at,
         };
 
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.insert(session_id, session.clone());
 
         session
     }
 
     pub fn get(&self, session_id: &str) -> Option<Session> {
-        let store = self.store.read().expect("SessionStore lock poisoned");
+        let store = self.store.read_recover();
         if let Some(session) = store.get(session_id) {
             if !session.is_expired() {
                 return Some(session.clone());
@@ -73,7 +74,7 @@ impl SessionStore {
     }
 
     pub fn delete(&self, session_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.remove(session_id);
     }
 
@@ -82,7 +83,7 @@ impl SessionStore {
 
         // Optimistic read first to check if update is necessary
         let needs_update = {
-            let store = self.store.read().expect("SessionStore lock poisoned");
+            let store = self.store.read_recover();
             if let Some(session) = store.get(session_id) {
                 // Only update if older than 5 minutes to prevent lock contention
                 now.signed_duration_since(session.last_active) > Duration::minutes(5)
@@ -92,7 +93,7 @@ impl SessionStore {
         };
 
         if needs_update {
-            let mut store = self.store.write().expect("SessionStore lock poisoned");
+            let mut store = self.store.write_recover();
             if let Some(session) = store.get_mut(session_id) {
                 session.last_active = now;
             }
@@ -100,7 +101,7 @@ impl SessionStore {
     }
 
     pub fn list_by_account(&self, account_id: &str) -> Vec<Session> {
-        let store = self.store.read().expect("SessionStore lock poisoned");
+        let store = self.store.read_recover();
         let now = Utc::now();
         store
             .values()
@@ -110,12 +111,12 @@ impl SessionStore {
     }
 
     pub fn delete_by_device(&self, account_id: &str, device_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, s| !(s.account_id == account_id && s.device_id == device_id));
     }
 
     pub fn delete_all_by_account(&self, account_id: &str) {
-        let mut store = self.store.write().expect("SessionStore lock poisoned");
+        let mut store = self.store.write_recover();
         store.retain(|_, s| s.account_id != account_id);
     }
 }

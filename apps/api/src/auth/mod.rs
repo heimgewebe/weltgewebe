@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod challenges;
+pub mod lock;
 pub mod passkeys;
 pub mod rate_limit;
 pub mod role;

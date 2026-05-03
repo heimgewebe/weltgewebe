@@ -1,3 +1,4 @@
+use crate::auth::lock::RwLockRecover;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -102,7 +103,7 @@ impl ChallengeStore {
         intent: ChallengeIntent,
     ) -> Challenge {
         // Atomic block: take a single write lock to avoid race conditions
-        let mut state = self.state.write().expect("ChallengeStore lock poisoned");
+        let mut state = self.state.write_recover();
 
         let now = Utc::now();
 
@@ -144,7 +145,7 @@ impl ChallengeStore {
     }
 
     pub fn consume(&self, challenge_id: &str) -> Option<Challenge> {
-        let mut state = self.state.write().expect("ChallengeStore lock poisoned");
+        let mut state = self.state.write_recover();
         if let Some(challenge) = Self::remove_challenge(&mut state, challenge_id) {
             if !challenge.is_expired() {
                 return Some(challenge);
@@ -155,7 +156,7 @@ impl ChallengeStore {
 
     pub fn get(&self, challenge_id: &str) -> Option<Challenge> {
         let is_expired = {
-            let state = self.state.read().expect("ChallengeStore lock poisoned");
+            let state = self.state.read_recover();
             if let Some(challenge) = state.challenges.get(challenge_id) {
                 if !challenge.is_expired() {
                     return Some(challenge.clone());
@@ -167,7 +168,7 @@ impl ChallengeStore {
         };
 
         if is_expired {
-            let mut state = self.state.write().expect("ChallengeStore lock poisoned");
+            let mut state = self.state.write_recover();
             Self::remove_challenge(&mut state, challenge_id);
         }
 
