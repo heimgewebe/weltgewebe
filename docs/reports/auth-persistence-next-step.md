@@ -308,7 +308,7 @@ eigenständiger PR-Scope.
 | Option | Pro | Contra | Bewertung |
 |---|---|---|---|
 | **In-Memory belassen** | kein Aufwand, aktueller Zustand | Restart = Logout aller Nutzer; kein Multi-Instance | nur für PoC/Dev ohne SLA |
-| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; keine neue Abhängigkeit | async-Abstraktion nötig; CI-Gate fehlt; PgBouncer-Modus zu prüfen | **empfohlen** (bereits entschieden) |
+| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; keine neue Abhängigkeit | async-Abstraktion nötig; CI-Gate fehlt; PgBouncer-Modus zu prüfen | **empfohlen** (strategisch gestützt; Runtime-Proof offen) |
 | **Redis** | schnell für TTL-basierte Keys; kein Schema nötig | nicht im Stack; neue Abhängigkeit; kein Mehrwert für diesen Use-Case | nicht empfohlen |
 | **Hybrid** | kurzlebige Stores in Redis, Sessions in PG | komplexer Stack; zwei Systeme für dasselbe Problem | nicht empfohlen für aktuellen Scope |
 
