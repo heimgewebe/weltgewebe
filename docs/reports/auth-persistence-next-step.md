@@ -56,9 +56,9 @@ Prämissencheck zur Aufgabenstellung:
 
 | Prämisse | Status | Befund |
 |---|---|---|
-| Auth-State ist mindestens teilweise flüchtig | **Bestätigt** | Alle 5 Stores sind in-memory. Belegt. |
+| Auth-State ist mindestens teilweise flüchtig | **Bestätigt** | Fünf transiente Auth-Stores sind in-memory: Sessions, Tokens, StepUpTokens, Challenges und PasskeyRegistrations. Account-Stammdaten sind ein separates JSONL-Thema. |
 | Doku markiert Persistenz als Restlücke | **Bestätigt** | OPT-API-002 in `optimierungsstatus.md` = open; README-Note aktiv. |
-| Keine belastbare Entscheidung Postgres vs. Redis vs. Hybrid | **Teilweise falsch** | Entscheidung ist getroffen (DB-first). Offen sind Implementierungsdetails, nicht die Strategie. |
+| Keine belastbare Entscheidung Postgres vs. Redis vs. Hybrid | **Teilweise falsch** | Die Doku stützt DB-first als nächsten Pfad; Runtime-Proof und Implementierungsdetails fehlen noch. |
 | Direkter Implementierungs-PR wäre zu annahmenreich | **Teilweise wahr** | PgBouncer-Modus, async-Abstraktion und CI-Gate sind noch ungeklärt. |
 
 ---
@@ -326,9 +326,10 @@ eigenständiger PR-Scope.
 
 ### Strategie: PostgreSQL für Sessions, In-Memory für kurzlebige Stores
 
-Diese Entscheidung ist bereits getroffen (vgl. `auth-persistence-readiness.md`
-und `auth-roadmap.md`). Dieses Dokument bestätigt sie auf Basis des aktualisierten
-Ist-Zustands.
+Diese Strategie ist durch `auth-persistence-readiness.md` und `auth-roadmap.md`
+vorgezeichnet. Dieses Dokument bestätigt PostgreSQL als naheliegenden nächsten
+Implementierungspfad auf Basis des aktualisierten Ist-Zustands, ohne den Runtime-Proof
+vorwegzunehmen.
 
 ### Was müsste wahr sein, damit Postgres genügt?
 
