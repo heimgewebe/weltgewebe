@@ -34,9 +34,10 @@ relations:
 
 ## 1. Kurzfazit
 
-Die Persistenzstrategie für Auth-Sessions ist bereits entschieden: **PostgreSQL (DB-first)**.
-Diese Entscheidung ist in `docs/reports/auth-persistence-readiness.md` und
-`docs/blueprints/auth-roadmap.md` dokumentiert und begründet.
+Die vorhandene Dokumentation und der aktualisierte Ist-Zustand stützen **PostgreSQL (DB-first)**
+als nächsten Implementierungspfad für Session-Persistenz. Redis und Hybrid haben im aktuellen
+Befund keinen belegten Zusatznutzen. Strategisch gestützt durch `docs/reports/auth-persistence-readiness.md`
+und `docs/blueprints/auth-roadmap.md`; noch nicht runtime-bewiesen.
 
 Seit dem Readiness-Report hat ein Migrations-Schema-PR die `sessions`-Tabellendefinition
 eingeführt (`apps/api/migrations/20260428000000_create_sessions.up.sql`). Der aktuelle
@@ -69,7 +70,7 @@ Prämissencheck zur Aufgabenstellung:
 Kommando:
 
 ```bash
-rg "RwLock|HashMap|SessionStore|TokenStore|StepUpTokenStore|ChallengeStore" \
+rg "RwLock|HashMap|SessionStore|TokenStore|StepUpTokenStore|ChallengeStore|PasskeyRegistrationStore" \
   apps/api/src/auth apps/api/src/state.rs -n
 ```
 
@@ -80,6 +81,7 @@ apps/api/src/state.rs:70:    pub sessions: SessionStore,
 apps/api/src/state.rs:71:    pub challenges: ChallengeStore,
 apps/api/src/state.rs:72:    pub tokens: TokenStore,
 apps/api/src/state.rs:73:    pub step_up_tokens: StepUpTokenStore,
+apps/api/src/state.rs:82:    pub passkey_registrations: PasskeyRegistrationStore,
 apps/api/src/auth/session.rs:26:pub struct SessionStore {
 apps/api/src/auth/session.rs:26:    store: Arc<RwLock<HashMap<String, Session>>>,
 apps/api/src/auth/tokens.rs:16:pub struct TokenStore {
@@ -88,6 +90,8 @@ apps/api/src/auth/step_up_tokens.rs:29:pub struct StepUpTokenStore {
 apps/api/src/auth/step_up_tokens.rs:29:    store: Arc<RwLock<HashMap<String, StepUpTokenData>>>,
 apps/api/src/auth/challenges.rs:47:pub struct ChallengeStore {
 apps/api/src/auth/challenges.rs:47:    state: Arc<RwLock<ChallengeState>>,
+apps/api/src/auth/passkeys.rs:89:pub struct PasskeyRegistrationStore {
+apps/api/src/auth/passkeys.rs:90:    store: Arc<RwLock<HashMap<String, PendingRegistration>>>,
 ```
 
 Startup-Code (`apps/api/src/lib.rs`, Zeilen 49–52), belegt:
@@ -141,7 +145,9 @@ CREATE INDEX sessions_expires_at ON sessions (expires_at);
 Divergenz zu `auth-persistence-readiness.md`: Dieses Vorgängerdokument stellte
 fest, dass kein Migrationsverzeichnis existiert. Das ist seit dem Schema-PR nicht mehr
 korrekt. Der aktuelle Ist-Zustand enthält ein Migrationsverzeichnis mit einer
-funktionsfähigen Tabellendefinition.
+plausiblen `sessions`-Tabellendefinition. Runtime-Funktion noch nicht belegt:
+`sqlx migrate run` gegen PostgreSQL/PgBouncer und Query-Kompatibilität eines
+späteren `DbSessionStore` sind noch zu prüfen.
 
 ### 2.3 DB-Pool (vorhanden, für Auth ungenutzt)
 
@@ -189,11 +195,16 @@ für den `DbSessionStore`-Use-Case, aber noch nicht empirisch geprüft.
 
 ### 2.5 Redis-Status (belegt: nicht im Stack)
 
-Kein Redis-Dienst in `infra/compose/compose.core.yml` oder `infra/compose/compose.prod.yml`.
-Kein Redis-Crate in `apps/api/Cargo.toml`.
+Kommando:
+
+```bash
+rg -i "redis|valkey|deadpool-redis|bb8-redis|fred" apps/api/Cargo.toml infra/compose -n || true
+```
+
+Ergebnis:
 
 ```text
-# Kein Treffer für Redis in Cargo.toml oder infra/compose/
+(no matches)
 ```
 
 Redis ist **keine vorhandene Infrastruktur** — eine Einführung würde eine neue
@@ -319,7 +330,7 @@ Ist-Zustands.
 ### Was müsste wahr sein, damit Postgres genügt?
 
 - **Belegt:** `db_pool` ist in `ApiState` vorhanden und `DATABASE_URL` konfiguriert.
-- **Belegt:** Migration `20260428000000_create_sessions.up.sql` ist korrekt und vollständig.
+- **Belegt:** Eine `sessions`-Migration existiert und definiert die benötigten Kernspalten und Indizes. Runtime-Migrationsbeweis gegen PostgreSQL/PgBouncer und Query-Kompatibilität des späteren `DbSessionStore` stehen noch aus.
 - **Belegt:** `sqlx` v0.8.1 ist als Abhängigkeit vorhanden.
 - **Offen:** PgBouncer `transaction` mode muss empirisch für `DbSessionStore`-CRUD geprüft sein. Keine bekannten Inkompatibilitäten für einfache CRUD-Queries, aber nicht durch Test belegt.
 - **Offen:** Startup-Migration (`sqlx::migrate!`) muss sicher sein bei nicht-konfiguriertem Pool (bestehende Tests nutzen `db_pool: None`).
@@ -423,7 +434,7 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 | Welche Stores sind in-memory? | **belegt** | Alle 5: Sessions, Tokens, StepUpTokens, Challenges, PasskeyRegistrations |
 | Was ist kritisch? | **belegt** | Nur `SessionStore` (24h TTL, Restart = Logout aller Nutzer) |
 | Migrations-Schema vorhanden? | **belegt** | Ja, seit 2026-04-28 — aber nicht in Startup aktiviert |
-| Strategie Postgres vs. Redis vs. Hybrid? | **entschieden** | PostgreSQL; Redis nicht nötig; Hybrid nicht sinnvoll |
+| Strategie Postgres vs. Redis vs. Hybrid? | **strategisch gestützt** | PostgreSQL durch Doku und Diagnose als nächster Pfad gestützt; Redis/Hybrid ohne belegten Zusatznutzen; Runtime-Proof noch offen |
 | Was fehlt für Implementierung? | **belegt** | async-Abstraktion, `DbSessionStore`, Startup-Migration, CI-Gate |
 | PgBouncer-Kompatibilität? | **offen** | Plausibel kompatibel für CRUD, nicht durch Test belegt |
-| Ist ein weiterer Diagnose-PR nötig? | **nein** | Entscheidung ist getroffen; Folge-PR kann implementieren |
+| Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig, sofern der Folge-PR die offenen Target-Proofs enthält: `sqlx`-Migration gegen PostgreSQL/PgBouncer, `DbSessionStore`-CRUD-Integrationstest, weiterhin grüner Offline-Testpfad |
