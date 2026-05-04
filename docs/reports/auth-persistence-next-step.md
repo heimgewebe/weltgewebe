@@ -67,14 +67,15 @@ Prämissencheck zur Aufgabenstellung:
 ### 2.1 In-Memory-Stores (alle transient)
 
 Kommando:
-```
+
+```bash
 rg "RwLock|HashMap|SessionStore|TokenStore|StepUpTokenStore|ChallengeStore" \
   apps/api/src/auth apps/api/src/state.rs -n
 ```
 
 Ergebnis (Auszug, belegt):
 
-```
+```text
 apps/api/src/state.rs:70:    pub sessions: SessionStore,
 apps/api/src/state.rs:71:    pub challenges: ChallengeStore,
 apps/api/src/state.rs:72:    pub tokens: TokenStore,
@@ -102,12 +103,14 @@ let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
 ### 2.2 Migrations-Infrastruktur (vorhanden, aber nicht aktiviert)
 
 Kommando:
-```
+
+```bash
 ls -la apps/api/migrations/
 ```
 
 Ergebnis:
-```
+
+```text
 total 16
 drwxr-xr-x 2 root root 4096 May  3 11:54 .
 drwxr-xr-x 5 root root 4096 May  3 11:54 ..
@@ -143,12 +146,14 @@ funktionsfähigen Tabellendefinition.
 ### 2.3 DB-Pool (vorhanden, für Auth ungenutzt)
 
 Kommando:
-```
+
+```bash
 rg "db_pool|PgPool|query_scalar" apps/api/src -n
 ```
 
 Ergebnis (Auszug, belegt):
-```
+
+```text
 apps/api/src/state.rs:59:use sqlx::PgPool;
 apps/api/src/state.rs:64:    pub db_pool: Option<PgPool>,
 apps/api/src/state.rs:65:    pub db_pool_configured: bool,
@@ -162,12 +167,14 @@ Kein Auth-Handler liest oder schreibt über den Pool.
 ### 2.4 PgBouncer-Konfiguration (belegt)
 
 Kommando:
-```
+
+```bash
 rg "POOL_MODE|pgbouncer" infra/compose/ -n
 ```
 
 Ergebnis:
-```
+
+```text
 infra/compose/compose.core.yml:88:  pgbouncer:
 infra/compose/compose.core.yml:90:    image: edoburu/pgbouncer:1.20
 infra/compose/compose.core.yml:90:      POOL_MODE: transaction
@@ -185,7 +192,7 @@ für den `DbSessionStore`-Use-Case, aber noch nicht empirisch geprüft.
 Kein Redis-Dienst in `infra/compose/compose.core.yml` oder `infra/compose/compose.prod.yml`.
 Kein Redis-Crate in `apps/api/Cargo.toml`.
 
-```
+```text
 # Kein Treffer für Redis in Cargo.toml oder infra/compose/
 ```
 
@@ -195,12 +202,14 @@ Abhängigkeit bedeuten.
 ### 2.6 Async-Abstraktion für SessionStore (belegt: fehlt)
 
 Kommando:
-```
+
+```bash
 rg "DbSessionStore|SessionOps|session_db|async_trait|trait.*Session" apps/api/src -n
 ```
 
 Ergebnis:
-```
+
+```text
 Keine Treffer
 ```
 
@@ -211,7 +220,8 @@ diese Inkompatibilität auflösen.
 ### 2.7 CI-Migrations-Step (belegt: fehlt)
 
 `.github/workflows/api.yml` führt aus:
-```
+
+```text
 cargo test --all-features --verbose
 ```
 
