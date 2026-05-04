@@ -6,7 +6,19 @@
   "type": "module",
   "pnpm": {
     "overrides": {
-      "cookie": "^0.7.0"
+      "cookie": "^0.7.0",
+      "rollup": "4.60.2",
+      "minimatch@^3.0.0": "3.1.5",
+      "minimatch@^9.0.0": "9.0.9",
+      "flatted": "3.4.2",
+      "picomatch@^2.0.0": "2.3.2",
+      "brace-expansion@^1.0.0": "1.1.14",
+      "brace-expansion@^2.0.0": "2.0.3",
+      "devalue": "5.8.0",
+      "postcss": "8.5.13",
+      "yaml@^1.0.0": "1.10.3",
+      "protocol-buffers-schema": "3.6.1",
+      "@eslint/plugin-kit": "0.7.1"
     }
   },
   "scripts": {
@@ -40,7 +52,7 @@
     "@opentelemetry/api": "^1.9.0",
     "@playwright/test": "1.55.1",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "2.52.2",
+    "@sveltejs/kit": "2.59.0",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@types/node": "^20.19.0",
     "@typescript-eslint/eslint-plugin": "8.8.0",
@@ -63,6 +75,6 @@
     "pmtiles": "^4.4.0"
   },
   "engines": {
-    "node": ">=20.19.0"
+    "node": "^20.19.0 || ^22.13.0 || >=24"
   }
 }
