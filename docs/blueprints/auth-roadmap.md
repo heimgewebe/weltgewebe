@@ -60,6 +60,7 @@ Diese Dokumente bleiben relevant, sind aber nicht mehr alleiniger Zielrahmen:
 Diese Dokumente müssen berücksichtigt, aber nicht mit der Zielarchitektur verwechselt werden:
 
 - `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
+- `docs/blueprints/auth-persistence-runtime-proof.md`
 - `docs/index.md`
 
 ### Betriebs- und Kontextbelege

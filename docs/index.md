@@ -49,6 +49,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 – **ADR-0006:** [adr/ADR-0006__auth-magic-link-session-passkey.md](adr/ADR-0006__auth-magic-link-session-passkey.md) (Führendes Zielbild)
 – **Auth Roadmap:** [blueprints/auth-roadmap.md](blueprints/auth-roadmap.md) (Umsetzungspfad)
+– **Auth-Persistenz Runtime-Proof:** [blueprints/auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) (Blaupause)
 – **Auth Status Matrix:** [reports/auth-status-matrix.md](reports/auth-status-matrix.md) (Aktueller Repo-Beweis)
 – **Agent Readiness Audit:** [reports/agent-readiness-audit.md](reports/agent-readiness-audit.md) (Diagnose)
 – **Auth Specs:** [specs/auth-api.md](specs/auth-api.md), [specs/auth-ui.md](specs/auth-ui.md), [specs/auth-state-machine.md](specs/auth-state-machine.md)
