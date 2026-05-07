@@ -94,11 +94,11 @@ Nicht mitziehen:
 
 ## 3. Grundprinzipien
 
-### 3.1 Proof before patch
+### 3.1 Beweis vor Umbau
 
 Kein Auth-Umbau ohne Runtime-Beweis.
 
-### 3.2 Fail closed
+### 3.2 Geschlossen fehlschlagen (fail closed)
 
 Wenn DB-Persistenz konfiguriert ist, aber kein DB-Pool verfügbar ist:
 
@@ -171,12 +171,28 @@ rg -n "pgbouncer|POOL_MODE|6432|DATABASE_URL" \
   infra .env.example docker-compose* compose* docs apps/api 2>/dev/null | head -160
 ```
 
+### Sicherheitsregel für `revert`
+
+`sqlx migrate revert` darf ausschließlich gegen eine frische lokale
+Wegwerf-Datenbank oder ein isoliertes Test-Fixture laufen. Gegen Shared Dev,
+Staging oder Produktion ist `revert` verboten, weil die Down-Migration
+`DROP TABLE sessions;` ausführt.
+
+Vor jedem Migrationsbeweis muss die Ziel-DB-Klasse dokumentiert werden:
+`disposable-local`, `shared-dev`, `staging` oder `prod`.
+
+- `disposable-local`: `run → revert → run` erlaubt.
+- `shared-dev`, `staging`, `prod`: nur `run` erlaubt.
+
 ### Migration direkt gegen PostgreSQL
 
 ```bash
 export DATABASE_URL=<direkte-postgres-url>
+# Nur bei Ziel-DB-Klasse disposable-local:
 sqlx migrate run --source apps/api/migrations
 sqlx migrate revert --source apps/api/migrations
+sqlx migrate run --source apps/api/migrations
+# Bei shared-dev/staging/prod:
 sqlx migrate run --source apps/api/migrations
 ```
 
@@ -186,8 +202,11 @@ Nur ausführen, wenn PgBouncer im Stack aktiv ist.
 
 ```bash
 export DATABASE_URL=<pgbouncer-url>
+# Nur bei Ziel-DB-Klasse disposable-local:
 sqlx migrate run --source apps/api/migrations
 sqlx migrate revert --source apps/api/migrations
+sqlx migrate run --source apps/api/migrations
+# Bei shared-dev/staging/prod:
 sqlx migrate run --source apps/api/migrations
 ```
 
@@ -403,51 +422,15 @@ Nicht tun:
 - Kein Redis.
 - Keine Startup-Migration.
 
-Diagnose:
+Diagnose und Runtime-Proof:
 
-```bash
-git status --short
-rg -n "sqlx" apps/api/Cargo.toml
-sqlx --version
-rg -n "pgbouncer|POOL_MODE|6432|DATABASE_URL" \
-  infra .env.example docker-compose* compose* docs apps/api 2>/dev/null | head -160
-```
-
-Migration-Proof direkt gegen PostgreSQL:
-
-```bash
-export DATABASE_URL=<direkte-postgres-url>
-sqlx migrate run --source apps/api/migrations
-sqlx migrate revert --source apps/api/migrations
-sqlx migrate run --source apps/api/migrations
-```
-
-Migration-Proof gegen PgBouncer, falls PgBouncer im Stack aktiv ist:
-
-```bash
-export DATABASE_URL=<pgbouncer-url>
-sqlx migrate run --source apps/api/migrations
-sqlx migrate revert --source apps/api/migrations
-sqlx migrate run --source apps/api/migrations
-```
-
-CRUD-Smoke:
-
-Erstelle den kleinsten reproduzierbaren Check gegen `sessions`:
-
-- `INSERT`
-- `SELECT`
-- `UPDATE last_active`
-- `DELETE`
-
-Der Smoke darf ein Script oder Integrationstest sein. Er darf keinen Auth-Code
-umbauen.
-
-Offline-Test:
-
-```bash
-cargo test --locked -p weltgewebe-api
-```
+- Führe die Diagnose aus Abschnitt 5 aus.
+- Beachte zwingend die Sicherheitsregel für `sqlx migrate revert`.
+- Dokumentiere vor jedem Migrationsbefehl die Ziel-DB-Klasse.
+- Führe den direkten PostgreSQL-Proof aus.
+- Führe den PgBouncer-Proof nur aus, wenn PgBouncer im aktiven Stack vorgesehen ist.
+- Erstelle den kleinsten reproduzierbaren CRUD-Smoke gegen `sessions`.
+- Führe `cargo test --locked -p weltgewebe-api` aus.
 
 Patch-Regel:
 

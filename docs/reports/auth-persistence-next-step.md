@@ -28,7 +28,7 @@ relations:
 
 > **Ablösehinweis (2026-05-06):** Der konkrete Folge-PR-Vorschlag in diesem Bericht
 > wird für die nächste Aktion durch `docs/blueprints/auth-persistence-runtime-proof.md`
-> superseded. Maßgeblich ist nun zuerst der Runtime-Proof-PR; die hier
+> abgelöst. Maßgeblich ist nun zuerst der Runtime-Proof-PR; die hier
 > dokumentierten Befunde bleiben als Diagnosegrundlage relevant.
 >
 > **Zweck:** Diagnose- und Entscheidungsgrundlage. Kein Implementierungs-PR.
