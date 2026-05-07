@@ -182,33 +182,55 @@ Vor jedem Migrationsbeweis muss die Ziel-DB-Klasse dokumentiert werden:
 `disposable-local`, `shared-dev`, `staging` oder `prod`.
 
 - `disposable-local`: `run → revert → run` erlaubt.
-- `shared-dev`, `staging`, `prod`: nur `run` erlaubt.
+- `shared-dev`, `staging`: nur `run` erlaubt; `revert` verboten.
+- `prod`: kein Runtime-Proof-Ziel. Produktion darf nur über den gesonderten
+  Deploy-/Release-Migrationspfad migriert werden; `revert` ist im Rahmen
+  dieses Blueprints verboten.
 
 ### Migration direkt gegen PostgreSQL
 
+Zuerst Ziel-DB-Klasse dokumentieren.
+
+Variante A — nur für `disposable-local`:
+
 ```bash
-export DATABASE_URL=<direkte-postgres-url>
-# Nur bei Ziel-DB-Klasse disposable-local:
+export DATABASE_URL=<direkte-postgres-url-fuer-wegwerf-db>
 sqlx migrate run --source apps/api/migrations
 sqlx migrate revert --source apps/api/migrations
 sqlx migrate run --source apps/api/migrations
-# Bei shared-dev/staging/prod:
+```
+
+Variante B — für `shared-dev` oder `staging`:
+
+```bash
+export DATABASE_URL=<direkte-postgres-url>
 sqlx migrate run --source apps/api/migrations
 ```
+
+`prod` ist kein Runtime-Proof-Ziel.
 
 ### Migration gegen PgBouncer
 
-Nur ausführen, wenn PgBouncer im Stack aktiv ist.
+Nur ausführen, wenn PgBouncer im Stack aktiv ist. Zuerst Ziel-DB-Klasse
+dokumentieren.
+
+Variante A — nur für `disposable-local`:
 
 ```bash
-export DATABASE_URL=<pgbouncer-url>
-# Nur bei Ziel-DB-Klasse disposable-local:
+export DATABASE_URL=<pgbouncer-url-fuer-wegwerf-db>
 sqlx migrate run --source apps/api/migrations
 sqlx migrate revert --source apps/api/migrations
 sqlx migrate run --source apps/api/migrations
-# Bei shared-dev/staging/prod:
+```
+
+Variante B — für `shared-dev` oder `staging`:
+
+```bash
+export DATABASE_URL=<pgbouncer-url>
 sqlx migrate run --source apps/api/migrations
 ```
+
+`prod` ist kein Runtime-Proof-Ziel.
 
 ### Minimaler SQLx-CRUD-Smoke
 
@@ -427,6 +449,8 @@ Diagnose und Runtime-Proof:
 - Führe die Diagnose aus Abschnitt 5 aus.
 - Beachte zwingend die Sicherheitsregel für `sqlx migrate revert`.
 - Dokumentiere vor jedem Migrationsbefehl die Ziel-DB-Klasse.
+- Wähle je Ziel-DB-Klasse genau eine Migrationsvariante aus Abschnitt 5;
+  kopiere niemals beide Varianten hintereinander.
 - Führe den direkten PostgreSQL-Proof aus.
 - Führe den PgBouncer-Proof nur aus, wenn PgBouncer im aktiven Stack vorgesehen ist.
 - Erstelle den kleinsten reproduzierbaren CRUD-Smoke gegen `sessions`.
