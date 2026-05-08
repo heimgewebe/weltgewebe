@@ -305,12 +305,12 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 ### Arbeitspakete Phase 5
 
-1. Session-Status sichtbar machen
-2. Zustand „Session abgelaufen“
-3. Passkey-Aktivierung mit verständlicher Erklärung
-4. Step-up-Dialog
-5. Geräteansicht / Geräteverwaltung
-6. AuthStore / AuthStatus auf reale Zustände erweitern
+1. [x] Session-Status sichtbar machen — `apps/web/src/lib/components/AccountSection.svelte` zeigt Konto, Rolle und aktive Sitzung in `/settings`; Tests in `apps/web/tests/account-section.spec.ts`.
+2. [ ] Zustand „Session abgelaufen“
+3. [~] Passkey-Aktivierung mit verständlicher Erklärung — Eintragspunkt und Erklärtext stehen als deaktivierter Stub in der Settings-Sektion; CTA aktiviert sich erst, wenn Auth-Phase 4 (Register-Verify, Auth-Optionen, Auth-Verify) im Backend nachgewiesen ist.
+4. [ ] Step-up-Dialog
+5. [x] Geräteansicht / Geräteverwaltung — Read-only Liste der aktiven Geräte mit „Dieses Gerät"-Badge in Settings; nutzt `GET /auth/devices` und markiert das aktuelle Gerät anhand des `current`-Flags. Schreiboperationen (Geräte-Removal) bleiben weiterhin step-up-getrieben über die bestehenden Endpunkte.
+6. [ ] AuthStore / AuthStatus auf reale Zustände erweitern
 
 ### Leitfrage
 

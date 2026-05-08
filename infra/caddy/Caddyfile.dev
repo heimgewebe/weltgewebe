@@ -44,5 +44,8 @@
     Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https://basemaps.cartocdn.com; img-src 'self' data: blob: https://basemaps.cartocdn.com; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
+    # Optional diagnose header. Set WELTGEWEBE_BUILD in the deploy environment
+    # to the canonical build version (matches /_app/version.json#version).
+    X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"
   }
 }
