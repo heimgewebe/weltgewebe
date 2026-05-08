@@ -116,7 +116,8 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 
 Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-Proof.
 
-- [x] Kartenklarheit Phasen 0–4 — Ist sichern, Datenquelle, Szenengrenzen, Regressionen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
+- [x] Kartenklarheit Phasen 0–3 — Ist sichern, Datenquelle, Szenengrenzen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
+- [~] Kartenklarheit Phase 4 — Regressionen teilweise; Keyboard-/Query-Parameter-Navigation offen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
 - [~] Kartenklarheit Phase 5 — Souveräne Basemap-Infrastruktur · [kartenklarheit-roadmap §155](blueprints/kartenklarheit-roadmap.md)
 - [~] Basemap-Roadmap Phasen 1–3 — Pipeline, Style, Runtime-Integration · [map-roadmap.md](blueprints/map-roadmap.md)
 - [ ] Basemap-Roadmap Phase 4 — Betrieb & Versionierung
