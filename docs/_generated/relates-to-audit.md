@@ -14,10 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 168 |
-| — relates_to | 167 |
+| Relationen gesamt | 185 |
+| — depends_on | 1 |
+| — relates_to | 182 |
 | — supersedes | 1 |
-| relates_to Anteil | 99% |
+| — updates | 1 |
+| relates_to Anteil | 98% |
 
 ### Mögliche supersedes-Lücken
 
@@ -29,20 +31,23 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (36 Dokumente):
+**Cluster 1** (46 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
+- `docs/adr/ADR-0005-auth.md`
+- `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
-- `docs/blueprints/kartenklarheit-phase6.md`
-- `docs/blueprints/kartenklarheit-roadmap.md`
-- `docs/blueprints/kartenklarheit.md`
-- `docs/blueprints/map-blaupause.md`
-- `docs/blueprints/map-roadmap.md`
+- `docs/blueprints/auth-persistence-runtime-proof.md`
+- `docs/blueprints/auth-roadmap.md`
+- `docs/blueprints/ui-blaupause.md`
+- `docs/blueprints/ui-roadmap.md`
+- `docs/blueprints/ui-state-machine.md`
+- `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 - `docs/datenmodell.md`
 - `docs/domain/modules.md`
 - `docs/domain/vocabulary.md`
@@ -57,8 +62,15 @@ _Keine Lücken erkannt._
 - `docs/policies/orientierung.md`
 - `docs/reference/glossar.md`
 - `docs/reports/agent-readiness-audit.md`
-- `docs/reports/map-architekturkritik.md`
-- `docs/reports/map-status-matrix.md`
+- `docs/reports/auth-persistence-next-step.md`
+- `docs/reports/auth-persistence-readiness.md`
+- `docs/reports/auth-status-matrix.md`
+- `docs/reports/optimierungsbericht.md`
+- `docs/reports/optimierungsstatus.md`
+- `docs/specs/auth-api.md`
+- `docs/specs/auth-blueprint.md`
+- `docs/specs/auth-state-machine.md`
+- `docs/specs/auth-ui.md`
 - `docs/specs/contract.md`
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
@@ -101,20 +113,15 @@ _Keine Lücken erkannt._
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
 - `docs/runbooks/uv-tooling.md`
 
-**Cluster 3** (12 Dokumente):
+**Cluster 3** (7 Dokumente):
 
-- `docs/adr/ADR-0005-auth.md`
-- `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-- `docs/blueprints/auth-roadmap.md`
-- `docs/blueprints/ui-blaupause.md`
-- `docs/blueprints/ui-roadmap.md`
-- `docs/blueprints/ui-state-machine.md`
-- `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-- `docs/reports/auth-status-matrix.md`
-- `docs/specs/auth-api.md`
-- `docs/specs/auth-blueprint.md`
-- `docs/specs/auth-state-machine.md`
-- `docs/specs/auth-ui.md`
+- `docs/blueprints/kartenklarheit-phase6.md`
+- `docs/blueprints/kartenklarheit-roadmap.md`
+- `docs/blueprints/kartenklarheit.md`
+- `docs/blueprints/map-blaupause.md`
+- `docs/blueprints/map-roadmap.md`
+- `docs/reports/map-architekturkritik.md`
+- `docs/reports/map-status-matrix.md`
 
 **Cluster 4** (3 Dokumente):
 
@@ -125,6 +132,14 @@ _Keine Lücken erkannt._
 ### Konkrete Beispiele zur Prüfung
 
 > Dokumente mit den meisten relates_to-Zielen und ihren konkreten Relationen.
+
+**`docs/blueprints/auth-persistence-runtime-proof.md`**:
+
+- relates_to → `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- relates_to → `docs/blueprints/auth-roadmap.md`
+- relates_to → `docs/reports/auth-persistence-next-step.md`
+- relates_to → `docs/reports/auth-persistence-readiness.md`
+- relates_to → `docs/specs/auth-api.md`
 
 **`docs/deploy/README.md`**:
 
@@ -140,13 +155,6 @@ _Keine Lücken erkannt._
 - relates_to → `docs/blueprints/auth-roadmap.md`
 - relates_to → `docs/reports/auth-status-matrix.md`
 - relates_to → `docs/specs/auth-blueprint.md`
-
-**`docs/blueprints/agent-operability-blaupause.md`**:
-
-- relates_to → `AGENTS.md`
-- relates_to → `agent-policy.yaml`
-- relates_to → `docs/policies/agent-reading-protocol.md`
-- relates_to → `docs/reports/agent-readiness-audit.md`
 
 ### Hinweise
 

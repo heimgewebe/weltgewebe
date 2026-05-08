@@ -35,8 +35,11 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 
 - [relates_to] docs/adr/ADR-0005-auth.md
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/specs/auth-api.md
 - [relates_to] docs/specs/auth-blueprint.md
@@ -54,6 +57,9 @@ Generated automatically. Do not edit.
 ## docs/blueprints/auth-roadmap.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/specs/auth-blueprint.md
 
@@ -106,6 +112,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/0043-edge-vs-conversation.md
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/techstack.md
 
@@ -207,6 +214,8 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
+- [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/reports/optimierungsstatus.md
 
 ## docs/policies/orientierung.md
 
@@ -241,6 +250,16 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 
+## docs/reports/auth-persistence-next-step.md
+
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+
+## docs/reports/auth-persistence-readiness.md
+
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [updates] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/optimierungsstatus.md
+
 ## docs/reports/auth-status-matrix.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
@@ -260,6 +279,14 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
+
+## docs/reports/optimierungsbericht.md
+
+- [depends_on] docs/reports/optimierungsstatus.md
+
+## docs/reports/optimierungsstatus.md
+
+- [relates_to] docs/reports/optimierungsbericht.md
 
 ## docs/runbook.md
 
@@ -292,6 +319,9 @@ Generated automatically. Do not edit.
 
 ## docs/specs/auth-api.md
 
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/specs/auth-state-machine.md
 - [relates_to] docs/specs/auth-ui.md
 
@@ -326,6 +356,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/datenmodell.md
+- [relates_to] docs/reports/optimierungsbericht.md
 
 ## docs/vision.md
 
