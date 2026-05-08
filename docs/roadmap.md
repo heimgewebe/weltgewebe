@@ -10,29 +10,29 @@ summary: >
   Agent-Operability, Versionierung) ordnet und Meilensteine abhakbar macht.
   Sie ersetzt keine Sub-Roadmap und keinen Statusbericht, sondern verknüpft sie.
 relations:
-  - type: relates_to
+  - type: depends_on
     target: docs/process/fahrplan.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/auth-roadmap.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/auth-persistence-runtime-proof.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/ui-roadmap.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/map-roadmap.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/kartenklarheit-roadmap.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/kartenklarheit-phase6.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/agent-operability-blaupause.md
-  - type: relates_to
+  - type: depends_on
     target: docs/blueprints/versionierungs-blaupause.md
-  - type: relates_to
+  - type: depends_on
     target: docs/reports/optimierungsstatus.md
-  - type: relates_to
+  - type: depends_on
     target: docs/reports/auth-status-matrix.md
-  - type: relates_to
+  - type: depends_on
     target: docs/reports/map-status-matrix.md
 ---
 

@@ -18,8 +18,8 @@ Generated automatically. Do not edit.
 | Dokumente mit ausgehenden Relationen | 84 |
 | Dokumente als Ziel referenziert | 66 |
 | Relationen gesamt | 197 |
-| — depends_on | 1 |
-| — relates_to | 194 |
+| — depends_on | 13 |
+| — relates_to | 182 |
 | — supersedes | 1 |
 | — updates | 1 |
 | Isolierte Dokumente | 1 |
