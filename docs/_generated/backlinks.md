@@ -35,8 +35,11 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 
 - [relates_to] docs/adr/ADR-0005-auth.md
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/reports/auth-status-matrix.md
 - [relates_to] docs/specs/auth-api.md
 - [relates_to] docs/specs/auth-blueprint.md
@@ -51,17 +54,34 @@ Generated automatically. Do not edit.
 - [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
 
+## docs/blueprints/agent-operability-blaupause.md
+
+- [depends_on] docs/roadmap.md
+
+## docs/blueprints/auth-persistence-runtime-proof.md
+
+- [depends_on] docs/roadmap.md
+
 ## docs/blueprints/auth-roadmap.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/reports/auth-status-matrix.md
+- [depends_on] docs/roadmap.md
 - [relates_to] docs/specs/auth-blueprint.md
+
+## docs/blueprints/kartenklarheit-phase6.md
+
+- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit-roadmap.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/reports/map-architekturkritik.md
 - [relates_to] docs/reports/map-status-matrix.md
+- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit.md
 
@@ -76,6 +96,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
+- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/ui-blaupause.md
 
@@ -87,6 +108,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-state-machine.md
+- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/ui-state-machine.md
 
@@ -96,6 +118,7 @@ Generated automatically. Do not edit.
 ## docs/blueprints/versionierungs-blaupause.md
 
 - [relates_to] docs/blueprints/versionierungs-statusgrundlage.md
+- [depends_on] docs/roadmap.md
 
 ## docs/blueprints/versionierungs-statusgrundlage.md
 
@@ -106,6 +129,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/0043-edge-vs-conversation.md
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/techstack.md
 
@@ -207,6 +231,8 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
+- [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/reports/optimierungsstatus.md
 
 ## docs/policies/orientierung.md
 
@@ -228,6 +254,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0004__fahrplan-verweis.md
 - [relates_to] docs/process/README.md
 - [relates_to] docs/quickstart-gate-c.md
+- [depends_on] docs/roadmap.md
 
 ## docs/process/sprache.md
 
@@ -241,10 +268,21 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 
+## docs/reports/auth-persistence-next-step.md
+
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+
+## docs/reports/auth-persistence-readiness.md
+
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [updates] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/optimierungsstatus.md
+
 ## docs/reports/auth-status-matrix.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
+- [depends_on] docs/roadmap.md
 
 ## docs/reports/map-architekturkritik.md
 
@@ -260,6 +298,16 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
+- [depends_on] docs/roadmap.md
+
+## docs/reports/optimierungsbericht.md
+
+- [depends_on] docs/reports/optimierungsstatus.md
+
+## docs/reports/optimierungsstatus.md
+
+- [relates_to] docs/reports/optimierungsbericht.md
+- [depends_on] docs/roadmap.md
 
 ## docs/runbook.md
 
@@ -292,6 +340,9 @@ Generated automatically. Do not edit.
 
 ## docs/specs/auth-api.md
 
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/specs/auth-state-machine.md
 - [relates_to] docs/specs/auth-ui.md
 
@@ -326,6 +377,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/datenmodell.md
+- [relates_to] docs/reports/optimierungsbericht.md
 
 ## docs/vision.md
 

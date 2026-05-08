@@ -15,6 +15,10 @@ NOTE:
 Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 -->
 
+### Master-Umsetzungsroadmap
+
+– **Master-Roadmap:** [roadmap.md](roadmap.md) (Koordinations-Index über alle thematischen Sub-Roadmaps)
+
 ### System
 
 – **Start:** [architekturstruktur.md](architekturstruktur.md)
