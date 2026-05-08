@@ -69,6 +69,14 @@ Haken hier sind verdichtete Repräsentationen, keine Eigenwahrheiten.
 4. **Reihenfolge vor Vollständigkeit.** Diese Datei priorisiert
    Abhängigkeiten zwischen Themen, nicht die Themen-internen Phasen.
 
+## Relations-Hinweis
+
+Diese Roadmap hat bewusst viele ausgehende `depends_on`-Relationen, weil sie
+als Koordinations-Index aus Sub-Roadmaps und Statusmatrizen abgeleitet ist.
+Ein hoher Outbound-Wert ist hier erwartet und kein eigenständiger Architektur-Hub.
+Neue Relationen dürfen nur ergänzt werden, wenn ein Dokument wirklich als
+Status- oder Reihenfolgequelle für die Master-Roadmap dient.
+
 ## Themen-Übersicht
 
 | Thema | Sub-Roadmap | Statusbeleg |
@@ -117,13 +125,13 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 
 ## Strang Agent-Operability
 
-- [~] Minimaler Action-Layer · [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md)
+- [?] Minimaler Action-Layer · Zielbild dokumentiert, Implementierungsstand prüfen · [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md)
 - [?] Agent-Readiness vollständig grün · [agent-readiness-audit.md](reports/agent-readiness-audit.md)
 
 ## Strang Versionierung
 
-- [?] Versionierungsmodell festziehen · [versionierungs-blaupause.md](blueprints/versionierungs-blaupause.md)
-- [?] Statusgrundlage gegen Repo prüfen · [versionierungs-statusgrundlage.md](blueprints/versionierungs-statusgrundlage.md)
+- [?] Versionierungsmodell festziehen · Blueprint ist draft · [versionierungs-blaupause.md](blueprints/versionierungs-blaupause.md)
+- [?] Statusgrundlage gegen Repo prüfen · Statusgrundlage ist active, aber Master-Status bleibt nur aus Sub-Beleg ableitbar · [versionierungs-statusgrundlage.md](blueprints/versionierungs-statusgrundlage.md)
 
 ## Strang Optimierungsfront
 
