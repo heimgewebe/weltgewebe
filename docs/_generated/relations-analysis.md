@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 85 |
-| Dokumente mit ausgehenden Relationen | 83 |
-| Dokumente als Ziel referenziert | 63 |
-| Relationen gesamt | 185 |
+| Dokumente gesamt | 86 |
+| Dokumente mit ausgehenden Relationen | 84 |
+| Dokumente als Ziel referenziert | 66 |
+| Relationen gesamt | 197 |
 | — depends_on | 1 |
-| — relates_to | 182 |
+| — relates_to | 194 |
 | — supersedes | 1 |
 | — updates | 1 |
 | Isolierte Dokumente | 1 |
@@ -29,6 +29,7 @@ Generated automatically. Do not edit.
 
 > Heuristische Hinweise — keine CI-Fehler. Zyklen deuten auf zirkuläre Abhängigkeiten, hohe Vernetzung auf zentrale Dokumente, die bei Änderungen besondere Aufmerksamkeit erfordern.
 
+- ⚠️ High outbound count (12): `docs/roadmap.md` — possible over-linking
 - ⚠️ High inbound count (13): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/deployment.md` — central dependency, review carefully
@@ -38,6 +39,10 @@ Generated automatically. Do not edit.
 _Keine Zyklen gefunden._
 
 ### Hubs (hohe Vernetzung)
+
+**Ausgehend (outbound):**
+
+- `docs/roadmap.md` — 12 ausgehende Relationen
 
 **Eingehend (inbound):**
 

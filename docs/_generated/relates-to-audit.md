@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 185 |
+| Relationen gesamt | 197 |
 | — depends_on | 1 |
-| — relates_to | 182 |
+| — relates_to | 194 |
 | — supersedes | 1 |
 | — updates | 1 |
 | relates_to Anteil | 98% |
@@ -31,26 +31,50 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (46 Dokumente):
+**Cluster 1** (84 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
+- `docs/adr/ADR-0002__reentry-kriterien.md`
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
+- `docs/adr/ADR-0004__fahrplan-verweis.md`
 - `docs/adr/ADR-0005-auth.md`
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/auth-persistence-runtime-proof.md`
 - `docs/blueprints/auth-roadmap.md`
+- `docs/blueprints/kartenklarheit-phase6.md`
+- `docs/blueprints/kartenklarheit-roadmap.md`
+- `docs/blueprints/kartenklarheit.md`
+- `docs/blueprints/map-blaupause.md`
+- `docs/blueprints/map-roadmap.md`
 - `docs/blueprints/ui-blaupause.md`
 - `docs/blueprints/ui-roadmap.md`
 - `docs/blueprints/ui-state-machine.md`
+- `docs/blueprints/versionierungs-blaupause.md`
+- `docs/blueprints/versionierungs-statusgrundlage.md`
 - `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
+- `docs/blueprints/weltgewebe.config.diff.md`
+- `docs/blueprints/weltgewebe.deploy.plan.md`
 - `docs/datenmodell.md`
+- `docs/deploy/CHANGELOG.md`
+- `docs/deploy/DRIFT_POLICY.md`
+- `docs/deploy/README.md`
+- `docs/deploy/heim-first-phase0.md`
+- `docs/deploy/heimserver.deployment.md`
+- `docs/deploy/heimserver.integration.md`
+- `docs/deploy/security.md`
+- `docs/deploy/vps.md`
+- `docs/deploy/weltgewebe.naming.md`
+- `docs/deployment.md`
+- `docs/deployment_governance.md`
+- `docs/dev/codespaces.md`
 - `docs/domain/modules.md`
 - `docs/domain/vocabulary.md`
+- `docs/edge/systemd/README.md`
 - `docs/geist-und-plan.md`
 - `docs/inhalt.md`
 - `docs/konzepte/garnrolle-und-verortung.md`
@@ -60,13 +84,27 @@ _Keine Lücken erkannt._
 - `docs/policies/agent-reading-protocol.md`
 - `docs/policies/architecture-critique.md`
 - `docs/policies/orientierung.md`
+- `docs/process/README.md`
+- `docs/process/bash-tooling-guidelines.md`
+- `docs/process/fahrplan.md`
+- `docs/process/sprache.md`
+- `docs/quickstart-gate-c.md`
 - `docs/reference/glossar.md`
 - `docs/reports/agent-readiness-audit.md`
 - `docs/reports/auth-persistence-next-step.md`
 - `docs/reports/auth-persistence-readiness.md`
 - `docs/reports/auth-status-matrix.md`
+- `docs/reports/map-architekturkritik.md`
+- `docs/reports/map-status-matrix.md`
 - `docs/reports/optimierungsbericht.md`
 - `docs/reports/optimierungsstatus.md`
+- `docs/roadmap.md`
+- `docs/runbook.md`
+- `docs/runbook.observability.md`
+- `docs/runbooks/README.md`
+- `docs/runbooks/codespaces-recovery.md`
+- `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
+- `docs/runbooks/uv-tooling.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-blueprint.md`
 - `docs/specs/auth-state-machine.md`
@@ -80,50 +118,7 @@ _Keine Lücken erkannt._
 - `docs/zusammenstellung.md`
 - `repo.meta.yaml`
 
-**Cluster 2** (30 Dokumente):
-
-- `docs/adr/ADR-0002__reentry-kriterien.md`
-- `docs/adr/ADR-0004__fahrplan-verweis.md`
-- `docs/blueprints/versionierungs-blaupause.md`
-- `docs/blueprints/versionierungs-statusgrundlage.md`
-- `docs/blueprints/weltgewebe.config.diff.md`
-- `docs/blueprints/weltgewebe.deploy.plan.md`
-- `docs/deploy/CHANGELOG.md`
-- `docs/deploy/DRIFT_POLICY.md`
-- `docs/deploy/README.md`
-- `docs/deploy/heim-first-phase0.md`
-- `docs/deploy/heimserver.deployment.md`
-- `docs/deploy/heimserver.integration.md`
-- `docs/deploy/security.md`
-- `docs/deploy/vps.md`
-- `docs/deploy/weltgewebe.naming.md`
-- `docs/deployment.md`
-- `docs/deployment_governance.md`
-- `docs/dev/codespaces.md`
-- `docs/edge/systemd/README.md`
-- `docs/process/README.md`
-- `docs/process/bash-tooling-guidelines.md`
-- `docs/process/fahrplan.md`
-- `docs/process/sprache.md`
-- `docs/quickstart-gate-c.md`
-- `docs/runbook.md`
-- `docs/runbook.observability.md`
-- `docs/runbooks/README.md`
-- `docs/runbooks/codespaces-recovery.md`
-- `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
-- `docs/runbooks/uv-tooling.md`
-
-**Cluster 3** (7 Dokumente):
-
-- `docs/blueprints/kartenklarheit-phase6.md`
-- `docs/blueprints/kartenklarheit-roadmap.md`
-- `docs/blueprints/kartenklarheit.md`
-- `docs/blueprints/map-blaupause.md`
-- `docs/blueprints/map-roadmap.md`
-- `docs/reports/map-architekturkritik.md`
-- `docs/reports/map-status-matrix.md`
-
-**Cluster 4** (3 Dokumente):
+**Cluster 2** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
@@ -132,6 +127,21 @@ _Keine Lücken erkannt._
 ### Konkrete Beispiele zur Prüfung
 
 > Dokumente mit den meisten relates_to-Zielen und ihren konkreten Relationen.
+
+**`docs/roadmap.md`**:
+
+- relates_to → `docs/blueprints/agent-operability-blaupause.md`
+- relates_to → `docs/blueprints/auth-persistence-runtime-proof.md`
+- relates_to → `docs/blueprints/auth-roadmap.md`
+- relates_to → `docs/blueprints/kartenklarheit-phase6.md`
+- relates_to → `docs/blueprints/kartenklarheit-roadmap.md`
+- relates_to → `docs/blueprints/map-roadmap.md`
+- relates_to → `docs/blueprints/ui-roadmap.md`
+- relates_to → `docs/blueprints/versionierungs-blaupause.md`
+- relates_to → `docs/process/fahrplan.md`
+- relates_to → `docs/reports/auth-status-matrix.md`
+- relates_to → `docs/reports/map-status-matrix.md`
+- relates_to → `docs/reports/optimierungsstatus.md`
 
 **`docs/blueprints/auth-persistence-runtime-proof.md`**:
 
@@ -148,13 +158,6 @@ _Keine Lücken erkannt._
 - relates_to → `docs/deploy/security.md`
 - relates_to → `docs/deployment.md`
 - relates_to → `docs/deployment_governance.md`
-
-**`docs/adr/ADR-0006__auth-magic-link-session-passkey.md`**:
-
-- relates_to → `docs/adr/ADR-0005-auth.md`
-- relates_to → `docs/blueprints/auth-roadmap.md`
-- relates_to → `docs/reports/auth-status-matrix.md`
-- relates_to → `docs/specs/auth-blueprint.md`
 
 ### Hinweise
 

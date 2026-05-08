@@ -54,6 +54,14 @@ Generated automatically. Do not edit.
 - [relates_to] docs/vision.md
 - [relates_to] docs/zusammenstellung.md
 
+## docs/blueprints/agent-operability-blaupause.md
+
+- [relates_to] docs/roadmap.md
+
+## docs/blueprints/auth-persistence-runtime-proof.md
+
+- [relates_to] docs/roadmap.md
+
 ## docs/blueprints/auth-roadmap.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
@@ -61,13 +69,19 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-persistence-next-step.md
 - [relates_to] docs/reports/auth-persistence-readiness.md
 - [relates_to] docs/reports/auth-status-matrix.md
+- [relates_to] docs/roadmap.md
 - [relates_to] docs/specs/auth-blueprint.md
+
+## docs/blueprints/kartenklarheit-phase6.md
+
+- [relates_to] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit-roadmap.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/reports/map-architekturkritik.md
 - [relates_to] docs/reports/map-status-matrix.md
+- [relates_to] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit.md
 
@@ -82,6 +96,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
+- [relates_to] docs/roadmap.md
 
 ## docs/blueprints/ui-blaupause.md
 
@@ -93,6 +108,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/ui-blaupause.md
 - [relates_to] docs/blueprints/ui-state-machine.md
+- [relates_to] docs/roadmap.md
 
 ## docs/blueprints/ui-state-machine.md
 
@@ -102,6 +118,7 @@ Generated automatically. Do not edit.
 ## docs/blueprints/versionierungs-blaupause.md
 
 - [relates_to] docs/blueprints/versionierungs-statusgrundlage.md
+- [relates_to] docs/roadmap.md
 
 ## docs/blueprints/versionierungs-statusgrundlage.md
 
@@ -237,6 +254,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0004__fahrplan-verweis.md
 - [relates_to] docs/process/README.md
 - [relates_to] docs/quickstart-gate-c.md
+- [relates_to] docs/roadmap.md
 
 ## docs/process/sprache.md
 
@@ -264,6 +282,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
+- [relates_to] docs/roadmap.md
 
 ## docs/reports/map-architekturkritik.md
 
@@ -279,6 +298,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
+- [relates_to] docs/roadmap.md
 
 ## docs/reports/optimierungsbericht.md
 
@@ -287,6 +307,7 @@ Generated automatically. Do not edit.
 ## docs/reports/optimierungsstatus.md
 
 - [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/roadmap.md
 
 ## docs/runbook.md
 
