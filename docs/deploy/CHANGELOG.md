@@ -12,7 +12,7 @@ relations:
 
 ## 2026-05-09
 
-- `infra/caddy/Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`: Kommentare präzisiert für `X-Weltgewebe-Build`-Header. Alle Dateien verwenden nun neutral "Deploy can set WELTGEWEBE_BUILD" statt unbelegter Annahmen. Unverified Aussage über Caddy-Verhalten bei ungesetztem Environment-Variable aus `Caddyfile.heim` entfernt. Funktional keine Änderung.
+- `infra/caddy/Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`: Neuer optionaler Response-Header `X-Weltgewebe-Build` aus Environment-Variable `WELTGEWEBE_BUILD`. Wird in jedem Header-Block emittiert; die Variable wird vom Deploy-Setup gesetzt (noch ausstehend) und matcht dann das `version`-Feld aus `/_app/version.json`. Beobachtbare Verhaltensänderung: alle Antworten enthalten den Header (ggf. leer, solange `WELTGEWEBE_BUILD` ungesetzt ist). Begleitkommentare neutralisiert: keine unbelegten Aussagen mehr über Deploy-Verhalten oder Caddys Umgang mit ungesetzten Variablen.
 
 ## 2026-03-31
 

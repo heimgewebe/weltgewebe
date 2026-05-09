@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
-test.describe("Build diagnose page", () => {
+test.describe("Build diagnostics page", () => {
   let localVersion = "unknown";
 
   test.beforeAll(() => {

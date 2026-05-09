@@ -1,7 +1,7 @@
 node_modules
 .svelte-kit
 build
-# Re-include the SvelteKit `/build` diagnose route, which is source code.
+# Re-include the SvelteKit `/build` diagnostics route, which is source code.
 !src/routes/build/
 !src/routes/build/**
 .DS_Store

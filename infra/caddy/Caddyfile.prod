@@ -90,7 +90,7 @@ weltgewebe.net {
 		X-Frame-Options "DENY"
 		Referrer-Policy "no-referrer"
 		X-Content-Type-Options "nosniff"
-		# Optional diagnose header. Deploy can set WELTGEWEBE_BUILD to the canonical
+		# Optional diagnostic header. Deploy can set WELTGEWEBE_BUILD to the canonical
 		# build version (matches /_app/version.json#version).
 		X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"
 	}

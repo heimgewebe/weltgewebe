@@ -206,7 +206,8 @@
     {#if actionMessage}
       <div
         class="message {actionVariant}"
-        role="status"
+        role={actionVariant === 'error' ? 'alert' : 'status'}
+        aria-live={actionVariant === 'error' ? 'assertive' : 'polite'}
         data-testid="account-section-action-message"
       >
         {actionMessage}
