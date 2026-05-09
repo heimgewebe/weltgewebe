@@ -10,6 +10,10 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-09
+
+- `infra/caddy/Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`: Kommentare präzisiert für `X-Weltgewebe-Build`-Header. Alle Dateien verwenden nun neutral "Deploy can set WELTGEWEBE_BUILD" statt unbelegter Annahmen. Unverified Aussage über Caddy-Verhalten bei ungesetztem Environment-Variable aus `Caddyfile.heim` entfernt. Funktional keine Änderung.
+
 ## 2026-03-31
 
 - `infra/caddy/Caddyfile.heim`: CSP-Härtungsfix — `https://basemaps.cartocdn.com` aus `connect-src` und `img-src` entfernt. Die Heim-Instanz operiert im `local-sovereign`-Modus; externe Tile-Provider haben dort keinen Platz in der CSP. Fail-Fast-Nebeneffekt: ein irrtümlich remote gebautes Bundle erzeugt jetzt sichtbare CSP-Violations statt stillschweigend CartoDB zu kontaktieren.
