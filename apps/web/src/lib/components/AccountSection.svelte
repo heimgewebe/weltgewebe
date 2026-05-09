@@ -109,17 +109,25 @@
           payload.error === 'STEP_UP_REQUIRED' &&
           typeof payload.challenge_id === 'string'
         ) {
-          actionVariant = 'info';
-          actionMessage =
-            'Zur Bestätigung wurde ein Bestätigungslink an deine hinterlegte E-Mail-Adresse versendet.';
-          await fetch('/api/auth/step-up/magic-link/request', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ challenge_id: payload.challenge_id })
-          }).catch(() => {
-            // request failure is non-fatal for the user message above
-          });
+          try {
+            const stepUpRes = await fetch('/api/auth/step-up/magic-link/request', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ challenge_id: payload.challenge_id })
+            });
+            if (stepUpRes.ok) {
+              actionVariant = 'info';
+              actionMessage =
+                'Zur Bestätigung wurde ein Bestätigungslink an deine hinterlegte E-Mail-Adresse versendet.';
+            } else {
+              actionVariant = 'error';
+              actionMessage = 'Bestätigungslink konnte nicht versendet werden.';
+            }
+          } catch {
+            actionVariant = 'error';
+            actionMessage = 'Netzwerkfehler beim Versenden des Bestätigungslinks.';
+          }
           return;
         }
       }
@@ -139,20 +147,21 @@
     }
   }
 
-  onMount(() => {
-    void loadDevices();
-  });
+  let lastAuthenticated: boolean | null = null;
 
-  $: if (browser) {
-    // Re-fetch device list when auth state flips.
-    void $authStore.authenticated;
-    if ($authStore.authenticated && devicesStatus !== 'loading') {
-      void loadDevices();
-    } else if (!$authStore.authenticated && devicesStatus !== 'unauthorized') {
-      devices = [];
-      devicesStatus = 'unauthorized';
-    }
-  }
+  onMount(() => {
+    const unsubscribe = authStore.subscribe((state) => {
+      if (state.authenticated === lastAuthenticated) return;
+      lastAuthenticated = state.authenticated;
+      if (state.authenticated) {
+        void loadDevices();
+      } else {
+        devices = [];
+        devicesStatus = 'unauthorized';
+      }
+    });
+    return unsubscribe;
+  });
 </script>
 
 <section class="account-section" data-testid="account-section">

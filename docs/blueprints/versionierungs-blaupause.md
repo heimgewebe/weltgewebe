@@ -439,8 +439,8 @@ Referenzen:
 
 - [x] Diagnose-Seite `/build` prüfen.
   - _Umgesetzt: `apps/web/src/routes/build/+page.svelte` zeigt den lokal gebündelten Build-Stand und vergleicht ihn live gegen `/_app/version.json`. Tests in `apps/web/tests/build-page.spec.ts` decken Sync-, Mismatch-, Unreachable- und Invalid-Pfad sowie den Refresh-Button ab._
-- [x] Optional `X-Weltgewebe-Build` Header.
-  - _Umgesetzt: Alle Caddyfiles (`Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`) emittieren `X-Weltgewebe-Build` aus der Umgebungsvariable `WELTGEWEBE_BUILD`. Der Wert wird im Deploy gesetzt und matcht das kanonische `version`-Feld aus `/_app/version.json`. Wenn `WELTGEWEBE_BUILD` nicht gesetzt ist, sendet Caddy keinen Wert und der Header bleibt leer._
+- [~] Optional `X-Weltgewebe-Build` Header.
+  - _Teilweise: Alle Caddyfiles (`Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`) enthalten den `header`-Eintrag `X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"`. Die Deploy-Pipeline setzt `WELTGEWEBE_BUILD` noch nicht — das ist ein ausstehender Deploy-Schritt. Ein Laufzeittest (curl) zur Verifikation des tatsächlichen Header-Werts steht ebenfalls aus._
 - [x] Optional Support-/Debug-Ansicht.
   - _Umgesetzt: Die `/build`-Route dient zugleich als Support-/Debug-Ansicht und ist bewusst über `<meta name="robots" content="noindex">` von Suchmaschinen ausgeschlossen._
 - [ ] Erst danach über Service Worker überhaupt reden.
@@ -473,10 +473,10 @@ Status: bereits implementiert
 - Banner/Reload
 - Tests
 
-### PR 4 — Optional Diagnoseausbau (umgesetzt)
+### PR 4 — Optional Diagnoseausbau (teilweise umgesetzt)
 
-Status: umgesetzt für `/build`-Route, `X-Weltgewebe-Build` Header und Support-Ansicht.
+Status: `/build`-Route und Support-Ansicht umgesetzt; `X-Weltgewebe-Build` Header vorbereitet, aber Deploy-Pipeline-Integration ausstehend.
 
 - [x] `/build`-Route in `apps/web/src/routes/build/+page.svelte`
-- [x] `X-Weltgewebe-Build` Header in allen Caddyfiles (env: `WELTGEWEBE_BUILD`)
+- [~] `X-Weltgewebe-Build` Header in allen Caddyfiles (env: `WELTGEWEBE_BUILD`) — Caddy-Einträge vorhanden, Deploy setzt Variable noch nicht
 - [x] Support-Hilfen: `/build` zeigt lokal gebündelten Stand, Server-Stand und Abgleich
