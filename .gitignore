@@ -17,6 +17,9 @@ build/
 dist/
 .tmp/
 target/
+# Re-include the SvelteKit `/build` diagnostics route, which is source code, not a build artifact.
+!apps/web/src/routes/build/
+!apps/web/src/routes/build/**
 
 # OS files
 .DS_Store

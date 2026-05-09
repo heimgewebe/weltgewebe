@@ -10,6 +10,10 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-09
+
+- `infra/caddy/Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`: Neuer optionaler Response-Header `X-Weltgewebe-Build` aus Environment-Variable `WELTGEWEBE_BUILD`. Wird in jedem Header-Block emittiert; die Variable wird vom Deploy-Setup gesetzt (noch ausstehend) und matcht dann das `version`-Feld aus `/_app/version.json`. Beobachtbare Verhaltensänderung: alle Antworten enthalten den Header (ggf. leer, solange `WELTGEWEBE_BUILD` ungesetzt ist). Begleitkommentare neutralisiert: keine unbelegten Aussagen mehr über Deploy-Verhalten oder Caddys Umgang mit ungesetzten Variablen.
+
 ## 2026-03-31
 
 - `infra/caddy/Caddyfile.heim`: CSP-Härtungsfix — `https://basemaps.cartocdn.com` aus `connect-src` und `img-src` entfernt. Die Heim-Instanz operiert im `local-sovereign`-Modus; externe Tile-Provider haben dort keinen Platz in der CSP. Fail-Fast-Nebeneffekt: ein irrtümlich remote gebautes Bundle erzeugt jetzt sichtbare CSP-Violations statt stillschweigend CartoDB zu kontaktieren.

@@ -1,5 +1,6 @@
 <script lang="ts">
   import VersionDiagnostics from '$lib/components/VersionDiagnostics.svelte';
+  import AccountSection from '$lib/components/AccountSection.svelte';
 </script>
 
 <div class="container">
@@ -21,6 +22,10 @@
 
 
     <p class="coming-soon">🚧 Diese Einstellungen werden bald verfügbar sein.</p>
+  </div>
+
+  <div class="card">
+    <AccountSection />
   </div>
 
   <div class="card diagnostics-card">

@@ -437,9 +437,12 @@ Referenzen:
 
 ### Phase G — Optionale Vertiefung
 
-- [ ] Diagnose-Seite `/build` prüfen.
-- [ ] Optional `X-Weltgewebe-Build` Header.
-- [ ] Optional Support-/Debug-Ansicht.
+- [x] Diagnose-Seite `/build` prüfen.
+  - _Umgesetzt: `apps/web/src/routes/build/+page.svelte` zeigt den lokal gebündelten Build-Stand und vergleicht ihn live gegen `/_app/version.json`. Tests in `apps/web/tests/build-page.spec.ts` decken Sync-, Mismatch-, Unreachable- und Invalid-Pfad sowie den Refresh-Button ab._
+- [~] Optional `X-Weltgewebe-Build` Header.
+  - _Teilweise: Alle Caddyfiles (`Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`) enthalten den `header`-Eintrag `X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"`. Die Deploy-Pipeline setzt `WELTGEWEBE_BUILD` noch nicht — das ist ein ausstehender Deploy-Schritt. Ein Laufzeittest (curl) zur Verifikation des tatsächlichen Header-Werts steht ebenfalls aus._
+- [x] Optional Support-/Debug-Ansicht.
+  - _Umgesetzt: Die `/build`-Route dient zugleich als Support-/Debug-Ansicht und ist bewusst über `<meta name="robots" content="noindex">` von Suchmaschinen ausgeschlossen._
 - [ ] Erst danach über Service Worker überhaupt reden.
 
 ## 11. Empfohlene PR-Struktur
@@ -470,8 +473,10 @@ Status: bereits implementiert
 - Banner/Reload
 - Tests
 
-### PR 4 — Optional Diagnoseausbau
+### PR 4 — Optional Diagnoseausbau (teilweise umgesetzt)
 
-- `/build`-Route
-- Header-/Navigation-Diagnose
-- Support-Hilfen
+Status: `/build`-Route und Support-Ansicht umgesetzt; `X-Weltgewebe-Build` Header vorbereitet, aber Deploy-Pipeline-Integration ausstehend.
+
+- [x] `/build`-Route in `apps/web/src/routes/build/+page.svelte`
+- [~] `X-Weltgewebe-Build` Header in allen Caddyfiles (env: `WELTGEWEBE_BUILD`) — Caddy-Einträge vorhanden, Deploy setzt Variable noch nicht
+- [x] Support-Hilfen: `/build` zeigt lokal gebündelten Stand, Server-Stand und Abgleich

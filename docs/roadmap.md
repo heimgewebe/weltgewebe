@@ -110,7 +110,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [x] Phase 3 — Fokus-Panels (Node/Account/Edge) · [ui-roadmap Phase 3](blueprints/ui-roadmap.md)
 - [x] Phase 4 — Suche, Filter, A11y · [ui-roadmap Phase 4](blueprints/ui-roadmap.md)
 - [x] Phase 5 — Doku-/Strukturpflege · [ui-roadmap Phase 5](blueprints/ui-roadmap.md)
-- [ ] Auth-UI-Integration: Step-up-Consume + Passkey-Eintragspunkt · folgt aus Auth-Phase 3
+- [~] Auth-UI-Integration: Step-up-Consume + Passkey-Eintragspunkt · Step-up-Consume ist als eigener Pfad unter `/auth/step-up/consume` belegt; Passkey-Eintragspunkt ist als deaktivierter Stub in der `/settings`-Account-Sektion sichtbar. Aktivierung folgt aus Auth-Phase 4 · siehe [auth-roadmap §9](blueprints/auth-roadmap.md)
 
 ## Strang Karte (Basemap + Kartenklarheit)
 
