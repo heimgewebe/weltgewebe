@@ -249,27 +249,27 @@
         </ul>
       {/if}
     </div>
-  {/if}
 
-  <div class="passkey" data-testid="account-section-passkey">
-    <h3>Passkey</h3>
-    <p class="muted">
-      Passkeys sind als optionaler Komfort- und Sicherheitsgewinn vorgesehen
-      (siehe Auth-Roadmap Phase 4). Die Aktivierung wird hier sichtbar gemacht,
-      sobald Register-Verify, Auth-Optionen und Auth-Verify im Backend
-      vollständig nachgewiesen sind.
-    </p>
-    <button
-      type="button"
-      class="btn"
-      disabled
-      aria-disabled="true"
-      data-testid="account-section-passkey-cta"
-      title="Backend-Pfad noch nicht vollständig implementiert"
-    >
-      Passkey aktivieren (demnächst)
-    </button>
-  </div>
+    <div class="passkey" data-testid="account-section-passkey">
+      <h3>Passkey</h3>
+      <p class="muted">
+        Passkeys sind als optionaler Komfort- und Sicherheitsgewinn vorgesehen
+        (siehe Auth-Roadmap Phase 4). Die Aktivierung wird hier sichtbar gemacht,
+        sobald Register-Verify, Auth-Optionen und Auth-Verify im Backend
+        vollständig nachgewiesen sind.
+      </p>
+      <button
+        type="button"
+        class="btn"
+        disabled
+        aria-disabled="true"
+        data-testid="account-section-passkey-cta"
+        title="Backend-Pfad noch nicht vollständig implementiert"
+      >
+        Passkey aktivieren (demnächst)
+      </button>
+    </div>
+  {/if}
 </section>
 
 <style>

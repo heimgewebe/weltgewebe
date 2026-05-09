@@ -110,6 +110,9 @@ test.describe("Settings — AccountSection", () => {
     await expect(
       section.locator('[data-testid="account-section-status"]'),
     ).toHaveCount(0);
+    await expect(
+      section.locator('[data-testid="account-section-passkey"]'),
+    ).toHaveCount(0);
   });
 
   test("shows account status, devices and logout when authenticated", async ({
