@@ -63,9 +63,8 @@ weltgewebe.home.arpa {
     Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
-    # Optional diagnose header. Set WELTGEWEBE_BUILD in the deploy environment
-    # to the canonical build version (matches /_app/version.json#version).
-    # Empty by default; Caddy emits no value when the env var is unset.
+    # Optional diagnose header. Deploy can set WELTGEWEBE_BUILD to the canonical
+    # build version (matches /_app/version.json#version).
     X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"
   }
 }

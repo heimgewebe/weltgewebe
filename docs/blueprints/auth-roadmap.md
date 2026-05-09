@@ -309,7 +309,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 2. [ ] Zustand „Session abgelaufen“
 3. [~] Passkey-Aktivierung mit verständlicher Erklärung — Eintragspunkt und Erklärtext stehen als deaktivierter Stub in der Settings-Sektion; CTA aktiviert sich erst, wenn Auth-Phase 4 (Register-Verify, Auth-Optionen, Auth-Verify) im Backend nachgewiesen ist.
 4. [ ] Step-up-Dialog
-5. [x] Geräteansicht / Geräteverwaltung — Read-only Liste der aktiven Geräte mit „Dieses Gerät"-Badge in Settings; nutzt `GET /auth/devices` und markiert das aktuelle Gerät anhand des `current`-Flags. Schreiboperationen (Geräte-Removal) bleiben weiterhin step-up-getrieben über die bestehenden Endpunkte.
+5. [x] Geräteansicht / Geräteverwaltung — Read-only Liste der aktiven Geräte mit „Dieses Gerät"-Badge in Settings; Frontend ruft `GET /api/auth/devices` auf und markiert das aktuelle Gerät anhand des `current`-Flags. Schreiboperationen (Geräte-Removal) bleiben weiterhin step-up-getrieben über die bestehenden Endpunkte.
 6. [ ] AuthStore / AuthStatus auf reale Zustände erweitern
 
 ### Leitfrage

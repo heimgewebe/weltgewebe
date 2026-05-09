@@ -223,4 +223,76 @@ test.describe("Settings — AccountSection", () => {
     await expect(cta).toBeVisible();
     await expect(cta).toBeDisabled();
   });
+
+  test("regression: devices fetched exactly once on initial load", async ({
+    page,
+  }) => {
+    let devicesCalls = 0;
+    await page.route("**/api/auth/devices", (route: Route) => {
+      devicesCalls += 1;
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            device_id: "device-1",
+            created_at: "2026-04-01T12:00:00Z",
+            last_active: "2026-05-08T08:30:00Z",
+            current: true,
+          },
+        ]),
+      });
+    });
+
+    await setupAuthMocks(page, {
+      initial: {
+        authenticated: true,
+        account_id: "acc-5",
+        role: "weber",
+      },
+      devices: [
+        {
+          device_id: "device-1",
+          created_at: "2026-04-01T12:00:00Z",
+          last_active: "2026-05-08T08:30:00Z",
+          current: true,
+        },
+      ],
+    });
+
+    await page.goto("/settings");
+    await page.locator('[data-testid="account-section"]').waitFor();
+
+    expect(devicesCalls).toBe(1);
+  });
+
+  test("logout-all error when step-up request fails", async ({ page }) => {
+    await setupAuthMocks(page, {
+      initial: {
+        authenticated: true,
+        account_id: "acc-6",
+        role: "gast",
+      },
+      devices: [
+        {
+          device_id: "device-fail",
+          created_at: "2026-04-01T12:00:00Z",
+          last_active: "2026-05-08T08:30:00Z",
+          current: true,
+        },
+      ],
+      stepUpRequestStatus: 500,
+    });
+
+    await page.goto("/settings");
+
+    const section = page.locator('[data-testid="account-section"]');
+    await section.locator('[data-testid="account-section-logout-all"]').click();
+
+    const message = section.locator(
+      '[data-testid="account-section-action-message"]',
+    );
+    await expect(message).toBeVisible();
+    await expect(message).toContainText("konnte nicht versendet werden");
+  });
 });
