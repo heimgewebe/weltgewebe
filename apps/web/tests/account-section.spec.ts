@@ -18,6 +18,7 @@ interface MockOptions {
   devices?: DeviceInfo[];
   logoutAllResponse?: { status: number; body: unknown };
   stepUpRequestStatus?: number;
+  onDevicesRequest?: () => void;
 }
 
 async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
@@ -50,6 +51,7 @@ async function setupAuthMocks(page: Page, opts: MockOptions): Promise<void> {
   });
 
   await page.route("**/api/auth/devices", (route: Route) => {
+    opts.onDevicesRequest?.();
     if (!authState.authenticated) {
       route.fulfill({
         status: 401,
@@ -228,21 +230,6 @@ test.describe("Settings — AccountSection", () => {
     page,
   }) => {
     let devicesCalls = 0;
-    await page.route("**/api/auth/devices", (route: Route) => {
-      devicesCalls += 1;
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            device_id: "device-1",
-            created_at: "2026-04-01T12:00:00Z",
-            last_active: "2026-05-08T08:30:00Z",
-            current: true,
-          },
-        ]),
-      });
-    });
 
     await setupAuthMocks(page, {
       initial: {
@@ -258,10 +245,15 @@ test.describe("Settings — AccountSection", () => {
           current: true,
         },
       ],
+      onDevicesRequest: () => {
+        devicesCalls += 1;
+      },
     });
 
     await page.goto("/settings");
-    await page.locator('[data-testid="account-section"]').waitFor();
+    await expect(
+      page.locator('[data-testid="account-section-device"]'),
+    ).toHaveCount(1);
 
     expect(devicesCalls).toBe(1);
   });
