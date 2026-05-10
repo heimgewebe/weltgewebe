@@ -4,7 +4,7 @@ title: Passkey Register-Verify – Vorbereitungsbericht
 doc_type: report
 status: active
 summary: >
-  Diagnose- und Vorbereitungsbericht für POST /api/auth/passkeys/register/verify.
+  Diagnose- und Vorbereitungsbericht für POST /auth/passkeys/register/verify.
   Dokumentiert den belegten Ist-Zustand, offene Persistenzfragen,
   Testmatrix und die Folge-PR-Entscheidung. Kein Feature-Code.
 relations:
@@ -28,7 +28,7 @@ relations:
 
 ## 1. Zweck
 
-Dieser Bericht bereitet den Folge-PR für `POST /api/auth/passkeys/register/verify` vor.
+Dieser Bericht bereitet den Folge-PR für `POST /auth/passkeys/register/verify` vor.
 
 Er enthält ausschließlich:
 
@@ -117,7 +117,19 @@ Es existiert **kein** Credential-Speicher für abgeschlossene Passkey-Registrier
 
 ---
 
-## 3. Endpoint-Zielbild
+## 3. Pfad-Konvention
+
+Dieser Bericht spricht durchgehend vom kanonischen **Backend-Pfad** aus der API-Spezifikation:
+
+```
+POST /auth/passkeys/register/verify
+```
+
+Falls der Endpunkt im Frontend oder durch den Reverse Proxy unter `/api/auth/...` erreichbar ist, gilt das nur als technische Mount- oder Proxy-Ebene. Die fachliche Spezifikation in diesem Bericht meint durchgehend `/auth/passkeys/register/verify` ohne API-Präfix.
+
+---
+
+## 4. Endpoint-Zielbild
 
 ### Geplanter Endpoint
 
@@ -138,26 +150,41 @@ POST /auth/passkeys/register/verify
 
 ### Erwartete Wirkung
 
-In dieser Reihenfolge:
+Folgende Schritte sind klar:
 
 1. **Session prüfen** — keine aktive Session → `401 UNAUTHORIZED`
-2. **Step-up prüfen** — kein gültiger Step-up für diesen Intent → `403 STEP_UP_REQUIRED` mit `challenge_id`
-   (Begründung: Passkey-Hinzufügen ist eine sensitive Operation; siehe `docs/specs/auth-api.md` Zeile 254)
-3. **`registration_id` auflösen** — `PasskeyRegistrationStore.consume(registration_id, account_id)` aufrufen
+2. **`registration_id` auflösen** — `PasskeyRegistrationStore.consume(registration_id, account_id)` aufrufen
    - Nicht gefunden oder abgelaufen → `400 BAD_REQUEST`
    - Account-Mismatch → `400 BAD_REQUEST`
-4. **WebAuthn-Antwort prüfen** — `webauthn.finish_passkey_registration(credential, &reg_state)`
+3. **WebAuthn-Antwort prüfen** — `webauthn.finish_passkey_registration(credential, &reg_state)`
    - Mismatch → `400 BAD_REQUEST` oder `422 UNPROCESSABLE_ENTITY`
-5. **Credential persistieren** — erzeugtes `Passkey`-Objekt in Credential-Store ablegen (account-gebunden)
-6. **`webauthn_user_id` zurückschreiben** — falls lazily generiert, jetzt in Datenquelle persistieren
-7. **Challenge verbrauchen** — Registration-State ist nach `consume()` bereits verbraucht (single-use sichergestellt)
-8. **Antwort:** `200 OK` mit minimaler Bestätigung
+4. **Credential persistieren** — erzeugtes `Passkey`-Objekt in Credential-Store ablegen (account-gebunden)
+5. **`webauthn_user_id` zurückschreiben** — falls lazily generiert, jetzt in Datenquelle persistieren
+6. **Antwort:** `200 OK` mit minimaler Bestätigung
+
+**Offene Designentscheidung: Step-up-Handoff** — siehe separater Abschnitt unten.
 
 **Keine Login-Semantik** — kein Cookie, kein neuer Session-Token, keine Umleitung.
 
+### Step-up-Handoff — Offene Designentscheidung
+
+**Problem:** Passkey-Registrierung ist eine sensitive Operation. Laut `docs/specs/auth-api.md` (Zeile 254) erfordern `POST /auth/passkeys/register/*` einen Step-up-Authentifizierungsnachweis.
+
+Der bestehende Step-up-Mechanismus erzeugt **aktionsgebundene Challenges**: `POST /auth/step-up/magic-link/consume` konsumiert einen Step-up-Token einmalig und **führt dabei direkt die gebundene Aktion aus** (z.B. `LogoutAll`, `RemoveDevice`). Der Mechanismus hinterlässt danach keinen wiederverwendbaren "Step-up ist erledigt"-Marker oder Session-Flag für einen später aufgerufenen Handler.
+
+**Konsequenz:** Für `register/verify` muss **vor der Implementierung** entschieden werden, wie der Step-up-Nachweis erbracht und an den Endpunkt übergeben wird. Es gibt mindestens drei Lösungsansätze:
+
+- **Pfad A (bevorzugt):** Step-up vor `register/options` erzwingen. Der Nutzer durchläuft den Step-up-Pfad (Magic Link, Consume mit Intent `BeginPasskeyRegistration`), bevor die WebAuthn-Ceremony überhaupt beginnt. Dann ist `register/verify` ein reiner Verify-Handler ohne sekundären Step-up-Bedarf.
+  
+- **Pfad B:** Neuen one-time Step-up-Grant einführen. `register/verify` akzeptiert einen Step-up-Token explizit als Eingabeparameter (z.B. `{ "registration_id": "...", "credential": {...}, "step_up_token": "..." }`). Der Handler prüft den Token und führt Registration + Credential-Persistenz durch. Erfordert neue Semantik im Step-up-System.
+
+- **Pfad C:** Direkte Integration in `consume_step_up`. `POST /auth/step-up/magic-link/consume` mit Intent `RegisterPasskey` würde nicht nur die Challenge verarbeiten, sondern **auch** `registration_id` und `credential` als Payload erhalten und direkt die Registrierung absolvieren. Erfordert erhebliche Umstrukturierung.
+
+**Status:** Diese Entscheidung muss im nächsten PR (Pfad B) geklärt und dokumentiert werden, bevor der `register/verify`-Handler Logik erhält.
+
 ---
 
-## 4. Persistenzfragen
+## 5. Persistenzfragen
 
 ### 4.1 Credential-Speicher
 
@@ -196,7 +223,7 @@ Jeder Test muss im Folge-PR als benannter `#[tokio::test]` in `apps/api/tests/ap
 |---|---|---|
 | T1 | Gültige Registrierung (korrekte credential, gültige registration_id, aktive Session) | `200 OK`, Credential im Store, webauthn_user_id stabil |
 | T2 | Keine Session | `401 UNAUTHORIZED` |
-| T3 | Fehlender Step-up | `403 STEP_UP_REQUIRED` mit `challenge_id` |
+| T3 | Step-up-Handoff-Semantik (abhängig von Pfad A/B/C aus Abschnitt 4.3) | Ergebnis hängt von der in Abschnitt 4.3 getroffenen Designentscheidung ab |
 | T4 | Unbekannte `registration_id` | `400 BAD_REQUEST` |
 | T5 | Abgelaufene `registration_id` (TTL > 5 Min) | `400 BAD_REQUEST` |
 | T6 | `registration_id` gehört anderem Account | `400 BAD_REQUEST` |
@@ -209,7 +236,7 @@ Jeder Test muss im Folge-PR als benannter `#[tokio::test]` in `apps/api/tests/ap
 
 ---
 
-## 6. Nicht-Ziele
+## 7. Nicht-Ziele
 
 Dieser PR und der direkte Folge-PR decken folgendes **nicht** ab:
 
@@ -225,7 +252,7 @@ Dieser PR und der direkte Folge-PR decken folgendes **nicht** ab:
 
 ---
 
-## 7. Folge-PR-Entscheidung
+## 8. Folge-PR-Entscheidung
 
 ### Bewertung der Pfade
 
@@ -245,8 +272,9 @@ Pfad A ist **nicht** direkt gangbar ohne die fehlenden Store-Strukturen.
 Inhalt eines Pfad-B-PR:
 1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs`
 2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/routes/accounts.rs`
-3. Step-up-Intent `RegisterPasskey` definieren (oder: Passkey-Register-Verify ohne Step-up, falls ADR das erlaubt — Klärung nötig)
-4. Unit-Tests für `PasskeyStore`
+3. **Entscheidung und dokumentation des Step-up-Handoff-Pfads** — siehe Abschnitt 4.3. Wahl aus A (Step-up vor register/options), B (one-time-grant), oder C (Intent-direkt). ADR-0006 aktualisieren, falls notwendig.
+4. Ggf. minimale Implementierung des gewählten Step-up-Pfads (z.B. neuer Intent-Typ)
+5. Unit-Tests für `PasskeyStore` und Step-up-Handoff
 
 Pfad B schafft die minimalen Voraussetzungen ohne WebAuthn-Verify-Logik.
 
@@ -267,10 +295,10 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 Der Folge-PR nach diesem Bericht soll lauten:
 
 ```
-feat(auth): add PasskeyStore and AccountStore webauthn_user_id writeback
+feat(auth): add PasskeyStore and step-up-handoff for passkey registration
 ```
 
-Inhalt: Credential-Store-Struktur + `AccountStore`-Mutation + Unit-Tests. Kein Handler, keine Route.
+Inhalt: Credential-Store-Struktur + `AccountStore`-Mutation + Step-up-Handoff-Entscheidung + Unit-Tests. Kein `register/verify`-Handler, keine WebAuthn-Verify-Route.
 
 Erst danach ist Pfad A gangbar:
 
@@ -280,7 +308,7 @@ feat(auth): implement passkey register verify
 
 ---
 
-## 8. Stop-Kriterium für den Folge-PR
+## 9. Stop-Kriterium für den Folge-PR
 
 Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 
@@ -288,14 +316,15 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 |---|---|
 | `PasskeyStore` mit Insert/Get/Remove implementiert und getestet | **offen** |
 | `AccountStore.update_webauthn_user_id()` implementiert | **offen** |
-| Step-up-Anforderung für Passkey-Register-Intent geklärt (ADR-0006 vs. auth-api.md Zeile 254) | **offen** |
+| Step-up-Handoff-Pfad entschieden (Pfad A vor register/options, Pfad B one-time-grant, oder Pfad C intent-direkt) — siehe Abschnitt 4.3 | **offen** |
+| Step-up-Handoff-Pfad implementiert und getestet | **offen** |
 | Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **offen** |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |
 
 ---
 
-## 9. Diagnoseausgaben (Rohdaten)
+## 10. Diagnoseausgaben (Rohdaten)
 
 ### git status --short
 
@@ -350,7 +379,7 @@ Der `validate_relations`-Fehler ist **pre-existing** und nicht durch diesen PR v
 
 ---
 
-## 10. Restlücken
+## 11. Restlücken
 
 | Lücke | Konsequenz |
 |---|---|
