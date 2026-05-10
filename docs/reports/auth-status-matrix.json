@@ -143,7 +143,8 @@
       "ist": "Register-Options implementiert. Dedizierte webauthn_user_id pro Account (UUID v4, nicht aus account_id abgeleitet); wenn in Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil (Writeback-Persistenz ist Voraussetzung für Register-Verify, noch offen). WebAuthn-Config aus AppConfig. Restlicher Pfad (Register-Verify, Auth, List, Remove) offen.",
       "status": "Teil",
       "documentation_evidence": [
-        "docs/blueprints/auth-roadmap.md (Phase 4 aktualisiert)"
+        "docs/blueprints/auth-roadmap.md (Phase 4 aktualisiert)",
+        "docs/reports/passkey-register-verify-prep.md (Vorbereitungsbericht Register-Verify)"
       ],
       "missing_evidence": [
         "Register-Verify",

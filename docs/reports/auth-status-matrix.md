@@ -161,7 +161,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min)
 - **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Speicherung, List, Remove, UI
 
-**Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert)
+**Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
 
 - `apps/api/src/auth/passkeys.rs` — Modul mit Builder, Store, Registrierung
