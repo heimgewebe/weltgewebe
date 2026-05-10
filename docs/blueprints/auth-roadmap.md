@@ -270,7 +270,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 1. [x] Statusbeweis: Was existiert bereits?
 2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Tests implementiert
-3. [ ] Register-Verify
+3. [ ] Register-Verify — Vorbereitungsbericht: [reports/passkey-register-verify-prep.md](../reports/passkey-register-verify-prep.md)
 4. [ ] Auth-Options
 5. [ ] Auth-Verify
 6. [ ] Passkeys auflisten
