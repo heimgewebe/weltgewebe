@@ -121,7 +121,7 @@ Es existiert **kein** Credential-Speicher für abgeschlossene Passkey-Registrier
 
 Dieser Bericht spricht durchgehend vom kanonischen **Backend-Pfad** aus der API-Spezifikation:
 
-```
+```text
 POST /auth/passkeys/register/verify
 ```
 
@@ -133,7 +133,7 @@ Falls der Endpunkt im Frontend oder durch den Reverse Proxy unter `/api/auth/...
 
 ### Geplanter Endpoint
 
-```
+```text
 POST /auth/passkeys/register/verify
 ```
 
@@ -256,9 +256,10 @@ Dieser PR und der direkte Folge-PR decken folgendes **nicht** ab:
 
 ### Bewertung der Pfade
 
-**Pfad A — direkt `feat(auth): implement passkey register verify`**
+#### Pfad A — direkt `feat(auth): implement passkey register verify`
 
 Blockiert durch:
+
 - Kein `PasskeyStore` (langlebiger Credential-Speicher)
 - Kein `webauthn_user_id`-Writeback-Mechanismus im `AccountStore`
 - Kein Step-up-Intent für Passkey-Registration definiert
@@ -267,9 +268,10 @@ Pfad A ist **nicht** direkt gangbar ohne die fehlenden Store-Strukturen.
 
 ---
 
-**Pfad B — zuerst Datenmodell-/Store-PR**
+#### Pfad B — zuerst Datenmodell-/Store-PR
 
 Inhalt eines Pfad-B-PR:
+
 1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs`
 2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/routes/accounts.rs`
 3. **Entscheidung und dokumentation des Step-up-Handoff-Pfads** — siehe Abschnitt 4.3. Wahl aus A (Step-up vor register/options), B (one-time-grant), oder C (Intent-direkt). ADR-0006 aktualisieren, falls notwendig.
@@ -280,7 +282,7 @@ Pfad B schafft die minimalen Voraussetzungen ohne WebAuthn-Verify-Logik.
 
 ---
 
-**Pfad C — zuerst WebAuthn-Test-Fixtures/Mocks**
+#### Pfad C — zuerst WebAuthn-Test-Fixtures/Mocks
 
 Das `webauthn_rs`-Crate erfordert echte kryptografische Operationen. Test-Fixtures (vorberechnete `RegisterPublicKeyCredential`-Objekte) müssten generiert und festgekodiert werden. Das ist möglich, aber aufwendig und fragil bei Library-Updates.
 
@@ -294,7 +296,7 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 
 Der Folge-PR nach diesem Bericht soll lauten:
 
-```
+```text
 feat(auth): add PasskeyStore and step-up-handoff for passkey registration
 ```
 
@@ -302,7 +304,7 @@ Inhalt: Credential-Store-Struktur + `AccountStore`-Mutation + Step-up-Handoff-En
 
 Erst danach ist Pfad A gangbar:
 
-```
+```text
 feat(auth): implement passkey register verify
 ```
 
@@ -328,13 +330,14 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 
 ### git status --short
 
-```
+```text
 (clean — keine uncommitted changes vor diesem PR)
 ```
 
 ### rg passkey/webauthn (Relevante Treffer)
 
 **Backend:**
+
 - `apps/api/src/auth/passkeys.rs` — Hauptmodul (7 Unit-Tests)
 - `apps/api/src/routes/auth.rs` — `passkey_register_options` (Zeile 1560), Step-up-Infrastruktur
 - `apps/api/src/routes/accounts.rs` — `webauthn_user_id: Uuid` (Zeile 84), Lazy-Backfill (Zeile 299–315)
@@ -343,10 +346,12 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 - `apps/api/tests/api_nodes.rs` — `webauthn_user_id: uuid::Uuid::new_v4()` (Test-Fixtures)
 
 **Frontend:**
+
 - `apps/web/src/lib/components/AccountSection.svelte` — deaktivierter Passkey-Stub
 - `apps/web/tests/account-section.spec.ts` — Tests für Passkey-Stub (Zeile 114, 216, 227)
 
 **Dokumentation:**
+
 - `docs/blueprints/auth-roadmap.md` — Phase 4 (Zeile 257 ff.)
 - `docs/specs/auth-api.md` — `register/verify` als geplanter Endpoint (Zeile 234)
 - `docs/reports/auth-status-matrix.md` — Passkey-Abschnitt (2.8)
@@ -355,10 +360,12 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 ### rg STEP_UP_REQUIRED / step-up / devices
 
 **Backend:**
+
 - `apps/api/src/routes/auth.rs` — Step-up erzeugt bei `logout-all` (Zeile 910, 918), `devices/:id` (Zeile 1234), `me/email` (Zeile 1013)
 - `apps/api/tests/api_auth.rs` — umfangreiche Integrationstests für alle Step-up-Pfade
 
 **Frontend:**
+
 - `apps/web/src/lib/components/AccountSection.svelte` — Step-up-Request bei logout-all (Zeile 109–113), devices-Liste (Zeile 56–77)
 - `apps/web/tests/account-section.spec.ts` — `STEP_UP_REQUIRED` (Zeile 30), `logout-all` (Zeile 79), `devices` (Zeile 53)
 
@@ -368,7 +375,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 
 Vor diesem Bericht:
 
-```
+```text
 validate_schema:    PASS (0 errors)
 check_repo_index:   PASS (0 errors, 0 warnings)
 validate_relations: FAIL (1 error, pre-existing)
