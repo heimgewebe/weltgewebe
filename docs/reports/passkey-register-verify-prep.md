@@ -278,7 +278,7 @@ Pfad A ist **nicht** direkt gangbar ohne die fehlenden Store-Strukturen.
 Inhalt eines Pfad-B-PR:
 
 1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs`
-2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/routes/accounts.rs`
+2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/auth/accounts.rs`
 3. **Entscheidung und dokumentation des Step-up-Handoff-Pfads** — siehe Abschnitt 4.3. Wahl aus A (Step-up vor register/options), B (one-time-grant), oder C (Intent-direkt). ADR-0006 aktualisieren, falls notwendig.
 4. Ggf. minimale Implementierung des gewählten Step-up-Pfads (z.B. neuer Intent-Typ)
 5. Unit-Tests für `PasskeyStore` und Step-up-Handoff
