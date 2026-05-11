@@ -105,15 +105,16 @@ Implementiert in `apps/api/src/auth/passkeys.rs` (Zeile 89–145):
   - Nicht vorhanden: Lazy Backfill via `Uuid::new_v4()` — prozessstabil, aber **nicht datenquellen-stabil**
 - **Kritisch:** Ein generierter (nicht persistierter) Wert verschwindet nach Neustart. Registrierte Passkeys wären dann nicht mehr ihrem Account zuordenbar.
 - **Kommentar in Code** (`accounts.rs` Zeile 301): „Once passkey registration is implemented (register-verify), the generated webauthn_user_id MUST be persisted back to the account data source so that registered passkeys remain bound to the correct identity across restarts."
-- **Status:** Persistenz-Writeback fehlt. Ist Voraussetzung für `register/verify`.
+- **Status:** `AccountStore.update_webauthn_user_id(account_id, uuid)` ist implementiert und getestet; der tatsächliche Datenquellen-Writeback bleibt bis `register/verify` offen.
 
 ### 2.5 Credential-Speicher
 
-Es existiert **kein** Credential-Speicher für abgeschlossene Passkey-Registrierungen.
+Es existiert ein langlebiger In-Memory-Credential-Speicher für abgeschlossene Passkey-Registrierungen:
 
-- Kein `PasskeyStore` oder vergleichbare Struktur
+- `PasskeyStore` in `apps/api/src/auth/passkeys.rs` (account-gebunden, duplicate detection, list/find/remove)
+- Keine TTL, kein single-use (bewusst **kein** Challenge-Store)
 - Kein Datenbankschema
-- Das `webauthn_rs`-Objekt `Passkey` (Ergebnis von `finish_passkey_registration`) hat keinen Ablageort
+- Credentials bleiben nur bis Prozessneustart erhalten (Phase-4-Minimalpfad)
 
 ---
 
@@ -162,11 +163,11 @@ Folgende Schritte sind klar:
 5. **`webauthn_user_id` zurückschreiben** — falls lazily generiert, jetzt in Datenquelle persistieren
 6. **Antwort:** `200 OK` mit minimaler Bestätigung
 
-**Offene Designentscheidung: Step-up-Handoff** — siehe separater Abschnitt unten.
+**Step-up-Handoff-Entscheidung:** siehe separater Abschnitt unten.
 
 **Keine Login-Semantik** — kein Cookie, kein neuer Session-Token, keine Umleitung.
 
-### Step-up-Handoff — Offene Designentscheidung
+### Step-up-Handoff — Entscheidung und Scope-Grenze
 
 **Problem:** Passkey-Registrierung ist eine sensitive Operation. Laut `docs/specs/auth-api.md` (Zeile 254) erfordern `POST /auth/passkeys/register/*` einen Step-up-Authentifizierungsnachweis.
 
@@ -180,7 +181,11 @@ Der bestehende Step-up-Mechanismus erzeugt **aktionsgebundene Challenges**: `POS
 
 - **Pfad C:** Direkte Integration in `consume_step_up`. `POST /auth/step-up/magic-link/consume` mit Intent `RegisterPasskey` würde nicht nur die Challenge verarbeiten, sondern **auch** `registration_id` und `credential` als Payload erhalten und direkt die Registrierung absolvieren. Erfordert erhebliche Umstrukturierung.
 
-**Status:** Diese Entscheidung muss im nächsten PR (Pfad B) geklärt und dokumentiert werden, bevor der `register/verify`-Handler Logik erhält.
+**Entscheidung:** Pfad A bleibt Zielbild (Step-up vor `register/options`).
+
+**Umsetzung in diesem PR:** Neuer Intent `BeginPasskeyRegistration` ist im Step-up-System ergänzt und im Consume-Pfad getestet (session-neutral, keine Nebenwirkungen).
+
+**Stop-Kriterium für diesen PR:** Keine Halb-Integration von `register/options` in den bestehenden Step-up-Flow ohne klaren Handoff-Mechanismus; kein `register/verify`-Handler in diesem Scope.
 
 ---
 
@@ -190,7 +195,7 @@ Der bestehende Step-up-Mechanismus erzeugt **aktionsgebundene Challenges**: `POS
 
 | Frage | Stand |
 |---|---|
-| Wo werden `Passkey`-Objekte gespeichert? | **Offen** — kein Store vorhanden |
+| Wo werden `Passkey`-Objekte gespeichert? | In `PasskeyStore` (langlebiger In-Memory-Store, account-gebunden) |
 | In-Memory vs. persistiert? | Für Phase 4 (Single-Instance, In-Memory-Arch.) wäre ein In-Memory-Store möglich, aber Neustarts verlieren alle Credentials |
 | Datenbankschema? | Nicht vorhanden; ab Phase 4 (DB-Persistenz) nötig |
 | Welche Felder? | `account_id`, `credential_id`, `passkey` (serialisiertes `Passkey`-Objekt), `created_at`, optional `nickname` |
@@ -203,7 +208,7 @@ Der bestehende Step-up-Mechanismus erzeugt **aktionsgebundene Challenges**: `POS
 |---|---|
 | Stabil über Neustarts? | **Nein** bei lazy-generierten Werten |
 | Wann muss Writeback erfolgen? | Spätestens beim ersten `register/verify` |
-| Welche Datei? | `apps/api/src/routes/accounts.rs` — `AccountStore` braucht eine Mutationsmethode |
+| Welche Datei? | `apps/api/src/auth/accounts.rs` — `AccountStore.update_webauthn_user_id(account_id, uuid)` implementiert |
 | Folgerisiko ohne Writeback? | Registrierte Passkeys verlieren ihren Account-Anker nach Neustart |
 
 ### 4.3 Was darf nicht in-memory bleiben
@@ -260,9 +265,9 @@ Dieser PR und der direkte Folge-PR decken folgendes **nicht** ab:
 
 Blockiert durch:
 
-- Kein `PasskeyStore` (langlebiger Credential-Speicher)
-- Kein `webauthn_user_id`-Writeback-Mechanismus im `AccountStore`
-- Kein Step-up-Intent für Passkey-Registration definiert
+- Kein persistenter (restart-fester) Credential-Store
+- Kein finaler Datenquellen-Writeback von `webauthn_user_id` im Register-Verify-Pfad
+- Kein vollständiger Step-up-Handoff für den Start von `register/options`
 
 Pfad A ist **nicht** direkt gangbar ohne die fehlenden Store-Strukturen.
 
@@ -316,10 +321,10 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 
 | Kriterium | Status |
 |---|---|
-| `PasskeyStore` mit Insert/Get/Remove implementiert und getestet | **offen** |
-| `AccountStore.update_webauthn_user_id()` implementiert | **offen** |
-| Step-up-Handoff-Pfad entschieden (Pfad A vor register/options, Pfad B one-time-grant, oder Pfad C intent-direkt) — siehe Abschnitt 4.3 | **offen** |
-| Step-up-Handoff-Pfad implementiert und getestet | **offen** |
+| `PasskeyStore` mit Insert/Get/Remove implementiert und getestet | **belegt** |
+| `AccountStore.update_webauthn_user_id()` implementiert | **belegt** |
+| Step-up-Handoff-Pfad entschieden (Pfad A vor register/options, Pfad B one-time-grant, oder Pfad C intent-direkt) — siehe Abschnitt 4.3 | **belegt (Pfad A als Zielbild)** |
+| Step-up-Handoff-Pfad implementiert und getestet | **teilweise** (Intent `BeginPasskeyRegistration` + Consume-Test; End-to-End-Handoff vor `register/options` weiterhin offen) |
 | Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **offen** |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |
@@ -390,9 +395,9 @@ Der `validate_relations`-Fehler ist **pre-existing** und nicht durch diesen PR v
 
 | Lücke | Konsequenz |
 |---|---|
-| Step-up-Intent für Passkey-Register nicht definiert | Pfad B muss klären: braucht `register/verify` einen Step-up-Challenge-Typ? Oder reicht aktive Session? ADR-0006 prüfen. |
-| Kein `PasskeyStore` | Folge-PR (Pfad B) muss ihn einführen, bevor `register/verify` implementiert wird |
-| `webauthn_user_id`-Writeback nicht implementiert | Pfad B; bis dahin: Credentials sind nach Neustart nicht mehr zuordenbar |
+| Finaler Step-up-Handoff vor `register/options` fehlt | Der Intent ist ergänzt, aber die Ceremony-Übergabe ist noch nicht end-to-end geschlossen |
+| Kein persistenter Passkey-Store | In-Memory-Store ist vorhanden, verliert Daten bei Neustart |
+| Datenquellen-Writeback für `webauthn_user_id` im Register-Verify-Pfad fehlt | Mutation existiert, aber der echte Persistenzpunkt wird erst mit `register/verify` umgesetzt |
 | Test-Fixtures für `finish_passkey_registration` | `webauthn_rs` benötigt kryptografisch korrekte Antworten; Strategie für realistische Tests im Folge-PR festlegen |
-| `excludeCredentials` im `register/options` | TODO in `auth.rs` Zeile 1626; erst nach `PasskeyStore` füllbar |
+| `excludeCredentials` im `register/options` | Grundsätzlich an `PasskeyStore` angebunden; reale Wirkung erst nach Register-Verify und tatsächlicher Credential-Ablage |
 | E2E-Test für vollständige Register-Ceremony | Folgt aus Implementierung, nicht Vorbereitung |

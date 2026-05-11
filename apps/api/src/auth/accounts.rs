@@ -1,5 +1,6 @@
 use crate::routes::accounts::AccountInternal;
 use std::collections::{BTreeMap, HashMap};
+use uuid::Uuid;
 
 #[derive(Clone, Default)]
 pub struct AccountStore {
@@ -109,6 +110,14 @@ impl AccountStore {
                 self.recompute_email_index_for_key(new);
             }
         }
+    }
+
+    pub fn update_webauthn_user_id(&mut self, account_id: &str, webauthn_user_id: Uuid) -> bool {
+        let Some(account) = self.map.get_mut(account_id) else {
+            return false;
+        };
+        account.webauthn_user_id = webauthn_user_id;
+        true
     }
 
     pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, AccountInternal> {
@@ -283,6 +292,43 @@ mod tests {
         assert_eq!(
             store.get_by_email("Shared@example.com").unwrap().public.id,
             "u1"
+        );
+    }
+
+    #[test]
+    fn test_update_webauthn_user_id_updates_existing_account() {
+        let mut store = AccountStore::new();
+        let mut account = dummy_account("u1", Some("u1@example.com"));
+        let original = account.webauthn_user_id;
+        store.insert(account.clone());
+
+        let replacement = Uuid::new_v4();
+        let updated = store.update_webauthn_user_id("u1", replacement);
+        assert!(updated, "existing account must be updatable");
+
+        let stored = store.get("u1").expect("account should exist");
+        assert_ne!(stored.webauthn_user_id, original);
+        assert_eq!(stored.webauthn_user_id, replacement);
+        assert!(
+            store.get_by_email("u1@example.com").is_some(),
+            "email index must remain intact after webauthn_user_id update"
+        );
+
+        // keep clone usage meaningful and explicit
+        account.webauthn_user_id = replacement;
+        assert_eq!(stored.webauthn_user_id, account.webauthn_user_id);
+    }
+
+    #[test]
+    fn test_update_webauthn_user_id_returns_false_for_missing_account() {
+        let mut store = AccountStore::new();
+        store.insert(dummy_account("u1", Some("u1@example.com")));
+
+        let updated = store.update_webauthn_user_id("missing", Uuid::new_v4());
+        assert!(!updated, "missing account must return false");
+        assert!(
+            store.get("u1").is_some(),
+            "existing accounts must remain unchanged"
         );
     }
 }

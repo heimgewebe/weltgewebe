@@ -72,8 +72,8 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
-| Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert (beide Intents); Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert | Teil   | mittel  |
-| Passkeys              | optional    | Register-Options implementiert, `webauthn_user_id` eingeführt (bei persistiertem Wert dauerhaft, sonst lazy-backfill/prozessstabil); restlicher Pfad offen | Teil  | mittel  |
+| Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; Passkey-Intent-Basis ergänzt (`BeginPasskeyRegistration`), finaler Handoff noch offen | Teil   | mittel  |
+| Passkeys              | optional    | Register-Options + PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; register/verify und Login-/Management-Pfade offen | Teil  | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
 
 ---
@@ -143,10 +143,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. `POST /auth/step-up/magic-link/consume` konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice), erzeugt dabei keine neue Session. Passkey-Pfad offen, minimaler Consume-UI-Pfad implementiert.
+**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. `POST /auth/step-up/magic-link/consume` konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice / UpdateEmail / BeginPasskeyRegistration), erzeugt dabei keine neue Session. Passkey-Handoff vor `register/options` bleibt offen; minimaler Consume-UI-Pfad implementiert.
 **Dokumentationsbelege:** `docs/specs/auth-api.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/step_up_tokens.rs`, `apps/api/src/mailer.rs`, `apps/web/src/routes/auth/step-up/consume/+page.svelte`
-**Fehlende Belege:** Passkey-Pfad, UI E2E Test
+**Fehlende Belege:** vollständiger Passkey-Handoff vor `register/options`, UI E2E Test
 **Status:** Teil
 **Risiko:** mittel
 
@@ -159,7 +159,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
 - `POST /auth/passkeys/register/options` implementiert (gibt `CreationChallengeResponse` zurück)
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min)
-- **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Speicherung, List, Remove, UI
+- Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
+- `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
+- **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Login/-Management, UI
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
@@ -170,7 +172,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `apps/api/src/routes/accounts.rs` — `webauthn_user_id` am Account-Modell
 - 7 Unit-Tests (passkeys.rs) + 4 Integrationstests (api_auth.rs)
 
-**Fehlende Belege:** Register-Verify, Auth-Flow, Passkey-Persistenz, E2E-UI
+**Fehlende Belege:** Register-Verify, Auth-Flow, persistente Ablage über Neustart, E2E-UI
 **Status:** Teil
 **Risiko:** mittel
 

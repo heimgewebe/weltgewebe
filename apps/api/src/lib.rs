@@ -80,6 +80,7 @@ pub async fn run() -> anyhow::Result<()> {
         }
     };
     let passkey_registrations = crate::auth::passkeys::PasskeyRegistrationStore::new();
+    let passkeys = crate::auth::passkeys::PasskeyStore::new();
 
     let mailer = match crate::mailer::Mailer::new(&app_config) {
         Ok(mailer) => Some(Arc::new(mailer)),
@@ -120,6 +121,7 @@ pub async fn run() -> anyhow::Result<()> {
         mailer,
         webauthn,
         passkey_registrations,
+        passkeys,
     };
 
     let app = Router::new()

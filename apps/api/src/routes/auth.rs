@@ -1552,6 +1552,15 @@ pub async fn consume_step_up(
                 (StatusCode::BAD_REQUEST, jar, Json(err)).into_response()
             }
         }
+        ChallengeIntent::BeginPasskeyRegistration => {
+            tracing::info!(
+                event = "auth.step_up.consume.begin_passkey_registration",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: validated BeginPasskeyRegistration intent (no side effects)"
+            );
+            StatusCode::NO_CONTENT.into_response()
+        }
     }
 }
 
@@ -1594,6 +1603,9 @@ pub async fn passkey_register_options(
         }
     };
 
+    // Step-up handoff remains an explicit follow-up concern for register/verify.
+    // This endpoint currently starts the WebAuthn ceremony only from an active session.
+
     // Look up the account to get webauthn_user_id and display info.
     let accounts = state.accounts.read().await;
     let account = match accounts.get(&account_id) {
@@ -1621,9 +1633,17 @@ pub async fn passkey_register_options(
         user_display_name,
     };
 
+    let exclude_credentials = state.passkeys.credential_ids_for_account(&account_id);
+    let exclude_credentials = if exclude_credentials.is_empty() {
+        None
+    } else {
+        Some(exclude_credentials)
+    };
+
     let (ccr, reg_state) = match crate::auth::passkeys::start_passkey_registration(
-        webauthn, &input,
-        None, // TODO: pass existing credential IDs once passkey storage is implemented
+        webauthn,
+        &input,
+        exclude_credentials,
     ) {
         Ok(result) => result,
         Err(e) => {

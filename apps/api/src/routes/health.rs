@@ -335,6 +335,7 @@ mod tests {
             mailer: None,
             webauthn: None,
             passkey_registrations: Default::default(),
+            passkeys: Default::default(),
         })
     }
 

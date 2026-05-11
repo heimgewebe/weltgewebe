@@ -102,6 +102,7 @@ mod tests {
             mailer: None, // No Mailer instance
             webauthn: None,
             passkey_registrations: Default::default(),
+            passkeys: Default::default(),
         })
     }
 

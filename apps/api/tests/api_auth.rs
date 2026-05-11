@@ -83,6 +83,7 @@ fn test_state() -> Result<ApiState> {
         mailer: None,
         webauthn: None,
         passkey_registrations: Default::default(),
+        passkeys: Default::default(),
     })
 }
 
@@ -3122,6 +3123,59 @@ async fn test_update_email_invalid_format() -> Result<()> {
 
     let res3 = app.oneshot(req3).await?;
     assert_eq!(res3.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn test_step_up_consume_begin_passkey_registration_no_side_effects() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev-passkey".to_string()));
+    let challenge = state.challenges.create(
+        "u1".to_string(),
+        "dev-passkey".to_string(),
+        weltgewebe_api::auth::challenges::ChallengeIntent::BeginPasskeyRegistration,
+    );
+    let token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        "u1".to_string(),
+        "dev-passkey".to_string(),
+    );
+
+    let app = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::from(
+            serde_json::json!({
+                "token": token,
+                "challenge_id": challenge.id
+            })
+            .to_string(),
+        ))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::NO_CONTENT);
+    assert!(
+        state.sessions.get(&session.id).is_some(),
+        "begin-passkey-registration step-up must not alter sessions"
+    );
+    assert!(
+        state.challenges.get(&challenge.id).is_none(),
+        "challenge must be consumed exactly once"
+    );
 
     Ok(())
 }
