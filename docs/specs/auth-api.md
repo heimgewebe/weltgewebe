@@ -185,16 +185,21 @@ Response:
 
 `POST /auth/passkeys/register/options`
 
-**Voraussetzung:** Aktive authentifizierte Session.
+**Voraussetzung:** Aktive authentifizierte Session. Zusätzlich ist für
+`POST /auth/passkeys/register/*` ein Step-up-Nachweis erforderlich
+(vgl. Step-up-Sektion).
 
-**Zweck:** Erzeugt WebAuthn-Registrierungsoptionen für den eingeloggten Account.
-Der Client übergibt diese Optionen an `navigator.credentials.create()`.
-Die serverseitig gespeicherte `registration_id` muss im nachfolgenden
+**Zweck:** Nach erfolgreichem Step-up-Handoff erzeugt der Endpunkt
+WebAuthn-Registrierungsoptionen für den eingeloggten Account. Der Client
+übergibt diese Optionen an `navigator.credentials.create()`. Die serverseitig
+gespeicherte `registration_id` muss im nachfolgenden
 `POST /auth/passkeys/register/verify`-Schritt mitgesendet werden.
 
-**Hinweis:** Step-up-Auth ist für den vollständigen Registrierungsfluss
-(`register/options` + `register/verify`) vorgesehen (vgl. Step-up-Sektion).
-Der `register/verify`-Schritt ist noch nicht implementiert.
+**Aktueller Zwischenstand (Phase 4):** Der Endpunkt erzwingt bereits
+`403 STEP_UP_REQUIRED` mit `challenge_id`, startet die Ceremony aber noch
+nicht erfolgreich, weil der kurzlebige Registration-Grant/Handoff zwischen
+Step-up-Consume und `register/options` noch nicht implementiert ist.
+Der `register/verify`-Schritt ist ebenfalls noch nicht implementiert.
 
 **Response `200 OK`:**
 
@@ -216,6 +221,7 @@ Der `register/verify`-Schritt ist noch nicht implementiert.
 | HTTP-Status | `error`-Code             | Ursache                                                            |
 |-------------|--------------------------|--------------------------------------------------------------------|
 | `401`       | `UNAUTHORIZED`           | Keine aktive Session                                               |
+| `403`       | `STEP_UP_REQUIRED`       | Step-up erforderlich; Response enthält `challenge_id`              |
 | `400`       | `ACCOUNT_INVALID`        | Session referenziert nicht mehr existierenden Account              |
 | `503`       | `PASSKEYS_NOT_CONFIGURED`| WebAuthn ist auf diesem Server nicht konfiguriert                  |
 | `500`       | `INTERNAL_ERROR`         | Generierung der Optionen fehlgeschlagen                            |

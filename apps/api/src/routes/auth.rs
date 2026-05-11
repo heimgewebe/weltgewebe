@@ -1568,9 +1568,10 @@ pub async fn consume_step_up(
 
 /// POST /auth/passkeys/register/options
 ///
-/// Returns WebAuthn `CreationChallengeResponse` for the authenticated user.
-/// Requires an active session. The response contains the challenge and
-/// parameters the client needs to call `navigator.credentials.create()`.
+/// Enforces step-up auth before the WebAuthn ceremony can start.
+/// Until the registration-grant handoff exists, this endpoint fail-closes with
+/// `403 STEP_UP_REQUIRED` and a challenge ID instead of returning WebAuthn
+/// creation options from a session alone.
 pub async fn passkey_register_options(
     State(state): State<ApiState>,
     Extension(ctx): Extension<AuthContext>,
@@ -1578,9 +1579,7 @@ pub async fn passkey_register_options(
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
 
-    let webauthn = match &state.webauthn {
-        Some(wa) => wa,
-        None => {
+    if state.webauthn.is_none() {
             tracing::warn!(
                 event = "auth.passkey.register_options.not_configured",
                 request_id = %request_id,
@@ -1591,8 +1590,7 @@ pub async fn passkey_register_options(
                 "message": "Passkey support is not enabled on this server"
             });
             return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
-        }
-    };
+    }
 
     let account_id = match &ctx.account_id {
         Some(id) => id.clone(),
@@ -1603,13 +1601,26 @@ pub async fn passkey_register_options(
         }
     };
 
-    // Step-up handoff remains an explicit follow-up concern for register/verify.
-    // This endpoint currently starts the WebAuthn ceremony only from an active session.
+    let device_id = match &ctx.device_id {
+        Some(id) => id.clone(),
+        None => {
+            tracing::error!(
+                event = "auth.passkey.register_options.missing_device_id",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Authenticated context missing device_id"
+            );
+            let err = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "Authenticated context missing device_id"
+            });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        }
+    };
 
-    // Look up the account to get webauthn_user_id and display info.
     let accounts = state.accounts.read().await;
-    let account = match accounts.get(&account_id) {
-        Some(a) => a.clone(),
+    match accounts.get(&account_id) {
+        Some(_) => {}
         None => {
             tracing::error!(
                 event = "auth.passkey.register_options.account_not_found",
@@ -1621,66 +1632,28 @@ pub async fn passkey_register_options(
                 serde_json::json!({"error": "ACCOUNT_INVALID", "message": "Account not found"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
-    };
+    }
     drop(accounts);
 
-    let user_name = account.email.as_deref().unwrap_or(&account.public.id);
-    let user_display_name = &account.public.title;
-
-    let input = crate::auth::passkeys::RegistrationInput {
-        webauthn_user_id: account.webauthn_user_id,
-        user_name,
-        user_display_name,
-    };
-
-    let exclude_credentials = state.passkeys.credential_ids_for_account(&account_id);
-    let exclude_credentials = if exclude_credentials.is_empty() {
-        None
-    } else {
-        Some(exclude_credentials)
-    };
-
-    let (ccr, reg_state) = match crate::auth::passkeys::start_passkey_registration(
-        webauthn,
-        &input,
-        exclude_credentials,
-    ) {
-        Ok(result) => result,
-        Err(e) => {
-            tracing::error!(
-                event = "auth.passkey.register_options.failed",
-                request_id = %request_id,
-                account_id = %account_id,
-                error = %e,
-                "Failed to generate passkey registration options"
-            );
-            let err = serde_json::json!({
-                "error": "INTERNAL_ERROR",
-                "message": "Failed to generate registration options"
-            });
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
-        }
-    };
-
-    // Store the registration state for later verification.
-    let reg_id = state
-        .passkey_registrations
-        .insert(account_id.clone(), reg_state)
-        .await;
+    let challenge = state.challenges.create(
+        account_id.clone(),
+        device_id,
+        ChallengeIntent::BeginPasskeyRegistration,
+    );
 
     tracing::info!(
-        event = "auth.passkey.register_options.success",
+        event = "auth.passkey.register_options.step_up_required",
         request_id = %request_id,
         account_id = %account_id,
-        registration_id = %reg_id,
-        "Passkey registration options generated"
+        challenge_id = %challenge.id,
+        "Passkey registration options blocked until step-up handoff exists"
     );
 
     let body = serde_json::json!({
-        "registration_id": reg_id,
-        "options": ccr,
+        "error": "STEP_UP_REQUIRED",
+        "challenge_id": challenge.id,
     });
-    (StatusCode::OK, Json(body)).into_response()
+    (StatusCode::FORBIDDEN, Json(body)).into_response()
 }
 
 #[cfg(test)]

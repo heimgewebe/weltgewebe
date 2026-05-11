@@ -3489,17 +3489,14 @@ async fn passkey_register_options_returns_503_when_not_configured() -> Result<()
 }
 
 #[tokio::test]
-async fn passkey_register_options_success() -> Result<()> {
+async fn passkey_register_options_requires_step_up_challenge() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state.sessions.create("u1".to_string(), None);
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev-passkey".to_string()));
+    let expected_device_id = session.device_id.clone();
 
-    // Capture the webauthn_user_id before the request.
-    let expected_wuid = {
-        let accounts = state.accounts.read().await;
-        accounts.get("u1").unwrap().webauthn_user_id
-    };
-
-    let app = app_with_auth(state);
+    let app = app_with_auth(state.clone());
 
     let req = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
@@ -3511,52 +3508,34 @@ async fn passkey_register_options_success() -> Result<()> {
     let status = res.status();
     let body_bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
 
-    if status != StatusCode::OK {
-        let text = String::from_utf8_lossy(&body_bytes);
-        panic!("expected 200 OK, got {status}: {text}");
-    }
+    assert_eq!(status, StatusCode::FORBIDDEN);
 
     let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body_json["error"], "STEP_UP_REQUIRED");
+    let challenge_id = body_json["challenge_id"]
+        .as_str()
+        .context("response must include challenge_id")?;
 
-    // Must contain a registration_id for the client to send back with register/verify.
-    assert!(
-        body_json.get("registration_id").is_some(),
-        "response must include registration_id"
-    );
-
-    // Must contain WebAuthn creation options under "options".
-    let options = body_json
-        .get("options")
-        .expect("response must include options");
-    let public_key = options
-        .get("publicKey")
-        .expect("options must include publicKey");
-
-    // Verify RP ID comes from config.
-    let rp = public_key.get("rp").expect("publicKey must include rp");
-    assert_eq!(rp["id"], "localhost", "rp.id must match configured value");
-
-    // Verify user.id matches the persisted webauthn_user_id (not a random new one).
-    let user = public_key.get("user").expect("publicKey must include user");
-    let user_id_b64 = user["id"].as_str().expect("user.id must be string");
-    let decoded = {
-        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-        use base64::Engine;
-        URL_SAFE_NO_PAD.decode(user_id_b64)?
-    };
-    assert_eq!(
-        decoded,
-        expected_wuid.as_bytes().to_vec(),
-        "user.id must match the persisted webauthn_user_id"
-    );
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .context("challenge must be stored for step-up flow")?;
+    assert_eq!(challenge.account_id, "u1");
+    assert_eq!(challenge.device_id, expected_device_id);
+    assert!(matches!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::BeginPasskeyRegistration
+    ));
 
     Ok(())
 }
 
 #[tokio::test]
-async fn passkey_register_options_stable_webauthn_user_id() -> Result<()> {
+async fn passkey_register_options_reuses_active_step_up_challenge() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state.sessions.create("u1".to_string(), None);
+    let session = state
+        .sessions
+        .create("u1".to_string(), Some("dev-passkey".to_string()));
 
     let app = app_with_auth(state.clone());
 
@@ -3567,37 +3546,41 @@ async fn passkey_register_options_stable_webauthn_user_id() -> Result<()> {
         .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
     let res = app.oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
     let body1: serde_json::Value =
         serde_json::from_slice(&body::to_bytes(res.into_body(), usize::MAX).await?)?;
 
     // Second call (rebuild the app since oneshot consumes it)
-    let app2 = app_with_auth(state);
+    let app2 = app_with_auth(state.clone());
     let req2 = Request::post("/auth/passkeys/register/options")
         .header("Host", "localhost")
         .header("Origin", "http://localhost:3000")
         .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
         .body(body::Body::empty())?;
     let res2 = app2.oneshot(req2).await?;
-    assert_eq!(res2.status(), StatusCode::OK);
+    assert_eq!(res2.status(), StatusCode::FORBIDDEN);
     let body2: serde_json::Value =
         serde_json::from_slice(&body::to_bytes(res2.into_body(), usize::MAX).await?)?;
 
-    // The user.id must be identical across calls (stable identity).
-    let uid1 = &body1["options"]["publicKey"]["user"]["id"];
-    let uid2 = &body2["options"]["publicKey"]["user"]["id"];
+    let challenge_id_1 = body1["challenge_id"]
+        .as_str()
+        .context("first response must include challenge_id")?;
+    let challenge_id_2 = body2["challenge_id"]
+        .as_str()
+        .context("second response must include challenge_id")?;
     assert_eq!(
-        uid1, uid2,
-        "webauthn_user_id must be stable across registration attempts"
+        challenge_id_1, challenge_id_2,
+        "same account/device/intent must reuse the active challenge"
     );
 
-    // But each call must produce a different registration_id (different challenge).
-    let reg1 = &body1["registration_id"];
-    let reg2 = &body2["registration_id"];
-    assert_ne!(
-        reg1, reg2,
-        "each registration attempt must get a unique registration_id"
-    );
+    let challenge = state
+        .challenges
+        .get(challenge_id_1)
+        .context("reused challenge must remain available")?;
+    assert!(matches!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::BeginPasskeyRegistration
+    ));
 
     Ok(())
 }

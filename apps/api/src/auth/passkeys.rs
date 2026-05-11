@@ -100,10 +100,16 @@ impl PasskeyStore {
 
     /// Returns all credential IDs for passkeys owned by the given account.
     pub fn credential_ids_for_account(&self, account_id: &str) -> Vec<CredentialID> {
-        self.list_for_account(account_id)
-            .into_iter()
-            .map(|passkey| passkey.cred_id().clone())
-            .collect()
+        let store = self.store.read_recover();
+        store
+            .get(account_id)
+            .map(|passkeys| {
+                passkeys
+                    .iter()
+                    .map(|passkey| passkey.cred_id().clone())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Finds a passkey by credential ID across all accounts.

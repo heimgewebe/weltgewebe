@@ -60,22 +60,23 @@ Er enthält **nicht**:
 | `apps/web/src/lib/components/AccountSection.svelte` | deaktivierter Passkey-Eintragspunkt (`data-testid="account-section-passkey"`, `data-testid="account-section-passkey-cta"`) | Stub, deaktiviert |
 | `apps/web/tests/account-section.spec.ts` | Test „passkey entry stub is present and disabled" (Zeile 216) | belegt |
 
-### 2.2 Register-Options – Was vorhanden ist
+### 2.2 Register-Options – aktueller Zwischenstand
 
-`POST /auth/passkeys/register/options` gibt zurück:
+`POST /auth/passkeys/register/options` ist vorhanden, startet die WebAuthn-Ceremony
+aber noch **nicht** aus einer Session allein. Der Endpunkt antwortet derzeit fail-closed:
 
 ```json
 {
-  "registration_id": "<opaque UUID>",
-  "options": { "publicKey": { ... } }
+  "error": "STEP_UP_REQUIRED",
+  "challenge_id": "<opaque UUID>"
 }
 ```
 
-- `webauthn_user_id` des Accounts wird als `user.id` eingesetzt (Base64url-kodiert).
-- `rp.id` und `rp.origin` kommen aus `AppConfig` (Env: `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`).
-- Das `PasskeyRegistration`-State-Objekt wird im `PasskeyRegistrationStore` abgelegt.
-- Die `registration_id` ist der opake Schlüssel, den der Client im `register/verify`-Schritt zurückschickt.
-- Bestehende Credential-IDs werden noch **nicht** als `excludeCredentials` übergeben (TODO in Zeile 1626 von `auth.rs`).
+- Die Response erzwingt einen `BeginPasskeyRegistration`-Challenge-Kontext für dieselbe Session.
+- Der Challenge-Store re-used vorhandene aktive Challenges für dieselbe Kombination aus `account_id`, `device_id` und Intent.
+- Ohne zusätzlichen Registration-Grant/Handoff erzeugt der Endpunkt **keine** `registration_id` und startet **keine** WebAuthn-Creation-Challenge.
+- `PasskeyRegistrationStore` und WebAuthn-Optionserzeugung bleiben vorbereitete Folgearbeit hinter dem noch offenen Handoff.
+- Bestehende Credential-IDs werden grundsätzlich aus `PasskeyStore` abgeleitet; ihre reale Wirkung greift aber erst, sobald die Ceremony tatsächlich gestartet werden kann.
 
 **4 Integrationstests belegt** in `apps/api/tests/api_auth.rs` (ab Zeile 3390):
 
@@ -83,8 +84,8 @@ Er enthält **nicht**:
 |---|---|
 | `passkey_register_options_requires_authentication` | Kein Cookie → 401 |
 | `passkey_register_options_returns_503_when_not_configured` | WebAuthn nicht konfiguriert → 503 `PASSKEYS_NOT_CONFIGURED` |
-| `passkey_register_options_success` | Vollständige Erfolgsantwort inkl. `registration_id` und `webauthn_user_id`-Stabilität |
-| `passkey_register_options_stable_webauthn_user_id` | Gleicher Account liefert konsistente `user.id` über mehrere Aufrufe |
+| `passkey_register_options_requires_step_up_challenge` | Authentifizierte Session erhält `403 STEP_UP_REQUIRED`; Challenge ist als `BeginPasskeyRegistration` gespeichert |
+| `passkey_register_options_reuses_active_step_up_challenge` | Wiederholter Aufruf derselben Session re-used dieselbe aktive Challenge |
 
 ### 2.3 PasskeyRegistrationStore
 
@@ -183,7 +184,7 @@ Der bestehende Step-up-Mechanismus erzeugt **aktionsgebundene Challenges**: `POS
 
 **Entscheidung:** Pfad A bleibt Zielbild (Step-up vor `register/options`).
 
-**Umsetzung in diesem PR:** Neuer Intent `BeginPasskeyRegistration` ist im Step-up-System ergänzt und im Consume-Pfad getestet (session-neutral, keine Nebenwirkungen).
+**Umsetzung in diesem PR:** Neuer Intent `BeginPasskeyRegistration` ist im Step-up-System ergänzt und im Consume-Pfad getestet (session-neutral, keine Nebenwirkungen). `register/options` erzwingt bereits fail-closed `STEP_UP_REQUIRED` mit `challenge_id`, startet ohne Registration-Grant aber noch keine Ceremony.
 
 **Stop-Kriterium für diesen PR:** Keine Halb-Integration von `register/options` in den bestehenden Step-up-Flow ohne klaren Handoff-Mechanismus; kein `register/verify`-Handler in diesem Scope.
 
@@ -345,7 +346,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 - `apps/api/src/auth/passkeys.rs` — Hauptmodul (7 Unit-Tests)
 - `apps/api/src/routes/auth.rs` — `passkey_register_options` (Zeile 1560), Step-up-Infrastruktur
 - `apps/api/src/routes/accounts.rs` — `webauthn_user_id: Uuid` (Zeile 84), Lazy-Backfill (Zeile 299–315)
-- `apps/api/tests/api_auth.rs` — 4 Integrationstests für `register/options` (ab Zeile 3390)
+- `apps/api/tests/api_auth.rs` — 4 Integrationstests für `register/options` und den fail-closed-Step-up-Gate
 - `apps/api/tests/auth_ratelimit_proxy_untrusted.rs` — `webauthn: None`, `passkey_registrations: Default::default()` (Test-Fixtures)
 - `apps/api/tests/api_nodes.rs` — `webauthn_user_id: uuid::Uuid::new_v4()` (Test-Fixtures)
 

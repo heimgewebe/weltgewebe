@@ -269,9 +269,9 @@ Step-up bleibt aktionsgebunden und session-neutral.
 ### Arbeitspakete Phase 4
 
 1. [x] Statusbeweis: Was existiert bereits?
-2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Tests implementiert
+2. [~] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Step-up-403 implementiert; erfolgreicher Ceremony-Start bleibt bis Grant-Handoff blockiert
 3. [ ] Register-Verify — Vorbereitungsbericht: [reports/passkey-register-verify-prep.md](../reports/passkey-register-verify-prep.md)
-4. [~] Voraussetzungen für Register-Verify — PasskeyStore + Writeback-Mutation implementiert; Step-up-Intent-Basis (`BeginPasskeyRegistration`) vorhanden, vollständiger Handoff vor `register/options` offen
+4. [~] Voraussetzungen für Register-Verify — PasskeyStore + Writeback-Mutation implementiert; `register/options` erzwingt bereits Step-up per Challenge, aber nutzbarer Handoff/Grant vor dem Ceremony-Start bleibt offen
 5. [ ] Auth-Options
 6. [ ] Auth-Verify
 7. [ ] Passkeys auflisten
@@ -283,12 +283,12 @@ Step-up bleibt aktionsgebunden und session-neutral.
 - `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; persistenzpflichtig ab register/verify)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`, optional `rp_name`) aus `AppConfig` mit Validierung
 - `Webauthn`-Instanz wird beim Start einmalig gebaut (optional, nur wenn konfiguriert)
-- Register-Options-Endpunkt gibt `CreationChallengeResponse` mit `webauthn_user_id` zurück
-- In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min)
+- Register-Options-Endpunkt erzwingt fail-closed `403 STEP_UP_REQUIRED` mit `challenge_id`; erfolgreicher Ceremony-Start folgt erst mit Grant-Handoff
+- In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min) ist vorbereitet, wird aber erst mit erfolgreichem Handoff aktiv genutzt
 - Langlebiger In-Memory-`PasskeyStore` (account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet
-- Step-up-Intent `BeginPasskeyRegistration` ergänzt (session-neutraler Consume-Pfad); vollständiger Handoff vor `register/options` (Grant/State-Erzeugung) ist offen
-- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Register-Options-Endpunkt und BeginPasskeyRegistration-Consume (Unit-Tests in `passkeys.rs` und `accounts.rs`, Integrationstests in `api_auth.rs`)
+- Step-up-Intent `BeginPasskeyRegistration` ergänzt (session-neutraler Consume-Pfad); `register/options` erzwingt bereits Challenge-basiertes Step-up fail-closed, vollständiger Handoff vor dem Ceremony-Start (Grant/State-Erzeugung) ist offen
+- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, fail-closed `register/options` und BeginPasskeyRegistration-Consume (Unit-Tests in `passkeys.rs` und `accounts.rs`, Integrationstests in `api_auth.rs`)
 - **Offen:** Register-Verify (inkl. tatsächlichem Datenquellen-Writeback), Auth-Optionen/Verify, Passkey-Login/Management, UI
 
 ### Voraussetzungen
