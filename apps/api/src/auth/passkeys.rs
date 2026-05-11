@@ -20,10 +20,10 @@
 //!   passkeys are enabled.
 
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock as StdRwLock};
 
 use chrono::{DateTime, Utc};
-use tokio::sync::RwLock as AsyncRwLock;
+use tokio::sync::RwLock as TokioRwLock;
 use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
@@ -57,13 +57,16 @@ pub struct StoredPasskey {
 /// Prozessneustart verloren.
 #[derive(Clone, Default)]
 pub struct PasskeyStore {
-    store: Arc<RwLock<HashMap<String, Vec<Passkey>>>>,
+    // We intentionally use std::sync::RwLock here because operations are
+    // short, purely in-memory mutations/lookups without async-await sections
+    // while the lock is held.
+    store: Arc<StdRwLock<HashMap<String, Vec<Passkey>>>>,
 }
 
 impl PasskeyStore {
     pub fn new() -> Self {
         Self {
-            store: Arc::new(RwLock::new(HashMap::new())),
+            store: Arc::new(StdRwLock::new(HashMap::new())),
         }
     }
 
@@ -193,7 +196,7 @@ struct PendingRegistration {
 /// request.
 #[derive(Clone, Default)]
 pub struct PasskeyRegistrationStore {
-    store: Arc<AsyncRwLock<HashMap<String, PendingRegistration>>>,
+    store: Arc<TokioRwLock<HashMap<String, PendingRegistration>>>,
 }
 
 impl PasskeyRegistrationStore {

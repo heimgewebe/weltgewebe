@@ -298,9 +298,9 @@ mod tests {
     #[test]
     fn test_update_webauthn_user_id_updates_existing_account() {
         let mut store = AccountStore::new();
-        let mut account = dummy_account("u1", Some("u1@example.com"));
+        let account = dummy_account("u1", Some("u1@example.com"));
         let original = account.webauthn_user_id;
-        store.insert(account.clone());
+        store.insert(account);
 
         let replacement = Uuid::new_v4();
         let updated = store.update_webauthn_user_id("u1", replacement);
@@ -313,10 +313,6 @@ mod tests {
             store.get_by_email("u1@example.com").is_some(),
             "email index must remain intact after webauthn_user_id update"
         );
-
-        // keep clone usage meaningful and explicit
-        account.webauthn_user_id = replacement;
-        assert_eq!(stored.webauthn_user_id, account.webauthn_user_id);
     }
 
     #[test]
