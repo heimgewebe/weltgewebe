@@ -323,8 +323,8 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 |---|---|
 | `PasskeyStore` mit Insert/Get/Remove implementiert und getestet | **belegt** |
 | `AccountStore.update_webauthn_user_id()` implementiert | **belegt** |
-| Step-up-Handoff-Pfad entschieden (Pfad A vor register/options, Pfad B one-time-grant, oder Pfad C intent-direkt) — siehe Abschnitt 4.3 | **belegt (Pfad A als Zielbild)** |
-| Step-up-Handoff-Pfad implementiert und getestet | **teilweise** (Intent `BeginPasskeyRegistration` + Consume-Test; End-to-End-Handoff vor `register/options` weiterhin offen) |
+| Step-up-Handoff-Zielbild entschieden | **belegt (Pfad A: Step-up vor `register/options`)** |
+| Step-up-Handoff technisch realisiert | **offen** — `BeginPasskeyRegistration` existiert und ist im Consume-Pfad getestet, erzeugt aber noch keinen verwendbaren Grant/State für `register/options`; vollständiger Handoff ist eigenständiger Folge-PR |
 | Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **offen** |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |
