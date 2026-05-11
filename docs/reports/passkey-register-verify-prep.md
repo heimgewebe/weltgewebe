@@ -265,25 +265,26 @@ Dieser PR und der direkte Folge-PR decken folgendes **nicht** ab:
 
 Blockiert durch:
 
-- Kein persistenter (restart-fester) Credential-Store
+- Kein persistenter (restart-fester) Credential-Store (In-Memory-`PasskeyStore` vorhanden; Persistenz ist Voraussetzung für Produktion, nicht Blocker für Entwicklungsphase)
 - Kein finaler Datenquellen-Writeback von `webauthn_user_id` im Register-Verify-Pfad
-- Kein vollständiger Step-up-Handoff für den Start von `register/options`
+- Kein vollständiger Step-up-Handoff für den Start von `register/options` (Intent-Basis vorhanden, Grant/State-Erzeugung fehlt)
+- Keine festgelegte WebAuthn-Teststrategie für `finish_passkey_registration`
 
-Pfad A ist **nicht** direkt gangbar ohne die fehlenden Store-Strukturen.
+Pfad A ist weiterhin nicht direkt gangbar — nicht mehr wegen fehlender Store-Grundlagen, sondern wegen offenem Step-up-Handoff, fehlender Verify-Implementierung, fehlendem Datenquellen-Writeback im Verify-Pfad und offener WebAuthn-Teststrategie.
 
 ---
 
-#### Pfad B — zuerst Datenmodell-/Store-PR
+#### Pfad B — Datenmodell-/Store-PR *(umgesetzt durch diesen PR)*
 
-Inhalt eines Pfad-B-PR:
+Pfad B ist implementiert:
 
-1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs`
-2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/auth/accounts.rs`
-3. **Entscheidung und dokumentation des Step-up-Handoff-Pfads** — siehe Abschnitt 4.3. Wahl aus A (Step-up vor register/options), B (one-time-grant), oder C (Intent-direkt). ADR-0006 aktualisieren, falls notwendig.
-4. Ggf. minimale Implementierung des gewählten Step-up-Pfads (z.B. neuer Intent-Typ)
-5. Unit-Tests für `PasskeyStore` und Step-up-Handoff
+1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs` ✅
+2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/auth/accounts.rs` ✅
+3. Step-up-Handoff-Zielbild entschieden (Pfad A: Step-up vor `register/options`) ✅
+4. `BeginPasskeyRegistration`-Intent ergänzt (Consume-Pfad, ohne Grant/State-Erzeugung) ✅
+5. Unit-Tests für `PasskeyStore`, `AccountStore`-Mutation und WebAuthn-Builder ✅
 
-Pfad B schafft die minimalen Voraussetzungen ohne WebAuthn-Verify-Logik.
+Offen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`).
 
 ---
 
@@ -297,15 +298,13 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 
 ### Empfehlung
 
-**Pfad B** ist der richtige nächste Schritt.
-
-Der Folge-PR nach diesem Bericht soll lauten:
+**Pfad B ist umgesetzt.** Der nächste sinnvolle Schritt vor `register/verify`:
 
 ```text
-feat(auth): add PasskeyStore and step-up-handoff for passkey registration
+feat(auth): add passkey registration step-up grant handoff
 ```
 
-Inhalt: Credential-Store-Struktur + `AccountStore`-Mutation + Step-up-Handoff-Entscheidung + Unit-Tests. Kein `register/verify`-Handler, keine WebAuthn-Verify-Route.
+Inhalt: eigener `PasskeyRegistrationGrantStore`; `BeginPasskeyRegistration`-Consume erzeugt einen kurzlebigen, account- und session-gebundenen Grant; `register/options` verlangt und konsumiert diesen Grant bevor die WebAuthn-Creation-Challenge gestartet wird. Kein `register/verify`-Handler, keine WebAuthn-Verify-Route.
 
 Erst danach ist Pfad A gangbar:
 
@@ -374,7 +373,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 - `apps/web/src/lib/components/AccountSection.svelte` — Step-up-Request bei logout-all (Zeile 109–113), devices-Liste (Zeile 56–77)
 - `apps/web/tests/account-section.spec.ts` — `STEP_UP_REQUIRED` (Zeile 30), `logout-all` (Zeile 79), `devices` (Zeile 53)
 
-**Step-up für Passkey-Register:** In `auth-api.md` Zeile 254 gelistet als step-up-pflichtige Operation. Kein Handler implementiert. Klärung im Folge-PR (Pfad B).
+**Step-up für Passkey-Register:** In `auth-api.md` Zeile 254 gelistet als step-up-pflichtige Operation. Intent `BeginPasskeyRegistration` ergänzt (Consume-Pfad, ohne Grant/State-Erzeugung). Vollständiger Handoff vor `register/options` ist eigenständiger Folge-PR.
 
 ### make docs-guard (ci-validate)
 

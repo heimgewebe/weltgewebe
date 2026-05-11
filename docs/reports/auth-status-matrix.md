@@ -170,7 +170,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `apps/api/src/routes/auth.rs` — `passkey_register_options` Endpunkt
 - `apps/api/src/config.rs` — `webauthn_rp_id`, `webauthn_rp_origin`, `webauthn_rp_name`
 - `apps/api/src/routes/accounts.rs` — `webauthn_user_id` am Account-Modell
-- 7 Unit-Tests (passkeys.rs) + 4 Integrationstests (api_auth.rs)
+- Unit-Tests in `apps/api/src/auth/passkeys.rs` und `apps/api/src/auth/accounts.rs`; Integrationstests in `apps/api/tests/api_auth.rs`
 
 **Fehlende Belege:** Register-Verify, Auth-Flow, persistente Ablage über Neustart, E2E-UI
 **Status:** Teil

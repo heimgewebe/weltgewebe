@@ -288,7 +288,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 - Langlebiger In-Memory-`PasskeyStore` (account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet
 - Step-up-Intent `BeginPasskeyRegistration` ergänzt (session-neutraler Consume-Pfad); vollständiger Handoff vor `register/options` (Grant/State-Erzeugung) ist offen
-- 11 Tests belegen die neue Semantik (7 Unit + 4 Integration)
+- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Register-Options-Endpunkt und BeginPasskeyRegistration-Consume (Unit-Tests in `passkeys.rs` und `accounts.rs`, Integrationstests in `api_auth.rs`)
 - **Offen:** Register-Verify (inkl. tatsächlichem Datenquellen-Writeback), Auth-Optionen/Verify, Passkey-Login/Management, UI
 
 ### Voraussetzungen
