@@ -264,28 +264,32 @@ Step-up bleibt aktionsgebunden und session-neutral.
 - Diese wird **nicht** aus `account_id` abgeleitet, sondern unabhängig verwaltet.
 - `account_id` bleibt die interne Fachidentität; `webauthn_user_id` ist die vom WebAuthn-Protokoll verwendete opake Nutzerkennung.
 - `rp_id` und `rp_origin` kommen aus `AppConfig` (Env: `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN`). Keine hardcodierten Defaults.
-- **Persistenzstatus:** Der Wert wird aus der Datenquelle gelesen, wenn vorhanden. Bei Accounts ohne persistierten Wert wird er beim Laden erzeugt (Lazy Backfill) und ist für die Laufzeit des Prozesses stabil. Eine dauerhafte Persistenz über Neustarts hinweg ist erst mit `register/verify` nötig und noch nicht implementiert.
+- **Persistenzstatus:** Der Wert wird aus der Datenquelle gelesen, wenn vorhanden. Bei Accounts ohne persistierten Wert wird er beim Laden erzeugt (Lazy Backfill) und ist für die Laufzeit des Prozesses stabil. Eine `AccountStore`-Mutation (`update_webauthn_user_id`) ist als Voraussetzung vorhanden; der tatsächliche Datenquellen-Writeback folgt mit `register/verify`.
 
 ### Arbeitspakete Phase 4
 
 1. [x] Statusbeweis: Was existiert bereits?
-2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Tests implementiert
+2. [~] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt und Step-up-403 implementiert; erfolgreicher Ceremony-Start bleibt bis Grant-Handoff blockiert
 3. [ ] Register-Verify — Vorbereitungsbericht: [reports/passkey-register-verify-prep.md](../reports/passkey-register-verify-prep.md)
-4. [ ] Auth-Options
-5. [ ] Auth-Verify
-6. [ ] Passkeys auflisten
-7. [ ] Passkey entfernen
-8. [ ] UI-Aktivierung erst nach erfolgreichem Login anbieten
+4. [~] Voraussetzungen für Register-Verify — PasskeyStore + Writeback-Mutation implementiert; `register/options` erzwingt bereits Step-up per Challenge, aber nutzbarer Handoff/Grant vor dem Ceremony-Start bleibt offen
+5. [ ] Auth-Options
+6. [ ] Auth-Verify
+7. [ ] Passkeys auflisten
+8. [ ] Passkey entfernen
+9. [ ] UI-Aktivierung erst nach erfolgreichem Login anbieten
 
 ### Aktueller Stand
 
 - `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; persistenzpflichtig ab register/verify)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`, optional `rp_name`) aus `AppConfig` mit Validierung
 - `Webauthn`-Instanz wird beim Start einmalig gebaut (optional, nur wenn konfiguriert)
-- Register-Options-Endpunkt gibt `CreationChallengeResponse` mit `webauthn_user_id` zurück
-- In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min)
-- 11 Tests belegen die neue Semantik (7 Unit + 4 Integration)
-- **Offen:** Register-Verify (inkl. Persistenz der webauthn_user_id), Auth-Optionen/Verify, Passkey-Speicherung, UI
+- Register-Options-Endpunkt erzwingt fail-closed `403 STEP_UP_REQUIRED` mit `challenge_id`; erfolgreicher Ceremony-Start folgt erst mit Grant-Handoff
+- In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min) ist vorbereitet, wird aber erst mit erfolgreichem Handoff aktiv genutzt
+- Langlebiger In-Memory-`PasskeyStore` (account-gebunden, duplicate detection, list/find/remove)
+- `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet
+- Step-up-Intent `BeginPasskeyRegistration` ergänzt (session-neutraler Consume-Pfad); `register/options` erzwingt bereits Challenge-basiertes Step-up fail-closed, vollständiger Handoff vor dem Ceremony-Start (Grant/State-Erzeugung) ist offen
+- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, fail-closed `register/options` und BeginPasskeyRegistration-Consume (Unit-Tests in `passkeys.rs` und `accounts.rs`, Integrationstests in `api_auth.rs`)
+- **Offen:** Register-Verify (inkl. tatsächlichem Datenquellen-Writeback), Auth-Optionen/Verify, Passkey-Login/Management, UI
 
 ### Voraussetzungen
 

@@ -3,7 +3,7 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     auth::{
-        challenges::ChallengeStore, passkeys::PasskeyRegistrationStore,
+        challenges::ChallengeStore, passkeys::PasskeyRegistrationStore, passkeys::PasskeyStore,
         rate_limit::AuthRateLimiter, session::SessionStore, step_up_tokens::StepUpTokenStore,
         tokens::TokenStore,
     },
@@ -80,6 +80,7 @@ pub struct ApiState {
     /// WebAuthn instance, present only when passkey support is configured.
     pub webauthn: Option<Arc<Webauthn>>,
     pub passkey_registrations: PasskeyRegistrationStore,
+    pub passkeys: PasskeyStore,
 }
 
 #[cfg(test)]

@@ -20,18 +20,133 @@
 //!   passkeys are enabled.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock as StdRwLock};
 
 use chrono::{DateTime, Utc};
-use tokio::sync::RwLock;
+use tokio::sync::RwLock as TokioRwLock;
 use url::Url;
 use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
-use crate::config::AppConfig;
+use crate::{auth::lock::RwLockRecover, config::AppConfig};
 
 /// TTL for in-progress passkey registrations (5 minutes).
 const REGISTRATION_TTL_SECS: i64 = 300;
+
+/// Error returned when inserting a passkey into [`PasskeyStore`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum PasskeyStoreInsertError {
+    #[error("passkey credential already exists")]
+    DuplicateCredentialId,
+}
+
+/// Stored passkey together with its owning account.
+#[derive(Clone, Debug)]
+pub struct StoredPasskey {
+    pub account_id: String,
+    pub passkey: Passkey,
+}
+
+/// Langlebiger In-Memory-Store für registrierte Passkeys.
+///
+/// Dieser Store ist **nicht** TTL-basiert und **nicht** single-use. Er hält
+/// Passkeys bis zum Prozessende und eignet sich damit als Minimalpfad für
+/// Phase 4, bis eine persistente Datenquelle folgt.
+///
+/// ⚠️ Wichtig: Da dieser Store rein in-memory ist, gehen alle Passkeys bei
+/// Prozessneustart verloren.
+#[derive(Clone, Default)]
+pub struct PasskeyStore {
+    // We intentionally use std::sync::RwLock here because operations are
+    // short, purely in-memory mutations/lookups without async-await sections
+    // while the lock is held.
+    store: Arc<StdRwLock<HashMap<String, Vec<Passkey>>>>,
+}
+
+impl PasskeyStore {
+    pub fn new() -> Self {
+        Self {
+            store: Arc::new(StdRwLock::new(HashMap::new())),
+        }
+    }
+
+    /// Inserts a passkey for an account.
+    ///
+    /// Rejects duplicate credential IDs globally across all accounts.
+    pub fn insert(
+        &self,
+        account_id: String,
+        passkey: Passkey,
+    ) -> Result<(), PasskeyStoreInsertError> {
+        let mut store = self.store.write_recover();
+        let credential_id = passkey.cred_id().clone();
+        let duplicate = store.values().any(|passkeys| {
+            passkeys
+                .iter()
+                .any(|existing| existing.cred_id() == &credential_id)
+        });
+        if duplicate {
+            return Err(PasskeyStoreInsertError::DuplicateCredentialId);
+        }
+        store.entry(account_id).or_default().push(passkey);
+        Ok(())
+    }
+
+    /// Lists all passkeys owned by the given account.
+    pub fn list_for_account(&self, account_id: &str) -> Vec<Passkey> {
+        let store = self.store.read_recover();
+        store.get(account_id).cloned().unwrap_or_default()
+    }
+
+    /// Returns all credential IDs for passkeys owned by the given account.
+    pub fn credential_ids_for_account(&self, account_id: &str) -> Vec<CredentialID> {
+        let store = self.store.read_recover();
+        store
+            .get(account_id)
+            .map(|passkeys| {
+                passkeys
+                    .iter()
+                    .map(|passkey| passkey.cred_id().clone())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Finds a passkey by credential ID across all accounts.
+    pub fn find_by_credential_id(&self, credential_id: &CredentialID) -> Option<StoredPasskey> {
+        let store = self.store.read_recover();
+        for (account_id, passkeys) in store.iter() {
+            if let Some(passkey) = passkeys
+                .iter()
+                .find(|candidate| candidate.cred_id() == credential_id)
+            {
+                return Some(StoredPasskey {
+                    account_id: account_id.clone(),
+                    passkey: passkey.clone(),
+                });
+            }
+        }
+        None
+    }
+
+    /// Removes a credential for an account.
+    ///
+    /// Returns `true` if the credential existed for the given account and was
+    /// removed. Credentials of other accounts are left untouched.
+    pub fn remove_for_account(&self, account_id: &str, credential_id: &CredentialID) -> bool {
+        let mut store = self.store.write_recover();
+        let Some(passkeys) = store.get_mut(account_id) else {
+            return false;
+        };
+        let original_len = passkeys.len();
+        passkeys.retain(|candidate| candidate.cred_id() != credential_id);
+        let changed = passkeys.len() != original_len;
+        if passkeys.is_empty() {
+            store.remove(account_id);
+        }
+        changed
+    }
+}
 
 // ── Webauthn builder ──────────────────────────────────────────────────────
 
@@ -87,7 +202,7 @@ struct PendingRegistration {
 /// request.
 #[derive(Clone, Default)]
 pub struct PasskeyRegistrationStore {
-    store: Arc<RwLock<HashMap<String, PendingRegistration>>>,
+    store: Arc<TokioRwLock<HashMap<String, PendingRegistration>>>,
 }
 
 impl PasskeyRegistrationStore {
@@ -174,11 +289,52 @@ pub fn start_passkey_registration(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn test_webauthn() -> Arc<Webauthn> {
         let origin = Url::parse("http://localhost:3000").unwrap();
         let builder = WebauthnBuilder::new("localhost", &origin).unwrap();
         Arc::new(builder.build().unwrap())
+    }
+
+    fn test_passkey(credential_seed: u8) -> Passkey {
+        let credential_id = vec![credential_seed; 32];
+        let credential_id_b64 = {
+            use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+            use base64::Engine;
+            URL_SAFE_NO_PAD.encode(credential_id)
+        };
+        serde_json::from_value(json!({
+            "cred": {
+                "cred_id": credential_id_b64,
+                "cred": {
+                    "type_": "ES256",
+                    "key": {
+                        "EC_EC2": {
+                            "curve": "SECP256R1",
+                            "x": vec![1_u8; 32],
+                            "y": vec![2_u8; 32]
+                        }
+                    }
+                },
+                "counter": 0,
+                "transports": null,
+                "user_verified": false,
+                "backup_eligible": false,
+                "backup_state": false,
+                "registration_policy": "preferred",
+                "extensions": {
+                    "cred_protect": "NotRequested",
+                    "hmac_create_secret": "NotRequested"
+                },
+                "attestation": {
+                    "data": "None",
+                    "metadata": "None"
+                },
+                "attestation_format": "None"
+            }
+        }))
+        .expect("passkey fixture must deserialize")
     }
 
     #[test]
@@ -332,6 +488,95 @@ webauthn_rp_id: example.com\n";
         assert!(
             correct.is_some(),
             "correct account must still consume after a wrong-account attempt"
+        );
+    }
+
+    #[test]
+    fn passkey_store_insert_and_list_for_account() {
+        let store = PasskeyStore::new();
+        let passkey = test_passkey(1);
+        store
+            .insert("acct-1".to_string(), passkey.clone())
+            .expect("insert should succeed");
+
+        let listed = store.list_for_account("acct-1");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].cred_id(), passkey.cred_id());
+    }
+
+    #[test]
+    fn passkey_store_rejects_duplicate_credential_id() {
+        let store = PasskeyStore::new();
+        let passkey = test_passkey(7);
+
+        store
+            .insert("acct-1".to_string(), passkey.clone())
+            .expect("first insert should succeed");
+        let duplicate = store.insert("acct-2".to_string(), passkey);
+
+        assert_eq!(
+            duplicate,
+            Err(PasskeyStoreInsertError::DuplicateCredentialId),
+            "duplicate credential id must be rejected"
+        );
+    }
+
+    #[test]
+    fn passkey_store_isolates_accounts() {
+        let store = PasskeyStore::new();
+        store
+            .insert("acct-a".to_string(), test_passkey(10))
+            .expect("insert account a");
+        store
+            .insert("acct-b".to_string(), test_passkey(20))
+            .expect("insert account b");
+
+        assert_eq!(store.list_for_account("acct-a").len(), 1);
+        assert_eq!(store.list_for_account("acct-b").len(), 1);
+        assert!(store.list_for_account("acct-c").is_empty());
+    }
+
+    #[test]
+    fn passkey_store_find_and_remove_are_account_scoped() {
+        let store = PasskeyStore::new();
+        let a_key = test_passkey(33);
+        let b_key = test_passkey(44);
+        let a_cred_id = a_key.cred_id().clone();
+        let b_cred_id = b_key.cred_id().clone();
+
+        store
+            .insert("acct-a".to_string(), a_key)
+            .expect("insert account a");
+        store
+            .insert("acct-b".to_string(), b_key)
+            .expect("insert account b");
+
+        let found = store
+            .find_by_credential_id(&a_cred_id)
+            .expect("credential must be found");
+        assert_eq!(found.account_id, "acct-a");
+        assert_eq!(found.passkey.cred_id(), &a_cred_id);
+
+        assert!(
+            !store.remove_for_account("acct-b", &a_cred_id),
+            "other account must not be able to remove credential"
+        );
+        assert!(
+            store.find_by_credential_id(&a_cred_id).is_some(),
+            "credential must still exist after wrong-account remove"
+        );
+
+        assert!(
+            store.remove_for_account("acct-a", &a_cred_id),
+            "owner account should remove credential"
+        );
+        assert!(
+            store.find_by_credential_id(&a_cred_id).is_none(),
+            "removed credential must no longer exist"
+        );
+        assert!(
+            store.find_by_credential_id(&b_cred_id).is_some(),
+            "other account credential must remain"
         );
     }
 

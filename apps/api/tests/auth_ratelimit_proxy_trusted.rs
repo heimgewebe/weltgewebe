@@ -50,6 +50,7 @@ fn test_state(config: AppConfig) -> Result<ApiState> {
         mailer: None,
         webauthn: None,
         passkey_registrations: Default::default(),
+        passkeys: Default::default(),
     })
 }
 

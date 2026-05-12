@@ -80,6 +80,7 @@ async fn test_state() -> Result<ApiState> {
         mailer: None,
         webauthn: None,
         passkey_registrations: Default::default(),
+        passkeys: Default::default(),
     })
 }
 
