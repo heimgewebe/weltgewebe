@@ -69,7 +69,7 @@ Beweisen, dass:
 
 ## 3. DB-Klasse
 
-**`disposable-local`**
+### disposable-local
 
 Verwendet wurde ein frisch gestarteter Docker-Container `postgres:16` auf Port 5499,
 Datenbank `weltgewebe_proof`. Der Container wurde ausschließlich für diesen Beweis
@@ -82,7 +82,7 @@ in dieser DB-Klasse ausgeführt werden.
 
 ### 4.1 Pflichtdiagnose
 
-```
+```text
 git status --short
 → (keine Ausgabe — sauberer Arbeitsstand)
 
@@ -106,7 +106,7 @@ DB-Klasse: **`disposable-local`** — Port 5499, Datenbank `weltgewebe_proof`.
 
 `sqlx-cli` nicht verfügbar. Migration via `psql -f`.
 
-```
+```bash
 PGPASSWORD=gewebe psql -h localhost -p 5499 -U welt -d weltgewebe_proof \
   -f apps/api/migrations/20260428000000_create_sessions.up.sql -v ON_ERROR_STOP=1
 
@@ -118,7 +118,7 @@ Ausgabe:
 
 Tabellenstruktur verifiziert:
 
-```
+```text
 \d sessions
 
                      Table "public.sessions"
@@ -138,17 +138,21 @@ Indexes:
 
 ### 4.3 Down-Migration und erneute Up-Migration (Reversibilität)
 
-```
-psql -f apps/api/migrations/20260428000000_create_sessions.down.sql
+```text
+PGPASSWORD=gewebe psql -h localhost -p 5499 -U welt -d weltgewebe_proof \
+  -f apps/api/migrations/20260428000000_create_sessions.down.sql -v ON_ERROR_STOP=1
 → DROP TABLE
 
-\dt sessions
+PGPASSWORD=gewebe psql -h localhost -p 5499 -U welt -d weltgewebe_proof \
+  -c "\dt sessions"
 → Did not find any relation named "sessions".
 
-psql -f apps/api/migrations/20260428000000_create_sessions.up.sql
+PGPASSWORD=gewebe psql -h localhost -p 5499 -U welt -d weltgewebe_proof \
+  -f apps/api/migrations/20260428000000_create_sessions.up.sql -v ON_ERROR_STOP=1
 → CREATE TABLE / CREATE INDEX / CREATE INDEX
 
-SELECT COUNT(*) FROM sessions;
+PGPASSWORD=gewebe psql -h localhost -p 5499 -U welt -d weltgewebe_proof \
+  -c "SELECT COUNT(*) FROM sessions;"
 → count: 0
 ```
 
@@ -237,7 +241,7 @@ aufgebaut, alle Operationen durchgelaufen.
 
 ### 4.6 Cargo Tests
 
-```
+```text
 cargo test --locked -p weltgewebe-api
 
 Ergebnis: alle Suites grün
@@ -252,7 +256,7 @@ aus Blueprint Abschnitt 3.4 ist erfüllt.
 
 ### 4.7 Git-Diff-Check
 
-```
+```bash
 git diff --check
 → (keine Ausgabe, Exit 0 — keine Whitespace-Fehler)
 ```
@@ -276,7 +280,7 @@ git diff --check
 | `sqlx migrate run` via sqlx-cli | ❌ NOT_PROVEN |
 | Exaktes Stack-Image `edoburu/pgbouncer:1.20` | ❌ NOT_PROVEN |
 
-**Gesamtergebnis: PARTIAL_PROVEN**
+### Gesamtergebnis: PARTIAL_PROVEN
 
 Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
 (transaction mode) ist reproduzierbar belegt. Der kritische SQLx/Rust-API-Pfad
@@ -289,7 +293,7 @@ noch nicht bewiesen. `psql`-CRUD ist nicht äquivalent zu SQLx-Runtime.
 
 ### Restlücke 1: SQLx Prepared Statements gegen PgBouncer (Rust-API-Ebene)
 
-**Status: offen**
+#### Status: offen
 
 Alle CRUD-Operationen wurden über den `psql`-Client ausgeführt, der keine
 Prepared Statements im SQLx-Sinne verwendet. SQLx nutzt standardmäßig
@@ -307,7 +311,7 @@ muss durch Rust-Integrationstests belegt werden.
 
 ### Restlücke 2: `sqlx-cli` nicht in CI-Umgebung installiert
 
-**Status: dokumentiert**
+#### Status: dokumentiert
 
 Migrationen wurden via `psql -f` ausgeführt. Im regulären Deploy-Pfad (`just db-migrate`)
 wird `sqlx-cli 0.8.1` erwartet:
@@ -321,7 +325,7 @@ Migrationspfad (z.B. `psql -f` im CI) explizit dokumentiert sein.
 
 ### Restlücke 3: `edoburu/pgbouncer:1.20`-Image nicht in Sandbox verfügbar
 
-**Status: dokumentiert**
+#### Status: dokumentiert
 
 Für den Beweis wurde `pgbouncer 1.22.0` (Ubuntu-Paket) verwendet, nicht das
 Stack-Image `edoburu/pgbouncer:1.20`. Der Test deckt denselben Zielmodus
