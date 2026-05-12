@@ -3602,18 +3602,45 @@ async fn passkey_register_options_reuses_active_step_up_challenge() -> Result<()
     Ok(())
 }
 
-// Helper: perform the full step-up flow for BeginPasskeyRegistration and return
-// the `registration_grant_id`.
-async fn obtain_registration_grant(state: &ApiState, session_cookie: &str) -> Result<String> {
-    let challenge = state.challenges.create(
-        "u1".to_string(),
-        "dev-passkey".to_string(),
-        weltgewebe_api::auth::challenges::ChallengeIntent::BeginPasskeyRegistration,
+async fn request_passkey_registration_challenge(
+    state: &ApiState,
+    session_cookie: &str,
+) -> Result<String> {
+    let app = app_with_auth(state.clone());
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Cookie", session_cookie.to_string())
+        .body(body::Body::empty())?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::FORBIDDEN,
+        "register/options without grant must return STEP_UP_REQUIRED"
     );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["error"], "STEP_UP_REQUIRED");
+    let challenge_id = body["challenge_id"]
+        .as_str()
+        .context("response must contain challenge_id")?
+        .to_string();
+
+    Ok(challenge_id)
+}
+
+async fn consume_begin_passkey_registration_step_up(
+    state: &ApiState,
+    session_cookie: &str,
+    challenge_id: &str,
+    account_id: &str,
+    device_id: &str,
+) -> Result<String> {
     let token = state.step_up_tokens.create(
-        challenge.id.clone(),
-        "u1".to_string(),
-        "dev-passkey".to_string(),
+        challenge_id.to_string(),
+        account_id.to_string(),
+        device_id.to_string(),
     );
 
     let app = app_with_auth(state.clone());
@@ -3621,7 +3648,7 @@ async fn obtain_registration_grant(state: &ApiState, session_cookie: &str) -> Re
         .header("Content-Type", "application/json")
         .header("Cookie", session_cookie.to_string())
         .body(body::Body::from(
-            serde_json::json!({"token": token, "challenge_id": challenge.id}).to_string(),
+            serde_json::json!({"token": token, "challenge_id": challenge_id}).to_string(),
         ))?;
 
     let res = app.oneshot(req).await?;
@@ -3647,7 +3674,26 @@ async fn passkey_register_options_with_valid_grant_returns_200() -> Result<()> {
         .create("u1".to_string(), Some("dev-passkey".to_string()));
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
-    let grant_id = obtain_registration_grant(&state, &cookie).await?;
+    let challenge_id = request_passkey_registration_challenge(&state, &cookie).await?;
+    let challenge = state
+        .challenges
+        .get(&challenge_id)
+        .context("challenge from register/options must be stored")?;
+    assert_eq!(challenge.account_id, "u1");
+    assert_eq!(challenge.device_id, session.device_id);
+    assert!(matches!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::BeginPasskeyRegistration
+    ));
+
+    let grant_id = consume_begin_passkey_registration_step_up(
+        &state,
+        &cookie,
+        &challenge_id,
+        &session.account_id,
+        &session.device_id,
+    )
+    .await?;
 
     let app = app_with_auth(state.clone());
     let req = Request::post("/auth/passkeys/register/options")
@@ -3698,7 +3744,15 @@ async fn passkey_register_options_grant_is_single_use() -> Result<()> {
         .create("u1".to_string(), Some("dev-passkey".to_string()));
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
-    let grant_id = obtain_registration_grant(&state, &cookie).await?;
+    let challenge_id = request_passkey_registration_challenge(&state, &cookie).await?;
+    let grant_id = consume_begin_passkey_registration_step_up(
+        &state,
+        &cookie,
+        &challenge_id,
+        &session.account_id,
+        &session.device_id,
+    )
+    .await?;
 
     // First use: must succeed.
     let app1 = app_with_auth(state.clone());
@@ -3740,7 +3794,7 @@ async fn passkey_register_options_grant_is_single_use() -> Result<()> {
 async fn passkey_register_options_grant_wrong_account_rejected() -> Result<()> {
     let state = test_state_with_webauthn()?;
 
-    // Session for u1 with device "dev-passkey" (matches obtain_registration_grant helper).
+    // Session for u1 with device "dev-passkey".
     let session_u1 = state
         .sessions
         .create("u1".to_string(), Some("dev-passkey".to_string()));
@@ -3751,8 +3805,15 @@ async fn passkey_register_options_grant_wrong_account_rejected() -> Result<()> {
     let cookie_u1 = format!("{}={}", SESSION_COOKIE_NAME, session_u1.id);
     let cookie_a1 = format!("{}={}", SESSION_COOKIE_NAME, session_a1.id);
 
-    // Grant issued to u1/dev-u1.
-    let grant_id = obtain_registration_grant(&state, &cookie_u1).await?;
+    let challenge_id = request_passkey_registration_challenge(&state, &cookie_u1).await?;
+    let grant_id = consume_begin_passkey_registration_step_up(
+        &state,
+        &cookie_u1,
+        &challenge_id,
+        &session_u1.account_id,
+        &session_u1.device_id,
+    )
+    .await?;
 
     // a1 tries to use u1's grant — must be rejected.
     let app = app_with_auth(state.clone());
@@ -3789,6 +3850,67 @@ async fn passkey_register_options_grant_wrong_account_rejected() -> Result<()> {
         res2.status(),
         StatusCode::OK,
         "grant must remain valid for the correct account after a wrong-account attempt"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_options_grant_wrong_device_rejected() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+
+    let session_u1_device_a = state
+        .sessions
+        .create("u1".to_string(), Some("dev-passkey".to_string()));
+    let session_u1_device_b = state
+        .sessions
+        .create("u1".to_string(), Some("dev-other".to_string()));
+    let cookie_device_a = format!("{}={}", SESSION_COOKIE_NAME, session_u1_device_a.id);
+    let cookie_device_b = format!("{}={}", SESSION_COOKIE_NAME, session_u1_device_b.id);
+
+    let challenge_id = request_passkey_registration_challenge(&state, &cookie_device_a).await?;
+    let grant_id = consume_begin_passkey_registration_step_up(
+        &state,
+        &cookie_device_a,
+        &challenge_id,
+        &session_u1_device_a.account_id,
+        &session_u1_device_a.device_id,
+    )
+    .await?;
+
+    let app = app_with_auth(state.clone());
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_device_b)
+        .body(body::Body::from(
+            serde_json::json!({"registration_grant_id": grant_id}).to_string(),
+        ))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::FORBIDDEN,
+        "grant belonging to a different device must be rejected"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["error"], "GRANT_INVALID");
+
+    let app2 = app_with_auth(state.clone());
+    let req2 = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_device_a)
+        .body(body::Body::from(
+            serde_json::json!({"registration_grant_id": grant_id}).to_string(),
+        ))?;
+    let res2 = app2.oneshot(req2).await?;
+    assert_eq!(
+        res2.status(),
+        StatusCode::OK,
+        "grant must remain valid for the correct device after a wrong-device attempt"
     );
 
     Ok(())

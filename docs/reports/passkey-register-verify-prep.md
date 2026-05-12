@@ -268,7 +268,6 @@ Blockiert durch:
 
 - Kein persistenter (restart-fester) Credential-Store (In-Memory-`PasskeyStore` vorhanden; Persistenz ist Voraussetzung für Produktion, nicht Blocker für Entwicklungsphase)
 - Kein finaler Datenquellen-Writeback von `webauthn_user_id` im Register-Verify-Pfad
-- Kein vollständiger Step-up-Handoff für den Start von `register/options` (Intent-Basis vorhanden, Grant/State-Erzeugung fehlt)
 - Keine festgelegte WebAuthn-Teststrategie für `finish_passkey_registration`
 
 Pfad A war nicht direkt gangbar wegen offenem Step-up-Handoff — **dieser ist nun implementiert**. Verbleibende Offenposten vor `register/verify`: Verify-Implementierung, Datenquellen-Writeback im Verify-Pfad und offene WebAuthn-Teststrategie.
@@ -282,7 +281,7 @@ Pfad B ist implementiert:
 1. `PasskeyStore` (in-memory, langlebig, account-gebunden) in `apps/api/src/auth/passkeys.rs` ✅
 2. `AccountStore`-Mutation: `update_webauthn_user_id(account_id, uuid)` in `apps/api/src/auth/accounts.rs` ✅
 3. Step-up-Handoff-Zielbild entschieden (Pfad A: Step-up vor `register/options`) ✅
-4. `BeginPasskeyRegistration`-Intent ergänzt (Consume-Pfad, ohne Grant/State-Erzeugung) ✅
+4. `BeginPasskeyRegistration`-Intent ergänzt; Consume erzeugt `registration_grant_id` ✅
 5. Unit-Tests für `PasskeyStore`, `AccountStore`-Mutation und WebAuthn-Builder ✅
 
 Offen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`) — **implementiert durch `feat(auth): add passkey registration step-up grant handoff`**.
@@ -299,15 +298,7 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 
 ### Empfehlung
 
-**Pfad B ist umgesetzt.** Der nächste sinnvolle Schritt vor `register/verify`:
-
-```text
-feat(auth): add passkey registration step-up grant handoff
-```
-
-Inhalt: eigener `PasskeyRegistrationGrantStore`; `BeginPasskeyRegistration`-Consume erzeugt einen kurzlebigen, account- und session-gebundenen Grant; `register/options` verlangt und konsumiert diesen Grant bevor die WebAuthn-Creation-Challenge gestartet wird. Kein `register/verify`-Handler, keine WebAuthn-Verify-Route.
-
-Erst danach ist Pfad A gangbar:
+**Pfad B ist umgesetzt.** Damit ist Pfad A jetzt gangbar. Der nächste sinnvolle Schritt ist:
 
 ```text
 feat(auth): implement passkey register verify

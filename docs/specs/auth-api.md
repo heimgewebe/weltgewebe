@@ -214,6 +214,17 @@ device-gebunden). Ohne Grant liefert der Endpunkt `403 STEP_UP_REQUIRED` mit
   User-Handle und Algorithmen für `navigator.credentials.create()`.
   Die Shape entspricht dem webauthn-rs-Protokoll und ist nicht weiter flachgeklopft.
 
+**Request-Body mit Grant:**
+
+```json
+{
+  "registration_grant_id": "<uuid>"
+}
+```
+
+- `registration_grant_id`: Opaque Grant-ID aus `POST /auth/step-up/magic-link/consume`.
+- Der Grant ist 5 Minuten gültig, single-use sowie an `account_id` und `device_id` gebunden.
+
 **Fehlerfälle:**
 
 | HTTP-Status | `error`-Code             | Ursache                                                            |
