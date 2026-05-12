@@ -44,6 +44,24 @@ Agent configuration, operational boundaries, and strict coding guidelines for We
 
 Scan `.github/workflows/`, `apps/`, `contracts/`, `docs/`, `infra/`, `scripts/`, `src/`, and `tests/` for changes.
 
+## Roadmap Synchronization
+
+For tasks that change roadmap, status, auth, UI, map, deployment, or
+agent-operability documents, agents MUST also consult:
+
+1. `docs/roadmap.md` — coordination layer
+2. the relevant sub-roadmap, for example `docs/blueprints/auth-roadmap.md`
+3. the relevant status matrix or report, for example
+   `docs/reports/auth-status-matrix.md`
+
+`docs/roadmap.md` is not a higher-precedence truth source. It is a
+synchronization surface. If it diverges from a sub-roadmap or status matrix,
+the sub-roadmap or status matrix leads and `docs/roadmap.md` must be updated
+or the drift must be explicitly documented.
+
+Only update `docs/roadmap.md` when the relevant sub-roadmap or status report
+already documents and substantiates the status change.
+
 ## Generated Files
 
 Files in `docs/_generated/` are automatically generated and protected.

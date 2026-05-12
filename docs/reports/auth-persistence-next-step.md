@@ -14,7 +14,7 @@ depends_on:
   - docs/reports/auth-persistence-readiness.md
   - docs/reports/optimierungsstatus.md
 relations:
-  - type: updates
+  - type: supersedes
     target: docs/reports/auth-persistence-readiness.md
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
