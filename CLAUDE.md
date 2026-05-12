@@ -65,8 +65,10 @@ also read:
 - the relevant sub-roadmap
 - the relevant status matrix or report
 
-Do not update `docs/roadmap.md` unless a sub-roadmap or status report already
-documents and evidences the status change.
+Per `AGENTS.md`, treat updates to `docs/roadmap.md` as downstream of
+sub-roadmaps or status reports. In practice, only update it after the relevant
+sub-roadmap or status report already documents and substantiates the status
+change.
 
 ---
 
