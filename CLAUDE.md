@@ -66,7 +66,7 @@ also read:
 - the relevant status matrix or report
 
 Do not update `docs/roadmap.md` unless a sub-roadmap or status report already
-proves the status change.
+documents and evidences the status change.
 
 ---
 
