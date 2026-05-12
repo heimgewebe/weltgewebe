@@ -136,7 +136,7 @@ Indexes:
     "sessions_expires_at" btree (expires_at)
 ```
 
-### 4.3 Down-Migration und erneute Up-Migration (Idempotenz)
+### 4.3 Down-Migration und erneute Up-Migration (Reversibilität)
 
 ```
 psql -f apps/api/migrations/20260428000000_create_sessions.down.sql
@@ -265,8 +265,8 @@ git diff --check
 |---|---|
 | Migration up (direkt Postgres, psql) | ✅ PROVEN |
 | Tabelle und Indizes korrekt | ✅ PROVEN |
-| Migration revert (disposable-local, psql) | ✅ PROVEN |
-| Migration up nach revert (psql) | ✅ PROVEN |
+| Migration down (disposable-local, psql) | ✅ PROVEN |
+| Migration up nach down (psql) | ✅ PROVEN |
 | CRUD direkt Postgres (psql) | ✅ PROVEN |
 | CRUD via PgBouncer transaction mode (psql) | ✅ PROVEN |
 | Offline-Tests grün | ✅ PROVEN |
