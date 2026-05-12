@@ -56,6 +56,18 @@ Before making any changes, read these files in order:
 
 Canonical cognitive modules are not part of the default reading order. Their structure is defined in `repo.meta.yaml` under `cognitive_modules`. They represent optional, high-cost reasoning layers and should only be loaded when explicitly required by the task. If a cognitive module is relevant, it must be loaded only through the activation logic defined in `docs/policies/agent-reading-protocol.md`. For Weltgewebe, this applies in particular to `docs/policies/architecture-critique.md`.
 
+### Roadmap / Status Tasks
+
+When a task touches roadmap, status, report, blueprint, or auth-flow planning,
+also read:
+
+- `docs/roadmap.md`
+- the relevant sub-roadmap
+- the relevant status matrix or report
+
+Do not update `docs/roadmap.md` unless a sub-roadmap or status report already
+proves the status change.
+
 ---
 
 ## What This Repository Is

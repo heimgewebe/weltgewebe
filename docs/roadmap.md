@@ -98,7 +98,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [x] Phase 0 — Kanonisierung & Drift-Stopp · [auth-roadmap §4](blueprints/auth-roadmap.md)
 - [x] Phase 1 — Ist-vs-Ziel-Beweis · [auth-roadmap §5](blueprints/auth-roadmap.md)
 - [x] Phase 2 — Session-/Device-Modell vervollständigen · [auth-roadmap §6](blueprints/auth-roadmap.md)
-- [~] Phase 3 — Step-up Auth · Passkey-Pfad offen · [auth-roadmap §7](blueprints/auth-roadmap.md)
+- [~] Phase 3 — Step-up Auth · Passkey-Register-Start fail-closed; Registration-Grant-Handoff offen · [auth-roadmap §8](blueprints/auth-roadmap.md)
 - [ ] Phase 4 — Auth-Persistenz Runtime-Proof (SQLx + PgBouncer) · [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md)
 - [ ] Phase 5 — `DbSessionStore` / `SessionBackend`-Abstraktion · folgt aus Runtime-Proof
 - [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
