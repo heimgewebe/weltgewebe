@@ -284,7 +284,7 @@ Pfad B ist implementiert:
 4. `BeginPasskeyRegistration`-Intent ergänzt; Consume erzeugt `registration_grant_id` ✅
 5. Unit-Tests für `PasskeyStore`, `AccountStore`-Mutation und WebAuthn-Builder ✅
 
-Offen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`) — **implementiert durch `feat(auth): add passkey registration step-up grant handoff`**.
+Abgeschlossen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`) — **implementiert durch `feat(auth): add passkey registration step-up grant handoff`**.
 
 ---
 

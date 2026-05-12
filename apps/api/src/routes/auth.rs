@@ -17,9 +17,9 @@ use uuid::Uuid;
 
 use crate::{
     auth::challenges::ChallengeIntent,
+    auth::passkeys::{start_passkey_registration, ConsumeGrantResult, RegistrationInput},
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
-    auth::passkeys::{ConsumeGrantResult, RegistrationInput, start_passkey_registration},
     middleware::auth::AuthContext,
     routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
@@ -1634,7 +1634,9 @@ pub async fn passkey_register_options(
         }
     };
 
-    let grant_id = payload.as_ref().and_then(|p| p.registration_grant_id.as_deref());
+    let grant_id = payload
+        .as_ref()
+        .and_then(|p| p.registration_grant_id.as_deref());
 
     // No grant supplied — generate or reuse a step-up challenge and fail-close.
     let Some(grant_id) = grant_id else {

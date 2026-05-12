@@ -344,7 +344,11 @@ impl PasskeyRegistrationGrantStore {
     ///
     /// Returns the opaque grant ID (UUID) that must be given to the client.
     pub fn insert(&self, account_id: String, device_id: String) -> String {
-        self.insert_with_ttl(account_id, device_id, Duration::seconds(REGISTRATION_GRANT_TTL_SECS))
+        self.insert_with_ttl(
+            account_id,
+            device_id,
+            Duration::seconds(REGISTRATION_GRANT_TTL_SECS),
+        )
     }
 
     /// Insert a grant with a custom TTL.  Exposed for testing.
@@ -379,12 +383,7 @@ impl PasskeyRegistrationGrantStore {
     ///   intact so the correct caller can still use it.
     /// * Returns [`ConsumeGrantResult::NotFound`] when the grant is absent or
     ///   has expired.
-    pub fn consume(
-        &self,
-        grant_id: &str,
-        account_id: &str,
-        device_id: &str,
-    ) -> ConsumeGrantResult {
+    pub fn consume(&self, grant_id: &str, account_id: &str, device_id: &str) -> ConsumeGrantResult {
         let now = Utc::now();
         let hash = Self::hash_grant_id(grant_id);
         let mut store = self.store.write_recover();
@@ -775,8 +774,11 @@ mod grant_tests {
     #[test]
     fn expired_grant_rejected() {
         let store = PasskeyRegistrationGrantStore::new();
-        let id =
-            store.insert_with_ttl("acct-1".to_string(), "dev-1".to_string(), Duration::milliseconds(1));
+        let id = store.insert_with_ttl(
+            "acct-1".to_string(),
+            "dev-1".to_string(),
+            Duration::milliseconds(1),
+        );
         std::thread::sleep(std::time::Duration::from_millis(50));
         let result = store.consume(&id, "acct-1", "dev-1");
         assert!(

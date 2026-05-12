@@ -3183,7 +3183,10 @@ async fn test_step_up_consume_begin_passkey_registration_issues_grant() -> Resul
     let grant_id = body_json["registration_grant_id"]
         .as_str()
         .context("registration_grant_id must be a string")?;
-    assert!(!grant_id.is_empty(), "registration_grant_id must not be empty");
+    assert!(
+        !grant_id.is_empty(),
+        "registration_grant_id must not be empty"
+    );
 
     assert!(
         state.sessions.get(&session.id).is_some(),
@@ -3717,7 +3720,10 @@ async fn passkey_register_options_with_valid_grant_returns_200() -> Result<()> {
     let registration_id = body["registration_id"]
         .as_str()
         .context("response must contain registration_id")?;
-    assert!(!registration_id.is_empty(), "registration_id must not be empty");
+    assert!(
+        !registration_id.is_empty(),
+        "registration_id must not be empty"
+    );
     assert!(
         body.get("options").is_some(),
         "response must contain WebAuthn options"

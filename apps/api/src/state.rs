@@ -3,14 +3,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     auth::{
-        challenges::ChallengeStore,
-        passkeys::PasskeyRegistrationGrantStore,
-        passkeys::PasskeyRegistrationStore,
-        passkeys::PasskeyStore,
-        rate_limit::AuthRateLimiter,
-        session::SessionStore,
-        step_up_tokens::StepUpTokenStore,
-        tokens::TokenStore,
+        challenges::ChallengeStore, passkeys::PasskeyRegistrationGrantStore,
+        passkeys::PasskeyRegistrationStore, passkeys::PasskeyStore, rate_limit::AuthRateLimiter,
+        session::SessionStore, step_up_tokens::StepUpTokenStore, tokens::TokenStore,
     },
     config::AppConfig,
     mailer::Mailer,
