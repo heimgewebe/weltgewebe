@@ -271,7 +271,7 @@ Blockiert durch:
 - Kein vollständiger Step-up-Handoff für den Start von `register/options` (Intent-Basis vorhanden, Grant/State-Erzeugung fehlt)
 - Keine festgelegte WebAuthn-Teststrategie für `finish_passkey_registration`
 
-Pfad A ist weiterhin nicht direkt gangbar — nicht mehr wegen fehlender Store-Grundlagen, sondern wegen offenem Step-up-Handoff, fehlender Verify-Implementierung, fehlendem Datenquellen-Writeback im Verify-Pfad und offener WebAuthn-Teststrategie.
+Pfad A war nicht direkt gangbar wegen offenem Step-up-Handoff — **dieser ist nun implementiert**. Verbleibende Offenposten vor `register/verify`: Verify-Implementierung, Datenquellen-Writeback im Verify-Pfad und offene WebAuthn-Teststrategie.
 
 ---
 
@@ -285,7 +285,7 @@ Pfad B ist implementiert:
 4. `BeginPasskeyRegistration`-Intent ergänzt (Consume-Pfad, ohne Grant/State-Erzeugung) ✅
 5. Unit-Tests für `PasskeyStore`, `AccountStore`-Mutation und WebAuthn-Builder ✅
 
-Offen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`).
+Offen aus Pfad B: vollständiger Step-up-Handoff (Grant/State-Erzeugung für `register/options`) — **implementiert durch `feat(auth): add passkey registration step-up grant handoff`**.
 
 ---
 
@@ -324,7 +324,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 | `PasskeyStore` mit Insert/Get/Remove implementiert und getestet | **belegt** |
 | `AccountStore.update_webauthn_user_id()` implementiert | **belegt** |
 | Step-up-Handoff-Zielbild entschieden | **belegt (Pfad A: Step-up vor `register/options`)** |
-| Step-up-Handoff technisch realisiert | **offen** — `BeginPasskeyRegistration` existiert und ist im Consume-Pfad getestet, erzeugt aber noch keinen verwendbaren Grant/State für `register/options`; vollständiger Handoff ist eigenständiger Folge-PR |
+| Step-up-Handoff technisch realisiert | **belegt** — `PasskeyRegistrationGrantStore` (TTL 5 Min, single-use, account/device-gebunden); `BeginPasskeyRegistration`-Consume erzeugt Grant; `register/options` konsumiert Grant und startet Ceremony |
 | Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **offen** |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |

@@ -189,17 +189,15 @@ Response:
 `POST /auth/passkeys/register/*` ein Step-up-Nachweis erforderlich
 (vgl. Step-up-Sektion).
 
-**Zweck:** Nach erfolgreichem Step-up-Handoff erzeugt der Endpunkt
-WebAuthn-Registrierungsoptionen für den eingeloggten Account. Der Client
-übergibt diese Optionen an `navigator.credentials.create()`. Die serverseitig
-gespeicherte `registration_id` muss im nachfolgenden
+**Zweck:** Mit gültigem `registration_grant_id` im Request-Body erzeugt der
+Endpunkt WebAuthn-Registrierungsoptionen für den eingeloggten Account. Der
+Grant wird durch `POST /auth/step-up/magic-link/consume` mit Intent
+`BeginPasskeyRegistration` ausgestellt (TTL 5 Min, single-use, account- und
+device-gebunden). Ohne Grant liefert der Endpunkt `403 STEP_UP_REQUIRED` mit
+`challenge_id`. Der Client übergibt die Optionen an
+`navigator.credentials.create()`. Die serverseitig gespeicherte
+`registration_id` muss im nachfolgenden
 `POST /auth/passkeys/register/verify`-Schritt mitgesendet werden.
-
-**Aktueller Zwischenstand (Phase 4):** Der Endpunkt erzwingt bereits
-`403 STEP_UP_REQUIRED` mit `challenge_id`, startet die Ceremony aber noch
-nicht erfolgreich, weil der kurzlebige Registration-Grant/Handoff zwischen
-Step-up-Consume und `register/options` noch nicht implementiert ist.
-Der `register/verify`-Schritt ist ebenfalls noch nicht implementiert.
 
 **Response `200 OK`:**
 
@@ -221,19 +219,19 @@ Der `register/verify`-Schritt ist ebenfalls noch nicht implementiert.
 | HTTP-Status | `error`-Code             | Ursache                                                            |
 |-------------|--------------------------|--------------------------------------------------------------------|
 | `401`       | `UNAUTHORIZED`           | Keine aktive Session                                               |
-| `403`       | `STEP_UP_REQUIRED`       | Step-up erforderlich; Response enthält `challenge_id`              |
+| `403`       | `STEP_UP_REQUIRED`       | Kein Grant mitgesendet; Response enthält `challenge_id`            |
+| `403`       | `GRANT_INVALID`          | Grant nicht gefunden, abgelaufen, bereits verwendet oder falsche Bindung |
 | `400`       | `ACCOUNT_INVALID`        | Session referenziert nicht mehr existierenden Account              |
 | `503`       | `PASSKEYS_NOT_CONFIGURED`| WebAuthn ist auf diesem Server nicht konfiguriert                  |
-| `500`       | `INTERNAL_ERROR`         | Generierung der Optionen fehlgeschlagen                            |
+| `500`       | `INTERNAL_SERVER_ERROR`  | Generierung der Optionen fehlgeschlagen                            |
 
-**Architekturanmerkungen (Phase-4-Teilschritt):**
+**Architekturanmerkungen:**
 
-- `exclude_credentials` wird noch nicht befüllt — bestehende Credentials des Accounts
-  werden noch nicht in die Exclude-Liste eingespeist. Das ist erst nach Passkey-Speicherung möglich.
+- `exclude_credentials` wird aus dem `PasskeyStore` befüllt — bestehende Credentials des Accounts werden in die Exclude-Liste eingespeist (sofern vorhanden).
 - Die `webauthn_user_id` des Accounts ist bei bereits persistiertem Wert dauerhaft stabil;
   bei Accounts ohne persistierten Wert ist sie lazy-backfill/prozessstabil
   (kein Writeback in dieser Phase). Writeback-Persistenz ist Voraussetzung für `register/verify`.
-- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung, List, Remove und UI sind offen.
+- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung über Neustart, List, Remove und UI sind offen.
 
 ### Registrierung abschließen
 
