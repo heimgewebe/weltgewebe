@@ -7,7 +7,7 @@ created: 2026-05-12
 lang: de
 summary: >
   Runtime-Proof-Bericht für den Auth-Persistenz-Pfad (OPT-API-002/003).
-  Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migration- und CRUD-Smoke
+  Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migrations- und CRUD-Smoke
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
   SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
   Stack-PgBouncer-Image bleiben NOT_PROVEN.
@@ -44,7 +44,8 @@ Beweisen, dass:
    sauber gegen PostgreSQL läuft (up + revert + up),
 2. minimaler CRUD (INSERT / SELECT / UPDATE / DELETE) gegen die `sessions`-Tabelle
    direkt über PostgreSQL funktioniert,
-3. dieselben CRUD-Operationen über PgBouncer im `POOL_MODE=transaction` funktionieren,
+3. dieselben CRUD-Operationen über PgBouncer im `POOL_MODE=transaction` via `psql`
+   funktionieren,
 4. alle bestehenden Offline-Tests (`cargo test --locked -p weltgewebe-api`) weiterhin
    grün sind,
 5. kein Auth-Verhalten verändert wurde.
@@ -182,10 +183,14 @@ SELECT COUNT(*) FROM sessions;
 ### 4.5 PgBouncer-Verbindungspfad
 
 Stack-Ziel: `edoburu/pgbouncer:1.20`, `POOL_MODE=transaction`.
-Für den Proof verwendet: natives `pgbouncer 1.22.0` (Ubuntu-Paket) mit identischer
-`POOL_MODE=transaction`-Konfiguration, da das Docker-Image `edoburu/pgbouncer:1.20`
-in der Sandbox-Registry nicht verfügbar war. Die Version 1.22.0 ist neuer als 1.20
-und ändert das Verbindungsverhalten für diesen Beweis nicht.
+Für den Proof verwendet: natives `pgbouncer 1.22.0` (Ubuntu-Paket) mit
+`POOL_MODE=transaction`-Konfiguration, da das Docker-Image
+`edoburu/pgbouncer:1.20` in der Sandbox-Registry nicht verfügbar war. Die Version
+1.22.0 ist neuer als 1.20. Für den getesteten psql-basierten CRUD-Smoke wurde
+keine abweichende PgBouncer-Semantik beobachtet; das exakte Stack-Image
+`edoburu/pgbouncer:1.20` bleibt jedoch NOT_PROVEN. Eine vollständige
+versionsspezifische Differenzanalyse zwischen 1.22.0 und 1.20 wurde in diesem
+Proof nicht durchgeführt.
 
 PgBouncer-Konfiguration:
 
@@ -318,8 +323,10 @@ Migrationspfad (z.B. `psql -f` im CI) explizit dokumentiert sein.
 **Status: dokumentiert**
 
 Für den Beweis wurde `pgbouncer 1.22.0` (Ubuntu-Paket) verwendet, nicht das
-Stack-Image `edoburu/pgbouncer:1.20`. Das Verbindungsprotokoll und die
-`POOL_MODE=transaction`-Semantik sind identisch. Die Docker-Compose-Konfiguration
+Stack-Image `edoburu/pgbouncer:1.20`. Der Test deckt denselben Zielmodus
+`POOL_MODE=transaction` ab. Eine vollständige Äquivalenz zum Stack-Image
+`edoburu/pgbouncer:1.20` ist damit nicht vollständig bewiesen; mögliche
+versionsspezifische Unterschiede wurden nicht untersucht. Die Docker-Compose-Konfiguration
 des Stacks bleibt unverändert.
 
 ---
@@ -330,7 +337,7 @@ des Stacks bleibt unverändert.
 |---|---|---|---|
 | SQLx Extended-Query scheitert an PgBouncer transaction mode | mittel | mittel | `statement_cache_capacity(0)` pro Pool-Verbindung |
 | `sqlx-cli` fehlt in CI für `just db-migrate` | niedrig | niedrig | Install-Schritt in CI dokumentieren |
-| Migration schlägt bei erstem `run` auf shared-dev fehl, weil Tabelle existiert | niedrig | niedrig | `sqlx migrate run` ist idempotent (Checksum-basiert) |
+| Shared-dev Drift: Tabelle existiert ohne SQLx-Migrationseintrag | mittel | mittel | Vor `sqlx migrate run` Migrationshistorie prüfen; Drift dokumentieren statt blind ausführen |
 
 ---
 
