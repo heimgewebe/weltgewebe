@@ -325,7 +325,7 @@ Migrationspfad (z.B. `psql -f` im CI) explizit dokumentiert sein.
 
 ### Restlücke 3: `edoburu/pgbouncer:1.20`-Image nicht in Sandbox verfügbar
 
-#### Status: dokumentiert
+#### Status: dokumentiert (Image-Differenz)
 
 Für den Beweis wurde `pgbouncer 1.22.0` (Ubuntu-Paket) verwendet, nicht das
 Stack-Image `edoburu/pgbouncer:1.20`. Der Test deckt denselben Zielmodus
