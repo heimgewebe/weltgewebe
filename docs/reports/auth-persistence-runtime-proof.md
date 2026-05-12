@@ -41,7 +41,7 @@ relations:
 Beweisen, dass:
 
 1. die vorhandene `sessions`-Migration (`apps/api/migrations/20260428000000_create_sessions.up.sql`)
-   sauber gegen PostgreSQL läuft (up + revert + up),
+   sauber gegen PostgreSQL läuft (up + down + up),
 2. minimaler CRUD (INSERT / SELECT / UPDATE / DELETE) gegen die `sessions`-Tabelle
    direkt über PostgreSQL funktioniert,
 3. dieselben CRUD-Operationen über PgBouncer im `POOL_MODE=transaction` via `psql`
@@ -73,8 +73,8 @@ Beweisen, dass:
 
 Verwendet wurde ein frisch gestarteter Docker-Container `postgres:16` auf Port 5499,
 Datenbank `weltgewebe_proof`. Der Container wurde ausschließlich für diesen Beweis
-gestartet und enthält keine geteilten oder produktiven Daten. `migrate revert` ist
-damit erlaubt.
+gestartet und enthält keine geteilten oder produktiven Daten. Die Down-Migration darf
+in dieser DB-Klasse ausgeführt werden.
 
 ---
 
@@ -301,8 +301,9 @@ Der Beweis auf Rust-API-Ebene — also SQLx-`query!` oder `query_as!` gegen
 PgBouncer im transaction mode — ist noch offen.
 
 **Mitigation (falls PR 2 scheitert):** `PgConnectOptions::statement_cache_capacity(0)`
-deaktiviert den SQLx-Prepared-Statement-Cache und macht einfache Queries
-mit transaction-mode-PgBouncer kompatibel.
+deaktiviert den SQLx-Prepared-Statement-Cache und ist eine dokumentierte Mitigation-Option
+für einfache Queries gegen transaction-mode-PgBouncer; der konkrete SQLx-Pfad
+muss durch Rust-Integrationstests belegt werden.
 
 ### Restlücke 2: `sqlx-cli` nicht in CI-Umgebung installiert
 
@@ -354,8 +355,9 @@ Vorgehen für den nächsten PR:
 1. Rust-Integrationstest schreiben, der via `sqlx::PgPool` gegen eine
    disposable-local Datenbank hinter PgBouncer (transaction mode) arbeitet.
 2. `PgConnectOptions::statement_cache_capacity(0)` beim Pool-Setup aktivieren
-   und im Test explizit belegen, dass damit die Prepared-Statement-Inkompatibilität
-   mit `POOL_MODE=transaction` ausgeschlossen ist.
+   und im Test explizit belegen, dass der getestete SQLx-CRUD-Pfad mit
+   `POOL_MODE=transaction` und deaktiviertem Statement-Cache erfolgreich läuft
+   (INSERT / SELECT / UPDATE / DELETE via SQLx gegen PgBouncer ohne Fehler).
 3. INSERT / SELECT / UPDATE / DELETE gegen `sessions` via SQLx/Rust — nicht via psql.
 4. Offline-Tests müssen weiterhin grün bleiben.
 
