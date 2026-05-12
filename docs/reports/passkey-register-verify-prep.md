@@ -270,7 +270,7 @@ Blockiert durch:
 - Kein finaler Datenquellen-Writeback von `webauthn_user_id` im Register-Verify-Pfad
 - Keine festgelegte WebAuthn-Teststrategie für `finish_passkey_registration`
 
-Pfad A war nicht direkt gangbar wegen offenem Step-up-Handoff — **dieser ist nun implementiert**. Verbleibende Offenposten vor `register/verify`: Verify-Implementierung, Datenquellen-Writeback im Verify-Pfad und offene WebAuthn-Teststrategie.
+Pfad A war nicht direkt gangbar wegen offenem Step-up-Handoff — **dieser ist nun implementiert**. Verbleibende Offenposten für den nächsten `register/verify`-PR: Verify-Implementierung, Datenquellen-Writeback im Verify-Pfad und offene WebAuthn-Teststrategie.
 
 ---
 
