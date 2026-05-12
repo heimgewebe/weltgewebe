@@ -310,7 +310,23 @@ Request:
 
 Response:
 
-`204 No Content` (Freigabe erteilt)
+Response ist **intent-abhängig**:
+
+- `204 No Content` für:
+  - `LogoutAll`
+  - `RemoveDevice`
+  - `UpdateEmail`
+- `200 OK` + JSON für `BeginPasskeyRegistration`:
+
+```json
+{
+  "registration_grant_id": "<uuid>"
+}
+```
+
+`registration_grant_id` ist eine kurzlebige, single-use Grant-ID (TTL 5 Min, an
+`account_id` + `device_id` gebunden). Sie muss anschließend bei
+`POST /auth/passkeys/register/options` im Request-Body übergeben werden.
 
 **Mechanik des Step-up-Magic-Links:**
 
@@ -336,6 +352,9 @@ Die Konsumierung dieses Links **etabliert keine neue Session**, sondern führt a
   Der anfragende Client ist danach ausgeloggt.
 - `RemoveDevice`: nur die Sessions des Zielgeräts werden entfernt.
   Die aktuelle Session des anfragenden Clients bleibt erhalten.
+- `UpdateEmail`: die Ziel-E-Mail wird nach erneuter Eindeutigkeitsprüfung übernommen.
+- `BeginPasskeyRegistration`: es wird ein `registration_grant_id` ausgestellt, der für
+  den nächsten Aufruf von `POST /auth/passkeys/register/options` benötigt wird.
 
 Es entsteht kein impliziter "Superuser"-Zustand.
 Ungültige oder abgelaufene Step-up-Links werfen ein generisches `401 Unauthorized` (`TOKEN_INVALID`),
