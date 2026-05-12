@@ -58,6 +58,7 @@ agent-operability documents, agents MUST also consult:
 synchronization surface. If it diverges from a sub-roadmap or status matrix,
 the sub-roadmap or status matrix leads and `docs/roadmap.md` must be updated
 or the drift must be explicitly documented.
+
 Only update `docs/roadmap.md` when the relevant sub-roadmap or status report
 already documents and substantiates the status change.
 
