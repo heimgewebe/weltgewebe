@@ -22,7 +22,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock as StdRwLock};
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
+use sha2::{Digest, Sha256};
 use tokio::sync::RwLock as TokioRwLock;
 use url::Url;
 use uuid::Uuid;
@@ -32,6 +33,9 @@ use crate::{auth::lock::RwLockRecover, config::AppConfig};
 
 /// TTL for in-progress passkey registrations (5 minutes).
 const REGISTRATION_TTL_SECS: i64 = 300;
+
+/// TTL for passkey registration grants (5 minutes — matches step-up token and registration TTL).
+const REGISTRATION_GRANT_TTL_SECS: i64 = 300;
 
 /// Error returned when inserting a passkey into [`PasskeyStore`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -284,6 +288,120 @@ pub fn start_passkey_registration(
         input.user_display_name,
         exclude_credentials,
     )
+}
+
+// ── Registration Grant Store ──────────────────────────────────────────────
+
+/// Internal grant record, keyed by the SHA-256 hash of the opaque grant ID.
+struct PasskeyRegistrationGrantData {
+    account_id: String,
+    device_id: String,
+    expires_at: DateTime<Utc>,
+}
+
+/// Result of a [`PasskeyRegistrationGrantStore::consume`] operation.
+pub enum ConsumeGrantResult {
+    /// Grant not found or has expired.
+    NotFound,
+    /// Grant found but `account_id` or `device_id` did not match.
+    ///
+    /// The grant is left intact so the correct caller can still use it.
+    BindingMismatch,
+    /// All bindings matched; the grant has been removed (single-use).
+    Consumed,
+}
+
+/// Short-lived, single-use, account- and device-bound grant that authorises
+/// the WebAuthn creation ceremony.
+///
+/// A grant is created by `consume_step_up` when the
+/// `BeginPasskeyRegistration` intent is validated.
+/// `POST /auth/passkeys/register/options` must present and consume a valid
+/// grant before `start_passkey_registration` is called.
+///
+/// * **In-memory** — no persistence across restarts.
+/// * **TTL** — 5 minutes (matches step-up token and `REGISTRATION_TTL_SECS`).
+/// * **Single-use** — the grant is removed on successful [`consume`][Self::consume].
+/// * **Opaque ID** — the raw UUID is returned to the client; its SHA-256 hash
+///   is stored server-side (same pattern as `StepUpTokenStore`).
+#[derive(Clone, Default)]
+pub struct PasskeyRegistrationGrantStore {
+    store: Arc<StdRwLock<HashMap<String, PasskeyRegistrationGrantData>>>,
+}
+
+impl PasskeyRegistrationGrantStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn hash_grant_id(id: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(id.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Insert a new grant bound to `account_id` and `device_id`.
+    ///
+    /// Returns the opaque grant ID (UUID) that must be given to the client.
+    pub fn insert(&self, account_id: String, device_id: String) -> String {
+        self.insert_with_ttl(
+            account_id,
+            device_id,
+            Duration::seconds(REGISTRATION_GRANT_TTL_SECS),
+        )
+    }
+
+    /// Insert a grant with a custom TTL.  Exposed for testing.
+    pub fn insert_with_ttl(
+        &self,
+        account_id: String,
+        device_id: String,
+        duration: Duration,
+    ) -> String {
+        let id = Uuid::new_v4().to_string();
+        let hash = Self::hash_grant_id(&id);
+        let now = Utc::now();
+        let expires_at = now + duration;
+        let data = PasskeyRegistrationGrantData {
+            account_id,
+            device_id,
+            expires_at,
+        };
+        let mut store = self.store.write_recover();
+        // Opportunistic cleanup of stale grants.
+        store.retain(|_, v| v.expires_at > now);
+        store.insert(hash, data);
+        id
+    }
+
+    /// Consume a grant atomically.
+    ///
+    /// * Returns [`ConsumeGrantResult::Consumed`] and removes the grant if
+    ///   `account_id` and `device_id` match and the grant has not expired.
+    /// * Returns [`ConsumeGrantResult::BindingMismatch`] if the grant exists
+    ///   and is not expired but the bindings do not match.  The grant is left
+    ///   intact so the correct caller can still use it.
+    /// * Returns [`ConsumeGrantResult::NotFound`] when the grant is absent or
+    ///   has expired.
+    pub fn consume(&self, grant_id: &str, account_id: &str, device_id: &str) -> ConsumeGrantResult {
+        let now = Utc::now();
+        let hash = Self::hash_grant_id(grant_id);
+        let mut store = self.store.write_recover();
+        store.retain(|_, v| v.expires_at > now);
+        match store.get(&hash) {
+            None => ConsumeGrantResult::NotFound,
+            Some(data) => {
+                if data.account_id != account_id || data.device_id != device_id {
+                    ConsumeGrantResult::BindingMismatch
+                } else {
+                    store
+                        .remove(&hash)
+                        .expect("entry was present under write lock");
+                    ConsumeGrantResult::Consumed
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -590,5 +708,92 @@ webauthn_rp_id: example.com\n";
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;
         use base64::Engine;
         URL_SAFE_NO_PAD.decode(id_str).expect("valid base64url")
+    }
+}
+
+#[cfg(test)]
+mod grant_tests {
+    use super::*;
+
+    #[test]
+    fn insert_and_consume_success() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let id = store.insert("acct-1".to_string(), "dev-1".to_string());
+        let result = store.consume(&id, "acct-1", "dev-1");
+        assert!(
+            matches!(result, ConsumeGrantResult::Consumed),
+            "consume with correct bindings must succeed"
+        );
+    }
+
+    #[test]
+    fn single_use_second_consume_rejected() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let id = store.insert("acct-1".to_string(), "dev-1".to_string());
+        store.consume(&id, "acct-1", "dev-1");
+        let result = store.consume(&id, "acct-1", "dev-1");
+        assert!(
+            matches!(result, ConsumeGrantResult::NotFound),
+            "second consume must be rejected (single-use)"
+        );
+    }
+
+    #[test]
+    fn wrong_account_rejected_grant_preserved() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let id = store.insert("acct-1".to_string(), "dev-1".to_string());
+        let result = store.consume(&id, "wrong-account", "dev-1");
+        assert!(
+            matches!(result, ConsumeGrantResult::BindingMismatch),
+            "wrong account must yield BindingMismatch"
+        );
+        // Grant must remain intact for the correct caller.
+        let result2 = store.consume(&id, "acct-1", "dev-1");
+        assert!(
+            matches!(result2, ConsumeGrantResult::Consumed),
+            "correct account must still consume after wrong-account attempt"
+        );
+    }
+
+    #[test]
+    fn wrong_device_rejected_grant_preserved() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let id = store.insert("acct-1".to_string(), "dev-1".to_string());
+        let result = store.consume(&id, "acct-1", "wrong-device");
+        assert!(
+            matches!(result, ConsumeGrantResult::BindingMismatch),
+            "wrong device must yield BindingMismatch"
+        );
+        let result2 = store.consume(&id, "acct-1", "dev-1");
+        assert!(
+            matches!(result2, ConsumeGrantResult::Consumed),
+            "correct device must still consume after wrong-device attempt"
+        );
+    }
+
+    #[test]
+    fn expired_grant_rejected() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let id = store.insert_with_ttl(
+            "acct-1".to_string(),
+            "dev-1".to_string(),
+            Duration::milliseconds(1),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let result = store.consume(&id, "acct-1", "dev-1");
+        assert!(
+            matches!(result, ConsumeGrantResult::NotFound),
+            "expired grant must be rejected"
+        );
+    }
+
+    #[test]
+    fn missing_grant_returns_not_found() {
+        let store = PasskeyRegistrationGrantStore::new();
+        let result = store.consume("no-such-grant-id", "acct-1", "dev-1");
+        assert!(
+            matches!(result, ConsumeGrantResult::NotFound),
+            "missing grant must return NotFound"
+        );
     }
 }

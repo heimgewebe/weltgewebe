@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::challenges::ChallengeIntent,
+    auth::passkeys::{start_passkey_registration, ConsumeGrantResult, RegistrationInput},
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
@@ -1553,29 +1554,44 @@ pub async fn consume_step_up(
             }
         }
         ChallengeIntent::BeginPasskeyRegistration => {
+            let grant_id = state
+                .passkey_registration_grants
+                .insert(account_id.clone(), device_id.clone());
             tracing::info!(
                 event = "auth.step_up.consume.begin_passkey_registration",
                 request_id = %request_id,
                 account_id = %account_id,
-                "Step-up consume: validated BeginPasskeyRegistration intent (no side effects)"
+                "Step-up consume: issued PasskeyRegistrationGrant for BeginPasskeyRegistration"
             );
-            StatusCode::NO_CONTENT.into_response()
+            let body = serde_json::json!({
+                "registration_grant_id": grant_id,
+            });
+            (StatusCode::OK, jar, Json(body)).into_response()
         }
     }
 }
 
 // ── Passkey Registration Options ──────────────────────────────────────────
 
+#[derive(serde::Deserialize, Default)]
+pub struct PasskeyRegisterOptionsPayload {
+    pub registration_grant_id: Option<String>,
+}
+
 /// POST /auth/passkeys/register/options
 ///
-/// Enforces step-up auth before the WebAuthn ceremony can start.
-/// Until the registration-grant handoff exists, this endpoint fail-closes with
-/// `403 STEP_UP_REQUIRED` and a challenge ID instead of returning WebAuthn
-/// creation options from a session alone.
+/// Without a `registration_grant_id` in the request body, the endpoint
+/// fail-closes with `403 STEP_UP_REQUIRED` and a `challenge_id`.
+///
+/// After the client has completed the step-up flow and obtained a
+/// `registration_grant_id` from `POST /auth/step-up/magic-link/consume`,
+/// it must supply that grant here.  The grant is consumed (single-use) before
+/// the WebAuthn creation ceremony is started.
 pub async fn passkey_register_options(
     State(state): State<ApiState>,
     Extension(ctx): Extension<AuthContext>,
     headers: HeaderMap,
+    payload: Option<Json<PasskeyRegisterOptionsPayload>>,
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
 
@@ -1618,42 +1634,146 @@ pub async fn passkey_register_options(
         }
     };
 
+    let grant_id = payload
+        .as_ref()
+        .and_then(|p| p.registration_grant_id.as_deref());
+
+    // No grant supplied — generate or reuse a step-up challenge and fail-close.
+    let Some(grant_id) = grant_id else {
+        let accounts = state.accounts.read().await;
+        match accounts.get(&account_id) {
+            Some(_) => {}
+            None => {
+                tracing::error!(
+                    event = "auth.passkey.register_options.account_not_found",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Session references non-existent account"
+                );
+                let err =
+                    serde_json::json!({"error": "ACCOUNT_INVALID", "message": "Account not found"});
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
+        }
+        drop(accounts);
+
+        let challenge = state.challenges.create(
+            account_id.clone(),
+            device_id,
+            ChallengeIntent::BeginPasskeyRegistration,
+        );
+
+        tracing::info!(
+            event = "auth.passkey.register_options.step_up_required",
+            request_id = %request_id,
+            account_id = %account_id,
+            challenge_id = %challenge.id,
+            "Passkey registration options: no grant supplied, returning STEP_UP_REQUIRED"
+        );
+
+        let body = serde_json::json!({
+            "error": "STEP_UP_REQUIRED",
+            "challenge_id": challenge.id,
+        });
+        return (StatusCode::FORBIDDEN, Json(body)).into_response();
+    };
+
+    // Grant supplied — validate and consume it before starting the ceremony.
+    match state
+        .passkey_registration_grants
+        .consume(grant_id, &account_id, &device_id)
+    {
+        ConsumeGrantResult::NotFound => {
+            tracing::warn!(
+                event = "auth.passkey.register_options.grant_not_found",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Passkey register-options: grant not found, expired, or already used"
+            );
+            let err = serde_json::json!({"error": "GRANT_INVALID"});
+            return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        }
+        ConsumeGrantResult::BindingMismatch => {
+            tracing::warn!(
+                event = "auth.passkey.register_options.grant_binding_mismatch",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Passkey register-options: grant binding mismatch (account_id or device_id)"
+            );
+            let err = serde_json::json!({"error": "GRANT_INVALID"});
+            return (StatusCode::FORBIDDEN, Json(err)).into_response();
+        }
+        ConsumeGrantResult::Consumed => {}
+    }
+
+    // Grant consumed — start the WebAuthn creation ceremony.
+    let webauthn = state.webauthn.as_ref().expect("webauthn checked above");
+
     let accounts = state.accounts.read().await;
-    match accounts.get(&account_id) {
-        Some(_) => {}
+    let account = match accounts.get(&account_id) {
+        Some(a) => a.clone(),
         None => {
             tracing::error!(
                 event = "auth.passkey.register_options.account_not_found",
                 request_id = %request_id,
                 account_id = %account_id,
-                "Session references non-existent account"
+                "Session references non-existent account after grant consume"
             );
             let err =
                 serde_json::json!({"error": "ACCOUNT_INVALID", "message": "Account not found"});
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
-    }
+    };
     drop(accounts);
 
-    let challenge = state.challenges.create(
-        account_id.clone(),
-        device_id,
-        ChallengeIntent::BeginPasskeyRegistration,
-    );
+    let exclude_credentials = {
+        let existing = state.passkeys.credential_ids_for_account(&account_id);
+        if existing.is_empty() {
+            None
+        } else {
+            Some(existing)
+        }
+    };
 
-    tracing::info!(
-        event = "auth.passkey.register_options.step_up_required",
-        request_id = %request_id,
-        account_id = %account_id,
-        challenge_id = %challenge.id,
-        "Passkey registration options blocked until step-up handoff exists"
-    );
+    let input = RegistrationInput {
+        webauthn_user_id: account.webauthn_user_id,
+        user_name: account.email.as_deref().unwrap_or(&account_id),
+        user_display_name: &account.public.title,
+    };
 
-    let body = serde_json::json!({
-        "error": "STEP_UP_REQUIRED",
-        "challenge_id": challenge.id,
-    });
-    (StatusCode::FORBIDDEN, Json(body)).into_response()
+    match start_passkey_registration(webauthn, &input, exclude_credentials) {
+        Err(e) => {
+            tracing::error!(
+                event = "auth.passkey.register_options.webauthn_error",
+                request_id = %request_id,
+                account_id = %account_id,
+                error = %e,
+                "WebAuthn start_passkey_registration failed"
+            );
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
+        }
+        Ok((ccr, reg_state)) => {
+            let registration_id = state
+                .passkey_registrations
+                .insert(account_id.clone(), reg_state)
+                .await;
+
+            tracing::info!(
+                event = "auth.passkey.register_options.ok",
+                request_id = %request_id,
+                account_id = %account_id,
+                registration_id = %registration_id,
+                "Passkey registration ceremony started"
+            );
+
+            let body = serde_json::json!({
+                "registration_id": registration_id,
+                "options": ccr,
+            });
+            (StatusCode::OK, Json(body)).into_response()
+        }
+    }
 }
 
 #[cfg(test)]

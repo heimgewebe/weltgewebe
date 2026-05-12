@@ -72,8 +72,8 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
-| Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; `register/options` erzwingt `STEP_UP_REQUIRED` für `BeginPasskeyRegistration`, finaler Handoff noch offen | Teil   | mittel  |
-| Passkeys              | optional    | Register-Options fail-closed mit Step-up-Challenge; PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; register/verify und Login-/Management-Pfade offen | Teil  | mittel  |
+| Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; `BeginPasskeyRegistration`-Consume erzeugt jetzt `registration_grant_id` (TTL 5 Min, single-use, account/device-gebunden); Handoff vollständig | Teil   | mittel  |
+| Passkeys              | optional    | Register-Options mit Grant-Handoff: Step-up erzeugt Grant, `register/options` konsumiert Grant und startet WebAuthn-Ceremony; PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; register/verify und Login-/Management-Pfade offen | Teil  | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
 
 ---
@@ -143,10 +143,10 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.7 Step-up Auth
 
 **Soll:** Challenge-System, TTL, Intent-Binding, Magic Link + Passkey, keine neue Session.
-**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. `POST /auth/step-up/magic-link/consume` konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice / UpdateEmail / BeginPasskeyRegistration), erzeugt dabei keine neue Session. `POST /auth/passkeys/register/options` erzwingt jetzt fail-closed `403 STEP_UP_REQUIRED` mit `challenge_id`, startet ohne Registration-Grant aber noch keine WebAuthn-Ceremony. Minimaler Consume-UI-Pfad implementiert.
+**Ist:** Challenge-Store (In-Memory) implementiert. `/auth/logout-all` und `DELETE /auth/devices/:id` erzeugen Challenges. `POST /auth/step-up/magic-link/request` validiert die Challenge gegen die aktuelle Session und nutzt einen separaten Step-up-Token-Pfad; Mailer-Codepfad ist implementiert. `POST /auth/step-up/magic-link/consume` konsumiert den Step-up-Token (single-use, SHA256-gehasht, 5-Min-TTL), prüft Challenge-Bindung und Session-Bindung, führt den Intent aus (LogoutAll / RemoveDevice / UpdateEmail / BeginPasskeyRegistration), erzeugt dabei keine neue Session. Für den `BeginPasskeyRegistration`-Intent erzeugt Consume jetzt einen kurzlebigen `registration_grant_id` (TTL 5 Min, single-use, account- und device-gebunden); `register/options` verlangt und konsumiert diesen Grant vor dem Ceremony-Start. Minimaler Consume-UI-Pfad implementiert.
 **Dokumentationsbelege:** `docs/specs/auth-api.md`
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/step_up_tokens.rs`, `apps/api/src/mailer.rs`, `apps/web/src/routes/auth/step-up/consume/+page.svelte`
-**Fehlende Belege:** vollständiger Passkey-Handoff vor `register/options`, UI E2E Test
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/auth/challenges.rs`, `apps/api/src/routes/auth.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/step_up_tokens.rs`, `apps/api/src/auth/passkeys.rs` (PasskeyRegistrationGrantStore), `apps/api/src/mailer.rs`, `apps/web/src/routes/auth/step-up/consume/+page.svelte`
+**Fehlende Belege:** UI E2E Test
 **Status:** Teil
 **Risiko:** mittel
 
@@ -157,8 +157,9 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 
 - `webauthn_user_id` als dedizierte UUID pro Account eingeführt (nicht aus `account_id` abgeleitet); wenn in der Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil (Writeback-Persistenz ist Voraussetzung für Register-Verify, noch offen)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
-- `POST /auth/passkeys/register/options` implementiert (fail-closed mit `STEP_UP_REQUIRED` + `challenge_id`; kein erfolgreicher Ceremony-Start ohne Grant-Handoff)
-- `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) vorhanden, aber erst nach Handoff aktiv genutzt
+- `POST /auth/passkeys/register/options` implementiert: ohne `registration_grant_id` fail-closed mit `STEP_UP_REQUIRED` + `challenge_id`; mit gültigem Grant wird die WebAuthn-Ceremony gestartet und `registration_id` + `options` zurückgegeben
+- `PasskeyRegistrationGrantStore` (In-Memory, TTL 5 Min, single-use, account- und device-gebunden) eingeführt; Consume für `BeginPasskeyRegistration` erzeugt einen Grant
+- `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) aktiv genutzt (nach Grant-Consume)
 - Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
 - **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Login/-Management, UI

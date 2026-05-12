@@ -189,17 +189,15 @@ Response:
 `POST /auth/passkeys/register/*` ein Step-up-Nachweis erforderlich
 (vgl. Step-up-Sektion).
 
-**Zweck:** Nach erfolgreichem Step-up-Handoff erzeugt der Endpunkt
-WebAuthn-Registrierungsoptionen für den eingeloggten Account. Der Client
-übergibt diese Optionen an `navigator.credentials.create()`. Die serverseitig
-gespeicherte `registration_id` muss im nachfolgenden
+**Zweck:** Mit gültigem `registration_grant_id` im Request-Body erzeugt der
+Endpunkt WebAuthn-Registrierungsoptionen für den eingeloggten Account. Der
+Grant wird durch `POST /auth/step-up/magic-link/consume` mit Intent
+`BeginPasskeyRegistration` ausgestellt (TTL 5 Min, single-use, account- und
+device-gebunden). Ohne Grant liefert der Endpunkt `403 STEP_UP_REQUIRED` mit
+`challenge_id`. Der Client übergibt die Optionen an
+`navigator.credentials.create()`. Die serverseitig gespeicherte
+`registration_id` muss im nachfolgenden
 `POST /auth/passkeys/register/verify`-Schritt mitgesendet werden.
-
-**Aktueller Zwischenstand (Phase 4):** Der Endpunkt erzwingt bereits
-`403 STEP_UP_REQUIRED` mit `challenge_id`, startet die Ceremony aber noch
-nicht erfolgreich, weil der kurzlebige Registration-Grant/Handoff zwischen
-Step-up-Consume und `register/options` noch nicht implementiert ist.
-Der `register/verify`-Schritt ist ebenfalls noch nicht implementiert.
 
 **Response `200 OK`:**
 
@@ -216,24 +214,35 @@ Der `register/verify`-Schritt ist ebenfalls noch nicht implementiert.
   User-Handle und Algorithmen für `navigator.credentials.create()`.
   Die Shape entspricht dem webauthn-rs-Protokoll und ist nicht weiter flachgeklopft.
 
+**Request-Body mit Grant:**
+
+```json
+{
+  "registration_grant_id": "<uuid>"
+}
+```
+
+- `registration_grant_id`: Opaque Grant-ID aus `POST /auth/step-up/magic-link/consume`.
+- Der Grant ist 5 Minuten gültig, single-use sowie an `account_id` und `device_id` gebunden.
+
 **Fehlerfälle:**
 
 | HTTP-Status | `error`-Code             | Ursache                                                            |
 |-------------|--------------------------|--------------------------------------------------------------------|
 | `401`       | `UNAUTHORIZED`           | Keine aktive Session                                               |
-| `403`       | `STEP_UP_REQUIRED`       | Step-up erforderlich; Response enthält `challenge_id`              |
+| `403`       | `STEP_UP_REQUIRED`       | Kein Grant mitgesendet; Response enthält `challenge_id`            |
+| `403`       | `GRANT_INVALID`          | Grant nicht gefunden, abgelaufen, bereits verwendet oder falsche Bindung |
 | `400`       | `ACCOUNT_INVALID`        | Session referenziert nicht mehr existierenden Account              |
 | `503`       | `PASSKEYS_NOT_CONFIGURED`| WebAuthn ist auf diesem Server nicht konfiguriert                  |
-| `500`       | `INTERNAL_ERROR`         | Generierung der Optionen fehlgeschlagen                            |
+| `500`       | `INTERNAL_SERVER_ERROR`  | Generierung der Optionen fehlgeschlagen                            |
 
-**Architekturanmerkungen (Phase-4-Teilschritt):**
+**Architekturanmerkungen:**
 
-- `exclude_credentials` wird noch nicht befüllt — bestehende Credentials des Accounts
-  werden noch nicht in die Exclude-Liste eingespeist. Das ist erst nach Passkey-Speicherung möglich.
+- `exclude_credentials` wird aus dem `PasskeyStore` befüllt — bestehende Credentials des Accounts werden in die Exclude-Liste eingespeist (sofern vorhanden).
 - Die `webauthn_user_id` des Accounts ist bei bereits persistiertem Wert dauerhaft stabil;
   bei Accounts ohne persistierten Wert ist sie lazy-backfill/prozessstabil
   (kein Writeback in dieser Phase). Writeback-Persistenz ist Voraussetzung für `register/verify`.
-- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung, List, Remove und UI sind offen.
+- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung über Neustart, List, Remove und UI sind offen.
 
 ### Registrierung abschließen
 
@@ -301,7 +310,24 @@ Request:
 
 Response:
 
-`204 No Content` (Freigabe erteilt)
+Response ist **intent-abhängig**:
+
+- `204 No Content` für:
+  - `LogoutAll`
+  - `RemoveDevice`
+  - `UpdateEmail`
+- `200 OK` + JSON für `BeginPasskeyRegistration`:
+
+```json
+{
+  "registration_grant_id": "<uuid>"
+}
+```
+
+`registration_grant_id` ist eine kurzlebige, single-use Grant-ID (TTL 5 Min, an
+`account_id` + `device_id` gebunden). Sie muss anschließend bei
+`POST /auth/passkeys/register/options` im Request-Body übergeben werden. Serverseitig
+wird die Grant-ID nicht im Klartext gespeichert, sondern nur als SHA-256-Hash.
 
 **Mechanik des Step-up-Magic-Links:**
 
@@ -327,6 +353,9 @@ Die Konsumierung dieses Links **etabliert keine neue Session**, sondern führt a
   Der anfragende Client ist danach ausgeloggt.
 - `RemoveDevice`: nur die Sessions des Zielgeräts werden entfernt.
   Die aktuelle Session des anfragenden Clients bleibt erhalten.
+- `UpdateEmail`: die Ziel-E-Mail wird nach erneuter Eindeutigkeitsprüfung übernommen.
+- `BeginPasskeyRegistration`: es wird ein `registration_grant_id` ausgestellt, der für
+  den nächsten Aufruf von `POST /auth/passkeys/register/options` benötigt wird.
 
 Es entsteht kein impliziter "Superuser"-Zustand.
 Ungültige oder abgelaufene Step-up-Links werfen ein generisches `401 Unauthorized` (`TOKEN_INVALID`),
