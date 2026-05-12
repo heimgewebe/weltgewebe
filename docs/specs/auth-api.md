@@ -326,7 +326,8 @@ Response ist **intent-abhängig**:
 
 `registration_grant_id` ist eine kurzlebige, single-use Grant-ID (TTL 5 Min, an
 `account_id` + `device_id` gebunden). Sie muss anschließend bei
-`POST /auth/passkeys/register/options` im Request-Body übergeben werden.
+`POST /auth/passkeys/register/options` im Request-Body übergeben werden. Serverseitig
+wird die Grant-ID nicht im Klartext gespeichert, sondern nur als SHA-256-Hash.
 
 **Mechanik des Step-up-Magic-Links:**
 
