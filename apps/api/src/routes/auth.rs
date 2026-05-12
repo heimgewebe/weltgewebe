@@ -1580,16 +1580,16 @@ pub async fn passkey_register_options(
     let request_id = get_request_id(&headers);
 
     if state.webauthn.is_none() {
-            tracing::warn!(
-                event = "auth.passkey.register_options.not_configured",
-                request_id = %request_id,
-                "Passkey register-options called but WebAuthn is not configured"
-            );
-            let err = serde_json::json!({
-                "error": "PASSKEYS_NOT_CONFIGURED",
-                "message": "Passkey support is not enabled on this server"
-            });
-            return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+        tracing::warn!(
+            event = "auth.passkey.register_options.not_configured",
+            request_id = %request_id,
+            "Passkey register-options called but WebAuthn is not configured"
+        );
+        let err = serde_json::json!({
+            "error": "PASSKEYS_NOT_CONFIGURED",
+            "message": "Passkey support is not enabled on this server"
+        });
+        return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
     }
 
     let account_id = match &ctx.account_id {
