@@ -7,10 +7,10 @@ created: 2026-05-12
 lang: de
 summary: >
   Runtime-Proof-Bericht für den Auth-Persistenz-Pfad (OPT-API-002/003).
-  Belegt Migration, CRUD-Smoke und PgBouncer-Verbindungspfad gegen eine
-  wegwerfbare lokale PostgreSQL-Instanz. Kein Auth-Umbau, kein DbSessionStore.
-  Ergebnis: PROVEN mit einer dokumentierten Restlücke (SQLx Prepared Statements
-  gegen PgBouncer auf Rust-API-Ebene).
+  Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migration- und CRUD-Smoke
+  gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
+  SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
+  Stack-PgBouncer-Image bleiben NOT_PROVEN.
 depends_on:
   - docs/blueprints/auth-persistence-runtime-proof.md
   - docs/reports/auth-persistence-next-step.md
@@ -258,19 +258,25 @@ git diff --check
 
 | Teilschritt | Ergebnis |
 |---|---|
-| Migration up (direkt Postgres) | ✅ PROVEN |
+| Migration up (direkt Postgres, psql) | ✅ PROVEN |
 | Tabelle und Indizes korrekt | ✅ PROVEN |
-| Migration revert (disposable-local) | ✅ PROVEN |
-| Migration up nach revert | ✅ PROVEN |
+| Migration revert (disposable-local, psql) | ✅ PROVEN |
+| Migration up nach revert (psql) | ✅ PROVEN |
 | CRUD direkt Postgres (psql) | ✅ PROVEN |
 | CRUD via PgBouncer transaction mode (psql) | ✅ PROVEN |
 | Offline-Tests grün | ✅ PROVEN |
 | Kein Auth-Verhalten geändert | ✅ PROVEN |
+| SQLx/Rust-API CRUD direkt Postgres | ❌ NOT_PROVEN |
+| SQLx/Rust-API CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
+| `sqlx migrate run` via sqlx-cli | ❌ NOT_PROVEN |
+| Exaktes Stack-Image `edoburu/pgbouncer:1.20` | ❌ NOT_PROVEN |
 
-**Gesamtergebnis: PROVEN**
+**Gesamtergebnis: PARTIAL_PROVEN**
 
-Der Runtime-Migrationspfad und der PgBouncer-Verbindungspfad sind reproduzierbar
-belegt.
+Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
+(transaction mode) ist reproduzierbar belegt. Der kritische SQLx/Rust-API-Pfad
+gegen PgBouncer transaction mode — der tatsächliche Runtime-Pfad der API — ist
+noch nicht bewiesen. `psql`-CRUD ist nicht äquivalent zu SQLx-Runtime.
 
 ---
 
@@ -330,24 +336,32 @@ des Stacks bleibt unverändert.
 
 ## 8. Entscheidungsempfehlung: nächster sicherer Schritt
 
-**Empfehlung: PR 2 — `feat(auth): implement Postgres-backed sessions`**
+**Empfehlung: `test(db): prove SQLx session CRUD through PgBouncer`**
 
-Der Runtime-Proof ist bestanden. PostgreSQL + PgBouncer (transaction mode) sind
-für minimale CRUD-Operationen belegt. Der Offline-Pfad ist stabil.
+Der psql-basierte Proof ist bestanden, aber der kritische SQLx/Rust-API-Pfad
+gegen PgBouncer transaction mode ist noch nicht belegt. Bevor `DbSessionStore`
+gebaut wird, muss dieser Pfad bewiesen sein.
 
-Vorgehen für PR 2:
+Vorgehen für den nächsten PR:
 
-1. `DbSessionStore` implementieren (alle sieben Methoden aus Blueprint Abschnitt 9).
-2. `PgConnectOptions::statement_cache_capacity(0)` beim Pool-Setup aktivieren,
-   um Restlücke 1 zu schließen, ohne PgBouncer-Konfiguration zu ändern.
-3. DB-Integrationstests schreiben — gegen disposable-local oder isolated-test-fixture.
-4. Offline-Tests müssen grün bleiben (kein `PgPool` erzwingen wenn DB nicht konfiguriert).
-5. `ApiState` so erweitern, dass bei konfigurierter DB und fehlendem Pool ein Fehler
-   geworfen wird (fail closed, Blueprint Abschnitt 3.2).
+1. Rust-Integrationstest schreiben, der via `sqlx::PgPool` gegen eine
+   disposable-local Datenbank hinter PgBouncer (transaction mode) arbeitet.
+2. `PgConnectOptions::statement_cache_capacity(0)` beim Pool-Setup aktivieren
+   und im Test explizit belegen, dass damit die Prepared-Statement-Inkompatibilität
+   mit `POOL_MODE=transaction` ausgeschlossen ist.
+3. INSERT / SELECT / UPDATE / DELETE gegen `sessions` via SQLx/Rust — nicht via psql.
+4. Offline-Tests müssen weiterhin grün bleiben.
 
-Alternativ: erst `refactor(auth): introduce SessionBackend abstraction` als eigenen PR,
-wenn die Änderungsfläche nach erster Messung breit erscheint (Blueprint Abschnitt 7,
-Pfad B).
+**Stop-Regel:** Wenn SQLx über PgBouncer scheitert, keine Session-Persistenz
+verdrahten — erst Ursache isolieren und Mitigation belegen.
+
+**Alternative:** `DbSessionStore` darf direkt im nächsten PR begonnen werden,
+aber nur wenn derselbe PR den SQLx/PgBouncer-Proof mit `statement_cache_capacity(0)`
+und Rust-Integrationstest enthält. Kein `DbSessionStore` ohne belegten SQLx/PgBouncer-Pfad.
+
+Zweite Alternative: erst `refactor(auth): introduce SessionBackend abstraction`
+als eigenen PR, wenn die Änderungsfläche nach erster Messung breit erscheint
+(Blueprint Abschnitt 7, Pfad B).
 
 ---
 
