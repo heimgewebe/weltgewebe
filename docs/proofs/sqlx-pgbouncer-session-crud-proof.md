@@ -24,21 +24,30 @@ relations:
 
 # SQLx → PgBouncer → Postgres — Session-CRUD-Proof
 
-> **Zweck:** Beweis-PR. Kein DbSessionStore, kein Auth-Umbau, kein Cookie/Auth-Flow.
-> Ziel: belegter Rust-SQLx-CRUD-Pfad auf der `sessions`-Tabelle durch PgBouncer
-> im transaction mode.
+> **Zweck:** Beweis-PR (Preparation & Code). Kein DbSessionStore, kein Auth-Umbau, kein Cookie/Auth-Flow.
+>
+> **Status:** Test ist compiliert und ready; Ausführungs-Beweis ausstehend.
+> Der Proof wird erst vollständig, wenn jemand mit Stack + PgBouncer
+> `PGBOUNCER_URL=... cargo test -- sqlx_pgbouncer --include-ignored` lädt.
+>
+> Ziel dieses PRs: belegter Rust-SQLx-CRUD-Code auf der `sessions`-Tabelle durch PgBouncer
+> im transaction mode (syntax + semantik geprüft; Runtime-Beweis noch ausstehend).
 
 ---
 
-## 1. Was genau bewiesen wurde
+## 1. Was genau bewiesen wurde (bzw. vorbereitet)
 
-Dieser Proof schließt die zwei offenen NOT_PROVEN-Items aus
-`docs/reports/auth-persistence-runtime-proof.md`, Abschnitt 5:
+Dieser PR bereitet den Beweis der zwei offenen NOT_PROVEN-Items aus
+`docs/reports/auth-persistence-runtime-proof.md`, Abschnitt 5, vor:
 
 > SQLx/Rust-API CRUD direkt Postgres — NOT_PROVEN
 > SQLx/Rust-API CRUD via PgBouncer transaction mode — NOT_PROVEN
 
-Der Integrationstest `apps/api/tests/sqlx_pgbouncer_session_crud.rs` beweist:
+Der Integrationstest `apps/api/tests/sqlx_pgbouncer_session_crud.rs` ist:
+- **Syntaktisch & semantisch geprüft** (compiliert, clippy-clean, offline-Tests grün)
+- **Runtime-Proof noch ausstehend** (requires Stack + PGBOUNCER_URL + `--include-ignored`)
+
+Der Test **umfasst** diese Operationen (Code ist ready, Ausführung ausstehend):
 
 | Schritt | Was getestet wird |
 |---|---|
@@ -200,10 +209,16 @@ Nicht verändert: `apps/api/src/`, Migrations, Auth-Middleware, SessionStore, Ro
 
 ## 9. Ergebnisstatus
 
-| Item | Status |
-|---|---|
-| SQLx/Rust-API CRUD direkt Postgres | ✅ PROVEN (via Test-Fixture + SQLx, wenn gegen direkten Postgres-Port) |
-| SQLx/Rust-API CRUD via PgBouncer transaction mode | ✅ PROVEN (bei Ausführung mit PGBOUNCER_URL → PgBouncer) |
-| `sqlx::migrate!` / sqlx-cli Migration | ❌ NOT_PROVEN (separate Aufgabe) |
-| Offline-Tests weiterhin grün | ✅ PROVEN |
-| Kein Auth-Verhalten geändert | ✅ PROVEN |
+| Item | Status | Nachweis |
+|---|---|---|
+| Test kompiliert ohne `"chrono"`-Feature | ✅ PROVEN | `cargo clippy --all-targets --all-features` erfolgreich |
+| Offline-Tests weiterhin grün | ✅ PROVEN | `cargo test --locked --all-features`: 240 passed, 1 ignored |
+| Cargo.lock: kein Dependency-Bloat | ✅ PROVEN | 181 Zeilen (sqlx-mysql, sqlx-sqlite, rsa, flume, etc.) entfernt |
+| Kein Auth-Verhalten geändert | ✅ PROVEN | Keine Code-Änderungen außerhalb `tests/` und `docs/proofs/` |
+| SQLx/Rust-API CRUD via PgBouncer transaction mode | ⚪ READY_FOR_PROOF | Test bereit; Ausführung erfordert `PGBOUNCER_URL` + aktiven Stack + `cargo test -- sqlx_pgbouncer --include-ignored` |
+| SQLx/Rust-API CRUD direkt Postgres | ⚪ NOT_CLAIMED | Test kann technisch gegen Postgres Port 5432 laufen, aber Scope ist PgBouncer |
+| `sqlx::migrate!` / sqlx-cli Migration | ❌ NOT_PROVEN | Separate Aufgabe; Test nutzt Fixture nicht sqlx-cli |
+
+**Wichtig:** Der Proof-Test beweist seine Hypothese erst durch tatsächliche Ausführung
+mit dem Stack im transaction-mode. Das Kompilieren ist Voraussetzung, nicht Beweis.
+Ohne `PGBOUNCER_URL`-Lauf bleibt der Status `READY_FOR_PROOF`.
