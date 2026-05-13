@@ -73,6 +73,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
 – **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen)
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
+– **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (PgBouncer vs. direkter Postgres — OPEN_DECISION)
 – **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
 – **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
 
