@@ -188,9 +188,11 @@ Aus `docs/reports/auth-persistence-runtime-proof.md`, Abschnitt 8:
 > **Stop-Regel:** Wenn SQLx über PgBouncer scheitert, keine Session-Persistenz
 > verdrahten — erst Ursache isolieren und Mitigation belegen.
 
-Dieser PR liefert den Beweis, dass `sqlx::PgPool` mit `statement_cache_capacity(0)` über
-PgBouncer im transaction mode stabil CRUD ausführen kann. Erst mit diesem Nachweis ist
-der `DbSessionStore`-PR architektonisch abgesichert.
+Dieser PR liefert den **ausführbaren Beweisaufbau** für `sqlx::PgPool` mit
+`statement_cache_capacity(0)` über PgBouncer im transaction mode. Der eigentliche
+Runtime-Beweis ist erst erbracht, wenn der ignorierte Test mit `PGBOUNCER_URL`
+gegen den aktiven Stack erfolgreich ausgeführt wurde. Erst danach ist der
+`DbSessionStore`-PR architektonisch abgesichert.
 
 ---
 
@@ -212,7 +214,7 @@ Nicht verändert: `apps/api/src/`, Migrations, Auth-Middleware, SessionStore, Ro
 | Item | Status | Nachweis |
 |---|---|---|
 | Test kompiliert ohne `"chrono"`-Feature | ✅ PROVEN | `cargo clippy --all-targets --all-features` erfolgreich |
-| Offline-Tests weiterhin grün | ✅ PROVEN | `cargo test --locked --all-features`: 240 passed, 1 ignored |
+| Offline-Tests weiterhin grün | ✅ PROVEN | `cargo test --locked --all-features` Ausgabe: `240 passed, 0 failed, 1 ignored` (der neue Proof-Test) |
 | Cargo.lock: kein Dependency-Bloat | ✅ PROVEN | 181 Zeilen (sqlx-mysql, sqlx-sqlite, rsa, flume, etc.) entfernt |
 | Kein Auth-Verhalten geändert | ✅ PROVEN | Keine Code-Änderungen außerhalb `tests/` und `docs/proofs/` |
 | SQLx/Rust-API CRUD via PgBouncer transaction mode | ⚪ READY_FOR_PROOF | Test bereit; Ausführung erfordert `PGBOUNCER_URL` + aktiven Stack + `cargo test -- sqlx_pgbouncer --include-ignored` |
