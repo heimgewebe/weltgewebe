@@ -5,6 +5,8 @@
 //!   PGBOUNCER_URL=postgres://welt:gewebe@localhost:6432/weltgewebe \
 //!     cargo test -p weltgewebe-api -- sqlx_pgbouncer --include-ignored
 //!
+//! A Rust/Cargo test environment is required; a runtime host that only has the built API
+//! binary is not enough to execute this proof harness.
 //! PGBOUNCER_URL must point to PgBouncer, not directly to Postgres.
 //! PgBouncer must be configured with POOL_MODE=transaction.
 //! The proof is only valid when run against that stack — see proof report.
@@ -226,7 +228,7 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
         .max_connections(2)
         .connect_with(connect_opts)
         .await
-        .expect("failed to connect via PGBOUNCER_URL — is the stack running?");
+        .expect("failed to connect via PGBOUNCER_URL — is PgBouncer running and is the URL pointing to port 6432 rather than direct Postgres?");
 
     // Isolated table: never touches the real `sessions` table.
     let table_name = format!(
