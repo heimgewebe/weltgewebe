@@ -7,9 +7,9 @@ created: 2026-05-13
 lang: de
 summary: >
   Rust/SQLx CRUD-Integrationstest gegen PgBouncer (transaction mode) → Postgres auf
-  der sessions-Tabelle. Beweist den produktionsnahen Verbindungspfad mit
-  statement_cache_capacity(0) als Mitigation für die SQLx/PgBouncer-Prepared-Statement-
-  Inkompatibilität. Kein chrono-Feature in sqlx, kein DbSessionStore, kein Auth-Umbau.
+  der sessions-Tabelle. Bereitet den Beweis des produktionsnahen Verbindungspfads mit
+  statement_cache_capacity(0) als Mitigation vor (READY_FOR_PROOF). Kein chrono-Feature
+  in sqlx, kein DbSessionStore, kein Auth-Umbau.
 depends_on:
   - docs/reports/auth-persistence-runtime-proof.md
   - docs/reports/auth-persistence-next-step.md
@@ -44,6 +44,7 @@ Dieser PR bereitet den Beweis der zwei offenen NOT_PROVEN-Items aus
 > SQLx/Rust-API CRUD via PgBouncer transaction mode — NOT_PROVEN
 
 Der Integrationstest `apps/api/tests/sqlx_pgbouncer_session_crud.rs` ist:
+
 - **Syntaktisch & semantisch geprüft** (compiliert, clippy-clean, offline-Tests grün)
 - **Runtime-Proof noch ausstehend** (requires Stack + PGBOUNCER_URL + `--include-ignored`)
 
@@ -53,13 +54,14 @@ Der Test **umfasst und wird folgende Operationen beweisen, wenn ausgeführt** (C
 |---|---|
 | Pool-Verbindung | `sqlx::PgPool` via `PgPoolOptions::connect_with()` gegen PgBouncer |
 | `statement_cache_capacity(0)` | explizit gesetzt in `PgConnectOptions`; Test läuft stabil durch |
-| Schema-Fixture | `CREATE TABLE IF NOT EXISTS sessions` (schema identisch mit Migration) via SQLx |
+| Isoliertes Fixture | `CREATE TABLE sqlx_pgbouncer_proof_<uuid>` (Spalten-Schema der Migration; Indizes absichtlich weggelassen) |
 | INSERT | Datensatz einfügen, `rows_affected() == 1` assertiert |
 | SELECT | id, account_id, device_id round-trip assertiert |
 | UPDATE | `last_active = NOW() + INTERVAL '10 minutes'`, `rows_affected() == 1` assertiert |
 | UPDATE-Verifikation | `SELECT last_active > NOW()` gibt `true` zurück |
 | DELETE | Datensatz löschen, `rows_affected() == 1` assertiert |
-| COUNT nach DELETE | `SELECT COUNT(*) WHERE id = $1` gibt `0` zurück |
+| COUNT nach DELETE | `SELECT COUNT(*) FROM <proof_table> WHERE id = $1` gibt `0` zurück |
+| Teardown | `DROP TABLE IF EXISTS sqlx_pgbouncer_proof_<uuid>` |
 
 Der Test verwendet ausschließlich `sqlx::query`, `sqlx::query_scalar` und `sqlx::Row::get` —
 kein psql, kein `sqlx::query!`-Makro, keine Live-Datenbank beim Compile.
@@ -70,7 +72,7 @@ und dessen transitive Abhängigkeiten (sqlx-mysql, sqlx-sqlite, rsa u. a.) zu ve
 
 ## 2. Welche Verbindungsschicht genutzt wurde
 
-```
+```text
 Rust (tokio) → sqlx::PgPool → PgBouncer (POOL_MODE=transaction, Port 6432)
              → PostgreSQL 16 (Port 5432)
 ```
@@ -110,7 +112,7 @@ Backend-Connection gebunden. Wird dieselbe Client-Connection aus dem Pool wieder
 und erhält eine andere Backend-Connection, sind die gecachten Handles ungültig — PgBouncer
 meldet dann:
 
-```
+```text
 ERROR: prepared statement "sqlx_s_1" does not exist
 ```
 
@@ -125,21 +127,24 @@ Session-CRUD-Operationen (niedrige Frequenz, kein Hot-Path) ist das akzeptabel.
 
 ---
 
-## 4. Schema-Fixture vs. Migrations-Proof
+## 4. Isoliertes Proof-Fixture vs. Migrations-Proof
 
-`ensure_sessions_table()` im Test führt `CREATE TABLE IF NOT EXISTS sessions (...)` via
-SQLx aus. Das ist ein **Test-Fixture**, kein Migrations-Proof:
+`create_proof_table()` im Test erzeugt eine **temporäre, isolierte Tabelle**
+`sqlx_pgbouncer_proof_<uuid>` via SQLx. Das ist ein **Test-Fixture**, kein Migrations-Proof.
+Die echte `sessions`-Tabelle wird nie berührt.
 
-| Eigenschaft | Test-Fixture | sqlx-Migrations-Proof |
+| Eigenschaft | Proof-Fixture | sqlx-Migrations-Proof |
 |---|---|---|
-| Idempotent | ja (`IF NOT EXISTS`) | nein (Migration prüft `_sqlx_migrations`-Tabelle) |
-| Nutzt Migration-Datei | nein (inline-Schema) | ja (`sqlx migrate run`) |
+| Tabellen-Name | `sqlx_pgbouncer_proof_<uuid>` (isoliert) | `sessions` (via Migration) |
+| Idempotent | nein (einmalig pro Testlauf) | nein (Migration prüft `_sqlx_migrations`) |
+| Nutzt Migration-Datei | nein (inline-Schema, nur Spalten) | ja (`sqlx migrate run`) |
+| Erstellt Indizes | nein (CRUD-Pfad-Fixture) | ja (wie in `20260428000000_create_sessions.up.sql`) |
 | Beweist Migration-Pfad | nein | ja |
+| Teardown | ja (`DROP TABLE IF EXISTS`) | nein |
 | Nötig für CRUD-Proof | ja (Tabelle muss existieren) | nein |
 
-Das inline-Schema in `ensure_sessions_table()` muss manuell mit
-`apps/api/migrations/20260428000000_create_sessions.up.sql` synchronisiert bleiben.
-Aktuell sind beide identisch. Der Test beweist ausdrücklich nicht den sqlx-Migrations-Pfad.
+Das Fixture spiegelt nur die Spalten-Definition der Migration wider, nicht die Indizes.
+Der Test beweist ausdrücklich nicht den sqlx-Migrations-Pfad.
 
 ---
 
@@ -215,7 +220,7 @@ Nicht verändert: `apps/api/src/`, Migrations, Auth-Middleware, SessionStore, Ro
 |---|---|---|
 | Test kompiliert ohne `"chrono"`-Feature | ✅ PROVEN | `cargo clippy --all-targets --all-features` erfolgreich |
 | Offline-Tests weiterhin grün | ✅ PROVEN | `cargo test --locked --all-features` Ausgabe: `240 passed, 0 failed, 1 ignored` (der neue Proof-Test) |
-| Cargo.lock: kein Dependency-Bloat | ✅ PROVEN | 181 Zeilen (sqlx-mysql, sqlx-sqlite, rsa, flume, etc.) entfernt |
+| Cargo.lock: unverändert | ✅ PROVEN | kein `"chrono"`-Feature, keine neuen Dependencies |
 | Kein Auth-Verhalten geändert | ✅ PROVEN | Keine Code-Änderungen außerhalb `tests/` und `docs/proofs/` |
 | SQLx/Rust-API CRUD via PgBouncer transaction mode | ⚪ READY_FOR_PROOF | Test bereit; Ausführung erfordert `PGBOUNCER_URL` + aktiven Stack + `cargo test -- sqlx_pgbouncer --include-ignored` |
 | SQLx/Rust-API CRUD direkt Postgres | ⚪ NOT_CLAIMED | Test kann technisch gegen Postgres Port 5432 laufen, aber Scope ist PgBouncer |

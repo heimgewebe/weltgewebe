@@ -13,7 +13,7 @@
 //! - sqlx::PgPool connects through PgBouncer in transaction pool mode.
 //! - PgConnectOptions::statement_cache_capacity(0) neutralises the prepared-statement
 //!   incompatibility with PgBouncer transaction mode.
-//! - INSERT / SELECT / UPDATE / DELETE on the sessions table succeed via SQLx.
+//! - INSERT / SELECT / UPDATE / DELETE on a sessions-schema table succeed via SQLx.
 //!
 //! What is NOT proven here:
 //! - sqlx::migrate! or sqlx-cli migration execution (separate proof step).
@@ -24,18 +24,37 @@ use sqlx::Row;
 use std::str::FromStr;
 use uuid::Uuid;
 
-/// Idempotent test-fixture setup.
+/// Validates that `name` matches the expected proof-table pattern
+/// `sqlx_pgbouncer_proof_` followed by exactly 32 lowercase hex characters.
 ///
-/// Creates the sessions table using the schema from
-/// `apps/api/migrations/20260428000000_create_sessions.up.sql` — with `IF NOT EXISTS`
-/// so the function is safe to call against a DB that already has the table.
+/// Panics if the pattern does not match — this is an internal guard to prevent
+/// accidental misuse of [`create_proof_table`] / [`drop_proof_table`] with
+/// arbitrary table names.
+fn assert_proof_table_name(name: &str) {
+    let prefix = "sqlx_pgbouncer_proof_";
+    assert!(
+        name.starts_with(prefix)
+            && name.len() == prefix.len() + 32
+            && name[prefix.len()..].chars().all(|c| c.is_ascii_hexdigit()),
+        "proof table name does not match expected pattern \
+         'sqlx_pgbouncer_proof_<32hex>': {name}"
+    );
+}
+
+/// Creates an isolated proof table with a unique, prefixed name.
 ///
-/// This is a **test fixture**, not a sqlx migration proof. It exists so the proof test
-/// can run against a fresh DB without requiring sqlx-cli or a prior `just db-migrate`.
-/// The inline schema must be kept in sync with the migration file manually.
-async fn ensure_sessions_table(pool: &sqlx::PgPool) {
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS sessions (\
+/// Uses a `sqlx_pgbouncer_proof_` prefix followed by a UUID (hex, no dashes) to avoid
+/// any collision with or mutation of the real `sessions` table from
+/// `apps/api/migrations/20260428000000_create_sessions.up.sql`.
+///
+/// Column structure mirrors the migration's table definition (indices are intentionally
+/// omitted — this is a CRUD-path fixture, not a migration proof).
+///
+/// The caller is responsible for dropping the table via [`drop_proof_table`] once done.
+async fn create_proof_table(pool: &sqlx::PgPool, table_name: &str) {
+    assert_proof_table_name(table_name);
+    sqlx::query(&format!(
+        "CREATE TABLE {} (\
             id          TEXT        PRIMARY KEY,\
             account_id  TEXT        NOT NULL,\
             device_id   TEXT        NOT NULL,\
@@ -43,16 +62,29 @@ async fn ensure_sessions_table(pool: &sqlx::PgPool) {
             last_active TIMESTAMPTZ NOT NULL,\
             expires_at  TIMESTAMPTZ NOT NULL\
         )",
-    )
+        table_name
+    ))
     .execute(pool)
     .await
-    .expect("failed to ensure sessions table exists");
+    .expect("failed to create proof table");
 }
 
-/// Proof: SQLx CRUD against the sessions table through PgBouncer transaction mode.
+/// Drops the isolated proof table created by [`create_proof_table`].
+async fn drop_proof_table(pool: &sqlx::PgPool, table_name: &str) {
+    assert_proof_table_name(table_name);
+    sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
+        .execute(pool)
+        .await
+        .expect("failed to drop proof table");
+}
+
+/// Proof: SQLx CRUD against a sessions-schema table through PgBouncer transaction mode.
 ///
 /// Covers: connection, INSERT, SELECT (string round-trip), UPDATE (last_active),
 /// post-UPDATE boolean verification, DELETE, post-DELETE COUNT.
+///
+/// An isolated table (`sqlx_pgbouncer_proof_<uuid>`) is created for each run so the
+/// real `sessions` table is never touched. The table is dropped on completion.
 ///
 /// Timestamps are generated SQL-side (NOW(), INTERVAL) to avoid binding
 /// `chrono::DateTime` values, which would require the sqlx `"chrono"` feature and the
@@ -64,13 +96,11 @@ async fn ensure_sessions_table(pool: &sqlx::PgPool) {
 #[tokio::test]
 #[ignore = "requires PGBOUNCER_URL pointing to PgBouncer in transaction mode"]
 async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
-    let pgbouncer_url = match std::env::var("PGBOUNCER_URL") {
-        Ok(url) => url,
-        Err(_) => {
-            eprintln!("PGBOUNCER_URL not set — skipping SQLx/PgBouncer proof test");
-            return;
-        }
-    };
+    let pgbouncer_url = std::env::var("PGBOUNCER_URL").expect(
+        "PGBOUNCER_URL must be set to run this proof test \
+         — point it at PgBouncer in transaction mode, e.g. \
+         postgres://welt:gewebe@localhost:6432/weltgewebe",
+    );
 
     let connect_opts = PgConnectOptions::from_str(&pgbouncer_url)
         .expect("PGBOUNCER_URL must be a valid postgres connection string")
@@ -82,25 +112,32 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
         .await
         .expect("failed to connect via PGBOUNCER_URL — is the stack running?");
 
-    ensure_sessions_table(&pool).await;
+    // Isolated table: never touches the real `sessions` table.
+    let table_name = format!(
+        "sqlx_pgbouncer_proof_{}",
+        Uuid::new_v4().to_string().replace('-', "")
+    );
+    assert_proof_table_name(&table_name); // guard before any SQL use
+    create_proof_table(&pool, &table_name).await;
 
     let id = Uuid::new_v4().to_string();
     let account_id = format!("proof-account-{}", Uuid::new_v4());
     let device_id = format!("proof-device-{}", Uuid::new_v4());
 
     // --- INSERT (timestamps SQL-side; no chrono feature required) ---
-    let insert_result = sqlx::query(
-        "INSERT INTO sessions \
+    let insert_result = sqlx::query(&format!(
+        "INSERT INTO {} \
              (id, account_id, device_id, created_at, last_active, expires_at) \
          VALUES \
              ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '24 hours')",
-    )
+        table_name
+    ))
     .bind(&id)
     .bind(&account_id)
     .bind(&device_id)
     .execute(&pool)
     .await
-    .expect("INSERT into sessions failed");
+    .expect("INSERT failed");
 
     assert_eq!(
         insert_result.rows_affected(),
@@ -109,11 +146,14 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     );
 
     // --- SELECT — string field round-trip ---
-    let row = sqlx::query("SELECT id, account_id, device_id FROM sessions WHERE id = $1")
-        .bind(&id)
-        .fetch_one(&pool)
-        .await
-        .expect("SELECT from sessions failed");
+    let row = sqlx::query(&format!(
+        "SELECT id, account_id, device_id FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .expect("SELECT failed");
 
     assert_eq!(row.get::<String, _>("id"), id, "id must round-trip");
     assert_eq!(
@@ -128,13 +168,14 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     );
 
     // --- UPDATE last_active (mirrors SessionStore::touch; SQL-side timestamp) ---
-    let update_result = sqlx::query(
-        "UPDATE sessions SET last_active = NOW() + INTERVAL '10 minutes' WHERE id = $1",
-    )
+    let update_result = sqlx::query(&format!(
+        "UPDATE {} SET last_active = NOW() + INTERVAL '10 minutes' WHERE id = $1",
+        table_name
+    ))
     .bind(&id)
     .execute(&pool)
     .await
-    .expect("UPDATE on sessions failed");
+    .expect("UPDATE failed");
 
     assert_eq!(
         update_result.rows_affected(),
@@ -143,12 +184,14 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     );
 
     // --- Verify UPDATE: last_active must now be ahead of NOW() ---
-    let is_future: bool =
-        sqlx::query_scalar("SELECT last_active > NOW() FROM sessions WHERE id = $1")
-            .bind(&id)
-            .fetch_one(&pool)
-            .await
-            .expect("SELECT after UPDATE failed");
+    let is_future: bool = sqlx::query_scalar(&format!(
+        "SELECT last_active > NOW() FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .expect("SELECT after UPDATE failed");
 
     assert!(
         is_future,
@@ -156,11 +199,11 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     );
 
     // --- DELETE ---
-    let delete_result = sqlx::query("DELETE FROM sessions WHERE id = $1")
+    let delete_result = sqlx::query(&format!("DELETE FROM {} WHERE id = $1", table_name))
         .bind(&id)
         .execute(&pool)
         .await
-        .expect("DELETE from sessions failed");
+        .expect("DELETE failed");
 
     assert_eq!(
         delete_result.rows_affected(),
@@ -169,13 +212,18 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     );
 
     // --- COUNT after DELETE — confirm gone ---
-    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sessions WHERE id = $1")
-        .bind(&id)
-        .fetch_one(&pool)
-        .await
-        .expect("COUNT after DELETE failed");
+    let count: i64 = sqlx::query_scalar(&format!(
+        "SELECT COUNT(*) FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .expect("COUNT after DELETE failed");
 
     assert_eq!(count, 0, "session must be absent after DELETE");
 
+    // Teardown: remove the isolated proof table.
+    drop_proof_table(&pool, &table_name).await;
     pool.close().await;
 }
