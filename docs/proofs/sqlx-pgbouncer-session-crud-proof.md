@@ -47,7 +47,7 @@ Der Integrationstest `apps/api/tests/sqlx_pgbouncer_session_crud.rs` ist:
 - **Syntaktisch & semantisch geprüft** (compiliert, clippy-clean, offline-Tests grün)
 - **Runtime-Proof noch ausstehend** (requires Stack + PGBOUNCER_URL + `--include-ignored`)
 
-Der Test **umfasst** diese Operationen (Code ist ready, Ausführung ausstehend):
+Der Test **umfasst und wird folgende Operationen beweisen, wenn ausgeführt** (Code ist ready, Ausführung ausstehend):
 
 | Schritt | Was getestet wird |
 |---|---|

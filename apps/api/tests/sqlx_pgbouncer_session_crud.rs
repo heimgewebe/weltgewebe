@@ -9,7 +9,7 @@
 //! PgBouncer must be configured with POOL_MODE=transaction.
 //! The proof is only valid when run against that stack — see proof report.
 //!
-//! What is proven:
+//! What this test proves when executed against PgBouncer:
 //! - sqlx::PgPool connects through PgBouncer in transaction pool mode.
 //! - PgConnectOptions::statement_cache_capacity(0) neutralises the prepared-statement
 //!   incompatibility with PgBouncer transaction mode.
