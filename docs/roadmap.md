@@ -100,7 +100,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [x] Phase 2 — Session-/Device-Modell vervollständigen · [auth-roadmap §6](blueprints/auth-roadmap.md)
 - [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; Register-Verify und UI-E2E offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
 - [~] Phase 4 — Auth-Persistenz Runtime-Proof
-  - SQL/psql-Migration + PgBouncer-CRUD-Smoke belegt
+  - SQL/psql-Migration + psql-basierter PgBouncer-CRUD-Smoke belegt
   - SQLx/PgBouncer-Rust-Proof als Testgerüst vorbereitet (READY_FOR_PROOF, nicht ausgeführt)
   - **OPEN_DECISION:** Ob Auth-Persistenz produktiv via PgBouncer oder direkten Postgres-Pfad
     laufen soll, ist ungeklärt. Prod-Stack enthält keinen PgBouncer; Dev-Stack enthält PgBouncer.

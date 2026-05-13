@@ -111,9 +111,11 @@ konsistent für Deutung B: Prod läuft ohne PgBouncer. Die **Dokumentation** spr
 Deutung A, aber sie wurde auf Basis von Dev-Stack-Beobachtungen geschrieben und spiegelt
 den Prod-Stack nicht korrekt wider.
 
-Per `repo.meta.yaml` truth model hat `runtime_configs_and_code` höhere Wahrheitspräzedenz
-als `normative_specifications` (Blueprints) und `diagnostic_reports` — die
-Compose-Konfigurationen und `.env.example` überwiegen.
+Für diese konkrete Runtime-Frage haben Compose-Konfigurationen, `.env.example`,
+API-Code und der Heimserver-Dump höhere Beweiskraft als ältere Reports, weil sie den
+aktuell ausführbaren bzw. konfigurierten Verbindungspfad beschreiben. Die Reports
+bleiben wichtig als Absichtsdokumente, sind hier aber teilweise mit dem belegten
+Prod-/Heimserver-Zustand im Konflikt.
 
 ---
 
