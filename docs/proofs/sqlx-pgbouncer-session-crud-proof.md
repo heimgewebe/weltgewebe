@@ -29,6 +29,7 @@ relations:
 > **Status:** Test ist compiliert und ready; Ausführungs-Beweis ausstehend.
 > Der Proof wird erst vollständig, wenn jemand mit Stack + PgBouncer
 > `PGBOUNCER_URL=... cargo test -- sqlx_pgbouncer --include-ignored` lädt.
+> Eine Heimserver-/Produktiv-Runtime ist dadurch nicht automatisch eine Proof-Umgebung.
 >
 > Ziel dieses PRs: belegter Rust-SQLx-CRUD-Code gegen ein **sessions-spaltenkompatibles Proof-Fixture**
 > durch PgBouncer im transaction mode (syntax + semantik geprüft; Runtime-Beweis noch ausstehend).
@@ -88,7 +89,7 @@ let pool = PgPoolOptions::new()
     .max_connections(2)
     .connect_with(connect_opts)
     .await
-    .expect("failed to connect via PGBOUNCER_URL — is the stack running?");
+    .expect("failed to connect via PGBOUNCER_URL — is PgBouncer running and is the URL pointing to port 6432 rather than direct Postgres?");
 ```
 
 **Wichtig:** `PGBOUNCER_URL` muss auf PgBouncer zeigen, nicht direkt auf Postgres.
@@ -96,6 +97,15 @@ Der Test selbst kann nicht prüfen, ob die Verbindung tatsächlich über PgBounc
 er vertraut darauf, dass die Testumgebung korrekt aufgebaut ist. Der Beweiswert des
 Tests hängt unmittelbar an der Testumgebung. Eine Ausführung gegen einen direkten
 Postgres-Port (5432) würde zwar bestehen, beweist aber nicht den PgBouncer-Pfad.
+
+Für einen echten Proof-Lauf sind gleichzeitig erforderlich:
+
+- eine Rust/Cargo-Umgebung, in der `cargo test -p weltgewebe-api ...` überhaupt ausführbar ist,
+- ein aktiver PgBouncer-Service im `POOL_MODE=transaction`,
+- eine `PGBOUNCER_URL`, die auf diesen PgBouncer zeigt und **nicht** direkt auf PostgreSQL.
+
+Ein Runtime-Host ohne Cargo/Rust-Toolchain oder ohne laufenden PgBouncer ist damit
+keine Proof-Umgebung, selbst wenn API und PostgreSQL bereits laufen.
 
 ---
 
@@ -158,6 +168,7 @@ Der Test beweist ausdrücklich nicht den sqlx-Migrations-Pfad.
 | Kein Pool-Mode-Selbsttest | PgBouncer-Modus `transaction` wird als korrekt konfiguriert vorausgesetzt |
 | Kein `DbSessionStore` | Kein Auth-Umbau; der Proof zeigt, dass der SQLx-Pfad funktioniert |
 | Kein CI-DB-Step | Test ist `#[ignore]`; läuft nicht in Standard-CI ohne `--include-ignored` |
+| Heimserver ≠ Proof-Labor | Laufender API-/DB-Betrieb ohne Cargo und PgBouncer genügt nicht für diesen Proof |
 | Kein Parallel-/Lasttest | Sequenzieller CRUD-Smoke; Concurrent-Load nicht Teil dieses Proofs |
 
 ---
@@ -165,7 +176,12 @@ Der Test beweist ausdrücklich nicht den sqlx-Migrations-Pfad.
 ## 6. Testausführung
 
 Der Test ist `#[ignore]` — Standard-CI (`cargo test --locked`) führt ihn nicht aus.
-Offline-Tests bleiben unverändert grün.
+Offline-Tests bleiben unverändert grün. Der PR liefert damit aktuell einen
+**Proof-Harness**, nicht den Runtime-Proof selbst.
+
+Der aktuell belegte Heimserver-/Runtime-Zustand ohne laufenden PgBouncer-Service und
+ohne Cargo/Rust-Toolchain reicht für diesen Proof ausdrücklich **nicht** aus. Ein
+solcher Host kann die API betreiben, aber nicht diesen SQLx/PgBouncer-Test ausführen.
 
 Für den Proof-Lauf mit aktivem Stack:
 
@@ -183,6 +199,9 @@ Erwartete Ausgabe:
 ```text
 test sqlx_pgbouncer_session_crud_through_transaction_mode ... ok
 ```
+
+Wenn `PGBOUNCER_URL` fehlt oder auf direkten Postgres zeigt, ist das kein zulässiger
+Proof-Lauf. Der Test darf deshalb weiterhin **nicht** still skippen.
 
 ---
 
@@ -229,3 +248,22 @@ Nicht verändert: `apps/api/src/`, Migrations, Auth-Middleware, SessionStore, Ro
 **Wichtig:** Der Proof-Test beweist seine Hypothese erst durch tatsächliche Ausführung
 mit dem Stack im transaction-mode. Das Kompilieren ist Voraussetzung, nicht Beweis.
 Ohne `PGBOUNCER_URL`-Lauf bleibt der Status `READY_FOR_PROOF`.
+
+## 10. Sinnvoller Follow-up
+
+Sauberer nächster Schritt, falls der Proof reproduzierbar in Automation laufen soll:
+
+```text
+ci(db): add disposable Postgres+PgBouncer proof job for ignored SQLx test
+```
+
+Dieser Follow-up-Job würde in CI einen wegwerfbaren Postgres+PgBouncer-Stack starten und
+dann gezielt ausführen:
+
+```bash
+PGBOUNCER_URL=postgres://... cargo test -p weltgewebe-api -- sqlx_pgbouncer --include-ignored
+```
+
+Bis ein solcher Lauf tatsächlich erfolgreich belegt ist, bleibt dieser PR bewusst
+bei **READY_FOR_PROOF**. Die Stop-Regel bleibt bestehen: kein `DbSessionStore`
+ohne ausgeführten SQLx/PgBouncer-Proof.
