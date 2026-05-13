@@ -30,8 +30,8 @@ relations:
 > Der Proof wird erst vollständig, wenn jemand mit Stack + PgBouncer
 > `PGBOUNCER_URL=... cargo test -- sqlx_pgbouncer --include-ignored` lädt.
 >
-> Ziel dieses PRs: belegter Rust-SQLx-CRUD-Code auf der `sessions`-Tabelle durch PgBouncer
-> im transaction mode (syntax + semantik geprüft; Runtime-Beweis noch ausstehend).
+> Ziel dieses PRs: belegter Rust-SQLx-CRUD-Code gegen ein **sessions-spaltenkompatibles Proof-Fixture**
+> durch PgBouncer im transaction mode (syntax + semantik geprüft; Runtime-Beweis noch ausstehend).
 
 ---
 
@@ -54,7 +54,7 @@ Der Test **umfasst und wird folgende Operationen beweisen, wenn ausgeführt** (C
 |---|---|
 | Pool-Verbindung | `sqlx::PgPool` via `PgPoolOptions::connect_with()` gegen PgBouncer |
 | `statement_cache_capacity(0)` | explizit gesetzt in `PgConnectOptions`; Test läuft stabil durch |
-| Isoliertes Fixture | `CREATE TABLE sqlx_pgbouncer_proof_<uuid>` (Spalten-Schema der Migration; Indizes absichtlich weggelassen) |
+| sessions-spaltenkompatibles Proof-Fixture | `CREATE TABLE sqlx_pgbouncer_proof_<uuid>` (nur Spalten der Migration; Indizes absichtlich weggelassen) |
 | INSERT | Datensatz einfügen, `rows_affected() == 1` assertiert |
 | SELECT | id, account_id, device_id round-trip assertiert |
 | UPDATE | `last_active = NOW() + INTERVAL '10 minutes'`, `rows_affected() == 1` assertiert |
@@ -127,13 +127,13 @@ Session-CRUD-Operationen (niedrige Frequenz, kein Hot-Path) ist das akzeptabel.
 
 ---
 
-## 4. Isoliertes Proof-Fixture vs. Migrations-Proof
+## 4. Sessions-spaltenkompatibles Proof-Fixture vs. Migrations-Proof
 
-`create_proof_table()` im Test erzeugt eine **temporäre, isolierte Tabelle**
-`sqlx_pgbouncer_proof_<uuid>` via SQLx. Das ist ein **Test-Fixture**, kein Migrations-Proof.
-Die echte `sessions`-Tabelle wird nie berührt.
+`create_proof_table()` im Test erzeugt ein **sessions-spaltenkompatibles Proof-Fixture** —
+eine temporäre, isolierte Tabelle `sqlx_pgbouncer_proof_<uuid>` via SQLx. Das ist ein
+Test-Fixture, kein Migrations-Proof. Die echte `sessions`-Tabelle wird nie berührt.
 
-| Eigenschaft | Proof-Fixture | sqlx-Migrations-Proof |
+| Eigenschaft | sessions-spaltenkompatibles Proof-Fixture | sqlx-Migrations-Proof |
 |---|---|---|
 | Tabellen-Name | `sqlx_pgbouncer_proof_<uuid>` (isoliert) | `sessions` (via Migration) |
 | Idempotent | nein (einmalig pro Testlauf) | nein (Migration prüft `_sqlx_migrations`) |

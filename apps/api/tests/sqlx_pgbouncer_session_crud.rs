@@ -9,11 +9,12 @@
 //! PgBouncer must be configured with POOL_MODE=transaction.
 //! The proof is only valid when run against that stack — see proof report.
 //!
-//! What this test proves when executed against PgBouncer:
+//! What this test is intended to prove when it completes successfully against PgBouncer:
 //! - sqlx::PgPool connects through PgBouncer in transaction pool mode.
 //! - PgConnectOptions::statement_cache_capacity(0) neutralises the prepared-statement
 //!   incompatibility with PgBouncer transaction mode.
-//! - INSERT / SELECT / UPDATE / DELETE on a sessions-schema table succeed via SQLx.
+//! - INSERT / SELECT / UPDATE / DELETE on a sessions-column-compatible proof table
+//!   succeed via SQLx.
 //!
 //! What is NOT proven here:
 //! - sqlx::migrate! or sqlx-cli migration execution (separate proof step).
@@ -41,7 +42,7 @@ fn assert_proof_table_name(name: &str) {
     );
 }
 
-/// Creates an isolated proof table with a unique, prefixed name.
+/// Creates a sessions-column-compatible proof table with a unique, prefixed name.
 ///
 /// Uses a `sqlx_pgbouncer_proof_` prefix followed by a UUID (hex, no dashes) to avoid
 /// any collision with or mutation of the real `sessions` table from
@@ -69,7 +70,7 @@ async fn create_proof_table(pool: &sqlx::PgPool, table_name: &str) {
     .expect("failed to create proof table");
 }
 
-/// Drops the isolated proof table created by [`create_proof_table`].
+/// Drops the sessions-column-compatible proof table created by [`create_proof_table`].
 async fn drop_proof_table(pool: &sqlx::PgPool, table_name: &str) {
     assert_proof_table_name(table_name);
     sqlx::query(&format!("DROP TABLE IF EXISTS {}", table_name))
@@ -78,13 +79,128 @@ async fn drop_proof_table(pool: &sqlx::PgPool, table_name: &str) {
         .expect("failed to drop proof table");
 }
 
-/// Proof: SQLx CRUD against a sessions-schema table through PgBouncer transaction mode.
+/// Runs the full CRUD proof sequence against the isolated sessions-column-compatible
+/// proof table `table_name`.
+///
+/// Returns `Ok(())` when all SQLx operations succeed and all row-count checks pass.
+/// Returns `Err(…)` on any SQLx error so the caller can always clean up the table.
+///
+/// Note: `assert!` / `assert_eq!` panics within this function will bypass cleanup; the
+/// UUID-named table is left behind in that (unlikely) case, but causes no collision.
+async fn run_crud_proof(
+    pool: &sqlx::PgPool,
+    table_name: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let id = Uuid::new_v4().to_string();
+    let account_id = format!("proof-account-{}", Uuid::new_v4());
+    let device_id = format!("proof-device-{}", Uuid::new_v4());
+
+    // --- INSERT (timestamps SQL-side; no chrono feature required) ---
+    let insert_result = sqlx::query(&format!(
+        "INSERT INTO {} \
+             (id, account_id, device_id, created_at, last_active, expires_at) \
+         VALUES \
+             ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '24 hours')",
+        table_name
+    ))
+    .bind(&id)
+    .bind(&account_id)
+    .bind(&device_id)
+    .execute(pool)
+    .await?;
+
+    assert_eq!(
+        insert_result.rows_affected(),
+        1,
+        "INSERT must affect exactly one row"
+    );
+
+    // --- SELECT — string field round-trip ---
+    let row = sqlx::query(&format!(
+        "SELECT id, account_id, device_id FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(pool)
+    .await?;
+
+    assert_eq!(row.get::<String, _>("id"), id, "id must round-trip");
+    assert_eq!(
+        row.get::<String, _>("account_id"),
+        account_id,
+        "account_id must round-trip"
+    );
+    assert_eq!(
+        row.get::<String, _>("device_id"),
+        device_id,
+        "device_id must round-trip"
+    );
+
+    // --- UPDATE last_active (mirrors SessionStore::touch; SQL-side timestamp) ---
+    let update_result = sqlx::query(&format!(
+        "UPDATE {} SET last_active = NOW() + INTERVAL '10 minutes' WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .execute(pool)
+    .await?;
+
+    assert_eq!(
+        update_result.rows_affected(),
+        1,
+        "UPDATE must affect exactly one row"
+    );
+
+    // --- Verify UPDATE: last_active must now be ahead of NOW() ---
+    let is_future: bool = sqlx::query_scalar(&format!(
+        "SELECT last_active > NOW() FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(pool)
+    .await?;
+
+    assert!(
+        is_future,
+        "last_active must be in the future after touch-UPDATE"
+    );
+
+    // --- DELETE ---
+    let delete_result = sqlx::query(&format!("DELETE FROM {} WHERE id = $1", table_name))
+        .bind(&id)
+        .execute(pool)
+        .await?;
+
+    assert_eq!(
+        delete_result.rows_affected(),
+        1,
+        "DELETE must remove exactly one row"
+    );
+
+    // --- COUNT after DELETE — confirm gone ---
+    let count: i64 = sqlx::query_scalar(&format!(
+        "SELECT COUNT(*) FROM {} WHERE id = $1",
+        table_name
+    ))
+    .bind(&id)
+    .fetch_one(pool)
+    .await?;
+
+    assert_eq!(count, 0, "session must be absent after DELETE");
+
+    Ok(())
+}
+
+/// Proof: SQLx CRUD against a sessions-column-compatible proof table through PgBouncer
+/// transaction mode.
 ///
 /// Covers: connection, INSERT, SELECT (string round-trip), UPDATE (last_active),
 /// post-UPDATE boolean verification, DELETE, post-DELETE COUNT.
 ///
-/// An isolated table (`sqlx_pgbouncer_proof_<uuid>`) is created for each run so the
-/// real `sessions` table is never touched. The table is dropped on completion.
+/// A sessions-column-compatible proof table (`sqlx_pgbouncer_proof_<uuid>`) is created
+/// for each run so the real `sessions` table is never touched. CRUD runs via
+/// [`run_crud_proof`], which returns a `Result` so the table is always dropped before
+/// the test outcome is finalised — even when SQLx returns an error.
 ///
 /// Timestamps are generated SQL-side (NOW(), INTERVAL) to avoid binding
 /// `chrono::DateTime` values, which would require the sqlx `"chrono"` feature and the
@@ -120,110 +236,13 @@ async fn sqlx_pgbouncer_session_crud_through_transaction_mode() {
     assert_proof_table_name(&table_name); // guard before any SQL use
     create_proof_table(&pool, &table_name).await;
 
-    let id = Uuid::new_v4().to_string();
-    let account_id = format!("proof-account-{}", Uuid::new_v4());
-    let device_id = format!("proof-device-{}", Uuid::new_v4());
+    // Run CRUD via Result-returning fn so drop_proof_table always executes.
+    let crud_result = run_crud_proof(&pool, &table_name).await;
 
-    // --- INSERT (timestamps SQL-side; no chrono feature required) ---
-    let insert_result = sqlx::query(&format!(
-        "INSERT INTO {} \
-             (id, account_id, device_id, created_at, last_active, expires_at) \
-         VALUES \
-             ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '24 hours')",
-        table_name
-    ))
-    .bind(&id)
-    .bind(&account_id)
-    .bind(&device_id)
-    .execute(&pool)
-    .await
-    .expect("INSERT failed");
-
-    assert_eq!(
-        insert_result.rows_affected(),
-        1,
-        "INSERT must affect exactly one row"
-    );
-
-    // --- SELECT — string field round-trip ---
-    let row = sqlx::query(&format!(
-        "SELECT id, account_id, device_id FROM {} WHERE id = $1",
-        table_name
-    ))
-    .bind(&id)
-    .fetch_one(&pool)
-    .await
-    .expect("SELECT failed");
-
-    assert_eq!(row.get::<String, _>("id"), id, "id must round-trip");
-    assert_eq!(
-        row.get::<String, _>("account_id"),
-        account_id,
-        "account_id must round-trip"
-    );
-    assert_eq!(
-        row.get::<String, _>("device_id"),
-        device_id,
-        "device_id must round-trip"
-    );
-
-    // --- UPDATE last_active (mirrors SessionStore::touch; SQL-side timestamp) ---
-    let update_result = sqlx::query(&format!(
-        "UPDATE {} SET last_active = NOW() + INTERVAL '10 minutes' WHERE id = $1",
-        table_name
-    ))
-    .bind(&id)
-    .execute(&pool)
-    .await
-    .expect("UPDATE failed");
-
-    assert_eq!(
-        update_result.rows_affected(),
-        1,
-        "UPDATE must affect exactly one row"
-    );
-
-    // --- Verify UPDATE: last_active must now be ahead of NOW() ---
-    let is_future: bool = sqlx::query_scalar(&format!(
-        "SELECT last_active > NOW() FROM {} WHERE id = $1",
-        table_name
-    ))
-    .bind(&id)
-    .fetch_one(&pool)
-    .await
-    .expect("SELECT after UPDATE failed");
-
-    assert!(
-        is_future,
-        "last_active must be in the future after touch-UPDATE"
-    );
-
-    // --- DELETE ---
-    let delete_result = sqlx::query(&format!("DELETE FROM {} WHERE id = $1", table_name))
-        .bind(&id)
-        .execute(&pool)
-        .await
-        .expect("DELETE failed");
-
-    assert_eq!(
-        delete_result.rows_affected(),
-        1,
-        "DELETE must remove exactly one row"
-    );
-
-    // --- COUNT after DELETE — confirm gone ---
-    let count: i64 = sqlx::query_scalar(&format!(
-        "SELECT COUNT(*) FROM {} WHERE id = $1",
-        table_name
-    ))
-    .bind(&id)
-    .fetch_one(&pool)
-    .await
-    .expect("COUNT after DELETE failed");
-
-    assert_eq!(count, 0, "session must be absent after DELETE");
-
-    // Teardown: remove the isolated proof table.
+    // Always clean up — even when CRUD failed.
     drop_proof_table(&pool, &table_name).await;
     pool.close().await;
+
+    // Propagate any CRUD failure after cleanup.
+    crud_result.expect("CRUD proof failed — see sqlx error above");
 }
