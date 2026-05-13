@@ -223,7 +223,7 @@ Dieser PR liefert weiterhin einen **ausführbaren Beweisaufbau** für `sqlx::PgP
 mit `statement_cache_capacity(0)` über PgBouncer im transaction mode. Der eigentliche
 PgBouncer-Runtime-Beweis ist erst erbracht, wenn der ignorierte Test mit
 `PGBOUNCER_URL` gegen den aktiven Stack erfolgreich ausgeführt wurde. Das Ergebnis
-ist relevant für Dev-/Proof-/Spezialbetriebe mit PgBouncer, aber nicht für die
+ist relevant für Dev-/Spezialbetriebe mit PgBouncer, aber nicht für die
 Produktionsentscheidung nach ADR-0007.
 
 ---

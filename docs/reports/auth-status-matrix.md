@@ -8,6 +8,8 @@ relations:
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - type: relates_to
+    target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
+  - type: relates_to
     target: docs/blueprints/auth-roadmap.md
 ---
 
@@ -31,6 +33,7 @@ Pflegeregel: Diese Matrix ist bei jedem Auth-bezogenen PR zu aktualisieren, der 
 Diese Dokumente beschreiben die finale Architektur, auf die hingearbeitet wird:
 
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
@@ -93,7 +96,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. In-Memory `SessionStore` ist als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (`auth-roadmap.md`, Phase 2 Persistenzentscheidung). Die `SessionStore`-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
+**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. In-Memory `SessionStore` ist als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (`auth-roadmap.md`, Phase 2 Persistenzentscheidung). ADR-0007 legt für die produktive Auth-Persistenz den direkten PostgreSQL-Zugriff über `DATABASE_URL` fest; PgBouncer ist optionaler Dev-/Spezialpfad und kein Produktions-Gate. Die `SessionStore`-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
 **Dokumentationsbelege:** `docs/blueprints/auth-roadmap.md` (Persistenzentscheidung), `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
 **Fehlende Belege:** Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests), E2E-Nachweis.

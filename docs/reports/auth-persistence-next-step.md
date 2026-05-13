@@ -447,4 +447,4 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 | Strategie Postgres vs. Redis vs. Hybrid? | **strategisch gestützt** | PostgreSQL durch Doku und Diagnose als nächster Pfad gestützt; Redis/Hybrid ohne belegten Zusatznutzen; Runtime-Proof noch offen |
 | Was fehlt für Implementierung? | **belegt** | async-Abstraktion, `DbSessionStore`, Startup-Migration, CI-Gate |
 | PgBouncer-Kompatibilität? | **optionaler Spezialpfad** | SQLx prepared statements + statement cache + PgBouncer `transaction` mode (`edoburu/pgbouncer:1.20`) sind nicht belastbar kompatibel; nach ADR-0007 aber kein Produktions-Gate |
-| Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig, sofern der Folge-PR die offenen Target-Proofs enthält: direkte `sqlx`-Migration/CRUD gegen PostgreSQL, `DbSessionStore`-CRUD-Integrationstest, weiterhin grüner Offline-Testpfad |
+| Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig; vor produktivem `DbSessionStore` ist jedoch ein separater Nachweis des direkten SQLx/Postgres-Persistenzpfads zwingend (inkl. weiterhin grünem Offline-Testpfad). |

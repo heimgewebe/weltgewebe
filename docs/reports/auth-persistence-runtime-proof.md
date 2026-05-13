@@ -11,7 +11,7 @@ summary: >
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
   SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
   Stack-PgBouncer-Image bleiben NOT_PROVEN. ADR-0007 schränkt PgBouncer auf
-  Dev-/Proof-/Spezialpfade ein; der Produktionspfad ist DATABASE_URL → direkter
+  Dev-/Spezialpfade ein; der Produktionspfad ist DATABASE_URL → direkter
   PostgreSQL-Zugriff.
 depends_on:
   - docs/blueprints/auth-persistence-runtime-proof.md
@@ -35,7 +35,7 @@ relations:
 > `SessionBackend`-Abstraktion. Kein register/verify.
 > Ziel: belegter Runtime-Pfad für die vorhandene `sessions`-Migration mit psql
 > und PgBouncer gegen eine wegwerfbare lokale Datenbank. Nach ADR-0007 ist dieser
-> PgBouncer-Pfad ein Dev-/Proof-/Spezialpfad; Produktion nutzt `DATABASE_URL` für
+> PgBouncer-Pfad ein Dev-/Spezialpfad; Produktion nutzt `DATABASE_URL` für
 > direkten PostgreSQL-Zugriff.
 >
 > Blueprint: `docs/blueprints/auth-persistence-runtime-proof.md`
@@ -290,7 +290,7 @@ git diff --check
 
 Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
 (transaction mode) ist reproduzierbar belegt. Der SQLx/Rust-API-Pfad gegen
-PgBouncer transaction mode bleibt für Dev-/Proof-/Spezialfälle unbewiesen.
+PgBouncer transaction mode bleibt für Dev-/Spezialfälle unbewiesen.
 Nach ADR-0007 ist dies kein Produktions-Gate: Der Produktionspfad für Auth-
 Persistenz ist `DATABASE_URL` → direkter PostgreSQL-Zugriff. `psql`-CRUD ist
 nicht äquivalent zu SQLx-Runtime.
@@ -301,7 +301,7 @@ nicht äquivalent zu SQLx-Runtime.
 
 ### Restlücke 1: SQLx Prepared Statements gegen PgBouncer (Rust-API-Ebene)
 
-#### Status: offen für Dev-/Proof-/Spezialpfad; kein Produktions-Gate nach ADR-0007
+#### Status: offen für Dev-/Spezialpfad; kein Produktions-Gate nach ADR-0007
 
 Alle CRUD-Operationen wurden über den `psql`-Client ausgeführt, der keine
 Prepared Statements im SQLx-Sinne verwendet. SQLx nutzt standardmäßig

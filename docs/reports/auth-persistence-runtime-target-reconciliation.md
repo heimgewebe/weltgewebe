@@ -8,7 +8,7 @@ lang: de
 summary: >
   Diagnose- und Kanonisierungsbericht. Klärt den Auth-Persistenzpfad für
   Produktion: direkter PostgreSQL-Zugriff via DATABASE_URL ist durch ADR-0007
-  entschieden. PgBouncer bleibt Dev-/Proof-/Spezialpfad und kein Produktions-Gate.
+  entschieden. PgBouncer bleibt Dev-/Spezialpfad und kein Produktions-Gate.
   Keine Implementierung.
 depends_on:
   - docs/adr/ADR-0007__auth-persistence-production-db-path.md
@@ -33,8 +33,8 @@ relations:
 > Dev-Stack, Prod-Stack, Runtime-Befund und Proof-Dokumenten fest.
 >
 > **Ergebnis:** ADR-0007 entscheidet den Produktionspfad: Auth-Persistenz läuft in
-> Produktion direkt über PostgreSQL via `DATABASE_URL`. PgBouncer ist Dev-/Proof-/
-> Spezialpfad und kein Produktions-Gate für `DbSessionStore`.
+> Produktion direkt über PostgreSQL via `DATABASE_URL`. PgBouncer ist
+> Dev-/Spezialpfad und kein Produktions-Gate für `DbSessionStore`.
 >
 > **Kein Produktionscode. Kein CI-Job. Keine Session-Persistenz. Keine Compose-Änderung.**
 >
@@ -50,7 +50,7 @@ Runtime-Beweis. Der belegte Heimserver-Zustand zeigt: API und Postgres laufen,
 aber kein PgBouncer-Service, keine Rust/Cargo-Toolchain auf dem Runtime-Host.
 
 Die vormals offene Frage war: Soll Auth-Persistenz produktiv über
-`API → PgBouncer → Postgres` laufen, oder ist PgBouncer nur Dev-/Proof-
+`API → PgBouncer → Postgres` laufen, oder ist PgBouncer nur Dev-/Spezial-
 Infrastruktur?
 
 **Antwort:** ADR-0007 entscheidet den Produktionspfad auf direkten PostgreSQL-Zugriff
@@ -73,7 +73,7 @@ direkte SQLx/Postgres-Persistenzpfad, nicht ein PgBouncer-Produktions-Gate.
 | `docs/reports/auth-persistence-runtime-proof.md` §2 | „API-Container verbindet über PgBouncer (Port 6432), nicht direkt gegen Postgres" | **CONFLICT_RESOLVED** | Diese Aussage wird auf den Dev-Stack (`compose.core.yml`) eingeschränkt. Für Produktion gilt ADR-0007: `DATABASE_URL` → direkter PostgreSQL-Zugriff. |
 | `docs/blueprints/auth-persistence-runtime-proof.md` | Behandelt PgBouncer als Proof-Ziel, wenn im aktiven Stack vorgesehen. | **CONFLICT_RESOLVED** | PgBouncer-Proofs bleiben optionaler Dev-/Spezialpfad; sie sind kein Produktions-Gate. |
 | `docs/proofs/sqlx-pgbouncer-session-crud-proof.md` | Test ist `#[ignore]`, Status `READY_FOR_PROOF`. Kein Runtime-Beweis. | **PROVEN** | Proof-Harness vorhanden; Runtime-Ausführung optional und nicht blockierend für Produktions-`DbSessionStore`. |
-| `docs/adr/ADR-0007__auth-persistence-production-db-path.md` | Production auth persistence uses direct PostgreSQL via `DATABASE_URL`; PgBouncer is not a required production path. | **DECIDED** | Die Zielarchitekturentscheidung ist geschlossen. |
+| `docs/adr/ADR-0007__auth-persistence-production-db-path.md` | Die produktive Auth-Persistenz nutzt direkten PostgreSQL-Zugriff über `DATABASE_URL`; PgBouncer ist Dev-/Spezialinfrastruktur und kein erforderlicher Produktionspfad. | **DECIDED** | Die Zielarchitekturentscheidung ist geschlossen. |
 
 ---
 
@@ -122,7 +122,7 @@ sprach teilweise für PgBouncer als Ziel, beruhte aber auf Dev-Stack-Beobachtung
 spiegelte den Prod-Stack nicht korrekt wider.
 
 ADR-0007 löst diese Divergenz formal auf: Für Produktion ist der direkte PostgreSQL-Pfad
-kanonisch. PgBouncer bleibt als Dev-/Proof-/Spezialpfad zulässig, aber nicht als
+kanonisch. PgBouncer bleibt als Dev-/Spezialpfad zulässig, aber nicht als
 Voraussetzung für produktive Auth-Persistenz.
 
 ---
@@ -138,7 +138,7 @@ formal akzeptiert.
 | Entscheidung | Konsequenz |
 |---|---|
 | Direkter PostgreSQL-Pfad in Produktion | Prod-Compose und `.env.example` bleiben in ihrer Grundrichtung unverändert: `DATABASE_URL` zeigt für Produktion auf PostgreSQL. `DbSessionStore` wird gegen diesen direkten SQLx/Postgres-Pfad geplant. |
-| PgBouncer als Dev-/Proof-/Spezialpfad | SQLx/PgBouncer-Proofs bleiben möglich, sind aber optional und kein Persistenz-Gate für Produktion. |
+| PgBouncer als Dev-/Spezialpfad | SQLx/PgBouncer-Proofs bleiben möglich, sind aber optional und kein Persistenz-Gate für Produktion. |
 | Rückkehr zu PgBouncer als Produktionspfad | Nur über neues ADR zulässig; dann wären Prod-Compose, Deployment, `DATABASE_URL` und Proof-Gates neu zu entscheiden. |
 
 ---

@@ -225,7 +225,7 @@ PostgreSQL-Zugriff via `DATABASE_URL` fest.
 **Folgen:**
 
 - `DbSessionStore` / `SessionBackend` wird gegen den direkten SQLx/Postgres-Pfad geplant.
-- PgBouncer bleibt Dev-/Proof-/Spezialpfad und ist kein Produktions-Gate.
+- PgBouncer bleibt Dev-/Spezialpfad und ist kein Produktions-Gate.
 - Kein `DbSessionStore` ohne direkten SQLx/Postgres-Persistenzpfad-Nachweis.
 - Eine spätere Rückkehr zu PgBouncer als Produktionspfad erfordert ein neues ADR.
 

@@ -9,7 +9,7 @@ summary: >
   Blueprint für sichere und schlanke Auth-Session-Persistenz: erst den direkten
   SQLx/PostgreSQL-Produktionspfad beweisen, danach DbSessionStore oder
   SessionBackend-Abstraktion implementieren. PgBouncer bleibt nach ADR-0007
-  optionaler Dev-/Proof-/Spezialpfad.
+  optionaler Dev-/Spezialpfad.
 depends_on:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/blueprints/auth-roadmap.md
@@ -78,7 +78,7 @@ Ergebnisziel:
 - Serverseitiger Widerruf bleibt möglich.
 - Offline-Tests ohne Datenbank bleiben grün.
 - Produktionspfad mit direktem PostgreSQL-Zugriff via `DATABASE_URL` ist belegt.
-- PgBouncer ist nur für Dev-/Proof-/Spezialpfade relevant und kein Produktions-Gate.
+- PgBouncer ist nur für Dev-/Spezialpfade relevant und kein Produktions-Gate.
 
 ---
 

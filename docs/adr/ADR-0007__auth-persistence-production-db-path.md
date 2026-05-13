@@ -5,7 +5,7 @@ doc_type: reference
 status: accepted
 summary: >
   Kanonisiert den Produktionspfad für Auth-Persistenz: direkter PostgreSQL-Zugriff
-  via DATABASE_URL. PgBouncer bleibt Dev-/Proof-/Spezialpfad und ist kein
+  via DATABASE_URL. PgBouncer bleibt Dev-/Spezialpfad und ist kein
   Produktions-Gate für DbSessionStore.
 relations:
   - type: relates_to
@@ -38,9 +38,11 @@ accepted
 
 ## Entscheidung
 
-Production auth persistence uses direct PostgreSQL via `DATABASE_URL`.
+Die produktive Auth-Persistenz nutzt direkten PostgreSQL-Zugriff über
+`DATABASE_URL`.
 
-PgBouncer is development/proof infrastructure and not a required production path.
+PgBouncer ist Dev-/Spezialinfrastruktur und kein erforderlicher
+Produktionspfad.
 
 ## Begründung
 
