@@ -52,6 +52,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 ### Auth-Architektur (Kanonisch)
 
 – **ADR-0006:** [adr/ADR-0006__auth-magic-link-session-passkey.md](adr/ADR-0006__auth-magic-link-session-passkey.md) (Führendes Zielbild)
+– **ADR-0007:** [adr/ADR-0007__auth-persistence-production-db-path.md](adr/ADR-0007__auth-persistence-production-db-path.md) (Auth-Persistenz Produktionspfad: direkter PostgreSQL-Zugriff)
 – **Auth Roadmap:** [blueprints/auth-roadmap.md](blueprints/auth-roadmap.md) (Umsetzungspfad)
 – **Auth-Persistenz Runtime-Proof:** [blueprints/auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) (Blaupause)
 – **Auth Status Matrix:** [reports/auth-status-matrix.md](reports/auth-status-matrix.md) (Aktueller Repo-Beweis)
@@ -73,7 +74,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
 – **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen)
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
-– **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (PgBouncer vs. direkter Postgres — OPEN_DECISION)
+– **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (ADR-0007: Produktion direkter Postgres; PgBouncer Dev-/Spezialpfad)
 – **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
 – **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
 

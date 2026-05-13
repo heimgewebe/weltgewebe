@@ -6,15 +6,17 @@ status: active
 created: 2026-05-06
 lang: de
 summary: >
-  Blueprint für sichere und schlanke Auth-Session-Persistenz: erst SQLx-,
-  PostgreSQL- und PgBouncer-Runtime-Pfad beweisen, danach DbSessionStore oder
-  SessionBackend-Abstraktion implementieren.
+  Blueprint für sichere und schlanke Auth-Session-Persistenz: erst den direkten
+  SQLx/PostgreSQL-Produktionspfad beweisen, danach DbSessionStore oder
+  SessionBackend-Abstraktion implementieren. PgBouncer bleibt nach ADR-0007
+  optionaler Dev-/Proof-/Spezialpfad.
 depends_on:
   - docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - docs/blueprints/auth-roadmap.md
   - docs/reports/auth-persistence-readiness.md
   - docs/reports/auth-persistence-next-step.md
   - docs/reports/optimierungsstatus.md
+  - docs/adr/ADR-0007__auth-persistence-production-db-path.md
 relations:
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
@@ -26,6 +28,8 @@ relations:
     target: docs/reports/auth-persistence-readiness.md
   - type: relates_to
     target: docs/reports/auth-persistence-next-step.md
+  - type: relates_to
+    target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
 ---
 
 # Auth-Persistenz — Runtime-Proof-Blaupause
@@ -40,13 +44,14 @@ relations:
 ### These
 
 `SessionStore` soll persistent werden. PostgreSQL ist der naheliegende Zielpfad,
-weil bereits `sqlx`, `PgPool`, PostgreSQL, PgBouncer und eine `sessions`-Migration
-im Repo vorhanden sind.
+weil bereits `sqlx`, `PgPool`, PostgreSQL und eine `sessions`-Migration im Repo
+vorhanden sind. PgBouncer ist zusätzlich im Dev-Stack vorhanden, aber nach ADR-0007
+kein Produktionspfad.
 
 ### Antithese
 
-Direkt `DbSessionStore` zu bauen ist riskant, solange SQLx, PostgreSQL,
-PgBouncer und Migrationen im echten Runtime-Pfad nicht bewiesen sind. Ein
+Direkt `DbSessionStore` zu bauen ist riskant, solange SQLx, PostgreSQL und
+Migrationen im direkten Produktionspfad nicht bewiesen sind. Ein
 Feature-PR ohne Runtime-Beleg würde Auth-Code, async-Abstraktion und
 Infrastruktur-Risiken vermischen.
 
@@ -55,7 +60,7 @@ Infrastruktur-Risiken vermischen.
 Runtime-Proof zuerst, danach adaptive Implementierung. Der Idealfall besteht aus
 zwei PRs:
 
-1. Runtime-Proof gegen PostgreSQL und, falls im aktiven Stack vorgesehen, PgBouncer.
+1. Runtime-Proof gegen direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer nur optional, falls im aktiven Dev-/Spezialstack vorgesehen.
 2. Persistenz-Implementierung mit kleinem Scope: entweder direkt `DbSessionStore`
    oder zuerst eine `SessionBackend`-/`SessionOps`-Abstraktion.
 
@@ -72,7 +77,8 @@ Ergebnisziel:
 - Sessions überleben API-Neustarts.
 - Serverseitiger Widerruf bleibt möglich.
 - Offline-Tests ohne Datenbank bleiben grün.
-- Runtime-Pfad mit PostgreSQL und, sofern Stack-Ziel, PgBouncer ist belegt.
+- Produktionspfad mit direktem PostgreSQL-Zugriff via `DATABASE_URL` ist belegt.
+- PgBouncer ist nur für Dev-/Proof-/Spezialpfade relevant und kein Produktions-Gate.
 
 ---
 
@@ -131,7 +137,7 @@ weil es in großen Codebasen langsam ist.
 
 | Schritt | PR | Zweck |
 |---|---|---|
-| 1 | `chore(db): prove SQLx migration and PgBouncer runtime path` | Runtime-Pfad belegen, keine Auth-Feature-Arbeit |
+| 1 | `chore(db): prove direct SQLx/Postgres session path` | Direkten Produktionspfad belegen, keine Auth-Feature-Arbeit; PgBouncer nur optional, wenn im aktiven Dev-/Spezialstack vorgesehen |
 | 2 | `feat(auth): implement Postgres-backed sessions` oder `refactor(auth): introduce SessionBackend abstraction` | Persistenz oder vorbereitende Abstraktion |
 
 Regel: Mehr Phasen nur, wenn PR 1 echte Hindernisse zeigt.
@@ -142,12 +148,12 @@ Regel: Mehr Phasen nur, wenn PR 1 echte Hindernisse zeigt.
 
 ### Titel
 
-`chore(db): prove SQLx migration and PgBouncer runtime path`
+`chore(db): prove direct SQLx/Postgres session path`
 
 ### Ziel
 
 Beweisen, dass die vorhandene `sessions`-Migration und ein minimaler SQLx-Zugriff
-gegen den echten DB-Pfad funktionieren.
+gegen den direkten PostgreSQL-Produktionspfad funktionieren.
 
 ### Nicht tun
 
@@ -211,7 +217,7 @@ sqlx migrate run --source apps/api/migrations
 
 ### Migration gegen PgBouncer
 
-Nur ausführen, wenn PgBouncer im Stack aktiv ist. Zuerst Ziel-DB-Klasse
+Optionaler Dev-/Spezialpfad nach ADR-0007. Nur ausführen, wenn PgBouncer im aktiven Stack vorgesehen ist. Zuerst Ziel-DB-Klasse
 dokumentieren.
 
 Variante A — nur für `disposable-local`:
@@ -254,8 +260,8 @@ cargo test --locked -p weltgewebe-api
 
 | Ergebnis | Folge |
 |---|---|
-| PostgreSQL + PgBouncer + CRUD grün | Weiter zu PR 2 |
-| PostgreSQL grün, PgBouncer scheitert | Gezielte Mitigation |
+| Direkter PostgreSQL-SQLx-Pfad + CRUD grün | Weiter zu PR 2 |
+| PostgreSQL grün, PgBouncer scheitert | Prod-Pfad nicht blockiert; gezielte Mitigation nur für Dev-/Spezialpfad |
 | CRUD scheitert | Ursache isolieren |
 | DB nicht verfügbar | Umgebung herstellen oder Nebenpfad dokumentieren |
 | Offline-Tests scheitern | Stoppen, kein Auth-Umbau |
@@ -277,7 +283,7 @@ Nur anwenden, wenn PgBouncer-/Prepared-Statement-Fehler belegt sind.
 
 ### Option C — API direkt gegen PostgreSQL
 
-Nur wählen, wenn PgBouncer bewusst nicht Zielpfad ist.
+Nach ADR-0007 ist dies der Produktionszielpfad.
 
 Regel: Keine Infrastrukturänderung ohne reproduzierten Fehler.
 
@@ -409,9 +415,11 @@ Erst bei geschlossenem Runtime-, CI-, Deploy- und Restlückenbeweis:
 
 ## 12. Alternativpfade
 
-### Wenn DB/PgBouncer blockiert
+### Wenn DB blockiert
 
 `OPT-INF-001`: Trivy Image Scanning.
+
+Ein blockierter PgBouncer-Proof blockiert nur Dev-/Spezialpfade, nicht den Produktionspfad nach ADR-0007.
 
 ### Wenn Runtime-Proof blockiert, aber Code-Fortschritt nötig ist
 
@@ -427,12 +435,13 @@ Arbeite diagnose-first. Ziel ist ein Runtime-Proof-PR, kein Auth-Feature.
 
 PR-Titel:
 
-`chore(db): prove SQLx migration and PgBouncer runtime path`
+`chore(db): prove direct SQLx/Postgres session path`
 
 Aufgabe:
 
 Beweise, dass die bestehende `sessions`-Migration und ein minimaler SQLx-CRUD-Pfad
-gegen PostgreSQL und, falls im Stack vorgesehen, gegen PgBouncer funktionieren.
+gegen den direkten PostgreSQL-Produktionspfad funktionieren. PgBouncer nur optional
+prüfen, wenn er im aktiven Dev-/Spezialstack vorgesehen ist.
 
 Nicht tun:
 
@@ -479,7 +488,7 @@ Hebel: Erst DB-Runtime beweisen, dann Auth umbauen.
 Entscheidung: Zwei PRs: Runtime-Proof → Persistenz.
 
 Nächste Aktion: Agentenauftrag für
-`chore(db): prove SQLx migration and PgBouncer runtime path`.
+`chore(db): prove direct SQLx/Postgres session path`.
 
 Unsicherheitsgrad: `0.12` — lokale Runtime-Ausgaben fehlen.
 
