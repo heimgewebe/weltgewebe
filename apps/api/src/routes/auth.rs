@@ -1104,11 +1104,11 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
                 .is_some_and(|acc| !acc.public.disabled);
             drop(accounts);
 
-            if let Err(error) = state.sessions.delete(old_session_id).await {
-                return session_backend_json_response("session_refresh.delete", &error);
-            }
-
             if !is_valid {
+                if let Err(error) = state.sessions.delete(old_session_id).await {
+                    return session_backend_json_response("session_refresh.delete", &error);
+                }
+
                 tracing::warn!(
                     event = "session.refresh_failed_disabled",
                     account_id = %old_session.account_id,
@@ -1136,6 +1136,21 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
                     return session_backend_json_response("session_refresh.create", &error);
                 }
             };
+
+            if let Err(error) = state.sessions.delete(old_session_id).await {
+                if let Err(rollback_error) = state.sessions.delete(&new_session.id).await {
+                    tracing::error!(
+                        event = "session.refresh_rollback_failed",
+                        old_session_id = %old_session_id,
+                        new_session_id = %new_session.id,
+                        delete_error = %error,
+                        rollback_error = %rollback_error,
+                        "Session refresh failed deleting old session; rollback delete for new session also failed"
+                    );
+                }
+
+                return session_backend_json_response("session_refresh.delete", &error);
+            }
 
             let new_cookie = build_session_cookie(new_session.id, None);
 
