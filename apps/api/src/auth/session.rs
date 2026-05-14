@@ -23,7 +23,7 @@ impl Session {
     }
 }
 
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum SessionBackendError {
     #[error("session backend unavailable")]
     Unavailable,
