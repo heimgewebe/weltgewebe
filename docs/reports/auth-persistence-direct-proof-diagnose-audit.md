@@ -106,22 +106,24 @@ Passkey-Store-Umbau, große Auth-Refactors.
 
 **Phase A ist eine reine Abstraktions-Naht und macht Auth-Persistenz NICHT lauffähig.**
 
-Phase A ist erst dann `PROVEN`, wenn:
+Phase A gilt erst dann als abgeschlossenes Abstraktions-Gate, wenn:
 
 1. alle bestehenden Offline-Tests grün bleiben,
 2. Auth-Verhalten unverändert bleibt,
 3. keine Runtime-Verdrahtung auf DB erfolgt.
+
+Phase A macht ausschließlich die Abstraktionsnaht belastbar; Auth-Session-Persistenz bleibt danach weiterhin NOT_PROVEN.
 
 **Auth-Session-Persistenz wird ausschließlich in Phase B PROVEN.**
 
 Phase B ist erst dann `PROVEN`, wenn:
 
 1. Runtime-Beweis: API erzeugt Session, API wird neu gestartet,
-  Session bleibt gültig (kein Logout durch Restart).
+    Session bleibt gültig (kein Logout durch Restart).
 2. Runtime-Beweis: `logout`, `logout_all`, `remove_device`, `session_refresh`
-  wirken über den DB-basierten Session-Pfad korrekt.
+    wirken über den DB-basierten Session-Pfad korrekt.
 3. CI-Beweis: ein DB-gebundener Integrationstest läuft automatisch und feilt,
-  wenn Session-Persistenzpfad nicht funktioniert.
+    wenn der Session-Persistenzpfad scheitert.
 4. Offline-Beweis: bestehende Offline-Test-Suites bleiben ohne DB grün.
 
 ## PR-Titelkandidaten für Phase A (Abstraktions-PR)
