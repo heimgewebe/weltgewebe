@@ -46,7 +46,7 @@ pub async fn run() -> anyhow::Result<()> {
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
-    let sessions = crate::auth::session::SessionStore::new();
+    let sessions = crate::auth::session::SessionBackend::new_in_memory();
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();

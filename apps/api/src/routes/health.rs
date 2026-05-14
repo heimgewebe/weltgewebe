@@ -269,7 +269,7 @@ mod tests {
     use super::*;
     use crate::state::OrderedCache;
     use crate::{
-        auth::{rate_limit::AuthRateLimiter, session::SessionStore},
+        auth::{rate_limit::AuthRateLimiter, session::SessionBackend},
         config::AppConfig,
         telemetry::{BuildInfo, Metrics},
         test_helpers::EnvGuard,
@@ -323,7 +323,7 @@ mod tests {
             nats_configured: false,
             config,
             metrics,
-            sessions: SessionStore::new(),
+            sessions: SessionBackend::new_in_memory(),
             challenges: Default::default(),
             tokens: crate::auth::tokens::TokenStore::new(),
             step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
