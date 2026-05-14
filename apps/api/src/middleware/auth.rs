@@ -25,19 +25,24 @@ pub async fn auth_middleware(
         role: Role::Gast,
         expires_at: None,
     };
+    let mut session_id_to_touch = None;
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         if let Some(session) = state.sessions.get(cookie.value()).await {
-            let accounts = state.accounts.read().await;
-            if let Some(internal) = accounts.get(&session.account_id) {
-                ctx.authenticated = true;
-                ctx.account_id = Some(session.account_id.clone());
-                ctx.device_id = Some(session.device_id.clone());
-                ctx.role = internal.role.clone();
-                ctx.expires_at = Some(session.expires_at);
+            {
+                let accounts = state.accounts.read().await;
+                if let Some(internal) = accounts.get(&session.account_id) {
+                    ctx.authenticated = true;
+                    ctx.account_id = Some(session.account_id.clone());
+                    ctx.device_id = Some(session.device_id.clone());
+                    ctx.role = internal.role.clone();
+                    ctx.expires_at = Some(session.expires_at);
+                    session_id_to_touch = Some(session.id.clone());
+                }
+            }
 
-                // Synchronously touch to update last_active if needed (debounced internally)
-                state.sessions.touch(&session.id).await;
+            if let Some(session_id) = session_id_to_touch {
+                state.sessions.touch(&session_id).await;
             }
         }
     }

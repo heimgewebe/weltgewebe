@@ -1161,7 +1161,7 @@ pub async fn list_devices(
 
     let mut devices: Vec<DeviceInfo> = device_map.into_values().collect();
     // Sort devices by last_active descending
-    devices.sort_by(|a, b| b.last_active.cmp(&a.last_active));
+    devices.sort_by_key(|device| std::cmp::Reverse(device.last_active));
 
     (axum::http::StatusCode::OK, Json(devices)).into_response()
 }
