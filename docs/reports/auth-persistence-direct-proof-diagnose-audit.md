@@ -77,15 +77,23 @@ Einschraenkung: Das Label `PROVEN` im Dokument darf ausschliesslich als
 
 ## Minimaler naechster Folge-PR
 
-Kleinstes sinnvolles Architektur-Gate Richtung echter Persistenz:
+Kleinstes sinnvolles Architektur-Gate Richtung echter Persistenz in zwei Phasen:
 
-1. `DbSessionStore` fuer die bestehende `sessions`-Tabelle implementieren
-   (nur Session-Domain, keine anderen Auth-Stores).
-2. Einen kleinen async-Backend-Adapter fuer Session-Operationen einfuehren,
-   damit `SessionStore`-Aufrufstellen DB oder in-memory nutzen koennen.
-3. Runtime-Verdrahtung in `ApiState` + Auth-Middleware/Auth-Routen nur fuer
-   Session-Operationen auf den neuen Backend-Pfad umstellen.
-4. In-Memory-Fallback fuer Offline-Tests beibehalten.
+A) `refactor(auth): introduce SessionBackend abstraction without changing runtime behavior`
+
+- Ziel: Backend-Naht fuer Session-Operationen einfuehren.
+- In-Memory bleibt aktiv.
+- Kein Runtime-Verhalten aendern.
+- Kein DbSessionStore.
+- PROVEN erst, wenn bestehende Offline-Tests gruen bleiben und Auth-Verhalten
+  identisch bleibt.
+
+B) `feat(auth): add DbSessionStore and prove restart-stable sessions`
+
+- Ziel: DB-Backend fuer Sessions implementieren und verdrahten.
+- Runtime-/CI-Proof fuer echte Session-Persistenz.
+- PROVEN erst mit Restart-Stabilitaet, DB-Integrationstest und weiterhin
+  gruenem Offline-Pfad.
 
 Nicht in diesen Folge-PR ziehen: Redis, Token-/Challenge-Store-Persistenz,
 Passkey-Store-Umbau, grosse Auth-Refactors.
