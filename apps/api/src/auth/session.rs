@@ -26,6 +26,70 @@ pub struct SessionStore {
     store: Arc<RwLock<HashMap<String, Session>>>,
 }
 
+pub trait SessionOps: Send + Sync {
+    fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session;
+    fn get(&self, session_id: &str) -> Option<Session>;
+    fn delete(&self, session_id: &str);
+    fn touch(&self, session_id: &str);
+    fn list_by_account(&self, account_id: &str) -> Vec<Session>;
+    fn delete_by_device(&self, account_id: &str, device_id: &str);
+    fn delete_all_by_account(&self, account_id: &str);
+}
+
+#[derive(Clone)]
+pub struct SessionBackend {
+    inner: Arc<dyn SessionOps>,
+}
+
+impl Default for SessionBackend {
+    fn default() -> Self {
+        Self::new_in_memory()
+    }
+}
+
+impl SessionBackend {
+    pub fn new<T>(backend: T) -> Self
+    where
+        T: SessionOps + 'static,
+    {
+        Self {
+            inner: Arc::new(backend),
+        }
+    }
+
+    pub fn new_in_memory() -> Self {
+        Self::new(SessionStore::new())
+    }
+
+    pub fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
+        self.inner.create(account_id, existing_device_id)
+    }
+
+    pub fn get(&self, session_id: &str) -> Option<Session> {
+        self.inner.get(session_id)
+    }
+
+    pub fn delete(&self, session_id: &str) {
+        self.inner.delete(session_id);
+    }
+
+    pub fn touch(&self, session_id: &str) {
+        self.inner.touch(session_id);
+    }
+
+    pub fn list_by_account(&self, account_id: &str) -> Vec<Session> {
+        self.inner.list_by_account(account_id)
+    }
+
+    pub fn delete_by_device(&self, account_id: &str, device_id: &str) {
+        self.inner.delete_by_device(account_id, device_id);
+    }
+
+    pub fn delete_all_by_account(&self, account_id: &str) {
+        self.inner.delete_all_by_account(account_id);
+    }
+}
+
 impl SessionStore {
     pub fn new() -> Self {
         Self {
@@ -117,6 +181,36 @@ impl SessionStore {
     pub fn delete_all_by_account(&self, account_id: &str) {
         let mut store = self.store.write_recover();
         store.retain(|_, s| s.account_id != account_id);
+    }
+}
+
+impl SessionOps for SessionStore {
+    fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
+        SessionStore::create(self, account_id, existing_device_id)
+    }
+
+    fn get(&self, session_id: &str) -> Option<Session> {
+        SessionStore::get(self, session_id)
+    }
+
+    fn delete(&self, session_id: &str) {
+        SessionStore::delete(self, session_id);
+    }
+
+    fn touch(&self, session_id: &str) {
+        SessionStore::touch(self, session_id);
+    }
+
+    fn list_by_account(&self, account_id: &str) -> Vec<Session> {
+        SessionStore::list_by_account(self, account_id)
+    }
+
+    fn delete_by_device(&self, account_id: &str, device_id: &str) {
+        SessionStore::delete_by_device(self, account_id, device_id);
+    }
+
+    fn delete_all_by_account(&self, account_id: &str) {
+        SessionStore::delete_all_by_account(self, account_id);
     }
 }
 

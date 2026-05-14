@@ -12,7 +12,7 @@ use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
-    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionStore},
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionBackend},
     config::AppConfig,
     routes::api_router,
     state::ApiState,
@@ -64,7 +64,7 @@ async fn test_state() -> Result<ApiState> {
         nats_configured: false,
         config,
         metrics,
-        sessions: SessionStore::new(),
+        sessions: SessionBackend::new_in_memory(),
         challenges: Default::default(),
         tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
         step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
