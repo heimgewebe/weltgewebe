@@ -16,13 +16,13 @@ depends_on:
   - docs/adr/ADR-0007__auth-persistence-production-db-path.md
   - docs/blueprints/auth-persistence-runtime-proof.md
 relations:
-  - type: closes_gap
+  - type: relates_to
     target: docs/reports/auth-persistence-runtime-proof.md
   - type: relates_to
     target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
   - type: relates_to
     target: docs/blueprints/auth-persistence-runtime-proof.md
-  - type: contrast_with
+  - type: relates_to
     target: docs/proofs/sqlx-pgbouncer-session-crud-proof.md
 ---
 
