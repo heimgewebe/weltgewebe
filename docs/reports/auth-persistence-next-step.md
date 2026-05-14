@@ -55,7 +55,7 @@ Was fehlt bis zur vollständigen Session-Persistenz:
 2. Async-Abstraktion für `SessionStore` (Trait oder Enum-Dispatch)
 3. Startup-Migration in `apps/api/src/lib.rs`
 4. CI-Migrations-Step in `.github/workflows/api.yml`
-5. PgBouncer-Kompatibilitätsprüfung (`transaction` mode)
+5. Direkter SQLx/Postgres-Persistenzpfad-Nachweis; PgBouncer-Kompatibilitätsprüfung nur für optionale Dev-/Spezialpfade
 
 Prämissencheck zur Aufgabenstellung:
 
@@ -64,7 +64,7 @@ Prämissencheck zur Aufgabenstellung:
 | Auth-State ist mindestens teilweise flüchtig | **Bestätigt** | Fünf transiente Auth-Stores sind in-memory: Sessions, Tokens, StepUpTokens, Challenges und PasskeyRegistrations. Account-Stammdaten sind ein separates JSONL-Thema. |
 | Doku markiert Persistenz als Restlücke | **Bestätigt** | OPT-API-002 in `optimierungsstatus.md` = open; README-Note aktiv. |
 | Keine belastbare Entscheidung Postgres vs. Redis vs. Hybrid | **Teilweise falsch** | Die Doku stützt DB-first als nächsten Pfad; Runtime-Proof und Implementierungsdetails fehlen noch. |
-| Direkter Implementierungs-PR wäre zu annahmenreich | **Teilweise wahr** | PgBouncer-Modus, async-Abstraktion und CI-Gate sind noch ungeklärt. |
+| Direkter Implementierungs-PR wäre zu annahmenreich | **Teilweise wahr** | Direkter SQLx/Postgres-Nachweis, async-Abstraktion und CI-Gate fehlen noch. PgBouncer ist nach ADR-0007 kein Produktions-Gate. |
 
 ---
 
@@ -151,8 +151,9 @@ Divergenz zu `auth-persistence-readiness.md`: Dieses Vorgängerdokument stellte
 fest, dass kein Migrationsverzeichnis existiert. Das ist seit dem Schema-PR nicht mehr
 korrekt. Der aktuelle Ist-Zustand enthält ein Migrationsverzeichnis mit einer
 plausiblen `sessions`-Tabellendefinition. Runtime-Funktion noch nicht belegt:
-`sqlx migrate run` gegen PostgreSQL/PgBouncer und Query-Kompatibilität eines
-späteren `DbSessionStore` sind noch zu prüfen.
+`sqlx migrate run` und Query-Kompatibilität gegen direkten PostgreSQL-Zugriff sind
+für einen späteren `DbSessionStore` noch zu prüfen. PgBouncer bleibt nach ADR-0007
+optionaler Dev-/Spezialpfad.
 
 ### 2.3 DB-Pool (vorhanden, für Auth ungenutzt)
 
@@ -175,7 +176,7 @@ apps/api/src/routes/health.rs:164:    match state.db_pool.as_ref() {
 `db_pool` ist verdrahtet, aber **ausschließlich für den Health-Check** genutzt.
 Kein Auth-Handler liest oder schreibt über den Pool.
 
-### 2.4 PgBouncer-Konfiguration (belegt)
+### 2.4 PgBouncer-Konfiguration (belegt; optionaler Dev-/Spezialpfad nach ADR-0007)
 
 Kommando:
 
@@ -192,14 +193,14 @@ infra/compose/compose.core.yml:90:      POOL_MODE: transaction
 infra/compose/compose.core.yml:42:      DATABASE_URL: postgres://welt:gewebe@pgbouncer:6432/weltgewebe
 ```
 
-PgBouncer läuft im `transaction` mode und laut Compose-Befund aktuell mit Image
-`edoburu/pgbouncer:1.20`. Für einen künftigen `DbSessionStore` ist die Kompatibilität
-mit dem aktuellen Stack nicht belastbar abgesichert. `sqlx` verwendet prepared
-statements und transparentes Statement-Caching (`PgConnectOptions::statement_cache_capacity`,
-Default 100); ohne explizite Mitigation kann das auch bei einfachen CRUD-Operationen
-unter PgBouncer im `transaction` mode scheitern. Die Aussage „grundsätzlich kompatibel"
-wäre daher zu stark. Ein Folge-PR muss eine explizite PgBouncer/sqlx-Strategie wählen
-und empirisch prüfen.
+PgBouncer läuft im Dev-Stack im `transaction` mode und laut Compose-Befund aktuell
+mit Image `edoburu/pgbouncer:1.20`. Nach ADR-0007 ist PgBouncer kein Produktionspfad
+für Auth-Persistenz. Für Dev-/Spezialbetriebe bleibt die SQLx-Kompatibilität trotzdem
+nicht belastbar abgesichert: `sqlx` verwendet prepared statements und transparentes
+Statement-Caching (`PgConnectOptions::statement_cache_capacity`, Default 100); ohne
+explizite Mitigation kann das auch bei einfachen CRUD-Operationen unter PgBouncer im
+`transaction` mode scheitern. Eine PgBouncer/sqlx-Strategie ist daher nur für diese
+optionalen Pfade empirisch zu prüfen.
 
 ### 2.5 Redis-Status (belegt: nicht im Stack)
 
@@ -313,7 +314,7 @@ eigenständiger PR-Scope.
 | Option | Pro | Contra | Bewertung |
 |---|---|---|---|
 | **In-Memory belassen** | kein Aufwand, aktueller Zustand | Restart = Logout aller Nutzer; kein Multi-Instance | nur für PoC/Dev ohne SLA |
-| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; keine neue Abhängigkeit | async-Abstraktion nötig; CI-Gate fehlt; PgBouncer-Modus zu prüfen | **empfohlen** (strategisch gestützt; Runtime-Proof offen) |
+| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; keine neue Abhängigkeit; ADR-0007 legt direkten Produktionspfad fest | async-Abstraktion nötig; CI-Gate fehlt; direkter SQLx/Postgres-Proof fehlt | **empfohlen** (strategisch gestützt; Runtime-Proof offen) |
 | **Redis** | schnell für TTL-basierte Keys; kein Schema nötig | nicht im Stack; neue Abhängigkeit; kein Mehrwert für diesen Use-Case | nicht empfohlen |
 | **Hybrid** | kurzlebige Stores in Redis, Sessions in PG | komplexer Stack; zwei Systeme für dasselbe Problem | nicht empfohlen für aktuellen Scope |
 
@@ -339,9 +340,9 @@ vorwegzunehmen.
 ### Was müsste wahr sein, damit Postgres genügt?
 
 - **Belegt:** `db_pool` ist in `ApiState` vorhanden und `DATABASE_URL` konfiguriert.
-- **Belegt:** Eine `sessions`-Migration existiert und definiert die benötigten Kernspalten und Indizes. Runtime-Migrationsbeweis gegen PostgreSQL/PgBouncer und Query-Kompatibilität des späteren `DbSessionStore` stehen noch aus.
+- **Belegt:** Eine `sessions`-Migration existiert und definiert die benötigten Kernspalten und Indizes. Runtime-Migrationsbeweis gegen direkten PostgreSQL-Zugriff und Query-Kompatibilität des späteren `DbSessionStore` stehen noch aus.
 - **Belegt:** `sqlx` v0.8.1 ist als Abhängigkeit vorhanden.
-- **Offen (Risiko):** PgBouncer `transaction` mode ist ein explizites Kompatibilitätsrisiko. Der aktuelle PgBouncer-Stand (`edoburu/pgbouncer:1.20`) und die SQLx-Prepared-Statement-/Statement-Cache-Nutzung müssen im Folge-PR entweder konfigurationsseitig entschärft (z. B. Statement-Cache deaktivieren, PgBouncer-Upgrade mit `max_prepared_statements`) oder durch eine andere Pooling-/Verbindungsstrategie ersetzt werden. Der CRUD-Pfad muss gegen PostgreSQL/PgBouncer getestet werden.
+- **Entschieden:** ADR-0007 macht direkten PostgreSQL-Zugriff via `DATABASE_URL` zum Produktionspfad; PgBouncer `transaction` mode bleibt optionales Kompatibilitätsrisiko für Dev-/Spezialpfade.
 - **Offen:** Startup-Migration (`sqlx::migrate!`) muss sicher sein bei nicht-konfiguriertem Pool (bestehende Tests nutzen `db_pool: None`).
 - **Offen:** CI-Gate muss Migrations- und Integrationstests ohne Datenbankverbindung weiterhin erlauben (aktueller In-Memory-Pfad muss erhalten bleiben).
 
@@ -430,7 +431,7 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 
 1. **Async-Abstraktion:** `SessionOps`-Trait mit `async_trait` oder `SessionBackend`-Enum mit `match`-Dispatch? Beides ist möglich. Enum-Dispatch hat weniger Indirektion; Trait ist erweiterbar. Entscheidung im PR-Review.
 
-2. **PgBouncer `transaction` mode:** Muss verifiziert werden, dass `sqlx::PgPool`-CRUD ohne Prepared-Statement-/Statement-Cache-Probleme läuft. `sqlx::query!`-Makros sind hierfür keine Abhilfe: Auch sie verwenden prepared statements und lösen das PgBouncer-Grundproblem nicht; zusätzlich setzen sie `cargo sqlx prepare` / eingecheckte `.sqlx`-Datei oder eine Live-Datenbank beim Compile voraus. Der Folge-PR muss eine explizite Mitigation wählen und testen — z. B. Statement-Cache auf 0 setzen (`PgConnectOptions::statement_cache_capacity(0)`), PgBouncer-Upgrade auf ≥ 1.21 mit `max_prepared_statements > 0`, Session-Pooling für die API, oder direkte Postgres-Verbindung ohne PgBouncer. Keine dieser Optionen gilt ohne Integrationstest als bewiesen.
+2. **Direkter SQLx/Postgres-Pfad:** Nach ADR-0007 muss der Folge-PR verifizieren, dass `sqlx::PgPool`-CRUD gegen direkten PostgreSQL-Zugriff über `DATABASE_URL` funktioniert. PgBouncer-Varianten (Statement-Cache auf 0, PgBouncer-Upgrade auf ≥ 1.21 mit `max_prepared_statements > 0`, Session-Pooling) sind optionale Dev-/Spezialpfade und keine Produktionsvoraussetzung.
 
 3. **Startup-Fehlerverhalten:** Wenn `db_pool_configured = true` und Pool nicht verfügbar, soll die API nicht still auf In-Memory fallen — expliziter Fehler ist korrekt (bereits in `auth-persistence-readiness.md` definiert).
 
@@ -445,5 +446,5 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 | Migrations-Schema vorhanden? | **belegt** | Ja, seit 2026-04-28 — aber nicht in Startup aktiviert |
 | Strategie Postgres vs. Redis vs. Hybrid? | **strategisch gestützt** | PostgreSQL durch Doku und Diagnose als nächster Pfad gestützt; Redis/Hybrid ohne belegten Zusatznutzen; Runtime-Proof noch offen |
 | Was fehlt für Implementierung? | **belegt** | async-Abstraktion, `DbSessionStore`, Startup-Migration, CI-Gate |
-| PgBouncer-Kompatibilität? | **offenes Risiko** | SQLx prepared statements + statement cache + PgBouncer `transaction` mode (`edoburu/pgbouncer:1.20`) sind nicht belastbar kompatibel; Mitigation und Integrationstest sind Pflicht im Folge-PR |
-| Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig, sofern der Folge-PR die offenen Target-Proofs enthält: `sqlx`-Migration gegen PostgreSQL/PgBouncer, `DbSessionStore`-CRUD-Integrationstest, weiterhin grüner Offline-Testpfad |
+| PgBouncer-Kompatibilität? | **optionaler Spezialpfad** | SQLx prepared statements + statement cache + PgBouncer `transaction` mode (`edoburu/pgbouncer:1.20`) sind nicht belastbar kompatibel; nach ADR-0007 aber kein Produktions-Gate |
+| Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig; vor produktivem `DbSessionStore` ist jedoch ein separater Nachweis des direkten SQLx/Postgres-Persistenzpfads zwingend (inkl. weiterhin grünem Offline-Testpfad). |
