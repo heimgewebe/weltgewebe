@@ -3,7 +3,9 @@
   "build": {
     "dockerfile": "Dockerfile.extended",
     "args": {
-      "USERNAME": "vscode"
+      "USERNAME": "vscode",
+      "USER_UID": "1000",
+      "USER_GID": "1000"
     }
   },
   "features": {
@@ -45,7 +47,7 @@
     "PUPPETEER_SKIP_DOWNLOAD": "true"
   },
   "remoteUser": "vscode",
-  "updateRemoteUserUID": true,
+  "updateRemoteUserUID": false,
   "init": true,
   "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
   "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
