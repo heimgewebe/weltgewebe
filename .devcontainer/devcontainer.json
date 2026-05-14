@@ -1,55 +1,55 @@
 {
- "name": "weltgewebe-dev",
- "build": {
-  "dockerfile": "Dockerfile.extended",
-  "args": {
-   "USERNAME": "vscode",
-   "USER_UID": "1000",
-   "USER_GID": "1000"
-  }
- },
- "features": {
-  "ghcr.io/devcontainers/features/git:1": {},
-  "ghcr.io/devcontainers/features/github-cli:1": {},
-  "ghcr.io/devcontainers/features/rust:1": {},
-  "ghcr.io/devcontainers/features/node:1": {
-   "version": "20"
-  }
- },
- "customizations": {
-  "vscode": {
-   "extensions": [
-    "rust-lang.rust-analyzer",
-    "timonwong.shellcheck",
-    "streetsidesoftware.code-spell-checker",
-    "yzhang.markdown-all-in-one",
-    "DavidAnson.vscode-markdownlint",
-    "bierner.markdown-preview-github-styles"
-   ]
-  }
- },
- "forwardPorts": [
-  5173,
-  3000
- ],
- "portsAttributes": {
-  "5173": {
-   "label": "Vite Dev Server",
-   "onAutoForward": "openBrowser"
+  "name": "weltgewebe-dev",
+  "build": {
+    "dockerfile": "Dockerfile.extended",
+    "args": {
+      "USERNAME": "vscode",
+      "USER_UID": "1000",
+      "USER_GID": "1000"
+    }
   },
-  "3000": {
-   "label": "API / Preview",
-   "onAutoForward": "notify"
-  }
- },
- "containerEnv": {
-  "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
-  "PUPPETEER_SKIP_DOWNLOAD": "true"
- },
- "remoteUser": "vscode",
- "updateRemoteUserUID": false,
- "init": true,
- "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
- "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
- "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'"
+  "features": {
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/rust:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "timonwong.shellcheck",
+        "streetsidesoftware.code-spell-checker",
+        "yzhang.markdown-all-in-one",
+        "DavidAnson.vscode-markdownlint",
+        "bierner.markdown-preview-github-styles"
+      ]
+    }
+  },
+  "forwardPorts": [
+    5173,
+    3000
+  ],
+  "portsAttributes": {
+    "5173": {
+      "label": "Vite Dev Server",
+      "onAutoForward": "openBrowser"
+    },
+    "3000": {
+      "label": "API / Preview",
+      "onAutoForward": "notify"
+    }
+  },
+  "containerEnv": {
+    "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
+    "PUPPETEER_SKIP_DOWNLOAD": "true"
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": false,
+  "init": true,
+  "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
+  "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
+  "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
