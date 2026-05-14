@@ -1,12 +1,7 @@
 {
   "name": "weltgewebe-dev",
   "build": {
-    "dockerfile": "Dockerfile.extended",
-    "args": {
-      "USERNAME": "vscode",
-      "USER_UID": "1000",
-      "USER_GID": "1000"
-    }
+    "dockerfile": "Dockerfile.extended"
   },
   "features": {
     "ghcr.io/devcontainers/features/git:1": {},
@@ -46,8 +41,8 @@
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
     "PUPPETEER_SKIP_DOWNLOAD": "true"
   },
-  "remoteUser": "vscode",
-  "updateRemoteUserUID": false,
+  "remoteUser": "node",
+  "updateRemoteUserUID": true,
   "init": true,
   "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
   "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",

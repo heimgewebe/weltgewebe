@@ -5,13 +5,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8
 
-# --- Ensure expected devcontainer user exists (the CLI assumes "vscode") ---
-# Idempotent: nur anlegen, wenn er fehlt (manche Base-Images liefern ihn nicht).
-#
+# --- Use base image user (node) to avoid UID conflicts ---
+# The base image mcr.microsoft.com/devcontainers/javascript-node:22
+# already provides the `node` user with UID 1000.
 # Hard invariant: if the requested UID is already owned by a different user, fail
 # fast instead of renaming the foreign user. The devcontainer CLI is responsible
 # for synchronizing the runtime UID/GID when updateRemoteUserUID is enabled.
-ARG USERNAME=vscode
+ARG USERNAME=node
 ARG USER_UID=1000
 ARG USER_GID=${USER_UID}
 RUN set -eux; \
