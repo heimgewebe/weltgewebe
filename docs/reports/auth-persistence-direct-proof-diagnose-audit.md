@@ -89,8 +89,8 @@ A) `refactor(auth): introduce SessionBackend abstraction without changing runtim
 - In-Memory bleibt aktiv.
 - Kein Runtime-Verhalten ändern.
 - Kein DbSessionStore.
-- PROVEN erst, wenn bestehende Offline-Tests grün bleiben und Auth-Verhalten
-  identisch bleibt.
+- Als Abstraktions-Gate abgeschlossen erst, wenn bestehende Offline-Tests grün
+  bleiben und Auth-Verhalten identisch bleibt.
 
 B) `feat(auth): add DbSessionStore and prove restart-stable sessions`
 
@@ -119,11 +119,11 @@ Phase A macht ausschließlich die Abstraktionsnaht belastbar; Auth-Session-Persi
 Phase B ist erst dann `PROVEN`, wenn:
 
 1. Runtime-Beweis: API erzeugt Session, API wird neu gestartet,
-    Session bleibt gültig (kein Logout durch Restart).
+   Session bleibt gültig (kein Logout durch Restart).
 2. Runtime-Beweis: `logout`, `logout_all`, `remove_device`, `session_refresh`
-    wirken über den DB-basierten Session-Pfad korrekt.
-3. CI-Beweis: ein DB-gebundener Integrationstest läuft automatisch und feilt,
-    wenn der Session-Persistenzpfad scheitert.
+   wirken über den DB-basierten Session-Pfad korrekt.
+3. CI-Beweis: ein DB-gebundener Integrationstest läuft automatisch und scheitert,
+   wenn der Session-Persistenzpfad nicht funktioniert.
 4. Offline-Beweis: bestehende Offline-Test-Suites bleiben ohne DB grün.
 
 ## PR-Titelkandidaten für Phase A (Abstraktions-PR)
