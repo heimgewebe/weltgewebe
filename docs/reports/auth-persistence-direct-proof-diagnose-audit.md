@@ -36,18 +36,19 @@ Bewertet wurde stattdessen das vorhandene Dokument
 
 mergebar.
 
-Begruendung: Das Proof-Dokument behauptet ueberwiegend korrekt nur den direkten
+Begründung: Das Proof-Dokument behauptet überwiegend korrekt nur den direkten
 SQLx/Postgres-CRUD-Pfad. Es grenzt explizit aus, dass kein `DbSessionStore`,
 kein Auth-Umbau und keine produktive Session-Persistenz-Verdrahtung bewiesen
 sind. Damit ist es als Runtime-Proof-Baustein valide.
 
-Einschraenkung: Das Label `PROVEN` im Dokument darf ausschliesslich als
-`PROVEN fuer den direkten SQLx/Postgres-CRUD-Pfad` gelesen werden, nicht als
-`PROVEN fuer produktive Auth-Session-Persistenz`.
+Einschränkung: Das Label `PROVEN` im Dokument darf ausschließlich als
+`PROVEN für den direkten SQLx/Postgres-CRUD-Pfad` gelesen werden, nicht als
+`PROVEN für produktive Auth-Session-Persistenz`.
 
 ## Was wirklich bewiesen ist
 
-- Direkte DB-Verbindung via `PG_DIRECT_URL` oder `DATABASE_URL` funktioniert.
+- Direkte DB-Verbindung via `PG_DIRECT_URL` ist runtime-seitig bewiesen;
+  `DATABASE_URL` ist im Testcode nur als Fallback akzeptiert.
 - SQLx-CRUD auf sessions-spaltenkompatiblem Proof-Fixture funktioniert:
   INSERT, SELECT, UPDATE `last_active`, DELETE, COUNT.
 - Der Test failt hart bei fehlender URL (kein stilles Skippen).
@@ -59,65 +60,72 @@ Einschraenkung: Das Label `PROVEN` im Dokument darf ausschliesslich als
 - Keine produktive Persistenz der realen Auth-Sessions aus Middleware/Routes.
 - Keine Nutzung durch `SessionStore` in `apps/api/src/auth/session.rs`
   (weiterhin in-memory `RwLock<HashMap<...>>`).
-- Keine Auth-Routen-/Middleware-Pfade ueber DB (`state.sessions.*` bleibt
+- Keine Auth-Routen-/Middleware-Pfade über DB (`state.sessions.*` bleibt
   in-memory in `apps/api/src/routes/auth.rs` und `apps/api/src/middleware/auth.rs`).
 - Keine Startup-Migration als verpflichtender Runtime-Pfad in `apps/api/src/lib.rs`.
-- Kein CI-Gate, das Auth-Session-Persistenz ueber API-Runtime beweist.
+- Kein CI-Gate, das Auth-Session-Persistenz über API-Runtime beweist.
 
 ## Versteckte Risiken
 
 - Semantisches Risiko: `PROVEN` kann organisatorisch als
-  `Persistenzproblem geloest` fehlgelesen werden.
+  `Persistenzproblem gelöst` fehlgelesen werden.
 - Integrationsrisiko: Solange `SessionStore` in-memory bleibt, gehen Sessions bei
   API-Restart verloren, obwohl DB-CRUD isoliert bewiesen ist.
 - Betriebsrisiko: Ohne Startup-/CI-Migrationsgate kann eine DB-basiert gedachte
   Persistenz in Runtime-Umgebungen uneinheitlich sein.
-- Scope-Risiko: Der Proof laeuft auf isoliertem Fixture, nicht auf der realen
+- Scope-Risiko: Der Proof läuft auf isoliertem Fixture, nicht auf der realen
   SessionStore-Laufzeitverkabelung.
 
-## Minimaler naechster Folge-PR
+## Minimaler nächster Folge-PR
+
+Der unmittelbar nächste konkrete PR ist **ausschließlich Phase A** (Abstraktions-PR).
+Phase B ist ein späterer, separater PR. Phase A führt keine DB-Runtime-Verdrahtung durch.
 
 Kleinstes sinnvolles Architektur-Gate Richtung echter Persistenz in zwei Phasen:
 
 A) `refactor(auth): introduce SessionBackend abstraction without changing runtime behavior`
 
-- Ziel: Backend-Naht fuer Session-Operationen einfuehren.
+- Ziel: Backend-Naht für Session-Operationen einführen.
 - In-Memory bleibt aktiv.
-- Kein Runtime-Verhalten aendern.
+- Kein Runtime-Verhalten ändern.
 - Kein DbSessionStore.
-- PROVEN erst, wenn bestehende Offline-Tests gruen bleiben und Auth-Verhalten
+- PROVEN erst, wenn bestehende Offline-Tests grün bleiben und Auth-Verhalten
   identisch bleibt.
 
 B) `feat(auth): add DbSessionStore and prove restart-stable sessions`
 
-- Ziel: DB-Backend fuer Sessions implementieren und verdrahten.
-- Runtime-/CI-Proof fuer echte Session-Persistenz.
-- PROVEN erst mit Restart-Stabilitaet, DB-Integrationstest und weiterhin
-  gruenem Offline-Pfad.
+- Ziel: DB-Backend für Sessions implementieren und verdrahten.
+- Runtime-/CI-Proof für echte Session-Persistenz.
+- PROVEN erst mit Restart-Stabilität, DB-Integrationstest und weiterhin
+  grünem Offline-Pfad.
 
 Nicht in diesen Folge-PR ziehen: Redis, Token-/Challenge-Store-Persistenz,
-Passkey-Store-Umbau, grosse Auth-Refactors.
+Passkey-Store-Umbau, große Auth-Refactors.
 
 ## Stop-Kriterium
 
+**Phase A ist eine reine Abstraktions-Naht und macht Auth-Persistenz NICHT lauffähig.**
+
 Phase A ist erst dann `PROVEN`, wenn:
 
-1. alle bestehenden Offline-Tests gruen bleiben,
-2. Auth-Verhalten unveraendert bleibt,
+1. alle bestehenden Offline-Tests grün bleiben,
+2. Auth-Verhalten unverändert bleibt,
 3. keine Runtime-Verdrahtung auf DB erfolgt.
+
+**Auth-Session-Persistenz wird ausschließlich in Phase B PROVEN.**
 
 Phase B ist erst dann `PROVEN`, wenn:
 
 1. Runtime-Beweis: API erzeugt Session, API wird neu gestartet,
-  Session bleibt gueltig (kein Logout durch Restart).
+  Session bleibt gültig (kein Logout durch Restart).
 2. Runtime-Beweis: `logout`, `logout_all`, `remove_device`, `session_refresh`
-  wirken ueber den DB-basierten Session-Pfad korrekt.
-3. CI-Beweis: ein DB-gebundener Integrationstest laeuft automatisch und failt,
+  wirken über den DB-basierten Session-Pfad korrekt.
+3. CI-Beweis: ein DB-gebundener Integrationstest läuft automatisch und feilt,
   wenn Session-Persistenzpfad nicht funktioniert.
-4. Offline-Beweis: bestehende Offline-Test-Suites bleiben ohne DB gruen.
+4. Offline-Beweis: bestehende Offline-Test-Suites bleiben ohne DB grün.
 
-## PR-Titelkandidaten (Folge-PR)
+## PR-Titelkandidaten für Phase A (Abstraktions-PR)
 
-1. `feat(auth): wire DbSessionStore for runtime session persistence`
-2. `feat(api): switch auth sessions from in-memory to PostgreSQL backend`
-3. `test(auth): prove restart-stable session persistence via DbSessionStore`
+1. `refactor(auth): extract session store abstraction without changing runtime wiring`
+2. `refactor(api): introduce auth session persistence interface for future DB backend`
+3. `test(auth): lock in current session behavior during store abstraction refactor`
