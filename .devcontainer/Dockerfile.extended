@@ -8,10 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # --- Ensure expected devcontainer user exists (the CLI assumes "vscode") ---
 # Idempotent: nur anlegen, wenn er fehlt (manche Base-Images liefern ihn nicht).
 #
-# Robustere Logik: vermeide feste UID/GID, wenn die gewünschte UID bereits belegt ist.
-# Falls ${USERNAME} bereits existiert, passiert nichts. Falls die gewünschte UID
-# frei ist, wird sie verwendet; sonst wird der User ohne feste UID angelegt, um
-# "UID ... is not unique"-Fehler während des Image-Builds zu vermeiden.
+# Hard invariant: if the requested UID is already owned by a different user, fail
+# fast instead of renaming the foreign user. The devcontainer CLI is responsible
+# for synchronizing the runtime UID/GID when updateRemoteUserUID is enabled.
 ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=${USER_UID}
@@ -19,8 +18,6 @@ RUN set -eux; \
    requested_uid="${USER_UID}"; \
    requested_gid="${USER_GID}"; \
    uid_owner="$(getent passwd "${requested_uid}" | cut -d: -f1 || true)"; \
-   # Hard invariant: ${USERNAME} must end up with ${USER_UID}. \
-   # Silent fallback to a different UID corrupts bind-mounted host repos. \
    if getent passwd "${USERNAME}" >/dev/null 2>&1; then \
      current_uid="$(id -u "${USERNAME}")"; \
      if [ "${current_uid}" != "${requested_uid}" ]; then \
@@ -31,12 +28,9 @@ RUN set -eux; \
        usermod --uid "${requested_uid}" "${USERNAME}"; \
      fi; \
    else \
-     if [ -n "${uid_owner}" ]; then \
-       old_home="$(getent passwd "${uid_owner}" | cut -d: -f6)"; \
-       usermod -l "${USERNAME}" "${uid_owner}"; \
-       if [ "${old_home}" != "/home/${USERNAME}" ]; then \
-         usermod -d "/home/${USERNAME}" -m "${USERNAME}" || true; \
-       fi; \
+     if [ -n "${uid_owner}" ] && [ "${uid_owner}" != "${USERNAME}" ]; then \
+       echo "ERROR: requested UID ${requested_uid} is already used by ${uid_owner}; refusing to create ${USERNAME}" >&2; \
+       exit 42; \
      else \
        if getent group "${requested_gid}" >/dev/null 2>&1; then \
          target_group="$(getent group "${requested_gid}" | cut -d: -f1)"; \
