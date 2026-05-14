@@ -313,7 +313,7 @@ pub async fn dev_login(
         }
     }
 
-    let session = state.sessions.create(payload.account_id, None);
+    let session = state.sessions.create(payload.account_id, None).await;
 
     let cookie = build_session_cookie(session.id, None);
 
@@ -817,7 +817,7 @@ pub async fn consume_login_post(
                 return Redirect::to("/login?error=account_disabled").into_response();
             }
 
-            let session = state.sessions.create(acc.public.id.clone(), None);
+            let session = state.sessions.create(acc.public.id.clone(), None).await;
             let cookie = build_session_cookie(session.id, None);
 
             // Clear the nonce cookie
@@ -865,7 +865,7 @@ pub async fn consume_login_post(
 
 pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
-        state.sessions.delete(cookie.value());
+        state.sessions.delete(cookie.value()).await;
     }
 
     let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
@@ -1038,14 +1038,14 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         let old_session_id = cookie.value();
 
-        if let Some(old_session) = state.sessions.get(old_session_id) {
+        if let Some(old_session) = state.sessions.get(old_session_id).await {
             let accounts = state.accounts.read().await;
             let is_valid = accounts
                 .get(&old_session.account_id)
                 .is_some_and(|acc| !acc.public.disabled);
             drop(accounts);
 
-            state.sessions.delete(old_session_id);
+            state.sessions.delete(old_session_id).await;
 
             if !is_valid {
                 tracing::warn!(
@@ -1066,7 +1066,8 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
 
             let new_session = state
                 .sessions
-                .create(old_session.account_id, Some(old_session.device_id.clone()));
+                .create(old_session.account_id, Some(old_session.device_id.clone()))
+                .await;
 
             let new_cookie = build_session_cookie(new_session.id, None);
 
@@ -1121,7 +1122,7 @@ pub async fn list_devices(
         }
     };
 
-    let sessions = state.sessions.list_by_account(&account_id);
+    let sessions = state.sessions.list_by_account(&account_id).await;
 
     // Group sessions by device_id
     let current_device_id = match ctx.device_id {
@@ -1199,13 +1200,16 @@ pub async fn remove_device(
 
     if *current_device_id == device_id {
         // Logging out current device -> delete all sessions for it and clear cookie
-        state.sessions.delete_by_device(&account_id, &device_id);
+        state
+            .sessions
+            .delete_by_device(&account_id, &device_id)
+            .await;
         let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
         return (axum::http::StatusCode::NO_CONTENT, jar.add(cookie)).into_response();
     }
 
     // Removing another device -> first check if it even exists for this account
-    let account_sessions = state.sessions.list_by_account(&account_id);
+    let account_sessions = state.sessions.list_by_account(&account_id).await;
     let target_device_exists = account_sessions.iter().any(|s| s.device_id == device_id);
 
     if !target_device_exists {
@@ -1495,7 +1499,7 @@ pub async fn consume_step_up(
                 account_id = %account_id,
                 "Step-up consume: executing LogoutAll intent"
             );
-            state.sessions.delete_all_by_account(&account_id);
+            state.sessions.delete_all_by_account(&account_id).await;
             // Empty value + zero max-age clears the session cookie in the client
             let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
             (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
@@ -1510,7 +1514,8 @@ pub async fn consume_step_up(
             );
             state
                 .sessions
-                .delete_by_device(&account_id, &target_device_id);
+                .delete_by_device(&account_id, &target_device_id)
+                .await;
             StatusCode::NO_CONTENT.into_response()
         }
         ChallengeIntent::UpdateEmail { new_email } => {

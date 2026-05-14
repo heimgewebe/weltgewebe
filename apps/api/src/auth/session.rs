@@ -1,4 +1,5 @@
 use crate::auth::lock::RwLockRecover;
+use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -26,14 +27,15 @@ pub struct SessionStore {
     store: Arc<RwLock<HashMap<String, Session>>>,
 }
 
+#[async_trait]
 pub trait SessionOps: Send + Sync {
-    fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session;
-    fn get(&self, session_id: &str) -> Option<Session>;
-    fn delete(&self, session_id: &str);
-    fn touch(&self, session_id: &str);
-    fn list_by_account(&self, account_id: &str) -> Vec<Session>;
-    fn delete_by_device(&self, account_id: &str, device_id: &str);
-    fn delete_all_by_account(&self, account_id: &str);
+    async fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session;
+    async fn get(&self, session_id: &str) -> Option<Session>;
+    async fn delete(&self, session_id: &str);
+    async fn touch(&self, session_id: &str);
+    async fn list_by_account(&self, account_id: &str) -> Vec<Session>;
+    async fn delete_by_device(&self, account_id: &str, device_id: &str);
+    async fn delete_all_by_account(&self, account_id: &str);
 }
 
 #[derive(Clone)]
@@ -61,32 +63,32 @@ impl SessionBackend {
         Self::new(SessionStore::new())
     }
 
-    pub fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
-        self.inner.create(account_id, existing_device_id)
+    pub async fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
+        self.inner.create(account_id, existing_device_id).await
     }
 
-    pub fn get(&self, session_id: &str) -> Option<Session> {
-        self.inner.get(session_id)
+    pub async fn get(&self, session_id: &str) -> Option<Session> {
+        self.inner.get(session_id).await
     }
 
-    pub fn delete(&self, session_id: &str) {
-        self.inner.delete(session_id);
+    pub async fn delete(&self, session_id: &str) {
+        self.inner.delete(session_id).await;
     }
 
-    pub fn touch(&self, session_id: &str) {
-        self.inner.touch(session_id);
+    pub async fn touch(&self, session_id: &str) {
+        self.inner.touch(session_id).await;
     }
 
-    pub fn list_by_account(&self, account_id: &str) -> Vec<Session> {
-        self.inner.list_by_account(account_id)
+    pub async fn list_by_account(&self, account_id: &str) -> Vec<Session> {
+        self.inner.list_by_account(account_id).await
     }
 
-    pub fn delete_by_device(&self, account_id: &str, device_id: &str) {
-        self.inner.delete_by_device(account_id, device_id);
+    pub async fn delete_by_device(&self, account_id: &str, device_id: &str) {
+        self.inner.delete_by_device(account_id, device_id).await;
     }
 
-    pub fn delete_all_by_account(&self, account_id: &str) {
-        self.inner.delete_all_by_account(account_id);
+    pub async fn delete_all_by_account(&self, account_id: &str) {
+        self.inner.delete_all_by_account(account_id).await;
     }
 }
 
@@ -184,32 +186,33 @@ impl SessionStore {
     }
 }
 
+#[async_trait]
 impl SessionOps for SessionStore {
-    fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
+    async fn create(&self, account_id: String, existing_device_id: Option<String>) -> Session {
         SessionStore::create(self, account_id, existing_device_id)
     }
 
-    fn get(&self, session_id: &str) -> Option<Session> {
+    async fn get(&self, session_id: &str) -> Option<Session> {
         SessionStore::get(self, session_id)
     }
 
-    fn delete(&self, session_id: &str) {
+    async fn delete(&self, session_id: &str) {
         SessionStore::delete(self, session_id);
     }
 
-    fn touch(&self, session_id: &str) {
+    async fn touch(&self, session_id: &str) {
         SessionStore::touch(self, session_id);
     }
 
-    fn list_by_account(&self, account_id: &str) -> Vec<Session> {
+    async fn list_by_account(&self, account_id: &str) -> Vec<Session> {
         SessionStore::list_by_account(self, account_id)
     }
 
-    fn delete_by_device(&self, account_id: &str, device_id: &str) {
+    async fn delete_by_device(&self, account_id: &str, device_id: &str) {
         SessionStore::delete_by_device(self, account_id, device_id);
     }
 
-    fn delete_all_by_account(&self, account_id: &str) {
+    async fn delete_all_by_account(&self, account_id: &str) {
         SessionStore::delete_all_by_account(self, account_id);
     }
 }

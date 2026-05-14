@@ -27,7 +27,7 @@ pub async fn auth_middleware(
     };
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
-        if let Some(session) = state.sessions.get(cookie.value()) {
+        if let Some(session) = state.sessions.get(cookie.value()).await {
             let accounts = state.accounts.read().await;
             if let Some(internal) = accounts.get(&session.account_id) {
                 ctx.authenticated = true;
@@ -37,7 +37,7 @@ pub async fn auth_middleware(
                 ctx.expires_at = Some(session.expires_at);
 
                 // Synchronously touch to update last_active if needed (debounced internally)
-                state.sessions.touch(&session.id);
+                state.sessions.touch(&session.id).await;
             }
         }
     }
