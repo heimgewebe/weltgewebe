@@ -24,6 +24,40 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
+async fn create_session(
+    state: &ApiState,
+    account_id: &str,
+    existing_device_id: Option<&str>,
+) -> weltgewebe_api::auth::session::Session {
+    state
+        .sessions
+        .create(
+            account_id.to_string(),
+            existing_device_id.map(std::string::ToString::to_string),
+        )
+        .await
+        .expect("in-memory session backend must create session")
+}
+
+async fn get_session(
+    state: &ApiState,
+    session_id: &str,
+) -> Option<weltgewebe_api::auth::session::Session> {
+    state
+        .sessions
+        .get(session_id)
+        .await
+        .expect("in-memory session backend must fetch session")
+}
+
+async fn delete_session(state: &ApiState, session_id: &str) {
+    state
+        .sessions
+        .delete(session_id)
+        .await
+        .expect("in-memory session backend must delete session");
+}
+
 fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
@@ -1224,7 +1258,7 @@ async fn session_endpoint_unauthenticated() -> Result<()> {
 async fn session_endpoint_authenticated() -> Result<()> {
     let state = test_state_with_accounts()?;
     // Mock a valid session for user u1
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id;
 
     let app = Router::new()
@@ -2080,7 +2114,7 @@ async fn test_step_up_magic_link_request_missing_mailer() -> Result<()> {
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2151,7 +2185,7 @@ async fn test_step_up_magic_link_request_invalid_challenge() -> Result<()> {
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id;
 
     let app = Router::new()
@@ -2212,10 +2246,10 @@ async fn test_step_up_magic_link_request_binding_mismatch() -> Result<()> {
         };
         accounts.insert(account);
     }
-    let session2 = state.sessions.create("u2".to_string(), None).await;
+    let session2 = create_session(&state, "u2", None).await;
     let session_id2 = session2.id;
 
-    let session1 = state.sessions.create("u1".to_string(), None).await;
+    let session1 = create_session(&state, "u1", None).await;
     let device_id1 = session1.device_id;
     let challenge1 = state.challenges.create(
         "u1".to_string(),
@@ -2286,7 +2320,7 @@ async fn test_step_up_magic_link_request_account_invalid() -> Result<()> {
         accounts.insert(account);
     }
 
-    let session = state.sessions.create("u2".to_string(), None).await;
+    let session = create_session(&state, "u2", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2337,7 +2371,7 @@ async fn test_step_up_magic_link_request_missing_base_url() -> Result<()> {
     state.config.auth_public_login = true;
     state.config.app_base_url = None; // explicitly missing
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2404,7 +2438,7 @@ async fn test_step_up_consume_invalid_token() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
 
     let app = Router::new()
@@ -2443,7 +2477,7 @@ async fn test_step_up_consume_challenge_id_mismatch() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2497,7 +2531,7 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2570,7 +2604,7 @@ async fn test_step_up_consume_challenge_missing_token_gone() -> Result<()> {
 
     // Confirm at store level: the token is gone (NotFound, not BindingMismatch)
     use weltgewebe_api::auth::step_up_tokens::ConsumeMatchResult;
-    let device_id = state.sessions.get(&session_id).await.unwrap().device_id;
+    let device_id = get_session(&state, &session_id).await.unwrap().device_id;
     assert!(matches!(
         state
             .step_up_tokens
@@ -2589,7 +2623,7 @@ async fn test_step_up_consume_session_mismatch() -> Result<()> {
     state.config.auth_public_login = true;
 
     // session1 belongs to u1/device1 — token is bound to this
-    let session1 = state.sessions.create("u1".to_string(), None).await;
+    let session1 = create_session(&state, "u1", None).await;
     let device_id1 = session1.device_id.clone();
     let challenge = state.challenges.create(
         "u1".to_string(),
@@ -2601,7 +2635,7 @@ async fn test_step_up_consume_session_mismatch() -> Result<()> {
         .create(challenge.id.clone(), "u1".to_string(), device_id1);
 
     // session2 belongs to u1 but a different device — we present this session
-    let session2 = state.sessions.create("u1".to_string(), None).await;
+    let session2 = create_session(&state, "u1", None).await;
     let session_id2 = session2.id.clone();
 
     let app = Router::new()
@@ -2645,7 +2679,7 @@ async fn test_step_up_consume_session_mismatch_token_survives() -> Result<()> {
     state.config.auth_public_login = true;
 
     // session1 belongs to u1/device1 — token and challenge are bound to this session
-    let session1 = state.sessions.create("u1".to_string(), None).await;
+    let session1 = create_session(&state, "u1", None).await;
     let session_id1 = session1.id.clone();
     let device_id1 = session1.device_id.clone();
     let challenge = state.challenges.create(
@@ -2658,7 +2692,7 @@ async fn test_step_up_consume_session_mismatch_token_survives() -> Result<()> {
         .create(challenge.id.clone(), "u1".to_string(), device_id1);
 
     // session2 belongs to u1 but a different device — wrong session
-    let session2 = state.sessions.create("u1".to_string(), None).await;
+    let session2 = create_session(&state, "u1", None).await;
     let session_id2 = session2.id.clone();
 
     let app = Router::new()
@@ -2718,7 +2752,7 @@ async fn test_step_up_consume_token_reuse_rejected() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
     let session_id = session.id.clone();
     let device_id = session.device_id.clone();
 
@@ -2759,7 +2793,7 @@ async fn test_step_up_consume_token_reuse_rejected() -> Result<()> {
     assert_eq!(res1.status(), StatusCode::NO_CONTENT);
 
     // Recreate a session since all were deleted by LogoutAll
-    let new_session = state.sessions.create("u1".to_string(), None).await;
+    let new_session = create_session(&state, "u1", None).await;
     let new_session_id = new_session.id.clone();
 
     // Second call with the same token — must be rejected
@@ -2793,10 +2827,10 @@ async fn test_step_up_consume_logout_all_success() -> Result<()> {
     state.config.auth_public_login = true;
 
     // Create two sessions for the same account
-    let session1 = state.sessions.create("u1".to_string(), None).await;
+    let session1 = create_session(&state, "u1", None).await;
     let session_id1 = session1.id.clone();
     let device_id1 = session1.device_id.clone();
-    let session2 = state.sessions.create("u1".to_string(), None).await;
+    let session2 = create_session(&state, "u1", None).await;
     let session_id2 = session2.id.clone();
 
     let challenge = state.challenges.create(
@@ -2835,9 +2869,9 @@ async fn test_step_up_consume_logout_all_success() -> Result<()> {
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
     // Session 1 must be gone
-    assert!(state.sessions.get(&session_id1).await.is_none());
+    assert!(get_session(&state, &session_id1).await.is_none());
     // Session 2 must also be gone (LogoutAll)
-    assert!(state.sessions.get(&session_id2).await.is_none());
+    assert!(get_session(&state, &session_id2).await.is_none());
 
     // The challenge must be consumed (single-use)
     assert!(state.challenges.get(&challenge.id).is_none());
@@ -2851,15 +2885,12 @@ async fn test_step_up_consume_remove_device_success() -> Result<()> {
     state.config.auth_public_login = true;
 
     // session1 is the requesting session (device1)
-    let session1 = state.sessions.create("u1".to_string(), None).await;
+    let session1 = create_session(&state, "u1", None).await;
     let session_id1 = session1.id.clone();
     let device_id1 = session1.device_id.clone();
 
     // session2 is the target device to remove (device2)
-    let session2 = state
-        .sessions
-        .create("u1".to_string(), Some("target-device".to_string()))
-        .await;
+    let session2 = create_session(&state, "u1", Some("target-device")).await;
     let session_id2 = session2.id.clone();
 
     let challenge = state.challenges.create(
@@ -2900,9 +2931,9 @@ async fn test_step_up_consume_remove_device_success() -> Result<()> {
     assert_eq!(res.status(), StatusCode::NO_CONTENT);
 
     // Target device (session2) must be removed
-    assert!(state.sessions.get(&session_id2).await.is_none());
+    assert!(get_session(&state, &session_id2).await.is_none());
     // Requesting session (session1) must still be valid
-    assert!(state.sessions.get(&session_id1).await.is_some());
+    assert!(get_session(&state, &session_id1).await.is_some());
 
     // The challenge must be consumed (single-use)
     assert!(state.challenges.get(&challenge.id).is_none());
@@ -2915,10 +2946,7 @@ async fn test_update_email_no_op_returns_204() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev1")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -2961,10 +2989,7 @@ async fn test_update_email_full_e2e_flow() -> Result<()> {
         .with_test_sink(sink.clone());
     state.mailer = Some(std::sync::Arc::new(mailer));
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev1")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -3075,10 +3100,7 @@ async fn test_update_email_invalid_format() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev1")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -3138,10 +3160,7 @@ async fn test_step_up_consume_begin_passkey_registration_issues_grant() -> Resul
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let challenge = state.challenges.create(
         "u1".to_string(),
         "dev-passkey".to_string(),
@@ -3194,7 +3213,7 @@ async fn test_step_up_consume_begin_passkey_registration_issues_grant() -> Resul
     );
 
     assert!(
-        state.sessions.get(&session.id).await.is_some(),
+        get_session(&state, &session.id).await.is_some(),
         "begin-passkey-registration step-up must not alter sessions"
     );
     assert!(
@@ -3211,10 +3230,7 @@ async fn test_update_email_requires_step_up() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev1")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -3254,10 +3270,7 @@ async fn test_update_email_conflict_with_existing_account() -> Result<()> {
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
 
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev1")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let app = Router::new()
@@ -3311,16 +3324,10 @@ async fn test_update_email_consume_wrong_session() -> Result<()> {
     state.config.auth_public_login = true;
 
     // Session 1 is the one that initiated the update
-    let session1 = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session1 = create_session(&state, "u1", Some("dev1")).await;
 
     // Session 2 is an attacker or just another session
-    let session2 = state
-        .sessions
-        .create("u2".to_string(), Some("dev2".to_string()))
-        .await;
+    let session2 = create_session(&state, "u2", Some("dev2")).await;
     let wrong_cookie = format!("{}={}", SESSION_COOKIE_NAME, session2.id);
 
     use weltgewebe_api::auth::challenges::ChallengeIntent;
@@ -3381,10 +3388,7 @@ async fn test_update_email_consume_session_rotation() -> Result<()> {
     state.config.auth_public_login = true;
 
     // Session 1 is the one that initiated the update (same device)
-    let session1 = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    let session1 = create_session(&state, "u1", Some("dev1")).await;
 
     use weltgewebe_api::auth::challenges::ChallengeIntent;
 
@@ -3403,11 +3407,8 @@ async fn test_update_email_consume_session_rotation() -> Result<()> {
     );
 
     // Simulate session rotation: Session 1 expires, new Session 2 is created for the *same* device
-    state.sessions.delete(&session1.id).await;
-    let session2 = state
-        .sessions
-        .create("u1".to_string(), Some("dev1".to_string()))
-        .await;
+    delete_session(&state, &session1.id).await;
+    let session2 = create_session(&state, "u1", Some("dev1")).await;
 
     let new_cookie = format!("{}={}", SESSION_COOKIE_NAME, session2.id);
 
@@ -3495,7 +3496,7 @@ async fn passkey_register_options_requires_authentication() -> Result<()> {
 async fn passkey_register_options_returns_503_when_not_configured() -> Result<()> {
     let state = test_state_with_accounts()?;
     // webauthn is None in default test_state
-    let session = state.sessions.create("u1".to_string(), None).await;
+    let session = create_session(&state, "u1", None).await;
 
     let app = app_with_auth(state);
 
@@ -3522,10 +3523,7 @@ async fn passkey_register_options_returns_503_when_not_configured() -> Result<()
 #[tokio::test]
 async fn passkey_register_options_requires_step_up_challenge() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let expected_device_id = session.device_id.clone();
 
     let app = app_with_auth(state.clone());
@@ -3565,10 +3563,7 @@ async fn passkey_register_options_requires_step_up_challenge() -> Result<()> {
 #[tokio::test]
 async fn passkey_register_options_reuses_active_step_up_challenge() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
 
     let app = app_with_auth(state.clone());
 
@@ -3685,10 +3680,7 @@ async fn consume_begin_passkey_registration_step_up(
 #[tokio::test]
 async fn passkey_register_options_with_valid_grant_returns_200() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let challenge_id = request_passkey_registration_challenge(&state, &cookie).await?;
@@ -3759,10 +3751,7 @@ async fn passkey_register_options_with_valid_grant_returns_200() -> Result<()> {
 #[tokio::test]
 async fn passkey_register_options_grant_is_single_use() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     let challenge_id = request_passkey_registration_challenge(&state, &cookie).await?;
@@ -3816,15 +3805,9 @@ async fn passkey_register_options_grant_wrong_account_rejected() -> Result<()> {
     let state = test_state_with_webauthn()?;
 
     // Session for u1 with device "dev-passkey".
-    let session_u1 = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session_u1 = create_session(&state, "u1", Some("dev-passkey")).await;
     // Session for a1 (different account, different device).
-    let session_a1 = state
-        .sessions
-        .create("a1".to_string(), Some("dev-a1".to_string()))
-        .await;
+    let session_a1 = create_session(&state, "a1", Some("dev-a1")).await;
     let cookie_u1 = format!("{}={}", SESSION_COOKIE_NAME, session_u1.id);
     let cookie_a1 = format!("{}={}", SESSION_COOKIE_NAME, session_a1.id);
 
@@ -3882,14 +3865,8 @@ async fn passkey_register_options_grant_wrong_account_rejected() -> Result<()> {
 async fn passkey_register_options_grant_wrong_device_rejected() -> Result<()> {
     let state = test_state_with_webauthn()?;
 
-    let session_u1_device_a = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
-    let session_u1_device_b = state
-        .sessions
-        .create("u1".to_string(), Some("dev-other".to_string()))
-        .await;
+    let session_u1_device_a = create_session(&state, "u1", Some("dev-passkey")).await;
+    let session_u1_device_b = create_session(&state, "u1", Some("dev-other")).await;
     let cookie_device_a = format!("{}={}", SESSION_COOKIE_NAME, session_u1_device_a.id);
     let cookie_device_b = format!("{}={}", SESSION_COOKIE_NAME, session_u1_device_b.id);
 
@@ -3944,10 +3921,7 @@ async fn passkey_register_options_grant_wrong_device_rejected() -> Result<()> {
 #[tokio::test]
 async fn passkey_register_options_without_grant_still_returns_step_up_required() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
 
     let app = app_with_auth(state.clone());
     let req = Request::post("/auth/passkeys/register/options")
@@ -3973,10 +3947,7 @@ async fn passkey_register_options_without_grant_still_returns_step_up_required()
 #[tokio::test]
 async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
     let state = test_state_with_webauthn()?;
-    let session = state
-        .sessions
-        .create("u1".to_string(), Some("dev-passkey".to_string()))
-        .await;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
 
     // Insert an already-expired grant directly.
