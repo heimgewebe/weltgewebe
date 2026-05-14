@@ -16,21 +16,43 @@ ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=${USER_UID}
 RUN set -eux; \
-    # ensure group exists (try with requested GID, fall back to name-only)
-    if ! getent group "${USERNAME}" >/dev/null 2>&1; then \
-      groupadd --gid "${USER_GID}" "${USERNAME}" || groupadd "${USERNAME}"; \
-    fi; \
-    # create user only if missing
-    if ! getent passwd "${USERNAME}" >/dev/null 2>&1; then \
-      # if the requested UID is free, create with that UID; otherwise create
-      # the user without forcing UID to avoid conflicts with existing users
-      if ! getent passwd "${USER_UID}" >/dev/null 2>&1; then \
-        useradd --uid "${USER_UID}" --gid "${USERNAME}" -m -s /bin/bash "${USERNAME}"; \
-      else \
-        useradd -m -s /bin/bash -g "${USERNAME}" "${USERNAME}" || useradd -m -s /bin/bash "${USERNAME}"; \
-      fi; \
-    fi; \
-    mkdir -p /home/"${USERNAME}"/.ssh && chown -R "${USERNAME}:${USERNAME}" /home/"${USERNAME}"
+   requested_uid="${USER_UID}"; \
+   requested_gid="${USER_GID}"; \
+   uid_owner="$(getent passwd "${requested_uid}" | cut -d: -f1 || true)"; \
+   # Hard invariant: ${USERNAME} must end up with ${USER_UID}. \
+   # Silent fallback to a different UID corrupts bind-mounted host repos. \
+   if getent passwd "${USERNAME}" >/dev/null 2>&1; then \
+     current_uid="$(id -u "${USERNAME}")"; \
+     if [ "${current_uid}" != "${requested_uid}" ]; then \
+       if [ -n "${uid_owner}" ] && [ "${uid_owner}" != "${USERNAME}" ]; then \
+         echo "ERROR: requested UID ${requested_uid} is already used by ${uid_owner}; refusing UID drift for ${USERNAME}" >&2; \
+         exit 42; \
+       fi; \
+       usermod --uid "${requested_uid}" "${USERNAME}"; \
+     fi; \
+   else \
+     if [ -n "${uid_owner}" ]; then \
+       old_home="$(getent passwd "${uid_owner}" | cut -d: -f6)"; \
+       usermod -l "${USERNAME}" "${uid_owner}"; \
+       if [ "${old_home}" != "/home/${USERNAME}" ]; then \
+         usermod -d "/home/${USERNAME}" -m "${USERNAME}" || true; \
+       fi; \
+     else \
+       if getent group "${requested_gid}" >/dev/null 2>&1; then \
+         target_group="$(getent group "${requested_gid}" | cut -d: -f1)"; \
+       else \
+         groupadd --gid "${requested_gid}" "${USERNAME}"; \
+         target_group="${USERNAME}"; \
+       fi; \
+       useradd --uid "${requested_uid}" --gid "${target_group}" -m -s /bin/bash "${USERNAME}"; \
+     fi; \
+   fi; \
+   if getent group "${requested_gid}" >/dev/null 2>&1; then \
+     target_group="$(getent group "${requested_gid}" | cut -d: -f1)"; \
+     usermod --gid "${target_group}" "${USERNAME}" || true; \
+   fi; \
+   mkdir -p /home/"${USERNAME}"/.ssh; \
+   chown -R "${USERNAME}:$(id -gn "${USERNAME}")" /home/"${USERNAME}"
 
 # Optional: Standard-Tools/Qualität der Life-in-Container-Experience
 # + sudo installieren und passwortlosen sudo für die Gruppe sudo erlauben,
