@@ -100,14 +100,20 @@ Passkey-Store-Umbau, grosse Auth-Refactors.
 
 ## Stop-Kriterium
 
-Der Folge-PR ist erst dann `PROVEN`, wenn alle Punkte erfuellt sind:
+Phase A ist erst dann `PROVEN`, wenn:
+
+1. alle bestehenden Offline-Tests gruen bleiben,
+2. Auth-Verhalten unveraendert bleibt,
+3. keine Runtime-Verdrahtung auf DB erfolgt.
+
+Phase B ist erst dann `PROVEN`, wenn:
 
 1. Runtime-Beweis: API erzeugt Session, API wird neu gestartet,
-   Session bleibt gueltig (kein Logout durch Restart).
+  Session bleibt gueltig (kein Logout durch Restart).
 2. Runtime-Beweis: `logout`, `logout_all`, `remove_device`, `session_refresh`
-   wirken ueber den DB-basierten Session-Pfad korrekt.
+  wirken ueber den DB-basierten Session-Pfad korrekt.
 3. CI-Beweis: ein DB-gebundener Integrationstest laeuft automatisch und failt,
-   wenn Session-Persistenzpfad nicht funktioniert.
+  wenn Session-Persistenzpfad nicht funktioniert.
 4. Offline-Beweis: bestehende Offline-Test-Suites bleiben ohne DB gruen.
 
 ## PR-Titelkandidaten (Folge-PR)
