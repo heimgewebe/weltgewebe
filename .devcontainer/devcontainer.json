@@ -23,7 +23,10 @@
       ]
     }
   },
-  "forwardPorts": [5173, 3000],
+  "forwardPorts": [
+    5173,
+    3000
+  ],
   "portsAttributes": {
     "5173": {
       "label": "Vite Dev Server",
@@ -38,10 +41,10 @@
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
     "PUPPETEER_SKIP_DOWNLOAD": "true"
   },
-  "remoteUser": "vscode",
+  "remoteUser": "node",
   "updateRemoteUserUID": true,
   "init": true,
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "postAttachCommand": "bash -lc 'corepack enable || true; cd apps/web && [ -d node_modules ] || pnpm install'",
-  "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
+  "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
+  "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
+  "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'"
 }
