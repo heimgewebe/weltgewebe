@@ -9,6 +9,8 @@ summary: >
   Runtime-Proof-Bericht für den Auth-Persistenz-Pfad (OPT-API-002/003).
   Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migrations- und CRUD-Smoke
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
+  SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Zugriff ist ebenfalls belegt
+  (siehe docs/proofs/sqlx-postgres-direct-session-crud-proof.md).
   SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
   Stack-PgBouncer-Image bleiben NOT_PROVEN. ADR-0007 schränkt PgBouncer auf
   Dev-/Spezialpfade ein; der Produktionspfad ist DATABASE_URL → direkter
@@ -281,7 +283,7 @@ git diff --check
 | CRUD via PgBouncer transaction mode (psql) | ✅ PROVEN |
 | Offline-Tests grün | ✅ PROVEN |
 | Kein Auth-Verhalten geändert | ✅ PROVEN |
-| SQLx/Rust-API CRUD direkt Postgres | ❌ NOT_PROVEN |
+| SQLx/Rust-API CRUD direkt Postgres | ✅ PROVEN |
 | SQLx/Rust-API CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
 | `sqlx migrate run` via sqlx-cli | ❌ NOT_PROVEN |
 | Exaktes Stack-Image `edoburu/pgbouncer:1.20` | ❌ NOT_PROVEN |
@@ -289,11 +291,32 @@ git diff --check
 ### Gesamtergebnis: PARTIAL_PROVEN
 
 Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
-(transaction mode) ist reproduzierbar belegt. Der SQLx/Rust-API-Pfad gegen
-PgBouncer transaction mode bleibt für Dev-/Spezialfälle unbewiesen.
-Nach ADR-0007 ist dies kein Produktions-Gate: Der Produktionspfad für Auth-
-Persistenz ist `DATABASE_URL` → direkter PostgreSQL-Zugriff. `psql`-CRUD ist
-nicht äquivalent zu SQLx-Runtime.
+(transaction mode) ist reproduzierbar belegt. Der produktive SQLx/Rust-API-
+Pfad gegen direkten PostgreSQL-Zugriff ist ebenfalls belegt (separater
+Proof-Report: `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`).
+Offen bleibt der SQLx/Rust-API-Pfad gegen PgBouncer transaction mode für
+Dev-/Spezialfälle. Nach ADR-0007 ist PgBouncer kein Produktions-Gate.
+
+### 5.1 Scope-Abgrenzung (kurz)
+
+PROVEN:
+
+- SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad (`DATABASE_URL`/`PG_DIRECT_URL`)
+- psql-Migrations- und CRUD-Pfad gegen disposable-local PostgreSQL
+- psql-CRUD über PgBouncer transaction mode
+
+NOT_PROVEN:
+
+- SQLx/Rust-CRUD über PgBouncer transaction mode
+- `sqlx migrate run` via sqlx-cli im CI-Kontext
+- Exaktes Stack-Image `edoburu/pgbouncer:1.20` im Runtime-Proof
+
+Warum `DbSessionStore` nicht Teil dieses PR ist:
+
+- Dieser PR ist ein Runtime-Proof-Scope ohne Auth-Router-Umbau.
+- Das Ziel ist Nachweisbarkeit des Persistenzpfads, nicht produktive
+  Store-Einführung.
+- `DbSessionStore` bleibt der nächste, separate Implementierungs-PR.
 
 ---
 
@@ -356,22 +379,20 @@ des Stacks bleibt unverändert.
 
 ## 8. Entscheidungsempfehlung: nächster sicherer Schritt
 
-**Empfehlung: `test(db): prove direct SQLx/Postgres session CRUD`**
+**Empfehlung: `feat(auth): implement DbSessionStore against direct PostgreSQL path`**
 
-Der psql-basierte Proof ist bestanden, aber der produktive SQLx/Rust-API-Pfad
-gegen direkten PostgreSQL-Zugriff ist noch nicht belegt. Nach ADR-0007 ist dieser
-direkte Pfad das Gate vor produktiver Auth-Persistenz.
+Der direkte SQLx/PostgreSQL-Persistenzpfad ist jetzt als Proof belegt. Damit ist
+die zentrale Vorbedingung aus ADR-0007 für den nächsten Implementierungsschritt
+erfüllt.
 
 Vorgehen für den nächsten PR:
 
-1. Rust-Integrationstest schreiben, der via `sqlx::PgPool` gegen eine
-   disposable-local PostgreSQL-Datenbank arbeitet.
-2. INSERT / SELECT / UPDATE / DELETE gegen `sessions` via SQLx/Rust — nicht via psql.
-3. Belegen, dass der getestete Pool aus `DATABASE_URL` direkt PostgreSQL adressiert.
-4. Offline-Tests müssen weiterhin grün bleiben.
+1. `DbSessionStore` gegen direkten PostgreSQL-Zugriff implementieren.
+2. `SessionBackend`/`SessionOps`-Wiring nur soweit anpassen, wie für Persistenz nötig.
+3. Login/Logout/Refresh-Verhalten unverändert halten.
+4. Offline-Testpfad weiterhin grün halten.
 
-**Stop-Regel:** Kein `DbSessionStore` ohne belegten direkten SQLx/Postgres-
-Persistenzpfad.
+**Stop-Regel:** Kein PgBouncer-spezifischer Umbau als Produktions-Gate.
 
 Optionaler Spezialpfad: Der SQLx/PgBouncer-Proof mit `statement_cache_capacity(0)`
 kann weiterhin ausgeführt werden, wenn ein Dev-/Spezialbetrieb PgBouncer nutzt.
