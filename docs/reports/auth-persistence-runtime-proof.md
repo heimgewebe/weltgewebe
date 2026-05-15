@@ -411,9 +411,9 @@ als eigenen PR, wenn die Änderungsfläche nach erster Messung breit erscheint
 |---|---|
 | `cargo test --locked -p weltgewebe-api` | ✅ 240 passed, lokal ausgeführt |
 | `git diff --check` | ✅ clean |
-| `cargo fmt -- --check` | nicht ausgeführt (kein Rust-Code verändert) |
-| `cargo clippy -- -D warnings` | nicht ausgeführt (kein Rust-Code verändert) |
+| `cargo fmt --check` | ✅ ausgeführt |
+| `cargo clippy -p weltgewebe-api --all-targets --all-features -- -D warnings` | ✅ ausgeführt |
 | `pnpm lint` (Web) | nicht betroffen |
 
-Dieser PR enthält ausschließlich einen neuen Report (`docs/reports/`).
+Dieser Sync-PR enthält Änderungen in `docs/reports/` und im `Justfile`.
 Keine Produktionscode-Änderungen.
