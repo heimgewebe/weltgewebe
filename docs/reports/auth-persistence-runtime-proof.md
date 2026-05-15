@@ -291,8 +291,8 @@ git diff --check
 ### Gesamtergebnis: PARTIAL_PROVEN
 
 Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
-(transaction mode) ist reproduzierbar belegt. Der produktive SQLx/Rust-API-
-Pfad gegen direkten PostgreSQL-Zugriff ist ebenfalls belegt (separater
+(transaction mode) ist reproduzierbar belegt. Der direkte SQLx/Rust-CRUD-
+Pfad gegen die Session-Tabelle in PostgreSQL ist ebenfalls belegt (separater
 Proof-Report: `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`).
 Offen bleibt der SQLx/Rust-API-Pfad gegen PgBouncer transaction mode für
 Dev-/Spezialfälle. Nach ADR-0007 ist PgBouncer kein Produktions-Gate.
@@ -301,7 +301,7 @@ Dev-/Spezialfälle. Nach ADR-0007 ist PgBouncer kein Produktions-Gate.
 
 PROVEN:
 
-- SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad (`DATABASE_URL`/`PG_DIRECT_URL`)
+- SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad (`PG_DIRECT_URL`, im Test als `DATABASE_URL` exportiert)
 - psql-Migrations- und CRUD-Pfad gegen disposable-local PostgreSQL
 - psql-CRUD über PgBouncer transaction mode
 
@@ -381,7 +381,7 @@ des Stacks bleibt unverändert.
 
 **Empfehlung: `feat(auth): implement DbSessionStore against direct PostgreSQL path`**
 
-Der direkte SQLx/PostgreSQL-Persistenzpfad ist jetzt als Proof belegt. Damit ist
+Der direkte SQLx/PostgreSQL-CRUD-Pfad gegen die Session-Tabelle ist jetzt als Proof belegt. Damit ist
 die zentrale Vorbedingung aus ADR-0007 für den nächsten Implementierungsschritt
 erfüllt.
 
