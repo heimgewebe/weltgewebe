@@ -9,7 +9,7 @@ summary: >
   Runtime-Proof-Bericht für den Auth-Persistenz-Pfad (OPT-API-002/003).
   Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migrations- und CRUD-Smoke
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
-  SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Zugriff ist ebenfalls belegt
+  SQLx/Rust-CRUD gegen die Session-Tabelle im direkten PostgreSQL-Pfad ist ebenfalls belegt
   (siehe docs/proofs/sqlx-postgres-direct-session-crud-proof.md).
   SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
   Stack-PgBouncer-Image bleiben NOT_PROVEN. ADR-0007 schränkt PgBouncer auf
@@ -286,8 +286,8 @@ git diff --check
 | CRUD via PgBouncer transaction mode (psql) | ✅ PROVEN |
 | Offline-Tests grün | ✅ PROVEN |
 | Kein Auth-Verhalten geändert | ✅ PROVEN |
-| SQLx/Rust-API CRUD direkt Postgres | ✅ PROVEN |
-| SQLx/Rust-API CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
+| SQLx/Rust CRUD gegen Session-Tabelle direkt Postgres | ✅ PROVEN |
+| SQLx/Rust CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
 | `sqlx migrate run` via sqlx-cli | ❌ NOT_PROVEN |
 | Exaktes Stack-Image `edoburu/pgbouncer:1.20` | ❌ NOT_PROVEN |
 
