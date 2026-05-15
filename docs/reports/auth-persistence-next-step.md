@@ -53,10 +53,10 @@ verzeichnis vorfand.
 Was fehlt bis zur vollständigen Session-Persistenz:
 
 1. `DbSessionStore`-Implementierung (async, `PgPool`)
-2. Async-Abstraktion für `SessionStore` (Trait oder Enum-Dispatch)
+2. Produktive Verdrahtung über die vorhandene `SessionBackend`/`SessionOps`-Naht
 3. Startup-Migration in `apps/api/src/lib.rs`
 4. CI-Migrations-Step in `.github/workflows/api.yml`
-5. Produktive Persistenzverdrahtung (`DbSessionStore`) mit weiterhin grünem Offline-Testpfad; PgBouncer-Kompatibilitätsprüfung nur für optionale Dev-/Spezialpfade
+5. Weiterhin grüner Offline-Testpfad; PgBouncer-Kompatibilitätsprüfung nur für optionale Dev-/Spezialpfade
 
 Prämissencheck zur Aufgabenstellung:
 
@@ -65,7 +65,7 @@ Prämissencheck zur Aufgabenstellung:
 | Auth-State ist mindestens teilweise flüchtig | **Bestätigt** | Fünf transiente Auth-Stores sind in-memory: Sessions, Tokens, StepUpTokens, Challenges und PasskeyRegistrations. Account-Stammdaten sind ein separates JSONL-Thema. |
 | Doku markiert Persistenz als Restlücke | **Bestätigt** | OPT-API-002 in `optimierungsstatus.md` = open; README-Note aktiv. |
 | Keine belastbare Entscheidung Postgres vs. Redis vs. Hybrid | **Teilweise falsch** | Die Doku stützt DB-first als nächsten Pfad; der direkte SQLx/Postgres-CRUD-Proof ist belegt, Implementierungsdetails fehlen noch. |
-| Direkter Implementierungs-PR wäre zu annahmenreich | **Teilweise wahr** | Direkter SQLx/Postgres-Nachweis ist belegt; async-Abstraktion und CI-Gate fehlen noch. PgBouncer ist nach ADR-0007 kein Produktions-Gate. |
+| Direkter Implementierungs-PR wäre zu annahmenreich | **Teilweise wahr** | Direkter SQLx/Postgres-Nachweis und SessionBackend-Abstraktion sind belegt; `DbSessionStore`, produktive Verdrahtung und CI-Gate fehlen noch. PgBouncer ist nach ADR-0007 kein Produktions-Gate. |
 
 ---
 
@@ -315,7 +315,7 @@ eigenständiger PR-Scope.
 | Option | Pro | Contra | Bewertung |
 |---|---|---|---|
 | **In-Memory belassen** | kein Aufwand, aktueller Zustand | Restart = Logout aller Nutzer; kein Multi-Instance | nur für PoC/Dev ohne SLA |
-| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; keine neue Abhängigkeit; ADR-0007 legt direkten Produktionspfad fest | async-Abstraktion nötig; CI-Gate fehlt | **empfohlen** (strategisch gestützt; direkter SQLx/Postgres-CRUD-Proof belegt) |
+| **PostgreSQL** | Stack vorhanden; Migration vorhanden; `db_pool` verdrahtet; `SessionBackend`/`SessionOps` vorhanden; keine neue Abhängigkeit; ADR-0007 legt direkten Produktionspfad fest | `DbSessionStore`, produktive Verdrahtung und CI-Gate fehlen | **empfohlen** (strategisch gestützt; direkter SQLx/Postgres-CRUD-Proof belegt) |
 | **Redis** | schnell für TTL-basierte Keys; kein Schema nötig | nicht im Stack; neue Abhängigkeit; kein Mehrwert für diesen Use-Case | nicht empfohlen |
 | **Hybrid** | kurzlebige Stores in Redis, Sessions in PG | komplexer Stack; zwei Systeme für dasselbe Problem | nicht empfohlen für aktuellen Scope |
 
@@ -430,7 +430,7 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 
 ### Offene Implementierungsfragen (zu klären im PR)
 
-1. **Async-Abstraktion:** `SessionOps`-Trait mit `async_trait` oder `SessionBackend`-Enum mit `match`-Dispatch? Beides ist möglich. Enum-Dispatch hat weniger Indirektion; Trait ist erweiterbar. Entscheidung im PR-Review.
+1. **SessionBackend-Naht:** `SessionBackend`/`SessionOps` ist vorhanden. Der Folge-PR soll diese Naht nutzen und den produktiven `DbSessionStore` dahinter verdrahten, ohne erneut über Trait-vs.-Enum zu entscheiden.
 
 2. **Direkter SQLx/Postgres-Pfad:** Nach ADR-0007 ist der SQLx/Postgres-CRUD-Proof gegen den direkten Pfad belegt. Der Folge-PR muss diese Pfadwahl in der produktiven `DbSessionStore`-Verdrahtung beibehalten. PgBouncer-Varianten (Statement-Cache auf 0, PgBouncer-Upgrade auf ≥ 1.21 mit `max_prepared_statements > 0`, Session-Pooling) sind optionale Dev-/Spezialpfade und keine Produktionsvoraussetzung.
 
@@ -446,6 +446,6 @@ isoliert sein, damit der bestehende Offline-Testpfad erhalten bleibt.
 | Was ist kritisch? | **belegt** | Nur `SessionStore` (24h TTL, Restart = Logout aller Nutzer) |
 | Migrations-Schema vorhanden? | **belegt** | Ja, seit 2026-04-28 — aber nicht in Startup aktiviert |
 | Strategie Postgres vs. Redis vs. Hybrid? | **strategisch gestützt** | PostgreSQL durch Doku und Diagnose als nächster Pfad gestützt; Redis/Hybrid ohne belegten Zusatznutzen; direkter SQLx/Postgres-CRUD-Proof belegt |
-| Was fehlt für Implementierung? | **belegt** | async-Abstraktion, `DbSessionStore`, Startup-Migration, CI-Gate |
+| Was fehlt für Implementierung? | **belegt** | `DbSessionStore`, produktive Verdrahtung, Startup-Migration, CI-Gate |
 | PgBouncer-Kompatibilität? | **optionaler Spezialpfad** | SQLx prepared statements + statement cache + PgBouncer `transaction` mode (`edoburu/pgbouncer:1.20`) sind nicht belastbar kompatibel; nach ADR-0007 aber kein Produktions-Gate |
 | Weiterer vorgelagerter Diagnose-PR nötig? | **nein** | Kein weiterer Diagnose-PR nötig; der direkte SQLx/Postgres-Proof ist belegt. Nächster Schritt ist die produktive `DbSessionStore`-Implementierung bei weiterhin grünem Offline-Testpfad. |
