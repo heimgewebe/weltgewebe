@@ -18,11 +18,14 @@ summary: >
 depends_on:
   - docs/blueprints/auth-persistence-runtime-proof.md
   - docs/reports/auth-persistence-next-step.md
+  - docs/proofs/sqlx-postgres-direct-session-crud-proof.md
 relations:
   - type: relates_to
     target: docs/blueprints/auth-persistence-runtime-proof.md
   - type: relates_to
     target: docs/reports/auth-persistence-next-step.md
+  - type: relates_to
+    target: docs/proofs/sqlx-postgres-direct-session-crud-proof.md
   - type: relates_to
     target: docs/blueprints/auth-roadmap.md
   - type: relates_to
