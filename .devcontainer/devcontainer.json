@@ -39,12 +39,17 @@
   },
   "containerEnv": {
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
-    "PUPPETEER_SKIP_DOWNLOAD": "true"
+    "PUPPETEER_SKIP_DOWNLOAD": "true",
+    "SSH_AUTH_SOCK": "/ssh-agent",
+    "GIT_SSH_COMMAND": "ssh -F /dev/null -o IdentitiesOnly=no"
   },
   "remoteUser": "node",
   "updateRemoteUserUID": true,
   "init": true,
-  "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; bash .devcontainer/post-create.sh'",
-  "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
-  "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'"
+  "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; bash .devcontainer/post-create.sh'",
+  "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
+  "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'",
+  "mounts": [
+    "source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent,type=bind,consistency=cached"
+  ]
 }
