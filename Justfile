@@ -87,11 +87,11 @@ db-migrate:    # run database migrations (requires sqlx-cli 0.8.1: cargo install
 	sqlx migrate run --source apps/api/migrations
 
 proof-auth-session-sqlx-direct:    # run ignored SQLx direct-Postgres session CRUD proof test
-	if [ -z "${PG_DIRECT_URL:-${DATABASE_URL:-}}" ]; then \
-		echo "Set PG_DIRECT_URL or DATABASE_URL to direct PostgreSQL (not PgBouncer)." >&2; \
+	if [ -z "${PG_DIRECT_URL:-}" ]; then \
+		echo "Set PG_DIRECT_URL to direct PostgreSQL (not PgBouncer)." >&2; \
 		exit 1; \
 	fi
-	cargo test --locked -p weltgewebe-api --test sqlx_postgres_direct_session_crud -- --include-ignored
+	DATABASE_URL="${PG_DIRECT_URL}" PG_DIRECT_URL="${PG_DIRECT_URL}" cargo test --locked -p weltgewebe-api --test sqlx_postgres_direct_session_crud -- --include-ignored
 
 seed:          # seed database with initial data
 	cargo run -p api -- seed
