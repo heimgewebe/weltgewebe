@@ -11,7 +11,7 @@ summary: >
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
   SQLx/Rust-CRUD gegen die Session-Tabelle im direkten PostgreSQL-Pfad ist ebenfalls belegt
   (siehe docs/proofs/sqlx-postgres-direct-session-crud-proof.md).
-  SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
+  SQLx/Rust-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
   Stack-PgBouncer-Image bleiben NOT_PROVEN. ADR-0007 schränkt PgBouncer auf
   Dev-/Spezialpfade ein; der Produktionspfad ist DATABASE_URL → direkter
   PostgreSQL-Zugriff.
@@ -297,7 +297,7 @@ Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
 (transaction mode) ist reproduzierbar belegt. Der direkte SQLx/Rust-CRUD-
 Pfad gegen die Session-Tabelle in PostgreSQL ist ebenfalls belegt (separater
 Proof-Report: `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`).
-Offen bleibt der SQLx/Rust-API-Pfad gegen PgBouncer transaction mode für
+Offen bleibt der SQLx/Rust-Pfad gegen PgBouncer transaction mode für
 Dev-/Spezialfälle. Nach ADR-0007 ist PgBouncer kein Produktions-Gate.
 
 ### 5.1 Scope-Abgrenzung (kurz)
