@@ -101,13 +101,15 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; Register-Verify und UI-E2E offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
 - [~] Phase 4 — Auth-Persistenz Runtime-Proof
   - SQL/psql-Migration + psql-basierter PgBouncer-CRUD-Smoke belegt
-  - SQLx/PgBouncer-Rust-Proof als Testgerüst vorbereitet (READY_FOR_PROOF, nicht ausgeführt), aber nach ADR-0007 optionaler Dev-/Spezialpfad
+  - SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad ist belegt (PROVEN; Session-Tabellen-CRUD-Primitive)
+  - SQLx/PgBouncer-Rust-Proof bleibt optionaler Dev-/Spezialpfad und weiterhin nicht belegt (NOT_PROVEN / READY_FOR_PROOF)
   - Zielarchitekturentscheidung geschlossen: Produktion nutzt direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer ist kein Produktions-Gate
   - Belege: [ADR-0007](adr/ADR-0007__auth-persistence-production-db-path.md),
     [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
     [Report](reports/auth-persistence-runtime-proof.md),
+    [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
-- [ ] Phase 5 — `DbSessionStore` / `SessionBackend`-Abstraktion · nächster Architekturpfad gegen direkten SQLx/PostgreSQL-Persistenzpfad
+- [ ] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · nächster Implementierungspfad gegen direkten SQLx/PostgreSQL-Persistenzpfad
 - [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
 
 ## Strang UI
