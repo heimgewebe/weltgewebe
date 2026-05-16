@@ -3,11 +3,11 @@ name: Basemap Runtime Proof
 
 # This workflow runs two jobs:
 #
-#   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, non-blocking)
+#   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, nicht blockierend)
 #      Runs the guard in skip mode with no Caddy and no artefact. Reports
 #      NOT_PROVEN to make the gap visible — never a false green.
 #
-#   2. basemap-range-delivery-proof  (Pfad 2 — echter Runtime-Proof, blocking)
+#   2. basemap-range-delivery-proof  (Pfad 2 — echter Runtime-Proof, blockierend)
 #      Starts a real Caddy container that serves a synthetic .pmtiles artefact
 #      under /local-basemap/* and runs the guard in require mode with
 #      scope=range-delivery. The guard issues a Range request via curl and
@@ -86,7 +86,7 @@ jobs:
               >> "${GITHUB_STEP_SUMMARY}"
             printf '%s\n\n' 'This is expected: the artefact is not committed to the repo and not built here.' \
               >> "${GITHUB_STEP_SUMMARY}"
-            printf '%s\n' 'The job stays non-blocking because skip mode returns exit 0 for NOT_PROVEN.' \
+            printf '%s\n' 'Der Job bleibt nicht blockierend, weil der skip-Modus bei NOT_PROVEN exit 0 zurueckgibt.' \
               >> "${GITHUB_STEP_SUMMARY}"
             printf '%s\n\n' 'Errors are not masked.' \
               >> "${GITHUB_STEP_SUMMARY}"

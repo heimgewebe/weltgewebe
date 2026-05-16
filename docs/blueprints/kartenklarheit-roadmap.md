@@ -200,12 +200,12 @@ Sondern:
   - Prueft: PMTiles-Artefakt vorhanden, Caddy erreichbar, Range-Request liefert HTTP 206,
     Accept-Ranges/Content-Range-Header vorhanden, kein stiller 200-OK.
   - Unterscheidet explizit zwischen PROVEN und NOT_PROVEN.
-- [x] Nicht-blockierender Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
+- [x] Nicht blockierender Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
   - Laeuft ohne Artefakt und ohne Caddy; meldet `NOT_PROVEN` — kein falsches Gruen.
   - Startet keinen Docker-Stack, baut kein PMTiles-Artefakt.
 - [~] **Blockierender CI-Job fuer HTTP-206-Range-Delivery bereit (READY_FOR_CI_PROOF):**
   Job `basemap-range-delivery-proof` startet einen realen Caddy-Container (Image
-  `caddy:2`, Config `infra/caddy/Caddyfile.proof`), serviert eine `.pmtiles`-Datei
+  `caddy:2.7`, Config `infra/caddy/Caddyfile.proof`), serviert eine `.pmtiles`-Datei
   unter `/local-basemap/*` und der Guard verifiziert HTTP 206 plus
   `Accept-Ranges`/`Content-Range`. Bei Abweichung schlaegt der Job hart fehl.
   PROVEN gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit

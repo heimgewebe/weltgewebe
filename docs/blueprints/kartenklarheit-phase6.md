@@ -148,7 +148,7 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
 
 - [~] **Blockierender CI-Job fuer HTTP-206-Range-Delivery bereit (READY_FOR_CI_PROOF).**
   Workflow `.github/workflows/basemap-runtime-proof.yml`, Job
-  `basemap-range-delivery-proof`: realer `caddy:2`-Container, deterministisches
+  `basemap-range-delivery-proof`: realer `caddy:2.7`-Container, deterministisches
   `.pmtiles`-Testartefakt, Guard im Modus `require` mit Scope `range-delivery`.
   Fehlt 206 oder `Content-Range`, schlaegt der Job hart fehl.
   PROVEN gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit
