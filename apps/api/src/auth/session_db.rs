@@ -56,19 +56,16 @@ impl SessionOps for DbSessionStore {
         let row = sqlx::query(
             "SELECT id, account_id, device_id, created_at, last_active, expires_at
              FROM sessions
-             WHERE id = $1",
+             WHERE id = $1 AND expires_at > NOW()",
         )
         .bind(session_id)
         .fetch_optional(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
 
-        let session = row
-            .map(Self::session_from_row)
+        row.map(Self::session_from_row)
             .transpose()
-            .map_err(|_| SessionBackendError::Unavailable)?;
-
-        Ok(session.filter(|s| !s.is_expired()))
+            .map_err(|_| SessionBackendError::Unavailable)
     }
 
     async fn delete(&self, session_id: &str) -> SessionResult<()> {
@@ -85,7 +82,9 @@ impl SessionOps for DbSessionStore {
         sqlx::query(
             "UPDATE sessions
              SET last_active = NOW()
-             WHERE id = $1 AND last_active < NOW() - INTERVAL '5 minutes'",
+                         WHERE id = $1
+                             AND expires_at > NOW()
+                             AND last_active < NOW() - INTERVAL '5 minutes'",
         )
         .bind(session_id)
         .execute(&self.pool)
