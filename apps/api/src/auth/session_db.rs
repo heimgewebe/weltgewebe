@@ -82,9 +82,9 @@ impl SessionOps for DbSessionStore {
         sqlx::query(
             "UPDATE sessions
              SET last_active = NOW()
-                         WHERE id = $1
-                             AND expires_at > NOW()
-                             AND last_active < NOW() - INTERVAL '5 minutes'",
+             WHERE id = $1
+               AND expires_at > NOW()
+               AND last_active < NOW() - INTERVAL '5 minutes'",
         )
         .bind(session_id)
         .execute(&self.pool)
