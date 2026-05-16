@@ -200,7 +200,7 @@ Sondern:
   - Prueft: PMTiles-Artefakt vorhanden, Caddy erreichbar, Range-Request liefert HTTP 206,
     Accept-Ranges/Content-Range-Header vorhanden, kein stiller 200-OK.
   - Unterscheidet explizit zwischen PROVEN und NOT_PROVEN.
-- [x] Non-blocking Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
+- [x] Nicht-blockierender Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
   - Laeuft ohne Artefakt und ohne Caddy; meldet `NOT_PROVEN` — kein falsches Gruen.
   - Startet keinen Docker-Stack, baut kein PMTiles-Artefakt.
 - [~] **Blockierender CI-Job fuer HTTP-206-Range-Delivery bereit (READY_FOR_CI_PROOF):**
@@ -260,7 +260,7 @@ Sondern:
 **Entscheidung:** Route-Contract, Szenenmodell und degradiertes Laufzeitverhalten sind jetzt explizit; offen bleibt vor allem die Produktionswahrheit der Basemap.
 **Status:** Loader, Szene, Interaktion, Fehlerbanner und clientseitiger Basemap-Modus sind belegt.
 Produktionsdefault, Artefaktverfuegbarkeit und echter HTTP-206-Runtime-Beweis bleiben offen.
-Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job non-blocking vorhanden,
+Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job nicht blockierend vorhanden,
 blockierender Job `basemap-range-delivery-proof` bereit (READY_FOR_CI_PROOF) — PROVEN
 erst nach beobachtetem gruenen GitHub-Actions-Lauf mit Guard-Output und Response-Headers.
 PMTiles-Magic-Byte-Check bleibt offen; `pmtiles-content`-Scope prueft nur die ersten

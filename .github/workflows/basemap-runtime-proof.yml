@@ -141,7 +141,7 @@ jobs:
           # for a future real artefact.
           python3 - <<'PY'
           import os, pathlib
-          out = pathlib.Path("build/basemap/proof-range-delivery.pmtiles")
+          out = pathlib.Path("build/basemap") / os.environ["ARTEFACT_NAME"]
           # Deterministic 64 KiB payload, not a valid PMTiles file by design.
           data = bytes(((i * 31 + 7) & 0xFF) for i in range(64 * 1024))
           out.write_bytes(data)
@@ -157,7 +157,7 @@ jobs:
             -p 8081:8081 \
             -v "${PWD}/infra/caddy/Caddyfile.proof:/etc/caddy/Caddyfile:ro" \
             -v "${PWD}/build/basemap:/srv/weltgewebe-basemap:ro" \
-            caddy:2 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+            caddy:2.7 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
           # Wait for readiness — poll the root response of Caddy.
           for i in $(seq 1 30); do
             if curl -sf -o /dev/null --max-time 2 "${BASEMAP_CADDY_URL}/"; then

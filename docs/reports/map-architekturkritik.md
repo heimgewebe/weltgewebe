@@ -142,9 +142,9 @@ Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
 
 Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit zwei Jobs:
 
-1. `basemap-runtime-proof` — non-blocking, `BASEMAP_PROOF_MODE=skip`. Diagnostiziert
+1. `basemap-runtime-proof` — nicht blockierend, `BASEMAP_PROOF_MODE=skip`. Diagnostiziert
    `NOT_PROVEN` ohne Caddy und ohne Artefakt. Kein Erfolg, keine Maskierung.
-2. `basemap-range-delivery-proof` — blocking. Startet einen realen `caddy:2`-Container
+2. `basemap-range-delivery-proof` — blockierend. Startet einen realen `caddy:2.7`-Container
    mit `infra/caddy/Caddyfile.proof`, legt ein deterministisches `.pmtiles`-Testartefakt
    unter `build/basemap/` ab, ruft die `/local-basemap/*`-Route per `curl` mit
    `Range: bytes=0-511` auf und verifiziert HTTP 206 plus `Accept-Ranges`/`Content-Range`
@@ -169,7 +169,7 @@ PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
 **Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) hat einen
 blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN erst nach
 beobachtetem CI-Lauf; fuer den PMTiles-Magic-Byte-Check offen. Achse D
-(Runtime vs. Tests): der blocking proof job ist eingezogen; visuelle
+(Runtime vs. Tests): der blockierende Proof-Job ist eingezogen; visuelle
 Kartenabnahme und PMTiles-Magic-Byte-Check bleiben offen. Phase 6 hat
 einen READY_FOR_CI_PROOF-Status fuer die HTTP-206-Achse; die Inhaltsachse
 bleibt eine bewusst markierte, separate Beweispflicht.
