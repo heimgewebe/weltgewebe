@@ -20,7 +20,7 @@ relations:
 
 Neue minimale Caddy-Konfiguration ausschließlich für den CI-Job `basemap-range-delivery-proof`.
 Die Datei bindet auf Port 8081, serviert `/local-basemap/*` aus `/srv/weltgewebe-basemap` und
-aktiviert explizit `file_server browse`, damit Caddy HTTP-Range-Requests (206 Partial Content)
+aktiviert `file_server`, damit Caddy HTTP-Range-Requests (206 Partial Content)
 korrekt beantwortet. Kein TLS, keine CSP, keine CORS-Header — bewusst minimal gehalten, da
 der Scope ausschließlich der Verifikation der Range-Delivery-Kette (`curl` → Caddy → `.pmtiles`)
 im CI gilt.
