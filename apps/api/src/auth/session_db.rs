@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use chrono::Utc;
-use sqlx::PgPool;
+use sqlx::{postgres::PgRow, PgPool, Row};
 use uuid::Uuid;
 
 use super::session::{Session, SessionBackendError, SessionOps, SessionResult};
@@ -16,6 +15,17 @@ impl DbSessionStore {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
     }
+
+    fn session_from_row(row: PgRow) -> Result<Session, sqlx::Error> {
+        Ok(Session {
+            id: row.try_get("id")?,
+            account_id: row.try_get("account_id")?,
+            device_id: row.try_get("device_id")?,
+            created_at: row.try_get("created_at")?,
+            last_active: row.try_get("last_active")?,
+            expires_at: row.try_get("expires_at")?,
+        })
+    }
 }
 
 #[async_trait]
@@ -27,37 +37,25 @@ impl SessionOps for DbSessionStore {
     ) -> SessionResult<Session> {
         let session_id = Uuid::new_v4().to_string();
         let device_id = existing_device_id.unwrap_or_else(|| Uuid::new_v4().to_string());
-        let now = Utc::now();
-        let expires_at = now + chrono::Duration::days(1);
-
-        sqlx::query(
-            "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at) 
-             VALUES ($1, $2, $3, $4, $5, $6)",
+        let row = sqlx::query(
+            "INSERT INTO sessions (id, account_id, device_id, created_at, last_active, expires_at)
+             VALUES ($1, $2, $3, NOW(), NOW(), NOW() + INTERVAL '1 day')
+             RETURNING id, account_id, device_id, created_at, last_active, expires_at",
         )
         .bind(&session_id)
         .bind(&account_id)
         .bind(&device_id)
-        .bind(now)
-        .bind(now)
-        .bind(expires_at)
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
 
-        Ok(Session {
-            id: session_id,
-            account_id,
-            device_id,
-            created_at: now,
-            last_active: now,
-            expires_at,
-        })
+        Self::session_from_row(row).map_err(|_| SessionBackendError::Unavailable)
     }
 
     async fn get(&self, session_id: &str) -> SessionResult<Option<Session>> {
-        let row = sqlx::query_as::<_, Session>(
-            "SELECT id, account_id, device_id, created_at, last_active, expires_at 
-             FROM sessions 
+        let row = sqlx::query(
+            "SELECT id, account_id, device_id, created_at, last_active, expires_at
+             FROM sessions
              WHERE id = $1",
         )
         .bind(session_id)
@@ -65,8 +63,12 @@ impl SessionOps for DbSessionStore {
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
 
-        // Filter expired sessions
-        Ok(row.filter(|s| !s.is_expired()))
+        let session = row
+            .map(Self::session_from_row)
+            .transpose()
+            .map_err(|_| SessionBackendError::Unavailable)?;
+
+        Ok(session.filter(|s| !s.is_expired()))
     }
 
     async fn delete(&self, session_id: &str) -> SessionResult<()> {
@@ -80,17 +82,12 @@ impl SessionOps for DbSessionStore {
     }
 
     async fn touch(&self, session_id: &str) -> SessionResult<()> {
-        let now = Utc::now();
-        let five_min_ago = now - chrono::Duration::minutes(5);
-
         sqlx::query(
-            "UPDATE sessions 
-             SET last_active = $1 
-             WHERE id = $2 AND last_active < $3",
+            "UPDATE sessions
+             SET last_active = NOW()
+             WHERE id = $1 AND last_active < NOW() - INTERVAL '5 minutes'",
         )
-        .bind(now)
         .bind(session_id)
-        .bind(five_min_ago)
         .execute(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
@@ -99,20 +96,21 @@ impl SessionOps for DbSessionStore {
     }
 
     async fn list_by_account(&self, account_id: &str) -> SessionResult<Vec<Session>> {
-        let now = Utc::now();
-        let sessions = sqlx::query_as::<_, Session>(
-            "SELECT id, account_id, device_id, created_at, last_active, expires_at 
-             FROM sessions 
-             WHERE account_id = $1 AND expires_at > $2
+        let rows = sqlx::query(
+            "SELECT id, account_id, device_id, created_at, last_active, expires_at
+             FROM sessions
+             WHERE account_id = $1 AND expires_at > NOW()
              ORDER BY created_at DESC",
         )
         .bind(account_id)
-        .bind(now)
         .fetch_all(&self.pool)
         .await
         .map_err(|_| SessionBackendError::Unavailable)?;
 
-        Ok(sessions)
+        rows.into_iter()
+            .map(Self::session_from_row)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| SessionBackendError::Unavailable)
     }
 
     async fn delete_by_device(&self, account_id: &str, device_id: &str) -> SessionResult<()> {
@@ -137,15 +135,5 @@ impl SessionOps for DbSessionStore {
             .map_err(|_| SessionBackendError::Unavailable)?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn test_create_and_get() {
-        // This is a placeholder test to show structure.
-        // Real integration tests require DATABASE_URL to be set.
-        // Test runs during CI when DATABASE_URL is present.
     }
 }
