@@ -173,12 +173,17 @@ jobs:
       - name: Sanity-check artefact reachable via Caddy (no Range)
         run: |
           set -euo pipefail
-          # Plain GET should yield 200 with the full body length.
+          # Plain GET must yield 200 with the full 64 KiB body.
           curl -sS -D /tmp/headers-plain.txt -o /tmp/body-plain.bin \
             "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}"
           echo "--- plain headers ---"
           cat /tmp/headers-plain.txt
-          echo "--- body bytes: $(wc -c </tmp/body-plain.bin) ---"
+          BODY_BYTES="$(wc -c </tmp/body-plain.bin)"
+          echo "--- body bytes: ${BODY_BYTES} ---"
+          if [ "${BODY_BYTES}" != "65536" ]; then
+            echo "ERROR: plain GET returned ${BODY_BYTES} bytes; expected 65536" >&2
+            exit 1
+          fi
 
       - name: Run basemap runtime proof guard (require + range-delivery)
         id: proof
@@ -194,8 +199,9 @@ jobs:
           # appear verbatim in the job log, separate from the guard's own
           # validation pass. If this returns anything other than 206 the
           # previous step has already failed; this is defence in depth.
+          # Range bytes=0-511 matches the range used by the guard.
           curl -sS -D /tmp/response-headers.txt -o /dev/null \
-            -H 'Range: bytes=0-15' \
+            -H 'Range: bytes=0-511' \
             "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}" || true
           echo "--- response-headers.txt ---"
           cat /tmp/response-headers.txt || true

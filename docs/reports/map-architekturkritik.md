@@ -150,11 +150,14 @@ Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit
    `Range: bytes=0-511` auf und verifiziert HTTP 206 plus `Accept-Ranges`/`Content-Range`
    via Guard im Scope `range-delivery`. Bei Abweichung schlaegt der Job hart fehl.
 
-**Bewertung:** Der Runtime-Beweis fuer die HTTP-206-Range-Delivery-Kette
-`curl -> Caddy -> .pmtiles-Datei` ist im CI hergestellt. Was *nicht* bewiesen ist:
-PMTiles-Inhaltsvaliditaet (Magic-Bytes, Tile-Directories). Dafuer ist der Guard-Scope
-`pmtiles-content` vorbereitet, der ein echtes PMTiles-Artefakt erfordert — heute weder
-gebaut noch hochgeladen im CI.
+**Bewertung:** Der blockierende CI-Job fuer die HTTP-206-Range-Delivery-Kette
+`curl -> Caddy -> .pmtiles-Datei` ist eingezogen (READY_FOR_CI_PROOF). PROVEN
+gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit erfasstem
+Guard-Output und Response-Headers als Beweis-Artefakt. Was *nicht* bewiesen ist:
+PMTiles-Inhaltsvaliditaet (Magic-Bytes, Tile-Directories). Dafuer ist der
+Guard-Scope `pmtiles-content` vorbereitet — dieser prueft jedoch nur die ersten
+7 Magic-Bytes (`"PMTiles"`), keine Tile-Directory-Struktur. Ein echtes
+PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
 
 **Kein Ersatz fuer den Runtime-Beweis:**
 
@@ -163,8 +166,10 @@ gebaut noch hochgeladen im CI.
 - `scripts/guard/caddy-basemap-route-guard.sh` ist ein statischer Konfigurations-Check.
   Er beweist Caddyfile-Struktur, nicht reale Delivery.
 
-**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) ist fuer die
-Range-Delivery-Kette geschlossen, fuer die PMTiles-Inhaltsvaliditaet offen. Achse D
-(Runtime vs. Tests) ist fuer Range-Delivery geschlossen; visuelle Kartenabnahme und
-PMTiles-Content bleiben offen. Phase 6 ist in der HTTP-206-Achse geschlossen;
-die Inhaltsachse bleibt eine bewusst markierte, separate Beweispflicht.
+**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) hat einen
+blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN erst nach
+beobachtetem CI-Lauf; fuer die PMTiles-Inhaltsvaliditaet offen. Achse D
+(Runtime vs. Tests): der blocking proof job ist eingezogen; visuelle
+Kartenabnahme und PMTiles-Content-Validitaet bleiben offen. Phase 6 hat
+einen READY_FOR_CI_PROOF-Status fuer die HTTP-206-Achse; die Inhaltsachse
+bleibt eine bewusst markierte, separate Beweispflicht.

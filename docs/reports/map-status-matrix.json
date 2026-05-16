@@ -107,14 +107,14 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (PMTiles-Magic-Bytes, fuer ein echtes Artefakt vorbereitet).",
+      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (Magic-Byte-Check der ersten 7 Bytes 'PMTiles' — kein vollstaendiger Struktur-Check, fuer ein echtes Artefakt vorbereitet). PROVEN gilt erst nach beobachtetem gruenen GitHub-Actions-Lauf.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
-      "proven_in_ci": [
-        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery)"
+      "ready_for_ci_proof": [
+        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN nach beobachtetem gruenen CI-Lauf"
       ],
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
@@ -137,6 +137,6 @@
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "Range-Delivery gegen reales Caddy ist im CI bewiesen; offen bleibt die reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content."
+    "Deploy_Artefakt": "READY_FOR_CI_PROOF: blockierender Job fuer Range-Delivery gegen Caddy ist eingezogen; PROVEN erst nach beobachtetem gruenen CI-Lauf. Offen: reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content (Magic-Byte-Check der ersten 7 Bytes)."
   }
 }

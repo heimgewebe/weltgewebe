@@ -31,10 +31,15 @@ set -euo pipefail
 #   BASEMAP_PROOF_SCOPE    "range-delivery"  — prove that Caddy serves HTTP Range requests
 #                                              against the .pmtiles file (default).
 #                                              Does NOT assert PMTiles content validity.
-#                          "pmtiles-content" — additionally verify the first 7 bytes of the
-#                                              artefact equal the PMTiles magic ("PMTiles").
-#                                              This catches a corrupt or empty placeholder
-#                                              file masquerading as a basemap.
+#                          "pmtiles-content" — additionally verify the PMTiles magic bytes:
+#                                              the first 7 bytes of the local artefact file
+#                                              must equal the ASCII string "PMTiles".
+#                                              This is a MAGIC-BYTE CHECK ONLY — it does NOT
+#                                              validate tile directories, header structure, or
+#                                              any other PMTiles spec v3 fields. A file with
+#                                              the correct magic prefix but corrupt/empty tile
+#                                              data will pass this check. Full structural
+#                                              PMTiles validation remains future work.
 #
 # Exit codes:
 #   0 — HTTP 206 confirmed, Accept-Ranges or Content-Range header present (PROVEN)
@@ -203,13 +208,19 @@ if [[ "${HAS_CONTENT_RANGE}" -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5 (optional): Validate PMTiles magic if scope=pmtiles-content
+# Step 5 (optional): Validate PMTiles magic bytes if scope=pmtiles-content
 # ---------------------------------------------------------------------------
 #
+# IMPORTANT: This is a MAGIC-BYTE CHECK ONLY.
 # PMTiles spec v3 prescribes the literal ASCII bytes "PMTiles" as the first
-# seven bytes of the file (followed by a one-byte version specifier). A
-# synthetic placeholder artefact will not match this and must be rejected
-# in pmtiles-content scope.
+# seven bytes of the file (followed by a one-byte version specifier). Checking
+# these seven bytes proves the file has the correct PMTiles prefix, but does
+# NOT validate tile directories, index/data structures, or any other PMTiles
+# spec v3 fields. Full structural PMTiles validation is future work.
+#
+# A synthetic placeholder artefact (e.g. the deterministic 64-KiB test file
+# generated in CI for the range-delivery scope) will not match this magic and
+# MUST be rejected in pmtiles-content scope — by design.
 
 if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
   if [[ -z "${PMTILES_FILE}" || ! -f "${PMTILES_FILE}" ]]; then
@@ -242,6 +253,6 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "range-delivery" ]]; then
   printf '                 PMTiles content validity is NOT asserted in this scope.\n'
   printf '                 For content validity use BASEMAP_PROOF_SCOPE=pmtiles-content.\n'
 else
-  printf '  Content magic: PMTiles header bytes confirmed\n'
+  printf '  Content magic: PMTiles magic bytes confirmed (7-byte prefix only; structural validation is future work)\n'
 fi
 printf 'This constitutes a real runtime proof — not a mocked client test.\n'
