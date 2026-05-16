@@ -17,5 +17,5 @@ Generated automatically. Do not edit.
 | Config | 66% | 3 | 2 |
 | Guard | 100% | 1 | 1 |
 | Schema | 0% | 1 | 0 |
-| Service | 0% | 2 | 0 |
+| Service | 33% | 3 | 1 |
 | Workflow | 50% | 2 | 1 |

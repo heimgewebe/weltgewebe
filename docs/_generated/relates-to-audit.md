@@ -14,12 +14,11 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 197 |
+| Relationen gesamt | 232 |
 | — depends_on | 13 |
-| — relates_to | 182 |
-| — supersedes | 1 |
-| — updates | 1 |
-| relates_to Anteil | 92% |
+| — relates_to | 217 |
+| — supersedes | 2 |
+| relates_to Anteil | 94% |
 
 ### Mögliche supersedes-Lücken
 
@@ -31,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (46 Dokumente):
+**Cluster 1** (54 Dokumente):
 
 - `AGENTS.md`
 - `agent-policy.yaml`
@@ -40,6 +39,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0003__privacy-ungenauigkeitsradius-ron.md`
 - `docs/adr/ADR-0005-auth.md`
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
 - `docs/blueprints/auth-persistence-runtime-proof.md`
@@ -60,13 +60,20 @@ _Keine Lücken erkannt._
 - `docs/policies/agent-reading-protocol.md`
 - `docs/policies/architecture-critique.md`
 - `docs/policies/orientierung.md`
+- `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
+- `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/reference/glossar.md`
 - `docs/reports/agent-readiness-audit.md`
+- `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
 - `docs/reports/auth-persistence-next-step.md`
 - `docs/reports/auth-persistence-readiness.md`
+- `docs/reports/auth-persistence-runtime-proof.md`
+- `docs/reports/auth-persistence-runtime-target-reconciliation.md`
 - `docs/reports/auth-status-matrix.md`
 - `docs/reports/optimierungsbericht.md`
 - `docs/reports/optimierungsstatus.md`
+- `docs/reports/passkey-register-verify-prep.md`
+- `docs/roadmap.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-blueprint.md`
 - `docs/specs/auth-state-machine.md`
@@ -136,25 +143,28 @@ _Keine Lücken erkannt._
 **`docs/blueprints/auth-persistence-runtime-proof.md`**:
 
 - relates_to → `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- relates_to → `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - relates_to → `docs/blueprints/auth-roadmap.md`
 - relates_to → `docs/reports/auth-persistence-next-step.md`
 - relates_to → `docs/reports/auth-persistence-readiness.md`
 - relates_to → `docs/specs/auth-api.md`
 
-**`docs/deploy/README.md`**:
+**`docs/reports/auth-persistence-runtime-proof.md`**:
 
-- relates_to → `docs/deploy/heimserver.deployment.md`
-- relates_to → `docs/deploy/heimserver.integration.md`
-- relates_to → `docs/deploy/security.md`
-- relates_to → `docs/deployment.md`
-- relates_to → `docs/deployment_governance.md`
-
-**`docs/adr/ADR-0006__auth-magic-link-session-passkey.md`**:
-
-- relates_to → `docs/adr/ADR-0005-auth.md`
+- relates_to → `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- relates_to → `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
+- relates_to → `docs/blueprints/auth-persistence-runtime-proof.md`
 - relates_to → `docs/blueprints/auth-roadmap.md`
-- relates_to → `docs/reports/auth-status-matrix.md`
-- relates_to → `docs/specs/auth-blueprint.md`
+- relates_to → `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
+- relates_to → `docs/reports/auth-persistence-next-step.md`
+
+**`docs/adr/ADR-0007__auth-persistence-production-db-path.md`**:
+
+- relates_to → `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- relates_to → `docs/blueprints/auth-roadmap.md`
+- relates_to → `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
+- relates_to → `docs/reports/auth-persistence-runtime-proof.md`
+- relates_to → `docs/reports/auth-persistence-runtime-target-reconciliation.md`
 
 ### Hinweise
 
