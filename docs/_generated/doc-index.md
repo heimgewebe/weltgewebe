@@ -20,6 +20,7 @@ Generated automatically. Do not edit.
 | adr.ADR-0004__fahrplan-verweis | ADR-0004 — Fahrplan-Verweis | reference | active | docs/adr/ADR-0004__fahrplan-verweis.md |
 | adr.ADR-0005-auth | ADR-0005 — Auth (Cookie-basierte Sessions) | reference | active | docs/adr/ADR-0005-auth.md |
 | adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
+| adr.ADR-0007-auth-persistence-production-db-path | ADR-0007 — Auth-Persistenz Produktionspfad: Direkter PostgreSQL-Zugriff statt PgBouncer | reference | accepted | docs/adr/ADR-0007__auth-persistence-production-db-path.md |
 | blueprints.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof-Blaupause | blueprint | active | docs/blueprints/auth-persistence-runtime-proof.md |
 | blueprints.auth-roadmap | Auth Roadmap | roadmap | active | docs/blueprints/auth-roadmap.md |
 | blueprints.weltgewebe.auth-and-ui-routing | Auth und UI-Routing | reference | active | docs/blueprints/weltgewebe.auth-and-ui-routing.md |
@@ -70,14 +71,20 @@ Generated automatically. Do not edit.
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
+| proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
+| proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | docs/reference/glossar.md |
+| reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | active | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |
 | reports.auth-persistence-next-step | Auth-Persistenz — Nächster Schritt | report | active | docs/reports/auth-persistence-next-step.md |
 | reports.auth-persistence-readiness | Auth-Persistenzbereitschaft — OPT-API-002 | report | active | docs/reports/auth-persistence-readiness.md |
+| reports.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof | report | active | docs/reports/auth-persistence-runtime-proof.md |
+| reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | active | docs/reports/auth-persistence-runtime-target-reconciliation.md |
 | reports.auth-status-matrix | Auth Status Matrix | reference | active | docs/reports/auth-status-matrix.md |
 | reports.cost-report | Cost Report | reference | active | docs/reports/cost-report.md |
 | reports.optimierungsbericht | Optimierungsbericht Weltgewebe | report | active | docs/reports/optimierungsbericht.md |
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
+| reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | active | docs/reports/passkey-register-verify-prep.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Selfhost-Deploy Runbook | reference | active | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |

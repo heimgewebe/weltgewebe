@@ -11,3 +11,4 @@ summary: Automatisch generierte Karte der abgelösten Dokumente.
 Generated automatically. Do not edit.
 
 - docs/konzepte/garnrolle.md → superseded by → docs/konzepte/garnrolle-und-verortung.md
+- docs/reports/auth-persistence-readiness.md → superseded by → docs/reports/auth-persistence-next-step.md
