@@ -5,5 +5,6 @@ pub mod passkeys;
 pub mod rate_limit;
 pub mod role;
 pub mod session;
+pub mod session_db;
 pub mod step_up_tokens;
 pub mod tokens;

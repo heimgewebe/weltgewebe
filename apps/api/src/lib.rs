@@ -46,7 +46,24 @@ pub async fn run() -> anyhow::Result<()> {
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
     let metrics = Metrics::try_new(BuildInfo::collect())?;
-    let sessions = crate::auth::session::SessionBackend::new_in_memory();
+
+    // Initialize session store: use DB-backed store if configured and pool is available,
+    // otherwise fall back to in-memory store for offline/test scenarios.
+    let sessions = if db_pool_configured {
+        match &db_pool {
+            Some(pool) => {
+                tracing::info!("Session store backed by PostgreSQL database");
+                crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(pool.clone()))
+            }
+            None => {
+                tracing::info!("Session store in-memory (database pool not available)");
+                crate::auth::session::SessionBackend::new_in_memory()
+            }
+        }
+    } else {
+        tracing::info!("Session store in-memory (database not configured)");
+        crate::auth::session::SessionBackend::new_in_memory()
+    };
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
