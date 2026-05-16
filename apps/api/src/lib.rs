@@ -10,7 +10,7 @@ pub mod utils;
 #[doc(hidden)]
 pub mod test_helpers;
 
-use std::{env, io::ErrorKind, net::SocketAddr, path::Path, sync::Arc};
+use std::{env, io::ErrorKind, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
@@ -46,7 +46,9 @@ pub async fn run() -> anyhow::Result<()> {
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
     if let (true, Some(pool)) = (db_pool_configured, db_pool.as_ref()) {
-        let migrator = sqlx::migrate::Migrator::new(Path::new("./migrations"))
+        let migrations_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+
+        let migrator = sqlx::migrate::Migrator::new(migrations_dir)
             .await
             .context("failed to load database migrations")?;
 
