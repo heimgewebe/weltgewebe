@@ -218,6 +218,14 @@ fi
 # NOT validate tile directories, index/data structures, or any other PMTiles
 # spec v3 fields. Full structural PMTiles validation is future work.
 #
+# SCOPE BOUNDARY — LOCAL ARTEFACT ONLY:
+# This check reads the file directly from the local BASEMAP_ARTIFACT_DIR.
+# It does NOT prove that Caddy delivers these bytes at the HTTP endpoint.
+# A future, stronger content proof should additionally do:
+#   curl -sS -H 'Range: bytes=0-6' -o /tmp/pmtiles-magic.bin "${FULL_URL}"
+#   test "$(cat /tmp/pmtiles-magic.bin)" = "PMTiles"
+# That would prove: curl → Caddy → delivered bytes → PMTiles magic prefix.
+#
 # A synthetic placeholder artefact (e.g. the deterministic 64-KiB test file
 # generated in CI for the range-delivery scope) will not match this magic and
 # MUST be rejected in pmtiles-content scope — by design.

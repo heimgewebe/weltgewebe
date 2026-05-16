@@ -118,7 +118,7 @@
       ],
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
-        "PMTiles-Inhaltsvaliditaet (Scope pmtiles-content) gegen reales Artefakt",
+        "PMTiles-Magic-Byte-Check (Scope pmtiles-content, 7-Byte-Prefix) gegen reales Artefakt",
         "Visuelle Abnahme der gerenderten Karte"
       ],
       "risk": "mittel",

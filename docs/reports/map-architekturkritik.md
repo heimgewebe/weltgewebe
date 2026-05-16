@@ -168,8 +168,8 @@ PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
 
 **Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) hat einen
 blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN erst nach
-beobachtetem CI-Lauf; fuer die PMTiles-Inhaltsvaliditaet offen. Achse D
+beobachtetem CI-Lauf; fuer den PMTiles-Magic-Byte-Check offen. Achse D
 (Runtime vs. Tests): der blocking proof job ist eingezogen; visuelle
-Kartenabnahme und PMTiles-Content-Validitaet bleiben offen. Phase 6 hat
+Kartenabnahme und PMTiles-Magic-Byte-Check bleiben offen. Phase 6 hat
 einen READY_FOR_CI_PROOF-Status fuer die HTTP-206-Achse; die Inhaltsachse
 bleibt eine bewusst markierte, separate Beweispflicht.

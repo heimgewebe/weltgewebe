@@ -211,10 +211,10 @@ Sondern:
   PROVEN gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit
   Guard-Output und Response-Headers als Beweis-Artefakt.
   - Scope: `BASEMAP_PROOF_SCOPE=range-delivery`. Beweist die
-    Range-Auslieferungs-Kette, nicht die PMTiles-Inhaltsvaliditaet.
+    Range-Auslieferungs-Kette, nicht den PMTiles-Magic-Byte-Check.
   - Das ausgelieferte Artefakt ist im CI ein deterministisches, synthetisches
     64-KiB-Testartefakt — keine echte Karte. Es belegt nur die Caddy-Range-Kette.
-- [ ] **PMTiles-Inhaltsvaliditaet im CI:** Der Guard kennt
+- [ ] **PMTiles-Magic-Byte-Check im CI:** Der Guard kennt
   `BASEMAP_PROOF_SCOPE=pmtiles-content` (prueft die PMTiles-Magic-Bytes), wird in
   diesem Scope aber erst ausfuehrbar, sobald ein echtes PMTiles-Artefakt im CI
   produziert oder geladen wird. Hamburg-/Deutschland-Builds bleiben heavy und
@@ -250,7 +250,7 @@ Sondern:
 - [x] Fehlerpfade testbar machen.
 - [~] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
   eingezogen (READY_FOR_CI_PROOF); PROVEN erst nach beobachtetem gruenen
-  GitHub-Actions-Lauf. PMTiles-Inhaltsvaliditaet bleibt offen.
+  GitHub-Actions-Lauf. PMTiles-Magic-Byte-Check bleibt offen.
 
 ---
 
@@ -263,5 +263,5 @@ Produktionsdefault, Artefaktverfuegbarkeit und echter HTTP-206-Runtime-Beweis bl
 Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job non-blocking vorhanden,
 blockierender Job `basemap-range-delivery-proof` bereit (READY_FOR_CI_PROOF) — PROVEN
 erst nach beobachtetem gruenen GitHub-Actions-Lauf mit Guard-Output und Response-Headers.
-PMTiles-Inhaltsvaliditaet bleibt offen; `pmtiles-content`-Scope prueft nur die ersten
-7 Magic-Bytes, keine Tile-Directory-Struktur.
+PMTiles-Magic-Byte-Check bleibt offen; `pmtiles-content`-Scope prueft nur die ersten
+7 Magic-Bytes der lokalen Artefaktdatei, keine Tile-Directory-Struktur.

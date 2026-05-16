@@ -155,9 +155,9 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
   erfasstem Guard-Output und Response-Headers als Beweis-Artefakt.
   - Was der Job prueft: `curl -H 'Range: bytes=0-511' → Caddy → .pmtiles-Datei
     → 206 Partial Content + Accept-Ranges/Content-Range`.
-  - Was *nicht* bewiesen ist: PMTiles-Inhaltsvaliditaet. Das Testartefakt im CI
+  - Was *nicht* bewiesen ist: PMTiles-Magic-Byte-Check. Das Testartefakt im CI
     ist synthetisch und enthaelt keine echten Tiles.
-- [ ] **PMTiles-Inhaltsvaliditaet im CI.** Guard kennt
+- [ ] **PMTiles-Magic-Byte-Check im CI.** Guard kennt
   `BASEMAP_PROOF_SCOPE=pmtiles-content` (prueft nur die ersten 7 Magic-Bytes
   `"PMTiles"` — KEIN vollstaendiger Struktur-Check, keine Tile-Directory-Validierung),
   wartet aber auf ein echtes PMTiles-Artefakt im CI-Pfad. Hamburg-/Deutschland-Builds
