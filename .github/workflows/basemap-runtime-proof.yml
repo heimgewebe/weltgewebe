@@ -15,9 +15,9 @@ name: Basemap Runtime Proof
 #
 # Scope distinction:
 #   Pfad 2 proves Caddy HTTP Range delivery against a .pmtiles file. It does
-#   NOT validate PMTiles content (header magic, tile directories). That
-#   remains a separate, future proof (scope=pmtiles-content) once a real
-#   PMTiles artefact is produced in CI.
+#   NOT validate PMTiles content beyond the delivery chain. The pmtiles-content
+#   scope (when used against a real artefact) adds a 7-byte magic-byte prefix
+#   check only; tile-directory and structural PMTiles validation remain future work.
 #
 # What is NOT a substitute for either proof:
 #   - basemap-client-integration.spec.ts (mocked MapLibre protocol handler)
@@ -173,11 +173,16 @@ jobs:
       - name: Sanity-check artefact reachable via Caddy (no Range)
         run: |
           set -euo pipefail
-          # Plain GET must yield 200 with the full 64 KiB body.
-          curl -sS -D /tmp/headers-plain.txt -o /tmp/body-plain.bin \
-            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}"
+          # Plain GET must yield HTTP 200 with the full 64 KiB body.
+          HTTP_STATUS="$(curl -sS -w '%{http_code}' \
+            -D /tmp/headers-plain.txt -o /tmp/body-plain.bin \
+            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}")"
           echo "--- plain headers ---"
           cat /tmp/headers-plain.txt
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "ERROR: plain GET returned HTTP ${HTTP_STATUS}; expected 200" >&2
+            exit 1
+          fi
           BODY_BYTES="$(wc -c </tmp/body-plain.bin)"
           echo "--- body bytes: ${BODY_BYTES} ---"
           if [ "${BODY_BYTES}" != "65536" ]; then
@@ -247,9 +252,10 @@ jobs:
             printf '%s\n\n' \
               'Chain: `curl Range` → live Caddy container → `.pmtiles` file → HTTP 206 Partial Content' \
               >> "${GITHUB_STEP_SUMMARY}"
-            _msg='**Not proven by this job:** PMTiles content validity'
-            _msg="${_msg}"' (header magic, tile directories). That requires'
-            _msg="${_msg}"' `BASEMAP_PROOF_SCOPE=pmtiles-content`'
+            _msg='**Not proven by this job:** PMTiles magic-byte check'
+            _msg="${_msg}"' (7-byte prefix only; tile-directory and structural'
+            _msg="${_msg}"' validation remain future work).'
+            _msg="${_msg}"' Requires `BASEMAP_PROOF_SCOPE=pmtiles-content`'
             _msg="${_msg}"' against a real PMTiles artefact.'
             printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
           else

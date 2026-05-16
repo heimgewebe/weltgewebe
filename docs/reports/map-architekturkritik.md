@@ -154,9 +154,9 @@ Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit
 `curl -> Caddy -> .pmtiles-Datei` ist eingezogen (READY_FOR_CI_PROOF). PROVEN
 gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit erfasstem
 Guard-Output und Response-Headers als Beweis-Artefakt. Was *nicht* bewiesen ist:
-PMTiles-Inhaltsvaliditaet (Magic-Bytes, Tile-Directories). Dafuer ist der
-Guard-Scope `pmtiles-content` vorbereitet — dieser prueft jedoch nur die ersten
-7 Magic-Bytes (`"PMTiles"`), keine Tile-Directory-Struktur. Ein echtes
+PMTiles-Magic-Byte-Check (7-Byte-Prefix): Scope `pmtiles-content` ist vorbereitet,
+prueft aber nur den `"PMTiles"`-Prefix — keine Tile-Directory-Struktur, keine
+strukturelle PMTiles-Validierung; beides bleibt Future Work. Ein echtes
 PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
 
 **Kein Ersatz fuer den Runtime-Beweis:**

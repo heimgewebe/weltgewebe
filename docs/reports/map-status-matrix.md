@@ -59,9 +59,10 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (zusaetzliche Magic-Byte-Validierung). Der CI-Workflow betreibt zwei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose) und `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) — letzterer startet einen realen `caddy:2`-Container gegen ein deterministisches `.pmtiles`-Testartefakt und schlaegt bei abweichendem HTTP-Status hart fehl.
 - **Status**: Teil (blockierender CI-Job bereit, READY_FOR_CI_PROOF; PROVEN erst nach beobachtetem gruenen CI-Lauf; PMTiles-Inhaltsvaliditaet offen)
 - **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
-- **Fehlend**: PMTiles-Inhaltsvaliditaet (Magic-Bytes, Tile-Directories) im CI; dafuer
-  ist `BASEMAP_PROOF_SCOPE=pmtiles-content` vorbereitet, der Job benoetigt aber ein
-  echtes PMTiles-Artefakt. Visuelle Abnahme der gerenderten Karte bleibt offen.
+- **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
+  ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
+  strukturelle PMTiles-Validierung bleiben Future Work.
+  Visuelle Abnahme der gerenderten Karte bleibt offen.
   Die clientseitigen Tests sind kein Ersatz fuer den Live-Caddy-Beweis.
 
 ## Essenz

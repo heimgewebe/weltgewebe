@@ -236,7 +236,8 @@ Sondern:
   beobachteten gruenen GitHub-Actions-Lauf — der blockierende Job ist eingezogen,
   aber kein Lauf mit Guard-Output und Response-Headers liegt als Beweis vor.
 - [ ] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
-  PMTiles-Artefakt (Magic-Bytes, Tile-Directories). Steht aus, solange im CI
+  PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix; Tile-Directory- und
+  Strukturvalidierung bleiben Future Work). Steht aus, solange im CI
   kein echtes Artefakt produziert wird.
 
 ---
