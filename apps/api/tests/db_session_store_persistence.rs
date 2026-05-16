@@ -8,8 +8,9 @@
 //! - Tests are ignored by default to keep offline paths green.
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
 
+use std::{path::PathBuf, str::FromStr};
+
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::str::FromStr;
 use uuid::Uuid;
 
 use weltgewebe_api::auth::session::SessionOps;
@@ -33,11 +34,15 @@ async fn connect_pool() -> sqlx::PgPool {
     let connect_opts = PgConnectOptions::from_str(&direct_database_url())
         .expect("DATABASE_URL must be a valid postgres connection string");
 
-    PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(2)
         .connect_with(connect_opts)
         .await
-        .expect("failed to connect to direct PostgreSQL")
+        .expect("failed to connect to direct PostgreSQL");
+
+    ensure_migrations(&pool).await;
+
+    pool
 }
 
 fn unique_account_id(test_name: &str) -> String {
@@ -50,6 +55,16 @@ async fn cleanup_account(pool: &sqlx::PgPool, account_id: &str) {
         .execute(pool)
         .await
         .expect("failed to cleanup account sessions");
+}
+
+async fn ensure_migrations(pool: &sqlx::PgPool) {
+    let migrations_dir: PathBuf = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("migrations");
+
+    let migrator = sqlx::migrate::Migrator::new(migrations_dir)
+        .await
+        .expect("failed to load migrations");
+
+    migrator.run(pool).await.expect("failed to run migrations");
 }
 
 #[tokio::test]
