@@ -234,12 +234,18 @@ jobs:
           printf '## Basemap Range Delivery Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
 
           if [[ -f "${OUTPUT_FILE}" ]] && grep -q '^PROVEN:' "${OUTPUT_FILE}"; then
-            printf '%s\n\n' '✅ **PROVEN (scope=range-delivery)** — real Caddy returned HTTP 206 for a Range request against the artefact' \
+            _msg='✅ **PROVEN (scope=range-delivery)**'
+            _msg="${_msg} — real Caddy returned HTTP 206"
+            _msg="${_msg} for a Range request against the artefact"
+            printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' \
+              'Chain: `curl Range` → live Caddy container → `.pmtiles` file → HTTP 206 Partial Content' \
               >> "${GITHUB_STEP_SUMMARY}"
-            printf '%s\n\n' 'Chain: `curl Range` → live Caddy container → `.pmtiles` file → HTTP 206 Partial Content' \
-              >> "${GITHUB_STEP_SUMMARY}"
-            printf '%s\n\n' '**Not proven by this job:** PMTiles content validity (header magic, tile directories). That requires `BASEMAP_PROOF_SCOPE=pmtiles-content` against a real PMTiles artefact.' \
-              >> "${GITHUB_STEP_SUMMARY}"
+            _msg='**Not proven by this job:** PMTiles content validity'
+            _msg="${_msg}"' (header magic, tile directories). That requires'
+            _msg="${_msg}"' `BASEMAP_PROOF_SCOPE=pmtiles-content`'
+            _msg="${_msg}"' against a real PMTiles artefact.'
+            printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
           else
             printf '%s\n\n' '❌ **FAILED** — guard did not report PROVEN' \
               >> "${GITHUB_STEP_SUMMARY}"
@@ -253,7 +259,9 @@ jobs:
           fi
           printf '```\n\n</details>\n\n' >> "${GITHUB_STEP_SUMMARY}"
 
-          printf '<details><summary>Response headers (independent re-issue)</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          _sec_hdr='Response headers (independent re-issue)'
+          printf '<details><summary>%s</summary>\n\n```\n' \
+            "${_sec_hdr}" >> "${GITHUB_STEP_SUMMARY}"
           if [[ -f "${HDR_FILE}" ]]; then
             cat "${HDR_FILE}" >> "${GITHUB_STEP_SUMMARY}"
           else

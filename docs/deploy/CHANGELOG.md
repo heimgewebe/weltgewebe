@@ -10,6 +10,26 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-16 - CI-only Caddyfile.proof hinzugefügt
+
+**Geänderte Dateien:**
+
+- `infra/caddy/Caddyfile.proof`
+
+**Beschreibung:**
+
+Neue minimale Caddy-Konfiguration ausschließlich für den CI-Job `basemap-range-delivery-proof`.
+Die Datei bindet auf Port 8081, serviert `/local-basemap/*` aus `/srv/weltgewebe-basemap` und
+aktiviert explizit `file_server browse`, damit Caddy HTTP-Range-Requests (206 Partial Content)
+korrekt beantwortet. Kein TLS, keine CSP, keine CORS-Header — bewusst minimal gehalten, da
+der Scope ausschließlich der Verifikation der Range-Delivery-Kette (`curl` → Caddy → `.pmtiles`)
+im CI gilt.
+
+Diese Datei ist **nicht** für Produktions-Deployments vorgesehen und wird von keinem
+`compose.prod.yml`-Service referenziert.
+
+**Risiko:** Kein Produktionsrisiko. Nur im CI-Job aktiv.
+
 ## 2026-05-09
 
 - `infra/caddy/Caddyfile`, `Caddyfile.dev`, `Caddyfile.heim`, `Caddyfile.prod`: Neuer optionaler Response-Header `X-Weltgewebe-Build` aus Environment-Variable `WELTGEWEBE_BUILD`. Wird in jedem Header-Block emittiert; die Variable wird vom Deploy-Setup gesetzt (noch ausstehend) und matcht dann das `version`-Feld aus `/_app/version.json`. Beobachtbare Verhaltensänderung: alle Antworten enthalten den Header (ggf. leer, solange `WELTGEWEBE_BUILD` ungesetzt ist). Begleitkommentare neutralisiert: keine unbelegten Aussagen mehr über Deploy-Verhalten oder Caddys Umgang mit ungesetzten Variablen.
