@@ -107,23 +107,27 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Clientseitige Tests belegen den lokalen Basemap-Pfad und Range-Requests im Testkontext. Das Guard-Script prueft den echten Live-Pfad gegen Caddy plus PMTiles-Artefakt und unterscheidet zwischen PROVEN und NOT_PROVEN; im CI bleibt der Workflow ohne Artefakt und ohne Caddy bewusst bei NOT_PROVEN.",
+      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (PMTiles-Magic-Bytes, fuer ein echtes Artefakt vorbereitet).",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
+      "proven_in_ci": [
+        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery)"
+      ],
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
-        "Laufender Caddy-Stack im CI",
-        "HTTP-206-Beweis in einem reproduzierbaren CI-Lauf"
+        "PMTiles-Inhaltsvaliditaet (Scope pmtiles-content) gegen reales Artefakt",
+        "Visuelle Abnahme der gerenderten Karte"
       ],
-      "risk": "hoch",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/web/tests/basemap-client-integration.spec.ts",
         "apps/web/tests/basemap-sovereignty-testbuild.spec.ts",
         "scripts/guard/basemap-runtime-proof.sh",
-        ".github/workflows/basemap-runtime-proof.yml"
+        ".github/workflows/basemap-runtime-proof.yml",
+        "infra/caddy/Caddyfile.proof"
       ],
       "not_a_substitute": [
         "apps/web/tests/basemap-client-integration.spec.ts (clientseitiger Mock-Test, kein Live-Caddy-Beweis)",
@@ -133,6 +137,6 @@
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "Offen: wie PMTiles-Artefakt, Caddy-Stack und HTTP-206-Beweis reproduzierbar im CI zusammengefuehrt werden."
+    "Deploy_Artefakt": "Range-Delivery gegen reales Caddy ist im CI bewiesen; offen bleibt die reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content."
   }
 }

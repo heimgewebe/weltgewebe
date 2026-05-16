@@ -140,14 +140,21 @@ Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
 - Accept-Ranges oder Content-Range-Header vorhanden
 - Unterscheidung zwischen PROVEN und NOT_PROVEN
 
-Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml`
-(non-blocking ueber `BASEMAP_PROOF_MODE=skip`, nicht ueber Fehler-Maskierung).
-Der Workflow startet **keinen** Caddy-Stack und baut **kein** PMTiles-Artefakt.
-Ohne beides meldet der Guard nur `NOT_PROVEN` — das ist der aktuelle CI-Status.
+Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit zwei Jobs:
 
-**Bewertung:** Der Runtime-Beweis ist vorbereitet, aber noch nicht vollstaendig geschlossen.
-Im aktuellen CI-Stack fehlen sowohl das echte PMTiles-Artefakt als auch ein laufendes
-Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
+1. `basemap-runtime-proof` — non-blocking, `BASEMAP_PROOF_MODE=skip`. Diagnostiziert
+   `NOT_PROVEN` ohne Caddy und ohne Artefakt. Kein Erfolg, keine Maskierung.
+2. `basemap-range-delivery-proof` — blocking. Startet einen realen `caddy:2`-Container
+   mit `infra/caddy/Caddyfile.proof`, legt ein deterministisches `.pmtiles`-Testartefakt
+   unter `build/basemap/` ab, ruft die `/local-basemap/*`-Route per `curl` mit
+   `Range: bytes=0-511` auf und verifiziert HTTP 206 plus `Accept-Ranges`/`Content-Range`
+   via Guard im Scope `range-delivery`. Bei Abweichung schlaegt der Job hart fehl.
+
+**Bewertung:** Der Runtime-Beweis fuer die HTTP-206-Range-Delivery-Kette
+`curl -> Caddy -> .pmtiles-Datei` ist im CI hergestellt. Was *nicht* bewiesen ist:
+PMTiles-Inhaltsvaliditaet (Magic-Bytes, Tile-Directories). Dafuer ist der Guard-Scope
+`pmtiles-content` vorbereitet, der ein echtes PMTiles-Artefakt erfordert — heute weder
+gebaut noch hochgeladen im CI.
 
 **Kein Ersatz fuer den Runtime-Beweis:**
 
@@ -156,6 +163,8 @@ Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falsc
 - `scripts/guard/caddy-basemap-route-guard.sh` ist ein statischer Konfigurations-Check.
   Er beweist Caddyfile-Struktur, nicht reale Delivery.
 
-**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) und Achse D (Runtime vs. Tests)
-bleiben offen. Phase 6 wird erst geschlossen, wenn der Guard PROVEN meldet — mit echtem
-Artefakt, laufendem Caddy und belegbarem HTTP-206-Nachweis im CI.
+**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) ist fuer die
+Range-Delivery-Kette geschlossen, fuer die PMTiles-Inhaltsvaliditaet offen. Achse D
+(Runtime vs. Tests) ist fuer Range-Delivery geschlossen; visuelle Kartenabnahme und
+PMTiles-Content bleiben offen. Phase 6 ist in der HTTP-206-Achse geschlossen;
+die Inhaltsachse bleibt eine bewusst markierte, separate Beweispflicht.

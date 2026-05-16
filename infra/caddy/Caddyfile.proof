@@ -1,0 +1,27 @@
+# Caddyfile.proof — minimal config used exclusively by the basemap-runtime-proof
+# CI job. It mirrors the public /local-basemap/* route from infra/caddy/Caddyfile
+# down to a stand-alone configuration so that a real Caddy process can serve a
+# .pmtiles file via HTTP Range requests, and the guard
+# scripts/guard/basemap-runtime-proof.sh can verify HTTP 206 + Content-Range
+# against it.
+#
+# Intentionally NOT used in dev/heim/prod. The production Caddyfiles add
+# additional concerns (TLS, CSP, reverse proxies, encoding, CORS) which are
+# outside the scope of the Range-delivery proof.
+#
+# Scope: this configuration proves Caddy HTTP Range delivery on /local-basemap/.
+#        It does not prove production CSP, CORS, or reverse-proxy behaviour.
+
+{
+	auto_https off
+	admin off
+}
+
+:8081 {
+	handle_path /local-basemap/* {
+		root * /srv/weltgewebe-basemap
+		file_server
+	}
+
+	respond "basemap-proof-root" 200
+}

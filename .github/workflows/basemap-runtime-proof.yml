@@ -1,35 +1,27 @@
 ---
-name: Basemap Runtime Proof — not-proven detector (non-blocking)
+name: Basemap Runtime Proof
 
-# This workflow is a NOT_PROVEN detector / proof guard dry-run.
-# It does NOT start a Caddy instance. It does NOT build or supply a PMTiles artefact.
+# This workflow runs two jobs:
 #
-# What this workflow does:
-#   Runs scripts/guard/basemap-runtime-proof.sh in skip mode.
-#   Without a live Caddy and a real PMTiles artefact, the guard exits with NOT_PROVEN.
-#   The job summary marks the result explicitly as NOT_PROVEN — never a false green.
+#   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, non-blocking)
+#      Runs the guard in skip mode with no Caddy and no artefact. Reports
+#      NOT_PROVEN to make the gap visible — never a false green.
 #
-# What this workflow does NOT do:
-#   - Does not start Docker / Caddy
-#   - Does not build a PMTiles artefact
-#   - Does not execute the actual HTTP 206 Range delivery chain
+#   2. basemap-range-delivery-proof  (Pfad 2 — echter Runtime-Proof, blocking)
+#      Starts a real Caddy container that serves a synthetic .pmtiles artefact
+#      under /local-basemap/* and runs the guard in require mode with
+#      scope=range-delivery. The guard issues a Range request via curl and
+#      asserts HTTP 206 plus Accept-Ranges/Content-Range. Failure fails the job.
 #
-# Current CI status: NOT_PROVEN
-#   The guard infrastructure is ready. The proof chain requires a live Caddy stack
-#   serving a real PMTiles artefact. That is not provided in this workflow.
-#   This is intentional and epistemically correct.
+# Scope distinction:
+#   Pfad 2 proves Caddy HTTP Range delivery against a .pmtiles file. It does
+#   NOT validate PMTiles content (header magic, tile directories). That
+#   remains a separate, future proof (scope=pmtiles-content) once a real
+#   PMTiles artefact is produced in CI.
 #
-# What is NOT a substitute for this proof:
-#   - A mocked client test (basemap-client-integration.spec.ts) validates MapLibre
-#     protocol handling without a real HTTP backend — not a runtime proof.
-#   - A static config guard (caddy-basemap-route-guard.sh) validates Caddyfile
-#     structure without executing delivery — not a runtime proof.
-#
-# To unlock a real proof:
-#   1. Build a PMTiles artefact and place it at build/basemap/*.pmtiles
-#   2. Start a Caddy instance serving /local-basemap/ from that directory
-#   3. Set BASEMAP_PROOF_MODE=require and re-run this guard
-#   4. Guard returns PROVEN — only then is Phase 6 closable
+# What is NOT a substitute for either proof:
+#   - basemap-client-integration.spec.ts (mocked MapLibre protocol handler)
+#   - caddy-basemap-route-guard.sh (static Caddyfile structure check)
 
 "on":
   pull_request:
@@ -118,5 +110,153 @@ jobs:
             cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
           else
             printf 'No guard output file was produced.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
+
+  basemap-range-delivery-proof:
+    name: basemap-range-delivery-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BASEMAP_PROOF_MODE: require
+      BASEMAP_PROOF_SCOPE: range-delivery
+      BASEMAP_CADDY_URL: http://localhost:8081
+      ARTEFACT_NAME: proof-range-delivery.pmtiles
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Docker availability
+        run: |
+          set -euo pipefail
+          docker --version
+          docker info >/dev/null
+
+      - name: Generate synthetic .pmtiles proof artefact
+        run: |
+          set -euo pipefail
+          mkdir -p build/basemap
+          # 64 KiB deterministic content. The byte stream is intentionally
+          # synthetic: this job proves HTTP Range delivery, not PMTiles content
+          # validity. A separate scope (pmtiles-content) is wired in the guard
+          # for a future real artefact.
+          python3 - <<'PY'
+          import os, pathlib
+          out = pathlib.Path("build/basemap/proof-range-delivery.pmtiles")
+          # Deterministic 64 KiB payload, not a valid PMTiles file by design.
+          data = bytes(((i * 31 + 7) & 0xFF) for i in range(64 * 1024))
+          out.write_bytes(data)
+          print(f"wrote {out} ({out.stat().st_size} bytes)")
+          PY
+          ls -la build/basemap/
+          test -s "build/basemap/${ARTEFACT_NAME}"
+
+      - name: Start Caddy serving /local-basemap/ from artefact directory
+        run: |
+          set -euo pipefail
+          docker run -d --name caddy-proof \
+            -p 8081:8081 \
+            -v "${PWD}/infra/caddy/Caddyfile.proof:/etc/caddy/Caddyfile:ro" \
+            -v "${PWD}/build/basemap:/srv/weltgewebe-basemap:ro" \
+            caddy:2 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          # Wait for readiness — poll the root response of Caddy.
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null --max-time 2 "${BASEMAP_CADDY_URL}/"; then
+              echo "caddy ready after ${i} attempts"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: caddy did not become ready in 30s" >&2
+          docker logs caddy-proof || true
+          exit 1
+
+      - name: Sanity-check artefact reachable via Caddy (no Range)
+        run: |
+          set -euo pipefail
+          # Plain GET should yield 200 with the full body length.
+          curl -sS -D /tmp/headers-plain.txt -o /tmp/body-plain.bin \
+            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}"
+          echo "--- plain headers ---"
+          cat /tmp/headers-plain.txt
+          echo "--- body bytes: $(wc -c </tmp/body-plain.bin) ---"
+
+      - name: Run basemap runtime proof guard (require + range-delivery)
+        id: proof
+        run: |
+          set -euo pipefail
+          scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/proof-output.txt
+
+      - name: Capture raw 206 evidence for the audit trail
+        if: always()
+        run: |
+          set -euo pipefail
+          # Independent re-issue of the Range request so the response headers
+          # appear verbatim in the job log, separate from the guard's own
+          # validation pass. If this returns anything other than 206 the
+          # previous step has already failed; this is defence in depth.
+          curl -sS -D /tmp/response-headers.txt -o /dev/null \
+            -H 'Range: bytes=0-15' \
+            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}" || true
+          echo "--- response-headers.txt ---"
+          cat /tmp/response-headers.txt || true
+
+      - name: Collect caddy logs
+        if: always()
+        run: |
+          docker logs caddy-proof > /tmp/caddy.log 2>&1 || true
+          echo "--- caddy.log (tail) ---"
+          tail -n 100 /tmp/caddy.log || true
+
+      - name: Tear down Caddy container
+        if: always()
+        run: docker rm -f caddy-proof || true
+
+      - name: Upload proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basemap-range-delivery-proof-evidence
+          path: |
+            /tmp/proof-output.txt
+            /tmp/response-headers.txt
+            /tmp/headers-plain.txt
+            /tmp/caddy.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          OUTPUT_FILE="/tmp/proof-output.txt"
+          HDR_FILE="/tmp/response-headers.txt"
+
+          printf '## Basemap Range Delivery Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${OUTPUT_FILE}" ]] && grep -q '^PROVEN:' "${OUTPUT_FILE}"; then
+            printf '%s\n\n' '✅ **PROVEN (scope=range-delivery)** — real Caddy returned HTTP 206 for a Range request against the artefact' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'Chain: `curl Range` → live Caddy container → `.pmtiles` file → HTTP 206 Partial Content' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' '**Not proven by this job:** PMTiles content validity (header magic, tile directories). That requires `BASEMAP_PROOF_SCOPE=pmtiles-content` against a real PMTiles artefact.' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '%s\n\n' '❌ **FAILED** — guard did not report PROVEN' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+          printf '<details><summary>Guard output</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${OUTPUT_FILE}" ]]; then
+            cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No guard output captured.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          printf '```\n\n</details>\n\n' >> "${GITHUB_STEP_SUMMARY}"
+
+          printf '<details><summary>Response headers (independent re-issue)</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${HDR_FILE}" ]]; then
+            cat "${HDR_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No response headers captured.\n' >> "${GITHUB_STEP_SUMMARY}"
           fi
           printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"

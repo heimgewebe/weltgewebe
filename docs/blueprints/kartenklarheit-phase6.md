@@ -144,6 +144,23 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
 
 👉 Ohne das ist „Basemap-Souveränität“ nur Theorie.
 
+#### 2.4 Status der CI-Beweise (Stand dieser Phase)
+
+- [x] **HTTP-206-Range-Delivery im CI bewiesen.** Workflow
+  `.github/workflows/basemap-runtime-proof.yml`, Job
+  `basemap-range-delivery-proof`: realer `caddy:2`-Container, deterministisches
+  `.pmtiles`-Testartefakt, Guard im Modus `require` mit Scope `range-delivery`.
+  Fehlt 206 oder `Content-Range`, schlaegt der Job hart fehl.
+  - Was bewiesen ist: `curl -H 'Range: bytes=0-511' → Caddy → .pmtiles-Datei → 206 Partial Content`.
+  - Was *nicht* bewiesen ist: PMTiles-Inhaltsvaliditaet. Das Testartefakt im CI
+    ist synthetisch und enthaelt keine echten Tiles.
+- [ ] **PMTiles-Inhaltsvaliditaet im CI.** Guard kennt
+  `BASEMAP_PROOF_SCOPE=pmtiles-content` (Pruefung der PMTiles-Magic-Bytes), wartet
+  aber auf ein echtes PMTiles-Artefakt im CI-Pfad. Hamburg-/Deutschland-Builds
+  bleiben heavy und laufen nur via `workflow_dispatch`.
+- [ ] **Visuelle Abnahme.** Karte rendert ohne Fallback nach realem Tile-Load —
+  separater Schritt, nicht durch den Range-Delivery-Proof gedeckt.
+
 ---
 
 ### 3. Visuelle Abnahme (der unterschätzte Teil)
