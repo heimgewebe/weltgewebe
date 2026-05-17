@@ -56,14 +56,20 @@ Repo-Stand tatsaechlich vorhanden sind.
 ## 6. Runtime-Integration
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
-- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus PMTiles-Artefakt und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der zugehoerige CI-Workflow bleibt ohne Artefakt und ohne Caddy bewusst bei NOT_PROVEN.
-- **Status**: Teil
-- **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`
-- **Fehlend**: Echter CI-Nachweis; PMTiles-Artefakt ist im CI aktuell nicht verfuegbar; kein Caddy-Stack im CI.
-  Solange kein reales Artefakt und kein laufender Caddy im CI-Stack vorhanden sind, bleibt der HTTP-206-Beweis offen.
+- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (zusaetzliche Magic-Byte-Validierung). Der CI-Workflow betreibt zwei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose) und `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) — letzterer startet einen realen `caddy:2.7`-Container gegen ein deterministisches `.pmtiles`-Testartefakt und schlaegt bei abweichendem HTTP-Status hart fehl.
+- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; PMTiles-Magic-Byte-Check offen)
+- **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
+- **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
+  ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
+  strukturelle PMTiles-Validierung bleiben Future Work.
+  Visuelle Abnahme der gerenderten Karte bleibt offen.
   Die clientseitigen Tests sind kein Ersatz fuer den Live-Caddy-Beweis.
 
 ## Essenz
 
 Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte Fehlerpfade.
-Offen bleiben vor allem die Produktionsentscheidung fuer den Basemap-Modus und der echte HTTP-206-Nachweis gegen laufendes Caddy plus Artefakt.
+Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
+ist PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+(Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
+(scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`. Offen bleiben die Produktionsentscheidung fuer den
+Basemap-Modus, den PMTiles-Magic-Byte-Check im CI und die visuelle Kartenabnahme.

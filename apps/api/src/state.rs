@@ -5,7 +5,7 @@ use crate::{
     auth::{
         challenges::ChallengeStore, passkeys::PasskeyRegistrationGrantStore,
         passkeys::PasskeyRegistrationStore, passkeys::PasskeyStore, rate_limit::AuthRateLimiter,
-        session::SessionStore, step_up_tokens::StepUpTokenStore, tokens::TokenStore,
+        session::SessionBackend, step_up_tokens::StepUpTokenStore, tokens::TokenStore,
     },
     config::AppConfig,
     mailer::Mailer,
@@ -67,7 +67,7 @@ pub struct ApiState {
     pub nats_configured: bool,
     pub config: AppConfig,
     pub metrics: Metrics,
-    pub sessions: SessionStore,
+    pub sessions: SessionBackend,
     pub challenges: ChallengeStore,
     pub tokens: TokenStore,
     pub step_up_tokens: StepUpTokenStore,

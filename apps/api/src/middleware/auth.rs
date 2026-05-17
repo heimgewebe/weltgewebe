@@ -1,4 +1,10 @@
-use axum::{body::Body, extract::State, http::Request, middleware::Next, response::Response};
+use axum::{
+    body::Body,
+    extract::State,
+    http::Request,
+    middleware::Next,
+    response::{IntoResponse, Response},
+};
 use axum_extra::extract::cookie::CookieJar;
 
 use crate::{auth::role::Role, routes::auth::SESSION_COOKIE_NAME, state::ApiState};
@@ -25,19 +31,45 @@ pub async fn auth_middleware(
         role: Role::Gast,
         expires_at: None,
     };
+    let mut session_id_to_touch = None;
 
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
-        if let Some(session) = state.sessions.get(cookie.value()) {
-            let accounts = state.accounts.read().await;
-            if let Some(internal) = accounts.get(&session.account_id) {
-                ctx.authenticated = true;
-                ctx.account_id = Some(session.account_id.clone());
-                ctx.device_id = Some(session.device_id.clone());
-                ctx.role = internal.role.clone();
-                ctx.expires_at = Some(session.expires_at);
+        let session = match state.sessions.get(cookie.value()).await {
+            Ok(session) => session,
+            Err(error) => {
+                tracing::error!(
+                    event = "auth.middleware.session_backend_failed",
+                    operation = "get",
+                    error = %error,
+                    "Session backend operation failed during auth middleware"
+                );
+                return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+            }
+        };
 
-                // Synchronously touch to update last_active if needed (debounced internally)
-                state.sessions.touch(&session.id);
+        if let Some(session) = session {
+            {
+                let accounts = state.accounts.read().await;
+                if let Some(internal) = accounts.get(&session.account_id) {
+                    ctx.authenticated = true;
+                    ctx.account_id = Some(session.account_id.clone());
+                    ctx.device_id = Some(session.device_id.clone());
+                    ctx.role = internal.role.clone();
+                    ctx.expires_at = Some(session.expires_at);
+                    session_id_to_touch = Some(session.id.clone());
+                }
+            }
+
+            if let Some(session_id) = session_id_to_touch {
+                if let Err(error) = state.sessions.touch(&session_id).await {
+                    tracing::error!(
+                        event = "auth.middleware.session_backend_failed",
+                        operation = "touch",
+                        error = %error,
+                        "Session backend operation failed during auth middleware"
+                    );
+                    return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+                }
             }
         }
     }

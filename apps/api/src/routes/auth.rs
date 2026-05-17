@@ -18,6 +18,7 @@ use uuid::Uuid;
 use crate::{
     auth::challenges::ChallengeIntent,
     auth::passkeys::{start_passkey_registration, ConsumeGrantResult, RegistrationInput},
+    auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
     middleware::auth::AuthContext,
@@ -97,6 +98,49 @@ pub struct DevAccount {
 pub struct LoginResponse {
     pub ok: bool,
     pub message: String,
+}
+
+fn log_session_backend_error(operation: &'static str, error: &SessionBackendError) {
+    tracing::error!(
+        event = "auth.session_backend_failed",
+        operation,
+        error = %error,
+        "Session backend operation failed"
+    );
+}
+
+fn session_backend_status_response(
+    operation: &'static str,
+    error: &SessionBackendError,
+) -> axum::response::Response {
+    log_session_backend_error(operation, error);
+    StatusCode::SERVICE_UNAVAILABLE.into_response()
+}
+
+fn session_backend_json_response(
+    operation: &'static str,
+    error: &SessionBackendError,
+) -> axum::response::Response {
+    log_session_backend_error(operation, error);
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({"error": "SESSION_BACKEND_UNAVAILABLE"})),
+    )
+        .into_response()
+}
+
+fn session_backend_json_response_with_jar(
+    operation: &'static str,
+    error: &SessionBackendError,
+    jar: CookieJar,
+) -> axum::response::Response {
+    log_session_backend_error(operation, error);
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        jar,
+        Json(serde_json::json!({"error": "SESSION_BACKEND_UNAVAILABLE"})),
+    )
+        .into_response()
 }
 
 #[derive(Clone)]
@@ -313,7 +357,10 @@ pub async fn dev_login(
         }
     }
 
-    let session = state.sessions.create(payload.account_id, None);
+    let session = match state.sessions.create(payload.account_id, None).await {
+        Ok(session) => session,
+        Err(error) => return session_backend_status_response("dev_login.create", &error),
+    };
 
     let cookie = build_session_cookie(session.id, None);
 
@@ -817,7 +864,12 @@ pub async fn consume_login_post(
                 return Redirect::to("/login?error=account_disabled").into_response();
             }
 
-            let session = state.sessions.create(acc.public.id.clone(), None);
+            let session = match state.sessions.create(acc.public.id.clone(), None).await {
+                Ok(session) => session,
+                Err(error) => {
+                    return session_backend_status_response("consume_login_post.create", &error);
+                }
+            };
             let cookie = build_session_cookie(session.id, None);
 
             // Clear the nonce cookie
@@ -865,12 +917,14 @@ pub async fn consume_login_post(
 
 pub async fn logout(State(state): State<ApiState>, jar: CookieJar) -> impl IntoResponse {
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
-        state.sessions.delete(cookie.value());
+        if let Err(error) = state.sessions.delete(cookie.value()).await {
+            return session_backend_status_response("logout.delete", &error);
+        }
     }
 
     let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
 
-    (jar.add(cookie), StatusCode::OK)
+    (jar.add(cookie), StatusCode::OK).into_response()
 }
 
 pub async fn logout_all(
@@ -1038,16 +1092,23 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
     if let Some(cookie) = jar.get(SESSION_COOKIE_NAME) {
         let old_session_id = cookie.value();
 
-        if let Some(old_session) = state.sessions.get(old_session_id) {
+        let old_session = match state.sessions.get(old_session_id).await {
+            Ok(session) => session,
+            Err(error) => return session_backend_json_response("session_refresh.get", &error),
+        };
+
+        if let Some(old_session) = old_session {
             let accounts = state.accounts.read().await;
             let is_valid = accounts
                 .get(&old_session.account_id)
                 .is_some_and(|acc| !acc.public.disabled);
             drop(accounts);
 
-            state.sessions.delete(old_session_id);
-
             if !is_valid {
+                if let Err(error) = state.sessions.delete(old_session_id).await {
+                    return session_backend_json_response("session_refresh.delete", &error);
+                }
+
                 tracing::warn!(
                     event = "session.refresh_failed_disabled",
                     account_id = %old_session.account_id,
@@ -1066,7 +1127,30 @@ pub async fn session_refresh(State(state): State<ApiState>, jar: CookieJar) -> i
 
             let new_session = state
                 .sessions
-                .create(old_session.account_id, Some(old_session.device_id.clone()));
+                .create(old_session.account_id, Some(old_session.device_id.clone()))
+                .await;
+
+            let new_session = match new_session {
+                Ok(session) => session,
+                Err(error) => {
+                    return session_backend_json_response("session_refresh.create", &error);
+                }
+            };
+
+            if let Err(error) = state.sessions.delete(old_session_id).await {
+                if let Err(rollback_error) = state.sessions.delete(&new_session.id).await {
+                    tracing::error!(
+                        event = "session.refresh_rollback_failed",
+                        old_session_id = %old_session_id,
+                        new_session_id = %new_session.id,
+                        delete_error = %error,
+                        rollback_error = %rollback_error,
+                        "Session refresh failed deleting old session; rollback delete for new session also failed"
+                    );
+                }
+
+                return session_backend_json_response("session_refresh.delete", &error);
+            }
 
             let new_cookie = build_session_cookie(new_session.id, None);
 
@@ -1121,7 +1205,10 @@ pub async fn list_devices(
         }
     };
 
-    let sessions = state.sessions.list_by_account(&account_id);
+    let sessions = match state.sessions.list_by_account(&account_id).await {
+        Ok(sessions) => sessions,
+        Err(error) => return session_backend_json_response("list_devices.list_by_account", &error),
+    };
 
     // Group sessions by device_id
     let current_device_id = match ctx.device_id {
@@ -1160,7 +1247,7 @@ pub async fn list_devices(
 
     let mut devices: Vec<DeviceInfo> = device_map.into_values().collect();
     // Sort devices by last_active descending
-    devices.sort_by(|a, b| b.last_active.cmp(&a.last_active));
+    devices.sort_by_key(|device| std::cmp::Reverse(device.last_active));
 
     (axum::http::StatusCode::OK, Json(devices)).into_response()
 }
@@ -1199,13 +1286,32 @@ pub async fn remove_device(
 
     if *current_device_id == device_id {
         // Logging out current device -> delete all sessions for it and clear cookie
-        state.sessions.delete_by_device(&account_id, &device_id);
+        if let Err(error) = state
+            .sessions
+            .delete_by_device(&account_id, &device_id)
+            .await
+        {
+            return session_backend_json_response_with_jar(
+                "remove_device.delete_by_device",
+                &error,
+                jar,
+            );
+        }
         let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
         return (axum::http::StatusCode::NO_CONTENT, jar.add(cookie)).into_response();
     }
 
     // Removing another device -> first check if it even exists for this account
-    let account_sessions = state.sessions.list_by_account(&account_id);
+    let account_sessions = match state.sessions.list_by_account(&account_id).await {
+        Ok(sessions) => sessions,
+        Err(error) => {
+            return session_backend_json_response_with_jar(
+                "remove_device.list_by_account",
+                &error,
+                jar,
+            );
+        }
+    };
     let target_device_exists = account_sessions.iter().any(|s| s.device_id == device_id);
 
     if !target_device_exists {
@@ -1495,7 +1601,13 @@ pub async fn consume_step_up(
                 account_id = %account_id,
                 "Step-up consume: executing LogoutAll intent"
             );
-            state.sessions.delete_all_by_account(&account_id);
+            if let Err(error) = state.sessions.delete_all_by_account(&account_id).await {
+                return session_backend_json_response_with_jar(
+                    "consume_step_up.delete_all_by_account",
+                    &error,
+                    jar,
+                );
+            }
             // Empty value + zero max-age clears the session cookie in the client
             let cookie = build_session_cookie("".to_string(), Some(Duration::seconds(0)));
             (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
@@ -1508,9 +1620,17 @@ pub async fn consume_step_up(
                 target_device_id = %target_device_id,
                 "Step-up consume: executing RemoveDevice intent"
             );
-            state
+            if let Err(error) = state
                 .sessions
-                .delete_by_device(&account_id, &target_device_id);
+                .delete_by_device(&account_id, &target_device_id)
+                .await
+            {
+                return session_backend_json_response_with_jar(
+                    "consume_step_up.delete_by_device",
+                    &error,
+                    jar,
+                );
+            }
             StatusCode::NO_CONTENT.into_response()
         }
         ChallengeIntent::UpdateEmail { new_email } => {

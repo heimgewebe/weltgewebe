@@ -45,8 +45,32 @@ pub async fn run() -> anyhow::Result<()> {
     let (db_pool, db_pool_configured) = initialise_database_pool().await;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
+    if let (true, Some(pool)) = (db_pool_configured, db_pool.as_ref()) {
+        sqlx::migrate!("./migrations")
+            .run(pool)
+            .await
+            .context("database migration failed")?;
+    }
+
     let metrics = Metrics::try_new(BuildInfo::collect())?;
-    let sessions = crate::auth::session::SessionStore::new();
+
+    let sessions = match (db_pool_configured, db_pool.as_ref()) {
+        (true, Some(pool)) => {
+            tracing::info!("Session store backed by PostgreSQL database");
+            crate::auth::session::SessionBackend::new(crate::auth::session_db::DbSessionStore::new(
+                pool.clone(),
+            ))
+        }
+        (true, None) => {
+            return Err(anyhow!(
+                "DATABASE_URL is configured but PostgreSQL pool is unavailable; refusing in-memory session fallback"
+            ));
+        }
+        (false, _) => {
+            tracing::info!("Session store in-memory (database not configured)");
+            crate::auth::session::SessionBackend::new_in_memory()
+        }
+    };
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();

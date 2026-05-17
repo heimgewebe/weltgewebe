@@ -9,20 +9,29 @@ summary: >
   Runtime-Proof-Bericht für den Auth-Persistenz-Pfad (OPT-API-002/003).
   Gesamtergebnis: PARTIAL_PROVEN. psql-basierter Migrations- und CRUD-Smoke
   gegen disposable-local PostgreSQL und PgBouncer (transaction mode) sind belegt.
-  SQLx/Rust-API-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
-  Stack-PgBouncer-Image bleiben NOT_PROVEN.
+  SQLx/Rust-CRUD gegen die Session-Tabelle im direkten PostgreSQL-Pfad ist ebenfalls belegt
+  (siehe docs/proofs/sqlx-postgres-direct-session-crud-proof.md).
+  SQLx/Rust-CRUD gegen PgBouncer, sqlx-cli-Migration und exaktes
+  Stack-PgBouncer-Image bleiben NOT_PROVEN. ADR-0007 schränkt PgBouncer auf
+  Dev-/Spezialpfade ein; der Produktionspfad ist DATABASE_URL → direkter
+  PostgreSQL-Zugriff.
 depends_on:
   - docs/blueprints/auth-persistence-runtime-proof.md
   - docs/reports/auth-persistence-next-step.md
+  - docs/proofs/sqlx-postgres-direct-session-crud-proof.md
 relations:
   - type: relates_to
     target: docs/blueprints/auth-persistence-runtime-proof.md
   - type: relates_to
     target: docs/reports/auth-persistence-next-step.md
   - type: relates_to
+    target: docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+  - type: relates_to
     target: docs/blueprints/auth-roadmap.md
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+  - type: relates_to
+    target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
 ---
 
 # Auth-Persistenz — Runtime-Proof
@@ -30,7 +39,9 @@ relations:
 > **Zweck:** Beweis-PR. Kein Auth-Umbau, kein `DbSessionStore`, keine
 > `SessionBackend`-Abstraktion. Kein register/verify.
 > Ziel: belegter Runtime-Pfad für die vorhandene `sessions`-Migration mit psql
-> und PgBouncer gegen eine wegwerfbare lokale Datenbank.
+> und PgBouncer gegen eine wegwerfbare lokale Datenbank. Nach ADR-0007 ist dieser
+> PgBouncer-Pfad ein Dev-/Spezialpfad; Produktion nutzt `DATABASE_URL` für
+> direkten PostgreSQL-Zugriff.
 >
 > Blueprint: `docs/blueprints/auth-persistence-runtime-proof.md`
 
@@ -60,7 +71,7 @@ Beweisen, dass:
 | Down-Migration | `apps/api/migrations/20260428000000_create_sessions.down.sql` vorhanden — `DROP TABLE sessions` |
 | SQLx | Cargo.toml: `sqlx = { version = "0.8.1", features = ["runtime-tokio", "postgres"] }` |
 | PgBouncer im Stack | `infra/compose/compose.core.yml`: `edoburu/pgbouncer:1.20`, `POOL_MODE: transaction`, Port 6432 |
-| API-Verbindung | API-Container verbindet über PgBouncer (Port 6432), nicht direkt gegen Postgres |
+| API-Verbindung | Dev-Stack: API-Container verbindet über PgBouncer (Port 6432). Produktion nach ADR-0007: `DATABASE_URL` → direkter PostgreSQL-Zugriff. |
 | `db_pool` in ApiState | vorhanden, aber ausschließlich für Health-Check verdrahtet — kein Auth-Pfad nutzt die DB |
 | `sqlx-cli` | **nicht** in der CI-Umgebung installiert; Justfile dokumentiert Install-Befehl |
 | SessionStore | in-memory, kein Auth-Umbau in diesem PR |
@@ -275,17 +286,40 @@ git diff --check
 | CRUD via PgBouncer transaction mode (psql) | ✅ PROVEN |
 | Offline-Tests grün | ✅ PROVEN |
 | Kein Auth-Verhalten geändert | ✅ PROVEN |
-| SQLx/Rust-API CRUD direkt Postgres | ❌ NOT_PROVEN |
-| SQLx/Rust-API CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
+| SQLx/Rust CRUD gegen Session-Tabelle direkt Postgres | ✅ PROVEN |
+| SQLx/Rust CRUD via PgBouncer transaction mode | ❌ NOT_PROVEN |
 | `sqlx migrate run` via sqlx-cli | ❌ NOT_PROVEN |
 | Exaktes Stack-Image `edoburu/pgbouncer:1.20` | ❌ NOT_PROVEN |
 
 ### Gesamtergebnis: PARTIAL_PROVEN
 
 Der psql-basierte Migrations- und CRUD-Pfad gegen PostgreSQL und PgBouncer
-(transaction mode) ist reproduzierbar belegt. Der kritische SQLx/Rust-API-Pfad
-gegen PgBouncer transaction mode — der tatsächliche Runtime-Pfad der API — ist
-noch nicht bewiesen. `psql`-CRUD ist nicht äquivalent zu SQLx-Runtime.
+(transaction mode) ist reproduzierbar belegt. Der direkte SQLx/Rust-CRUD-
+Pfad gegen die Session-Tabelle in PostgreSQL ist ebenfalls belegt (separater
+Proof-Report: `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`).
+Offen bleibt der SQLx/Rust-Pfad gegen PgBouncer transaction mode für
+Dev-/Spezialfälle. Nach ADR-0007 ist PgBouncer kein Produktions-Gate.
+
+### 5.1 Scope-Abgrenzung (kurz)
+
+PROVEN:
+
+- SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad (`PG_DIRECT_URL`, im Test als `DATABASE_URL` exportiert)
+- psql-Migrations- und CRUD-Pfad gegen disposable-local PostgreSQL
+- psql-CRUD über PgBouncer transaction mode
+
+NOT_PROVEN:
+
+- SQLx/Rust-CRUD über PgBouncer transaction mode
+- `sqlx migrate run` via sqlx-cli im CI-Kontext
+- Exaktes Stack-Image `edoburu/pgbouncer:1.20` im Runtime-Proof
+
+Warum `DbSessionStore` nicht Teil dieses PR ist:
+
+- Dieser PR ist ein Runtime-Proof-Scope ohne Auth-Router-Umbau.
+- Das Ziel ist Nachweisbarkeit des Persistenzpfads, nicht produktive
+  Store-Einführung.
+- `DbSessionStore` bleibt der nächste, separate Implementierungs-PR.
 
 ---
 
@@ -293,7 +327,7 @@ noch nicht bewiesen. `psql`-CRUD ist nicht äquivalent zu SQLx-Runtime.
 
 ### Restlücke 1: SQLx Prepared Statements gegen PgBouncer (Rust-API-Ebene)
 
-#### Status: offen
+#### Status: offen für Dev-/Spezialpfad; kein Produktions-Gate nach ADR-0007
 
 Alle CRUD-Operationen wurden über den `psql`-Client ausgeführt, der keine
 Prepared Statements im SQLx-Sinne verwendet. SQLx nutzt standardmäßig
@@ -348,29 +382,25 @@ des Stacks bleibt unverändert.
 
 ## 8. Entscheidungsempfehlung: nächster sicherer Schritt
 
-**Empfehlung: `test(db): prove SQLx session CRUD through PgBouncer`**
+**Empfehlung: `feat(auth): implement DbSessionStore against direct PostgreSQL path`**
 
-Der psql-basierte Proof ist bestanden, aber der kritische SQLx/Rust-API-Pfad
-gegen PgBouncer transaction mode ist noch nicht belegt. Bevor `DbSessionStore`
-gebaut wird, muss dieser Pfad bewiesen sein.
+Der direkte SQLx/PostgreSQL-CRUD-Pfad gegen die Session-Tabelle ist jetzt als Proof belegt. Damit ist
+die zentrale Vorbedingung aus ADR-0007 für den nächsten Implementierungsschritt
+erfüllt.
 
 Vorgehen für den nächsten PR:
 
-1. Rust-Integrationstest schreiben, der via `sqlx::PgPool` gegen eine
-   disposable-local Datenbank hinter PgBouncer (transaction mode) arbeitet.
-2. `PgConnectOptions::statement_cache_capacity(0)` beim Pool-Setup aktivieren
-   und im Test explizit belegen, dass der getestete SQLx-CRUD-Pfad mit
-   `POOL_MODE=transaction` und deaktiviertem Statement-Cache erfolgreich läuft
-   (INSERT / SELECT / UPDATE / DELETE via SQLx gegen PgBouncer ohne Fehler).
-3. INSERT / SELECT / UPDATE / DELETE gegen `sessions` via SQLx/Rust — nicht via psql.
-4. Offline-Tests müssen weiterhin grün bleiben.
+1. `DbSessionStore` gegen direkten PostgreSQL-Zugriff implementieren.
+2. `SessionBackend`/`SessionOps`-Wiring nur soweit anpassen, wie für Persistenz nötig.
+3. Login/Logout/Refresh-Verhalten unverändert halten.
+4. Offline-Testpfad weiterhin grün halten.
 
-**Stop-Regel:** Wenn SQLx über PgBouncer scheitert, keine Session-Persistenz
-verdrahten — erst Ursache isolieren und Mitigation belegen.
+**Stop-Regel:** Kein PgBouncer-spezifischer Umbau als Produktions-Gate.
 
-**Alternative:** `DbSessionStore` darf direkt im nächsten PR begonnen werden,
-aber nur wenn derselbe PR den SQLx/PgBouncer-Proof mit `statement_cache_capacity(0)`
-und Rust-Integrationstest enthält. Kein `DbSessionStore` ohne belegten SQLx/PgBouncer-Pfad.
+Optionaler Spezialpfad: Der SQLx/PgBouncer-Proof mit `statement_cache_capacity(0)`
+kann weiterhin ausgeführt werden, wenn ein Dev-/Spezialbetrieb PgBouncer nutzt.
+Er ist aber kein Produktions-Gate und blockiert `DbSessionStore` gegen direkten
+PostgreSQL-Zugriff nicht.
 
 Zweite Alternative: erst `refactor(auth): introduce SessionBackend abstraction`
 als eigenen PR, wenn die Änderungsfläche nach erster Messung breit erscheint
@@ -384,9 +414,9 @@ als eigenen PR, wenn die Änderungsfläche nach erster Messung breit erscheint
 |---|---|
 | `cargo test --locked -p weltgewebe-api` | ✅ 240 passed, lokal ausgeführt |
 | `git diff --check` | ✅ clean |
-| `cargo fmt -- --check` | nicht ausgeführt (kein Rust-Code verändert) |
-| `cargo clippy -- -D warnings` | nicht ausgeführt (kein Rust-Code verändert) |
+| `cargo fmt --check` | ✅ ausgeführt |
+| `cargo clippy -p weltgewebe-api --all-targets --all-features -- -D warnings` | ✅ ausgeführt |
 | `pnpm lint` (Web) | nicht betroffen |
 
-Dieser PR enthält ausschließlich einen neuen Report (`docs/reports/`).
+Dieser Sync-PR enthält Änderungen in `docs/reports/` und im `Justfile`.
 Keine Produktionscode-Änderungen.
