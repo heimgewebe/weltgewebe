@@ -69,7 +69,7 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte Fehlerpfade.
 Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
-ist PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+ist PROVEN: [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
 (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
 (scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`. Offen bleiben die Produktionsentscheidung fuer den
 Basemap-Modus, den PMTiles-Magic-Byte-Check im CI und die visuelle Kartenabnahme.

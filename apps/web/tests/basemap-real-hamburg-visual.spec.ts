@@ -214,7 +214,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       ).toBeGreaterThan(0);
 
       // Check MapLibre isStyleLoaded() via window.__TEST_MAP__ hook
-      const styleLoaded = await expect
+      await expect
         .poll(
           async () => {
             return await page.evaluate(() => {
@@ -229,6 +229,15 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           },
         )
         .toBeTruthy();
+
+      const styleLoaded = await page.evaluate(() => {
+        const map = (window as unknown as Record<string, unknown>)
+          .__TEST_MAP__ as { isStyleLoaded?: () => boolean } | undefined;
+        return map?.isStyleLoaded?.() ?? false;
+      });
+      expect(styleLoaded, "MapLibre isStyleLoaded() must resolve to true").toBe(
+        true,
+      );
 
       // Screenshot as visual artifact
       await page.screenshot({
@@ -248,7 +257,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         pmtiles_206_responses: pmtilesResponses.filter((r) => r.status === 206)
           .length,
         canvas_dimensions: canvasDimensions,
-        style_loaded: styleLoaded ?? true,
+        style_loaded: styleLoaded,
         remote_violations: remoteViolations,
         screenshot: testInfo.outputPath("screenshot.png"),
         first_request: pmtilesRequests[0] ?? null,

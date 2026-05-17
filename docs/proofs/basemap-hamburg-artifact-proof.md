@@ -58,7 +58,8 @@ relations:
   - `Accept-Ranges: bytes`
   - `Content-Range: bytes 0-511/23948877`
 - Guard pmtiles-content (case 3 — require + real artefact + SHA256):
-  ```
+
+  ```text
   PROVEN: PMTiles Magic/Header verified
     File:         build/basemap/basemap-hamburg-v0.1.0.pmtiles
     Size:         23948877 bytes

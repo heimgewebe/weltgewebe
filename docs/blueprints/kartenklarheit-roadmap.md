@@ -208,7 +208,7 @@ Sondern:
   `caddy:2.7`, Config `infra/caddy/Caddyfile.proof`), serviert eine `.pmtiles`-Datei
   unter `/local-basemap/*` und der Guard verifiziert HTTP 206 plus
   `Accept-Ranges`/`Content-Range`. Bei Abweichung schlaegt der Job hart fehl.
-  **PROVEN:** CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  **PROVEN:** [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
   (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
   (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`.
   - Scope: `BASEMAP_PROOF_SCOPE=range-delivery`. Beweist die
@@ -234,7 +234,7 @@ Sondern:
 - [x] Guard-Script liefert PROVEN (HTTP 206 bestaetigt) in einem reproduzierbaren
   CI-Lauf mit laufendem Caddy-Backend und einer `.pmtiles`-Datei unter
   `/local-basemap/*`. Scope: `range-delivery`. **PROVEN:** CI-Lauf
-  https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659 (Commit 14feefd6),
+  [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659) (Commit 14feefd6),
   Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
   Response `HTTP/1.1 206 Partial Content`.
 - [ ] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
@@ -251,7 +251,7 @@ Sondern:
 - [ ] Externe Basemap-Abhaengigkeit klar entscheiden.
 - [x] Fehlerpfade testbar machen.
 - [x] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
-  PROVEN — CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  PROVEN — [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
   (Commit 14feefd6). PMTiles-Magic-Byte-Check bleibt offen.
 
 ---
