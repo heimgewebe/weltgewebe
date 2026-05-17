@@ -140,14 +140,25 @@ Dieses Script prueft (lokal, mit laufendem Caddy und echtem Artefakt):
 - Accept-Ranges oder Content-Range-Header vorhanden
 - Unterscheidung zwischen PROVEN und NOT_PROVEN
 
-Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml`
-(non-blocking ueber `BASEMAP_PROOF_MODE=skip`, nicht ueber Fehler-Maskierung).
-Der Workflow startet **keinen** Caddy-Stack und baut **kein** PMTiles-Artefakt.
-Ohne beides meldet der Guard nur `NOT_PROVEN` — das ist der aktuelle CI-Status.
+Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit zwei Jobs:
 
-**Bewertung:** Der Runtime-Beweis ist vorbereitet, aber noch nicht vollstaendig geschlossen.
-Im aktuellen CI-Stack fehlen sowohl das echte PMTiles-Artefakt als auch ein laufendes
-Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falscher Erfolgsstatus.
+1. `basemap-runtime-proof` — nicht blockierend, `BASEMAP_PROOF_MODE=skip`. Diagnostiziert
+   `NOT_PROVEN` ohne Caddy und ohne Artefakt. Kein Erfolg, keine Maskierung.
+2. `basemap-range-delivery-proof` — blockierend. Startet einen realen `caddy:2.7`-Container
+   mit `infra/caddy/Caddyfile.proof`, legt ein deterministisches `.pmtiles`-Testartefakt
+   unter `build/basemap/` ab, ruft die `/local-basemap/*`-Route per `curl` mit
+   `Range: bytes=0-511` auf und verifiziert HTTP 206 plus `Accept-Ranges`/`Content-Range`
+   via Guard im Scope `range-delivery`. Bei Abweichung schlaegt der Job hart fehl.
+
+**Bewertung:** Der blockierende CI-Job fuer die HTTP-206-Range-Delivery-Kette
+`curl -> Caddy -> .pmtiles-Datei` ist PROVEN: CI-Lauf
+https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659 (Commit 14feefd6),
+Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
+Response-Header `HTTP/1.1 206 Partial Content`. Was *nicht* bewiesen ist:
+PMTiles-Magic-Byte-Check (7-Byte-Prefix): Scope `pmtiles-content` ist vorbereitet,
+prueft aber nur den `"PMTiles"`-Prefix — keine Tile-Directory-Struktur, keine
+strukturelle PMTiles-Validierung; beides bleibt Future Work. Ein echtes
+PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
 
 **Kein Ersatz fuer den Runtime-Beweis:**
 
@@ -156,6 +167,10 @@ Caddy-Backend; der Guard meldet `NOT_PROVEN` — epistemisch korrekt, kein falsc
 - `scripts/guard/caddy-basemap-route-guard.sh` ist ein statischer Konfigurations-Check.
   Er beweist Caddyfile-Struktur, nicht reale Delivery.
 
-**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) und Achse D (Runtime vs. Tests)
-bleiben offen. Phase 6 wird erst geschlossen, wenn der Guard PROVEN meldet — mit echtem
-Artefakt, laufendem Caddy und belegbarem HTTP-206-Nachweis im CI.
+**Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) hat einen
+blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN (CI-Lauf #25970466659,
+Commit 14feefd6); fuer den PMTiles-Magic-Byte-Check offen. Achse D
+(Runtime vs. Tests): der blockierende Proof-Job ist PROVEN; visuelle
+Kartenabnahme und PMTiles-Magic-Byte-Check bleiben offen. Phase 6 hat
+einen PROVEN-Status fuer die HTTP-206-Achse; die Inhaltsachse
+bleibt eine bewusst markierte, separate Beweispflicht.
