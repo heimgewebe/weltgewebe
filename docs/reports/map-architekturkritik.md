@@ -151,9 +151,10 @@ Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit
    via Guard im Scope `range-delivery`. Bei Abweichung schlaegt der Job hart fehl.
 
 **Bewertung:** Der blockierende CI-Job fuer die HTTP-206-Range-Delivery-Kette
-`curl -> Caddy -> .pmtiles-Datei` ist eingezogen (READY_FOR_CI_PROOF). PROVEN
-gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit erfasstem
-Guard-Output und Response-Headers als Beweis-Artefakt. Was *nicht* bewiesen ist:
+`curl -> Caddy -> .pmtiles-Datei` ist PROVEN: CI-Lauf
+https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659 (Commit 14feefd6),
+Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
+Response-Header `HTTP/1.1 206 Partial Content`. Was *nicht* bewiesen ist:
 PMTiles-Magic-Byte-Check (7-Byte-Prefix): Scope `pmtiles-content` ist vorbereitet,
 prueft aber nur den `"PMTiles"`-Prefix — keine Tile-Directory-Struktur, keine
 strukturelle PMTiles-Validierung; beides bleibt Future Work. Ein echtes
@@ -167,9 +168,9 @@ PMTiles-Artefakt ist weder gebaut noch hochgeladen im CI.
   Er beweist Caddyfile-Struktur, nicht reale Delivery.
 
 **Konsequenz fuer Architekturkritik:** Achse C (Betriebsmodi) hat einen
-blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN erst nach
-beobachtetem CI-Lauf; fuer den PMTiles-Magic-Byte-Check offen. Achse D
-(Runtime vs. Tests): der blockierende Proof-Job ist eingezogen; visuelle
+blockierenden CI-Job fuer die Range-Delivery-Kette — PROVEN (CI-Lauf #25970466659,
+Commit 14feefd6); fuer den PMTiles-Magic-Byte-Check offen. Achse D
+(Runtime vs. Tests): der blockierende Proof-Job ist PROVEN; visuelle
 Kartenabnahme und PMTiles-Magic-Byte-Check bleiben offen. Phase 6 hat
-einen READY_FOR_CI_PROOF-Status fuer die HTTP-206-Achse; die Inhaltsachse
+einen PROVEN-Status fuer die HTTP-206-Achse; die Inhaltsachse
 bleibt eine bewusst markierte, separate Beweispflicht.

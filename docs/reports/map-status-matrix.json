@@ -107,14 +107,11 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (Magic-Byte-Check der ersten 7 Bytes 'PMTiles' — kein vollstaendiger Struktur-Check, fuer ein echtes Artefakt vorbereitet). PROVEN gilt erst nach beobachtetem gruenen GitHub-Actions-Lauf.",
+      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (Magic-Byte-Check der ersten 7 Bytes 'PMTiles' — kein vollstaendiger Struktur-Check, fuer ein echtes Artefakt vorbereitet). PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. Artifact: basemap-range-delivery-proof-evidence (ID 7035995961).",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
-      ],
-      "ready_for_ci_proof": [
-        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN nach beobachtetem gruenen CI-Lauf"
       ],
       "missing_evidence": [
         "Echtes PMTiles-Artefakt im CI-Stack",
@@ -132,11 +129,14 @@
       "not_a_substitute": [
         "apps/web/tests/basemap-client-integration.spec.ts (clientseitiger Mock-Test, kein Live-Caddy-Beweis)",
         "scripts/guard/caddy-basemap-route-guard.sh (statischer Konfigurations-Check, kein Runtime-Beweis)"
+      ],
+      "proven": [
+        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content"
       ]
     }
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "READY_FOR_CI_PROOF: blockierender Job fuer Range-Delivery gegen Caddy ist eingezogen; PROVEN erst nach beobachtetem gruenen CI-Lauf. Offen: reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content (Magic-Byte-Check der ersten 7 Bytes)."
+    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). Offen: reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content (Magic-Byte-Check der ersten 7 Bytes)."
   }
 }

@@ -203,13 +203,14 @@ Sondern:
 - [x] Nicht blockierender Guard-Workflow vorhanden: `.github/workflows/basemap-runtime-proof.yml`
   - Laeuft ohne Artefakt und ohne Caddy; meldet `NOT_PROVEN` — kein falsches Gruen.
   - Startet keinen Docker-Stack, baut kein PMTiles-Artefakt.
-- [~] **Blockierender CI-Job fuer HTTP-206-Range-Delivery bereit (READY_FOR_CI_PROOF):**
+- [x] **Blockierender CI-Job fuer HTTP-206-Range-Delivery PROVEN:**
   Job `basemap-range-delivery-proof` startet einen realen Caddy-Container (Image
   `caddy:2.7`, Config `infra/caddy/Caddyfile.proof`), serviert eine `.pmtiles`-Datei
   unter `/local-basemap/*` und der Guard verifiziert HTTP 206 plus
   `Accept-Ranges`/`Content-Range`. Bei Abweichung schlaegt der Job hart fehl.
-  PROVEN gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit
-  Guard-Output und Response-Headers als Beweis-Artefakt.
+  **PROVEN:** CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
+  (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`.
   - Scope: `BASEMAP_PROOF_SCOPE=range-delivery`. Beweist die
     Range-Auslieferungs-Kette, nicht den PMTiles-Magic-Byte-Check.
   - Das ausgelieferte Artefakt ist im CI ein deterministisches, synthetisches
@@ -230,11 +231,12 @@ Sondern:
 
 ### Stop-Kriterium der Phase 6
 
-- [~] Guard-Script liefert PROVEN (HTTP 206 bestaetigt) in einem reproduzierbaren
+- [x] Guard-Script liefert PROVEN (HTTP 206 bestaetigt) in einem reproduzierbaren
   CI-Lauf mit laufendem Caddy-Backend und einer `.pmtiles`-Datei unter
-  `/local-basemap/*`. Scope: `range-delivery`. PROVEN gilt erst nach einem
-  beobachteten gruenen GitHub-Actions-Lauf — der blockierende Job ist eingezogen,
-  aber kein Lauf mit Guard-Output und Response-Headers liegt als Beweis vor.
+  `/local-basemap/*`. Scope: `range-delivery`. **PROVEN:** CI-Lauf
+  https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659 (Commit 14feefd6),
+  Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
+  Response `HTTP/1.1 206 Partial Content`.
 - [ ] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
   PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix; Tile-Directory- und
   Strukturvalidierung bleiben Future Work). Steht aus, solange im CI
@@ -248,9 +250,9 @@ Sondern:
 - [x] Datenquelle explizit machen.
 - [ ] Externe Basemap-Abhaengigkeit klar entscheiden.
 - [x] Fehlerpfade testbar machen.
-- [~] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
-  eingezogen (READY_FOR_CI_PROOF); PROVEN erst nach beobachtetem gruenen
-  GitHub-Actions-Lauf. PMTiles-Magic-Byte-Check bleibt offen.
+- [x] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
+  PROVEN — CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  (Commit 14feefd6). PMTiles-Magic-Byte-Check bleibt offen.
 
 ---
 
@@ -261,7 +263,8 @@ Sondern:
 **Status:** Loader, Szene, Interaktion, Fehlerbanner und clientseitiger Basemap-Modus sind belegt.
 Produktionsdefault, Artefaktverfuegbarkeit und echter HTTP-206-Runtime-Beweis bleiben offen.
 Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job nicht blockierend vorhanden,
-blockierender Job `basemap-range-delivery-proof` bereit (READY_FOR_CI_PROOF) — PROVEN
-erst nach beobachtetem gruenen GitHub-Actions-Lauf mit Guard-Output und Response-Headers.
+blockierender Job `basemap-range-delivery-proof` PROVEN (CI-Lauf #25970466659, Commit 14feefd6,
+Guard `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
+Response `HTTP/1.1 206 Partial Content`).
 PMTiles-Magic-Byte-Check bleibt offen; `pmtiles-content`-Scope prueft nur die ersten
 7 Magic-Bytes der lokalen Artefaktdatei, keine Tile-Directory-Struktur.

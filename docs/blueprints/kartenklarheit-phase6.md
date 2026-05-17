@@ -146,13 +146,14 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
 
 #### 2.4 Status der CI-Beweise (Stand dieser Phase)
 
-- [~] **Blockierender CI-Job fuer HTTP-206-Range-Delivery bereit (READY_FOR_CI_PROOF).**
+- [x] **Blockierender CI-Job fuer HTTP-206-Range-Delivery PROVEN.**
   Workflow `.github/workflows/basemap-runtime-proof.yml`, Job
   `basemap-range-delivery-proof`: realer `caddy:2.7`-Container, deterministisches
   `.pmtiles`-Testartefakt, Guard im Modus `require` mit Scope `range-delivery`.
   Fehlt 206 oder `Content-Range`, schlaegt der Job hart fehl.
-  PROVEN gilt erst nach einem beobachteten gruenen GitHub-Actions-Lauf mit
-  erfasstem Guard-Output und Response-Headers als Beweis-Artefakt.
+  **PROVEN:** CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
+  (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`.
   - Was der Job prueft: `curl -H 'Range: bytes=0-511' → Caddy → .pmtiles-Datei
     → 206 Partial Content + Accept-Ranges/Content-Range`.
   - Was *nicht* bewiesen ist: PMTiles-Magic-Byte-Check. Das Testartefakt im CI

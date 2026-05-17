@@ -57,7 +57,7 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
 - **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (zusaetzliche Magic-Byte-Validierung). Der CI-Workflow betreibt zwei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose) und `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) — letzterer startet einen realen `caddy:2.7`-Container gegen ein deterministisches `.pmtiles`-Testartefakt und schlaegt bei abweichendem HTTP-Status hart fehl.
-- **Status**: Teil (blockierender CI-Job bereit, READY_FOR_CI_PROOF; PROVEN erst nach beobachtetem gruenen CI-Lauf; PMTiles-Magic-Byte-Check offen)
+- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; PMTiles-Magic-Byte-Check offen)
 - **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
 - **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
   ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
@@ -69,6 +69,7 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte Fehlerpfade.
 Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
-ist eingezogen (READY_FOR_CI_PROOF); PROVEN gilt erst nach beobachtetem gruenen
-GitHub-Actions-Lauf. Offen bleiben die Produktionsentscheidung fuer den
+ist PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+(Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
+(scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`. Offen bleiben die Produktionsentscheidung fuer den
 Basemap-Modus, den PMTiles-Magic-Byte-Check im CI und die visuelle Kartenabnahme.
