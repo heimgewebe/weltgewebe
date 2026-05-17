@@ -147,6 +147,30 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       // Navigate to map — /local-basemap/style.json and *.pmtiles are NOT mocked
       await page.goto("/map?proof=1&t=" + Date.now());
 
+      // Preflight: style endpoint must exist and point to the local Hamburg PMTiles alias
+      const styleResponse = await page.request.get("/local-basemap/style.json");
+      expect(
+        styleResponse.status(),
+        "Expected /local-basemap/style.json to return HTTP 200",
+      ).toBe(200);
+      const styleContentType = styleResponse.headers()["content-type"] ?? "";
+      expect(
+        styleContentType,
+        "Expected /local-basemap/style.json to be application/json",
+      ).toContain("application/json");
+      const styleJson = (await styleResponse.json()) as {
+        sources?: { basemap?: { url?: string } };
+      };
+      const styleBasemapUrl = styleJson.sources?.basemap?.url ?? "";
+      expect(
+        styleBasemapUrl,
+        "Expected local basemap style to reference the Hamburg PMTiles file",
+      ).toContain(REAL_PMTILES_FILENAME);
+      expect(
+        styleBasemapUrl,
+        "Expected local basemap style source to use pmtiles protocol",
+      ).toContain("pmtiles://");
+
       // Map container must be visible
       await expect(page.locator("#map")).toBeVisible({ timeout: 20000 });
 
