@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Guard: Basemap Runtime Proof — Caddy PMTiles HTTP Range delivery
+# Guard: Basemap Runtime Proof — PMTiles content and Caddy HTTP Range delivery
 #
-# Proves that a live Caddy instance delivers a PMTiles artefact via HTTP Range
-# requests (HTTP 206 Partial Content), with Accept-Ranges/Content-Range headers.
+# Supports two proof scopes, selected via BASEMAP_PROOF_SCOPE:
+#
+#   range-delivery   (default)
+#     Proves that a live Caddy instance delivers a PMTiles artefact via HTTP
+#     Range requests (HTTP 206 Partial Content), with Accept-Ranges/Content-Range
+#     headers present.  Does NOT validate the artefact content itself.
+#
+#   pmtiles-content
+#     Proves that the local artefact exists, is non-empty, and carries the exact
+#     PMTiles magic header at byte offset 0 ("PMTiles", 7 bytes).
+#     Optionally verifies SHA256 when BASEMAP_EXPECTED_SHA256 is set.
+#     Explicitly NOT a deep PMTiles structure validation.
 #
 # This is DISTINCT from:
 #   - apps/web/tests/basemap-client-integration.spec.ts  (mocked client test;
@@ -13,48 +23,46 @@ set -euo pipefail
 #       validates route definitions in Caddyfiles, not live delivery)
 #
 # Neither of the above constitutes a real runtime proof.
-# This script is the only current guard that exercises the actual delivery chain:
-#   Browser / curl → HTTP → Caddy → PMTiles artefact → 206 Partial Content
 #
 # Usage:
 #   scripts/guard/basemap-runtime-proof.sh
 #
 # Environment variables (all optional):
+#   BASEMAP_PROOF_SCOPE    Proof scope to execute:
+#                          "range-delivery" (default) — HTTP Range proof via Caddy
+#                          "pmtiles-content"          — Magic/Header/Hash proof on local file
+#   BASEMAP_PROOF_MODE     "require" — fail with exit 1 when artefact is absent (default)
+#                          "skip"    — exit 0 with NOT_PROVEN note when artefact is absent
+#
+#   For range-delivery scope:
 #   BASEMAP_CADDY_URL      Base URL of the running Caddy instance
 #                          (default: http://localhost:8081)
 #   BASEMAP_ENDPOINT_PATH  Explicit HTTP path to the PMTiles artefact on Caddy
-#                          (overrides auto-detection; e.g. /local-basemap/basemap-v0.1.0.pmtiles)
+#                          (overrides auto-detection)
 #   BASEMAP_ARTIFACT_DIR   Local directory to scan for .pmtiles files
 #                          (default: <repo-root>/build/basemap)
-#   BASEMAP_PROOF_MODE     "require" — fail with exit 1 when artefact is absent (default)
-#                          "skip"    — exit 0 with NOT_PROVEN note when artefact is absent
-#   BASEMAP_PROOF_SCOPE    "range-delivery"  — prove that Caddy serves HTTP Range requests
-#                                              against the .pmtiles file (default).
-#                                              Does NOT assert PMTiles content validity.
-#                          "pmtiles-content" — additionally verify the PMTiles magic bytes:
-#                                              the first 7 bytes of the local artefact file
-#                                              must equal the ASCII string "PMTiles".
-#                                              This is a MAGIC-BYTE CHECK ONLY — it does NOT
-#                                              validate tile directories, header structure, or
-#                                              any other PMTiles spec v3 fields. A file with
-#                                              the correct magic prefix but corrupt/empty tile
-#                                              data will pass this check. Full structural
-#                                              PMTiles validation remains future work.
+#
+#   For pmtiles-content scope:
+#   BASEMAP_PMTILES_PATH   Explicit path to the local .pmtiles file to inspect
+#                          (overrides auto-detection from BASEMAP_ARTIFACT_DIR)
+#   BASEMAP_EXPECTED_SHA256  Expected SHA256 hex digest; when set, hash is verified
 #
 # Exit codes:
-#   0 — HTTP 206 confirmed, Accept-Ranges or Content-Range header present (PROVEN)
+#   0 — Proof succeeded (PROVEN)
 #   0 — Artefact absent and BASEMAP_PROOF_MODE=skip (NOT_PROVEN, explicitly skipped)
-#   1 — Proof failed: wrong HTTP status, missing range headers, connectivity error,
-#         artefact absent in "require" mode, or PMTiles magic mismatch in
-#         "pmtiles-content" scope
+#   1 — Proof failed or artefact absent in "require" mode
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 
-BASEMAP_CADDY_URL="${BASEMAP_CADDY_URL:-http://localhost:8081}"
-BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
-BASEMAP_PROOF_MODE="${BASEMAP_PROOF_MODE:-require}"
 BASEMAP_PROOF_SCOPE="${BASEMAP_PROOF_SCOPE:-range-delivery}"
+BASEMAP_PROOF_MODE="${BASEMAP_PROOF_MODE:-require}"
+
+# Validate BASEMAP_PROOF_SCOPE
+if [[ "${BASEMAP_PROOF_SCOPE}" != "range-delivery" && "${BASEMAP_PROOF_SCOPE}" != "pmtiles-content" ]]; then
+  printf 'ERROR: BASEMAP_PROOF_SCOPE must be "range-delivery" or "pmtiles-content", got: %s\n' "${BASEMAP_PROOF_SCOPE}" >&2
+  exit 1
+fi
 
 # Validate BASEMAP_PROOF_MODE
 if [[ "${BASEMAP_PROOF_MODE}" != "require" && "${BASEMAP_PROOF_MODE}" != "skip" ]]; then
@@ -62,11 +70,102 @@ if [[ "${BASEMAP_PROOF_MODE}" != "require" && "${BASEMAP_PROOF_MODE}" != "skip" 
   exit 1
 fi
 
-# Validate BASEMAP_PROOF_SCOPE
-if [[ "${BASEMAP_PROOF_SCOPE}" != "range-delivery" && "${BASEMAP_PROOF_SCOPE}" != "pmtiles-content" ]]; then
-  printf 'ERROR: BASEMAP_PROOF_SCOPE must be "range-delivery" or "pmtiles-content", got: %s\n' "${BASEMAP_PROOF_SCOPE}" >&2
-  exit 1
+# ---------------------------------------------------------------------------
+# Scope: pmtiles-content
+# Proves: local file exists, non-empty, PMTiles magic header at offset 0,
+#         optional SHA256 checksum.
+# Explicitly NOT: deep PMTiles structure validation.
+# ---------------------------------------------------------------------------
+
+if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
+  printf 'Proof scope: pmtiles-content (Magic/Header/Hash — not deep structure)\n'
+
+  BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
+  BASEMAP_PMTILES_PATH="${BASEMAP_PMTILES_PATH:-}"
+  BASEMAP_EXPECTED_SHA256="${BASEMAP_EXPECTED_SHA256:-}"
+
+  # Resolve file path
+  PMTILES_FILE=""
+  if [[ -n "${BASEMAP_PMTILES_PATH}" ]]; then
+    PMTILES_FILE="${BASEMAP_PMTILES_PATH}"
+    printf 'Using explicit PMTiles path: %s\n' "${PMTILES_FILE}"
+  elif [[ -d "${BASEMAP_ARTIFACT_DIR}" ]]; then
+    while IFS= read -r -d '' f; do
+      PMTILES_FILE="${f}"
+      break
+    done < <(find "${BASEMAP_ARTIFACT_DIR}" -maxdepth 1 -name '*.pmtiles' -print0 2>/dev/null)
+    if [[ -n "${PMTILES_FILE}" ]]; then
+      printf 'Auto-detected PMTiles file: %s\n' "${PMTILES_FILE}"
+    fi
+  fi
+
+  # Handle missing file
+  if [[ -z "${PMTILES_FILE}" || ! -f "${PMTILES_FILE}" ]]; then
+    if [[ "${BASEMAP_PROOF_MODE}" == "skip" ]]; then
+      printf 'NOT_PROVEN: PMTiles file not found — content proof skipped\n'
+      printf 'Set BASEMAP_PMTILES_PATH or place a .pmtiles file in %s to enable this proof.\n' "${BASEMAP_ARTIFACT_DIR}"
+      exit 0
+    else
+      printf 'ERROR: PMTiles file not found: %s\n' "${PMTILES_FILE:-<none resolved>}" >&2
+      printf 'Set BASEMAP_PMTILES_PATH to the artefact path, or use BASEMAP_PROOF_MODE=skip to skip.\n' >&2
+      exit 1
+    fi
+  fi
+
+  # Check non-empty
+  FILE_SIZE="$(stat -c '%s' "${PMTILES_FILE}" 2>/dev/null || echo 0)"
+  if [[ "${FILE_SIZE}" -eq 0 ]]; then
+    printf 'ERROR: PMTiles file is empty: %s\n' "${PMTILES_FILE}" >&2
+    exit 1
+  fi
+  printf 'File size: %s bytes\n' "${FILE_SIZE}"
+
+  # Verify PMTiles magic header (bytes 0-6 must be ASCII "PMTiles")
+  MAGIC_EXPECTED="PMTiles"
+  MAGIC_ACTUAL="$(dd if="${PMTILES_FILE}" bs=1 count=7 skip=0 2>/dev/null | tr -d '\0')"
+  if [[ "${MAGIC_ACTUAL}" != "${MAGIC_EXPECTED}" ]]; then
+    printf 'ERROR: Magic header mismatch in %s\n' "${PMTILES_FILE}" >&2
+    printf '  Expected: %s\n' "${MAGIC_EXPECTED}" >&2
+    printf '  Actual:   %s\n' "${MAGIC_ACTUAL}" >&2
+    printf '  File does not appear to be a valid PMTiles archive.\n' >&2
+    exit 1
+  fi
+  printf 'Magic header: "%s" (PMTiles format confirmed at offset 0)\n' "${MAGIC_ACTUAL}"
+
+  # Optional SHA256 check
+  SHA256_STATUS="not checked"
+  if [[ -n "${BASEMAP_EXPECTED_SHA256}" ]]; then
+    ACTUAL_SHA256="$(sha256sum "${PMTILES_FILE}" | awk '{print $1}')"
+    if [[ "${ACTUAL_SHA256}" != "${BASEMAP_EXPECTED_SHA256}" ]]; then
+      printf 'ERROR: SHA256 mismatch for %s\n' "${PMTILES_FILE}" >&2
+      printf '  Expected: %s\n' "${BASEMAP_EXPECTED_SHA256}" >&2
+      printf '  Actual:   %s\n' "${ACTUAL_SHA256}" >&2
+      exit 1
+    fi
+    printf 'SHA256: %s (matches expected)\n' "${ACTUAL_SHA256}"
+    SHA256_STATUS="PROVEN"
+  fi
+
+  printf '\n'
+  printf 'PROVEN: PMTiles Magic/Header verified\n'
+  printf '  File:         %s\n' "${PMTILES_FILE}"
+  printf '  Size:         %s bytes\n' "${FILE_SIZE}"
+  printf '  Magic header: "%s" at offset 0\n' "${MAGIC_ACTUAL}"
+  printf '  SHA256 check: %s\n' "${SHA256_STATUS}"
+  printf '\n'
+  printf 'NOT_PROVEN: Deep PMTiles structure validation (tile index, directory, metadata integrity)\n'
+  printf '  This scope validates magic/header/hash only — full structure proof not implemented.\n'
+  exit 0
 fi
+
+# ---------------------------------------------------------------------------
+# Scope: range-delivery (default)
+# Proves: HTTP Range request to live Caddy returns 206, Accept-Ranges/Content-Range.
+# Does NOT validate artefact content.
+# ---------------------------------------------------------------------------
+
+BASEMAP_CADDY_URL="${BASEMAP_CADDY_URL:-http://localhost:8081}"
+BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
 
 # Validate BASEMAP_ENDPOINT_PATH starts with "/" if explicitly set
 if [[ -n "${BASEMAP_ENDPOINT_PATH:-}" && "${BASEMAP_ENDPOINT_PATH}" != /* ]]; then
@@ -91,20 +190,12 @@ trap cleanup EXIT
 # ---------------------------------------------------------------------------
 
 ENDPOINT_PATH=""
-PMTILES_FILE=""
 
 if [[ -n "${BASEMAP_ENDPOINT_PATH:-}" ]]; then
   ENDPOINT_PATH="${BASEMAP_ENDPOINT_PATH}"
   printf 'Using explicit endpoint path: %s\n' "${ENDPOINT_PATH}"
-  # When the endpoint path is explicit, try to locate the local file to honor
-  # pmtiles-content scope; fall back to the artefact directory by basename.
-  if [[ -d "${BASEMAP_ARTIFACT_DIR}" ]]; then
-    CAND="${BASEMAP_ARTIFACT_DIR}/$(basename "${ENDPOINT_PATH}")"
-    if [[ -f "${CAND}" ]]; then
-      PMTILES_FILE="${CAND}"
-    fi
-  fi
 else
+  PMTILES_FILE=""
   if [[ -d "${BASEMAP_ARTIFACT_DIR}" ]]; then
     while IFS= read -r -d '' f; do
       PMTILES_FILE="${f}"
@@ -208,59 +299,11 @@ if [[ "${HAS_CONTENT_RANGE}" -eq 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5 (optional): Validate PMTiles magic bytes if scope=pmtiles-content
-# ---------------------------------------------------------------------------
-#
-# IMPORTANT: This is a MAGIC-BYTE CHECK ONLY.
-# PMTiles spec v3 prescribes the literal ASCII bytes "PMTiles" as the first
-# seven bytes of the file (followed by a one-byte version specifier). Checking
-# these seven bytes proves the file has the correct PMTiles prefix, but does
-# NOT validate tile directories, index/data structures, or any other PMTiles
-# spec v3 fields. Full structural PMTiles validation is future work.
-#
-# SCOPE BOUNDARY — LOCAL ARTEFACT ONLY:
-# This check reads the file directly from the local BASEMAP_ARTIFACT_DIR.
-# It does NOT prove that Caddy delivers these bytes at the HTTP endpoint.
-# A future, stronger content proof should additionally do:
-#   curl -sS -H 'Range: bytes=0-6' -o /tmp/pmtiles-magic.bin "${FULL_URL}"
-#   test "$(cat /tmp/pmtiles-magic.bin)" = "PMTiles"
-# That would prove: curl → Caddy → delivered bytes → PMTiles magic prefix.
-#
-# A synthetic placeholder artefact (e.g. the deterministic 64-KiB test file
-# generated in CI for the range-delivery scope) will not match this magic and
-# MUST be rejected in pmtiles-content scope — by design.
-
-if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
-  if [[ -z "${PMTILES_FILE}" || ! -f "${PMTILES_FILE}" ]]; then
-    printf 'ERROR: pmtiles-content scope requires a local artefact file to inspect\n' >&2
-    printf '  Looked up via BASEMAP_ARTIFACT_DIR=%s\n' "${BASEMAP_ARTIFACT_DIR}" >&2
-    printf '  When BASEMAP_ENDPOINT_PATH is set explicitly, place the matching file there.\n' >&2
-    exit 1
-  fi
-  MAGIC="$(head -c 7 "${PMTILES_FILE}" 2>/dev/null || true)"
-  if [[ "${MAGIC}" != "PMTiles" ]]; then
-    printf 'ERROR: artefact does not start with PMTiles magic bytes\n' >&2
-    printf '  File:     %s\n' "${PMTILES_FILE}" >&2
-    printf '  Expected: "PMTiles" (7 ASCII bytes)\n' >&2
-    printf '  This guard rejects placeholder/synthetic files in pmtiles-content scope.\n' >&2
-    exit 1
-  fi
-  printf 'PMTiles magic: confirmed ("PMTiles" present at offset 0)\n'
-fi
-
-# ---------------------------------------------------------------------------
 # Proof confirmed
 # ---------------------------------------------------------------------------
 
-printf '\nPROVEN: Caddy PMTiles Range delivery verified (scope=%s)\n' "${BASEMAP_PROOF_SCOPE}"
+printf '\nPROVEN: Caddy PMTiles Range delivery verified\n'
 printf '  Endpoint:      %s\n' "${FULL_URL}"
 printf '  HTTP status:   206 Partial Content\n'
 printf '  Range headers: present\n'
-if [[ "${BASEMAP_PROOF_SCOPE}" == "range-delivery" ]]; then
-  printf '  Note:          this proof asserts HTTP Range delivery only.\n'
-  printf '                 PMTiles content validity is NOT asserted in this scope.\n'
-  printf '                 For content validity use BASEMAP_PROOF_SCOPE=pmtiles-content.\n'
-else
-  printf '  Content magic: PMTiles magic bytes confirmed (7-byte prefix only; structural validation is future work)\n'
-fi
 printf 'This constitutes a real runtime proof — not a mocked client test.\n'

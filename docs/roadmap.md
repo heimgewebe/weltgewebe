@@ -129,6 +129,7 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 - [~] Kartenklarheit Phase 4 — Regressionen teilweise; Keyboard-/Query-Parameter-Navigation offen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
 - [~] Kartenklarheit Phase 5 — Souveräne Basemap-Infrastruktur · [kartenklarheit-roadmap §155](blueprints/kartenklarheit-roadmap.md)
 - [~] Basemap-Roadmap Phasen 1–3 — Pipeline, Style, Runtime-Integration · [map-roadmap.md](blueprints/map-roadmap.md)
+- [~] Hamburg-PMTiles-Artefakt lokal auf heimserver erzeugt; PMTiles-Magic/SHA256/Guard-Scope pmtiles-content PROVEN; Range-Delivery PROVEN; tiefe Strukturvalidierung + visuelle Abnahme offen · [docs/proofs/basemap-hamburg-artifact-proof.md](proofs/basemap-hamburg-artifact-proof.md)
 - [ ] Basemap-Roadmap Phase 4 — Betrieb & Versionierung
 - [ ] Basemap-Roadmap Phase 5 — Ausbau (Faden-Dichte)
 - [ ] Kartenklarheit Phase 6 — Wahrheitsbeweis (Runtime, E2E, visuelle Abnahme, CI) · [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md)

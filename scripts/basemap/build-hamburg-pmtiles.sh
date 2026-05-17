@@ -101,7 +101,8 @@ if ! docker run --rm \
   -v "$BASEMAP_DIR":/data \
   "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
-  --output="/data/$OUTPUT_PMTILES"; then
+  --output="/data/$OUTPUT_PMTILES" \
+  --download=true; then
 
   echo "Error: Docker execution failed." >&2
   exit 1
