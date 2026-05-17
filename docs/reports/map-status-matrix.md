@@ -62,8 +62,10 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
   ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
   strukturelle PMTiles-Validierung bleiben Future Work.
-  Visuelle Abnahme der gerenderten Karte bleibt offen.
-  Die clientseitigen Tests sind kein Ersatz fuer den Live-Caddy-Beweis.
+  **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.spec.ts`) PROVEN
+  (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
+  CI-Ausführung des visuellen Proofs: NOT_PROVEN (noch nicht in GitHub Actions). Map-Interaktion und clientseite Fehlerbehandlung sind belegt.
+  Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
 ## Essenz
 

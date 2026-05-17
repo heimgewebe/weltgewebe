@@ -24,8 +24,9 @@ import path from "node:path";
  *      - Zero requests to external tile providers
  *      - Proves the full browser-side pipeline works end-to-end
  *
- * Environment: Requires the Vite DEV server (not preview) so the
- * local-basemap-serve middleware in vite.config.ts is active.
+ * Environment: Requires Vite dev or preview server with
+ * local-basemap-serve middleware in vite.config.ts active (configureServer or
+ * configurePreviewServer hooks).
  * Run with: PLAYWRIGHT_SKIP_WEBSERVER=1 PORT=5173
  *
  * /local-basemap/style.json and /local-basemap/*.pmtiles are NOT mocked here.
