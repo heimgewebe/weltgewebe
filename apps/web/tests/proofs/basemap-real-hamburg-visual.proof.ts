@@ -34,7 +34,6 @@ import path from "node:path";
  */
 
 const REAL_PMTILES_FILENAME = "basemap-hamburg.pmtiles";
-const VERSIONED_PMTILES_FILENAME = "basemap-hamburg-v0.1.0.pmtiles";
 
 const FORBIDDEN_REMOTE_PROVIDERS = [
   "api.maptiler.com",
@@ -57,17 +56,9 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         "../../build/basemap",
       );
       const aliasPath = path.join(buildBasemapDir, REAL_PMTILES_FILENAME);
-      const versionedPath = path.join(
-        buildBasemapDir,
-        VERSIONED_PMTILES_FILENAME,
-      );
-      if (!fs.existsSync(aliasPath) && fs.existsSync(versionedPath)) {
-        fs.mkdirSync(buildBasemapDir, { recursive: true });
-        fs.copyFileSync(versionedPath, aliasPath);
-      }
       test.skip(
         !fs.existsSync(aliasPath),
-        `NOT_PROVEN: missing required local PMTiles alias ${aliasPath}`,
+        `NOT_PROVEN: missing required published PMTiles alias ${aliasPath}; run scripts/basemap/publish-basemap.sh first`,
       );
 
       const pmtilesRequests: Array<{
