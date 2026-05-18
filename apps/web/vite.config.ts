@@ -8,7 +8,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const LOCAL_BASEMAP_PREFIX = "/local-basemap/";
-const HAMBURG_PMTILES_FILE = "basemap-hamburg-v0.1.0.pmtiles";
 
 function createLocalBasemapMiddleware() {
   const repoRoot = path.resolve(__dirname, "../../");
@@ -51,53 +50,6 @@ function createLocalBasemapMiddleware() {
     const safeRelPath = pathname
       .replace(/^\/+/, "")
       .replace(/^local-basemap\//, "");
-
-    if (safeRelPath === "style.json") {
-      const canonicalStylePath = path.resolve(
-        path.join(mapStyleDir, "style.json"),
-      );
-      if (!canonicalStylePath.startsWith(mapStyleDir + path.sep)) {
-        res.statusCode = 403;
-        res.end("Forbidden");
-        return;
-      }
-      if (!fs.existsSync(canonicalStylePath)) {
-        res.statusCode = 404;
-        res.end("Not found");
-        return;
-      }
-
-      let parsed: Record<string, unknown>;
-      try {
-        parsed = JSON.parse(
-          fs.readFileSync(canonicalStylePath, "utf8"),
-        ) as Record<string, unknown>;
-      } catch {
-        res.statusCode = 500;
-        res.end("Invalid style JSON");
-        return;
-      }
-
-      const sources = parsed.sources as Record<string, unknown> | undefined;
-      const basemapSource = sources?.basemap as
-        | Record<string, unknown>
-        | undefined;
-      if (basemapSource) {
-        basemapSource.url = `pmtiles://${HAMBURG_PMTILES_FILE}`;
-      }
-
-      const body = JSON.stringify(parsed);
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.setHeader("Content-Length", Buffer.byteLength(body));
-      if (req.method === "HEAD") {
-        res.end();
-      } else {
-        res.end(body);
-      }
-      return;
-    }
 
     let baseDir = "";
     if (

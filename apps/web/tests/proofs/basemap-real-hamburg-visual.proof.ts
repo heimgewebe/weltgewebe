@@ -7,12 +7,12 @@ import path from "node:path";
  *
  * Proves the full end-to-end pipeline:
  *   Browser → Weltgewebe App → MapLibre → pmtiles:// → /local-basemap/ →
- *   Vite dev-server middleware → build/basemap/basemap-hamburg-v0.1.0.pmtiles
+ *   Vite dev-server middleware → build/basemap/basemap-hamburg.pmtiles
  *
  * Two-part proof strategy:
  *
  *   1. SERVER RANGE CONTRACT:
- *      - Explicit direct Range request to /local-basemap/basemap-hamburg-v0.1.0.pmtiles
+ *      - Explicit direct Range request to /local-basemap/basemap-hamburg.pmtiles
  *      - Must return HTTP 206 Partial Content
  *      - Must include Accept-Ranges: bytes and Content-Range headers
  *      - Proves the Vite middleware correctly delivers Range-capable files
@@ -33,7 +33,8 @@ import path from "node:path";
  * Only /api/** and /_app/version.json are mocked (no backend server needed).
  */
 
-const REAL_PMTILES_FILENAME = "basemap-hamburg-v0.1.0.pmtiles";
+const REAL_PMTILES_FILENAME = "basemap-hamburg.pmtiles";
+const VERSIONED_PMTILES_FILENAME = "basemap-hamburg-v0.1.0.pmtiles";
 
 const FORBIDDEN_REMOTE_PROVIDERS = [
   "api.maptiler.com",
@@ -51,6 +52,24 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
     "loads real Hamburg PMTiles artifact via MapLibre with HTTP 206 Range delivery",
     { tag: "@proof" },
     async ({ page }, testInfo) => {
+      const buildBasemapDir = path.resolve(
+        process.cwd(),
+        "../../build/basemap",
+      );
+      const aliasPath = path.join(buildBasemapDir, REAL_PMTILES_FILENAME);
+      const versionedPath = path.join(
+        buildBasemapDir,
+        VERSIONED_PMTILES_FILENAME,
+      );
+      if (!fs.existsSync(aliasPath) && fs.existsSync(versionedPath)) {
+        fs.mkdirSync(buildBasemapDir, { recursive: true });
+        fs.copyFileSync(versionedPath, aliasPath);
+      }
+      test.skip(
+        !fs.existsSync(aliasPath),
+        `NOT_PROVEN: missing required local PMTiles alias ${aliasPath}`,
+      );
+
       const pmtilesRequests: Array<{
         url: string;
         method: string;
@@ -110,36 +129,40 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
 
       // Mock /api/** — no backend server needed
       await page.route("**/api/**", async (route) => {
-        const url = route.request().url();
-        if (url.includes("/api/nodes")) {
+        const url = new URL(route.request().url());
+        const pathname = url.pathname;
+        if (pathname === "/api/nodes" || pathname.startsWith("/api/nodes/")) {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
             body: JSON.stringify([]),
           });
         }
-        if (url.includes("/api/accounts")) {
+        if (
+          pathname === "/api/accounts" ||
+          pathname.startsWith("/api/accounts/")
+        ) {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
             body: JSON.stringify([]),
           });
         }
-        if (url.includes("/api/edges")) {
+        if (pathname === "/api/edges" || pathname.startsWith("/api/edges/")) {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
             body: JSON.stringify([]),
           });
         }
-        if (url.includes("/api/health")) {
+        if (pathname === "/api/health" || pathname.startsWith("/api/health/")) {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
             body: JSON.stringify({ status: "Ready" }),
           });
         }
-        if (url.includes("/api/auth/me") || url.includes("/api/me")) {
+        if (pathname === "/api/auth/me" || pathname === "/api/me") {
           return route.fulfill({
             status: 200,
             contentType: "application/json",
@@ -147,9 +170,11 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           });
         }
         return route.fulfill({
-          status: 200,
+          status: 500,
           contentType: "application/json",
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            error: `Unexpected mocked API request in basemap proof: ${url.pathname}${url.search}`,
+          }),
         });
       });
 
@@ -173,8 +198,8 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       const styleBasemapUrl = styleJson.sources?.basemap?.url ?? "";
       expect(
         styleBasemapUrl,
-        "Expected local basemap style to reference the Hamburg PMTiles file",
-      ).toContain(REAL_PMTILES_FILENAME);
+        "Expected local basemap style to reference the stable Hamburg PMTiles alias",
+      ).toBe(`pmtiles://${REAL_PMTILES_FILENAME}`);
       expect(
         styleBasemapUrl,
         "Expected local basemap style source to use pmtiles protocol",
