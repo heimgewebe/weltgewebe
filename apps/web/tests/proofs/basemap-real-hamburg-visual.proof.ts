@@ -56,10 +56,10 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         "../../build/basemap",
       );
       const aliasPath = path.join(buildBasemapDir, REAL_PMTILES_FILENAME);
-      test.skip(
-        !fs.existsSync(aliasPath),
+      expect(
+        fs.existsSync(aliasPath),
         `NOT_PROVEN: missing required published PMTiles alias ${aliasPath}; run scripts/basemap/publish-basemap.sh first`,
-      );
+      ).toBe(true);
 
       const pmtilesRequests: Array<{
         url: string;
@@ -73,6 +73,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         contentRange: string | null;
       }> = [];
       const remoteViolations: string[] = [];
+      const unexpectedApiRequests: string[] = [];
 
       page.on("console", (msg) => {
         if (msg.type() === "error") {
@@ -160,11 +161,13 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
             body: JSON.stringify({ authenticated: false, role: "gast" }),
           });
         }
+        const requestPathWithQuery = `${url.pathname}${url.search}`;
+        unexpectedApiRequests.push(requestPathWithQuery);
         return route.fulfill({
           status: 500,
           contentType: "application/json",
           body: JSON.stringify({
-            error: `Unexpected mocked API request in basemap proof: ${url.pathname}${url.search}`,
+            error: `Unexpected mocked API request in basemap proof: ${requestPathWithQuery}`,
           }),
         });
       });
@@ -266,6 +269,10 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         remoteViolations,
         `External basemap providers were contacted: ${remoteViolations.join(", ")}`,
       ).toHaveLength(0);
+      expect(
+        unexpectedApiRequests,
+        `Unexpected /api/** requests observed in basemap proof: ${unexpectedApiRequests.join(", ")}`,
+      ).toHaveLength(0);
 
       // Verify canvas has non-trivial dimensions (MapLibre rendered something)
       const canvasDimensions = await page.evaluate(() => {
@@ -349,6 +356,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         canvas_dimensions: canvasDimensions,
         style_loaded: styleLoaded,
         remote_violations: remoteViolations,
+        unexpected_api_requests: unexpectedApiRequests,
 
         // Artifacts
         screenshot: testInfo.outputPath("screenshot.png"),
