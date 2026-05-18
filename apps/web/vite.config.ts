@@ -48,7 +48,9 @@ function createLocalBasemapMiddleware() {
       return;
     }
 
-    const safeRelPath = pathname.replace(/^\/+/, "");
+    const safeRelPath = pathname
+      .replace(/^\/+/, "")
+      .replace(/^local-basemap\//, "");
 
     if (safeRelPath === "style.json") {
       const canonicalStylePath = path.resolve(
