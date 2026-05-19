@@ -3,7 +3,7 @@ id: docs.proofs.basemap-hamburg-artifact-proof
 title: Basemap Hamburg Artifact Proof (Heimserver)
 doc_type: proof
 status: active
-summary: Proof that the Hamburg basemap PMTiles artifact was successfully built and deployed on the Heimserver.
+summary: Nachweis, dass das Hamburg-Basemap-PMTiles-Artefakt auf dem Heimserver erfolgreich erzeugt wurde; ein Produktionsdeployment wird hiermit nicht belegt.
 relations:
   - type: relates_to
     target: scripts/basemap/build-hamburg-pmtiles.sh
