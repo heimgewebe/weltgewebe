@@ -39,6 +39,7 @@
     "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
     "test:unit": "vitest run",
     "test": "playwright test",
+    "test:proof:basemap-real": "playwright test --config=playwright.proof.config.ts --reporter=dot,html,junit",
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",

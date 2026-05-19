@@ -62,14 +62,16 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
   ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
   strukturelle PMTiles-Validierung bleiben Future Work.
-  Visuelle Abnahme der gerenderten Karte bleibt offen.
-  Die clientseitigen Tests sind kein Ersatz fuer den Live-Caddy-Beweis.
+  **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
+  (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
+  CI-Ausführung des visuellen Proofs: NOT_PROVEN (noch nicht in GitHub Actions). Map-Interaktion und clientseite Fehlerbehandlung sind belegt.
+  Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
 ## Essenz
 
 Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte Fehlerpfade.
 Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
-ist PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+ist PROVEN: [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
 (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
 (scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`. Offen bleiben die Produktionsentscheidung fuer den
 Basemap-Modus, den PMTiles-Magic-Byte-Check im CI und die visuelle Kartenabnahme.

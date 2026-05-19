@@ -152,7 +152,7 @@ Dazugehoeriger Guard-Workflow: `.github/workflows/basemap-runtime-proof.yml` mit
 
 **Bewertung:** Der blockierende CI-Job fuer die HTTP-206-Range-Delivery-Kette
 `curl -> Caddy -> .pmtiles-Datei` ist PROVEN: CI-Lauf
-https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659 (Commit 14feefd6),
+[CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659) (Commit 14feefd6),
 Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
 Response-Header `HTTP/1.1 206 Partial Content`. Was *nicht* bewiesen ist:
 PMTiles-Magic-Byte-Check (7-Byte-Prefix): Scope `pmtiles-content` ist vorbereitet,

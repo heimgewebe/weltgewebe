@@ -151,7 +151,7 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
   `basemap-range-delivery-proof`: realer `caddy:2.7`-Container, deterministisches
   `.pmtiles`-Testartefakt, Guard im Modus `require` mit Scope `range-delivery`.
   Fehlt 206 oder `Content-Range`, schlaegt der Job hart fehl.
-  **PROVEN:** CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659
+  **PROVEN:** [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
   (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
   (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`.
   - Was der Job prueft: `curl -H 'Range: bytes=0-511' → Caddy → .pmtiles-Datei

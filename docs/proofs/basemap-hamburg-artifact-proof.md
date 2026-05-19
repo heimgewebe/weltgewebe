@@ -35,7 +35,20 @@ relations:
   - Beweis: Magic Header `PMTiles` an Offset 0 + SHA256 übereinstimmend via Guard ausgeführt
   - Ausgeführt am: 2026-05-17 auf heimserver, Branch `feat/basemap-pmtiles-content-proof`
   - Tiefe PMTiles-Strukturvalidierung: `NOT_PROVEN` (nicht implementiert)
-- Visuelle Abnahme (MapLibre Browser/E2E): `NOT_PROVEN`
+- Visuelle Abnahme lokal auf heimserver (MapLibre Browser/E2E via Playwright): `PROVEN`
+  - Browser: Chromium (Docker `mcr.microsoft.com/playwright:v1.55.1-noble`)
+  - Ausgeführt am: 2026-05-17 auf heimserver, Branch `feat/basemap-visual-runtime-proof`
+  - PMTiles-Range-Requests: 3 (alle mit `Range: bytes=0-16383`)
+  - HTTP-206-Responses: 3 (`Content-Range: bytes 0-16383/23948877`)
+  - Canvas gerendert: 1280×720px
+  - MapLibre `isStyleLoaded()`: `true`
+  - Externe Tile-Provider kontaktiert: 0 (sovereignty PROVEN)
+  - Test: `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts`
+  - Start über opt-in Script: `pnpm --dir apps/web test:proof:basemap-real`
+  - Laufzeit: 3.1s
+- Visuelle Abnahme in GitHub Actions Standard-CI (`pnpm --dir apps/web test:ci`): `NOT_PROVEN`
+  - Grund: Der opt-in Proof-Test läuft absichtlich nicht in `test:ci`, weil das reale PMTiles-Artefakt in Standard-CI nicht garantiert erzeugt wird.
+  - Konsequenz: Standard-CI-Erfolg ist **kein** visueller PMTiles-Runtime-Proof.
 
 ## Belegauszüge
 
@@ -49,7 +62,8 @@ relations:
   - `Accept-Ranges: bytes`
   - `Content-Range: bytes 0-511/23948877`
 - Guard pmtiles-content (case 3 — require + real artefact + SHA256):
-  ```
+
+  ```text
   PROVEN: PMTiles Magic/Header verified
     File:         build/basemap/basemap-hamburg-v0.1.0.pmtiles
     Size:         23948877 bytes
@@ -63,4 +77,21 @@ relations:
 - Vollständige PMTiles-Strukturvalidierung über Magic-Check hinaus
 - Vollständigkeit/Qualität des Tile-Inhalts
 - Produktionshosting/-deployment
-- Visuelle Browser-Abnahme
+
+## Visueller Beweis (Playwright)
+
+```json
+{
+  "timestamp": "2026-05-17T09:21:50.484Z",
+  "verdict": "PROVEN",
+  "pmtiles_filename": "basemap-hamburg.pmtiles",
+  "pmtiles_requests_total": 3,
+  "pmtiles_range_requests": 3,
+  "pmtiles_206_responses": 3,
+  "canvas_dimensions": { "width": 1280, "height": 720 },
+  "style_loaded": true,
+  "remote_violations": [],
+  "first_request": { "url": "http://127.0.0.1:5173/local-basemap/basemap-hamburg.pmtiles", "rangeHeader": "bytes=0-16383" },
+  "first_206_response": { "status": 206, "contentRange": "bytes 0-16383/23948877" }
+}
+```
