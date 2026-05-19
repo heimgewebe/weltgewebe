@@ -1,5 +1,10 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Default recipe: run lint when `just` is called without arguments.
+# Must be the FIRST recipe — just picks the first recipe as default,
+# not the one named "default".
+default: lint
+
 # Reset & Restart Web Dev Environment (Codespaces-tauglich)
 reset-web:
 	@echo "🧹 Cleaning up and restarting web environment..."
@@ -95,7 +100,6 @@ proof-auth-session-sqlx-direct:    # run ignored SQLx direct-Postgres session CR
 
 seed:          # seed database with initial data
 	cargo run -p api -- seed
-default: lint
 
 # Lokaler Helper: Schnelltests & Linter – sicher mit Null-Trennung und Quoting
 lint:
