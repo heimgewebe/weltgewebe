@@ -16,12 +16,12 @@ relations:
 # Auth Status Matrix – Weltgewebe
 
 Status: aktiv
-Zweck: Verifikation der Auth-Architektur gegen ADR-0006, ADR-0007 und Specs
+Zweck: Verifikation der Auth-Architektur gegen ADR-0006 + Specs
 Letzte Aktualisierung: manuell gepflegt
 Pflegeregel: Diese Matrix ist bei jedem Auth-bezogenen PR zu aktualisieren, der Zielrahmen, Runtime-Verhalten oder Sicherheitsinvarianten verändert.
 
 > Diese Matrix dient als Diagnoseartefakt zur Roadmap.
-> Sie ersetzt nicht den normativen Zielrahmen aus ADR-0006, ADR-0007 und den zugehörigen Specs, sondern verdichtet deren Sollzustand gegen den belegten Ist-Zustand.
+> Sie ersetzt nicht den normativen Zielrahmen aus ADR-0006 und den zugehörigen Specs, sondern verdichtet deren Sollzustand gegen den belegten Ist-Zustand.
 > Siehe: `docs/blueprints/auth-roadmap.md`
 
 ---
@@ -70,7 +70,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
-| Session               | required    | API aktiv, In-Memory als bewusste Wahl dokumentiert; Produktions-Zielpfad nach ADR-0007 direkter PostgreSQL-Zugriff via `DATABASE_URL`; psql-basierter direkter PostgreSQL-CRUD-Pfad belegt; SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Pfad bleibt Runtime-Gate. Offen bleibt die produktive `DbSessionStore`-/`SessionBackend`-Verdrahtung inkl. Auth-Runtime- und CI-Gate sowie E2E | Teil   | mittel  |
+| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; E2E offen | Teil   | mittel  |
 | Session Refresh       | required    | Route aktiv, Session-Rotation belegt, Token-Split offen | Teil   | mittel  |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
@@ -96,17 +96,17 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. In-Memory `SessionStore` ist als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (`auth-roadmap.md`, Phase 2 Persistenzentscheidung). ADR-0007 legt für produktive Auth-Persistenz direkten PostgreSQL-Zugriff via `DATABASE_URL` fest; PgBouncer ist optionaler Dev-/Spezialpfad und keine Produktionsvoraussetzung. Die `SessionStore`-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
+**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. Phase 5 (PR #1072): `DbSessionStore` implementiert — direkte PostgreSQL-Persistenz über `DATABASE_URL` gemäß ADR-0007; In-Memory-`SessionStore` bleibt aktiv wenn `DATABASE_URL` nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration (gesetztes `DATABASE_URL`, aber Pool-Fehler). Query-Layer-Expiry-Filterung (`WHERE expires_at > NOW()`), 5-Minuten-Debounce auf `touch()`. ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
 **Dokumentationsbelege:** `docs/adr/ADR-0007__auth-persistence-production-db-path.md`, `docs/blueprints/auth-roadmap.md` (Persistenzentscheidung), `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`
-**Fehlende Belege:** SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Pfad (Runtime-Gate), produktive `DbSessionStore`-/`SessionBackend`-Verdrahtung gegen den direkten PostgreSQL-Pfad inkl. Auth-Runtime- und CI-Gate, vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests), E2E-Nachweis.
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/src/auth/session_db.rs`, `apps/api/tests/db_session_store_persistence.rs`
+**Fehlende Belege:** Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests), E2E-Nachweis.
 **Status:** Teil
 **Risiko:** mittel
 
 ### 2.3 Session Refresh
 
 **Soll:** POST `/auth/session/refresh`, verlängert TTL ohne neue Auth.
-**Ist:** POST `/auth/session/refresh` ist implementiert und durch API-Tests belegt. Aktuell wird die Session rotiert (alte gelöscht, neue mit gleichem `account_id`/`device_id` erstellt); der Zielrahmen mit separatem Access/Refresh-Token-Split ist noch offen. Die In-Memory-Persistenzentscheidung (siehe Phase 2 Roadmap) gilt auch hier.
+**Ist:** POST `/auth/session/refresh` ist implementiert und durch API-Tests belegt. Aktuell wird die Session rotiert (alte gelöscht, neue mit gleichem `account_id`/`device_id` erstellt); der Zielrahmen mit separatem Access/Refresh-Token-Split ist noch offen. Persistenz folgt dem Session-Store (Phase 5: `DbSessionStore` wenn `DATABASE_URL` gesetzt, sonst In-Memory).
 **Dokumentationsbelege:** keine
 **Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/tests/api_auth.rs`
 **Fehlende Belege:** Vollständiger Token-Split (Access/Refresh), E2E-Nachweis.

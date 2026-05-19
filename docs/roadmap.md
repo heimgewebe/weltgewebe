@@ -101,13 +101,15 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; Register-Verify und UI-E2E offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
 - [~] Phase 4 — Auth-Persistenz Runtime-Proof
   - SQL/psql-Migration + psql-basierter PgBouncer-CRUD-Smoke belegt
-  - SQLx/PgBouncer-Rust-Proof als Testgerüst vorbereitet (READY_FOR_PROOF, nicht ausgeführt), aber nach ADR-0007 optionaler Dev-/Spezialpfad
-  - Zielarchitekturentscheidung geschlossen: Produktion nutzt direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer ist keine Produktionsvoraussetzung
+  - SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad ist belegt (PROVEN; Session-Tabellen-CRUD-Primitive)
+  - SQLx/PgBouncer-Rust-Proof bleibt optionaler Dev-/Spezialpfad und weiterhin nicht belegt (NOT_PROVEN / READY_FOR_PROOF)
+  - Zielarchitekturentscheidung geschlossen: Produktion nutzt direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer ist kein Produktions-Gate
   - Belege: [ADR-0007](adr/ADR-0007__auth-persistence-production-db-path.md),
     [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
     [Report](reports/auth-persistence-runtime-proof.md),
+    [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
-- [ ] Phase 5 — `DbSessionStore` / `SessionBackend`-Abstraktion · nächster Architekturpfad gegen direkten SQLx/PostgreSQL-Persistenzpfad
+- [x] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · direkter SQLx/PostgreSQL-Persistenzpfad implementiert (PR #1072)
 - [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
 
 ## Strang UI
@@ -127,6 +129,7 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 - [~] Kartenklarheit Phase 4 — Regressionen teilweise; Keyboard-/Query-Parameter-Navigation offen · [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md)
 - [~] Kartenklarheit Phase 5 — Souveräne Basemap-Infrastruktur · [kartenklarheit-roadmap §155](blueprints/kartenklarheit-roadmap.md)
 - [~] Basemap-Roadmap Phasen 1–3 — Pipeline, Style, Runtime-Integration · [map-roadmap.md](blueprints/map-roadmap.md)
+- [~] Hamburg-PMTiles-Artefakt lokal auf heimserver erzeugt; PMTiles-Magic/SHA256/Guard-Scope pmtiles-content PROVEN; Range-Delivery PROVEN; tiefe Strukturvalidierung + visuelle Abnahme offen · [docs/proofs/basemap-hamburg-artifact-proof.md](proofs/basemap-hamburg-artifact-proof.md)
 - [ ] Basemap-Roadmap Phase 4 — Betrieb & Versionierung
 - [ ] Basemap-Roadmap Phase 5 — Ausbau (Faden-Dichte)
 - [ ] Kartenklarheit Phase 6 — Wahrheitsbeweis (Runtime, E2E, visuelle Abnahme, CI) · [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md)
@@ -147,7 +150,7 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 
 ## Themenübergreifende Reihenfolge (Was vor Was)
 
-1. **psql-basierter direkter PostgreSQL-CRUD-Pfad ist belegt**; der SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Pfad bleibt Runtime-Gate vor produktivem `DbSessionStore` und vor `DbSessionStore`-/`SessionBackend`-Verdrahtung inkl. Auth-Runtime- und CI-Gate. PgBouncer-Proofs sind nach ADR-0007 optionaler Dev-/Spezialpfad.
+1. **Direkter SQLx/Postgres-Persistenzpfad-Nachweis** vor produktivem `DbSessionStore`; PgBouncer-Proofs sind nach ADR-0007 optionaler Dev-/Spezialpfad.
 2. **Auth-Phase 3 (Step-up)** vor **UI Auth-Integration**.
 3. **Kartenklarheit Phase 5 (souveräne Pipeline)** vor **Phase 6 (Wahrheitsbeweis)**.
 4. **Basemap-Roadmap Phase 3 (Runtime-Integration)** überlappt mit

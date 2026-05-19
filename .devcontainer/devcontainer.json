@@ -23,7 +23,10 @@
       ]
     }
   },
-  "forwardPorts": [5173, 3000],
+  "forwardPorts": [
+    5173,
+    3000
+  ],
   "portsAttributes": {
     "5173": {
       "label": "Vite Dev Server",
@@ -36,12 +39,18 @@
   },
   "containerEnv": {
     "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD": "1",
-    "PUPPETEER_SKIP_DOWNLOAD": "true"
+    "PUPPETEER_SKIP_DOWNLOAD": "true",
+    "SSH_AUTH_SOCK": "/ssh-agent",
+    "GIT_SSH_COMMAND": "ssh -F /dev/null -o IdentityAgent=/ssh-agent -o IdentitiesOnly=no"
   },
-  "remoteUser": "vscode",
+  "remoteUser": "node",
   "updateRemoteUserUID": true,
   "init": true,
-  "postCreateCommand": "bash .devcontainer/post-create.sh",
-  "postAttachCommand": "bash -lc 'corepack enable || true; cd apps/web && [ -d node_modules ] || pnpm install'",
-  "postStartCommand": "bash -lc 'set -euxo pipefail; echo Using compose as the single source of truth; just check || true'"
+  "postCreateCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; bash .devcontainer/post-create.sh'",
+  "postAttachCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; corepack enable || true; cd apps/web && ([ -d node_modules ] || pnpm install)'",
+  "postStartCommand": "bash -lc 'set -e; .devcontainer/uid-guard.sh; .devcontainer/ssh-agent-guard.sh; set -uxo pipefail; echo Using compose as the single source of truth; just check || true'",
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh/devcontainer-ssh-agent.sock,target=/ssh-agent,type=bind,consistency=cached"
+  ],
+  "initializeCommand": "bash .devcontainer/prepare-ssh-agent-mount.sh"
 }

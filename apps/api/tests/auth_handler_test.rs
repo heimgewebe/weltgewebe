@@ -13,7 +13,8 @@ mod tests {
     use tower::ServiceExt;
     use weltgewebe_api::{
         auth::{
-            accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionStore,
+            accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role,
+            session::SessionBackend,
         },
         config::AppConfig,
         routes::{
@@ -86,7 +87,7 @@ mod tests {
             nats_configured: false,
             config,
             metrics,
-            sessions: SessionStore::new(),
+            sessions: SessionBackend::new_in_memory(),
             challenges: Default::default(),
             tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
             step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),

@@ -21,3 +21,4 @@ Generated automatically. Do not edit.
 | impl.assets.map-style | docs/blueprints/map-blaupause.md, map-style/ASSETS.md | config | none |
 | impl.infra.caddy | docs/blueprints/map-blaupause.md | config | scripts/guard/caddy-basemap-route-guard.sh |
 | impl.guard.basemap-runtime-proof | docs/blueprints/kartenklarheit-roadmap.md, docs/blueprints/kartenklarheit-phase6.md, docs/reports/map-status-matrix.md, docs/reports/map-architekturkritik.md | guard | .github/workflows/basemap-runtime-proof.yml |
+| impl.auth.db-session-store | docs/blueprints/auth-roadmap.md | service | apps/api/tests/db_session_store_persistence.rs |

@@ -78,7 +78,7 @@ Ergebnisziel:
 - Serverseitiger Widerruf bleibt möglich.
 - Offline-Tests ohne Datenbank bleiben grün.
 - Produktionspfad mit direktem PostgreSQL-Zugriff via `DATABASE_URL` ist belegt.
-- PgBouncer ist nur für Dev-/Spezialpfade relevant und keine Produktionsvoraussetzung.
+- PgBouncer ist nur für Dev-/Spezialpfade relevant und kein Produktions-Gate.
 
 ---
 

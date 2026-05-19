@@ -5,8 +5,8 @@ doc_type: reference
 status: accepted
 summary: >
   Kanonisiert den Produktionspfad für Auth-Persistenz: direkter PostgreSQL-Zugriff
-  via DATABASE_URL. PgBouncer bleibt Dev-/Spezialpfad und ist keine
-  Produktionsvoraussetzung für DbSessionStore.
+  via DATABASE_URL. PgBouncer bleibt Dev-/Spezialpfad und ist kein
+  Produktions-Gate für DbSessionStore.
 relations:
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
@@ -34,13 +34,15 @@ accepted
 - `.env.example` setzt `DATABASE_URL` auf direkten Postgres-Port 5432.
 - Die API liest ausschließlich `DATABASE_URL`.
 - Der SQLx/PgBouncer-Test ist nur `READY_FOR_PROOF` und kein Runtime-Beweis.
-- PgBouncer als Produktionsvoraussetzung ist dokumentarisch angenommen, aber runtime-seitig nicht kanonisch.
+- PgBouncer als Prod-Gate ist dokumentarisch angenommen, aber runtime-seitig nicht kanonisch.
 
 ## Entscheidung
 
-Die produktive Auth-Persistenz nutzt direkten PostgreSQL-Zugriff über `DATABASE_URL`.
+Die produktive Auth-Persistenz nutzt direkten PostgreSQL-Zugriff über
+`DATABASE_URL`.
 
-PgBouncer ist Dev-/Spezialinfrastruktur und kein erforderlicher Produktionspfad.
+PgBouncer ist Dev-/Spezialinfrastruktur und kein erforderlicher
+Produktionspfad.
 
 ## Begründung
 

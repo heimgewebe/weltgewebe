@@ -76,3 +76,12 @@ implementations:
       - docs/reports/map-architekturkritik.md
     verified_by:
       - .github/workflows/basemap-runtime-proof.yml
+
+  - id: impl.auth.db-session-store
+    path: apps/api/src/auth/session_db.rs
+    impl_type: service
+    status: active
+    documented_by:
+      - docs/blueprints/auth-roadmap.md
+    verified_by:
+      - apps/api/tests/db_session_store_persistence.rs

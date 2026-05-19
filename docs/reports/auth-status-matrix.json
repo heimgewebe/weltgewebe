@@ -35,7 +35,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. In-Memory SessionStore als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (auth-roadmap.md, Phase 2 Persistenzentscheidung). ADR-0007 legt für produktive Auth-Persistenz direkten PostgreSQL-Zugriff via DATABASE_URL fest; PgBouncer ist optionaler Dev-/Spezialpfad und keine Produktionsvoraussetzung. SessionStore-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE.",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. In-Memory SessionStore als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (auth-roadmap.md, Phase 2 Persistenzentscheidung). ADR-0007 legt für die produktive Auth-Persistenz den direkten PostgreSQL-Zugriff über DATABASE_URL fest; PgBouncer ist optionaler Dev-/Spezialpfad und kein Produktions-Gate. SessionStore-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
@@ -44,7 +44,6 @@
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
       ],
       "missing_evidence": [
-        "Produktive DbSessionStore-/SessionBackend-Verdrahtung gegen direkten PostgreSQL-Pfad inkl. Auth-Runtime- und CI-Gate",
         "Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests)",
         "E2E-Nachweis"
       ],

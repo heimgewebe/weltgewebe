@@ -35,16 +35,30 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 
 - [relates_to] docs/adr/ADR-0005-auth.md
+- [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - [relates_to] docs/reports/auth-persistence-next-step.md
 - [relates_to] docs/reports/auth-persistence-readiness.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
 - [relates_to] docs/reports/auth-status-matrix.md
+- [relates_to] docs/reports/passkey-register-verify-prep.md
 - [relates_to] docs/specs/auth-api.md
 - [relates_to] docs/specs/auth-blueprint.md
 - [relates_to] docs/specs/auth-state-machine.md
 - [relates_to] docs/specs/auth-ui.md
+
+## docs/adr/ADR-0007__auth-persistence-production-db-path.md
+
+- [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/blueprints/auth-roadmap.md
+- [relates_to] docs/proofs/sqlx-pgbouncer-session-crud-proof.md
+- [relates_to] docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+- [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
+- [relates_to] docs/reports/auth-status-matrix.md
 
 ## docs/architekturstruktur.md
 
@@ -60,15 +74,22 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/auth-persistence-runtime-proof.md
 
+- [relates_to] docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
+- [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 - [depends_on] docs/roadmap.md
 
 ## docs/blueprints/auth-roadmap.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
+- [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/proofs/sqlx-pgbouncer-session-crud-proof.md
 - [relates_to] docs/reports/auth-persistence-next-step.md
 - [relates_to] docs/reports/auth-persistence-readiness.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
 - [relates_to] docs/reports/auth-status-matrix.md
+- [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/specs/auth-blueprint.md
 
@@ -260,6 +281,17 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/README.md
 
+## docs/proofs/sqlx-pgbouncer-session-crud-proof.md
+
+- [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
+- [relates_to] docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+- [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
+
+## docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+
+- [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
+
 ## docs/quickstart-gate-c.md
 
 - [relates_to] docs/dev/codespaces.md
@@ -271,17 +303,33 @@ Generated automatically. Do not edit.
 ## docs/reports/auth-persistence-next-step.md
 
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
+- [relates_to] docs/proofs/sqlx-pgbouncer-session-crud-proof.md
+- [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
+- [relates_to] docs/reports/auth-persistence-runtime-proof.md
 
 ## docs/reports/auth-persistence-readiness.md
 
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
-- [updates] docs/reports/auth-persistence-next-step.md
+- [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
+- [supersedes] docs/reports/auth-persistence-next-step.md
 - [relates_to] docs/reports/optimierungsstatus.md
+
+## docs/reports/auth-persistence-runtime-proof.md
+
+- [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
+- [relates_to] docs/proofs/sqlx-pgbouncer-session-crud-proof.md
+- [relates_to] docs/proofs/sqlx-postgres-direct-session-crud-proof.md
+- [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
+
+## docs/reports/auth-persistence-runtime-target-reconciliation.md
+
+- [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
 
 ## docs/reports/auth-status-matrix.md
 
 - [relates_to] docs/adr/ADR-0006__auth-magic-link-session-passkey.md
 - [relates_to] docs/blueprints/auth-roadmap.md
+- [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md
 
 ## docs/reports/map-architekturkritik.md
@@ -308,6 +356,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/optimierungsbericht.md
 - [depends_on] docs/roadmap.md
+
+## docs/roadmap.md
+
+- [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 
 ## docs/runbook.md
 
@@ -343,6 +395,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/reports/auth-persistence-next-step.md
 - [relates_to] docs/reports/auth-persistence-readiness.md
+- [relates_to] docs/reports/passkey-register-verify-prep.md
 - [relates_to] docs/specs/auth-state-machine.md
 - [relates_to] docs/specs/auth-ui.md
 
