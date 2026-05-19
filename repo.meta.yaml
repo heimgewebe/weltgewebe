@@ -47,7 +47,6 @@ discovery_roots:
   - policies/
   - scripts/
   - src/
-  - tests/
   - tools/
 
 generated_artifacts:
