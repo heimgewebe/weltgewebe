@@ -11,6 +11,10 @@ name: wgx-guard
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   guard:
     # Fleet-Repos, die von metarepo aus via wgx up Templates beziehen,

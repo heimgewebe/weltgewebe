@@ -8,6 +8,11 @@ permissions:
       - "apps/web/**"
       - "docs/**"
       - ".github/workflows/seo-archive.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest

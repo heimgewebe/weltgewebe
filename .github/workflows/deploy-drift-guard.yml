@@ -9,6 +9,10 @@ permissions:
       - 'infra/compose/**'
       - 'infra/caddy/**'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   drift-check:
     runs-on: ubuntu-latest
