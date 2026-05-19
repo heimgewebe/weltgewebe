@@ -7,8 +7,9 @@ created: 2026-05-13
 lang: de
 summary: >
   Rust/SQLx CRUD-Integrationstest gegen PgBouncer (transaction mode) → Postgres auf
-  der sessions-Tabelle. Bereitet den Beweis des produktionsnahen Verbindungspfads mit
-  statement_cache_capacity(0) als Mitigation vor (READY_FOR_PROOF). Kein chrono-Feature
+  der sessions-Tabelle. Bereitet einen optionalen Dev-/Spezialpfad mit
+  statement_cache_capacity(0) als Mitigation vor (READY_FOR_PROOF). Nach ADR-0007
+  ist dieser Proof keine Produktionsvoraussetzung für DbSessionStore. Kein chrono-Feature
   in sqlx, kein DbSessionStore, kein Auth-Umbau.
 depends_on:
   - docs/reports/auth-persistence-runtime-proof.md
@@ -20,6 +21,8 @@ relations:
     target: docs/reports/auth-persistence-next-step.md
   - type: relates_to
     target: docs/blueprints/auth-roadmap.md
+  - type: relates_to
+    target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
 ---
 
 # SQLx → PgBouncer → Postgres — Session-CRUD-Proof
@@ -30,6 +33,8 @@ relations:
 > Der Proof wird erst vollständig, wenn jemand mit Stack + PgBouncer
 > `PGBOUNCER_URL=... cargo test -- sqlx_pgbouncer --include-ignored` lädt.
 > Eine Heimserver-/Produktiv-Runtime ist dadurch nicht automatisch eine Proof-Umgebung.
+> Nach ADR-0007 ist dieser Proof ein optionaler Dev-/Spezialpfad und keine
+> Produktionsvoraussetzung für `DbSessionStore`.
 >
 > Ziel dieses PRs: belegter Rust-SQLx-CRUD-Code gegen ein **sessions-spaltenkompatibles Proof-Fixture**
 > durch PgBouncer im transaction mode (syntax + semantik geprüft; Runtime-Beweis noch ausstehend).
@@ -38,11 +43,13 @@ relations:
 
 ## 1. Was genau bewiesen wurde (bzw. vorbereitet)
 
-Dieser PR bereitet den Beweis der zwei offenen NOT_PROVEN-Items aus
+Dieser PR bereitet den Beweis des PgBouncer-spezifischen NOT_PROVEN-Items aus
 `docs/reports/auth-persistence-runtime-proof.md`, Abschnitt 5, vor:
 
-> SQLx/Rust-API CRUD direkt Postgres — NOT_PROVEN
 > SQLx/Rust-API CRUD via PgBouncer transaction mode — NOT_PROVEN
+
+Das direkte SQLx/Postgres-Item bleibt separat nachzuweisen und ist nach ADR-0007
+relevant für den Produktionspfad.
 
 Der Integrationstest `apps/api/tests/sqlx_pgbouncer_session_crud.rs` ist:
 
@@ -205,18 +212,19 @@ Proof-Lauf. Der Test darf deshalb weiterhin **nicht** still skippen.
 
 ---
 
-## 7. Warum dieser PR das korrekte Gate vor dem Persistenz-PR ist
+## 7. Warum dieser PR keine Produktionsvoraussetzung mehr ist
 
-Aus `docs/reports/auth-persistence-runtime-proof.md`, Abschnitt 8:
+ADR-0007 entscheidet den Produktionspfad für Auth-Persistenz auf direkten
+PostgreSQL-Zugriff via `DATABASE_URL`. Damit ist dieser PgBouncer-Proof kein
+Blocker für einen produktiven `DbSessionStore`, der gegen den direkten
+SQLx/Postgres-Pfad geplant und belegt wird.
 
-> **Stop-Regel:** Wenn SQLx über PgBouncer scheitert, keine Session-Persistenz
-> verdrahten — erst Ursache isolieren und Mitigation belegen.
-
-Dieser PR liefert den **ausführbaren Beweisaufbau** für `sqlx::PgPool` mit
-`statement_cache_capacity(0)` über PgBouncer im transaction mode. Der eigentliche
-Runtime-Beweis ist erst erbracht, wenn der ignorierte Test mit `PGBOUNCER_URL`
-gegen den aktiven Stack erfolgreich ausgeführt wurde. Erst danach ist der
-`DbSessionStore`-PR architektonisch abgesichert.
+Dieser PR liefert weiterhin einen **ausführbaren Beweisaufbau** für `sqlx::PgPool`
+mit `statement_cache_capacity(0)` über PgBouncer im transaction mode. Der eigentliche
+PgBouncer-Runtime-Beweis ist erst erbracht, wenn der ignorierte Test mit
+`PGBOUNCER_URL` gegen den aktiven Stack erfolgreich ausgeführt wurde. Das Ergebnis
+ist relevant für Dev-/Spezialbetriebe mit PgBouncer, aber nicht für die
+Produktionsentscheidung nach ADR-0007.
 
 ---
 
@@ -242,7 +250,7 @@ Nicht verändert: `apps/api/src/`, Migrations, Auth-Middleware, SessionStore, Ro
 | Cargo.lock: unverändert | ✅ PROVEN | kein `"chrono"`-Feature, keine neuen Dependencies |
 | Kein Auth-Verhalten geändert | ✅ PROVEN | Keine Code-Änderungen außerhalb `tests/` und `docs/proofs/` |
 | SQLx/Rust-API CRUD via PgBouncer transaction mode | ⚪ READY_FOR_PROOF | Test bereit; Ausführung erfordert `PGBOUNCER_URL` + aktiven Stack + `cargo test -- sqlx_pgbouncer --include-ignored` |
-| SQLx/Rust-API CRUD direkt Postgres | ⚪ NOT_CLAIMED | Test kann technisch gegen Postgres Port 5432 laufen, aber Scope ist PgBouncer |
+| SQLx/Rust-API CRUD direkt Postgres | ⚪ NOT_CLAIMED | Separater Produktionspfad nach ADR-0007; dieser Test hat bewusst PgBouncer-Scope |
 | `sqlx::migrate!` / sqlx-cli Migration | ❌ NOT_PROVEN | Separate Aufgabe; Test nutzt Fixture nicht sqlx-cli |
 
 **Wichtig:** Der Proof-Test beweist seine Hypothese erst durch tatsächliche Ausführung
@@ -265,5 +273,6 @@ PGBOUNCER_URL=postgres://... cargo test -p weltgewebe-api -- sqlx_pgbouncer --in
 ```
 
 Bis ein solcher Lauf tatsächlich erfolgreich belegt ist, bleibt dieser PR bewusst
-bei **READY_FOR_PROOF**. Die Stop-Regel bleibt bestehen: kein `DbSessionStore`
-ohne ausgeführten SQLx/PgBouncer-Proof.
+bei **READY_FOR_PROOF**. Nach ADR-0007 ist das ein optionaler Dev-/Spezialpfad:
+kein produktiver `DbSessionStore` gegen direkten PostgreSQL-Zugriff wird durch
+den fehlenden SQLx/PgBouncer-Proof blockiert.

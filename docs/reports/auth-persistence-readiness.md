@@ -212,8 +212,9 @@ reiner In-Memory-Zugriff, keine Datenbankabfrage.
 - `db_pool: Option<PgPool>` ist bereits in `ApiState` verdrahtet —
   Infrastruktur vorhanden, nur nicht für Auth genutzt.
 - PostgreSQL ist in den betrachteten Dev-/Prod-Basisstacks vorhanden und wird
-  von der API über `DATABASE_URL` adressiert; Profil-Parität und PgBouncer-Policy
-  bleiben separat zu prüfen.
+  von der API über `DATABASE_URL` adressiert; nach ADR-0007 ist direkter
+  PostgreSQL-Zugriff der Produktionspfad. PgBouncer bleibt optionaler
+  Dev-/Spezialpfad.
 - Die DB-Extensions `uuid-ossp` und `pgcrypto` sind bereits aktiv
   (`infra/compose/sql/init/00_extensions.sql`).
 - `SessionStore`-Methodenoberfläche deckt alle nötigen Operationen ab;
@@ -391,7 +392,7 @@ mit gleicher Schnittstelle parallel für beide Backends bestehen.
 | Risiko | Schwere | Wahrscheinlichkeit | Maßnahme |
 |---|---|---|---|
 | API-Neustart löscht alle Sessions (Ist-Zustand) | hoch | bei jedem Deploy | `sessions`-Tabelle einführen |
-| DB-Ausfall bei persistentem Store → alle Auth-Ops fehlerhaft | hoch | kontextabhängig / nicht abschließend belegt | Klar scheitern statt In-Memory-Fallback; Readiness/Health muss DB-Ausfall sichtbar machen; PgBouncer-Parität für Dev/Prod separat prüfen |
+| DB-Ausfall bei persistentem Store → alle Auth-Ops fehlerhaft | hoch | kontextabhängig / nicht abschließend belegt | Klar scheitern statt In-Memory-Fallback; Readiness/Health muss DB-Ausfall sichtbar machen; direkter Postgres-Produktionspfad muss nachgewiesen werden |
 | Migration läuft nicht idempotent → CI-Bruch | mittel | niedrig | Keine `IF NOT EXISTS`-Kaschierung in der Up-Migration; die Migration soll bei unerwartetem Vorzustand scheitern. Das sqlx-Migrationsprotokoll verhindert reguläre Doppelausführung. |
 | `DbSessionStore` verdrängt `SessionStore` → In-Memory-Testharness bricht | niedrig | niedrig | `test_state()` nutzt `db_pool: None` → bleibt in-memory |
 | Falsche Indexwahl → Performance bei hoher Session-Zahl | niedrig | niedrig | `sessions_account_id` + `sessions_expires_at` decken alle Abfragen ab |

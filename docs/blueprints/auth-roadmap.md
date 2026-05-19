@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - type: relates_to
+    target: docs/adr/ADR-0007__auth-persistence-production-db-path.md
+  - type: relates_to
     target: docs/reports/auth-status-matrix.md
   - type: relates_to
     target: docs/specs/auth-blueprint.md
@@ -44,6 +46,7 @@ Diese Roadmap dient zugleich als:
 Diese Dokumente definieren den kanonischen Zielzustand:
 
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
+- `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
 - `docs/specs/auth-api.md`
 - `docs/specs/auth-state-machine.md`
 - `docs/specs/auth-ui.md`
@@ -213,6 +216,18 @@ Jeder relevante Bereich ist entweder:
 - `ApiState` enthält bereits ein optionales `db_pool: Option<PgPool>` als generelle DB-Infrastruktur; eine Session-spezifische Anbindung existiert noch nicht.
 - Die `SessionStore`-Schnittstelle (`create`, `get`, `delete`, `list_by_account`, `delete_by_device`, `delete_all_by_account`) ist abstrakt genug, um ohne Route-Änderungen auf einen persistenten Adapter umgestellt zu werden.
 - Challenge- und Token-Stores unterliegen derselben Einschätzung: kurzlebig (5 min TTL), sicherheitsunkritisch bei Verlust durch Restart.
+
+### Produktionspfad für persistenten Store
+
+**Entscheidung:** ADR-0007 legt den Produktionspfad für Auth-Persistenz auf direkten
+PostgreSQL-Zugriff via `DATABASE_URL` fest.
+
+**Folgen:**
+
+- `DbSessionStore` / `SessionBackend` wird gegen den direkten SQLx/Postgres-Pfad geplant.
+- PgBouncer bleibt Dev-/Spezialpfad und ist keine Produktionsvoraussetzung.
+- Kein `DbSessionStore` ohne direkten SQLx/Postgres-Persistenzpfad-Nachweis.
+- Eine spätere Rückkehr zu PgBouncer als Produktionspfad erfordert ein neues ADR.
 
 **Trigger für Migration auf persistenten Store:**
 

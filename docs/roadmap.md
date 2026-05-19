@@ -101,13 +101,13 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; Register-Verify und UI-E2E offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
 - [~] Phase 4 — Auth-Persistenz Runtime-Proof
   - SQL/psql-Migration + psql-basierter PgBouncer-CRUD-Smoke belegt
-  - SQLx/PgBouncer-Rust-Proof als Testgerüst vorbereitet (READY_FOR_PROOF, nicht ausgeführt)
-  - **OPEN_DECISION:** Ob Auth-Persistenz produktiv via PgBouncer oder direkten Postgres-Pfad
-    laufen soll, ist ungeklärt. Prod-Stack enthält keinen PgBouncer; Dev-Stack enthält PgBouncer.
-  - Belege: [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
+  - SQLx/PgBouncer-Rust-Proof als Testgerüst vorbereitet (READY_FOR_PROOF, nicht ausgeführt), aber nach ADR-0007 optionaler Dev-/Spezialpfad
+  - Zielarchitekturentscheidung geschlossen: Produktion nutzt direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer ist keine Produktionsvoraussetzung
+  - Belege: [ADR-0007](adr/ADR-0007__auth-persistence-production-db-path.md),
+    [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
     [Report](reports/auth-persistence-runtime-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
-- [ ] Phase 5 — `DbSessionStore` / `SessionBackend`-Abstraktion · folgt aus Runtime-Proof
+- [ ] Phase 5 — `DbSessionStore` / `SessionBackend`-Abstraktion · nächster Architekturpfad gegen direkten SQLx/PostgreSQL-Persistenzpfad
 - [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
 
 ## Strang UI
@@ -147,7 +147,7 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 
 ## Themenübergreifende Reihenfolge (Was vor Was)
 
-1. **Auth-Persistenz Runtime-Proof** vor `DbSessionStore`.
+1. **psql-basierter direkter PostgreSQL-CRUD-Pfad ist belegt**; der SQLx/Rust-API-CRUD gegen direkten PostgreSQL-Pfad bleibt Runtime-Gate vor produktivem `DbSessionStore` und vor `DbSessionStore`-/`SessionBackend`-Verdrahtung inkl. Auth-Runtime- und CI-Gate. PgBouncer-Proofs sind nach ADR-0007 optionaler Dev-/Spezialpfad.
 2. **Auth-Phase 3 (Step-up)** vor **UI Auth-Integration**.
 3. **Kartenklarheit Phase 5 (souveräne Pipeline)** vor **Phase 6 (Wahrheitsbeweis)**.
 4. **Basemap-Roadmap Phase 3 (Runtime-Integration)** überlappt mit
