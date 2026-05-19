@@ -21,6 +21,10 @@ permissions:
       - '.github/workflows/deploy-check.yml'
       - '.node-version'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   csp-contract-check:
     runs-on: ubuntu-latest

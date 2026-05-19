@@ -10,6 +10,10 @@ permissions:
       - ".wgx/**"
       - "docs/wgx-konzept.md"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke:
     # auch hier: statt eigener CI-Logik nur noch Forwarder auf das

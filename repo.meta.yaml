@@ -38,12 +38,16 @@ canonical_sources:
 discovery_roots:
   - .github/workflows/
   - apps/
+  - architecture/
+  - audit/
+  - configs/
   - contracts/
   - docs/
   - infra/
+  - policies/
   - scripts/
   - src/
-  - tests/
+  - tools/
 
 generated_artifacts:
   - docs/_generated/doc-index.md

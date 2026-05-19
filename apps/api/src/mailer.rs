@@ -119,7 +119,7 @@ impl Mailer {
     pub async fn send_step_up_magic_link(&self, to: &str, link: &str) -> Result<()> {
         if let Some(sink) = &self.test_sink {
             sink.lock()
-                .unwrap()
+                .expect("mailer test_sink mutex poisoned")
                 .push((to.to_string(), link.to_string()));
             return Ok(());
         }
@@ -156,7 +156,7 @@ impl Mailer {
     pub async fn send_magic_link(&self, to: &str, link: &str) -> Result<()> {
         if let Some(sink) = &self.test_sink {
             sink.lock()
-                .unwrap()
+                .expect("mailer test_sink mutex poisoned")
                 .push((to.to_string(), link.to_string()));
             return Ok(());
         }
