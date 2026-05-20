@@ -106,9 +106,17 @@ jobs:
 
       - name: Wait for PostgreSQL
         run: |
-          until pg_isready -h localhost -p 5432 -U welt -d weltgewebe; do
-            echo "Waiting for postgres..."; sleep 2
+          max_attempts=15
+          for attempt in $(seq 1 "$max_attempts"); do
+            if pg_isready -h localhost -p 5432 -U welt -d weltgewebe; then
+              echo "PostgreSQL is ready."
+              exit 0
+            fi
+            echo "Waiting for postgres... attempt ${attempt}/${max_attempts}"
+            sleep 2
           done
+          echo "ERROR: PostgreSQL did not become ready after ${max_attempts} attempts." >&2
+          exit 1
 
       - name: Run db session persistence proof (direct PostgreSQL, --include-ignored)
         run: >-
