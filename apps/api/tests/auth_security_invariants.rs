@@ -1,8 +1,8 @@
 //! Reproducible Auth security-invariant proofs (auth-roadmap Phase 7).
 //!
 //! Closes the two clearest gaps named in `docs/reports/auth-status-matrix.md` §2.9:
-//!   1. Systematic CSRF coverage of *all* mutating endpoints (previously only
-//!      `/auth/session/refresh` was covered).
+//!   1. Systematic CSRF coverage of all currently listed CSRF-relevant mutating
+//!      endpoints (previously only `/auth/session/refresh` was covered).
 //!   2. Anti-enumeration *parity*: a known and an unknown email must yield a
 //!      byte-identical response (previously only the unknown side was checked).
 //!
@@ -219,9 +219,10 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
         .expect("cookie has a value")
         .to_string();
 
-    // All mutating, non-exempt endpoints reachable under the CSRF layer.
-    // `/auth/login` and `/auth/logout` are intentionally exempt; the magic-link
-    // request/consume entry points carry no session cookie and are not listed.
+    // All currently listed CSRF-relevant mutating endpoints reachable under the
+    // CSRF layer. `/auth/login` and `/auth/logout` are intentionally exempt;
+    // the magic-link request/consume entry points carry no session cookie and
+    // are therefore not listed here.
     let mutating_endpoints: &[(Method, &str)] = &[
         (Method::POST, "/auth/session/refresh"),
         (Method::POST, "/auth/logout-all"),

@@ -384,7 +384,8 @@ Sie muss auch wissen:
 
 ### Bisher belegt (reproduzierbar)
 
-- **CSRF / Origin:** Systematische Abdeckung aller mutierenden Endpunkte —
+- **CSRF / Origin:** Systematische Abdeckung aller aktuell gelisteten
+  CSRF-pflichtigen mutierenden Endpunkte —
   ein Cross-Site-Request mit Session-Cookie, aber ohne passenden
   Origin/Referer wird mit `403` (leerer Body) abgewiesen; eine Positivkontrolle
   mit gültigem Origin passiert die Middleware. Beleg:
