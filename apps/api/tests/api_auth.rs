@@ -639,6 +639,47 @@ fn extract_cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     })
 }
 
+/// Extract full Set-Cookie header for inspection (includes attributes).
+fn extract_set_cookie_header(headers: &HeaderMap, name: &str) -> Option<String> {
+    headers.get_all("set-cookie").iter().find_map(|val| {
+        let s = val.to_str().ok()?;
+        let cookie_part = s.split_once(';').map(|(part, _)| part).unwrap_or(s);
+        let (key, _) = cookie_part.split_once('=')?;
+        if key.trim() == name {
+            Some(s.to_lowercase())
+        } else {
+            None
+        }
+    })
+}
+
+/// Verify that Session Cookie attributes match security requirements.
+fn assert_session_cookie_secure(cookie_header: &str, expect_secure: bool) {
+    let header_lower = cookie_header.to_lowercase();
+    
+    // Must have httponly
+    assert!(
+        header_lower.contains("httponly"),
+        "Session cookie must have HttpOnly attribute; got: {}",
+        cookie_header
+    );
+    
+    // Must have SameSite=Lax
+    assert!(
+        header_lower.contains("samesite=lax"),
+        "Session cookie must have SameSite=Lax; got: {}",
+        cookie_header
+    );
+    
+    // Secure should match config
+    let has_secure = header_lower.contains("secure");
+    assert_eq!(
+        has_secure, expect_secure,
+        "Session cookie Secure flag mismatch: expected={}, got={}; header: {}",
+        expect_secure, has_secure, cookie_header
+    );
+}
+
 #[tokio::test]
 #[serial]
 async fn consume_legacy_alias_returns_404() -> Result<()> {
@@ -3976,6 +4017,133 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let body: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(body["error"], "GRANT_INVALID");
+
+    Ok(())
+}
+
+// Phase 6 E2E Proof: Session Cookie Security Attributes
+//
+// This test proves that:
+// 1. Session cookies are set with correct security attributes (httpOnly, SameSite=Lax, Secure).
+// 2. Magic Link login flow produces a valid session.
+// 3. Session persists in memory backend (offline mode without DATABASE_URL).
+
+#[tokio::test]
+#[serial]
+async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<()> {
+    std::env::remove_var("AUTH_COOKIE_SECURE");
+    // Default is true, simulating production HTTPS
+
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state.clone());
+
+    // Step 1: Request Magic Link
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Step 2: Create a token directly (simulate magic link sent)
+    let token = state.tokens.create("u1@example.com".to_string());
+
+    // Step 3: GET consume page to extract nonce
+    let uri = format!("/auth/magic-link/consume?token={}", token);
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+    assert_eq!(res_get.status(), StatusCode::OK);
+
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("nonce cookie not set")?;
+    let (_, nonce) = nonce_val
+        .split_once('.')
+        .context("invalid nonce format")?;
+    let nonce = nonce.to_string();
+
+    // Step 4: POST consume with nonce – this sets the SESSION_COOKIE_NAME
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res_post = app.oneshot(req_post).await?;
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+
+    // Step 5: Verify Session Cookie Attributes (PROOF)
+    let session_cookie_header = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("Session cookie not set in response")?;
+
+    // AUTH_COOKIE_SECURE defaults to true, so Secure flag should be present
+    let expect_secure = std::env::var("AUTH_COOKIE_SECURE")
+        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+        .unwrap_or(true);
+
+    assert_session_cookie_secure(&session_cookie_header, expect_secure);
+
+    // Step 6: Verify Session exists in in-memory backend
+    let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("session id not in set-cookie")?;
+    let session = get_session(&state, &session_id)
+        .await
+        .ok_or_else(|| anyhow::anyhow!("session not persisted in memory backend"))?;
+
+    assert_eq!(session.account_id, "u1");
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()> {
+    // Simulate dev/local mode where AUTH_COOKIE_SECURE=0
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "0");
+
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state.clone());
+
+    // Request Magic Link
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Get token
+    let token = state.tokens.create("u1@example.com".to_string());
+
+    // GET consume page
+    let uri = format!("/auth/magic-link/consume?token={}", token);
+    let req_get = Request::get(&uri).body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("nonce cookie not set")?;
+    let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
+
+    // POST consume
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
+        .body(body::Body::from(body_str))?;
+
+    let res_post = app.oneshot(req_post).await?;
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+
+    // Verify Session Cookie has NO Secure flag
+    let session_cookie_header = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("Session cookie not set")?;
+
+    assert_session_cookie_secure(&session_cookie_header, false);
 
     Ok(())
 }
