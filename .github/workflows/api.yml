@@ -72,6 +72,58 @@ jobs:
         working-directory: apps/api
         run: cargo test --all-features --verbose
 
+  db-session-persistence-proof:
+    name: db session persistence proof (direct postgres)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      DATABASE_URL: postgres://welt:gewebe@localhost:5432/weltgewebe
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: welt
+          POSTGRES_PASSWORD: gewebe
+          POSTGRES_DB: weltgewebe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: "1.89.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Wait for PostgreSQL
+        run: |
+          max_attempts=15
+          for attempt in $(seq 1 "$max_attempts"); do
+            if pg_isready -h localhost -p 5432 -U welt -d weltgewebe; then
+              echo "PostgreSQL is ready."
+              exit 0
+            fi
+            echo "Waiting for postgres... attempt ${attempt}/${max_attempts}"
+            sleep 2
+          done
+          echo "ERROR: PostgreSQL did not become ready after ${max_attempts} attempts." >&2
+          exit 1
+
+      - name: Run db session persistence proof (direct PostgreSQL, --include-ignored)
+        run: >-
+          cargo test --locked -p weltgewebe-api
+          --test db_session_store_persistence
+          -- --include-ignored
+
   dependency-audit:
     name: dependency audit (on-demand)
     runs-on: ubuntu-latest

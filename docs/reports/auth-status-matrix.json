@@ -54,8 +54,15 @@
         "apps/api/src/middleware/auth.rs",
         "apps/api/src/middleware/authz.rs",
         "apps/api/tests/api_auth.rs",
-        "apps/api/src/auth/session.rs"
-      ]
+        "apps/api/src/auth/session.rs",
+        "apps/api/src/auth/session_db.rs",
+        "apps/api/tests/db_session_store_persistence.rs"
+      ],
+      "ci_gate": {
+        "workflow": ".github/workflows/api.yml",
+        "job": "db-session-persistence-proof",
+        "status": "CI-Gate hinzugefügt / pending CI proof"
+      }
     },
     "session_refresh": {
       "soll": "POST /auth/session/refresh",
