@@ -77,7 +77,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; `BeginPasskeyRegistration`-Consume erzeugt jetzt `registration_grant_id` (TTL 5 Min, single-use, account/device-gebunden); Handoff vollständig | Teil   | mittel  |
 | Passkeys              | optional    | Register-Options mit Grant-Handoff: Step-up erzeugt Grant, `register/options` konsumiert Grant und startet WebAuthn-Ceremony; PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; register/verify und Login-/Management-Pfade offen | Teil  | mittel  |
-| Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert, systematische Smoke-Tests fehlen | Teil   | hoch    |
+| Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert; Anti-Enumeration-Parität und systematische CSRF-Abdeckung aller mutierenden Endpunkte reproduzierbar belegt (Phase 7); Rate-Limit-Runtime-Smoke und End-to-End-Token-Leak-Test offen | Teil   | mittel  |
 
 ---
 
@@ -184,12 +184,12 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.9 Sicherheitsinvarianten
 
 **Soll:** Anti-Enumeration, Rate Limit, Trusted Proxy Handling, CSRF / Origin, Token Leak Prevention.
-**Ist:** Codepfade für alle fünf Aspekte sind implementiert. Anti-Enumeration: `request_login` gibt identische 200-Responses unabhängig von der Account-Existenz. Rate Limiting: Dual-Layer (IP + E-Mail-Hash) via `AuthRateLimiter`. CSRF: Origin-/Referer-Middleware (`middleware/csrf.rs`) implementiert; punktuell durch API-Test belegt. Trusted Proxy: `effective_client_ip()` mit RFC-7239-Forwarded-Parsing und konfigurierbarer Allowlist (`AUTH_TRUSTED_PROXIES`). Token Leak Prevention: SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow (`routes/auth.rs`). Systematische Sicherheits-Smoke-Tests fehlen.
+**Ist:** Codepfade für alle fünf Aspekte sind implementiert. Anti-Enumeration: `request_login` gibt identische 200-Responses unabhängig von der Account-Existenz. Rate Limiting: Dual-Layer (IP + E-Mail-Hash) via `AuthRateLimiter`. CSRF: Origin-/Referer-Middleware (`middleware/csrf.rs`) implementiert. Trusted Proxy: `effective_client_ip()` mit RFC-7239-Forwarded-Parsing und konfigurierbarer Allowlist (`AUTH_TRUSTED_PROXIES`). Token Leak Prevention: SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow (`routes/auth.rs`). **Phase 7 (reproduzierbare Sicherheitsnachweise):** Anti-Enumeration ist als Paritätstest belegt (bekannte vs. unbekannte E-Mail liefern eine byte-identische 200-Response ohne E-Mail-/Token-Leakage); CSRF ist systematisch über alle mutierenden Endpunkte belegt (Cross-Site-Request ohne Origin/Referer → 403 mit leerem Body, plus Positivkontrolle mit gültigem Origin) gegen denselben Middleware-Stack wie in `src/lib.rs`. Rate-Limit-Runtime-Smoke und ein End-to-End-Token-Leak-Test bleiben offen.
 **Dokumentationsbelege:** `docs/runbook.md` (Rate Limits, Trusted Proxies), `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs` (Anti-Enumeration in `request_login`, Trusted Proxy in `effective_client_ip`, Constant-Time-Vergleich in `consume_login_post`), `apps/api/src/middleware/csrf.rs`, `apps/api/tests/api_auth.rs` (`test_session_refresh_csrf_rejected`), `apps/api/src/auth/rate_limit.rs`, `apps/api/src/auth/tokens.rs` (SHA-256-Hashing), `apps/api/src/auth/step_up_tokens.rs` (SHA-256-Hashing)
-**Fehlende Belege:** Kein dedizierter Anti-Enumeration-Test (identische Response für bekannte vs. unbekannte Accounts), keine systematische CSRF-Abdeckung aller mutierenden Endpunkte, kein Runtime-Smoke-Test für Rate Limiting, kein dedizierter Token-Leak-Prevention-Test.
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs` (Anti-Enumeration in `request_login`, Trusted Proxy in `effective_client_ip`, Constant-Time-Vergleich in `consume_login_post`), `apps/api/src/middleware/csrf.rs`, `apps/api/tests/auth_security_invariants.rs` (`csrf_blocks_all_mutating_endpoints_without_origin`, `magic_link_request_is_indistinguishable_for_known_and_unknown_email`), `apps/api/tests/api_auth.rs` (`test_session_refresh_csrf_rejected`), `apps/api/tests/auth_ratelimit.rs`, `apps/api/src/auth/rate_limit.rs`, `apps/api/src/auth/tokens.rs` (SHA-256-Hashing), `apps/api/src/auth/step_up_tokens.rs` (SHA-256-Hashing)
+**Fehlende Belege:** Kein Runtime-Smoke-Test gegen einen laufenden Server für Rate Limiting (Integrationstests in `apps/api/tests/auth_ratelimit*.rs` vorhanden), kein End-to-End-Token-Leak-Prevention-Test (Response-Non-Leakage belegt und SHA-256-Hashing unit-getestet; Speicher-/Log-Pfad-Beweis bleibt offen).
 **Status:** Teil
-**Risiko:** hoch
+**Risiko:** mittel
 
 ---
 
