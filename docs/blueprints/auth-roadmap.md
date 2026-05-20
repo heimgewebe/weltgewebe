@@ -390,8 +390,10 @@ Sie muss auch wissen:
   Origin/Referer wird mit `403` (leerer Body) abgewiesen; eine Positivkontrolle
   mit gültigem Origin passiert die Middleware. Beleg:
   `apps/api/tests/auth_security_invariants.rs::csrf_blocks_all_mutating_endpoints_without_origin`.
-- **Anti-Enumeration:** Bekannte und unbekannte E-Mail liefern eine
-  byte-identische `200`-Antwort ohne E-Mail-/Token-Leakage. Beleg:
+- **Anti-Enumeration:** Bekannte und unbekannte E-Mail liefern identischen
+  Status, einen byte-identischen Body und Parität der sicherheitsrelevanten
+  Header (kein `Set-Cookie`-Seitenkanal, identischer
+  `Content-Type`/`Cache-Control`) — ohne E-Mail-/Token-Leakage. Beleg:
   `apps/api/tests/auth_security_invariants.rs::magic_link_request_is_indistinguishable_for_known_and_unknown_email`.
 
 Offen: Rate-Limit-Runtime-Smoke gegen einen laufenden Server,

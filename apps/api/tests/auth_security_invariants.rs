@@ -3,17 +3,24 @@
 //! Closes the two clearest gaps named in `docs/reports/auth-status-matrix.md` §2.9:
 //!   1. Systematic CSRF coverage of all currently listed CSRF-relevant mutating
 //!      endpoints (previously only `/auth/session/refresh` was covered).
-//!   2. Anti-enumeration *parity*: a known and an unknown email must yield a
-//!      byte-identical response (previously only the unknown side was checked).
+//!   2. Anti-enumeration *parity*: a known and an unknown email must yield an
+//!      identical status, a byte-identical body, and parity of the security-
+//!      relevant response headers (previously only the unknown side was checked).
 //!
-//! These tests run against the same middleware stack wired in `src/lib.rs`
-//! (`auth_middleware` as a route layer, `require_csrf` as the outer layer).
+//! The CSRF coverage test (`csrf_blocks_all_mutating_endpoints_without_origin`)
+//! exercises the production-style middleware stack wired in `src/lib.rs`
+//! (`auth_middleware` as a route layer, `require_csrf` as the outer layer). The
+//! anti-enumeration test
+//! (`magic_link_request_is_indistinguishable_for_known_and_unknown_email`)
+//! deliberately uses the narrower `app_plain()` router: `/auth/magic-link/request`
+//! carries no session cookie and is not CSRF-relevant, so only response parity
+//! needs proving there.
 
 use anyhow::Result;
 use axum::{
     body,
     extract::connect_info::MockConnectInfo,
-    http::{Method, Request, StatusCode},
+    http::{header, Method, Request, StatusCode},
     Router,
 };
 use serial_test::serial;
@@ -258,8 +265,10 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
 }
 
 /// Anti-enumeration parity: a magic-link request for a known vs. an unknown
-/// email must be indistinguishable — identical status and byte-identical body —
-/// and must never echo the address or a token back to the caller.
+/// email must be indistinguishable — identical status, byte-identical body, and
+/// parity of the security-relevant response headers (no `Set-Cookie` side
+/// channel, identical `Content-Type`/`Cache-Control`) — and must never echo the
+/// address or a token back to the caller.
 #[tokio::test]
 #[serial]
 async fn magic_link_request_is_indistinguishable_for_known_and_unknown_email() -> Result<()> {
@@ -271,8 +280,14 @@ async fn magic_link_request_is_indistinguishable_for_known_and_unknown_email() -
             .body(body::Body::from(format!(r#"{{"email":"{email}"}}"#)))?)
     };
 
+    // Capture the security-relevant headers *before* consuming the body: a leak
+    // here (e.g. a `Set-Cookie` only on the known path) would be an enumeration
+    // side channel even when status and body match.
     let known_res = app.clone().oneshot(request_for(KNOWN_EMAIL)?).await?;
     let known_status = known_res.status();
+    let known_content_type = known_res.headers().get(header::CONTENT_TYPE).cloned();
+    let known_cache_control = known_res.headers().get(header::CACHE_CONTROL).cloned();
+    let known_has_set_cookie = known_res.headers().contains_key(header::SET_COOKIE);
     let known_body = body::to_bytes(known_res.into_body(), usize::MAX).await?;
 
     let unknown_res = app
@@ -280,6 +295,9 @@ async fn magic_link_request_is_indistinguishable_for_known_and_unknown_email() -
         .oneshot(request_for("nobody@example.com")?)
         .await?;
     let unknown_status = unknown_res.status();
+    let unknown_content_type = unknown_res.headers().get(header::CONTENT_TYPE).cloned();
+    let unknown_cache_control = unknown_res.headers().get(header::CACHE_CONTROL).cloned();
+    let unknown_has_set_cookie = unknown_res.headers().contains_key(header::SET_COOKIE);
     let unknown_body = body::to_bytes(unknown_res.into_body(), usize::MAX).await?;
 
     assert_eq!(known_status, StatusCode::OK);
@@ -290,6 +308,24 @@ async fn magic_link_request_is_indistinguishable_for_known_and_unknown_email() -
     assert_eq!(
         known_body, unknown_body,
         "response body must be byte-identical for known vs. unknown email"
+    );
+
+    // Header parity: the obvious enumeration side channels must not differ.
+    assert!(
+        !known_has_set_cookie,
+        "magic-link request for a known email must not set a cookie"
+    );
+    assert!(
+        !unknown_has_set_cookie,
+        "magic-link request for an unknown email must not set a cookie"
+    );
+    assert_eq!(
+        known_content_type, unknown_content_type,
+        "Content-Type must be identical for known vs. unknown email"
+    );
+    assert_eq!(
+        known_cache_control, unknown_cache_control,
+        "Cache-Control must be identical for known vs. unknown email"
     );
 
     // Shape and non-leakage of the shared response.
