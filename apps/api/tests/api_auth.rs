@@ -291,7 +291,7 @@ async fn consume_login_fails_if_account_disabled() -> Result<()> {
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
 
-    let res_post = app.oneshot(req_post).await?;
+    let res_post = app.clone().oneshot(req_post).await?;
 
     // Should fail and redirect to login error
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
@@ -712,7 +712,7 @@ async fn consume_legacy_alias_returns_404() -> Result<()> {
     let req_post = Request::post("/auth/login/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body::Body::from("token=any&nonce=any"))?;
-    let res_post = app.oneshot(req_post).await?;
+    let res_post = app.clone().oneshot(req_post).await?;
     assert_eq!(res_post.status(), StatusCode::NOT_FOUND);
 
     Ok(())
@@ -4042,8 +4042,8 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
 //
 // This test proves that:
 // 1. Session cookies are set with correct security attributes (HttpOnly, SameSite=Lax, Secure).
-// 2. Magic-Link consume produces a valid session when supplied with a valid token and nonce.
-// 3. Session persists in memory backend (offline mode without DATABASE_URL).
+// 2. Magic-Link consume with seeded token produces a valid authenticated API session.
+// 3. Offline mode remains covered (no DATABASE_URL required).
 
 #[tokio::test]
 #[serial]
@@ -4057,18 +4057,10 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
 
     let app = app(state.clone());
 
-    // Step 1: Request Magic Link
-    let req = Request::post("/auth/magic-link/request")
-        .header("Content-Type", "application/json")
-        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
-
-    let res = app.clone().oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::OK);
-
-    // Step 2: Create a token directly (simulate magic link sent)
+    // Step 1: Seed a valid token directly (consume-path API proof, no mailer/browser E2E)
     let token = state.tokens.create("u1@example.com".to_string());
 
-    // Step 3: GET consume page to extract nonce
+    // Step 2: GET consume page to extract nonce
     let uri = format!("/auth/magic-link/consume?token={}", token);
     let req_get = Request::get(&uri).body(body::Body::empty())?;
     let res_get = app.clone().oneshot(req_get).await?;
@@ -4079,30 +4071,49 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
     let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
     let nonce = nonce.to_string();
 
-    // Step 4: POST consume with nonce – this sets the SESSION_COOKIE_NAME
+    // Step 3: POST consume with nonce - this sets the SESSION_COOKIE_NAME
     let body_str = format!("token={}&nonce={}", token, nonce);
     let req_post = Request::post("/auth/magic-link/consume")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .header("Cookie", format!("{}={}", NONCE_COOKIE_NAME, nonce_val))
         .body(body::Body::from(body_str))?;
 
-    let res_post = app.oneshot(req_post).await?;
+    let res_post = app.clone().oneshot(req_post).await?;
     assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
 
-    // Step 5: Verify Session Cookie Attributes (PROOF)
+    // Step 4: Verify Session Cookie Attributes (PROOF)
     let session_cookie_header = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
         .context("Session cookie not set in response")?;
 
     assert_session_cookie_secure(&session_cookie_header, true);
 
-    // Step 6: Verify Session exists in in-memory backend
+    // Step 5: Verify cookie authenticates a real API request (/auth/session)
     let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
         .context("session id not in set-cookie")?;
-    let session = get_session(&state, &session_id)
-        .await
-        .ok_or_else(|| anyhow::anyhow!("session not persisted in memory backend"))?;
 
-    assert_eq!(session.account_id, "u1");
+    let app_with_auth = Router::new()
+        .merge(weltgewebe_api::routes::api_router())
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            weltgewebe_api::middleware::auth::auth_middleware,
+        ))
+        .with_state(state.clone());
+
+    let req_session = Request::get("/auth/session")
+        .header("Host", "localhost")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session_id))
+        .body(body::Body::empty())?;
+    let res_session = app_with_auth.oneshot(req_session).await?;
+    assert_eq!(res_session.status(), StatusCode::OK);
+
+    let body_bytes = body::to_bytes(res_session.into_body(), usize::MAX).await?;
+    let body_json: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+    assert_eq!(body_json["authenticated"], true);
+    assert!(body_json.get("expires_at").is_some());
+    assert!(
+        body_json["device_id"].as_str().is_some(),
+        "device_id must be present for authenticated session"
+    );
 
     Ok(())
 }
@@ -4119,15 +4130,7 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
 
     let app = app(state.clone());
 
-    // Request Magic Link
-    let req = Request::post("/auth/magic-link/request")
-        .header("Content-Type", "application/json")
-        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
-
-    let res = app.clone().oneshot(req).await?;
-    assert_eq!(res.status(), StatusCode::OK);
-
-    // Get token
+    // Seed token directly for consume-path proof.
     let token = state.tokens.create("u1@example.com".to_string());
 
     // GET consume page

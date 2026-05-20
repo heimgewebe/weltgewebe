@@ -35,7 +35,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): API-level Magic-Link consume proof + Cookie-Attribut-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; Session in Memory-Backend persistent ✓; Offline-Tests ohne DATABASE_URL grün ✓.",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): API-level Magic-Link consume proof with seeded token + Cookie-Attribut-Proof (HttpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; authentifizierter Request mit Session-Cookie gegen /auth/session lokal belegt.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
@@ -62,7 +62,7 @@
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
         "job": "db-session-persistence-proof (Phase 5) + Phase 6 Cookie-Proof Tests (Offline)",
-        "status": "Phase 5 CI-Gate aktiv; Phase 6 Tests laufen als Offline-Tests im Standard-Test-Suite (cargo test --locked -p weltgewebe-api) — grün"
+        "status": "Phase 5 CI-Gate konfiguriert / pending CI proof; Phase 6 Cookie-Proof-Tests laufen in der Offline-Test-Suite und sind lokal belegt, CI-Nachweis pending."
       }
     },
     "session_refresh": {
