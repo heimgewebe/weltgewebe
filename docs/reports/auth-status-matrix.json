@@ -35,8 +35,8 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): Beweis der Cookie-Sicherheitsattribute durch E2E-Tests — Magic-Link-Flow mit Attribut-Verifikation (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; Session in Memory-Backend persistent ✓; Offline-Tests ohne DATABASE_URL grün ✓.",
-      "status": "Teil (Phase 6 Proof-Stufe: Cookie-Attribute + E2E ✓; Rotation/Leak ⏳)",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): API-level Magic-Link consume proof + Cookie-Attribut-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; Session in Memory-Backend persistent ✓; Offline-Tests ohne DATABASE_URL grün ✓.",
+      "status": "Teil",
       "documentation_evidence": [
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
         "docs/blueprints/auth-roadmap.md",
@@ -45,9 +45,10 @@
       ],
       "missing_evidence": [
         "Session-Rotation/Leak-Tests",
-        "Cookie-Refresh-Beweise bei Session-Refresh-Flow"
+        "Cookie-Refresh-Beweise bei Session-Refresh-Flow",
+        "vollständiger Browser-/Mailer-End-to-End-Nachweis des Magic-Link-Flows"
       ],
-      "risk": "mittel (Phase 5+6 Persistenz und Cookie-Attrs belegt; Refresh-Rotations-Semantik ausstehend)",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/routes/mod.rs",

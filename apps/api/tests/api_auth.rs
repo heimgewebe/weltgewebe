@@ -646,33 +646,50 @@ fn extract_set_cookie_header(headers: &HeaderMap, name: &str) -> Option<String> 
         let cookie_part = s.split_once(';').map(|(part, _)| part).unwrap_or(s);
         let (key, _) = cookie_part.split_once('=')?;
         if key.trim() == name {
-            Some(s.to_lowercase())
+            Some(s.to_string())
         } else {
             None
         }
     })
 }
 
+fn has_cookie_flag_attribute(cookie_header: &str, attr_name: &str) -> bool {
+    cookie_header
+        .split(';')
+        .skip(1)
+        .map(str::trim)
+        .any(|attr| attr.eq_ignore_ascii_case(attr_name))
+}
+
+fn has_cookie_samesite_lax(cookie_header: &str) -> bool {
+    cookie_header
+        .split(';')
+        .skip(1)
+        .map(str::trim)
+        .filter_map(|attr| attr.split_once('='))
+        .any(|(key, value)| {
+            key.trim().eq_ignore_ascii_case("samesite") && value.trim().eq_ignore_ascii_case("lax")
+        })
+}
+
 /// Verify that Session Cookie attributes match security requirements.
 fn assert_session_cookie_secure(cookie_header: &str, expect_secure: bool) {
-    let header_lower = cookie_header.to_lowercase();
-    
     // Must have httponly
     assert!(
-        header_lower.contains("httponly"),
+        has_cookie_flag_attribute(cookie_header, "httponly"),
         "Session cookie must have HttpOnly attribute; got: {}",
         cookie_header
     );
-    
+
     // Must have SameSite=Lax
     assert!(
-        header_lower.contains("samesite=lax"),
+        has_cookie_samesite_lax(cookie_header),
         "Session cookie must have SameSite=Lax; got: {}",
         cookie_header
     );
-    
+
     // Secure should match config
-    let has_secure = header_lower.contains("secure");
+    let has_secure = has_cookie_flag_attribute(cookie_header, "secure");
     assert_eq!(
         has_secure, expect_secure,
         "Session cookie Secure flag mismatch: expected={}, got={}; header: {}",
@@ -4031,8 +4048,8 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<()> {
-    std::env::remove_var("AUTH_COOKIE_SECURE");
-    // Default is true, simulating production HTTPS
+    // Simulate production/default mode where secure cookies are enabled.
+    let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
@@ -4059,9 +4076,7 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
 
     let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
         .context("nonce cookie not set")?;
-    let (_, nonce) = nonce_val
-        .split_once('.')
-        .context("invalid nonce format")?;
+    let (_, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
     let nonce = nonce.to_string();
 
     // Step 4: POST consume with nonce – this sets the SESSION_COOKIE_NAME
@@ -4078,12 +4093,7 @@ async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<
     let session_cookie_header = extract_set_cookie_header(res_post.headers(), SESSION_COOKIE_NAME)
         .context("Session cookie not set in response")?;
 
-    // AUTH_COOKIE_SECURE defaults to true, so Secure flag should be present
-    let expect_secure = std::env::var("AUTH_COOKIE_SECURE")
-        .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
-        .unwrap_or(true);
-
-    assert_session_cookie_secure(&session_cookie_header, expect_secure);
+    assert_session_cookie_secure(&session_cookie_header, true);
 
     // Step 6: Verify Session exists in in-memory backend
     let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
