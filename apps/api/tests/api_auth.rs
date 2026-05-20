@@ -4038,11 +4038,11 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
     Ok(())
 }
 
-// Phase 6 E2E Proof: Session Cookie Security Attributes
+// Phase 6 API-level Proof: Session Cookie Security Attributes
 //
 // This test proves that:
-// 1. Session cookies are set with correct security attributes (httpOnly, SameSite=Lax, Secure).
-// 2. Magic Link login flow produces a valid session.
+// 1. Session cookies are set with correct security attributes (HttpOnly, SameSite=Lax, Secure).
+// 2. Magic-Link consume produces a valid session when supplied with a valid token and nonce.
 // 3. Session persists in memory backend (offline mode without DATABASE_URL).
 
 #[tokio::test]
