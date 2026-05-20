@@ -35,8 +35,8 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. In-Memory SessionStore als bewusste Architekturentscheidung für Single-Instance-Betrieb dokumentiert (auth-roadmap.md, Phase 2 Persistenzentscheidung). ADR-0007 legt für die produktive Auth-Persistenz den direkten PostgreSQL-Zugriff über DATABASE_URL fest; PgBouncer ist optionaler Dev-/Spezialpfad und kein Produktions-Gate. SessionStore-Schnittstelle erlaubt Migration auf persistenten Adapter ohne Route-Änderungen. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE.",
-      "status": "Teil",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): Beweis der Cookie-Sicherheitsattribute durch E2E-Tests — Magic-Link-Flow mit Attribut-Verifikation (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; Session in Memory-Backend persistent ✓; Offline-Tests ohne DATABASE_URL grün ✓.",
+      "status": "Teil (Phase 6 Proof-Stufe: Cookie-Attribute + E2E ✓; Rotation/Leak ⏳)",
       "documentation_evidence": [
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
         "docs/blueprints/auth-roadmap.md",
@@ -44,24 +44,24 @@
         "docs/blueprints/weltgewebe.auth-and-ui-routing.md"
       ],
       "missing_evidence": [
-        "Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests)",
-        "E2E-Nachweis"
+        "Session-Rotation/Leak-Tests",
+        "Cookie-Refresh-Beweise bei Session-Refresh-Flow"
       ],
-      "risk": "mittel",
+      "risk": "mittel (Phase 5+6 Persistenz und Cookie-Attrs belegt; Refresh-Rotations-Semantik ausstehend)",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/routes/mod.rs",
         "apps/api/src/middleware/auth.rs",
         "apps/api/src/middleware/authz.rs",
-        "apps/api/tests/api_auth.rs",
+        "apps/api/tests/api_auth.rs (Phase 6 Tests: session_cookie_has_secure_attributes_on_magic_link_consume, session_cookie_insecure_when_auth_cookie_secure_disabled)",
         "apps/api/src/auth/session.rs",
         "apps/api/src/auth/session_db.rs",
         "apps/api/tests/db_session_store_persistence.rs"
       ],
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
-        "job": "db-session-persistence-proof",
-        "status": "CI-Gate hinzugefügt / pending CI proof"
+        "job": "db-session-persistence-proof (Phase 5) + Phase 6 Cookie-Proof Tests (Offline)",
+        "status": "Phase 5 CI-Gate aktiv; Phase 6 Tests laufen als Offline-Tests im Standard-Test-Suite (cargo test --locked -p weltgewebe-api) — grün"
       }
     },
     "session_refresh": {

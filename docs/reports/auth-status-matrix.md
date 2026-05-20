@@ -70,7 +70,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
-| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; E2E offen | Teil   | mittel  |
+| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; Phase 6: Cookie-Sicherheits-E2E-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Magic-Link-E2E ✓ | Teil   | mittel  |
 | Session Refresh       | required    | Route aktiv, Session-Rotation belegt, Token-Split offen | Teil   | mittel  |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
@@ -96,13 +96,13 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 ### 2.2 Session
 
 **Soll:** GET `/auth/session`, Session Cookie (secure, httpOnly), belastbares Persistenzmodell.
-**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. Phase 5 (PR #1072): `DbSessionStore` implementiert — direkte PostgreSQL-Persistenz über `DATABASE_URL` gemäß ADR-0007; In-Memory-`SessionStore` bleibt aktiv wenn `DATABASE_URL` nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration (gesetztes `DATABASE_URL`, aber Pool-Fehler). Query-Layer-Expiry-Filterung (`WHERE expires_at > NOW()`), 5-Minuten-Debounce auf `touch()`. ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`.
+**Ist:** `GET /auth/session` ist implementiert (inkl. `expires_at` und `device_id`) und durch API-Tests belegt. Phase 5 (PR #1072): `DbSessionStore` implementiert — direkte PostgreSQL-Persistenz über `DATABASE_URL` gemäß ADR-0007; In-Memory-`SessionStore` bleibt aktiv wenn `DATABASE_URL` nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration (gesetztes `DATABASE_URL`, aber Pool-Fehler). Query-Layer-Expiry-Filterung (`WHERE expires_at > NOW()`), 5-Minuten-Debounce auf `touch()`. ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; `httpOnly` und `SameSite=Lax` bedingungslos gesetzt; `Secure` standardmäßig aktiv, konfigurierbar über `AUTH_COOKIE_SECURE`. Phase 6 (PR #1081): Beweis der Cookie-Sicherheitsattribute durch E2E-Tests: Magic-Link-Flow mit Attribut-Verifikation (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓), Test mit `AUTH_COOKIE_SECURE=0` für Dev-Modus. Session in Memory-Backend persistent ✓. Offline-Tests (ohne DATABASE_URL) grün ✓.
 **Dokumentationsbelege:** `docs/adr/ADR-0007__auth-persistence-production-db-path.md`, `docs/blueprints/auth-roadmap.md` (Persistenzentscheidung), `docs/specs/auth-blueprint.md`, `docs/blueprints/weltgewebe.auth-and-ui-routing.md`
-**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs`, `apps/api/src/auth/session.rs`, `apps/api/src/auth/session_db.rs`, `apps/api/tests/db_session_store_persistence.rs`
-**CI-Gate:** `.github/workflows/api.yml` Job `db-session-persistence-proof` — führt `apps/api/tests/db_session_store_persistence.rs` verbindlich gegen direkten PostgreSQL-Service (Port 5432) aus; CI-Gate hinzugefügt / pending CI proof.
-**Fehlende Belege:** Vollumfängliche Cookie-Sicherheits-Verifikation (z.B. Rotation/Leak-Tests), E2E-Nachweis.
-**Status:** Teil
-**Risiko:** mittel
+**Code-, Test- und Verifikationsbelege:** `apps/api/src/routes/auth.rs`, `apps/api/src/routes/mod.rs`, `apps/api/src/middleware/auth.rs`, `apps/api/src/middleware/authz.rs`, `apps/api/tests/api_auth.rs` (inkl. Phase 6 Tests: `session_cookie_has_secure_attributes_on_magic_link_consume`, `session_cookie_insecure_when_auth_cookie_secure_disabled`), `apps/api/src/auth/session.rs`, `apps/api/src/auth/session_db.rs`, `apps/api/tests/db_session_store_persistence.rs`
+**CI-Gate:** `.github/workflows/api.yml` Job `db-session-persistence-proof` — führt `apps/api/tests/db_session_store_persistence.rs` verbindlich gegen direkten PostgreSQL-Service (Port 5432) aus; CI-Gate hinzugefügt / pending CI proof. Phase 6 Tests laufen als Offline-Tests im Standard-Test-Suite (cargo test --locked -p weltgewebe-api).
+**Fehlende Belege:** Session-Rotation/Leak-Tests, Cookie-Refresh-Beweise bei Session-Refresh-Flow.
+**Status:** Teil (Phase 6 Proof-Stufe: Cookie-Attribute + E2E ✓; Rotation/Leak ⏳)
+**Risiko:** mittel (Phase 5+6 Persistenz und Cookie-Attrs belegt; Refresh-Rotations-Semantik ausstehend)
 
 ### 2.3 Session Refresh
 
