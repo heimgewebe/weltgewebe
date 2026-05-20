@@ -4048,7 +4048,7 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn session_cookie_has_secure_attributes_on_magic_link_consume() -> Result<()> {
-    // Simulate production/default mode where secure cookies are enabled.
+    // Simulate production-like mode where secure cookies are explicitly enabled.
     let _guard = weltgewebe_api::test_helpers::EnvGuard::set("AUTH_COOKIE_SECURE", "1");
 
     let mut state = test_state_with_accounts()?;
