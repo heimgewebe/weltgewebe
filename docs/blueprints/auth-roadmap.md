@@ -382,6 +382,21 @@ Sie muss auch wissen:
 - Devices / Logout-All
 - Passkey-Smoke (sobald vorhanden)
 
+### Bisher belegt (reproduzierbar)
+
+- **CSRF / Origin:** Systematische Abdeckung aller aktuell gelisteten
+  CSRF-pflichtigen mutierenden Endpunkte —
+  ein Cross-Site-Request mit Session-Cookie, aber ohne passenden
+  Origin/Referer wird mit `403` (leerer Body) abgewiesen; eine Positivkontrolle
+  mit gültigem Origin passiert die Middleware. Beleg:
+  `apps/api/tests/auth_security_invariants.rs::csrf_blocks_all_mutating_endpoints_without_origin`.
+- **Anti-Enumeration:** Bekannte und unbekannte E-Mail liefern eine
+  byte-identische `200`-Antwort ohne E-Mail-/Token-Leakage. Beleg:
+  `apps/api/tests/auth_security_invariants.rs::magic_link_request_is_indistinguishable_for_known_and_unknown_email`.
+
+Offen: Rate-Limit-Runtime-Smoke gegen einen laufenden Server,
+SMTP-/Magic-Link-Delivery-Nachweis, Passkey-Smoke.
+
 ### Optionale spätere Absicherung
 
 Automatisierte Guards oder Smokescripts sind eine mögliche spätere Absicherung (falls die manuelle Matrixpflege und Review-Praxis nicht mehr ausreichen), aber noch nicht zwingend als Architektur-Artefakt beschlossen.

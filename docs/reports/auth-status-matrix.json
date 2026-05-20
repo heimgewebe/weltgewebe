@@ -174,23 +174,23 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert; punktuell durch API-Test belegt), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Systematische Sicherheits-Smoke-Tests fehlen.",
+      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Phase 7 (reproduzierbare Sicherheitsnachweise): Systematische CSRF-Abdeckung aller aktuell gelisteten CSRF-pflichtigen mutierenden Endpunkte (Cross-Site-Request ohne Origin/Referer → 403 mit leerem Body; Positivkontrolle mit gültigem Origin) und Anti-Enumeration-Parität (bekannte vs. unbekannte E-Mail → byte-identische 200-Response, keine E-Mail-/Token-Leakage) sind in apps/api/tests/auth_security_invariants.rs gegen denselben Middleware-Stack wie in src/lib.rs reproduzierbar belegt.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
         "docs/adr/ADR-0006__auth-magic-link-session-passkey.md"
       ],
       "missing_evidence": [
-        "Kein dedizierter Anti-Enumeration-Test",
-        "Keine systematische CSRF-Abdeckung aller mutierenden Endpunkte",
-        "Kein Runtime-Smoke-Test für Rate Limiting",
-        "Kein dedizierter Token-Leak-Prevention-Test"
+        "Kein Runtime-Smoke-Test gegen einen laufenden Server für Rate Limiting (Integrationstests in apps/api/tests/auth_ratelimit*.rs vorhanden)",
+        "Kein End-to-End-Token-Leak-Prevention-Test (Response-Non-Leakage belegt und SHA-256-Hashing unit-getestet; Speicher-/Log-Pfad-Beweis offen)"
       ],
-      "risk": "hoch",
+      "risk": "mittel",
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/middleware/csrf.rs",
+        "apps/api/tests/auth_security_invariants.rs",
         "apps/api/tests/api_auth.rs",
+        "apps/api/tests/auth_ratelimit.rs",
         "apps/api/src/auth/rate_limit.rs",
         "apps/api/src/auth/tokens.rs",
         "apps/api/src/auth/step_up_tokens.rs"
