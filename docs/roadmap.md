@@ -110,6 +110,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
     [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
 - [x] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · direkter SQLx/PostgreSQL-Persistenzpfad implementiert (PR #1072)
+- [~] Phase 5b — CI-Gate für `db_session_store_persistence`-Test · Job `db-session-persistence-proof` in `.github/workflows/api.yml` hinzugefügt; direkter PostgreSQL-Port 5432; pending CI proof
 - [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
 
 ## Strang UI
