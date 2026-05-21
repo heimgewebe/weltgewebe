@@ -1,15 +1,8 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fs, path::PathBuf};
 
-const ROUTE_SOURCE_FILES: &[&str] = &[
-    include_str!("../src/routes/accounts.rs"),
-    include_str!("../src/routes/auth.rs"),
-    include_str!("../src/routes/edges.rs"),
-    include_str!("../src/routes/health.rs"),
-    include_str!("../src/routes/meta.rs"),
-    include_str!("../src/routes/mod.rs"),
-    include_str!("../src/routes/nodes.rs"),
-    include_str!("../src/routes/query.rs"),
-];
+fn routes_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/routes")
+}
 
 const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/auth/session/refresh"),
@@ -33,10 +26,30 @@ const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[
 ];
 
 fn collect_declared_mutating_routes() -> BTreeSet<(String, String)> {
-    ROUTE_SOURCE_FILES
-        .iter()
-        .flat_map(|source| collect_mutating_routes_from_source(source))
-        .collect()
+    let mut routes = BTreeSet::new();
+
+    collect_route_sources(&routes_dir(), &mut routes);
+
+    routes
+}
+
+fn collect_route_sources(dir: &PathBuf, routes: &mut BTreeSet<(String, String)>) {
+    for entry in fs::read_dir(dir).expect("failed to read apps/api/src/routes") {
+        let path = entry.expect("failed to read route entry").path();
+        if path.is_dir() {
+            collect_route_sources(&path, routes);
+            continue;
+        }
+
+        if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+            continue;
+        }
+
+        let source = fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!("failed to read route source {}: {}", path.display(), error)
+        });
+        routes.extend(collect_mutating_routes_from_source(&source));
+    }
 }
 
 fn collect_mutating_routes_from_source(source: &str) -> BTreeSet<(String, String)> {
@@ -50,7 +63,7 @@ fn collect_mutating_routes_from_source(source: &str) -> BTreeSet<(String, String
             break;
         };
 
-        if let Some(route) = extract_mutating_route(&source[route_start..route_end]) {
+        for route in extract_mutating_routes(&source[route_start..route_end]) {
             routes.insert(route);
         }
 
@@ -80,25 +93,29 @@ fn find_matching_paren(source: &str, open_paren: usize) -> Option<usize> {
     None
 }
 
-fn extract_mutating_route(route_call: &str) -> Option<(String, String)> {
-    let path_start = route_call.find('"')? + 1;
-    let path_end = route_call[path_start..].find('"')? + path_start;
+fn extract_mutating_routes(route_call: &str) -> Vec<(String, String)> {
+    // This is a source-level guard, not a Rust parser.
+    let Some(path_start) = route_call.find('"').map(|index| index + 1) else {
+        return Vec::new();
+    };
+    let Some(path_end) = route_call[path_start..]
+        .find('"')
+        .map(|index| index + path_start)
+    else {
+        return Vec::new();
+    };
     let path = route_call[path_start..path_end].to_string();
 
-    let method = if route_call.contains("axum::routing::delete(") || route_call.contains("delete(")
-    {
-        "DELETE"
-    } else if route_call.contains("axum::routing::put(") || route_call.contains("put(") {
-        "PUT"
-    } else if route_call.contains("axum::routing::patch(") || route_call.contains("patch(") {
-        "PATCH"
-    } else if route_call.contains("axum::routing::post(") || route_call.contains("post(") {
-        "POST"
-    } else {
-        return None;
-    };
+    let mut routes = Vec::new();
+    for method in ["DELETE", "PUT", "PATCH", "POST"] {
+        if route_call.contains(&format!("{}(", method.to_lowercase()))
+            || route_call.contains(&format!("axum::routing::{}(", method.to_lowercase()))
+        {
+            routes.push((method.to_string(), path.clone()));
+        }
+    }
 
-    Some((method.to_string(), path))
+    routes
 }
 
 fn route_set(routes: &[(&str, &str)]) -> BTreeSet<(String, String)> {
