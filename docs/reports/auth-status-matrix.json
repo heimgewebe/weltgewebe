@@ -174,7 +174,7 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert; punktuell durch API-Test belegt), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Systematische Sicherheits-Smoke-Tests fehlen.",
+      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert; der neue Guard-Test in apps/api/tests/auth_security_invariants.rs bindet die aktuellen mutierenden Routen an eine explizite CSRF-Liste und schlägt bei Routendrift an), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Systematische Sicherheits-Smoke-Tests fehlen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
@@ -182,7 +182,7 @@
       ],
       "missing_evidence": [
         "Kein dedizierter Anti-Enumeration-Test",
-        "Keine systematische CSRF-Abdeckung aller mutierenden Endpunkte",
+        "Kein browsernaher CSRF-Smoke-Test für Proxy-/Host-/Origin-Edge-Cases",
         "Kein Runtime-Smoke-Test für Rate Limiting",
         "Kein dedizierter Token-Leak-Prevention-Test"
       ],
@@ -190,7 +190,8 @@
       "code_runtime_evidence": [
         "apps/api/src/routes/auth.rs",
         "apps/api/src/middleware/csrf.rs",
-        "apps/api/tests/api_auth.rs",
+        "apps/api/tests/api_auth.rs (test_session_refresh_csrf_rejected)",
+        "apps/api/tests/auth_security_invariants.rs (csrf_mutating_route_drift_guard_matches_router_declarations)",
         "apps/api/src/auth/rate_limit.rs",
         "apps/api/src/auth/tokens.rs",
         "apps/api/src/auth/step_up_tokens.rs"
