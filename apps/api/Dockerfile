@@ -16,14 +16,14 @@ COPY apps/api/Cargo.toml apps/api/Cargo.toml
 # DUMMY_TARGET_FOR_CARGO_FETCH
 # Cargo erkennt Targets über src/main.rs|src/lib.rs. In dieser Stage sind ggf. nur Manifeste kopiert.
 RUN mkdir -p apps/api/src && printf '%s\n' 'fn main() {}' > apps/api/src/main.rs
-RUN cargo fetch
+RUN cargo fetch --locked
 
 # 3) Copy the rest of the workspace
 COPY . .
 
 # 4) Build the API binary in release mode
-# Offline mode is not strictly necessary but ensures we use what we fetched
-RUN cargo build --release --bin weltgewebe-api
+# Build against the checked-in lockfile for deterministic dependency resolution.
+RUN cargo build --release --locked --bin weltgewebe-api
 
 # Runner stage
 FROM debian:bookworm-slim
@@ -31,8 +31,9 @@ FROM debian:bookworm-slim
 WORKDIR /app
 
 # Install runtime dependencies
-# curl/wget is needed for healthchecks. ca-certificates for HTTPS.
+# wget is needed for healthchecks. ca-certificates for HTTPS.
 # jq is needed for data seeding scripts.
+# libssl3 is required by OpenSSL-linked Rust dependencies such as webauthn-rs.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 \
     && rm -rf /var/lib/apt/lists/*
