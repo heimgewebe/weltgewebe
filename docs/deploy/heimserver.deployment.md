@@ -75,7 +75,10 @@ relations:
   ```
 
   **Offline Recovery:** `weltgewebe-up --no-pull` funktioniert auch ohne Internetverbindung,
-  da es Git vollständig überspringt (kein fetch, kein switch, kein pull).
+  da es Git vollständig überspringt (kein fetch, kein switch, kein pull) und den aktuell vorhandenen Checkout deployt.
+
+  **Format-Hinweis:** `--branch` erwartet einen Branch-Namen wie `main` oder `feat/x`,
+  nicht `origin/main`.
 
   **Hinweis:** `--current-branch` ist für absichtliche Abweichungen gedacht (z. B. Debugging),
   nicht für den regulären Heimserver-Betrieb.

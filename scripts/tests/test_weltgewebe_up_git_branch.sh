@@ -303,7 +303,18 @@ assert_contains "$out_current" "Branch switch: no"
 
 echo "PASS: --current-branch works"
 
-# 4) Dirty worktree: abort before branch switch
+# 4) Invalid branch name is rejected early
+repo_invalid_branch="$(new_repo invalid-branch)"
+set +e
+out_invalid_branch="$(run_up "$repo_invalid_branch" "$WORKDIR_ROOT/invalid-branch.git.log" --branch "origin/main" 2>&1)"
+rc_invalid_branch=$?
+set -e
+[[ "$rc_invalid_branch" -ne 0 ]] || fail "invalid --branch value should fail"
+assert_contains "$out_invalid_branch" "ERROR: Invalid deploy branch name: origin/main"
+
+echo "PASS: invalid --branch is rejected"
+
+# 5) Dirty worktree: abort before branch switch
 repo_dirty="$(new_repo dirty-worktree)"
 (
   cd "$repo_dirty"
@@ -324,7 +335,7 @@ assert_contains "$out_dirty" "Dirty worktree detected"
 
 echo "PASS: dirty worktree blocks deploy"
 
-# 5) Detached HEAD + clean: switch to default main
+# 6) Detached HEAD + clean: switch to default main
 repo_detached="$(new_repo detached-head)"
 (
   cd "$repo_detached"
@@ -342,7 +353,7 @@ assert_contains "$out_detached" "Deploy branch: main"
 
 echo "PASS: detached head resolves via deploy-branch contract"
 
-# 6) --no-pull: no fetch/switch/pull and no git writes
+# 7) --no-pull: no fetch/switch/pull and no git writes
 repo_no_pull="$(new_repo no-pull)"
 (
   cd "$repo_no_pull"
@@ -350,6 +361,7 @@ repo_no_pull="$(new_repo no-pull)"
 )
 out_no_pull="$(run_up "$repo_no_pull" "$WORKDIR_ROOT/no-pull.git.log" --no-pull 2>&1)" || fail "--no-pull run should succeed"
 assert_contains "$out_no_pull" "Git mode: no-pull"
+assert_contains "$out_no_pull" "Deploy branch applied: no (--no-pull)"
 assert_contains "$out_no_pull" "Branch switch: no"
 if [[ -s "$WORKDIR_ROOT/no-pull.git.log" ]]; then
   fail "--no-pull must not execute git commands"
@@ -362,7 +374,7 @@ fi
 
 echo "PASS: --no-pull skips all git operations"
 
-# 7) Non-fast-forward pull fails hard
+# 8) Non-fast-forward pull fails hard
 repo_nonff="$(new_repo non-ff)"
 origin_nonff="$WORKDIR_ROOT/non-ff/origin.git"
 (
@@ -386,7 +398,7 @@ assert_contains "$out_nonff" "Git pull failed (fast-forward only)"
 
 echo "PASS: non-fast-forward pull aborts"
 
-# 8) Failure bundle contains deploy-branch metadata fields
+# 9) Failure bundle contains deploy-branch metadata fields
 repo_bundle="$(new_repo failure-bundle)"
 (
   cd "$repo_bundle"

@@ -37,7 +37,7 @@ usage() {
   echo "Options:"
   echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
     echo "  --no-pull               Skip all git operations entirely (offline deploy recovery)"
-    echo "  --branch BRANCH         Deploy explicit remote branch (default: main)"
+    echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
     echo "  --current-branch        Deploy the currently checked-out branch intentionally"
   echo "  --build-mode MODE       Set build mode: auto (default), force, no"
   echo "  --no-build              Alias for --build-mode no"
@@ -396,6 +396,18 @@ if [[ "$DO_PULL" == "1" ]]; then
         exit 1
     fi
 
+    if [[ "$DEPLOY_BRANCH_RESOLVED" == "${REMOTE}/"* ]]; then
+        echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+        echo "       Use a branch name like 'main' or 'feat/x' (without '${REMOTE}/')."
+        exit 1
+    fi
+
+    if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
+        echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+        echo "       Use a branch name like 'main' or 'feat/x' (without 'origin/')."
+        exit 1
+    fi
+
     REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2>/dev/null || echo "unknown")
 
     if [[ "$CURRENT_BRANCH_BEFORE" == "$DEPLOY_BRANCH_RESOLVED" ]]; then
@@ -404,7 +416,7 @@ if [[ "$DO_PULL" == "1" ]]; then
         BRANCH_SWITCH_ATTEMPTED="yes"
         echo ">> Git Branch Switch: ${CURRENT_BRANCH_BEFORE} -> ${DEPLOY_BRANCH_RESOLVED}"
 
-        if git switch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
+        if git switch -- "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
             BRANCH_SWITCH_RESULT="switched"
         elif git switch --track "${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" >/dev/null 2>&1; then
             BRANCH_SWITCH_RESULT="switched"
@@ -446,6 +458,9 @@ echo ">> Git Summary:"
 echo "   Current branch: $CURRENT_BRANCH_BEFORE"
 echo "   Deploy branch: $DEPLOY_BRANCH_RESOLVED"
 echo "   Git mode: $( [[ "$DO_PULL" == "1" ]] && echo "pull" || echo "no-pull" )"
+if [[ "$DO_PULL" != "1" ]]; then
+    echo "   Deploy branch applied: no (--no-pull)"
+fi
 echo "   Branch switch: $( [[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no" )"
 echo "   Previous HEAD: $HEAD_BEFORE"
 echo "   Target HEAD after pull: $HEAD_AFTER"

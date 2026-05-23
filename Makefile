@@ -1,4 +1,4 @@
-.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards generate diagnose prepare-commit
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests generate diagnose prepare-commit
 
 validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
@@ -19,7 +19,10 @@ validate-guards:
 	bash scripts/docmeta/generated-files-guard.sh
 	bash scripts/docmeta/coverage-guard.sh
 
-validate: validate-tests validate-core validate-guards
+validate-shell-tests:
+	bash scripts/tests/test_weltgewebe_up_git_branch.sh
+
+validate: validate-tests validate-core validate-guards validate-shell-tests
 
 ci-validate: validate
 
