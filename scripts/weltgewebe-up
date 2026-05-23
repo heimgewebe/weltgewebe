@@ -981,58 +981,78 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
        exit 1
    fi
    
-   # Check for CARTO leaks
-   CARTO_LEAK_FOUND=0
-   if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
-       CARTO_LEAK_FOUND=1
+   # Verification function: check bundle validity
+   verify_bundle() {
+       local carto_leak=0
+       local local_basemap=0
+        
+       if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
+           carto_leak=1
+       fi
+        
+       if grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
+           local_basemap=1
+       fi
+        
+       echo "$carto_leak:$local_basemap"
+   }
+    
+   # Initial verification
+   VERIFY_RESULT=$(verify_bundle)
+   CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
+   LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+    
+   # Handle verification failures
+   VERIFICATION_FAILED=0
+   if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+       VERIFICATION_FAILED=1
    fi
-   
-   # Check for local-basemap presence
-   LOCAL_BASEMAP_FOUND=0
-   if grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
-       LOCAL_BASEMAP_FOUND=1
-   fi
-   
-   # Handle CARTO leaks
-   if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
-       if [[ "$BUILD_WEB" == "auto" && "$NEEDS_WEB_BUILD" == "0" ]]; then
-           # Auto mode with existing bundle: force rebuild
-           echo "WARNING: Existing bundle contains CARTO references in local-sovereign mode."
-           echo "         Forcing rebuild to ensure sovereignty..."
-           NEEDS_WEB_BUILD=1
-           
-           if command -v pnpm >/dev/null; then
-               if [[ ! -d "apps/web/node_modules" ]]; then
-                   echo "   Installing dependencies..."
-                   pnpm -C apps/web install --frozen-lockfile
-               fi
-               echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
-               echo "   Building..."
-               pnpm -C apps/web build
-               
-               # Re-check after rebuild
-               if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
-                   echo "ERROR: Frontend build still contains CARTO references after rebuild."
-                   grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
-                   exit 1
-               fi
-               CARTO_LEAK_FOUND=0
-           else
-               echo "ERROR: Auto-rebuild requested but pnpm not found."
-               exit 1
+    
+   # Auto-heal in auto mode
+   if [[ "$VERIFICATION_FAILED" == "1" && "$BUILD_WEB" == "auto" && "$NEEDS_WEB_BUILD" == "0" ]]; then
+       echo "WARNING: Existing bundle failed sovereignty verification."
+       if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
+           echo "         - Contains CARTO references"
+       fi
+       if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+           echo "         - Missing local-basemap route"
+       fi
+       echo "         Forcing rebuild to ensure sovereignty..."
+       NEEDS_WEB_BUILD=1
+        
+       if command -v pnpm >/dev/null; then
+           if [[ ! -d "apps/web/node_modules" ]]; then
+               echo "   Installing dependencies..."
+               pnpm -C apps/web install --frozen-lockfile
+           fi
+           echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+           echo "   Building..."
+           pnpm -C apps/web build
+            
+           # Re-verify after rebuild
+           VERIFY_RESULT=$(verify_bundle)
+           CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
+           LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+           VERIFICATION_FAILED=0
+           if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+               VERIFICATION_FAILED=1
            fi
        else
-           # Explicit skip or forced build: abort hard
-           echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-           grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
+           echo "ERROR: Auto-rebuild requested but pnpm not found."
            exit 1
        fi
    fi
-   
-   # Check for local-basemap presence
-   if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
-       echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
-       echo "       The sovereign basemap route appears to be missing from the bundle."
+    
+   # Hard fail if verification still fails
+   if [[ "$VERIFICATION_FAILED" == "1" ]]; then
+       if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
+           echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+           grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
+       fi
+       if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+           echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
+           echo "       The sovereign basemap route appears to be missing from the bundle."
+       fi
        exit 1
    fi
    
