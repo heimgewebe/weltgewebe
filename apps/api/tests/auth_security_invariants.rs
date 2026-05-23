@@ -440,7 +440,9 @@ fn find_matching_paren(source: &str, open_paren: usize) -> Option<usize> {
 }
 
 fn extract_mutating_routes(route_call: &str) -> Vec<(String, String)> {
-    // This is a source-level guard, not a Rust parser.
+    // This is a source-level, heuristic guard and intentionally not a full Rust/Axum parser.
+    // It matches common router construction forms directly in source text and does not
+    // resolve aliases/macros or full builder semantics across arbitrary indirection.
     let Some(path_start) = route_call.find('"').map(|index| index + 1) else {
         return Vec::new();
     };
@@ -451,17 +453,60 @@ fn extract_mutating_routes(route_call: &str) -> Vec<(String, String)> {
         return Vec::new();
     };
     let path = route_call[path_start..path_end].to_string();
+    let normalized: String = route_call.chars().filter(|c| !c.is_whitespace()).collect();
+    let has_on_call = normalized.contains("MethodRouter::on(")
+        || normalized.contains(".on(")
+        || normalized.contains("on(");
 
     let mut routes = Vec::new();
     for method in ["DELETE", "PUT", "PATCH", "POST"] {
-        if route_call.contains(&format!("{}(", method.to_lowercase()))
-            || route_call.contains(&format!("axum::routing::{}(", method.to_lowercase()))
-        {
+        let method_lower = method.to_lowercase();
+        let method_filter = format!("MethodFilter::{method}");
+        let mutating_handler_match = normalized.contains(&format!("{method_lower}("))
+            || normalized.contains(&format!("axum::routing::{method_lower}("));
+        let mutating_service_match = normalized.contains(&format!("{method_lower}_service("))
+            || normalized.contains(&format!("axum::routing::{method_lower}_service("));
+        let mutating_on_match = has_on_call && normalized.contains(&method_filter);
+
+        if mutating_handler_match || mutating_service_match || mutating_on_match {
             routes.push((method.to_string(), path.clone()));
         }
     }
 
     routes
+}
+
+#[test]
+fn extract_mutating_routes_recognizes_on_and_service_forms() {
+    let route = r#".route("/devices/:id", MethodRouter::on(MethodFilter::POST | MethodFilter::PUT, handler).on(MethodFilter::PATCH, handler).on(MethodFilter::DELETE, handler))"#;
+    let mutating = extract_mutating_routes(route)
+        .into_iter()
+        .map(|(method, _)| method)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        mutating,
+        BTreeSet::from([
+            "DELETE".to_string(),
+            "PATCH".to_string(),
+            "POST".to_string(),
+            "PUT".to_string()
+        ])
+    );
+
+    let service_route = r#".route("/devices/:id", on(MethodFilter::POST | MethodFilter::DELETE, handler).route_layer(axum::middleware::from_fn(require_auth)).and(axum::routing::put_service(service)).and(patch_service(service)))"#;
+    let service_mutating = extract_mutating_routes(service_route)
+        .into_iter()
+        .map(|(method, _)| method)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        service_mutating,
+        BTreeSet::from([
+            "DELETE".to_string(),
+            "PATCH".to_string(),
+            "POST".to_string(),
+            "PUT".to_string()
+        ])
+    );
 }
 
 fn route_set(routes: &[(&str, &str)]) -> BTreeSet<(String, String)> {
