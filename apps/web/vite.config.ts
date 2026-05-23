@@ -192,7 +192,11 @@ export default defineConfig({
       : 4173,
     strictPort: true,
   },
-  // Expose PUBLIC_ prefixed env vars to import.meta.env for basemap mode configuration
-  // and other public build-time settings. VITE_ prefix is always included by default.
+  // Expose PUBLIC_ prefixed env vars to import.meta.env for public build-time
+  // settings (VITE_ is always included by default). NOTE: this is a convenience
+  // for reading env at runtime — it is NOT what keeps the CARTO URL out of a
+  // local-sovereign bundle. That guarantee comes from the build-time generator
+  // (scripts/generate-basemap-config.js), which simply never emits the remote
+  // URL unless PUBLIC_BASEMAP_MODE=remote-style.
   envPrefix: ["VITE_", "PUBLIC_"],
 });
