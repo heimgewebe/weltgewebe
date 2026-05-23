@@ -15,14 +15,19 @@ relations:
 **Geänderte Dateien:**
 
 - `apps/web/scripts/generate-basemap-config.js` (neue Datei)
+- `apps/web/basemap-mode.policy.json` (neue Policy-Datei)
+- `apps/web/.gitignore` (ergänzt: `src/lib/generated/`)
 - `apps/web/src/lib/generated/basemapConfig.ts` (generiert, nicht eingecheckt — gitignored, von `generate-basemap-config.js` erzeugt)
 - `apps/web/src/lib/map/config/basemap.current.ts`
 - `apps/web/src/lib/map/config/basemap.current.test.ts`
 - `apps/web/package.json`
 - `apps/web/vite.config.ts`
-- `scripts/weltgewebe-up` (Guard unverändert hart — hier nur referenziert)
-- `scripts/tests/test_basemap_mode_guard.sh` (unverändert — hier nur referenziert)
-- `Makefile` (unverändert — hier nur referenziert)
+
+**Referenzierte bestehende Guards (unverändert):**
+
+- `scripts/weltgewebe-up`
+- `scripts/tests/test_basemap_mode_guard.sh`
+- `Makefile`
 
 **Beschreibung:**
 
