@@ -1592,7 +1592,8 @@ try:
         v = data.get("version")
         if not isinstance(v, str) or not v.strip():
             sys.exit(2)
-        print(f"{v}\n{data.get(\"build_id\", \"\")}")
+        print(v)
+        print(data.get("build_id", ""))
 except json.JSONDecodeError:
     sys.exit(3)
 except Exception:
