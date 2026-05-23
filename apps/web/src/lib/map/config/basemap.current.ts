@@ -1,20 +1,12 @@
 // "local-sovereign" mode uses the locally served map style and PMTiles artifact.
 // Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
 //
-// PUBLIC_BASEMAP_MODE must be read via SvelteKit's $env module so the value is
-// inlined into the client bundle at build time. `import.meta.env.PUBLIC_*` does
-// NOT work here: Vite only exposes vars matching its envPrefix (default VITE_),
-// so PUBLIC_-prefixed vars are always `undefined` there, silently leaking the
-// remote CARTO default into every build.
-//
-// We read it via a namespace import of $env/static/public (not a named import):
-// a named `import { PUBLIC_BASEMAP_MODE }` hard-fails the build whenever the
-// variable is unset (CI, local dev, vitest), which would break the documented
-// "unset is a valid default" contract. The namespace form yields `undefined`
-// when unset while still being statically inlined to a string literal when set —
-// which lets the bundler dead-code-eliminate the remote (CARTO) branch below in
-// local-sovereign builds. That elimination is what the deploy leak-guard relies on.
-import * as publicEnv from "$env/static/public";
+// PUBLIC_BASEMAP_MODE is read via import.meta.env.PUBLIC_BASEMAP_MODE, which is
+// exposed by SvelteKit's Vite plugin and inlined into the client bundle at build time.
+// When unset, it defaults to undefined, which is then resolved by resolveBasemapMode()
+// based on the isLocal context. This allows the bundler to dead-code-eliminate the
+// remote (CARTO) branch in local-sovereign builds, which is what the deploy leak-guard
+// relies on.
 
 export type BasemapMode = "remote-style" | "local-sovereign";
 
@@ -69,12 +61,12 @@ export function resolveBasemapMode(
 }
 
 // Statically inlined to a string literal when PUBLIC_BASEMAP_MODE is set,
-// `undefined` when unset (see import note above). The cast is required because
-// the generated $env/static/public type only declares variables present at
-// `svelte-kit sync` time; it is erased at build, so folding is unaffected.
-const compileTimeMode: string | undefined = (
-  publicEnv as Record<string, string | undefined>
-).PUBLIC_BASEMAP_MODE;
+// `undefined` when unset. This allows the bundler to dead-code-eliminate the
+// remote (CARTO) branch below in local-sovereign builds.
+const compileTimeMode: string | undefined =
+  typeof import.meta !== "undefined" && import.meta.env
+    ? import.meta.env.PUBLIC_BASEMAP_MODE
+    : undefined;
 const resolvedMode = resolveBasemapMode(compileTimeMode, isLocal);
 
 const baseConfig: BaseBasemapConfig = {
