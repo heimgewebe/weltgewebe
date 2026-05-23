@@ -36,7 +36,7 @@ usage() {
   echo
   echo "Options:"
   echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
-    echo "  --no-pull               Skip all git operations entirely (offline deploy recovery)"
+    echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
     echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
     echo "  --current-branch        Deploy the currently checked-out branch intentionally"
   echo "  --build-mode MODE       Set build mode: auto (default), force, no"
@@ -397,16 +397,28 @@ if [[ "$DO_PULL" == "1" ]]; then
     fi
 
         case "$DEPLOY_BRANCH_RESOLVED" in
-            "${REMOTE}/"*|origin/*|refs/*)
+            refs/*)
+                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+                echo "       Use a branch name like 'main' or 'feat/x', not a refs/... path."
+                exit 1
+                ;;
+            origin/*)
                 echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
                 echo "       Use a branch name like 'main' or 'feat/x', not 'origin/main'."
                 exit 1
                 ;;
         esac
 
+        first_segment="${DEPLOY_BRANCH_RESOLVED%%/*}"
+        if [[ "$DEPLOY_BRANCH_RESOLVED" == */* ]] && git remote | grep -Fxq "$first_segment"; then
+            echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+            echo "       Use a branch name like 'main' or 'feat/x', not '<remote>/<branch>'."
+            exit 1
+        fi
+
     if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
         echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-        echo "       Use a branch name like 'main' or 'feat/x' (without 'origin/')."
+                echo "       Use a branch name like 'main' or 'feat/x'."
         exit 1
     fi
 

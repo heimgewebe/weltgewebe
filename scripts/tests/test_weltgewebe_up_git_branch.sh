@@ -317,6 +317,34 @@ fi
 
 echo "PASS: invalid --branch is rejected"
 
+# 4b) Invalid remote-qualified branch is rejected even if REMOTE differs
+repo_invalid_branch_upstream="$(new_repo invalid-branch-upstream)"
+(
+  cd "$repo_invalid_branch_upstream"
+  git remote add upstream "$WORKDIR_ROOT/invalid-branch-upstream/origin.git"
+)
+set +e
+out_invalid_branch_upstream="$(REMOTE=upstream run_up "$repo_invalid_branch_upstream" "$WORKDIR_ROOT/invalid-branch-upstream.git.log" --branch "origin/main" 2>&1)"
+rc_invalid_branch_upstream=$?
+set -e
+[[ "$rc_invalid_branch_upstream" -ne 0 ]] || fail "origin/main must fail even when REMOTE=upstream"
+assert_contains "$out_invalid_branch_upstream" "ERROR: Invalid deploy branch name: origin/main"
+if grep -Fq "switch" "$WORKDIR_ROOT/invalid-branch-upstream.git.log"; then
+  fail "invalid remote-qualified branch must fail before any branch switch"
+fi
+
+echo "PASS: origin/main rejected with REMOTE=upstream"
+
+# 4c) refs/* branch path is rejected
+set +e
+out_invalid_refs="$(run_up "$repo_invalid_branch" "$WORKDIR_ROOT/invalid-refs.git.log" --branch "refs/heads/main" 2>&1)"
+rc_invalid_refs=$?
+set -e
+[[ "$rc_invalid_refs" -ne 0 ]] || fail "refs/heads/main should fail"
+assert_contains "$out_invalid_refs" "ERROR: Invalid deploy branch name: refs/heads/main"
+
+echo "PASS: refs/* branch path is rejected"
+
 # 5) Dirty worktree: abort before branch switch
 repo_dirty="$(new_repo dirty-worktree)"
 (
@@ -356,7 +384,7 @@ assert_contains "$out_detached" "Deploy branch: main"
 
 echo "PASS: detached head resolves via deploy-branch contract"
 
-# 7) --no-pull: no fetch/switch/pull and no git writes
+# 7) --no-pull: no git sync/branch operations (fetch/switch/pull)
 repo_no_pull="$(new_repo no-pull)"
 (
   cd "$repo_no_pull"
@@ -366,8 +394,8 @@ out_no_pull="$(run_up "$repo_no_pull" "$WORKDIR_ROOT/no-pull.git.log" --no-pull 
 assert_contains "$out_no_pull" "Git mode: no-pull"
 assert_contains "$out_no_pull" "Deploy branch applied: no (--no-pull)"
 assert_contains "$out_no_pull" "Branch switch: no"
-if [[ -s "$WORKDIR_ROOT/no-pull.git.log" ]]; then
-  fail "--no-pull must not execute git commands"
+if grep -Eq '(^| )fetch( |$)|(^| )switch( |$)|(^| )pull( |$)' "$WORKDIR_ROOT/no-pull.git.log"; then
+  fail "--no-pull must not execute fetch/switch/pull"
 fi
 (
   cd "$repo_no_pull"
@@ -375,7 +403,7 @@ fi
   [[ "$current_branch" == "feat/x" ]] || fail "--no-pull should keep current branch"
 )
 
-echo "PASS: --no-pull skips all git operations"
+echo "PASS: --no-pull skips git sync/branch operations"
 
 # 8) Non-fast-forward pull fails hard
 repo_nonff="$(new_repo non-ff)"

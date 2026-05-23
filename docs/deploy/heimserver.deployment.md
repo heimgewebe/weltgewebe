@@ -67,7 +67,7 @@ relations:
   # Nur bewusstes Debugging: aktuell ausgecheckten Branch deployen
   weltgewebe-up --current-branch
 
-  # Offline Recovery (Git vollständig überspringen):
+  # Offline Recovery (kein fetch/switch/pull):
   weltgewebe-up --no-pull
 
   # Optional: mit Caddy (wenn Ports frei):
@@ -75,7 +75,8 @@ relations:
   ```
 
   **Offline Recovery:** `weltgewebe-up --no-pull` funktioniert auch ohne Internetverbindung,
-  da es Git vollständig überspringt (kein fetch, kein switch, kein pull) und den aktuell vorhandenen Checkout deployt.
+  da es keine Git-Sync-/Branchwechsel-Operationen ausführt (kein fetch, kein switch, kein pull)
+  und den aktuell vorhandenen Checkout deployt.
 
   **Format-Hinweis:** `--branch` erwartet einen Branch-Namen wie `main` oder `feat/x`,
   nicht `origin/main`.
