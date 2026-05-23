@@ -288,7 +288,7 @@ und schließender Klammer auskommentiert wurde.
 docker compose -f infra/compose/compose.prod.yml config
 # Sollte ohne Fehler durchlaufen
 
-docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" caddy:2 caddy validate --config /etc/caddy/Caddyfile
+docker run --rm -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" caddy:2.7 caddy validate --config /etc/caddy/Caddyfile
 # Sollte "Valid configuration" ausgeben
 ```
 

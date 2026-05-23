@@ -194,7 +194,8 @@ jobs:
         id: proof
         run: |
           set -euo pipefail
-          scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/proof-output.txt
+          BASEMAP_ENDPOINT_PATH="/local-basemap/${ARTEFACT_NAME}" \
+            scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/proof-output.txt
 
       - name: Capture raw 206 evidence for the audit trail
         if: always()
