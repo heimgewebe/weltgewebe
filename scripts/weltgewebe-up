@@ -997,18 +997,18 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
        echo "$carto_leak:$local_basemap"
    }
     
-   # Initial verification
+   # Initial verification: check for CARTO leaks and local-basemap presence
    VERIFY_RESULT=$(verify_bundle)
    CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
    LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
-    
-   # Handle verification failures
+     
+   # Determine if verification failed (either CARTO leak OR missing local-basemap)
    VERIFICATION_FAILED=0
    if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
        VERIFICATION_FAILED=1
    fi
-    
-   # Auto-heal in auto mode
+     
+   # Auto-heal in auto mode: if verification failed and no rebuild was done, try rebuilding
    if [[ "$VERIFICATION_FAILED" == "1" && "$BUILD_WEB" == "auto" && "$NEEDS_WEB_BUILD" == "0" ]]; then
        echo "WARNING: Existing bundle failed sovereignty verification."
        if [[ "$CARTO_LEAK_FOUND" == "1" ]]; then
@@ -1019,7 +1019,7 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
        fi
        echo "         Forcing rebuild to ensure sovereignty..."
        NEEDS_WEB_BUILD=1
-        
+         
        if command -v pnpm >/dev/null; then
            if [[ ! -d "apps/web/node_modules" ]]; then
                echo "   Installing dependencies..."
@@ -1028,8 +1028,9 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
            echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
            echo "   Building..."
            pnpm -C apps/web build
-            
-           # Re-verify after rebuild
+             
+           # Re-verify after rebuild: recalculate both CARTO_LEAK_FOUND and LOCAL_BASEMAP_FOUND
+           # This ensures we catch any issues introduced or fixed by the rebuild
            VERIFY_RESULT=$(verify_bundle)
            CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
            LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
