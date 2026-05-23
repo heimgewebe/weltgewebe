@@ -848,6 +848,38 @@ if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
   fi
 fi
 
+# 6a. Frontend Basemap Mode Resolution (before build decision)
+# This must run before the build-decision to ensure:
+# 1. Invalid env values are caught early
+# 2. The leak-guard can verify existing bundles even if no rebuild is needed
+# 3. Edge/Heimserver deployments always use local-sovereign unless explicitly overridden
+
+# Validate PUBLIC_BASEMAP_MODE before any default injection.
+# Typos (e.g. "local_sovereign", "garbage") would silently bypass the
+# build guard, so we hard-fail on any value that is not a known mode.
+case "${PUBLIC_BASEMAP_MODE:-}" in
+    ""|"local-sovereign"|"remote-style")
+        ;;
+    *)
+        echo "ERROR: Invalid PUBLIC_BASEMAP_MODE='${PUBLIC_BASEMAP_MODE}'."
+        echo "       Allowed values: local-sovereign, remote-style (or unset)."
+        exit 1
+        ;;
+esac
+
+BASEMAP_MODE_SOURCE="explicit PUBLIC_BASEMAP_MODE"
+if [[ -z "${PUBLIC_BASEMAP_MODE:-}" ]]; then
+    if [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
+        export PUBLIC_BASEMAP_MODE="local-sovereign"
+        BASEMAP_MODE_SOURCE="edge/heimserver default"
+    else
+        BASEMAP_MODE_SOURCE="web app default (unset)"
+    fi
+else
+    # Honor and propagate an explicitly provided value to the build subprocess.
+    export PUBLIC_BASEMAP_MODE
+fi
+
 # 6b. Frontend Build
 
 # Returns the 'version' string from a local version.json, or empty on any error.
@@ -917,64 +949,9 @@ if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" )
              echo "   Installing dependencies..."
              pnpm -C apps/web install --frozen-lockfile
          fi
-         # --- Frontend basemap mode (sovereign-by-default for edge) ---
-         # The canonical mode resolution lives in apps/web (basemap.current.ts).
-         # Here we only ensure the Heimserver/Edge build defaults to the
-         # sovereign local basemap, without overriding an explicit operator value.
-
-         # Validate PUBLIC_BASEMAP_MODE before any default injection.
-         # Typos (e.g. "local_sovereign", "garbage") would silently bypass the
-         # build guard, so we hard-fail on any value that is not a known mode.
-         case "${PUBLIC_BASEMAP_MODE:-}" in
-             ""|"local-sovereign"|"remote-style")
-                 ;;
-             *)
-                 echo "ERROR: Invalid PUBLIC_BASEMAP_MODE='${PUBLIC_BASEMAP_MODE}'."
-                 echo "       Allowed values: local-sovereign, remote-style (or unset)."
-                 exit 1
-                 ;;
-         esac
-
-         BASEMAP_MODE_SOURCE="explicit PUBLIC_BASEMAP_MODE"
-         if [[ -z "${PUBLIC_BASEMAP_MODE:-}" ]]; then
-             if [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
-                 export PUBLIC_BASEMAP_MODE="local-sovereign"
-                 BASEMAP_MODE_SOURCE="edge/heimserver default"
-             else
-                 BASEMAP_MODE_SOURCE="web app default (unset)"
-             fi
-         else
-             # Honor and propagate an explicitly provided value to the build subprocess.
-             export PUBLIC_BASEMAP_MODE
-         fi
          echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
-
          echo "   Building..."
          pnpm -C apps/web build
-
-         # --- Build Guard: forbid remote basemap leaks in local-sovereign mode ---
-         # In sovereign mode the bundle must not reference CARTO/remote basemaps and
-         # must reference the local route. CSP stays hard; this catches build leaks early.
-         if [[ "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
-             WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
-             echo "   Verifying sovereign frontend build (no remote basemap leaks)..."
-             if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
-                 echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-                 echo "       Build output '$WEB_IMMUTABLE_DIR' missing after build; cannot verify sovereignty."
-                 exit 1
-             fi
-             if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
-                 echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-                 grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/         leaked in: /'
-                 exit 1
-             fi
-             if ! grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
-                 echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
-                 echo "       The sovereign basemap route appears to be missing from the bundle."
-                 exit 1
-             fi
-             echo "   [✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
-         fi
      else
          echo "WARNING: Frontend build required but 'pnpm' not found."
          echo "         UI may be stale or broken."
@@ -983,6 +960,33 @@ if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" )
              exit 1
          fi
      fi
+  fi
+
+  # --- Build Guard: forbid remote basemap leaks in local-sovereign mode ---
+  # This guard runs AFTER the build decision (whether rebuild happened or not).
+  # In sovereign mode the bundle must not reference CARTO/remote basemaps and
+  # must reference the local route. CSP stays hard; this catches build leaks early.
+  # This ensures that even if an existing bundle is reused, it is verified.
+  if [[ "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
+      WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
+      echo
+      echo "   Verifying sovereign frontend build (no remote basemap leaks)..."
+      if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
+          echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+          echo "       Build output '$WEB_IMMUTABLE_DIR' missing; cannot verify sovereignty."
+          exit 1
+      fi
+      if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
+          echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+          grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/         leaked in: /'
+          exit 1
+      fi
+      if ! grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
+          echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
+          echo "       The sovereign basemap route appears to be missing from the bundle."
+          exit 1
+      fi
+      echo "   [✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
   fi
 elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/index.html" ]]; then
   echo
