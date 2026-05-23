@@ -16,7 +16,10 @@ relations:
 
 - `apps/web/src/lib/map/config/basemap.current.ts`
 - `apps/web/src/lib/map/config/basemap.current.test.ts` (neue Datei)
+- `apps/web/vite.config.ts`
 - `scripts/weltgewebe-up`
+- `scripts/tests/test_basemap_mode_guard.sh` (neue Datei)
+- `Makefile`
 
 **Beschreibung:**
 
