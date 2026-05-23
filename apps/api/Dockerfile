@@ -23,7 +23,10 @@ COPY . .
 
 # 4) Build the API binary in release mode
 # Build against the checked-in lockfile for deterministic dependency resolution.
-RUN cargo build --release --locked --bin weltgewebe-api
+ARG CARGO_BUILD_JOBS=2
+# Default to a conservative job count for Heimserver stability.
+# CI or larger builders may override with --build-arg CARGO_BUILD_JOBS=<n>.
+RUN CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS}" cargo build --release --locked --bin weltgewebe-api
 
 # Runner stage
 FROM debian:bookworm-slim

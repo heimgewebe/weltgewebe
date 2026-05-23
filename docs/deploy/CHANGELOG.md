@@ -10,6 +10,23 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - API-Dockerfile: konfigurierbare Cargo-Build-Parallelität
+
+**Geänderte Dateien:**
+
+- `apps/api/Dockerfile`
+
+**Beschreibung:**
+
+Das API-Dockerfile nutzt jetzt `CARGO_BUILD_JOBS` als explizites Build-Arg,
+um die Cargo-Build-Parallelität stabil und nachvollziehbar zu steuern.
+Der Default ist auf `2` gesetzt, um die Build-Last auf dem Heimserver zu glätten
+und harte Abbrüche bei `docker compose up --build` zu reduzieren.
+Auf CI oder größeren Buildern kann der Wert gezielt per
+`--build-arg CARGO_BUILD_JOBS=<n>` überschrieben werden.
+
+**Risiko:** Build kann länger dauern; dafür stabilerer Heimserver-Deploy.
+
 ## 2026-05-23 - `weltgewebe-up` Deploy-Branch-Vertrag explizit gemacht
 
 **Geänderte Dateien:**
