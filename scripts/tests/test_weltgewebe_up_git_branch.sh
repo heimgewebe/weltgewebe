@@ -311,6 +311,9 @@ rc_invalid_branch=$?
 set -e
 [[ "$rc_invalid_branch" -ne 0 ]] || fail "invalid --branch value should fail"
 assert_contains "$out_invalid_branch" "ERROR: Invalid deploy branch name: origin/main"
+if grep -Fq "switch" "$WORKDIR_ROOT/invalid-branch.git.log"; then
+  fail "invalid --branch must fail before any branch switch"
+fi
 
 echo "PASS: invalid --branch is rejected"
 

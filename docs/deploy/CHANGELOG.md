@@ -16,6 +16,7 @@ relations:
 
 - `scripts/weltgewebe-up`
 - `scripts/tests/test_weltgewebe_up_git_branch.sh`
+- `Makefile`
 - `docs/deploy/heimserver.deployment.md`
 
 **Beschreibung:**

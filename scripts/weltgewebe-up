@@ -396,11 +396,13 @@ if [[ "$DO_PULL" == "1" ]]; then
         exit 1
     fi
 
-    if [[ "$DEPLOY_BRANCH_RESOLVED" == "${REMOTE}/"* ]]; then
-        echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
-        echo "       Use a branch name like 'main' or 'feat/x' (without '${REMOTE}/')."
-        exit 1
-    fi
+        case "$DEPLOY_BRANCH_RESOLVED" in
+            "${REMOTE}/"*|origin/*|refs/*)
+                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+                echo "       Use a branch name like 'main' or 'feat/x', not 'origin/main'."
+                exit 1
+                ;;
+        esac
 
     if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
         echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
