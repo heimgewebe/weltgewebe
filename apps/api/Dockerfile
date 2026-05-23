@@ -34,7 +34,7 @@ WORKDIR /app
 # curl/wget is needed for healthchecks. ca-certificates for HTTPS.
 # jq is needed for data seeding scripts.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates wget jq \
+    && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
