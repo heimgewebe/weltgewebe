@@ -1,12 +1,13 @@
-// "local-sovereign" mode uses the locally served map style and PMTiles artifact.
-// Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
-//
-// PUBLIC_BASEMAP_MODE is read via import.meta.env.PUBLIC_BASEMAP_MODE, which is
-// exposed by Vite's envPrefix configuration (set in vite.config.ts) and inlined into
-// the client bundle at build time. When unset, it defaults to undefined, which is then
-// resolved by resolveBasemapMode() based on the isLocal context. This allows the bundler
-// to dead-code-eliminate the remote (CARTO) branch in local-sovereign builds, which is
-// what the deploy leak-guard relies on.
+// The active basemap mode is decided at build time by
+// scripts/generate-basemap-config.js, which reads PUBLIC_BASEMAP_MODE and
+// writes $lib/generated/basemapConfig.ts. In a local-sovereign build that
+// generated module carries no remote (CARTO) URL, so this module — and the
+// whole client bundle — contains no CARTO string literal at all. The remote
+// URL only ever exists in the generated module of an explicit remote-style
+// build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
+
+import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
+import basemapModePolicy from "../../../../basemap-mode.policy.json";
 
 export type BasemapMode = "remote-style" | "local-sovereign";
 
@@ -38,36 +39,20 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-// The remote basemap is CARTO Voyager. Only ever reached via an explicit
-// remote-style choice; never the silent default for the Heimserver/Edge deploy.
-export const REMOTE_STYLE_URL =
-  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
-
-// Safely access env vars in test context
-const isLocal =
-  typeof import.meta !== "undefined" && import.meta.env
-    ? import.meta.env.DEV || import.meta.env.MODE === "test"
-    : false;
-
-// Allow explicitly overriding the basemap mode for production deployments (like Caddyfile.heim)
-export function resolveBasemapMode(
-  envMode: string | undefined,
-  isLocalContext: boolean,
-): BasemapMode {
-  if (envMode === "local-sovereign" || envMode === "remote-style") {
-    return envMode;
+// Pure resolution policy. Documents how a raw env mode string maps to a
+// concrete basemap mode. The basemap mode policy (allowed modes, default) is
+// defined in basemap-mode.policy.json and enforced by the build-time
+// generator. This resolver applies the same policy for consistency.
+//
+// Note: The build-time generator is stricter — it always uses the policy
+// default for unset PUBLIC_BASEMAP_MODE. This resolver is kept as the
+// independently tested reference for the resolution contract.
+export function resolveBasemapMode(envMode: string | undefined): BasemapMode {
+  if (basemapModePolicy.allowedModes.includes(envMode || "")) {
+    return envMode as BasemapMode;
   }
-  return isLocalContext ? "local-sovereign" : "remote-style";
+  return basemapModePolicy.defaultMode as BasemapMode;
 }
-
-// Statically inlined to a string literal when PUBLIC_BASEMAP_MODE is set,
-// `undefined` when unset. This allows the bundler to dead-code-eliminate the
-// remote (CARTO) branch below in local-sovereign builds.
-const compileTimeMode: string | undefined =
-  typeof import.meta !== "undefined" && import.meta.env
-    ? import.meta.env.PUBLIC_BASEMAP_MODE
-    : undefined;
-const resolvedMode = resolveBasemapMode(compileTimeMode, isLocal);
 
 const baseConfig: BaseBasemapConfig = {
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
@@ -76,22 +61,18 @@ const baseConfig: BaseBasemapConfig = {
   maxZoom: 18,
 };
 
-const localSovereignConfig: LocalSovereignBasemapConfig = {
-  ...baseConfig,
-  mode: "local-sovereign",
-};
-
-// The first comparison is against the compile-time literal so that, in a
-// local-sovereign build, the bundler folds it to `true` and eliminates the
-// remote branch (and its CARTO URL literal) entirely. The runtime fallback
-// branches only survive when the mode is not statically local-sovereign.
+// Assembled from the generated build-time config. The remote branch reads the
+// URL from BUILD_BASEMAP_CONFIG (a property access, not a string literal), so
+// no CARTO URL is hardcoded here. In a local-sovereign build the generated
+// config has mode "local-sovereign" and no styleUrl.
 export const currentBasemap: BasemapConfig =
-  compileTimeMode === "local-sovereign"
-    ? localSovereignConfig
-    : resolvedMode === "remote-style"
-      ? {
-          ...baseConfig,
-          mode: "remote-style",
-          styleUrl: REMOTE_STYLE_URL,
-        }
-      : localSovereignConfig;
+  BUILD_BASEMAP_CONFIG.mode === "remote-style"
+    ? {
+        ...baseConfig,
+        mode: "remote-style",
+        styleUrl: BUILD_BASEMAP_CONFIG.styleUrl,
+      }
+    : {
+        ...baseConfig,
+        mode: "local-sovereign",
+      };

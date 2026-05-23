@@ -22,7 +22,8 @@
     }
   },
   "scripts": {
-    "dev": "node scripts/generate-version.js --client && vite dev --host",
+    "generate:basemap-config": "node scripts/generate-basemap-config.js",
+    "dev": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host",
     "build": "vite build",
     "prebuild": "pnpm run sync",
     "postbuild": "node scripts/generate-version.js --server",
@@ -34,9 +35,14 @@
     "precheck:ci": "pnpm run sync",
     "check:ci": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier -w .",
+    "prelint": "pnpm run generate:basemap-config",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
     "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
+    "pretest": "pnpm run generate:basemap-config",
+    "pretest:ci": "pnpm run generate:basemap-config",
+    "pretest:proof:basemap-real": "pnpm run generate:basemap-config",
+    "pretest:unit": "pnpm run generate:basemap-config",
     "test:unit": "vitest run",
     "test": "playwright test",
     "test:proof:basemap-real": "playwright test --config=playwright.proof.config.ts --reporter=dot,html,junit",
@@ -44,9 +50,10 @@
     "test:ci": "playwright test --reporter=dot,html,junit",
     "report": "playwright show-report playwright-report",
     "test:setup": "node ./node_modules/@playwright/test/cli.js install --with-deps || true",
-    "sync": "node scripts/generate-version.js --client && svelte-kit sync",
+    "sync": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && svelte-kit sync",
+    "preci": "pnpm run generate:basemap-config",
     "ci": "node ../../ci/scripts/assert-web-budget.mjs && pnpm lint && pnpm check:ci",
-    "dev:cs": "node scripts/generate-version.js --client && vite dev --host 0.0.0.0 --port 5173",
+    "dev:cs": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host 0.0.0.0 --port 5173",
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
   },
   "devDependencies": {

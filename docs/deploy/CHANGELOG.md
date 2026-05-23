@@ -10,7 +10,91 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - CARTO-freies local-sovereign-Bundle via Build-Time-Generator
+
+**Geänderte Dateien:**
+
+- `apps/web/scripts/generate-basemap-config.js` (neue Datei)
+- `apps/web/basemap-mode.policy.json` (neue Policy-Datei)
+- `apps/web/.gitignore` (ergänzt: `src/lib/generated/`)
+- `apps/web/src/lib/generated/basemapConfig.ts` (generiert, nicht eingecheckt — gitignored, von `generate-basemap-config.js` erzeugt)
+- `apps/web/src/lib/map/config/basemap.current.ts`
+- `apps/web/src/lib/map/config/basemap.current.test.ts`
+- `apps/web/package.json`
+- `apps/web/vite.config.ts`
+
+**Referenzierte bestehende Guards (unverändert):**
+
+- `scripts/weltgewebe-up`
+- `scripts/tests/test_basemap_mode_guard.sh`
+- `Makefile`
+
+**Beschreibung:**
+
+Korrektur des vorherigen Eintrags: `envPrefix` allein entfernt den CARTO-String
+**nicht** zuverlässig aus dem Client-Bundle. Der Remote-Zweig samt
+`https://basemaps.cartocdn.com/...` blieb trotz `PUBLIC_BASEMAP_MODE=local-sovereign`
+statisch im Bundle (`apps/web/build/_app/immutable/nodes/11.*.js`), weil sich der
+Bundler nicht auf Dead-Code-Elimination des Remote-Zweigs verlassen ließ. Der
+Leak-Guard in `weltgewebe-up` schlug deshalb korrekt fehl.
+
+1. **Build-Time-Basemap-Config-Generator**: Neues Script
+   `apps/web/scripts/generate-basemap-config.js` liest `PUBLIC_BASEMAP_MODE` und
+   erzeugt `apps/web/src/lib/generated/basemapConfig.ts`. Erlaubte Werte:
+   `unset`, `local-sovereign`, `remote-style`; jeder andere Wert führt zu einem
+   harten Fehler (Schutz vor stillen Tippfehlern). Der CARTO-`styleUrl` wird
+   **ausschließlich** für `remote-style` emittiert. Bei `local-sovereign` und beim
+   ungesetzten Default enthält die generierte Datei keinen Remote-String.
+
+2. **Sovereign-by-default**: Ein ungesetztes `PUBLIC_BASEMAP_MODE` erzeugt eine
+   CARTO-freie `local-sovereign`-Konfiguration. `remote-style` ist damit nur noch
+   explizit wählbar.
+
+3. **`basemap.current.ts` entkoppelt**: `REMOTE_STYLE_URL` und der CARTO-String
+   wurden entfernt. `currentBasemap` wird aus `baseConfig` und dem generierten
+   `BUILD_BASEMAP_CONFIG` (Modus + optional `styleUrl`) zusammengesetzt. Der
+   Remote-Zweig liest den URL als Property-Zugriff aus dem generierten Modul —
+   es existiert kein CARTO-String-Literal mehr in dieser Datei. Damit hängt die
+   Souveränität nicht mehr an Dead-Code-Elimination, sondern daran, dass der
+   String im local-sovereign-Importgraph schlicht nicht vorkommt.
+
+4. **Build- und Test-Verdrahtung**: `generate-basemap-config.js` läuft über das
+   gemeinsame Script `generate:basemap-config` im `sync`-Script (und damit in
+   `prebuild`/`precheck`/`precheck:ci`) neben `generate-version.js` sowie im
+   `dev`/`dev:cs`-Start. Zusätzlich erzeugen jetzt `pretest`, `pretest:ci`,
+   `pretest:proof:basemap-real` und `pretest:unit` die Datei vor Test-Discovery.
+   Das verhindert ein fehlendes `basemapConfig.ts` bei `pnpm test`,
+   `pnpm test:ci` und `pnpm test:proof:basemap-real` auf frischem Checkout.
+   Auch `prelint` und `preci` erzeugen die Datei, damit `pnpm lint` und `pnpm ci`
+   auf frischem Checkout nicht scheitern, wenn TypeScript-Imports die generierte
+   Datei prüfen.
+
+5. **Guard bleibt hart**: Der Leak-Guard in `scripts/weltgewebe-up` wurde **nicht**
+   abgeschwächt. In `local-sovereign` muss
+   `grep -R 'basemaps.cartocdn.com\|voyager-gl-style\|cartocdn' apps/web/build/_app/immutable`
+   leer sein und `local-basemap` vorhanden; sonst Deploy-Abbruch.
+
+6. **`envPrefix` bleibt, ist aber nicht der Sicherheitsanker**: Der Kommentar in
+   `vite.config.ts` wurde korrigiert. `envPrefix` exponiert nur den Env-Wert; die
+   CARTO-Freiheit garantiert der Generator.
+
+7. **CSP unverändert**: keine Lockerung, `basemaps.cartocdn.com` bleibt nicht
+   erlaubt. Keine Caddy-/DNS-/PMTiles-/Glyphs-/API-Änderungen.
+
+**Verifikation:**
+
+- `PUBLIC_BASEMAP_MODE=local-sovereign pnpm build` → CARTO-Grep im Bundle leer,
+  `local-basemap` vorhanden.
+- ungesetzt `pnpm build` → ebenfalls CARTO-frei (sovereign default).
+- `PUBLIC_BASEMAP_MODE=remote-style pnpm build` → CARTO erwartungsgemäß vorhanden.
+
 ## 2026-05-23 - Souveräner Basemap-Modus im Frontend erzwungen, CARTO-Leak-Guard (gehärtet)
+
+> **Hinweis (korrigiert durch den Eintrag oben):** Punkt 1 dieses Eintrags
+> beschrieb `envPrefix` + Inlining + Dead-Code-Elimination als Mechanismus zur
+> Entfernung des CARTO-Strings aus dem `local-sovereign`-Bundle. Das war nicht
+> ausreichend — der CARTO-String blieb im Bundle. Maßgeblich ist jetzt die
+> generierte Build-Time-Konfiguration (siehe Eintrag oben).
 
 **Geänderte Dateien:**
 

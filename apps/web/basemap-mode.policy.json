@@ -1,0 +1,4 @@
+{
+  "defaultMode": "local-sovereign",
+  "allowedModes": ["local-sovereign", "remote-style"]
+}
