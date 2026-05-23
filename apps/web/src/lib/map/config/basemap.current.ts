@@ -2,11 +2,11 @@
 // Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
 //
 // PUBLIC_BASEMAP_MODE is read via import.meta.env.PUBLIC_BASEMAP_MODE, which is
-// exposed by SvelteKit's Vite plugin and inlined into the client bundle at build time.
-// When unset, it defaults to undefined, which is then resolved by resolveBasemapMode()
-// based on the isLocal context. This allows the bundler to dead-code-eliminate the
-// remote (CARTO) branch in local-sovereign builds, which is what the deploy leak-guard
-// relies on.
+// exposed by Vite's envPrefix configuration (set in vite.config.ts) and inlined into
+// the client bundle at build time. When unset, it defaults to undefined, which is then
+// resolved by resolveBasemapMode() based on the isLocal context. This allows the bundler
+// to dead-code-eliminate the remote (CARTO) branch in local-sovereign builds, which is
+// what the deploy leak-guard relies on.
 
 export type BasemapMode = "remote-style" | "local-sovereign";
 
