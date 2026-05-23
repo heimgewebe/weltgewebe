@@ -32,12 +32,13 @@ Das Frontend-Deployment wurde um stale-Version-Erkennung ausgebaut:
    - Ungültiges JSON → Rebuild
    - `version` leer/blank → Rebuild
    - `version != CURRENT_SHORT_SHA` (aktueller Deploy-HEAD) → Rebuild
-   
+
    Beispiel: Heimserver mit Version `17314c6a`, neuer Deploy-HEAD `c67aaa67` → Auto-Rebuild.
 
 3. **Live-Guard**: `/_app/version.json` wird nach dem Deploy gegen `CURRENT_SHORT_SHA` verglichen.
    Stale-Match → harte Fehlermeldung:
-   ```
+
+   ```text
    Frontend Guard failed: /_app/version.json is stale: version <X>, expected <Y>.
    ```
 
