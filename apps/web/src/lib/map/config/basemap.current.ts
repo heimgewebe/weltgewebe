@@ -6,7 +6,7 @@
 // URL only ever exists in the generated module of an explicit remote-style
 // build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
 
-import { BUILD_BASEMAP_CONFIG } from "$lib/generated/basemapConfig";
+import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
 
 export type BasemapMode = "remote-style" | "local-sovereign";
 

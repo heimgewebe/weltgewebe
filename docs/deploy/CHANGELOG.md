@@ -53,10 +53,13 @@ Leak-Guard in `weltgewebe-up` schlug deshalb korrekt fehl.
    Souveränität nicht mehr an Dead-Code-Elimination, sondern daran, dass der
    String im local-sovereign-Importgraph schlicht nicht vorkommt.
 
-4. **Build-Verdrahtung**: `generate-basemap-config.js` läuft im `sync`-Script
-   (und damit in `prebuild`/`precheck`/`precheck:ci`) neben `generate-version.js`
-   sowie über `pretest:unit` und im `dev`/`dev:cs`-Start. Jeder Build, Typecheck
-   und Unit-Test arbeitet so mit einem frischen Basemap-Config-Stand.
+4. **Build- und Test-Verdrahtung**: `generate-basemap-config.js` läuft über das
+   gemeinsame Script `generate:basemap-config` im `sync`-Script (und damit in
+   `prebuild`/`precheck`/`precheck:ci`) neben `generate-version.js` sowie im
+   `dev`/`dev:cs`-Start. Zusätzlich erzeugen jetzt `pretest`, `pretest:ci`,
+   `pretest:proof:basemap-real` und `pretest:unit` die Datei vor Test-Discovery.
+   Das verhindert ein fehlendes `basemapConfig.ts` bei `pnpm test`,
+   `pnpm test:ci` und `pnpm test:proof:basemap-real` auf frischem Checkout.
 
 5. **Guard bleibt hart**: Der Leak-Guard in `scripts/weltgewebe-up` wurde **nicht**
    abgeschwächt. In `local-sovereign` muss
