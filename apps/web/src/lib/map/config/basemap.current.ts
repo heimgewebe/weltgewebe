@@ -7,6 +7,7 @@
 // build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
 
 import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
+import basemapModePolicy from "../../../../basemap-mode.policy.json";
 
 export type BasemapMode = "remote-style" | "local-sovereign";
 
@@ -46,19 +47,11 @@ export const HAMMER_PARK_CENTER = {
 // Note: The build-time generator is stricter — it always uses the policy
 // default for unset PUBLIC_BASEMAP_MODE. This resolver is kept as the
 // independently tested reference for the resolution contract.
-export function resolveBasemapMode(
-  envMode: string | undefined,
-  isLocalContext: boolean,
-): BasemapMode {
-  // Allowed modes: local-sovereign, remote-style
-  // Default mode: local-sovereign
-  const allowedModes = ["local-sovereign", "remote-style"];
-  const defaultMode = "local-sovereign";
-
-  if (allowedModes.includes(envMode || "")) {
+export function resolveBasemapMode(envMode: string | undefined): BasemapMode {
+  if (basemapModePolicy.allowedModes.includes(envMode || "")) {
     return envMode as BasemapMode;
   }
-  return defaultMode as BasemapMode;
+  return basemapModePolicy.defaultMode as BasemapMode;
 }
 
 const baseConfig: BaseBasemapConfig = {
