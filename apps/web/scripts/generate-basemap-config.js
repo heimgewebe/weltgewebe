@@ -57,7 +57,11 @@ export const BUILD_BASEMAP_CONFIG: BuildBasemapConfig = {
 };
 `;
 
-const outDir = path.resolve(process.cwd(), "src/lib/generated");
+const outDir = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "..",
+  "src/lib/generated",
+);
 const outFile = path.join(outDir, "basemapConfig.ts");
 
 if (!fs.existsSync(outDir)) {

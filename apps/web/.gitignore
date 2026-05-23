@@ -10,6 +10,9 @@ public/demo.png
 .env.local
 package-lock.json
 
+# Generated source files (build-time)
+src/lib/generated/
+
 # Playwright artifacts
 playwright-report/
 test-results/
