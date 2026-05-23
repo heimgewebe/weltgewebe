@@ -26,7 +26,7 @@ Das Deploy-Skript `weltgewebe-up` verwendet jetzt einen expliziten Deploy-Branch
 - Standard-Deploy-Branch ist `main`.
 - Abweichende Branches sind nur bewusst möglich (`--branch <name>` oder `WELTGEWEBE_DEPLOY_BRANCH=<name>`).
 - Optional kann für gezieltes Debugging `--current-branch` verwendet werden.
-- `--no-pull` bleibt Offline-Recovery und überspringt Git vollständig (kein fetch/switch/pull).
+- `--no-pull` bleibt Offline-Recovery und überspringt Git-Sync-/Branchwechsel-Operationen (kein fetch/switch/pull).
 
 Die Git-Preflight-Semantik wurde vereinheitlicht: Konflikte/Dirty Worktree blockieren weiterhin,
 Branchwechsel erfolgt nur auf den expliziten Zielbranch, Pull nur via `--ff-only`.
