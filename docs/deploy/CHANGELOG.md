@@ -10,6 +10,48 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - Souveräner Basemap-Modus im Frontend erzwungen, CARTO-Leak-Guard
+
+**Geänderte Dateien:**
+
+- `apps/web/src/lib/map/config/basemap.current.ts`
+- `apps/web/src/lib/map/config/basemap.current.test.ts` (neue Datei)
+- `scripts/weltgewebe-up`
+
+**Beschreibung:**
+
+1. **SvelteKit-konforme Env-Lesung**: `PUBLIC_BASEMAP_MODE` wird nicht mehr über
+   `import.meta.env.PUBLIC_BASEMAP_MODE` gelesen (Vite belegt `import.meta.env`
+   nur für `VITE_`-Präfixe, daher war der Wert im Client-Bundle immer `undefined`
+   und CARTO der stille Default). Stattdessen Namespace-Import von
+   `$env/static/public`. Der Namespace-Import (statt `import { PUBLIC_BASEMAP_MODE }`)
+   ist bewusst gewählt: ein Named-Import bricht den Build hart ab, sobald die
+   Variable nicht gesetzt ist (CI, lokale Dev, vitest), was den dokumentierten
+   „unset ist ein gültiger Default"-Vertrag verletzt. Der Namespace-Zugriff liefert
+   `undefined` bei unset, wird aber bei gesetztem Wert weiterhin als String-Literal
+   inlined — Voraussetzung für das Dead-Code-Eliminieren des Remote-Zweigs.
+
+2. **Heimserver/Edge-Default**: `scripts/weltgewebe-up` setzt beim Web-Build
+   `PUBLIC_BASEMAP_MODE=local-sovereign`, wenn kein expliziter Wert gesetzt ist
+   und ein Edge-/Heimserver-Deploy erkannt wird (`DEPLOY_FRONTEND_MODE=edge` oder
+   laufender Edge-Gateway-Container). Ein explizit gesetzter Wert wird nicht
+   überschrieben. Der effektive Modus wird geloggt: `Frontend basemap mode: <mode>`.
+
+3. **local-sovereign Build-Guard**: Nach `pnpm -C apps/web build` prüft
+   `weltgewebe-up` bei effektivem Modus `local-sovereign`
+   `apps/web/build/_app/immutable` auf `basemaps.cartocdn.com`/`voyager-gl-style`/
+   `cartocdn`. Treffer → harte Fehlermeldung, Deploy-Abbruch. Zusätzlich muss
+   `local-basemap` im Bundle vorhanden sein, sonst Abbruch.
+
+4. **CSP bleibt unverändert hart**: keine Lockerung, `basemaps.cartocdn.com` bleibt
+   nicht erlaubt. Keine Caddy-/DNS-/PMTiles-/Glyphs-/API-Änderungen.
+
+**Risiko:**
+
+`remote-style` ist weiterhin nur explizit wählbar und behält den CARTO-Default-URL
+(als `REMOTE_STYLE_URL`), der ausschließlich im Remote-Zweig landet. In
+`local-sovereign`-Builds wird dieser Zweig samt URL durch den Bundler entfernt.
+
 ## 2026-05-23 - Frontend-Version-Guard und stale Web-Build-Erkennung gehärtet
 
 **Geänderte Dateien:**
