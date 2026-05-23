@@ -921,6 +921,20 @@ if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" )
          # The canonical mode resolution lives in apps/web (basemap.current.ts).
          # Here we only ensure the Heimserver/Edge build defaults to the
          # sovereign local basemap, without overriding an explicit operator value.
+
+         # Validate PUBLIC_BASEMAP_MODE before any default injection.
+         # Typos (e.g. "local_sovereign", "garbage") would silently bypass the
+         # build guard, so we hard-fail on any value that is not a known mode.
+         case "${PUBLIC_BASEMAP_MODE:-}" in
+             ""|"local-sovereign"|"remote-style")
+                 ;;
+             *)
+                 echo "ERROR: Invalid PUBLIC_BASEMAP_MODE='${PUBLIC_BASEMAP_MODE}'."
+                 echo "       Allowed values: local-sovereign, remote-style (or unset)."
+                 exit 1
+                 ;;
+         esac
+
          BASEMAP_MODE_SOURCE="explicit PUBLIC_BASEMAP_MODE"
          if [[ -z "${PUBLIC_BASEMAP_MODE:-}" ]]; then
              if [[ "$DEPLOY_FRONTEND_MODE" == "edge" || "$EDGE_RUNTIME_DETECTED" == "1" ]]; then
