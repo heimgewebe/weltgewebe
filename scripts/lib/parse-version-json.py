@@ -33,12 +33,16 @@ def main() -> None:
         sys.exit(1)
 
     try:
+        if not isinstance(data, dict):
+            sys.exit(2)
         v = data.get("version")
         if not isinstance(v, str) or not v.strip():
             sys.exit(2)
+        build_id = data.get("build_id", "")
+        commit = data.get("commit", "")
         print(v.strip())
-        print(data.get("build_id", ""))
-        print(data.get("commit", ""))
+        print(build_id if isinstance(build_id, str) else "")
+        print(commit if isinstance(commit, str) else "")
     except Exception:
         sys.exit(1)
 

@@ -173,6 +173,30 @@ _sha="c67aaa67"
 echo "PASS: staleness comparison contract — up-to-date build does not trigger rebuild"
 
 # ===========================================================================
+# Part 3b: valid JSON that is not an object → must be exit 2, not exit 1
+# (covers the case where data.get() would raise AttributeError without the
+#  isinstance(data, dict) guard)
+# ===========================================================================
+
+# --- Test 15: JSON array → exit 2 ---
+result=$(run_guard '[]')
+rc="${result%%|*}"
+[[ "$rc" == "2" ]] || fail "Test 15: JSON array expected exit 2, got $rc"
+echo "PASS: JSON array rejected with exit 2"
+
+# --- Test 16: JSON string → exit 2 ---
+result=$(run_guard '"foo"')
+rc="${result%%|*}"
+[[ "$rc" == "2" ]] || fail "Test 16: JSON string expected exit 2, got $rc"
+echo "PASS: JSON string rejected with exit 2"
+
+# --- Test 17: JSON number → exit 2 ---
+result=$(run_guard '123')
+rc="${result%%|*}"
+[[ "$rc" == "2" ]] || fail "Test 17: JSON number expected exit 2, got $rc"
+echo "PASS: JSON number rejected with exit 2"
+
+# ===========================================================================
 # Part 4: bash syntax check of the deploy script
 # ===========================================================================
 
