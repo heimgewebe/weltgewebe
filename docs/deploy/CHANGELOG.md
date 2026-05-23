@@ -10,6 +10,48 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - Frontend-Version-Guard und stale Web-Build-Erkennung gehärtet
+
+**Geänderte Dateien:**
+
+- `scripts/weltgewebe-up`
+- `scripts/lib/parse-version-json.py` (neue Datei)
+- `scripts/tests/test_version_guard.sh`
+- `Makefile`
+
+**Beschreibung:**
+
+Das Frontend-Deployment wurde um stale-Version-Erkennung ausgebaut:
+
+1. **Parser-Robustheit**: Version-JSON-Parsing aus Inline-Python in gemeinsamen Helper
+   `scripts/lib/parse-version-json.py` ausgelagert.
+   Syntaxfehler im Frontend-Guard behoben (f-string mit escaped quotes).
+
+2. **Auto-Build-Staleness**: `BUILD_WEB=auto` erkennt jetzt stale `apps/web/build/_app/version.json`:
+   - Fehlendes `version.json` → Rebuild
+   - Ungültiges JSON → Rebuild
+   - `version` leer/blank → Rebuild
+   - `version != CURRENT_SHORT_SHA` (aktueller Deploy-HEAD) → Rebuild
+   
+   Beispiel: Heimserver mit Version `17314c6a`, neuer Deploy-HEAD `c67aaa67` → Auto-Rebuild.
+
+3. **Live-Guard**: `/_app/version.json` wird nach dem Deploy gegen `CURRENT_SHORT_SHA` verglichen.
+   Stale-Match → harte Fehlermeldung:
+   ```
+   Frontend Guard failed: /_app/version.json is stale: version <X>, expected <Y>.
+   ```
+
+4. **Failure-Bundle-Erweiterung**: Bei Version-Guard-Fehler speichert das Bundle nun Kontext-Datei
+   `version_guard_context.txt` mit live-version, expected SHA, build_id, commit, raw JSON und Headers.
+
+5. **Test-Verbesserung**: 14 Regressions-Tests via Contract-Test-Ansatz (gemeinsamer Helper).
+   Tests in `make validate-shell-tests` integriert.
+
+**Risiko:**
+
+Auto-Deploy kann häufiger ein Frontend-Build auslösen; Deployment-Dauer kann sich erhöhen.
+Nutzen: verhindert stale Frontend bei neuem Backend/API-Deploy — das Fenster für API/Frontend-Mismatch ist schmal.
+
 ## 2026-05-23 - API-Dockerfile: konfigurierbare Cargo-Build-Parallelität
 
 **Geänderte Dateien:**
