@@ -502,6 +502,7 @@ BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}
 generate_failure_bundle() {
   local error_msg="$1"
   local err_log_file="${2:-}"
+  local extra_context_file="${3:-}"
     local timestamp
     timestamp=$(date +"%Y%m%d-%H%M%S")
   local bundle_dir=".ops/failures/${timestamp}"
@@ -607,6 +608,10 @@ generate_failure_bundle() {
   curl -fsS --cacert "$EDGE_CA" https://weltgewebe.home.arpa/api/health/ready > "${bundle_dir}/alias_route_health.txt" 2>&1 || true
   curl -fsSI --cacert "$EDGE_CA" https://weltgewebe.home.arpa > "${bundle_dir}/frontend_head.txt" 2>&1 || true
 
+  if [[ -n "$extra_context_file" && -f "$extra_context_file" ]]; then
+      cp "$extra_context_file" "${bundle_dir}/version_guard_context.txt"
+  fi
+
   ln -sfn "$PWD/$bundle_dir" /tmp/weltgewebe-deploy-failure
 
   # Print failure summary (exact requested format)
@@ -702,6 +707,11 @@ if [[ "$DO_PULL" == "1" ]]; then
 else
     # Explicitly avoid git calls if no-pull
     CURRENT_HEAD="unknown"
+fi
+
+CURRENT_SHORT_SHA="unknown"
+if [[ "$DO_PULL" == "1" ]]; then
+    CURRENT_SHORT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 fi
 
 if [[ "$BUILD_MODE" == "force" ]]; then
@@ -839,6 +849,14 @@ if [[ "$DEPLOY_FRONTEND_MODE" == "edge" ]]; then
 fi
 
 # 6b. Frontend Build
+
+# Returns the 'version' string from a local version.json, or empty on any error.
+_read_version_json() {
+    local json_file="$1"
+    python3 "$REPO_DIR/scripts/lib/parse-version-json.py" "$json_file" 2>/dev/null \
+        | head -n1 || true
+}
+
 if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" ) ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
@@ -846,11 +864,46 @@ if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" )
   if [[ "$BUILD_WEB" == "force" ]]; then
      NEEDS_WEB_BUILD=1
      WEB_MSG="Forced"
+  elif [[ "$BUILD_WEB" == "no" ]]; then
+     # Explicitly skipped — emit a warning if the build looks stale so the guard error is predictable.
+     if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
+         _stale_hint=""
+         if [[ ! -f "apps/web/build/index.html" ]]; then
+             _stale_hint="artifact missing"
+         elif [[ ! -f "apps/web/build/_app/version.json" ]]; then
+             _stale_hint="version.json missing"
+         elif [[ "$CURRENT_SHORT_SHA" != "unknown" ]]; then
+             _bv_no=$(_read_version_json "apps/web/build/_app/version.json")
+             if [[ -z "$_bv_no" ]]; then
+                 _stale_hint="version.json invalid"
+             elif [[ "$_bv_no" != "$CURRENT_SHORT_SHA" ]]; then
+                 _stale_hint="version stale ($_bv_no != $CURRENT_SHORT_SHA)"
+             fi
+         fi
+         if [[ -n "$_stale_hint" ]]; then
+             echo "WARNING: frontend build skipped by --no-build-web; stale version.json may fail guards. ($_stale_hint)"
+         fi
+     fi
   else
      # Auto
      if [[ ! -f "apps/web/build/index.html" ]]; then
         NEEDS_WEB_BUILD=1
         WEB_MSG="Auto: Artifact missing"
+     elif [[ "$REQUIRE_FRONTEND" == "1" && "$CURRENT_SHORT_SHA" != "unknown" ]]; then
+        _vj="apps/web/build/_app/version.json"
+        if [[ ! -f "$_vj" ]]; then
+            NEEDS_WEB_BUILD=1
+            WEB_MSG="Auto: version.json missing"
+        else
+            _bv=$(_read_version_json "$_vj")
+            if [[ -z "$_bv" ]]; then
+                NEEDS_WEB_BUILD=1
+                WEB_MSG="Auto: version.json invalid"
+            elif [[ "$_bv" != "$CURRENT_SHORT_SHA" ]]; then
+                NEEDS_WEB_BUILD=1
+                WEB_MSG="Auto: version stale ($_bv != $CURRENT_SHORT_SHA)"
+            fi
+        fi
      fi
   fi
 
@@ -1584,20 +1637,8 @@ if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
 
         # Robust parsing: ensure JSON is strictly parsable and contains canonical version
         VERSION_PARSED_OUT=$(mktemp)
-        if python3 -c '
-import sys, json
-try:
-    with open(sys.argv[1], "r") as f:
-        data = json.load(f)
-        v = data.get("version")
-        if not isinstance(v, str) or not v.strip():
-            sys.exit(2)
-        print(f"{v}\n{data.get(\"build_id\", \"\")}")
-except json.JSONDecodeError:
-    sys.exit(3)
-except Exception:
-    sys.exit(1)
-' "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null; then
+        if python3 "$REPO_DIR/scripts/lib/parse-version-json.py" \
+                "$VERSION_OUT" > "$VERSION_PARSED_OUT" 2>/dev/null; then
             PY_STATUS=0
         else
             PY_STATUS=$?
@@ -1619,7 +1660,29 @@ except Exception:
 
         BUILD_VERSION=$(sed -n '1p' "$VERSION_PARSED_OUT")
         BUILD_ID=$(sed -n '2p' "$VERSION_PARSED_OUT")
+        BUILD_COMMIT=$(sed -n '3p' "$VERSION_PARSED_OUT")
         rm -f "$VERSION_PARSED_OUT"
+
+        if [[ "$CURRENT_SHORT_SHA" != "unknown" && "$BUILD_VERSION" != "$CURRENT_SHORT_SHA" ]]; then
+            _vctx=$(mktemp)
+            {
+                echo "live_version: $BUILD_VERSION"
+                echo "expected_short_sha: $CURRENT_SHORT_SHA"
+                [[ -n "$BUILD_ID" ]] && echo "build_id: $BUILD_ID"
+                [[ -n "$BUILD_COMMIT" ]] && echo "commit: $BUILD_COMMIT"
+                echo "---"
+                echo "version_json_body:"
+                cat "$VERSION_OUT" 2>/dev/null || true
+                echo "---"
+                echo "version_response_headers:"
+                cat "$VERSION_HEADERS_OUT" 2>/dev/null || true
+            } > "$_vctx"
+            msg="Frontend Guard failed: /_app/version.json is stale: version $BUILD_VERSION, expected $CURRENT_SHORT_SHA."
+            echo "ERROR: $msg"
+            generate_failure_bundle "$msg" "" "$_vctx"
+            rm -f "$_vctx" "$HTML_OUT" "$VERSION_OUT" "$VERSION_HEADERS_OUT"
+            exit 1
+        fi
 
         if [[ -n "$BUILD_ID" && "$BUILD_ID" != "$BUILD_VERSION" ]]; then
             echo "OK (Version: $BUILD_VERSION, Build-ID: $BUILD_ID verified via /_app/version.json with no-store)"
