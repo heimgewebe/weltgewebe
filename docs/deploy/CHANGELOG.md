@@ -10,6 +10,32 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - `weltgewebe-up` Deploy-Branch-Vertrag explizit gemacht
+
+**Geänderte Dateien:**
+
+- `scripts/weltgewebe-up`
+- `scripts/tests/test_weltgewebe_up_git_branch.sh`
+- `Makefile`
+- `docs/deploy/heimserver.deployment.md`
+
+**Beschreibung:**
+
+Das Deploy-Skript `weltgewebe-up` verwendet jetzt einen expliziten Deploy-Branch-Vertrag:
+
+- Standard-Deploy-Branch ist `main`.
+- Abweichende Branches sind nur bewusst möglich (`--branch <name>` oder `WELTGEWEBE_DEPLOY_BRANCH=<name>`).
+- Optional kann für gezieltes Debugging `--current-branch` verwendet werden.
+- `--no-pull` bleibt Offline-Recovery und überspringt Git-Sync-/Branchwechsel-Operationen (kein fetch/switch/pull).
+
+Die Git-Preflight-Semantik wurde vereinheitlicht: Konflikte/Dirty Worktree blockieren weiterhin,
+Branchwechsel erfolgt nur auf den expliziten Zielbranch, Pull nur via `--ff-only`.
+Zusätzlich wurde die Failure-Bundle-Git-Diagnostik um Deploy-Branch-/Switch-Metadaten erweitert.
+
+**Risiko:** Mittel (geänderte Default-Semantik für Branch-Auswahl).
+
+**Nutzen:** Verhindert stillen Heimserver-Branch-Drift und macht Deploy-Zielbranch diagnostisch transparent.
+
 ## 2026-05-23 - API-Container auf Bookworm/OpenSSL 3 umgestellt
 
 **Geänderte Dateien:**

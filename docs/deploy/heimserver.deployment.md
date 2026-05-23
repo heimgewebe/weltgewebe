@@ -52,12 +52,22 @@ relations:
   Das Skript nutzt standardmäßig:
   - `REPO_DIR=/opt/weltgewebe`
   - `ENV_FILE=/opt/weltgewebe/.env`
+  - Deploy-Branch-Vertrag: standardmäßig `main` (abweichende Branches nur explizit)
 
   ```sh
-  # Default (Update git fetch + pull --ff-only, ohne Caddy):
+  # Default (pullt und deployt explizit den Default-Branch `main`, ohne Caddy):
   weltgewebe-up
 
-  # Offline Recovery (ohne Git):
+  # Expliziter Feature-Branch-Deploy (bewusst):
+  weltgewebe-up --branch feat/dein-zweig
+
+  # Alternativ per Environment-Override:
+  WELTGEWEBE_DEPLOY_BRANCH=feat/dein-zweig weltgewebe-up
+
+  # Nur bewusstes Debugging: aktuell ausgecheckten Branch deployen
+  weltgewebe-up --current-branch
+
+  # Offline Recovery (kein fetch/switch/pull):
   weltgewebe-up --no-pull
 
   # Optional: mit Caddy (wenn Ports frei):
@@ -65,7 +75,14 @@ relations:
   ```
 
   **Offline Recovery:** `weltgewebe-up --no-pull` funktioniert auch ohne Internetverbindung,
-  da es keine Git-Befehle ausführt.
+  da es keine Git-Sync-/Branchwechsel-Operationen ausführt (kein fetch, kein switch, kein pull)
+  und den aktuell vorhandenen Checkout deployt.
+
+  **Format-Hinweis:** `--branch` erwartet einen Branch-Namen wie `main` oder `feat/x`,
+  nicht `origin/main`.
+
+  **Hinweis:** `--current-branch` ist für absichtliche Abweichungen gedacht (z. B. Debugging),
+  nicht für den regulären Heimserver-Betrieb.
 
   Für abweichende Installationspfade: `REPO_DIR` und `ENV_FILE` setzen.
   `REPO_DIR=/pfad ENV_FILE=/pfad/.env weltgewebe-up`

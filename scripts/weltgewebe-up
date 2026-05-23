@@ -7,7 +7,7 @@ set -euo pipefail
 # Robust, idempotent, and optional-caddy-aware deployment wrapper.
 #
 # Usage:
-#   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no]
+#   weltgewebe-up [--with-caddy] [--no-pull] [--build-mode auto|force|no] [--branch BRANCH|--current-branch]
 
 # REPO_DIR defaults are handled in resolution logic below
 ENV_FILE="${ENV_FILE:-/opt/weltgewebe/.env}"
@@ -27,13 +27,18 @@ DO_PULL=1
 BUILD_MODE="auto"
 PURGE_ZOMBIES=0
 BUILD_WEB="auto"
+DEPLOY_BRANCH="${WELTGEWEBE_DEPLOY_BRANCH:-main}"
+DEPLOY_BRANCH_OVERRIDE=""
+USE_CURRENT_BRANCH=0
 
 usage() {
   echo "Usage: $0 [options]"
   echo
   echo "Options:"
   echo "  --with-caddy            Start the 'caddy' service (default: disabled/scale=0)"
-  echo "  --no-pull               Skip git fetch/pull (offline deploy)"
+    echo "  --no-pull               Skip git sync/branch operations (no fetch, switch, pull)"
+    echo "  --branch BRANCH         Deploy explicit branch name (default: main, no origin/ prefix)"
+    echo "  --current-branch        Deploy the currently checked-out branch intentionally"
   echo "  --build-mode MODE       Set build mode: auto (default), force, no"
   echo "  --no-build              Alias for --build-mode no"
   echo "  --force-build           Alias for --build-mode force"
@@ -53,6 +58,15 @@ while [[ "$#" -gt 0 ]]; do
   case $1 in
     --with-caddy) WITH_CADDY=1 ;;
     --no-pull) DO_PULL=0 ;;
+    --branch)
+       if [[ $# -lt 2 || -z "${2:-}" ]]; then
+           echo "ERROR: --branch requires a branch name."
+           usage
+       fi
+       DEPLOY_BRANCH_OVERRIDE="$2"
+       shift
+       ;;
+    --current-branch) USE_CURRENT_BRANCH=1 ;;
     --build-mode)
        if [[ $# -lt 2 || -z "${2:-}" ]]; then
            echo "ERROR: --build-mode requires an argument (auto|force|no)."
@@ -78,6 +92,27 @@ while [[ "$#" -gt 0 ]]; do
   esac
   shift
 done
+
+if [[ -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
+    DEPLOY_BRANCH="$DEPLOY_BRANCH_OVERRIDE"
+fi
+
+if [[ "$USE_CURRENT_BRANCH" == "1" && -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
+    echo "ERROR: --branch and --current-branch are mutually exclusive."
+    exit 1
+fi
+
+if [[ "$DO_PULL" != "1" && "$USE_CURRENT_BRANCH" == "1" ]]; then
+    echo "ERROR: --current-branch cannot be combined with --no-pull."
+    echo "       --no-pull deploys the existing checkout without fetch/switch/pull."
+    exit 1
+fi
+
+if [[ "$USE_CURRENT_BRANCH" != "1" && -z "$DEPLOY_BRANCH" ]]; then
+    echo "ERROR: Deploy branch resolved to empty value."
+    echo "       Set WELTGEWEBE_DEPLOY_BRANCH or pass --branch <name>."
+    exit 1
+fi
 
 EDGE_GATEWAY_CONTAINER="${EDGE_GATEWAY_CONTAINER:-edge-caddy}"
 if [[ -z "$EDGE_GATEWAY_CONTAINER" || "$EDGE_GATEWAY_CONTAINER" =~ [[:space:]] ]]; then
@@ -296,7 +331,15 @@ export WELTGEWEBE_ENV_FILE="${WELTGEWEBE_ENV_FILE:-$ENV_FILE}"
 GIT_FETCH_ATTEMPTED="no"
 GIT_PULL_ATTEMPTED="no"
 GIT_PULL_SKIPPED_REASON=""
-GIT_AUTOFIX_APPLIED="no"
+DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
+CURRENT_BRANCH_BEFORE="unknown"
+CURRENT_BRANCH_AFTER="unknown"
+HEAD_BEFORE="unknown"
+HEAD_AFTER="unknown"
+REMOTE_DEPLOY_BRANCH_SHA="unknown"
+DETACHED_BEFORE_SWITCH="no"
+BRANCH_SWITCH_ATTEMPTED="no"
+BRANCH_SWITCH_RESULT="unknown"
 
 # 2. Git Operations (Prioritized if PULL enabled)
 if [[ "$DO_PULL" == "1" ]]; then
@@ -335,52 +378,113 @@ if [[ "$DO_PULL" == "1" ]]; then
     exit 1
   fi
 
-  # Check for detached HEAD
-  if ! BRANCH="$(git symbolic-ref -q --short HEAD)"; then
-    HEAD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    HEAD_BEFORE=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    if CURRENT_BRANCH_BEFORE="$(git symbolic-ref -q --short HEAD 2>/dev/null)"; then
+        :
+    else
+        CURRENT_BRANCH_BEFORE="DETACHED"
+        DETACHED_BEFORE_SWITCH="yes"
+    fi
 
-    # Safe Git-Autofix Check
-    # Conditions: detached HEAD (already here), no conflicts (locally checked), clean worktree (IS_DIRTY=0)
-    UNMERGED=$(git diff --name-only --diff-filter=U || true)
-    if [[ "${WELTGEWEBE_AUTOFIX_GIT:-1}" == "1" && "$IS_DIRTY" == "0" && -z "$UNMERGED" ]]; then
-        echo "INFO: Detached HEAD detected."
-        echo "INFO: Previous detached HEAD: $HEAD_COMMIT"
-        echo "INFO: Working tree clean."
-        echo "INFO: Switching to main and updating fast-forward..."
-
-        if git switch main >/dev/null 2>&1; then
-            GIT_PULL_ATTEMPTED="yes"
-            if ! git pull --ff-only "$REMOTE" main; then
-                echo "ERROR: Git pull failed (fast-forward only) after switching to main."
-                echo "       Please resolve manually or use: $0 --no-pull"
-                exit 1
-            fi
-            GIT_AUTOFIX_APPLIED="yes"
-        else
-            echo "ERROR: Failed to switch to main."
+    if [[ "$USE_CURRENT_BRANCH" == "1" ]]; then
+        if [[ "$CURRENT_BRANCH_BEFORE" == "DETACHED" ]]; then
+            echo "ERROR: --current-branch requires an attached branch (detached HEAD found)."
             exit 1
         fi
+        DEPLOY_BRANCH_RESOLVED="$CURRENT_BRANCH_BEFORE"
+        echo ">> Git Branch Mode: current-branch (explicit)"
     else
-        echo "WARNING: Detached HEAD detected."
-        echo "HEAD: $HEAD_COMMIT"
-        echo "Pull skipped."
-        echo "Deploy may not use the latest main branch."
-        GIT_PULL_SKIPPED_REASON="detached HEAD without autofix"
+        DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
     fi
-  else
-    echo ">> Git Pull (fast-forward)..."
+
+    if [[ -z "$DEPLOY_BRANCH_RESOLVED" ]]; then
+        echo "ERROR: Deploy branch is empty after resolution."
+        exit 1
+    fi
+
+        case "$DEPLOY_BRANCH_RESOLVED" in
+            refs/*)
+                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+                echo "       Use a branch name like 'main' or 'feat/x', not a refs/... path."
+                exit 1
+                ;;
+            origin/*)
+                echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+                echo "       Use a branch name like 'main' or 'feat/x', not 'origin/main'."
+                exit 1
+                ;;
+        esac
+
+        first_segment="${DEPLOY_BRANCH_RESOLVED%%/*}"
+        if [[ "$DEPLOY_BRANCH_RESOLVED" == */* ]] && git remote | grep -Fxq "$first_segment"; then
+            echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+            echo "       Use a branch name like 'main' or 'feat/x', not '<remote>/<branch>'."
+            exit 1
+        fi
+
+    if ! git check-ref-format --branch "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
+        echo "ERROR: Invalid deploy branch name: $DEPLOY_BRANCH_RESOLVED"
+                echo "       Use a branch name like 'main' or 'feat/x'."
+        exit 1
+    fi
+
+    REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2>/dev/null || echo "unknown")
+
+    if [[ "$CURRENT_BRANCH_BEFORE" == "$DEPLOY_BRANCH_RESOLVED" ]]; then
+        BRANCH_SWITCH_RESULT="already_on_target"
+    else
+        BRANCH_SWITCH_ATTEMPTED="yes"
+        echo ">> Git Branch Switch: ${CURRENT_BRANCH_BEFORE} -> ${DEPLOY_BRANCH_RESOLVED}"
+
+        if git switch -- "$DEPLOY_BRANCH_RESOLVED" >/dev/null 2>&1; then
+            BRANCH_SWITCH_RESULT="switched"
+        elif git switch --track "${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" >/dev/null 2>&1; then
+            BRANCH_SWITCH_RESULT="switched"
+    else
+            BRANCH_SWITCH_RESULT="failed"
+            echo "ERROR: Failed to switch to deploy branch '$DEPLOY_BRANCH_RESOLVED'."
+            echo "       Tried local branch and tracking '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
+            exit 1
+    fi
+  fi
+
+    CURRENT_BRANCH_AFTER=$(git symbolic-ref -q --short HEAD 2>/dev/null || echo "DETACHED")
+    if [[ "$CURRENT_BRANCH_AFTER" != "$DEPLOY_BRANCH_RESOLVED" ]]; then
+        BRANCH_SWITCH_RESULT="failed"
+        echo "ERROR: Repository is on '$CURRENT_BRANCH_AFTER' after switch, expected '$DEPLOY_BRANCH_RESOLVED'."
+        exit 1
+    fi
+
+    echo ">> Git Pull (fast-forward): ${REMOTE}/${DEPLOY_BRANCH_RESOLVED}"
     GIT_PULL_ATTEMPTED="yes"
-    if ! git pull --ff-only "$REMOTE" "$BRANCH"; then
-        echo "ERROR: Git pull failed (fast-forward only)."
+    if ! git pull --ff-only "$REMOTE" "$DEPLOY_BRANCH_RESOLVED"; then
+        echo "ERROR: Git pull failed (fast-forward only) for '${REMOTE}/${DEPLOY_BRANCH_RESOLVED}'."
         echo "       Please resolve manually or use: $0 --no-pull"
         exit 1
     fi
-  fi
+
+    HEAD_AFTER=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    REMOTE_DEPLOY_BRANCH_SHA=$(git rev-parse --short "refs/remotes/${REMOTE}/${DEPLOY_BRANCH_RESOLVED}" 2>/dev/null || echo "$REMOTE_DEPLOY_BRANCH_SHA")
 else
   echo
   echo ">> Git: Skipped (--no-pull)"
   GIT_PULL_SKIPPED_REASON="--no-pull"
+    DEPLOY_BRANCH_RESOLVED="$DEPLOY_BRANCH"
+    BRANCH_SWITCH_RESULT="skipped_no_pull"
 fi
+
+echo
+echo ">> Git Summary:"
+echo "   Branch before deploy: $CURRENT_BRANCH_BEFORE"
+echo "   Current branch: $CURRENT_BRANCH_AFTER"
+echo "   Deploy branch: $DEPLOY_BRANCH_RESOLVED"
+echo "   Git mode: $( [[ "$DO_PULL" == "1" ]] && echo "pull" || echo "no-pull" )"
+if [[ "$DO_PULL" != "1" ]]; then
+    echo "   Deploy mode: existing checkout (--no-pull; branch contract not applied)"
+fi
+echo "   Branch switch: $( [[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no" )"
+echo "   Previous HEAD: $HEAD_BEFORE"
+echo "   Target HEAD after pull: $HEAD_AFTER"
 
 # 3. Preflight: Docker Compose Config (Strict)
 # Run AFTER pull to validate new config
@@ -398,30 +502,41 @@ BASE_ARGS=("--env-file" "$ENV_FILE" "-p" "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}
 generate_failure_bundle() {
   local error_msg="$1"
   local err_log_file="${2:-}"
-  local timestamp=$(date +"%Y%m%d-%H%M%S")
+    local timestamp
+    timestamp=$(date +"%Y%m%d-%H%M%S")
   local bundle_dir=".ops/failures/${timestamp}"
 
   mkdir -p "$bundle_dir"
 
   # 1. git_state.txt
   {
-    local branch
-    branch=$(git symbolic-ref -q --short HEAD 2>/dev/null || echo "DETACHED")
-    local head_commit
-    head_commit=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    local remote_main
-    remote_main=$(git rev-parse --short "refs/remotes/${REMOTE}/main" 2>/dev/null || echo "unknown")
+        local branch="$CURRENT_BRANCH_AFTER"
+        local head_commit="$HEAD_AFTER"
 
-    echo "branch: $branch"
-    echo "head: $head_commit"
-    echo "remote main: $remote_main"
+        if [[ "$branch" == "unknown" ]]; then
+            branch="$CURRENT_BRANCH_BEFORE"
+        fi
+        if [[ "$head_commit" == "unknown" ]]; then
+            head_commit="$HEAD_BEFORE"
+        fi
+
+        echo "branch: $branch"
+        echo "head: $head_commit"
+        echo "deploy branch: $DEPLOY_BRANCH_RESOLVED"
+        echo "current branch before: $CURRENT_BRANCH_BEFORE"
+        echo "current branch after: $CURRENT_BRANCH_AFTER"
+        echo "head before: $HEAD_BEFORE"
+        echo "head after: $HEAD_AFTER"
+        echo "remote deploy branch: $REMOTE_DEPLOY_BRANCH_SHA"
+        echo "detached before switch: $DETACHED_BEFORE_SWITCH"
+        echo "branch switch attempted: $BRANCH_SWITCH_ATTEMPTED"
+        echo "branch switch result: $BRANCH_SWITCH_RESULT"
     echo "fetch attempted: $GIT_FETCH_ATTEMPTED"
     echo "pull attempted: $GIT_PULL_ATTEMPTED"
 
     if [[ -n "$GIT_PULL_SKIPPED_REASON" ]]; then
        echo "pull skipped reason: $GIT_PULL_SKIPPED_REASON"
     fi
-    echo "autofix applied: $GIT_AUTOFIX_APPLIED"
   } > "${bundle_dir}/git_state.txt"
 
   # 2. compose_ps.txt
@@ -467,7 +582,8 @@ generate_failure_bundle() {
   } > "${bundle_dir}/compose_files.txt"
 
   # 7. api_network_aliases.txt
-  local api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
+    local api_cid
+    api_cid=$(docker compose "${BASE_ARGS[@]}" ps -q api 2>/dev/null || true)
   if [[ -n "$api_cid" ]]; then
       docker inspect --format '{{range .NetworkSettings.Networks}}{{println .NetworkID}} {{println .Aliases}}{{end}}' "$api_cid" > "${bundle_dir}/api_network_aliases.txt" 2>/dev/null || true
   fi
@@ -578,6 +694,7 @@ echo ">> Build Decision:"
 
 DO_BUILD=1
 REASON="unknown"
+LAST_DEPLOYED_SHA="unknown"
 
 # Get Current HEAD (safely)
 if [[ "$DO_PULL" == "1" ]]; then
@@ -616,6 +733,9 @@ fi
 echo "   Mode:   $BUILD_MODE"
 echo "   Reason: $REASON"
 echo "   Action: $( [[ "$DO_BUILD" == "1" ]] && echo "Build" || echo "Skip Build" )"
+echo "   Deploy branch:    $DEPLOY_BRANCH_RESOLVED"
+echo "   Last deployed SHA: $LAST_DEPLOYED_SHA"
+echo "   Current deploy SHA: $CURRENT_HEAD"
 
 
 # 5. Service Plan & Caddy Logic
