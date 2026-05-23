@@ -10,24 +10,29 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
-## 2026-05-23 - Dev-Compose-Web-Image auf Node 20.19.0 (Alpine) gesetzt
+## 2026-05-23 - API-Container auf Bookworm/OpenSSL 3 umgestellt
 
 **Geänderte Dateien:**
 
+- `apps/api/Dockerfile`
 - `infra/compose/compose.core.yml`
 
 **Beschreibung:**
 
-Im Dev-Compose-Stack wurde das `web`-Service-Image auf `node:20.19.0-alpine` gesetzt.
-Damit ist die Container-Laufzeit im lokalen Compose-Setup auf die erwartete Node.js-Version
-für die Frontend-Toolchain ausgerichtet.
+Das API-Container-Image wurde von Bullseye auf Bookworm gehoben, damit
+OpenSSL-3-abhängige WebAuthn/Attestation-Dependencies zuverlässig bauen.
+Der Builder installiert die OpenSSL-Build-Abhängigkeiten explizit; die Runner-Stage
+enthält `libssl3` für dynamisch gegen OpenSSL gelinkte Runtime-Abhängigkeiten.
+Der Dev-Compose-API-Service nutzt ebenfalls `rust:1.89.0-bookworm`, damit Dev/CI
+nicht auf der alten Bullseye/OpenSSL-1.1-Basis verbleiben.
 
 **Auswirkung auf Deployment:**
 
-- Betrifft das lokale/dev Compose-Verhalten.
-- Keine Änderung an Applikationslogik oder produktivem Compose-Stack.
+- Betrifft API-Image-Build, Runtime-Stage und Dev-Compose-API-Service.
+- Keine Änderung an Applikationslogik, Datenbank oder Volumes.
 
-**Risiko:** Niedrig.
+**Risiko:** Niedrig bis mittel. Die Basisimages wechseln auf Bookworm; Build- und
+Runtime-Stage bleiben dabei konsistent.
 
 ## 2026-05-16 - CI-only Caddyfile.proof hinzugefügt
 
