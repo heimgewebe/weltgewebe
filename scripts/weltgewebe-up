@@ -961,36 +961,36 @@ if [[ -d "apps/web" && ( "$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force" )
          fi
      fi
   fi
-
-  # --- Build Guard: forbid remote basemap leaks in local-sovereign mode ---
-  # This guard runs AFTER the build decision (whether rebuild happened or not).
-  # In sovereign mode the bundle must not reference CARTO/remote basemaps and
-  # must reference the local route. CSP stays hard; this catches build leaks early.
-  # This ensures that even if an existing bundle is reused, it is verified.
-  if [[ "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
-      WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
-      echo
-      echo "   Verifying sovereign frontend build (no remote basemap leaks)..."
-      if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
-          echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-          echo "       Build output '$WEB_IMMUTABLE_DIR' missing; cannot verify sovereignty."
-          exit 1
-      fi
-      if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
-          echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
-          grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/         leaked in: /'
-          exit 1
-      fi
-      if ! grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
-          echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
-          echo "       The sovereign basemap route appears to be missing from the bundle."
-          exit 1
-      fi
-      echo "   [✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
-  fi
 elif [[ "$REQUIRE_FRONTEND" == "0" && -d "apps/web" && ! -f "apps/web/build/index.html" ]]; then
   echo
   echo "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
+fi
+
+# --- Build Guard: forbid remote basemap leaks in local-sovereign mode ---
+# This guard runs AFTER the build decision (whether rebuild happened or not).
+# In sovereign mode the bundle must not reference CARTO/remote basemaps and
+# must reference the local route. CSP stays hard; this catches build leaks early.
+# This ensures that even if an existing bundle is reused, it is verified.
+if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
+   WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
+   echo
+   echo ">> Verifying sovereign frontend build (no remote basemap leaks)..."
+   if [[ ! -d "$WEB_IMMUTABLE_DIR" ]]; then
+       echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+       echo "       Build output '$WEB_IMMUTABLE_DIR' missing; cannot verify sovereignty."
+       exit 1
+   fi
+   if grep -RqE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR"; then
+       echo "ERROR: Frontend build leaked remote basemap references in local-sovereign mode."
+       grep -RlE 'basemaps\.cartocdn\.com|voyager-gl-style|cartocdn' "$WEB_IMMUTABLE_DIR" | sed 's/^/       leaked in: /'
+       exit 1
+   fi
+   if ! grep -Rq 'local-basemap' "$WEB_IMMUTABLE_DIR"; then
+       echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
+       echo "       The sovereign basemap route appears to be missing from the bundle."
+       exit 1
+   fi
+   echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
 fi
 
 # 6c. Basemap Artifact Guard (best effort)
