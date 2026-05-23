@@ -60,6 +60,9 @@ Leak-Guard in `weltgewebe-up` schlug deshalb korrekt fehl.
    `pretest:proof:basemap-real` und `pretest:unit` die Datei vor Test-Discovery.
    Das verhindert ein fehlendes `basemapConfig.ts` bei `pnpm test`,
    `pnpm test:ci` und `pnpm test:proof:basemap-real` auf frischem Checkout.
+   Auch `prelint` und `preci` erzeugen die Datei, damit `pnpm lint` und `pnpm ci`
+   auf frischem Checkout nicht scheitern, wenn TypeScript-Imports die generierte
+   Datei prüfen.
 
 5. **Guard bleibt hart**: Der Leak-Guard in `scripts/weltgewebe-up` wurde **nicht**
    abgeschwächt. In `local-sovereign` muss
