@@ -174,7 +174,7 @@
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
-      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Phase 7 (reproduzierbare Sicherheitsnachweise): Systematische CSRF-Abdeckung aller aktuell gelisteten CSRF-pflichtigen mutierenden Endpunkte (Cross-Site-Request ohne Origin/Referer → 403 mit leerem Body; Positivkontrolle mit gültigem Origin) ist gegen den produktionsnahen Middleware-Stack wie in src/lib.rs belegt; die Anti-Enumeration-Parität (bekannte vs. unbekannte E-Mail → identischer Status, byte-identischer Body und Parität der sicherheitsrelevanten Header: kein Set-Cookie-Seitenkanal, identischer Content-Type/Cache-Control, keine E-Mail-/Token-Leakage) ist bewusst über einen schlanken Router belegt, da der Magic-Link-Request keinen Session-Cookie trägt und nicht CSRF-relevant ist. Beide Nachweise liegen in apps/api/tests/auth_security_invariants.rs.",
+      "ist": "Codepfade für alle fünf Aspekte implementiert: Anti-Enumeration (identische 200-Responses in request_login), Rate Limiting (Dual-Layer IP + E-Mail-Hash), CSRF (Origin-/Referer-Middleware implementiert), Trusted Proxy (RFC-7239-Forwarded-Parsing, konfigurierbare Allowlist via AUTH_TRUSTED_PROXIES), Token Leak Prevention (SHA-256-Hashing für Magic-Link- und Step-up-Tokens; Constant-Time-Vergleich punktuell im Magic-Link-Consume-Flow). Phase 7 (reproduzierbare Sicherheitsnachweise): Systematische CSRF-Abdeckung aller aktuell gelisteten CSRF-pflichtigen mutierenden Endpunkte (Cross-Site-Request ohne Origin/Referer → 403 mit leerem Body; Positivkontrolle mit gültigem Origin) ist gegen den produktionsnahen Middleware-Stack wie in src/lib.rs belegt; die Anti-Enumeration-Parität (bekannte vs. unbekannte E-Mail → identischer Status, byte-identischer Body und Parität der sicherheitsrelevanten Header: kein Set-Cookie-Seitenkanal, identischer Content-Type/Cache-Control, keine E-Mail-/Token-Leakage) ist bewusst über einen schlanken Router belegt, da der Magic-Link-Request keinen Session-Cookie trägt und nicht CSRF-relevant ist. Zusätzlich erzwingt eine quelltextbasierte CSRF-Routen-Drift-Prüfung in apps/api/tests/auth_security_invariants.rs, dass neu deklarierte mutierende Routen explizit als CSRF-geschützt oder als bewusst ausgenommen klassifiziert werden.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/runbook.md",
@@ -189,6 +189,7 @@
         "apps/api/src/routes/auth.rs",
         "apps/api/src/middleware/csrf.rs",
         "apps/api/tests/auth_security_invariants.rs",
+        "apps/api/tests/auth_security_invariants.rs (csrf_mutating_route_drift_guard_matches_router_declarations)",
         "apps/api/tests/api_auth.rs",
         "apps/api/tests/auth_ratelimit.rs",
         "apps/api/src/auth/rate_limit.rs",
