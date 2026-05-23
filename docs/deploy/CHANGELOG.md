@@ -10,6 +10,25 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - Dev-Compose-Web-Image auf Node 20.19.0 (Alpine) gesetzt
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.core.yml`
+
+**Beschreibung:**
+
+Im Dev-Compose-Stack wurde das `web`-Service-Image auf `node:20.19.0-alpine` gesetzt.
+Damit ist die Container-Laufzeit im lokalen Compose-Setup auf die erwartete Node.js-Version
+für die Frontend-Toolchain ausgerichtet.
+
+**Auswirkung auf Deployment:**
+
+- Betrifft das lokale/dev Compose-Verhalten.
+- Keine Änderung an Applikationslogik oder produktivem Compose-Stack.
+
+**Risiko:** Niedrig.
+
 ## 2026-05-16 - CI-only Caddyfile.proof hinzugefügt
 
 **Geänderte Dateien:**
