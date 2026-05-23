@@ -493,7 +493,7 @@ fn extract_mutating_routes_recognizes_on_and_service_forms() {
         ])
     );
 
-    let service_route = r#".route("/devices/:id", on(MethodFilter::POST | MethodFilter::DELETE, handler).route_layer(axum::middleware::from_fn(require_auth)).and(axum::routing::put_service(service)).and(patch_service(service)))"#;
+    let service_route = r#".route("/devices/:id", on(MethodFilter::POST | MethodFilter::DELETE, handler).route_layer(axum::middleware::from_fn(require_auth)).and(axum::routing::put_service(service)).and(patch_service(service)).and(post_service(service)).and(delete_service(service)).and(axum::routing::post_service(service)).and(axum::routing::delete_service(service)))"#;
     let service_mutating = extract_mutating_routes(service_route)
         .into_iter()
         .map(|(method, _)| method)
