@@ -1,5 +1,13 @@
 // "local-sovereign" mode uses the locally served map style and PMTiles artifact.
 // Assets (glyphs/sprites) might still be incomplete, but the runtime pipeline is unblocked.
+//
+// PUBLIC_BASEMAP_MODE is read via import.meta.env.PUBLIC_BASEMAP_MODE, which is
+// exposed by Vite's envPrefix configuration (set in vite.config.ts) and inlined into
+// the client bundle at build time. When unset, it defaults to undefined, which is then
+// resolved by resolveBasemapMode() based on the isLocal context. This allows the bundler
+// to dead-code-eliminate the remote (CARTO) branch in local-sovereign builds, which is
+// what the deploy leak-guard relies on.
+
 export type BasemapMode = "remote-style" | "local-sovereign";
 
 type BaseBasemapConfig = {
@@ -30,6 +38,11 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
+// The remote basemap is CARTO Voyager. Only ever reached via an explicit
+// remote-style choice; never the silent default for the Heimserver/Edge deploy.
+export const REMOTE_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+
 // Safely access env vars in test context
 const isLocal =
   typeof import.meta !== "undefined" && import.meta.env
@@ -47,11 +60,14 @@ export function resolveBasemapMode(
   return isLocalContext ? "local-sovereign" : "remote-style";
 }
 
-const envMode =
+// Statically inlined to a string literal when PUBLIC_BASEMAP_MODE is set,
+// `undefined` when unset. This allows the bundler to dead-code-eliminate the
+// remote (CARTO) branch below in local-sovereign builds.
+const compileTimeMode: string | undefined =
   typeof import.meta !== "undefined" && import.meta.env
     ? import.meta.env.PUBLIC_BASEMAP_MODE
     : undefined;
-const resolvedMode = resolveBasemapMode(envMode, isLocal);
+const resolvedMode = resolveBasemapMode(compileTimeMode, isLocal);
 
 const baseConfig: BaseBasemapConfig = {
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
@@ -60,15 +76,22 @@ const baseConfig: BaseBasemapConfig = {
   maxZoom: 18,
 };
 
+const localSovereignConfig: LocalSovereignBasemapConfig = {
+  ...baseConfig,
+  mode: "local-sovereign",
+};
+
+// The first comparison is against the compile-time literal so that, in a
+// local-sovereign build, the bundler folds it to `true` and eliminates the
+// remote branch (and its CARTO URL literal) entirely. The runtime fallback
+// branches only survive when the mode is not statically local-sovereign.
 export const currentBasemap: BasemapConfig =
-  resolvedMode === "local-sovereign"
-    ? {
-        ...baseConfig,
-        mode: "local-sovereign",
-      }
-    : {
-        ...baseConfig,
-        mode: "remote-style",
-        styleUrl:
-          "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json",
-      };
+  compileTimeMode === "local-sovereign"
+    ? localSovereignConfig
+    : resolvedMode === "remote-style"
+      ? {
+          ...baseConfig,
+          mode: "remote-style",
+          styleUrl: REMOTE_STYLE_URL,
+        }
+      : localSovereignConfig;

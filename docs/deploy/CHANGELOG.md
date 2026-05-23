@@ -10,6 +10,61 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-23 - Souveräner Basemap-Modus im Frontend erzwungen, CARTO-Leak-Guard (gehärtet)
+
+**Geänderte Dateien:**
+
+- `apps/web/src/lib/map/config/basemap.current.ts`
+- `apps/web/src/lib/map/config/basemap.current.test.ts` (neue Datei)
+- `apps/web/vite.config.ts`
+- `scripts/weltgewebe-up`
+- `scripts/tests/test_basemap_mode_guard.sh` (neue Datei)
+- `Makefile`
+
+**Beschreibung:**
+
+1. **SvelteKit-konforme Env-Lesung**: `PUBLIC_BASEMAP_MODE` wird via
+   `import.meta.env.PUBLIC_BASEMAP_MODE` mit sicherer Fallback-Logik gelesen.
+   Dies vermeidet Probleme mit `$env/static/public` in Test-Kontexten (Playwright)
+   und bleibt kompatibel mit Vite/Browser-Build-Kontexten. Der Wert wird bei
+   gesetztem Wert als String-Literal inlined — Voraussetzung für das
+   Dead-Code-Eliminieren des Remote-Zweigs durch den Bundler.
+
+2. **Mode-Resolution vor Build-Entscheidung**: `scripts/weltgewebe-up` validiert
+   und setzt `PUBLIC_BASEMAP_MODE` BEVOR die Build-Entscheidung getroffen wird.
+   Dies stellt sicher:
+   - Ungültige Env-Werte werden früh erkannt und hart blockiert
+   - Edge/Heimserver-Deployments nutzen standardmäßig `local-sovereign`
+   - Der Leak-Guard kann auch bestehende Bundles prüfen, auch wenn kein Rebuild nötig ist
+
+3. **Heimserver/Edge-Default**: Wenn `PUBLIC_BASEMAP_MODE` ungesetzt ist und
+   ein Edge-/Heimserver-Deploy erkannt wird (`DEPLOY_FRONTEND_MODE=edge` oder
+   laufender Edge-Gateway-Container), wird der Modus auf `local-sovereign` gesetzt.
+   Ein explizit gesetzter Wert wird nicht überschrieben. Der effektive Modus wird
+   geloggt: `Frontend basemap mode: <mode> (<source>)`.
+
+4. **local-sovereign Build-Guard (auch bei Build-Skip)**: Der Guard läuft NACH der
+   Build-Entscheidung, unabhängig davon, ob ein Rebuild stattgefunden hat oder nicht.
+   Bei effektivem Modus `local-sovereign` prüft `weltgewebe-up`
+   `apps/web/build/_app/immutable` auf `basemaps.cartocdn.com`/`voyager-gl-style`/
+   `cartocdn`. Treffer → harte Fehlermeldung, Deploy-Abbruch. Zusätzlich muss
+   `local-basemap` im Bundle vorhanden sein, sonst Abbruch.
+   Dies verhindert, dass ein mit `remote-style` gebautes Bundle mit passendem
+   `version.json` durchrutscht, wenn die Build-Entscheidung es als „nicht stale" einstuft.
+
+5. **CSP bleibt unverändert hart**: keine Lockerung, `basemaps.cartocdn.com` bleibt
+   nicht erlaubt. Keine Caddy-/DNS-/PMTiles-/Glyphs-/API-Änderungen.
+
+**Risiko:**
+
+- `remote-style` ist weiterhin nur explizit wählbar und behält den CARTO-Default-URL
+  (als `REMOTE_STYLE_URL`), der ausschließlich im Remote-Zweig landet. In
+  `local-sovereign`-Builds wird dieser Zweig samt URL durch den Bundler entfernt.
+- **Atomizität**: Wenn der Guard nach `pnpm build` fehlschlägt, ist `apps/web/build`
+  bereits geschrieben. Dies ist nicht zwingend ein Blocker (CSP blockiert CARTO
+  sowieso), sollte aber bewusst sein. Folge-PR könnte Pre-Build-Validierung oder
+  Staging-Verzeichnis erwägen.
+
 ## 2026-05-23 - Frontend-Version-Guard und stale Web-Build-Erkennung gehärtet
 
 **Geänderte Dateien:**

@@ -192,4 +192,7 @@ export default defineConfig({
       : 4173,
     strictPort: true,
   },
+  // Expose PUBLIC_ prefixed env vars to import.meta.env for basemap mode configuration
+  // and other public build-time settings. VITE_ prefix is always included by default.
+  envPrefix: ["VITE_", "PUBLIC_"],
 });
