@@ -1,7 +1,11 @@
 # Use the same Rust version as defined in toolchain.versions.yml and compose.core.yml
-FROM rust:1.89.0-bullseye as builder
+FROM rust:1.89.0-bookworm AS builder
 
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # 1) Copy manifests first to cache dependencies
 COPY Cargo.toml Cargo.lock ./
@@ -22,14 +26,16 @@ COPY . .
 RUN cargo build --release --bin weltgewebe-api
 
 # Runner stage
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
 # Install runtime dependencies
 # curl/wget is needed for healthchecks. ca-certificates for HTTPS.
 # jq is needed for data seeding scripts.
-RUN apt-get update && apt-get install -y ca-certificates wget jq && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates wget jq \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
