@@ -19,20 +19,16 @@ describe("resolveBasemapMode", () => {
     expect(resolveBasemapMode("remote-style", false)).toBe("remote-style");
   });
 
-  it("defaults to local-sovereign in a local context when unset", () => {
+  it("defaults to local-sovereign when unset, regardless of context", () => {
+    // The basemap mode policy defines local-sovereign as the default.
+    // Both the build-time generator and this resolver apply the same policy.
     expect(resolveBasemapMode(undefined, true)).toBe("local-sovereign");
-  });
-
-  it("defaults to remote-style in a non-local context when unset", () => {
-    // Documented default of the pure resolver. The build-time generator is
-    // stricter: an unset PUBLIC_BASEMAP_MODE always yields a CARTO-free
-    // local-sovereign config (remote-style is opt-in only).
-    expect(resolveBasemapMode(undefined, false)).toBe("remote-style");
+    expect(resolveBasemapMode(undefined, false)).toBe("local-sovereign");
   });
 
   it("falls back to the default for unknown values instead of trusting them", () => {
     expect(resolveBasemapMode("garbage", true)).toBe("local-sovereign");
-    expect(resolveBasemapMode("", false)).toBe("remote-style");
+    expect(resolveBasemapMode("", false)).toBe("local-sovereign");
   });
 });
 

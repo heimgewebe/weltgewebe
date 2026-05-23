@@ -9,27 +9,32 @@ import path from "node:path";
 // contains no remote URL at all, so the client bundle is guaranteed
 // CARTO-free regardless of the bundler's dead-code elimination.
 //
-// Allowed PUBLIC_BASEMAP_MODE values:
-//   unset           -> local-sovereign (sovereign default; remote is opt-in)
-//   "local-sovereign"
-//   "remote-style"  -> the only mode that carries the CARTO URL
-// Any other value is a hard error so typos cannot silently downgrade
-// sovereignty guarantees.
+// The basemap mode policy (allowed modes, default) is defined in
+// basemap-mode.policy.json. This generator enforces that policy and emits
+// the CARTO URL only for remote-style mode.
 
 const REMOTE_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+
+// Load the basemap mode policy.
+const policyPath = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "..",
+  "basemap-mode.policy.json",
+);
+const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 
 const rawMode = process.env.PUBLIC_BASEMAP_MODE;
 
 let mode;
 if (rawMode === undefined || rawMode === "") {
-  mode = "local-sovereign";
-} else if (rawMode === "local-sovereign" || rawMode === "remote-style") {
+  mode = policy.defaultMode;
+} else if (policy.allowedModes.includes(rawMode)) {
   mode = rawMode;
 } else {
   console.error(`ERROR: Invalid PUBLIC_BASEMAP_MODE='${rawMode}'.`);
   console.error(
-    "       Allowed values: local-sovereign, remote-style (or unset).",
+    `       Allowed values: ${policy.allowedModes.join(", ")} (or unset for default: ${policy.defaultMode}).`,
   );
   process.exit(1);
 }
