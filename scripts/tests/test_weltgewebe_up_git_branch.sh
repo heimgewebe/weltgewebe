@@ -379,7 +379,8 @@ out_detached="$(run_up "$repo_detached" "$WORKDIR_ROOT/detached-head.git.log" 2>
   current_branch="$(git symbolic-ref --short HEAD)"
   [[ "$current_branch" == "main" ]] || fail "detached-head default should end on main"
 )
-assert_contains "$out_detached" "Current branch: DETACHED"
+assert_contains "$out_detached" "Branch before deploy: DETACHED"
+assert_contains "$out_detached" "Current branch: main"
 assert_contains "$out_detached" "Deploy branch: main"
 
 echo "PASS: detached head resolves via deploy-branch contract"
@@ -392,7 +393,7 @@ repo_no_pull="$(new_repo no-pull)"
 )
 out_no_pull="$(run_up "$repo_no_pull" "$WORKDIR_ROOT/no-pull.git.log" --no-pull 2>&1)" || fail "--no-pull run should succeed"
 assert_contains "$out_no_pull" "Git mode: no-pull"
-assert_contains "$out_no_pull" "Deploy branch applied: no (--no-pull)"
+assert_contains "$out_no_pull" "Deploy mode: existing checkout (--no-pull; branch contract not applied)"
 assert_contains "$out_no_pull" "Branch switch: no"
 if grep -Eq '(^| )fetch( |$)|(^| )switch( |$)|(^| )pull( |$)' "$WORKDIR_ROOT/no-pull.git.log"; then
   fail "--no-pull must not execute fetch/switch/pull"
@@ -404,6 +405,20 @@ fi
 )
 
 echo "PASS: --no-pull skips git sync/branch operations"
+
+# 7b) --no-pull and --current-branch are mutually exclusive
+repo_no_pull_current="$(new_repo no-pull-current-branch)"
+set +e
+out_no_pull_current="$(run_up "$repo_no_pull_current" "$WORKDIR_ROOT/no-pull-current-branch.git.log" --no-pull --current-branch 2>&1)"
+rc_no_pull_current=$?
+set -e
+[[ "$rc_no_pull_current" -ne 0 ]] || fail "--no-pull --current-branch should fail"
+assert_contains "$out_no_pull_current" "ERROR: --current-branch cannot be combined with --no-pull."
+if grep -Eq '(^| )fetch( |$)|(^| )switch( |$)|(^| )pull( |$)' "$WORKDIR_ROOT/no-pull-current-branch.git.log"; then
+  fail "--no-pull --current-branch must not execute fetch/switch/pull"
+fi
+
+echo "PASS: --no-pull rejects --current-branch"
 
 # 8) Non-fast-forward pull fails hard
 repo_nonff="$(new_repo non-ff)"

@@ -102,6 +102,12 @@ if [[ "$USE_CURRENT_BRANCH" == "1" && -n "$DEPLOY_BRANCH_OVERRIDE" ]]; then
     exit 1
 fi
 
+if [[ "$DO_PULL" != "1" && "$USE_CURRENT_BRANCH" == "1" ]]; then
+    echo "ERROR: --current-branch cannot be combined with --no-pull."
+    echo "       --no-pull deploys the existing checkout without fetch/switch/pull."
+    exit 1
+fi
+
 if [[ "$USE_CURRENT_BRANCH" != "1" && -z "$DEPLOY_BRANCH" ]]; then
     echo "ERROR: Deploy branch resolved to empty value."
     echo "       Set WELTGEWEBE_DEPLOY_BRANCH or pass --branch <name>."
@@ -469,11 +475,12 @@ fi
 
 echo
 echo ">> Git Summary:"
-echo "   Current branch: $CURRENT_BRANCH_BEFORE"
+echo "   Branch before deploy: $CURRENT_BRANCH_BEFORE"
+echo "   Current branch: $CURRENT_BRANCH_AFTER"
 echo "   Deploy branch: $DEPLOY_BRANCH_RESOLVED"
 echo "   Git mode: $( [[ "$DO_PULL" == "1" ]] && echo "pull" || echo "no-pull" )"
 if [[ "$DO_PULL" != "1" ]]; then
-    echo "   Deploy branch applied: no (--no-pull)"
+    echo "   Deploy mode: existing checkout (--no-pull; branch contract not applied)"
 fi
 echo "   Branch switch: $( [[ "$BRANCH_SWITCH_ATTEMPTED" == "yes" ]] && echo "yes" || echo "no" )"
 echo "   Previous HEAD: $HEAD_BEFORE"
