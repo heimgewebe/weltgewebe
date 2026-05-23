@@ -24,6 +24,25 @@ const policyPath = path.resolve(
 );
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 
+// Validate policy structure.
+const validModes = new Set(["local-sovereign", "remote-style"]);
+if (!validModes.has(policy.defaultMode)) {
+  console.error(
+    `ERROR: Invalid basemap-mode.policy.json: defaultMode='${policy.defaultMode}' is not in validModes.`,
+  );
+  process.exit(1);
+}
+if (
+  !Array.isArray(policy.allowedModes) ||
+  policy.allowedModes.some((mode) => !validModes.has(mode)) ||
+  !policy.allowedModes.includes(policy.defaultMode)
+) {
+  console.error(
+    "ERROR: Invalid basemap-mode.policy.json: allowedModes must be an array of valid modes and must include defaultMode.",
+  );
+  process.exit(1);
+}
+
 const rawMode = process.env.PUBLIC_BASEMAP_MODE;
 
 let mode;
