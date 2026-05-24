@@ -386,6 +386,24 @@ async fn append_account_line(record: &Value) -> std::io::Result<()> {
 /// `require_admin` middleware). v0 creates a verortete Garnrolle with a public
 /// position derived from `location` (+ optional `radius_m`, default 0 => exact).
 ///
+/// ## radius_m semantics
+///
+/// - `radius_m=0` (default): `public_pos` equals `location` exactly.
+/// - `radius_m>0`: `public_pos` is a **deterministic, ID-based jitter** of
+///   `location` within a square bounding box of ±`radius_m` meters. The jitter
+///   is derived from a djb2 hash of the account ID and is guaranteed non-zero
+///   (the hash bucket values can never produce exactly 0.0 offset for either
+///   axis). This is not a fake field: the API actually obfuscates the position
+///   when a non-zero radius is requested.
+///
+/// ## role=admin in v0
+///
+/// The `role` field accepts `"weber"` (default) or `"admin"`. Allowing an
+/// Admin to create another Admin account is **intentional in v0** — it enables
+/// controlled power delegation by the initial operator. Only the first Admin
+/// must be bootstrapped via `scripts/dev/bootstrap-first-account.sh`; all
+/// subsequent Admins can be created through this endpoint by an existing Admin.
+///
 /// Persists by appending to the JSONL store (durable across restart) and
 /// inserts into the in-memory store (immediate visibility for GET /accounts).
 pub async fn create_account(

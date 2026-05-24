@@ -356,7 +356,16 @@ In-Memory-Store ist die Lesequelle und wird beim Start aus dem JSONL geladen.
   Accounts anlegen.
 - **Typ:** immer verortete Garnrolle (`type=garnrolle`, `mode=verortet`).
 - **Position:** Request nimmt eine interne `location` entgegen; `public_pos` wird
-  daraus abgeleitet. Bei `radius_m=0` ist `public_pos == location` (exakt).
+  daraus abgeleitet. Bei `radius_m=0` ist `public_pos == location` (exakt). Bei
+  `radius_m>0` wird `public_pos` deterministisch auf Basis der Account-ID
+  innerhalb eines ±`radius_m`-Meter-Quadrats verschoben (kein Zufallswert, kein
+  Sprung bei erneutem Laden). Die Verschiebung ist garantiert nicht null.
+- **Rollenvergabe:** Der `role`-Parameter erlaubt `"weber"` (Default) oder
+  `"admin"`. Ein Admin darf in v0 auch Admin-Accounts anlegen — dies ist
+  **bewusste Machtweitergabe** und ermöglicht kontrollierten Auf- und Abbau der
+  Betreiberstruktur. Nur der **erste Admin** muss per Bootstrap erzeugt werden
+  (Henne-Ei: kein API-Zugang vor dem ersten Admin); alle weiteren Admins legt
+  ein bestehender Admin über diesen Endpunkt an.
 
 **Request-Body:**
 
@@ -365,7 +374,7 @@ In-Memory-Store ist die Lesequelle und wird beim Start aus dem JSONL geladen.
 | `title` | ja | Anzeigename (nicht leer) |
 | `location.lat` | ja | Breitengrad, Zahl in `[-90, 90]` |
 | `location.lon` | ja | Längengrad, Zahl in `[-180, 180]` |
-| `radius_m` | nein | Unschärferadius (Default `0` ⇒ exakte `public_pos`) |
+| `radius_m` | nein | Unschärferadius in Metern (Default `0` ⇒ exakte `public_pos`; `>0` ⇒ deterministische ID-basierte Verschiebung) |
 | `summary` | nein | Kurzbeschreibung (leer ⇒ weggelassen) |
 | `role` | nein | `weber` oder `admin` (Allowlist, Default `weber`) |
 | `tags` | nein | Liste von Strings |
