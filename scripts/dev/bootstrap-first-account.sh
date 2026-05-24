@@ -120,8 +120,17 @@ _validate_coord "$PUBLIC_LON" -180 180 "PUBLIC_LON"
 # control characters (ASCII 0-31 except tab, which is also rejected for safety).
 _validate_no_control_chars() {
   local val="$1" name="$2"
-  if printf '%s' "$val" | grep -qE '[[:cntrl:]]'; then
-    echo "Error: $name contains control characters (CR, LF, etc.), which are not allowed." >&2
+  # First check for common control characters using bash pattern matching
+  # (more reliable than grep for detecting LF/CR in shell variables)
+  case "$val" in
+    *$'\n'*|*$'\r'*|*$'\t'*)
+      echo "Error: $name contains control characters (CR, LF, TAB), which are not allowed." >&2
+      exit 1
+      ;;
+  esac
+  # Additional check for other control characters using grep with LC_ALL=C
+  if printf '%s' "$val" | LC_ALL=C grep -q '[[:cntrl:]]'; then
+    echo "Error: $name contains control characters, which are not allowed." >&2
     exit 1
   fi
 }
