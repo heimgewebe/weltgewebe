@@ -6,7 +6,7 @@ set -euo pipefail
 # Reads account metadata from .gewebe/in/bootstrap-first-account.env (written
 # by scripts/dev/bootstrap-first-account.sh). Checks:
 #   - /api/accounts: account present and public_pos set
-#   - /map: reachable (HTTP 200)
+#   - /map: reachable (HTTP 200) — only when pointed at web/Caddy origin, not in direct-API mode
 #
 # Usage:
 #   ./scripts/dev/smoke-seed.sh
