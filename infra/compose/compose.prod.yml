@@ -25,7 +25,7 @@ services:
       # Optional bootstrap fields (account is always garnrolle/verortet):
       ACCOUNT_ID: ${ACCOUNT_ID:-}
       ACCOUNT_SUMMARY: ${ACCOUNT_SUMMARY:-}
-      ACCOUNT_ROLE: ${ACCOUNT_ROLE:-weber}
+      ACCOUNT_ROLE: ${ACCOUNT_ROLE:-admin}
       ACCOUNT_TAGS: ${ACCOUNT_TAGS:-real}
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-}
       DATABASE_URL: ${DATABASE_URL}
