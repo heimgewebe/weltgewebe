@@ -504,6 +504,9 @@ BASE_URL=https://<deine-domain> just smoke-seed
 
 Der Bootstrap ist idempotent: er überspringt den Lauf, wenn
 `.gewebe/in/bootstrap-first-account.env` auf dem Volume `/data` bereits existiert.
-Ist `GEWEBE_SEED_REAL=true` und befüllen die Kerndateien die Demo-Sentinel-Prüfung,
-wird die Demo-Generierung automatisch übersprungen.
+
+Bei realem Bootstrap muss `GEWEBE_SEED_DEMO=false` gesetzt sein. Wenn
+`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig gesetzt sind,
+bricht der Entrypoint bewusst ab; es gibt keinen Mischbetrieb aus Real- und
+Demo-Seeding.
 
