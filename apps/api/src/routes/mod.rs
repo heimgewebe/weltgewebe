@@ -12,11 +12,11 @@ use axum::{
     Router,
 };
 
-use crate::middleware::authz::require_write;
+use crate::middleware::authz::{require_admin, require_write};
 use crate::state::ApiState;
 
 use self::{
-    accounts::{get_account, list_accounts},
+    accounts::{create_account, get_account, list_accounts},
     auth::{
         consume_login_get, consume_login_post, consume_step_up, dev_login, list_dev_accounts,
         list_devices, logout, logout_all, me, passkey_register_options, remove_device,
@@ -37,7 +37,12 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route("/edges", get(list_edges))
         .route("/edges/:id", get(get_edge))
-        .route("/accounts", get(list_accounts))
+        .route(
+            "/accounts",
+            get(list_accounts)
+                .post(create_account)
+                .route_layer(from_fn(require_admin)),
+        )
         .route("/accounts/:id", get(get_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))
         .route("/auth/dev/login", post(dev_login))

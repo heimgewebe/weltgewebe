@@ -128,6 +128,28 @@ check-demo:
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/nodes" | jq length
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/edges" | jq length
 
+# ---------- Real seed (erster echter Account + reale Anfangsdaten) ----------
+# Smoke-Origin überschreibbar: `just smoke-seed BASE_URL=http://127.0.0.1:8081`
+BASE_URL := "http://127.0.0.1:8081"
+
+# Bootstrapped den ersten echten Account (idempotent) nach .gewebe/in.
+# Benötigt Umgebungsvariablen: ACCOUNT_TITLE, PUBLIC_LAT, PUBLIC_LON (alle Pflicht).
+# Optional: ACCOUNT_ID, ACCOUNT_SUMMARY, ACCOUNT_ROLE, ACCOUNT_TAGS, ACCOUNT_EMAIL.
+# Beispiel:
+#   ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.55" PUBLIC_LON="9.99" just bootstrap-first-account
+bootstrap-first-account:
+	./scripts/dev/bootstrap-first-account.sh
+
+# Smoke-Check des Bootstrapped-Accounts gegen einen laufenden Stack (Caddy-Origin).
+# Liest Account-ID aus .gewebe/in/bootstrap-first-account.env.
+smoke-seed:
+	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-seed.sh
+
+# Smoke-Check für Account Creation v0: Admin legt Account per POST /api/accounts an.
+# Benötigt laufenden Stack + AUTH_DEV_LOGIN=1 + Admin-Account (bootstrap mit ACCOUNT_ROLE=admin).
+smoke-account-create:
+	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-account-create.sh
+
 # ---------- Contracts ----------
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh

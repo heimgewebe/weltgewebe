@@ -333,3 +333,190 @@ deployment) will fail fast.
   for `Host` header forwarding.
 
 Ensure these are set in your `.env` file or deployment secrets.
+
+## 4. Account Creation v0 (Hauptpfad) & Erst-Admin-Bootstrap
+
+Es gibt zwei klar getrennte Wege, einen Account anzulegen:
+
+- **Account Creation v0 (Hauptpfad):** Ein eingeloggter **Admin** legt Accounts
+  über `POST /api/accounts` an. Der Account wird dauerhaft gespeichert
+  (JSONL-Append + In-Memory-Store) und ist sofort über `GET /api/accounts` und
+  die Karte sichtbar. Keine öffentliche Registrierung, kein Self-Signup.
+- **Bootstrap (Init-/Not-/Dev-Pfad):** legt den **ersten Admin** an (Henne-Ei:
+  der erste Admin kann nicht per API entstehen) bzw. seedet beim Container-Start.
+  Ausdrücklich **nicht** der normale Erstellungsprozess.
+
+Die Datenebene ist JSONL-gespeist (`GEWEBE_IN_DIR`, Standard `.gewebe/in`); der
+In-Memory-Store ist die Lesequelle und wird beim Start aus dem JSONL geladen.
+
+### Account Creation v0: `POST /api/accounts`
+
+- **Authz:** nur **Admin** (eigene `require_admin`-Prüfung, strenger als das
+  generische `require_write` für Weber+Admin). Weber dürfen in v0 **keine**
+  Accounts anlegen.
+- **Typ:** immer verortete Garnrolle (`type=garnrolle`, `mode=verortet`).
+- **Position:** Request nimmt eine interne `location` entgegen; `public_pos` wird
+  daraus abgeleitet. Bei `radius_m=0` ist `public_pos == location` (exakt). Bei
+  `radius_m>0` wird `public_pos` deterministisch auf Basis der Account-ID
+  innerhalb eines ±`radius_m`-Meter-Quadrats verschoben (kein Zufallswert, kein
+  Sprung bei erneutem Laden). Die Verschiebung ist garantiert nicht null.
+- **Rollenvergabe:** Der `role`-Parameter erlaubt `"weber"` (Default) oder
+  `"admin"`. Ein Admin darf in v0 auch Admin-Accounts anlegen — dies ist
+  **bewusste Machtweitergabe** und ermöglicht kontrollierten Auf- und Abbau der
+  Betreiberstruktur. Nur der **erste Admin** muss per Bootstrap erzeugt werden
+  (Henne-Ei: kein API-Zugang vor dem ersten Admin); alle weiteren Admins legt
+  ein bestehender Admin über diesen Endpunkt an.
+
+**Request-Body:**
+
+| Feld | Pflicht | Bedeutung |
+|---|---|---|
+| `title` | ja | Anzeigename (nicht leer) |
+| `location.lat` | ja | Breitengrad, Zahl in `[-90, 90]` |
+| `location.lon` | ja | Längengrad, Zahl in `[-180, 180]` |
+| `radius_m` | nein | Unschärferadius in Metern (Default `0` ⇒ exakte `public_pos`; `>0` ⇒ deterministische ID-basierte Verschiebung) |
+| `summary` | nein | Kurzbeschreibung (leer ⇒ weggelassen) |
+| `role` | nein | `weber` oder `admin` (Allowlist, Default `weber`) |
+| `tags` | nein | Liste von Strings |
+| `id` | nein | UUID (sonst serverseitig generiert) |
+| `email` | nein | operatives Feld (nicht Teil des Domain-Contracts) |
+
+**Antworten:** `201 Created` (Account-JSON) · `400` ungültige Felder/Koordinaten ·
+`401` nicht eingeloggt · `403` eingeloggt, aber nicht Admin · `409` ID/E-Mail-Konflikt.
+
+**Beispiel (lokal, Admin-Session via Dev-Login):**
+
+```bash
+# Admin-Session holen (AUTH_DEV_LOGIN=1 vorausgesetzt), Cookie speichern:
+curl -fsS -c cookies.txt -X POST http://127.0.0.1:8081/api/auth/dev/login \
+  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
+  -d '{"account_id":"<ADMIN_UUID>"}'
+
+# Account anlegen (Cookie + Origin nötig wegen CSRF):
+curl -fsS -b cookies.txt -X POST http://127.0.0.1:8081/api/accounts \
+  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
+  -d '{"title":"Alice","location":{"lat":53.5503,"lon":9.9932},"tags":["real"]}'
+```
+
+**Smoke (POST → GET, zusätzlich /map bei Web/Caddy-Origin):**
+
+```bash
+just smoke-account-create   # liest Admin-ID aus bootstrap-first-account.env
+```
+
+> **Hinweis:** `smoke-account-create.sh` prüft `/map` nur, wenn gegen die Web/Caddy-Origin geprüft wird.
+> Im Direct-API-Modus (`API_PREFIX=`) wird `/map` bewusst übersprungen, da die Rust-API keine `/map`-Route hat.
+>
+> **UI:** Ein Minimalformular „Account erstellen" ist bewusst **nicht** Teil
+> dieses PR und folgt als expliziter Folge-PR. v0 ist API + Smoke + Tests.
+
+### Erst-Admin & Initialisierung: Bootstrap (Not-/Dev-Pfad)
+
+Der Bootstrap-Account ist immer eine **verortete Garnrolle** (`type=garnrolle`,
+`mode=verortet`, `radius_m=0`). Für den **ersten Admin** `ACCOUNT_ROLE=admin`
+setzen — danach legt dieser Admin alle weiteren Accounts über die API an.
+
+`scripts/dev/bootstrap-first-account.sh` legt genau einen Account an und
+schreibt die Metadaten (Account-ID, Titel, Position) nach
+`.gewebe/in/bootstrap-first-account.env`.
+
+**Pflichtfelder (per Umgebungsvariable):**
+
+| Variable | Bedeutung | Validierung |
+|---|---|---|
+| `ACCOUNT_TITLE` | Anzeigename des Accounts | nicht leer |
+| `PUBLIC_LAT` | Breitengrad der öffentlichen Kartenposition | Zahl in `[-90, 90]` |
+| `PUBLIC_LON` | Längengrad der öffentlichen Kartenposition | Zahl in `[-180, 180]` |
+
+**Optionale Felder:**
+
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `ACCOUNT_ID` | UUID (sonst automatisch generiert) | auto |
+| `ACCOUNT_SUMMARY` | Kurzbeschreibung (leer ⇒ weggelassen) | leer |
+| `ACCOUNT_ROLE` | `weber` oder `admin` (Allowlist) | `admin` |
+| `ACCOUNT_TAGS` | Kommagetrennte Tags | `real` |
+| `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
+
+Der Account-Typ ist fix `garnrolle`/`verortet` und nicht konfigurierbar.
+Werte werden scriptintern JSON-sicher escaped; der Bootstrap-Pfad benötigt kein `jq`. `jq` wird nur für Smoke-/Dev-Auswertung verwendet.
+
+**Flags:**
+
+- `--round-location` — Koordinaten auf 3 Dezimalstellen runden (~111 m Unschärfe)
+- `--clean-demo` — Bekannte Demo-IDs aus dem Datensatz entfernen
+- `--force` — Neu anlegen, auch wenn Metadatei bereits existiert
+
+**Idempotenz:** Dieser Pfad ist für die Initialisierung des ersten Admins gedacht.
+Die Idempotenz wird über die Metadatei `.gewebe/in/bootstrap-first-account.env`
+gesteuert: Wenn diese Datei existiert, wird das Skript ohne Fehler beendet und
+gibt die bereits gespeicherte Account-ID aus. Mit `--force` kann ein neuer Account
+angelegt werden, auch wenn die Metadatei bereits existiert.
+
+**Hinweis zur Position:** `PUBLIC_LAT`/`PUBLIC_LON` werden als `public_pos` über
+`/api/accounts` öffentlich sichtbar. Bewusste Entscheidung — die Position ist
+auf der Karte sichtbar. `--round-location` reduziert die Präzision (~111 m).
+`.gewebe/in/` ist git-ignored; keine echten Koordinaten werden ins Repo geschrieben.
+
+### Lokal (dev): Erst-Admin bootstrappen, dann per API erstellen
+
+```bash
+# 1. Ersten Admin bootstrappen (ACCOUNT_ROLE=admin!):
+ACCOUNT_ROLE="admin" ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+  just bootstrap-first-account
+
+# 2. Dev-Stack mit Dev-Login starten:
+AUTH_DEV_LOGIN=1 just up
+
+# 3. Smoke: Bootstrap-Account sichtbar?
+just smoke-seed
+
+# 4. Account Creation v0: Admin legt weitere Accounts per API an.
+just smoke-account-create
+```
+
+Dev-Login (kein Public-Login nötig): `AUTH_DEV_LOGIN=1` setzen, dann
+`POST /api/auth/dev/login` mit der `account_id` aus der Metadatei.
+Magic-Link/Public-Login bleibt bewusst außerhalb dieses Pfads (siehe Abschnitt 3).
+
+### Produktion / `weltgewebe-up`
+
+Der API-Container-Entrypoint führt den Bootstrap beim Start aus, wenn aktiviert.
+In der `.env` (oder deployment secrets):
+
+```bash
+GEWEBE_SEED_REAL=true
+GEWEBE_SEED_DEMO=false
+
+# Pflichtfelder für GEWEBE_SEED_REAL=true:
+ACCOUNT_TITLE=Alice
+PUBLIC_LAT=53.5503
+PUBLIC_LON=9.9932
+
+# Optional:
+# ACCOUNT_SUMMARY=Gründerin
+# ACCOUNT_ROLE=admin      # first real bootstrap account should be admin; later accounts via API
+# ACCOUNT_TAGS=real
+# ACCOUNT_EMAIL=alice@example.com
+```
+
+`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig sind verboten:
+Der Entrypoint bricht mit Fehler ab (kein Mischbetrieb aus realem Erstaccount
+und Demo-Daten).
+
+Danach deployen und gegen den Caddy-Origin smoken:
+
+```bash
+scripts/weltgewebe-up --with-caddy
+BASE_URL=https://<deine-domain> just smoke-seed
+```
+
+Dieser Pfad ist für die Initialisierung des ersten Admins gedacht; technisch wird
+Idempotenz über `bootstrap-first-account.env` gesteuert (Entrypoint überspringt
+den Lauf, wenn diese Metadatei auf dem Volume `/data` bereits existiert).
+
+Bei realem Bootstrap muss `GEWEBE_SEED_DEMO=false` gesetzt sein. Wenn
+`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig gesetzt sind,
+bricht der Entrypoint bewusst ab; es gibt keinen Mischbetrieb aus Real- und
+Demo-Seeding.
+

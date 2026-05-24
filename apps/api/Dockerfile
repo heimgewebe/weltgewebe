@@ -35,7 +35,7 @@ WORKDIR /app
 
 # Install runtime dependencies
 # wget is needed for healthchecks. ca-certificates for HTTPS.
-# jq is needed for data seeding scripts.
+# jq is kept for demo/dev tooling and smoke-style JSON inspection; bootstrap-first-account.sh does not require jq.
 # libssl3 is required by OpenSSL-linked Rust dependencies such as webauthn-rs.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 \
@@ -47,8 +47,9 @@ COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
 # Copy scripts for data seeding
 # Note: Docker context is repo root
 COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
+COPY scripts/dev/bootstrap-first-account.sh /usr/local/bin/bootstrap-first-account
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
 
 # Expose the port
 COPY policies /app/policies

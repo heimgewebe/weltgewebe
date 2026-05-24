@@ -10,6 +10,48 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-05-24 - Account-Erstellung v0: compose.prod.yml reicht Bootstrap-Variablen durch
+
+**Geänderte Dateien:**
+
+- `infra/compose/compose.prod.yml`
+- `apps/api/entrypoint.sh`
+- `apps/api/Dockerfile`
+- `scripts/dev/bootstrap-first-account.sh` (neue Datei)
+- `scripts/dev/smoke-seed.sh` (neue Datei)
+- `scripts/dev/smoke-account-create.sh` (neue Datei)
+
+**Beschreibung:**
+
+1. **Normaler Account-Erstellungspfad** ist `POST /api/accounts` durch eingeloggte
+   Admins. Admin-only; erfordert eine gültige Admin-Session.
+
+2. **Bootstrap nur für Henne-Ei-Situationen**: `GEWEBE_SEED_REAL=true` aktiviert
+   den Erst-Admin-Bootstrap beim Container-Start. Dieser Pfad ist ausschließlich
+   für den allerersten Admin gedacht, wenn noch kein Account in der Datenbank
+   existiert.
+
+3. **`infra/compose/compose.prod.yml`** reicht folgende Variablen an den
+   API-Container durch:
+   - `GEWEBE_SEED_REAL` (default: `false`) — aktiviert Bootstrap.
+   - `GEWEBE_SEED_DEMO` — Demo-Daten ein/aus. Für echte Deployments auf `false`
+     setzen.
+   - `GEWEBE_SEED_REAL` und `GEWEBE_SEED_DEMO` sind gegenseitig ausgeschlossen:
+     beide gleichzeitig sind verboten; der Entrypoint bricht ab. Es gibt keinen
+     Mischbetrieb und kein stilles Überspringen bei widersprüchlicher Konfiguration.
+
+4. **`bootstrap-first-account.sh` ohne jq**: `bootstrap-first-account.sh` benötigt
+   Bash sowie Standard-CLI-Tools (`grep`, `awk`, `sed`, `printf`); kein `jq`.
+
+5. **Smoke/Dev-Hinweis**: `smoke-account-create.sh` benötigt `jq` für die
+   Auswertung der JSON-API-Antworten. Der Smoke ist für Entwicklungsumgebungen
+   gedacht, nicht für den Container-Start. `bootstrap-first-account.sh` benötigt
+   kein `jq`.
+
+6. **Dateinamen historisch**: Die JSONL-Datendateien heißen weiterhin
+   `demo.accounts.jsonl`, `demo.nodes.jsonl`, `demo.edges.jsonl` — auch für reale
+   Daten. Die Namen sind historisch und bleiben aus Kompatibilitätsgründen
+   unverändert.
 
 ## 2026-05-24 - CSP-Härtung für repo-interne local-sovereign Caddyfiles
 

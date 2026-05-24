@@ -4,9 +4,33 @@ set -e
 # GEWEBE_IN_DIR should be set by docker-compose, default to .gewebe/in
 DATA_DIR="${GEWEBE_IN_DIR:-.gewebe/in}"
 
-# Check if seeding is enabled (default: false)
-# We support "true", "1", "yes"
+# Optional: seed the REAL starting dataset (default: false).
+# Idempotent. Recommended for real deployments together with GEWEBE_SEED_DEMO=false.
+# Real and demo seeding are mutually exclusive. If both are enabled, startup fails.
+# For real deployments use GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false.
+ENABLE_REAL_SEEDING="${GEWEBE_SEED_REAL:-false}"
+
+# Check if demo seeding is enabled (default: false). We support "true", "1", "yes".
 ENABLE_SEEDING="${GEWEBE_SEED_DEMO:-false}"
+
+# Guard: real and demo seeding are mutually exclusive. Mixing a real first
+# account with demo Garnrollen makes "which data is real?" unanswerable.
+if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]] && [[ "$ENABLE_SEEDING" =~ ^(true|1|yes)$ ]]; then
+    echo "Error: GEWEBE_SEED_REAL and GEWEBE_SEED_DEMO must not both be enabled." >&2
+    echo "       For a real deployment set GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false." >&2
+    exit 1
+fi
+
+if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
+    echo "Ensuring REAL seed data in $DATA_DIR (GEWEBE_SEED_REAL=$ENABLE_REAL_SEEDING)..."
+    mkdir -p "$DATA_DIR"
+    if command -v bootstrap-first-account >/dev/null 2>&1; then
+        bootstrap-first-account "$DATA_DIR"
+    else
+        echo "Error: bootstrap-first-account not found, cannot perform GEWEBE_SEED_REAL." >&2
+        exit 1
+    fi
+fi
 
 if [[ "$ENABLE_SEEDING" =~ ^(true|1|yes)$ ]]; then
     # Sentinel check: If core files exist and are not empty, we assume data is present.
