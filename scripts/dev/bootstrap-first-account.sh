@@ -115,6 +115,27 @@ _validate_coord() {
 _validate_coord "$PUBLIC_LAT" -90 90 "PUBLIC_LAT"
 _validate_coord "$PUBLIC_LON" -180 180 "PUBLIC_LON"
 
+# --- Validate text fields: reject control characters (CR, LF, etc.) ---
+# JSONL format requires single-line records. Reject any field containing
+# control characters (ASCII 0-31 except tab, which is also rejected for safety).
+_validate_no_control_chars() {
+  local val="$1" name="$2"
+  if printf '%s' "$val" | grep -qE '[[:cntrl:]]'; then
+    echo "Error: $name contains control characters (CR, LF, etc.), which are not allowed." >&2
+    exit 1
+  fi
+}
+_validate_no_control_chars "$ACCOUNT_TITLE" "ACCOUNT_TITLE"
+if [ -n "${ACCOUNT_SUMMARY:-}" ]; then
+  _validate_no_control_chars "$ACCOUNT_SUMMARY" "ACCOUNT_SUMMARY"
+fi
+if [ -n "${ACCOUNT_TAGS:-}" ]; then
+  _validate_no_control_chars "$ACCOUNT_TAGS" "ACCOUNT_TAGS"
+fi
+if [ -n "${ACCOUNT_EMAIL:-}" ]; then
+  _validate_no_control_chars "$ACCOUNT_EMAIL" "ACCOUNT_EMAIL"
+fi
+
 # --- Defaults & allowlists ---
 ACCOUNT_ROLE="${ACCOUNT_ROLE:-admin}"
 case "$ACCOUNT_ROLE" in

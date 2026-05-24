@@ -398,11 +398,14 @@ curl -fsS -b cookies.txt -X POST http://127.0.0.1:8081/api/accounts \
   -d '{"title":"Alice","location":{"lat":53.5503,"lon":9.9932},"tags":["real"]}'
 ```
 
-**Smoke (POST → GET → /map):**
+**Smoke (POST → GET, zusätzlich /map bei Web/Caddy-Origin):**
 
 ```bash
 just smoke-account-create   # liest Admin-ID aus bootstrap-first-account.env
 ```
+
+> **Hinweis:** `smoke-account-create.sh` prüft `/map` nur, wenn gegen die Web/Caddy-Origin geprüft wird.
+> Im Direct-API-Modus (`API_PREFIX=`) wird `/map` bewusst übersprungen, da die Rust-API keine `/map`-Route hat.
 
 > **UI:** Ein Minimalformular „Account erstellen" ist bewusst **nicht** Teil
 > dieses PR und folgt als expliziter Folge-PR. v0 ist API + Smoke + Tests.
@@ -443,6 +446,12 @@ Werte werden scriptintern JSON-sicher escaped; der Bootstrap-Pfad benötigt kein
 - `--round-location` — Koordinaten auf 3 Dezimalstellen runden (~111 m Unschärfe)
 - `--clean-demo` — Bekannte Demo-IDs aus dem Datensatz entfernen
 - `--force` — Neu anlegen, auch wenn Metadatei bereits existiert
+
+**Idempotenz:** Dieser Pfad ist für die Initialisierung des ersten Admins gedacht.
+Die Idempotenz wird über die Metadatei `.gewebe/in/bootstrap-first-account.env`
+gesteuert: Wenn diese Datei existiert, wird das Skript ohne Fehler beendet und
+gibt die bereits gespeicherte Account-ID aus. Mit `--force` kann ein neuer Account
+angelegt werden, auch wenn die Metadatei bereits existiert.
 
 **Hinweis zur Position:** `PUBLIC_LAT`/`PUBLIC_LON` werden als `public_pos` über
 `/api/accounts` öffentlich sichtbar. Bewusste Entscheidung — die Position ist
