@@ -8,9 +8,9 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 
 ## Runtime Assumptions (Important)
 
-* glyphs are referenced via relative paths and must be served alongside the `style.json`
+* glyphs are referenced via the stable `/local-basemap/glyphs/{fontstack}/{range}.pbf` runtime path and must be served by the same local-basemap route as `style.json`
 * `pmtiles://` URLs require a protocol handler in the MapLibre runtime (not part of this configuration)
-* The current configuration is a structural artifact, not a fully wired runtime setup
+* The current configuration is wired for the local-sovereign runtime route `/local-basemap/`
 
 ## Structure
 
