@@ -128,6 +128,18 @@ check-demo:
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/nodes" | jq length
 	curl -fsS "http://127.0.0.1:{{PORT}}/api/edges" | jq length
 
+# ---------- Real seed (erster echter Account + reale Anfangsdaten) ----------
+# Smoke-Origin überschreibbar: `just smoke-seed BASE_URL=http://127.0.0.1:8081`
+BASE_URL := "http://127.0.0.1:8081"
+
+# Seedet den ersten echten Account + reale Anfangsdaten (idempotent) nach .gewebe/in
+seed-real:
+	./scripts/dev/seed-real-data.sh
+
+# Smoke-Check der realen Seed-Daten gegen einen laufenden Stack (Caddy-Origin)
+smoke-seed:
+	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-seed.sh
+
 # ---------- Contracts ----------
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh

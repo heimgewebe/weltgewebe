@@ -14,6 +14,9 @@ services:
       # Enable demo data seeding via env var (default: false).
       # Set GEWEBE_SEED_DEMO=true in .env for development deployments.
       GEWEBE_SEED_DEMO: ${GEWEBE_SEED_DEMO:-false}
+      # Enable REAL initial data seeding (default: false). Idempotent.
+      # For a real deployment set GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false.
+      GEWEBE_SEED_REAL: ${GEWEBE_SEED_REAL:-false}
       DATABASE_URL: ${DATABASE_URL}
       RUST_LOG: ${RUST_LOG:-info}
       # Auth

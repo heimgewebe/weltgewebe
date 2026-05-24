@@ -4,6 +4,22 @@ set -e
 # GEWEBE_IN_DIR should be set by docker-compose, default to .gewebe/in
 DATA_DIR="${GEWEBE_IN_DIR:-.gewebe/in}"
 
+# Optional: seed the REAL starting dataset (default: false).
+# Idempotent. Recommended for real deployments together with GEWEBE_SEED_DEMO=false
+# so the dataset stays "real only". Runs before the demo sentinel below, so if the
+# real seed populates the core files, demo generation is skipped automatically.
+ENABLE_REAL_SEEDING="${GEWEBE_SEED_REAL:-false}"
+
+if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
+    echo "Ensuring REAL seed data in $DATA_DIR (GEWEBE_SEED_REAL=$ENABLE_REAL_SEEDING)..."
+    mkdir -p "$DATA_DIR"
+    if command -v seed-real-data >/dev/null 2>&1; then
+        seed-real-data "$DATA_DIR"
+    else
+        echo "Warning: seed-real-data not found, skipping real seeding."
+    fi
+fi
+
 # Check if seeding is enabled (default: false)
 # We support "true", "1", "yes"
 ENABLE_SEEDING="${GEWEBE_SEED_DEMO:-false}"

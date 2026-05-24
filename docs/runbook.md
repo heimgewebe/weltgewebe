@@ -333,3 +333,64 @@ deployment) will fail fast.
   for `Host` header forwarding.
 
 Ensure these are set in your `.env` file or deployment secrets.
+
+## 4. Erster echter Account & reale Seed-Daten
+
+Die Datenebene ist read-only und JSONL-gespeist (`GEWEBE_IN_DIR`, Standard
+`.gewebe/in`). Es gibt bewusst keinen Account-/Create-Endpoint, der persistiert.
+Der erste echte Account und reale Anfangsdaten werden daher über einen
+idempotenten Seed-Pfad angelegt, klar getrennt von den Demo-Daten.
+
+### Was der reale Seed enthält
+
+`scripts/dev/seed-real-data.sh` erzeugt eine privacy-sichere Startmenge:
+
+- 1 Gründungs-Account als **Rolle ohne Namen (RoN)** — ohne Standort, ohne
+  öffentliche Position (`role=weber`).
+- 2 reale öffentliche Orte (Nodes) mit gerundeten (~100 m) öffentlichen
+  Koordinaten.
+- 2 Kanten (Account → Ort, Ort → Ort).
+
+Alle Records sind contract-konform zu `contracts/domain/{account,node,edge}.schema.json`
+(Projektion auf die Domain-Felder; operative Felder wie `role` liest die API,
+sie sind nicht Teil des Contracts).
+
+**Privacy/Trennung:** Der reale Seed ist getrennt vom Demo-Generator
+(`generate-demo-data.sh`). `.gewebe/in/` ist git-ignored — präzise oder private
+Daten gehören ausschließlich lokal auf die Zielmaschine, nie ins Repo. Mit
+`--clean-demo` entfernt der reale Seed die bekannten Demo-IDs, damit der
+Datensatz „real only" bleibt.
+
+### Lokal (dev)
+
+```bash
+just seed-real           # schreibt .gewebe/in/demo.{accounts,nodes,edges}.jsonl
+just up                  # dev-Stack (Caddy auf 127.0.0.1:8081, /api/* -> Rust-API)
+just smoke-seed          # prüft /api/{accounts,nodes,edges} + /map gegen die realen IDs
+```
+
+Login für den Gründungs-Account (kein Public-Login nötig): `AUTH_DEV_LOGIN=1`
+setzen, lokal `POST /api/auth/dev/login` mit der Account-ID
+`a0000001-0000-4000-8000-000000000001`. Magic-Link/Public-Login bleibt bewusst
+außerhalb dieses Pfads (siehe Abschnitt 3).
+
+### Produktion / `weltgewebe-up`
+
+Der API-Container-Entrypoint seedet beim Start, wenn aktiviert. In der `.env`:
+
+```bash
+GEWEBE_SEED_REAL=true
+GEWEBE_SEED_DEMO=false
+```
+
+Danach deployen und gegen den Caddy-Origin smoken:
+
+```bash
+scripts/weltgewebe-up --with-caddy
+BASE_URL=https://<deine-domain> just smoke-seed
+```
+
+Der Entrypoint ruft den realen Seed idempotent gegen das Volume `/data`
+(`GEWEBE_IN_DIR=/data`) auf; ist der reale Seed aktiv und befüllt die Kerndateien,
+wird die Demo-Generierung automatisch übersprungen.
+
