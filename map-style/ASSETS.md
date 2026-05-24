@@ -15,7 +15,7 @@ Daher ist die Strategie für alle visuell benötigten Assets:
 
 1. **Lokales Hosting**: Alle benötigten Assets sollen physisch in diesem Verzeichnis (`map-style/`) abgelegt und lokal
    ausgeliefert werden.
-2. **Pfad-Integration**: In der `style.json` verweisen `glyphs` auf relative Pfade (`./glyphs/{fontstack}/{range}.pbf`). Die `sprite` Eigenschaft entfällt.
+2. **Pfad-Integration**: In der `style.json` verweisen `glyphs` auf den stabilen Runtime-Pfad (`/local-basemap/glyphs/{fontstack}/{range}.pbf`). Die `sprite` Eigenschaft entfällt.
 3. **Klare Lizenzen**: Jedes Asset muss mit einer kompatiblen, dokumentierten Open-Source-Lizenz versehen sein.
 
 ## Glyphs (Schriften)
