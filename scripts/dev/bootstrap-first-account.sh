@@ -25,7 +25,7 @@ Required environment variables:
 Optional environment variables:
   ACCOUNT_ID      UUID (default: generated via uuidgen or sha256 fallback)
   ACCOUNT_SUMMARY Short description (omitted if empty)
-  ACCOUNT_ROLE    weber|admin (default: weber; set to admin for first real bootstrap)
+  ACCOUNT_ROLE    weber|admin (default: admin; first real bootstrap should be admin)
   ACCOUNT_TAGS    Comma-separated tags (default: real)
   ACCOUNT_EMAIL   Email address (operational field, omitted if empty)
 
@@ -68,6 +68,22 @@ for arg in "$@"; do
   esac
 done
 
+mkdir -p "$DIR"
+META_FILE="$DIR/bootstrap-first-account.env"
+ACCOUNTS_FILE="$DIR/demo.accounts.jsonl"
+NODES_FILE="$DIR/demo.nodes.jsonl"
+EDGES_FILE="$DIR/demo.edges.jsonl"
+
+# --- Idempotency ---
+if [ -f "$META_FILE" ] && [ "$FORCE" -eq 0 ]; then
+  # shellcheck source=/dev/null
+  . "$META_FILE"
+  echo "→ Metadaten bereits vorhanden: $META_FILE"
+  echo "  Account-ID: ${BOOTSTRAP_ACCOUNT_ID:-?}"
+  echo "  Verwende --force zum Neuanlegen."
+  exit 0
+fi
+
 # --- Required env ---
 if [ -z "${ACCOUNT_TITLE:-}" ]; then
   echo "Error: ACCOUNT_TITLE is required (non-empty)." >&2
@@ -100,7 +116,7 @@ _validate_coord "$PUBLIC_LAT" -90 90 "PUBLIC_LAT"
 _validate_coord "$PUBLIC_LON" -180 180 "PUBLIC_LON"
 
 # --- Defaults & allowlists ---
-ACCOUNT_ROLE="${ACCOUNT_ROLE:-weber}"
+ACCOUNT_ROLE="${ACCOUNT_ROLE:-admin}"
 case "$ACCOUNT_ROLE" in
   weber | admin) ;;
   *)
@@ -134,22 +150,6 @@ if ! printf '%s' "$ACCOUNT_ID" |
   grep -qiE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
   echo "Error: ACCOUNT_ID must be a UUID, got: $ACCOUNT_ID" >&2
   exit 1
-fi
-
-mkdir -p "$DIR"
-META_FILE="$DIR/bootstrap-first-account.env"
-ACCOUNTS_FILE="$DIR/demo.accounts.jsonl"
-NODES_FILE="$DIR/demo.nodes.jsonl"
-EDGES_FILE="$DIR/demo.edges.jsonl"
-
-# --- Idempotency ---
-if [ -f "$META_FILE" ] && [ "$FORCE" -eq 0 ]; then
-  # shellcheck source=/dev/null
-  . "$META_FILE"
-  echo "→ Metadaten bereits vorhanden: $META_FILE"
-  echo "  Account-ID: ${BOOTSTRAP_ACCOUNT_ID:-?}"
-  echo "  Verwende --force zum Neuanlegen."
-  exit 0
 fi
 
 # --- Privacy notice ---

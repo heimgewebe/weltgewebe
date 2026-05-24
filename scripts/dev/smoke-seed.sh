@@ -79,9 +79,11 @@ if check_url "accounts" "$BASE_URL$API_PREFIX/accounts"; then
   fi
 fi
 
-# Check /map reachable
-if check_url "map" "$BASE_URL/map"; then
-  echo "✓ map: 200"
+# Check /map reachable (only if API_PREFIX is set, i.e., not hitting API directly)
+if [ -n "$API_PREFIX" ]; then
+  if check_url "map" "$BASE_URL/map"; then
+    echo "✓ map: 200"
+  fi
 fi
 
 if [ "$fail" -ne 0 ]; then
