@@ -442,7 +442,11 @@ async fn radius_m_positive_jitters_public_pos() -> Result<()> {
     let max_deg_lon = max_deg / cos_lat;
     let lon_delta = {
         let d = (jitter_lon - lon).abs();
-        if d > 180.0 { 360.0 - d } else { d }
+        if d > 180.0 {
+            360.0 - d
+        } else {
+            d
+        }
     };
     assert!(
         lon_delta <= max_deg_lon + 1e-9,
@@ -490,10 +494,7 @@ async fn radius_m_positive_public_pos_is_deterministic() -> Result<()> {
 
     // GET /accounts/{id}: the same public_pos must be returned.
     let res = app
-        .oneshot(
-            axum::http::Request::get(format!("/accounts/{id}"))
-                .body(body::Body::empty())?,
-        )
+        .oneshot(axum::http::Request::get(format!("/accounts/{id}")).body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::OK);
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;

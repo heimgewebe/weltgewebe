@@ -6,10 +6,13 @@ set -euo pipefail
 #
 # Requirements:
 #   - A running stack (default: dev Caddy origin on 127.0.0.1:8081).
+#   - jq (for JSON response parsing). Install with: apt-get install jq
 #   - AUTH_DEV_LOGIN=1 on the API (to obtain an admin session locally), OR a
 #     pre-supplied ADMIN_SESSION_COOKIE for remote stacks.
 #   - An existing ADMIN account. Its id is taken from ADMIN_ACCOUNT_ID, else from
 #     .gewebe/in/bootstrap-first-account.env (bootstrap with ACCOUNT_ROLE=admin).
+#
+# Note: bootstrap-first-account.sh does NOT require jq; only this smoke script does.
 #
 # Usage:
 #   ACCOUNT_ROLE=admin ACCOUNT_TITLE=Op PUBLIC_LAT=53.55 PUBLIC_LON=9.99 \

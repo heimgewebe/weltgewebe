@@ -134,7 +134,7 @@ BASE_URL := "http://127.0.0.1:8081"
 
 # Bootstrapped den ersten echten Account (idempotent) nach .gewebe/in.
 # Benötigt Umgebungsvariablen: ACCOUNT_TITLE, PUBLIC_LAT, PUBLIC_LON (alle Pflicht).
-# Optional: ACCOUNT_ID, ACCOUNT_SUMMARY, ACCOUNT_ROLE, ACCOUNT_TYPE, ACCOUNT_TAGS, ACCOUNT_EMAIL.
+# Optional: ACCOUNT_ID, ACCOUNT_SUMMARY, ACCOUNT_ROLE, ACCOUNT_TAGS, ACCOUNT_EMAIL.
 # Beispiel:
 #   ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.55" PUBLIC_LON="9.99" just bootstrap-first-account
 bootstrap-first-account:
