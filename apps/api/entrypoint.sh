@@ -10,6 +10,17 @@ DATA_DIR="${GEWEBE_IN_DIR:-.gewebe/in}"
 # real seed populates the core files, demo generation is skipped automatically.
 ENABLE_REAL_SEEDING="${GEWEBE_SEED_REAL:-false}"
 
+# Check if demo seeding is enabled (default: false). We support "true", "1", "yes".
+ENABLE_SEEDING="${GEWEBE_SEED_DEMO:-false}"
+
+# Guard: real and demo seeding are mutually exclusive. Mixing a real first
+# account with demo Garnrollen makes "which data is real?" unanswerable.
+if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]] && [[ "$ENABLE_SEEDING" =~ ^(true|1|yes)$ ]]; then
+    echo "Error: GEWEBE_SEED_REAL and GEWEBE_SEED_DEMO must not both be enabled." >&2
+    echo "       For a real deployment set GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false." >&2
+    exit 1
+fi
+
 if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
     echo "Ensuring REAL seed data in $DATA_DIR (GEWEBE_SEED_REAL=$ENABLE_REAL_SEEDING)..."
     mkdir -p "$DATA_DIR"
@@ -19,10 +30,6 @@ if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
         echo "Warning: bootstrap-first-account not found, skipping real seeding."
     fi
 fi
-
-# Check if seeding is enabled (default: false)
-# We support "true", "1", "yes"
-ENABLE_SEEDING="${GEWEBE_SEED_DEMO:-false}"
 
 if [[ "$ENABLE_SEEDING" =~ ^(true|1|yes)$ ]]; then
     # Sentinel check: If core files exist and are not empty, we assume data is present.

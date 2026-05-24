@@ -58,11 +58,12 @@ if check_url "accounts" "$BASE_URL$API_PREFIX/accounts"; then
     _ok=0
     fail=1
   fi
-  if command -v jq >/dev/null 2>&1; then
+  if command -v jq > /dev/null 2>&1; then
     if ! jq -e --arg id "$ACCOUNT_ID" \
-      '.[] | select(.id == $id) | has("public_pos") and (.public_pos | type == "object")' \
-      "$tmp" >/dev/null 2>&1; then
-      echo "✗ accounts: public_pos fehlt für Account $ACCOUNT_ID"
+      '.[] | select(.id == $id) | .public_pos
+       | (.lat | type == "number") and (.lon | type == "number")' \
+      "$tmp" > /dev/null 2>&1; then
+      echo "✗ accounts: public_pos.{lat,lon} fehlt für Account $ACCOUNT_ID"
       _ok=0
       fail=1
     fi
@@ -74,7 +75,7 @@ if check_url "accounts" "$BASE_URL$API_PREFIX/accounts"; then
     fi
   fi
   if [ "$_ok" -eq 1 ]; then
-    echo "✓ accounts: 200, Account $ACCOUNT_ID mit public_pos"
+    echo "✓ accounts: 200, Account $ACCOUNT_ID mit public_pos.{lat,lon}"
   fi
 fi
 

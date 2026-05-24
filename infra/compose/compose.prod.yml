@@ -22,11 +22,10 @@ services:
       ACCOUNT_TITLE: ${ACCOUNT_TITLE:-}
       PUBLIC_LAT: ${PUBLIC_LAT:-}
       PUBLIC_LON: ${PUBLIC_LON:-}
-      # Optional bootstrap fields:
+      # Optional bootstrap fields (account is always garnrolle/verortet):
       ACCOUNT_ID: ${ACCOUNT_ID:-}
       ACCOUNT_SUMMARY: ${ACCOUNT_SUMMARY:-}
       ACCOUNT_ROLE: ${ACCOUNT_ROLE:-weber}
-      ACCOUNT_TYPE: ${ACCOUNT_TYPE:-garnrolle}
       ACCOUNT_TAGS: ${ACCOUNT_TAGS:-real}
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-}
       DATABASE_URL: ${DATABASE_URL}

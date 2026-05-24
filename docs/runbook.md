@@ -341,6 +341,11 @@ Die Datenebene ist read-only und JSONL-gespeist (`GEWEBE_IN_DIR`, Standard
 Der erste echte Account wird daher über einen idempotenten Self-Bootstrap-Pfad
 angelegt, klar getrennt von den Demo-Daten.
 
+Der Bootstrap-Account ist immer eine **verortete Garnrolle** (`type=garnrolle`,
+`mode=verortet`, `radius_m=0`): Der ganze Sinn ist ein sichtbarer Account mit
+öffentlicher Position auf der Karte. RoN-Accounts haben per Contract keine
+`public_pos` und werden über diesen Pfad bewusst nicht erzeugt.
+
 ### Self-Bootstrap: Erster Account per Env/Flags
 
 `scripts/dev/bootstrap-first-account.sh` legt genau einen Account an und
@@ -349,22 +354,24 @@ schreibt die Metadaten (Account-ID, Titel, Position) nach
 
 **Pflichtfelder (per Umgebungsvariable):**
 
-| Variable | Bedeutung |
-|---|---|
-| `ACCOUNT_TITLE` | Anzeigename des Accounts |
-| `PUBLIC_LAT` | Breitengrad der öffentlichen Kartenposition (Dezimalgrad) |
-| `PUBLIC_LON` | Längengrad der öffentlichen Kartenposition (Dezimalgrad) |
+| Variable | Bedeutung | Validierung |
+|---|---|---|
+| `ACCOUNT_TITLE` | Anzeigename des Accounts | nicht leer |
+| `PUBLIC_LAT` | Breitengrad der öffentlichen Kartenposition | Zahl in `[-90, 90]` |
+| `PUBLIC_LON` | Längengrad der öffentlichen Kartenposition | Zahl in `[-180, 180]` |
 
 **Optionale Felder:**
 
 | Variable | Bedeutung | Standard |
 |---|---|---|
 | `ACCOUNT_ID` | UUID (sonst automatisch generiert) | auto |
-| `ACCOUNT_SUMMARY` | Kurzbeschreibung | leer |
-| `ACCOUNT_ROLE` | `weber` oder `admin` | `weber` |
-| `ACCOUNT_TYPE` | `garnrolle` oder `ron` | `garnrolle` |
+| `ACCOUNT_SUMMARY` | Kurzbeschreibung (leer ⇒ weggelassen) | leer |
+| `ACCOUNT_ROLE` | `weber` oder `admin` (Allowlist) | `weber` |
 | `ACCOUNT_TAGS` | Kommagetrennte Tags | `real` |
 | `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
+
+Der Account-Typ ist fix `garnrolle`/`verortet` und nicht konfigurierbar.
+Werte werden per `jq` JSON-sicher escaped (kein hand-gebautes JSON).
 
 **Flags:**
 
@@ -424,6 +431,10 @@ PUBLIC_LON=9.9932
 # ACCOUNT_TAGS=real
 # ACCOUNT_EMAIL=alice@example.com
 ```
+
+`GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig sind verboten:
+Der Entrypoint bricht mit Fehler ab (kein Mischbetrieb aus realem Erstaccount
+und Demo-Daten).
 
 Danach deployen und gegen den Caddy-Origin smoken:
 

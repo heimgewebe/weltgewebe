@@ -3,41 +3,45 @@ set -euo pipefail
 
 # Bootstrap the first real account with a public map position.
 #
-# Reads account data from environment variables. Required:
-#   ACCOUNT_TITLE   Display name
-#   PUBLIC_LAT      Latitude (decimal degrees, e.g. 53.5503)
-#   PUBLIC_LON      Longitude (decimal degrees, e.g. 9.9932)
+# The bootstrap account is always a verortete Garnrolle: the whole point is a
+# visible account with a public position on the map. (RoN accounts have no
+# public_pos by contract and are therefore not produced by this path.)
 #
-# Optional:
-#   ACCOUNT_ID      UUID (default: auto-generated via uuidgen or sha256 fallback)
-#   ACCOUNT_SUMMARY Short description (default: empty)
-#   ACCOUNT_TYPE    garnrolle|ron (default: garnrolle)
-#   ACCOUNT_ROLE    weber|admin (default: weber)
-#   ACCOUNT_TAGS    Comma-separated tags (default: real)
-#   ACCOUNT_EMAIL   Email address (operational field, not in domain contract)
-#
-# Flags:
-#   --round-location  Round lat/lon to 3 decimal places (~111 m per 0.001 deg)
-#   --clean-demo      Remove known demo sample IDs from the dataset
-#   --force           Re-run even if bootstrap metadata file already exists
-#   -h|--help         Show this help
-#
-# The TARGET_DIR can be passed as a positional argument (default: .gewebe/in).
-# The metadata file .gewebe/in/bootstrap-first-account.env is created on success.
-#
-# Privacy notice:
-#   PUBLIC_LAT/PUBLIC_LON are written to the JSONL seed and served as public_pos
-#   via /api/accounts. This position is intentionally public on the map.
-#   Use --round-location to reduce precision (~111 m per 0.001 deg).
-#   The script does NOT prevent exact coordinates — use your own judgment.
-#
-# Examples:
-#   ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.55" PUBLIC_LON="9.99" \
-#     ./scripts/dev/bootstrap-first-account.sh
-#
-#   ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.55" PUBLIC_LON="9.99" \
-#     ACCOUNT_SUMMARY="Gründerin" ACCOUNT_TAGS="real,gründung" \
-#     ./scripts/dev/bootstrap-first-account.sh --round-location
+# Reads account data from environment variables. See usage() below.
+
+usage() {
+  cat << 'EOF'
+Usage:
+  ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+    ./scripts/dev/bootstrap-first-account.sh [TARGET_DIR] [FLAGS]
+
+Required environment variables:
+  ACCOUNT_TITLE   Display name (non-empty)
+  PUBLIC_LAT      Latitude in [-90, 90]   (decimal degrees, e.g. 53.5503)
+  PUBLIC_LON      Longitude in [-180, 180] (decimal degrees, e.g. 9.9932)
+
+Optional environment variables:
+  ACCOUNT_ID      UUID (default: generated via uuidgen or sha256 fallback)
+  ACCOUNT_SUMMARY Short description (omitted if empty)
+  ACCOUNT_ROLE    weber|admin (default: weber)
+  ACCOUNT_TAGS    Comma-separated tags (default: real)
+  ACCOUNT_EMAIL   Email address (operational field, omitted if empty)
+
+Flags:
+  --round-location  Round lat/lon to 3 decimals (~111 m per 0.001 deg)
+  --clean-demo      Remove known demo sample IDs from the dataset
+  --force           Re-run even if the bootstrap metadata file exists
+  -h, --help        Show this help
+
+The created account is type=garnrolle, mode=verortet, radius_m=0 (exact
+public_pos). The TARGET_DIR positional arg defaults to .gewebe/in. On success
+the metadata file <TARGET_DIR>/bootstrap-first-account.env is written.
+
+Privacy: PUBLIC_LAT/PUBLIC_LON become public_pos via /api/accounts. This
+position is intentionally public on the map. Use --round-location to reduce
+precision. .gewebe/in/ is git-ignored; no coordinates are written to the repo.
+EOF
+}
 
 DIR=".gewebe/in"
 CLEAN_DEMO=0
@@ -50,11 +54,12 @@ for arg in "$@"; do
     --force) FORCE=1 ;;
     --round-location) ROUND_LOCATION=1 ;;
     -h | --help)
-      sed -n '3,50p' "$0"
+      usage
       exit 0
       ;;
     -*)
       echo "Unknown option: $arg" >&2
+      usage >&2
       exit 1
       ;;
     *) DIR="$arg" ;;
@@ -62,15 +67,15 @@ for arg in "$@"; do
 done
 
 # --- Dependency check ---
-if ! command -v jq >/dev/null 2>&1; then
+if ! command -v jq > /dev/null 2>&1; then
   echo "Error: jq is required. Install with: apt-get install jq" >&2
   exit 1
 fi
 
 # --- Required env ---
 if [ -z "${ACCOUNT_TITLE:-}" ]; then
-  echo "Error: ACCOUNT_TITLE is required." >&2
-  echo "  ACCOUNT_TITLE=\"Alice\" PUBLIC_LAT=\"53.55\" PUBLIC_LON=\"9.99\" $0" >&2
+  echo "Error: ACCOUNT_TITLE is required (non-empty)." >&2
+  usage >&2
   exit 1
 fi
 if [ -z "${PUBLIC_LAT:-}" ]; then
@@ -82,40 +87,53 @@ if [ -z "${PUBLIC_LON:-}" ]; then
   exit 1
 fi
 
-# --- Validate coordinates are numeric ---
+# --- Validate coordinates: numeric and within geographic range ---
 _validate_coord() {
-  local val="$1"
-  local name="$2"
-  if ! printf '%s' "$val" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
-    echo "Error: $name must be a decimal number (e.g. 53.55), got: $val" >&2
+  local val="$1" lo="$2" hi="$3" name="$4"
+  if ! printf '%s' "$val" | jq -e --argjson lo "$lo" --argjson hi "$hi" \
+    'type == "number" and . >= $lo and . <= $hi' > /dev/null 2>&1; then
+    echo "Error: $name must be a number in [$lo, $hi], got: $val" >&2
     exit 1
   fi
 }
-_validate_coord "$PUBLIC_LAT" "PUBLIC_LAT"
-_validate_coord "$PUBLIC_LON" "PUBLIC_LON"
+_validate_coord "$PUBLIC_LAT" -90 90 "PUBLIC_LAT"
+_validate_coord "$PUBLIC_LON" -180 180 "PUBLIC_LON"
 
-# --- Defaults ---
+# --- Defaults & allowlists ---
 ACCOUNT_ROLE="${ACCOUNT_ROLE:-weber}"
-ACCOUNT_TYPE="${ACCOUNT_TYPE:-garnrolle}"
+case "$ACCOUNT_ROLE" in
+  weber | admin) ;;
+  *)
+    echo "Error: ACCOUNT_ROLE must be 'weber' or 'admin', got: $ACCOUNT_ROLE" >&2
+    exit 1
+    ;;
+esac
 ACCOUNT_SUMMARY="${ACCOUNT_SUMMARY:-}"
 ACCOUNT_TAGS="${ACCOUNT_TAGS:-real}"
 
-# --- Location ---
+# --- Location (validation already done above on raw input) ---
 LAT="$PUBLIC_LAT"
 LON="$PUBLIC_LON"
 if [ "$ROUND_LOCATION" -eq 1 ]; then
-  LAT="$(printf '%.3f' "$LAT")"
-  LON="$(printf '%.3f' "$LON")"
+  LAT="$(LC_ALL=C printf '%.3f' "$LAT")"
+  LON="$(LC_ALL=C printf '%.3f' "$LON")"
 fi
 
 # --- Account ID ---
 if [ -z "${ACCOUNT_ID:-}" ]; then
-  if command -v uuidgen >/dev/null 2>&1; then
+  if command -v uuidgen > /dev/null 2>&1; then
     ACCOUNT_ID="$(uuidgen | tr '[:upper:]' '[:lower:]')"
   else
     _hash="$(printf '%s' "${ACCOUNT_TITLE}${LAT}${LON}" | sha256sum | cut -c1-32)"
     ACCOUNT_ID="${_hash:0:8}-${_hash:8:4}-4${_hash:13:3}-8${_hash:17:3}-${_hash:20:12}"
   fi
+fi
+# Validate ID is a UUID: contract requires format uuid, and the ID is used in a
+# grep regex below, so reject anything that is not a plain UUID.
+if ! printf '%s' "$ACCOUNT_ID" |
+  grep -qiE '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'; then
+  echo "Error: ACCOUNT_ID must be a UUID, got: $ACCOUNT_ID" >&2
+  exit 1
 fi
 
 mkdir -p "$DIR"
@@ -159,7 +177,7 @@ remove_line_by_id() {
   if [ -s "$file" ] && grep -q "$match_pattern" "$file"; then
     echo "→ removing $id from $(basename "$file")"
     TMP_FILE=$(mktemp)
-    grep -v "$match_pattern" "$file" >"$TMP_FILE" || true
+    grep -v "$match_pattern" "$file" > "$TMP_FILE" || true
     mv "$TMP_FILE" "$file"
     chmod 644 "$file"
     TMP_FILE=""
@@ -174,7 +192,7 @@ ensure_jsonl_line() {
 
   if [ ! -s "$file" ]; then
     echo "→ seeds: $(basename "$file") (neu)"
-    printf '%s\n' "$canonical_json" >"$file"
+    printf '%s\n' "$canonical_json" > "$file"
     return 0
   fi
 
@@ -183,12 +201,12 @@ ensure_jsonl_line() {
 
   if [ "$count" -eq 0 ]; then
     echo "→ adding $id to $(basename "$file")"
-    printf '%s\n' "$canonical_json" >>"$file"
+    printf '%s\n' "$canonical_json" >> "$file"
   elif [ "$count" -gt 1 ]; then
     echo "→ deduplicating $id in $(basename "$file")"
     TMP_FILE=$(mktemp)
-    grep -v "$match_pattern" "$file" >"$TMP_FILE" || true
-    printf '%s\n' "$canonical_json" >>"$TMP_FILE"
+    grep -v "$match_pattern" "$file" > "$TMP_FILE" || true
+    printf '%s\n' "$canonical_json" >> "$TMP_FILE"
     mv "$TMP_FILE" "$file"
     chmod 644 "$file"
     TMP_FILE=""
@@ -223,49 +241,49 @@ if [ "$CLEAN_DEMO" -eq 1 ]; then
   for id in "${DEMO_EDGE_IDS[@]}"; do remove_line_by_id "$EDGES_FILE" "$id"; done
 fi
 
-# --- Build account JSON ---
-# type=garnrolle + mode=verortet requires location (domain contract).
-# radius_m=0 → calculate_jittered_pos returns exact coords as public_pos.
+# --- Build account JSON (jq for safe escaping; never hand-built strings) ---
+# Always type=garnrolle / mode=verortet with location + radius_m=0 so the API
+# computes an exact public_pos. summary/email are omitted when empty
+# (contract requires summary minLength 1; additionalProperties is projected out
+# by verify-demo-data.ts so operational fields role/email are allowed in JSONL).
 TAGS_JSON="$(jq -Rn --arg tags "$ACCOUNT_TAGS" \
   '$tags | split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "")) | map(select(. != ""))')"
 
-ACCOUNT_JSON="$(jq -n \
+ACCOUNT_JSON="$(jq -nc \
   --arg id "$ACCOUNT_ID" \
-  --arg type "$ACCOUNT_TYPE" \
   --arg title "$ACCOUNT_TITLE" \
   --arg summary "$ACCOUNT_SUMMARY" \
   --argjson tags "$TAGS_JSON" \
   --arg role "$ACCOUNT_ROLE" \
+  --arg email "${ACCOUNT_EMAIL:-}" \
   --argjson lat "$LAT" \
   --argjson lon "$LON" \
-  '{id: $id, type: $type, mode: "verortet", title: $title, summary: $summary,
+  '{id: $id, type: "garnrolle", mode: "verortet", title: $title,
     tags: $tags, role: $role,
-    location: {lat: $lat, lon: $lon}, radius_m: 0}' \
-  | jq -c .)"
-
-if [ -n "${ACCOUNT_EMAIL:-}" ]; then
-  ACCOUNT_JSON="$(printf '%s' "$ACCOUNT_JSON" | \
-    jq -c --arg email "$ACCOUNT_EMAIL" '. + {email: $email}')"
-fi
+    location: {lat: $lat, lon: $lon}, radius_m: 0}
+   + (if $summary != "" then {summary: $summary} else {} end)
+   + (if $email != "" then {email: $email} else {} end)')"
 
 touch "$ACCOUNTS_FILE"
 ensure_jsonl_line "$ACCOUNTS_FILE" "$ACCOUNT_ID" "$ACCOUNT_JSON"
 
 # --- Save metadata ---
+# Values are %q-quoted so the file is safe to `source` even if the title
+# contains spaces, quotes or shell metacharacters.
 {
-  printf 'BOOTSTRAP_ACCOUNT_ID="%s"\n' "$ACCOUNT_ID"
-  printf 'BOOTSTRAP_ACCOUNT_TITLE="%s"\n' "$ACCOUNT_TITLE"
-  printf 'BOOTSTRAP_PUBLIC_LAT="%s"\n' "$LAT"
-  printf 'BOOTSTRAP_PUBLIC_LON="%s"\n' "$LON"
-} >"$META_FILE"
+  printf 'BOOTSTRAP_ACCOUNT_ID=%q\n' "$ACCOUNT_ID"
+  printf 'BOOTSTRAP_ACCOUNT_TITLE=%q\n' "$ACCOUNT_TITLE"
+  printf 'BOOTSTRAP_PUBLIC_LAT=%q\n' "$LAT"
+  printf 'BOOTSTRAP_PUBLIC_LON=%q\n' "$LON"
+} > "$META_FILE"
 echo "→ Metadaten gespeichert: $META_FILE"
 
 printf '\n'
 printf '✓ Bootstrap abgeschlossen in %s\n' "$DIR"
 printf '  Account:  %s (%s)\n' "$ACCOUNT_ID" "$ACCOUNT_TITLE"
-printf '  Typ:      %s / verortet\n' "$ACCOUNT_TYPE"
+printf '  Typ:      garnrolle / verortet\n'
 printf '  Position: %s, %s (öffentlich auf der Karte)\n' "$LAT" "$LON"
 printf '  Rolle:    %s\n' "$ACCOUNT_ROLE"
 printf '\n'
 printf 'Dev-Login (AUTH_DEV_LOGIN=1 vorausgesetzt):\n'
-printf '  POST /api/auth/dev/login  {\"account_id\":\"%s\"}\n' "$ACCOUNT_ID"
+printf '  POST /api/auth/dev/login  {"account_id":"%s"}\n' "$ACCOUNT_ID"
