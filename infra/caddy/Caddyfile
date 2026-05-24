@@ -39,9 +39,8 @@
   }
   reverse_proxy /* web:5173
   header {
-    # Dev-CSP: HMR/WebSocket & Dev-Assets erlauben; bei Bedarf später härten
-    # Für externe Tiles ggf. ergänzen, z.B.:
-    #   img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org;
+    # Local-sovereign CSP: WebSocket-Schemes bleiben fuer Dev/Proxy erlaubt;
+    # externe Tile-/Bildquellen bleiben in diesem Caddy-Pfad bewusst gesperrt.
     Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; img-src 'self' data: blob:; worker-src 'self' blob:; object-src 'none';"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
