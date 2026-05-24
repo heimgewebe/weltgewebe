@@ -35,7 +35,7 @@ WORKDIR /app
 
 # Install runtime dependencies
 # wget is needed for healthchecks. ca-certificates for HTTPS.
-# jq is needed for data seeding scripts.
+# jq is used by generate-demo-data.sh (optional enhancement).
 # libssl3 is required by OpenSSL-linked Rust dependencies such as webauthn-rs.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates wget jq libssl3 \

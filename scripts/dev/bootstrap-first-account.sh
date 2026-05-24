@@ -8,6 +8,8 @@ set -euo pipefail
 # public_pos by contract and are therefore not produced by this path.)
 #
 # Reads account data from environment variables. See usage() below.
+#
+# No external JSON tools required: uses only bash, grep, awk, sed, and printf.
 
 usage() {
   cat << 'EOF'
@@ -66,12 +68,6 @@ for arg in "$@"; do
   esac
 done
 
-# --- Dependency check ---
-if ! command -v jq > /dev/null 2>&1; then
-  echo "Error: jq is required. Install with: apt-get install jq" >&2
-  exit 1
-fi
-
 # --- Required env ---
 if [ -z "${ACCOUNT_TITLE:-}" ]; then
   echo "Error: ACCOUNT_TITLE is required (non-empty)." >&2
@@ -88,11 +84,15 @@ if [ -z "${PUBLIC_LON:-}" ]; then
 fi
 
 # --- Validate coordinates: numeric and within geographic range ---
+# Uses grep for format check and awk for float range comparison (no jq).
 _validate_coord() {
   local val="$1" lo="$2" hi="$3" name="$4"
-  if ! printf '%s' "$val" | jq -e --argjson lo "$lo" --argjson hi "$hi" \
-    'type == "number" and . >= $lo and . <= $hi' > /dev/null 2>&1; then
-    echo "Error: $name must be a number in [$lo, $hi], got: $val" >&2
+  if ! printf '%s' "$val" | grep -qE '^-?[0-9]+(\.[0-9]+)?$'; then
+    echo "Error: $name must be a decimal number in [$lo, $hi], got: $val" >&2
+    exit 1
+  fi
+  if ! awk -v v="$val" -v lo="$lo" -v hi="$hi" 'BEGIN { exit !(v >= lo && v <= hi) }'; then
+    echo "Error: $name must be in range [$lo, $hi], got: $val" >&2
     exit 1
   fi
 }
@@ -241,28 +241,66 @@ if [ "$CLEAN_DEMO" -eq 1 ]; then
   for id in "${DEMO_EDGE_IDS[@]}"; do remove_line_by_id "$EDGES_FILE" "$id"; done
 fi
 
-# --- Build account JSON (jq for safe escaping; never hand-built strings) ---
+# --- JSON helpers (pure shell/sed/awk; no jq required) ---
+
+# Escape a string value for embedding in a JSON string literal.
+# Handles the critical JSON special characters: backslash (must be first),
+# double-quote. Newlines and carriage-returns are stripped to preserve the
+# single-line JSONL format required by the data store.
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\r\n'
+}
+
+# Convert a comma-separated tag list to a JSON array of quoted strings.
+# Trims surrounding whitespace from each tag and skips empty tokens.
+tags_to_json_array() {
+  local input="$1" result="[" first=1 rest tag
+  rest="$input"
+  while true; do
+    case "$rest" in
+      *,*)
+        tag="${rest%%,*}"
+        rest="${rest#*,}"
+        ;;
+      *)
+        tag="$rest"
+        rest=""
+        ;;
+    esac
+    # trim leading whitespace
+    while [ "${tag#[[:space:]]}" != "$tag" ]; do tag="${tag#[[:space:]]}"; done
+    # trim trailing whitespace
+    while [ "${tag%[[:space:]]}" != "$tag" ]; do tag="${tag%[[:space:]]}"; done
+    if [ -n "$tag" ]; then
+      [ "$first" -eq 0 ] && result="${result},"
+      result="${result}\"$(json_escape "$tag")\""
+      first=0
+    fi
+    [ -z "$rest" ] && break
+  done
+  printf '%s' "${result}]"
+}
+
+# --- Build account JSON (pure shell; no jq required) ---
 # Always type=garnrolle / mode=verortet with location + radius_m=0 so the API
 # computes an exact public_pos. summary/email are omitted when empty
 # (contract requires summary minLength 1; additionalProperties is projected out
 # by verify-demo-data.ts so operational fields role/email are allowed in JSONL).
-TAGS_JSON="$(jq -Rn --arg tags "$ACCOUNT_TAGS" \
-  '$tags | split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "")) | map(select(. != ""))')"
-
-ACCOUNT_JSON="$(jq -nc \
-  --arg id "$ACCOUNT_ID" \
-  --arg title "$ACCOUNT_TITLE" \
-  --arg summary "$ACCOUNT_SUMMARY" \
-  --argjson tags "$TAGS_JSON" \
-  --arg role "$ACCOUNT_ROLE" \
-  --arg email "${ACCOUNT_EMAIL:-}" \
-  --argjson lat "$LAT" \
-  --argjson lon "$LON" \
-  '{id: $id, type: "garnrolle", mode: "verortet", title: $title,
-    tags: $tags, role: $role,
-    location: {lat: $lat, lon: $lon}, radius_m: 0}
-   + (if $summary != "" then {summary: $summary} else {} end)
-   + (if $email != "" then {email: $email} else {} end)')"
+TAGS_JSON="$(tags_to_json_array "$ACCOUNT_TAGS")"
+TITLE_ESC="$(json_escape "$ACCOUNT_TITLE")"
+ACCOUNT_JSON="{\"id\":\"${ACCOUNT_ID}\",\"type\":\"garnrolle\",\"mode\":\"verortet\""
+ACCOUNT_JSON="${ACCOUNT_JSON},\"title\":\"${TITLE_ESC}\",\"tags\":${TAGS_JSON}"
+ACCOUNT_JSON="${ACCOUNT_JSON},\"role\":\"${ACCOUNT_ROLE}\""
+ACCOUNT_JSON="${ACCOUNT_JSON},\"location\":{\"lat\":${LAT},\"lon\":${LON}}"
+ACCOUNT_JSON="${ACCOUNT_JSON},\"radius_m\":0}"
+if [ -n "$ACCOUNT_SUMMARY" ]; then
+  SUMMARY_ESC="$(json_escape "$ACCOUNT_SUMMARY")"
+  ACCOUNT_JSON="${ACCOUNT_JSON%\}},\"summary\":\"${SUMMARY_ESC}\"}"
+fi
+if [ -n "${ACCOUNT_EMAIL:-}" ]; then
+  EMAIL_ESC="$(json_escape "${ACCOUNT_EMAIL}")"
+  ACCOUNT_JSON="${ACCOUNT_JSON%\}},\"email\":\"${EMAIL_ESC}\"}"
+fi
 
 touch "$ACCOUNTS_FILE"
 ensure_jsonl_line "$ACCOUNTS_FILE" "$ACCOUNT_ID" "$ACCOUNT_JSON"
