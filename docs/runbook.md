@@ -406,7 +406,7 @@ just smoke-account-create   # liest Admin-ID aus bootstrap-first-account.env
 
 > **Hinweis:** `smoke-account-create.sh` prüft `/map` nur, wenn gegen die Web/Caddy-Origin geprüft wird.
 > Im Direct-API-Modus (`API_PREFIX=`) wird `/map` bewusst übersprungen, da die Rust-API keine `/map`-Route hat.
-
+>
 > **UI:** Ein Minimalformular „Account erstellen" ist bewusst **nicht** Teil
 > dieses PR und folgt als expliziter Folge-PR. v0 ist API + Smoke + Tests.
 
