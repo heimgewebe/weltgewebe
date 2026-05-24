@@ -96,6 +96,7 @@ mod tests {
                 weltgewebe_api::state::OrderedCache::new(),
             )),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+            accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(tokio::sync::RwLock::new(
                 weltgewebe_api::state::OrderedCache::new(),
             )),

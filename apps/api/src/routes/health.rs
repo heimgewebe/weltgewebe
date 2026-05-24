@@ -330,6 +330,7 @@ mod tests {
             accounts: Arc::new(RwLock::new(AccountStore::new())),
             nodes: Arc::new(RwLock::new(OrderedCache::new())),
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+            accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(RwLock::new(OrderedCache::new())),
             rate_limiter,
             mailer: None,

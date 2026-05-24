@@ -1,17 +1,18 @@
 use super::query::parse_usize_param;
 use crate::auth::{accounts::AccountStore, role::Role};
+use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
+    Extension, Json,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::{collections::HashMap, env, path::PathBuf};
 use tokio::{
-    fs::File,
-    io::{AsyncBufReadExt, BufReader},
+    fs::{File, OpenOptions},
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
 };
 use uuid::Uuid;
 
@@ -351,6 +352,212 @@ pub async fn get_account(
     } else {
         Err(StatusCode::NOT_FOUND)
     }
+}
+
+/// Parse a JSON value as f64, accepting either a number or a numeric string.
+fn json_f64(v: &Value) -> Option<f64> {
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+}
+
+/// Append a single account record as a JSONL line. Durability via fsync.
+/// Callers MUST hold `state.accounts_persist` to serialize writes.
+async fn append_account_line(record: &Value) -> std::io::Result<()> {
+    let path = accounts_path();
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let line = serde_json::to_string(record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .await?;
+    file.write_all(line.as_bytes()).await?;
+    file.write_all(b"\n").await?;
+    file.flush().await?;
+    file.sync_all().await?;
+    Ok(())
+}
+
+/// Create the first/next account as an operator (Admin-only; gated by
+/// `require_admin` middleware). v0 creates a verortete Garnrolle with a public
+/// position derived from `location` (+ optional `radius_m`, default 0 => exact).
+///
+/// Persists by appending to the JSONL store (durable across restart) and
+/// inserts into the in-memory store (immediate visibility for GET /accounts).
+pub async fn create_account(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    Json(payload): Json<Value>,
+) -> Result<(StatusCode, Json<AccountPublic>), (StatusCode, String)> {
+    let bad = |msg: &str| (StatusCode::BAD_REQUEST, msg.to_string());
+
+    // --- title (required, non-empty) ---
+    let title = payload
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .unwrap_or("");
+    if title.is_empty() {
+        return Err(bad("title is required"));
+    }
+
+    // --- type (v0: garnrolle only) ---
+    let kind = payload
+        .get("type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("garnrolle");
+    if kind != "garnrolle" {
+        return Err(bad("type must be 'garnrolle' in v0 (verortete Garnrolle)"));
+    }
+
+    // --- role (allowlist weber|admin, default weber) ---
+    let role_str = payload
+        .get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("weber");
+    let role = match role_str {
+        "weber" => Role::Weber,
+        "admin" => Role::Admin,
+        _ => return Err(bad("role must be 'weber' or 'admin'")),
+    };
+
+    // --- location (required) + range validation ---
+    let location = payload
+        .get("location")
+        .ok_or_else(|| bad("location is required"))?;
+    let (lat, lon) = match (
+        location.get("lat").and_then(json_f64),
+        location.get("lon").and_then(json_f64),
+    ) {
+        (Some(la), Some(lo)) => (la, lo),
+        _ => return Err(bad("location.lat and location.lon are required numbers")),
+    };
+    if !(-90.0..=90.0).contains(&lat) {
+        return Err(bad("location.lat must be in [-90, 90]"));
+    }
+    if !(-180.0..=180.0).contains(&lon) {
+        return Err(bad("location.lon must be in [-180, 180]"));
+    }
+
+    // --- radius_m (optional, default 0) ---
+    let radius_m: u32 = match payload.get("radius_m") {
+        None | Some(Value::Null) => 0,
+        Some(v) => match v.as_u64() {
+            Some(n) if n <= u32::MAX as u64 => n as u32,
+            _ => return Err(bad("radius_m must be a non-negative integer")),
+        },
+    };
+
+    // --- id (optional UUID, else generated) ---
+    let id = match payload.get("id").and_then(|v| v.as_str()) {
+        Some(s) => {
+            if Uuid::parse_str(s).is_err() {
+                return Err(bad("id must be a UUID"));
+            }
+            s.to_string()
+        }
+        None => Uuid::new_v4().to_string(),
+    };
+
+    // --- optional summary / tags / email ---
+    let summary = payload
+        .get("summary")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let tags: Vec<String> = payload
+        .get("tags")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    let email = payload
+        .get("email")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    // --- Build canonical JSONL record (matches contract after key projection;
+    // role/email are operational fields read by the API) ---
+    let mut record = serde_json::Map::new();
+    record.insert("id".into(), json!(id));
+    record.insert("type".into(), json!("garnrolle"));
+    record.insert("mode".into(), json!("verortet"));
+    record.insert("title".into(), json!(title));
+    if let Some(s) = &summary {
+        record.insert("summary".into(), json!(s));
+    }
+    if !tags.is_empty() {
+        record.insert("tags".into(), json!(tags));
+    }
+    record.insert("role".into(), json!(role_str));
+    record.insert("location".into(), json!({ "lat": lat, "lon": lon }));
+    record.insert("radius_m".into(), json!(radius_m));
+    if let Some(e) = &email {
+        record.insert("email".into(), json!(e));
+    }
+    let record = Value::Object(record);
+
+    let public = map_json_to_public_account(&record).ok_or_else(|| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to map account".to_string(),
+        )
+    })?;
+
+    // --- Persist (serialize creates so check-then-write is atomic) ---
+    let _persist_guard = state.accounts_persist.lock().await;
+
+    {
+        let accounts = state.accounts.read().await;
+        if accounts.get(&id).is_some() {
+            return Err((
+                StatusCode::CONFLICT,
+                "account id already exists".to_string(),
+            ));
+        }
+        if let Some(e) = &email {
+            if accounts.get_by_email(e).is_some() {
+                return Err((StatusCode::CONFLICT, "email already exists".to_string()));
+            }
+        }
+    }
+
+    if let Err(e) = append_account_line(&record).await {
+        tracing::error!(error = %e, "failed to append account to JSONL");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to persist account".to_string(),
+        ));
+    }
+
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(AccountInternal {
+            public: public.clone(),
+            role,
+            email,
+            webauthn_user_id: Uuid::new_v4(),
+        });
+    }
+
+    tracing::info!(
+        event = "account.created",
+        account_id = %id,
+        created_by = ctx.account_id.as_deref().unwrap_or("?"),
+        "Account created by operator"
+    );
+
+    Ok((StatusCode::CREATED, Json(public)))
 }
 
 #[cfg(test)]

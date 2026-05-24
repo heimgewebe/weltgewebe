@@ -334,19 +334,75 @@ deployment) will fail fast.
 
 Ensure these are set in your `.env` file or deployment secrets.
 
-## 4. Erster echter Account & reale Seed-Daten
+## 4. Account Creation v0 (Hauptpfad) & Erst-Admin-Bootstrap
 
-Die Datenebene ist read-only und JSONL-gespeist (`GEWEBE_IN_DIR`, Standard
-`.gewebe/in`). Es gibt bewusst keinen Account-/Create-Endpoint, der persistiert.
-Der erste echte Account wird daher über einen idempotenten Self-Bootstrap-Pfad
-angelegt, klar getrennt von den Demo-Daten.
+Es gibt zwei klar getrennte Wege, einen Account anzulegen:
+
+- **Account Creation v0 (Hauptpfad):** Ein eingeloggter **Admin** legt Accounts
+  über `POST /api/accounts` an. Der Account wird dauerhaft gespeichert
+  (JSONL-Append + In-Memory-Store) und ist sofort über `GET /api/accounts` und
+  die Karte sichtbar. Keine öffentliche Registrierung, kein Self-Signup.
+- **Bootstrap (Init-/Not-/Dev-Pfad):** legt den **ersten Admin** an (Henne-Ei:
+  der erste Admin kann nicht per API entstehen) bzw. seedet beim Container-Start.
+  Ausdrücklich **nicht** der normale Erstellungsprozess.
+
+Die Datenebene ist JSONL-gespeist (`GEWEBE_IN_DIR`, Standard `.gewebe/in`); der
+In-Memory-Store ist die Lesequelle und wird beim Start aus dem JSONL geladen.
+
+### Account Creation v0: `POST /api/accounts`
+
+- **Authz:** nur **Admin** (eigene `require_admin`-Prüfung, strenger als das
+  generische `require_write` für Weber+Admin). Weber dürfen in v0 **keine**
+  Accounts anlegen.
+- **Typ:** immer verortete Garnrolle (`type=garnrolle`, `mode=verortet`).
+- **Position:** Request nimmt eine interne `location` entgegen; `public_pos` wird
+  daraus abgeleitet. Bei `radius_m=0` ist `public_pos == location` (exakt).
+
+**Request-Body:**
+
+| Feld | Pflicht | Bedeutung |
+|---|---|---|
+| `title` | ja | Anzeigename (nicht leer) |
+| `location.lat` | ja | Breitengrad, Zahl in `[-90, 90]` |
+| `location.lon` | ja | Längengrad, Zahl in `[-180, 180]` |
+| `radius_m` | nein | Unschärferadius (Default `0` ⇒ exakte `public_pos`) |
+| `summary` | nein | Kurzbeschreibung (leer ⇒ weggelassen) |
+| `role` | nein | `weber` oder `admin` (Allowlist, Default `weber`) |
+| `tags` | nein | Liste von Strings |
+| `id` | nein | UUID (sonst serverseitig generiert) |
+| `email` | nein | operatives Feld (nicht Teil des Domain-Contracts) |
+
+**Antworten:** `201 Created` (Account-JSON) · `400` ungültige Felder/Koordinaten ·
+`401` nicht eingeloggt · `403` eingeloggt, aber nicht Admin · `409` ID/E-Mail-Konflikt.
+
+**Beispiel (lokal, Admin-Session via Dev-Login):**
+
+```bash
+# Admin-Session holen (AUTH_DEV_LOGIN=1 vorausgesetzt), Cookie speichern:
+curl -fsS -c cookies.txt -X POST http://127.0.0.1:8081/api/auth/dev/login \
+  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
+  -d '{"account_id":"<ADMIN_UUID>"}'
+
+# Account anlegen (Cookie + Origin nötig wegen CSRF):
+curl -fsS -b cookies.txt -X POST http://127.0.0.1:8081/api/accounts \
+  -H 'Content-Type: application/json' -H 'Origin: http://127.0.0.1:8081' \
+  -d '{"title":"Alice","location":{"lat":53.5503,"lon":9.9932},"tags":["real"]}'
+```
+
+**Smoke (POST → GET → /map):**
+
+```bash
+just smoke-account-create   # liest Admin-ID aus bootstrap-first-account.env
+```
+
+> **UI:** Ein Minimalformular „Account erstellen" ist bewusst **nicht** Teil
+> dieses PR und folgt als expliziter Folge-PR. v0 ist API + Smoke + Tests.
+
+### Erst-Admin & Initialisierung: Bootstrap (Not-/Dev-Pfad)
 
 Der Bootstrap-Account ist immer eine **verortete Garnrolle** (`type=garnrolle`,
-`mode=verortet`, `radius_m=0`): Der ganze Sinn ist ein sichtbarer Account mit
-öffentlicher Position auf der Karte. RoN-Accounts haben per Contract keine
-`public_pos` und werden über diesen Pfad bewusst nicht erzeugt.
-
-### Self-Bootstrap: Erster Account per Env/Flags
+`mode=verortet`, `radius_m=0`). Für den **ersten Admin** `ACCOUNT_ROLE=admin`
+setzen — danach legt dieser Admin alle weiteren Accounts über die API an.
 
 `scripts/dev/bootstrap-first-account.sh` legt genau einen Account an und
 schreibt die Metadaten (Account-ID, Titel, Position) nach
@@ -384,27 +440,21 @@ Werte werden per `jq` JSON-sicher escaped (kein hand-gebautes JSON).
 auf der Karte sichtbar. `--round-location` reduziert die Präzision (~111 m).
 `.gewebe/in/` ist git-ignored; keine echten Koordinaten werden ins Repo geschrieben.
 
-### Lokal (dev)
+### Lokal (dev): Erst-Admin bootstrappen, dann per API erstellen
 
 ```bash
-# 1. Account bootstrappen (Pflichtfelder setzen):
-ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+# 1. Ersten Admin bootstrappen (ACCOUNT_ROLE=admin!):
+ACCOUNT_ROLE="admin" ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
   just bootstrap-first-account
 
-# Mit optionalen Feldern und gerundeter Position:
-ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
-  ACCOUNT_SUMMARY="Gründerin" ACCOUNT_TAGS="real,gründung" \
-  ./scripts/dev/bootstrap-first-account.sh --round-location
+# 2. Dev-Stack mit Dev-Login starten:
+AUTH_DEV_LOGIN=1 just up
 
-# Demo-Daten gleichzeitig bereinigen:
-ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
-  ./scripts/dev/bootstrap-first-account.sh --clean-demo
-
-# 2. Dev-Stack starten:
-just up
-
-# 3. Smoke-Check (liest Account-ID aus .gewebe/in/bootstrap-first-account.env):
+# 3. Smoke: Bootstrap-Account sichtbar?
 just smoke-seed
+
+# 4. Account Creation v0: Admin legt weitere Accounts per API an.
+just smoke-account-create
 ```
 
 Dev-Login (kein Public-Login nötig): `AUTH_DEV_LOGIN=1` setzen, dann

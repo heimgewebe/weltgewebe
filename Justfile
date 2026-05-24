@@ -145,6 +145,11 @@ bootstrap-first-account:
 smoke-seed:
 	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-seed.sh
 
+# Smoke-Check für Account Creation v0: Admin legt Account per POST /api/accounts an.
+# Benötigt laufenden Stack + AUTH_DEV_LOGIN=1 + Admin-Account (bootstrap mit ACCOUNT_ROLE=admin).
+smoke-account-create:
+	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-account-create.sh
+
 # ---------- Contracts ----------
 contracts-domain-check:
 	./scripts/contracts-domain-check.sh

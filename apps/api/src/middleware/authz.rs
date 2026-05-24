@@ -39,3 +39,38 @@ pub async fn require_write(req: Request<Body>, next: Next) -> Response {
 
     next.run(req).await
 }
+
+/// Gate for admin-only endpoints (e.g. account creation):
+/// - Safe methods (GET, HEAD, OPTIONS) pass through.
+/// - Others:
+///   - no valid session -> 401
+///   - authenticated but not Admin -> 403
+pub async fn require_admin(req: Request<Body>, next: Next) -> Response {
+    if req.method() == Method::GET
+        || req.method() == Method::HEAD
+        || req.method() == Method::OPTIONS
+    {
+        return next.run(req).await;
+    }
+
+    let ctx = req
+        .extensions()
+        .get::<AuthContext>()
+        .cloned()
+        .unwrap_or(AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        });
+
+    if !ctx.authenticated {
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+    if ctx.role != Role::Admin {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    next.run(req).await
+}

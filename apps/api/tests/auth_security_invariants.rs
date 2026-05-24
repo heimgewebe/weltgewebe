@@ -123,6 +123,7 @@ fn build_state() -> Result<ApiState> {
             weltgewebe_api::state::OrderedCache::new(),
         )),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+        accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::state::OrderedCache::new(),
         )),
@@ -359,6 +360,7 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/auth/step-up/magic-link/consume"),
     ("POST", "/auth/passkeys/register/options"),
     ("PATCH", "/nodes/:id"),
+    ("POST", "/accounts"),
 ];
 
 const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[

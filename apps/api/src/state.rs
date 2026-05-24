@@ -74,6 +74,9 @@ pub struct ApiState {
     pub accounts: Arc<RwLock<crate::auth::accounts::AccountStore>>,
     pub nodes: Arc<RwLock<OrderedCache<Node>>>,
     pub nodes_persist: Arc<Mutex<()>>,
+    /// Serializes account-create persistence (append to JSONL) so concurrent
+    /// creates cannot interleave the duplicate-check and the write.
+    pub accounts_persist: Arc<Mutex<()>>,
     pub edges: Arc<RwLock<OrderedCache<Edge>>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,

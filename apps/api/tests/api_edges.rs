@@ -73,6 +73,7 @@ async fn test_state() -> Result<ApiState> {
             weltgewebe_api::state::OrderedCache::new(),
         )),
         nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+        accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
         edges: Arc::new(tokio::sync::RwLock::new(edges)),
         rate_limiter,
         mailer: None,
