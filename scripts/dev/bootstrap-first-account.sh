@@ -25,7 +25,7 @@ Required environment variables:
 Optional environment variables:
   ACCOUNT_ID      UUID (default: generated via uuidgen or sha256 fallback)
   ACCOUNT_SUMMARY Short description (omitted if empty)
-  ACCOUNT_ROLE    weber|admin (default: weber)
+  ACCOUNT_ROLE    weber|admin (default: weber; set to admin for first real bootstrap)
   ACCOUNT_TAGS    Comma-separated tags (default: real)
   ACCOUNT_EMAIL   Email address (operational field, omitted if empty)
 
