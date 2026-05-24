@@ -132,11 +132,16 @@ check-demo:
 # Smoke-Origin überschreibbar: `just smoke-seed BASE_URL=http://127.0.0.1:8081`
 BASE_URL := "http://127.0.0.1:8081"
 
-# Seedet den ersten echten Account + reale Anfangsdaten (idempotent) nach .gewebe/in
-seed-real:
-	./scripts/dev/seed-real-data.sh
+# Bootstrapped den ersten echten Account (idempotent) nach .gewebe/in.
+# Benötigt Umgebungsvariablen: ACCOUNT_TITLE, PUBLIC_LAT, PUBLIC_LON (alle Pflicht).
+# Optional: ACCOUNT_ID, ACCOUNT_SUMMARY, ACCOUNT_ROLE, ACCOUNT_TYPE, ACCOUNT_TAGS, ACCOUNT_EMAIL.
+# Beispiel:
+#   ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.55" PUBLIC_LON="9.99" just bootstrap-first-account
+bootstrap-first-account:
+	./scripts/dev/bootstrap-first-account.sh
 
-# Smoke-Check der realen Seed-Daten gegen einen laufenden Stack (Caddy-Origin)
+# Smoke-Check des Bootstrapped-Accounts gegen einen laufenden Stack (Caddy-Origin).
+# Liest Account-ID aus .gewebe/in/bootstrap-first-account.env.
 smoke-seed:
 	BASE_URL={{BASE_URL}} ./scripts/dev/smoke-seed.sh
 

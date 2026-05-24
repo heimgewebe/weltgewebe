@@ -16,7 +16,19 @@ services:
       GEWEBE_SEED_DEMO: ${GEWEBE_SEED_DEMO:-false}
       # Enable REAL initial data seeding (default: false). Idempotent.
       # For a real deployment set GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false.
+      # Also set ACCOUNT_TITLE, PUBLIC_LAT, PUBLIC_LON (required when GEWEBE_SEED_REAL=true).
       GEWEBE_SEED_REAL: ${GEWEBE_SEED_REAL:-false}
+      # Required when GEWEBE_SEED_REAL=true:
+      ACCOUNT_TITLE: ${ACCOUNT_TITLE:-}
+      PUBLIC_LAT: ${PUBLIC_LAT:-}
+      PUBLIC_LON: ${PUBLIC_LON:-}
+      # Optional bootstrap fields:
+      ACCOUNT_ID: ${ACCOUNT_ID:-}
+      ACCOUNT_SUMMARY: ${ACCOUNT_SUMMARY:-}
+      ACCOUNT_ROLE: ${ACCOUNT_ROLE:-weber}
+      ACCOUNT_TYPE: ${ACCOUNT_TYPE:-garnrolle}
+      ACCOUNT_TAGS: ${ACCOUNT_TAGS:-real}
+      ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-}
       DATABASE_URL: ${DATABASE_URL}
       RUST_LOG: ${RUST_LOG:-info}
       # Auth

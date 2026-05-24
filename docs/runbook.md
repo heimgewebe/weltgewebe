@@ -338,49 +338,91 @@ Ensure these are set in your `.env` file or deployment secrets.
 
 Die Datenebene ist read-only und JSONL-gespeist (`GEWEBE_IN_DIR`, Standard
 `.gewebe/in`). Es gibt bewusst keinen Account-/Create-Endpoint, der persistiert.
-Der erste echte Account und reale Anfangsdaten werden daher über einen
-idempotenten Seed-Pfad angelegt, klar getrennt von den Demo-Daten.
+Der erste echte Account wird daher über einen idempotenten Self-Bootstrap-Pfad
+angelegt, klar getrennt von den Demo-Daten.
 
-### Was der reale Seed enthält
+### Self-Bootstrap: Erster Account per Env/Flags
 
-`scripts/dev/seed-real-data.sh` erzeugt eine privacy-sichere Startmenge:
+`scripts/dev/bootstrap-first-account.sh` legt genau einen Account an und
+schreibt die Metadaten (Account-ID, Titel, Position) nach
+`.gewebe/in/bootstrap-first-account.env`.
 
-- 1 Gründungs-Account als **Rolle ohne Namen (RoN)** — ohne Standort, ohne
-  öffentliche Position (`role=weber`).
-- 2 reale öffentliche Orte (Nodes) mit gerundeten (~100 m) öffentlichen
-  Koordinaten.
-- 2 Kanten (Account → Ort, Ort → Ort).
+**Pflichtfelder (per Umgebungsvariable):**
 
-Alle Records sind contract-konform zu `contracts/domain/{account,node,edge}.schema.json`
-(Projektion auf die Domain-Felder; operative Felder wie `role` liest die API,
-sie sind nicht Teil des Contracts).
+| Variable | Bedeutung |
+|---|---|
+| `ACCOUNT_TITLE` | Anzeigename des Accounts |
+| `PUBLIC_LAT` | Breitengrad der öffentlichen Kartenposition (Dezimalgrad) |
+| `PUBLIC_LON` | Längengrad der öffentlichen Kartenposition (Dezimalgrad) |
 
-**Privacy/Trennung:** Der reale Seed ist getrennt vom Demo-Generator
-(`generate-demo-data.sh`). `.gewebe/in/` ist git-ignored — präzise oder private
-Daten gehören ausschließlich lokal auf die Zielmaschine, nie ins Repo. Mit
-`--clean-demo` entfernt der reale Seed die bekannten Demo-IDs, damit der
-Datensatz „real only" bleibt.
+**Optionale Felder:**
+
+| Variable | Bedeutung | Standard |
+|---|---|---|
+| `ACCOUNT_ID` | UUID (sonst automatisch generiert) | auto |
+| `ACCOUNT_SUMMARY` | Kurzbeschreibung | leer |
+| `ACCOUNT_ROLE` | `weber` oder `admin` | `weber` |
+| `ACCOUNT_TYPE` | `garnrolle` oder `ron` | `garnrolle` |
+| `ACCOUNT_TAGS` | Kommagetrennte Tags | `real` |
+| `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
+
+**Flags:**
+
+- `--round-location` — Koordinaten auf 3 Dezimalstellen runden (~111 m Unschärfe)
+- `--clean-demo` — Bekannte Demo-IDs aus dem Datensatz entfernen
+- `--force` — Neu anlegen, auch wenn Metadatei bereits existiert
+
+**Hinweis zur Position:** `PUBLIC_LAT`/`PUBLIC_LON` werden als `public_pos` über
+`/api/accounts` öffentlich sichtbar. Bewusste Entscheidung — die Position ist
+auf der Karte sichtbar. `--round-location` reduziert die Präzision (~111 m).
+`.gewebe/in/` ist git-ignored; keine echten Koordinaten werden ins Repo geschrieben.
 
 ### Lokal (dev)
 
 ```bash
-just seed-real           # schreibt .gewebe/in/demo.{accounts,nodes,edges}.jsonl
-just up                  # dev-Stack (Caddy auf 127.0.0.1:8081, /api/* -> Rust-API)
-just smoke-seed          # prüft /api/{accounts,nodes,edges} + /map gegen die realen IDs
+# 1. Account bootstrappen (Pflichtfelder setzen):
+ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+  just bootstrap-first-account
+
+# Mit optionalen Feldern und gerundeter Position:
+ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+  ACCOUNT_SUMMARY="Gründerin" ACCOUNT_TAGS="real,gründung" \
+  ./scripts/dev/bootstrap-first-account.sh --round-location
+
+# Demo-Daten gleichzeitig bereinigen:
+ACCOUNT_TITLE="Alice" PUBLIC_LAT="53.5503" PUBLIC_LON="9.9932" \
+  ./scripts/dev/bootstrap-first-account.sh --clean-demo
+
+# 2. Dev-Stack starten:
+just up
+
+# 3. Smoke-Check (liest Account-ID aus .gewebe/in/bootstrap-first-account.env):
+just smoke-seed
 ```
 
-Login für den Gründungs-Account (kein Public-Login nötig): `AUTH_DEV_LOGIN=1`
-setzen, lokal `POST /api/auth/dev/login` mit der Account-ID
-`a0000001-0000-4000-8000-000000000001`. Magic-Link/Public-Login bleibt bewusst
-außerhalb dieses Pfads (siehe Abschnitt 3).
+Dev-Login (kein Public-Login nötig): `AUTH_DEV_LOGIN=1` setzen, dann
+`POST /api/auth/dev/login` mit der `account_id` aus der Metadatei.
+Magic-Link/Public-Login bleibt bewusst außerhalb dieses Pfads (siehe Abschnitt 3).
 
 ### Produktion / `weltgewebe-up`
 
-Der API-Container-Entrypoint seedet beim Start, wenn aktiviert. In der `.env`:
+Der API-Container-Entrypoint führt den Bootstrap beim Start aus, wenn aktiviert.
+In der `.env` (oder deployment secrets):
 
 ```bash
 GEWEBE_SEED_REAL=true
 GEWEBE_SEED_DEMO=false
+
+# Pflichtfelder für GEWEBE_SEED_REAL=true:
+ACCOUNT_TITLE=Alice
+PUBLIC_LAT=53.5503
+PUBLIC_LON=9.9932
+
+# Optional:
+# ACCOUNT_SUMMARY=Gründerin
+# ACCOUNT_ROLE=weber
+# ACCOUNT_TAGS=real
+# ACCOUNT_EMAIL=alice@example.com
 ```
 
 Danach deployen und gegen den Caddy-Origin smoken:
@@ -390,7 +432,8 @@ scripts/weltgewebe-up --with-caddy
 BASE_URL=https://<deine-domain> just smoke-seed
 ```
 
-Der Entrypoint ruft den realen Seed idempotent gegen das Volume `/data`
-(`GEWEBE_IN_DIR=/data`) auf; ist der reale Seed aktiv und befüllt die Kerndateien,
+Der Bootstrap ist idempotent: er überspringt den Lauf, wenn
+`.gewebe/in/bootstrap-first-account.env` auf dem Volume `/data` bereits existiert.
+Ist `GEWEBE_SEED_REAL=true` und befüllen die Kerndateien die Demo-Sentinel-Prüfung,
 wird die Demo-Generierung automatisch übersprungen.
 

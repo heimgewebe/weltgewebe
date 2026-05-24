@@ -47,9 +47,9 @@ COPY --from=builder /app/target/release/weltgewebe-api /app/weltgewebe-api
 # Copy scripts for data seeding
 # Note: Docker context is repo root
 COPY scripts/dev/generate-demo-data.sh /usr/local/bin/generate-demo-data
-COPY scripts/dev/seed-real-data.sh /usr/local/bin/seed-real-data
+COPY scripts/dev/bootstrap-first-account.sh /usr/local/bin/bootstrap-first-account
 COPY apps/api/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/seed-real-data /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/generate-demo-data /usr/local/bin/bootstrap-first-account /usr/local/bin/entrypoint.sh
 
 # Expose the port
 COPY policies /app/policies

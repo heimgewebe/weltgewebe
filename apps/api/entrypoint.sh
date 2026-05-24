@@ -13,10 +13,10 @@ ENABLE_REAL_SEEDING="${GEWEBE_SEED_REAL:-false}"
 if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
     echo "Ensuring REAL seed data in $DATA_DIR (GEWEBE_SEED_REAL=$ENABLE_REAL_SEEDING)..."
     mkdir -p "$DATA_DIR"
-    if command -v seed-real-data >/dev/null 2>&1; then
-        seed-real-data "$DATA_DIR"
+    if command -v bootstrap-first-account >/dev/null 2>&1; then
+        bootstrap-first-account "$DATA_DIR"
     else
-        echo "Warning: seed-real-data not found, skipping real seeding."
+        echo "Warning: bootstrap-first-account not found, skipping real seeding."
     fi
 fi
 
