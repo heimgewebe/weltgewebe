@@ -37,7 +37,8 @@ relations:
    - `GEWEBE_SEED_DEMO` — Demo-Daten ein/aus. Für echte Deployments auf `false`
      setzen.
    - `GEWEBE_SEED_REAL` und `GEWEBE_SEED_DEMO` sind gegenseitig ausgeschlossen:
-     wenn `GEWEBE_SEED_REAL=true`, wird Demo-Seeding übersprungen.
+     beide gleichzeitig sind verboten; der Entrypoint bricht ab. Es gibt keinen
+     Mischbetrieb und kein stilles Überspringen bei widersprüchlicher Konfiguration.
 
 4. **`bootstrap-first-account.sh` ohne jq**: Das Bootstrap-Script benötigt nur
    POSIX-Standard-Tools (`bash`, `grep`, `awk`, `sed`, `printf`). Es funktioniert

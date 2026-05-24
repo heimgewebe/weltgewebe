@@ -436,7 +436,7 @@ schreibt die Metadaten (Account-ID, Titel, Position) nach
 | `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
 
 Der Account-Typ ist fix `garnrolle`/`verortet` und nicht konfigurierbar.
-Werte werden per `jq` JSON-sicher escaped (kein hand-gebautes JSON).
+Werte werden scriptintern JSON-sicher escaped; der Bootstrap-Pfad benötigt kein `jq`. `jq` wird nur für Smoke-/Dev-Auswertung verwendet.
 
 **Flags:**
 
