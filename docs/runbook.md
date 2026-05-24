@@ -431,7 +431,7 @@ schreibt die Metadaten (Account-ID, Titel, Position) nach
 |---|---|---|
 | `ACCOUNT_ID` | UUID (sonst automatisch generiert) | auto |
 | `ACCOUNT_SUMMARY` | Kurzbeschreibung (leer ⇒ weggelassen) | leer |
-| `ACCOUNT_ROLE` | `weber` oder `admin` (Allowlist) | `weber` |
+| `ACCOUNT_ROLE` | `weber` oder `admin` (Allowlist) | `admin` |
 | `ACCOUNT_TAGS` | Kommagetrennte Tags | `real` |
 | `ACCOUNT_EMAIL` | E-Mail-Adresse (operatives Feld) | leer |
 

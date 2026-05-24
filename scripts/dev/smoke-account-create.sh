@@ -114,13 +114,17 @@ else
   fail=1
 fi
 
-# --- 4. /map reachable ---
-code="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/map" || true)"
-if [ "$code" = "200" ]; then
-  echo "✓ map: 200"
+# --- 4. /map reachable, only for web/Caddy origin ---
+if [ -n "$API_PREFIX" ]; then
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/map" || true)"
+  if [ "$code" = "200" ]; then
+    echo "✓ map: 200"
+  else
+    echo "✗ map: HTTP $code" >&2
+    fail=1
+  fi
 else
-  echo "✗ map: HTTP $code" >&2
-  fail=1
+  echo "→ map: skipped (direct API mode)"
 fi
 
 if [ "$fail" -ne 0 ]; then
