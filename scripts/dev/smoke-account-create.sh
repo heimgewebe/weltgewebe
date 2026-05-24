@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Smoke-test for Account Creation v0: an Admin operator creates an account via
-# POST /api/accounts; it must then be visible via GET /api/accounts and the map.
+# POST /api/accounts; it must then be visible via GET /api/accounts.
+# When pointed at the web/Caddy origin, the smoke also checks /map.
 #
 # Requirements:
 #   - A running stack (default: dev Caddy origin on 127.0.0.1:8081).
