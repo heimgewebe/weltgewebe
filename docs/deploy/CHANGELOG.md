@@ -40,9 +40,8 @@ relations:
      beide gleichzeitig sind verboten; der Entrypoint bricht ab. Es gibt keinen
      Mischbetrieb und kein stilles Überspringen bei widersprüchlicher Konfiguration.
 
-4. **`bootstrap-first-account.sh` ohne jq**: Das Bootstrap-Script benötigt nur
-   POSIX-Standard-Tools (`bash`, `grep`, `awk`, `sed`, `printf`). Es funktioniert
-   in jedem `debian:bookworm-slim`-Container ohne zusätzliche Abhängigkeiten.
+4. **`bootstrap-first-account.sh` ohne jq**: `bootstrap-first-account.sh` benötigt
+   Bash sowie Standard-CLI-Tools (`grep`, `awk`, `sed`, `printf`); kein `jq`.
 
 5. **Smoke/Dev-Hinweis**: `smoke-account-create.sh` benötigt `jq` für die
    Auswertung der JSON-API-Antworten. Der Smoke ist für Entwicklungsumgebungen

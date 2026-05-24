@@ -486,7 +486,7 @@ PUBLIC_LON=9.9932
 
 # Optional:
 # ACCOUNT_SUMMARY=Gründerin
-# ACCOUNT_ROLE=weber
+# ACCOUNT_ROLE=admin      # first real bootstrap account should be admin; later accounts via API
 # ACCOUNT_TAGS=real
 # ACCOUNT_EMAIL=alice@example.com
 ```
@@ -502,8 +502,9 @@ scripts/weltgewebe-up --with-caddy
 BASE_URL=https://<deine-domain> just smoke-seed
 ```
 
-Der Bootstrap ist idempotent: er überspringt den Lauf, wenn
-`.gewebe/in/bootstrap-first-account.env` auf dem Volume `/data` bereits existiert.
+Dieser Pfad ist für die Initialisierung des ersten Admins gedacht; technisch wird
+Idempotenz über `bootstrap-first-account.env` gesteuert (Entrypoint überspringt
+den Lauf, wenn diese Metadatei auf dem Volume `/data` bereits existiert).
 
 Bei realem Bootstrap muss `GEWEBE_SEED_DEMO=false` gesetzt sein. Wenn
 `GEWEBE_SEED_REAL=true` und `GEWEBE_SEED_DEMO=true` gleichzeitig gesetzt sind,
