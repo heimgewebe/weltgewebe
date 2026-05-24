@@ -5,9 +5,9 @@ set -e
 DATA_DIR="${GEWEBE_IN_DIR:-.gewebe/in}"
 
 # Optional: seed the REAL starting dataset (default: false).
-# Idempotent. Recommended for real deployments together with GEWEBE_SEED_DEMO=false
-# so the dataset stays "real only". Runs before the demo sentinel below, so if the
-# real seed populates the core files, demo generation is skipped automatically.
+# Idempotent. Recommended for real deployments together with GEWEBE_SEED_DEMO=false.
+# Real and demo seeding are mutually exclusive. If both are enabled, startup fails.
+# For real deployments use GEWEBE_SEED_REAL=true and GEWEBE_SEED_DEMO=false.
 ENABLE_REAL_SEEDING="${GEWEBE_SEED_REAL:-false}"
 
 # Check if demo seeding is enabled (default: false). We support "true", "1", "yes".
