@@ -278,6 +278,8 @@ fi
 # double-quote. Newlines and carriage-returns are stripped to preserve the
 # single-line JSONL format required by the data store.
 json_escape() {
+  # Escape backslashes and quotes for JSON. CR/LF stripping is defensive only;
+  # control characters are rejected by _validate_no_control_chars() before reaching here.
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\r\n'
 }
 

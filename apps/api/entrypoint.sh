@@ -27,7 +27,8 @@ if [[ "$ENABLE_REAL_SEEDING" =~ ^(true|1|yes)$ ]]; then
     if command -v bootstrap-first-account >/dev/null 2>&1; then
         bootstrap-first-account "$DATA_DIR"
     else
-        echo "Warning: bootstrap-first-account not found, skipping real seeding."
+        echo "Error: bootstrap-first-account not found, cannot perform GEWEBE_SEED_REAL." >&2
+        exit 1
     fi
 fi
 
