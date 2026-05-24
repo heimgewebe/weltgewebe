@@ -10,6 +10,27 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+
+## 2026-05-24 - CSP-Härtung für repo-interne local-sovereign Caddyfiles
+
+**Geänderte Dateien:**
+
+- `infra/caddy/Caddyfile`
+- `infra/caddy/Caddyfile.dev`
+
+**Beschreibung:**
+
+Die repo-internen Caddy-Konfigurationen entfernen externe CARTO-Tile-Provider
+aus `connect-src` und `img-src`. WebSocket-Quellen (`ws:`/`wss:`) bleiben für
+Dev-/Proxy-Betrieb erlaubt; Basemap-Bild- und Tile-Quellen bleiben lokal.
+
+Die operative Heimserver-Edge-Caddyfile kann extern unter
+`/opt/heimgewebe/edge/Caddyfile` liegen und wird durch `weltgewebe-up`
+bevorzugt, wenn vorhanden. Diese Änderung härtet die repo-internen
+Referenz-/Dev-Caddyfiles und verhindert künftige CSP-Drift, ersetzt aber nicht
+den Live-Edge-Abgleich.
+
+
 ## 2026-05-23 - CARTO-freies local-sovereign-Bundle via Build-Time-Generator
 
 **Geänderte Dateien:**
