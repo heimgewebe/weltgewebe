@@ -7,23 +7,28 @@ const CARTO_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 
 describe("resolveBasemapMode", () => {
-  it("honours an explicit local-sovereign value", () => {
-    expect(resolveBasemapMode("local-sovereign")).toBe("local-sovereign");
+  it("honours an explicit local-sovereign value regardless of context", () => {
+    expect(resolveBasemapMode("local-sovereign", true)).toBe("local-sovereign");
+    expect(resolveBasemapMode("local-sovereign", false)).toBe(
+      "local-sovereign",
+    );
   });
 
-  it("honours an explicit remote-style value", () => {
-    expect(resolveBasemapMode("remote-style")).toBe("remote-style");
+  it("honours an explicit remote-style value regardless of context", () => {
+    expect(resolveBasemapMode("remote-style", true)).toBe("remote-style");
+    expect(resolveBasemapMode("remote-style", false)).toBe("remote-style");
   });
 
-  it("defaults to local-sovereign when unset", () => {
-    // The basemap mode policy defines local-sovereign as the default.
-    // Both the build-time generator and this resolver apply the same policy.
-    expect(resolveBasemapMode(undefined)).toBe("local-sovereign");
+  it("falls back to local-sovereign in local context when unset or invalid", () => {
+    expect(resolveBasemapMode(undefined, true)).toBe("local-sovereign");
+    expect(resolveBasemapMode("garbage", true)).toBe("local-sovereign");
+    expect(resolveBasemapMode("", true)).toBe("local-sovereign");
   });
 
-  it("falls back to the default for unknown values instead of trusting them", () => {
-    expect(resolveBasemapMode("garbage")).toBe("local-sovereign");
-    expect(resolveBasemapMode("")).toBe("local-sovereign");
+  it("falls back to remote-style in production context when unset or invalid", () => {
+    expect(resolveBasemapMode(undefined, false)).toBe("remote-style");
+    expect(resolveBasemapMode("garbage", false)).toBe("remote-style");
+    expect(resolveBasemapMode("", false)).toBe("remote-style");
   });
 });
 

@@ -27,15 +27,15 @@ test.describe("rewritePmtilesUrl", () => {
 
 test.describe("resolveBasemapMode", () => {
   test("returns 'local-sovereign' when envMode is explicitly 'local-sovereign'", () => {
+    expect(resolveBasemapMode("local-sovereign", true)).toBe("local-sovereign");
     expect(resolveBasemapMode("local-sovereign", false)).toBe(
       "local-sovereign",
     );
-    expect(resolveBasemapMode("local-sovereign", true)).toBe("local-sovereign");
   });
 
   test("returns 'remote-style' when envMode is explicitly 'remote-style'", () => {
-    expect(resolveBasemapMode("remote-style", false)).toBe("remote-style");
     expect(resolveBasemapMode("remote-style", true)).toBe("remote-style");
+    expect(resolveBasemapMode("remote-style", false)).toBe("remote-style");
   });
 
   test("falls back to 'local-sovereign' in local context if envMode is missing or invalid", () => {
