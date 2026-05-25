@@ -443,8 +443,10 @@ und das Verhalten der Endpunkte war inkonsistent.
 
 **Behebung (dieser Durchgang):** `MAX_PAGE_SIZE` nach `apps/api/src/routes/query.rs`
 zentralisiert; `.min(MAX_PAGE_SIZE)` in `nodes.rs` und `accounts.rs` ergänzt;
-`edges.rs` nutzt nun die geteilte Konstante. Regressionstest
-`nodes_limit_is_clamped_to_max_page_size` in `apps/api/tests/api_nodes.rs`.
+`edges.rs` nutzt nun die geteilte Konstante. Regressionstests
+`nodes_limit_is_clamped_to_max_page_size` in `apps/api/tests/api_nodes.rs`
+und `accounts_limit_is_clamped_to_max_page_size` in
+`apps/api/tests/api_accounts.rs`.
 
 ### N.6 Niedrig: Login-E-Mail ohne Längenbegrenzung
 
