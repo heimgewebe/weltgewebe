@@ -1,4 +1,4 @@
-use super::query::parse_usize_param;
+use super::query::{parse_usize_param, MAX_PAGE_SIZE};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
@@ -43,8 +43,6 @@ pub struct EdgeWithDetails {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_details: Option<EdgeParticipantDetails>,
 }
-
-const MAX_PAGE_SIZE: usize = 1000;
 
 pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();

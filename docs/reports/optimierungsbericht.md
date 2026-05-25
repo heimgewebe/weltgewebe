@@ -223,7 +223,7 @@ Statusmatrix eine operative Orientierung, keine maschinell erzwungene Wahrheit.
 
 ### 4.1 Hoch: Workflow-Redundanz
 
-**Problem:** 27 Workflows mit Überschneidungen:
+**Problem:** 28 Workflows mit Überschneidungen:
 
 - `web.yml` + `heavy.yml` duplizieren Playwright-Tests
 - `ci.yml` + `web.yml` + `api.yml` + `api-smoke.yml` überlappen
@@ -382,3 +382,105 @@ Statusmatrix eine operative Orientierung, keine maschinell erzwungene Wahrheit.
 3. Kritische offene Risiken zuerst bearbeiten: Session-Persistenz, DB-Migrationen, Produktions-Guards, Runtime-Proofs.
 4. `done` nur mit reproduzierbarem Code-/Test-/Doku-Nachweis vergeben.
 5. Bei fehlender Evidenz den Status als `open` lassen und Lücke explizit benennen (keine stille Interpolation).
+
+---
+
+## Nachtrag 2026-05-25 — Konsistenz- und Drift-Befunde
+
+> Ergänzende Befunde aus einem Repo-Durchgang am 2026-05-25. Sie betreffen vor
+> allem Toolchain-/CI-Konsistenz und ergänzen die obigen Schichten. Operative
+> Statusführung wie immer in `docs/reports/optimierungsstatus.md`.
+
+### N.1 Mittel: Rust-Toolchain-Version hartkodiert statt aus kanonischer Quelle
+
+**Problem:** `toolchain.versions.yml` pinnt `rust: "1.89.0"` als kanonische
+Quelle. Nur `ci.yml` liest diese Version dynamisch (yq). In `security.yml` (2×),
+`api.yml` (3×) und `api-smoke.yml` (1×) ist `toolchain: "1.89.0"` hartkodiert.
+Bei einem Versions-Bump driften diese sechs Stellen still von der kanonischen
+Datei ab — ein Widerspruch zum Truth-Model des Repos.
+
+**Empfehlung:** Den yq-Read-Step aus `ci.yml` auf die Rust-Jobs ausweiten oder
+die Version zentral via `workflow_call`/`env` durchreichen.
+
+### N.2 Niedrig: Inkonsistente Action-Refs
+
+**Problem:** `dtolnay/rust-toolchain` wird teils mit `@stable` (security.yml,
+ci.yml, api-smoke.yml), teils mit `@v1` (api.yml) referenziert.
+`astral-sh/setup-uv` war `@v1` (python-tooling.yml) gegenüber `@v4` (ci.yml).
+Zusätzlich wird die in `toolchain.versions.yml` gepinnte `uv: "0.9.11"` in
+`python-tooling.yml` nicht erzwungen.
+
+**Status/Behebung:** `setup-uv` in `python-tooling.yml` auf `@v4` angeglichen
+(dieser Durchgang). Vereinheitlichung der `rust-toolchain`-Refs bleibt offen.
+
+### N.3 Niedrig–Mittel: Third-Party-Actions nur per Floating-Tag gepinnt
+
+**Problem:** Sämtliche GitHub-Actions sind per Tag gepinnt (`@v4`, `@v2`, `@v0`
+…), nicht per Commit-SHA. §3.2 empfiehlt SHA-Pinning, das aber repo-weit nicht
+angewendet wird. Floating-Tags sind mutierbar (Supply-Chain-Risiko), besonders
+bei Third-Party-Actions (`dorny/paths-filter`, `extractions/setup-just`,
+`DavidAnson/markdownlint-cli2-action`, `softprops/action-gh-release`,
+`lycheeverse/lychee-action`).
+
+**Empfehlung:** Mindestens Third-Party-Actions auf Commit-SHA pinnen (mit
+Kommentar des Tags), Erstanbieter-Actions bewusst bei Major-Tag belassen.
+
+### N.4 Mittel: Keine Dependency-Update-Automation verankert
+
+**Problem:** §4.3 nannte fehlendes Dependabot/Renovate bereits diagnostisch,
+die Statusmatrix führte es bisher nicht. Bestätigt: weder
+`.github/dependabot.yml` noch eine Renovate-Konfiguration vorhanden.
+
+**Empfehlung:** Renovate oder Dependabot einrichten und als eigenen
+Status-Eintrag führen.
+
+### N.5 Mittel: Listen-Limit ohne Obergrenze bei `/nodes` und `/accounts` (behoben)
+
+**Problem:** `/edges` clampte den `limit`-Parameter auf `MAX_PAGE_SIZE = 1000`,
+`/nodes` und `/accounts` taten dies nicht. Ein einzelner Request konnte damit
+eine unbegrenzt große In-Memory-Collection erzwingen (Ressourcen-Erschöpfung)
+und das Verhalten der Endpunkte war inkonsistent.
+
+**Behebung (dieser Durchgang):** `MAX_PAGE_SIZE` nach `apps/api/src/routes/query.rs`
+zentralisiert; `.min(MAX_PAGE_SIZE)` in `nodes.rs` und `accounts.rs` ergänzt;
+`edges.rs` nutzt nun die geteilte Konstante. Regressionstest
+`nodes_limit_is_clamped_to_max_page_size` in `apps/api/tests/api_nodes.rs`.
+
+### N.6 Niedrig: Login-E-Mail ohne Längenbegrenzung
+
+**Problem:** `request_login` (`apps/api/src/routes/auth.rs`) validiert die
+E-Mail nur über `contains('@')`, ohne `maxLength`. Konsistent mit §5.2
+(fehlende String-Obergrenzen in den Contracts). Das axum-Body-Limit begrenzt das
+Restrisiko, aber eine explizite Boundary-Validierung fehlt.
+
+**Empfehlung:** Längen-Obergrenze (z. B. 254 nach RFC 5321) vor Hash/Store.
+
+### N.7 Mittel: Keine `maxLength` in Domain-Schemas
+
+**Problem:** §5.2 nannte fehlende String-Constraints allgemein. Aktueller Stand:
+`additionalProperties: false` und `minLength` sind in mehreren Schemas vorhanden
+(siehe OPT-CON-001 `partial`), `$id` ist gesetzt — aber `maxLength` fehlt in
+**allen** sechs Domain-Schemas vollständig, und `message`/`role` enthalten noch
+verschachtelte Objekte ohne `additionalProperties: false`.
+
+**Empfehlung:** `maxLength` je Feld ergänzen; verbleibende permissive
+Nested-Objects schließen.
+
+### N.8 Niedrig: Duplizierte Detail-Fetch-Logik in Panel-Komponenten
+
+**Problem:** `NodePanel.svelte`, `AccountPanel.svelte` und `EdgePanel.svelte`
+wiederholen nahezu identische reaktive Fetch-/Abort-/Loading-Logik (~3×).
+Fehlerkorrekturen (z. B. an der Request-ID-Race-Absicherung) müssen dreifach
+erfolgen.
+
+**Empfehlung:** Gemeinsame `usePanelDetails()`-Utility oder Wrapper-Komponente
+extrahieren.
+
+### N.9 Niedrig (minor): Weitere Konsistenzpunkte
+
+- **Doppelte Dev-Stack-Targets:** `Makefile` (Docmeta-Validierung) und
+  `Justfile` (Dev/CI) definieren beide `up`/`down`. Drift-Gefahr; Makefile-Targets
+  könnten auf den Justfile verweisen.
+- **`package.json` ohne `engines`:** `.nvmrc`/`.node-version` (20.19.0) und
+  `packageManager` (`pnpm@9.11.0`) sind gepinnt, aber `package.json` deklariert
+  kein `engines`-Feld — keine Durchsetzung außerhalb der CI.

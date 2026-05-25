@@ -42,7 +42,7 @@ jobs:
           python-version-file: '.python-version'
 
       # Official uv setup (adds `uv` to PATH)
-      - uses: astral-sh/setup-uv@v1
+      - uses: astral-sh/setup-uv@v4
 
       - name: Cache uv downloads
         uses: actions/cache@v4

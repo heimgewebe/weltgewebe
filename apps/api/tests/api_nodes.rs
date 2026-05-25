@@ -616,3 +616,29 @@ async fn nodes_robustness_with_dirty_data() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn nodes_limit_is_clamped_to_max_page_size() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    // Seed more nodes than the page-size cap so the clamp is observable.
+    let lines: Vec<String> = (0..1100)
+        .map(|i| format!(r#"{{"id":"n{i}","location":{{"lon":10.0,"lat":53.5}},"title":"N{i}"}}"#))
+        .collect();
+    let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+
+    let (app, _env) = app_with_nodes(&in_dir, &line_refs).await;
+
+    // A limit above MAX_PAGE_SIZE (1000) must be clamped, mirroring /edges.
+    let res = app
+        .oneshot(Request::get("/nodes?limit=5000").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v.as_array().context("must be array")?.len(), 1000);
+
+    Ok(())
+}
