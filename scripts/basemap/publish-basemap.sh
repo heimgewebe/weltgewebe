@@ -95,6 +95,7 @@ except Exception as e:
     print(str(e), file=sys.stderr)
     sys.exit(5)
 PY
+    :
 else
     PY_STATUS=$?
     echo "ERROR: Sentinel contract validation failed (Exit Code: $PY_STATUS)." >&2
