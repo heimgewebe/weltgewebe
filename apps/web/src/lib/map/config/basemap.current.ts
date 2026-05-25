@@ -7,9 +7,19 @@
 // build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
 
 import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
-import basemapModePolicy from "../../../../basemap-mode.policy.json";
 
 export type BasemapMode = "remote-style" | "local-sovereign";
+
+// Mirrors basemap-mode.policy.json (canonical source for the build-time generator).
+// Keep in sync manually until the generator emits a TS policy artifact.
+// TODO: generate this from basemap-mode.policy.json to eliminate drift risk.
+const BASEMAP_MODE_POLICY = {
+  defaultMode: "local-sovereign",
+  allowedModes: ["local-sovereign", "remote-style"],
+} as const satisfies {
+  defaultMode: BasemapMode;
+  allowedModes: readonly BasemapMode[];
+};
 
 type BaseBasemapConfig = {
   center: [number, number];
@@ -44,14 +54,20 @@ export const HAMMER_PARK_CENTER = {
 // defined in basemap-mode.policy.json and enforced by the build-time
 // generator. This resolver applies the same policy for consistency.
 //
+// isLocalContext: true  → fall back to "local-sovereign" when envMode is absent/invalid
+// isLocalContext: false → fall back to "remote-style" (production default)
+//
 // Note: The build-time generator is stricter — it always uses the policy
 // default for unset PUBLIC_BASEMAP_MODE. This resolver is kept as the
 // independently tested reference for the resolution contract.
-export function resolveBasemapMode(envMode: string | undefined): BasemapMode {
-  if (basemapModePolicy.allowedModes.includes(envMode || "")) {
+export function resolveBasemapMode(
+  envMode: string | undefined,
+  isLocalContext: boolean,
+): BasemapMode {
+  if (BASEMAP_MODE_POLICY.allowedModes.includes(envMode as BasemapMode)) {
     return envMode as BasemapMode;
   }
-  return basemapModePolicy.defaultMode as BasemapMode;
+  return isLocalContext ? "local-sovereign" : "remote-style";
 }
 
 const baseConfig: BaseBasemapConfig = {
