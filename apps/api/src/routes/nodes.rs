@@ -1,4 +1,4 @@
-use super::query::parse_usize_param;
+use super::query::{parse_usize_param, MAX_PAGE_SIZE};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
@@ -568,7 +568,7 @@ pub async fn list_nodes(
         Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
     };
-    let limit: usize = parse_usize_param(&params, "limit", 100)?;
+    let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
     let offset: usize = parse_usize_param(&params, "offset", 0)?;
 
     let cache = state.nodes.read().await;

@@ -1,4 +1,4 @@
-use super::query::parse_usize_param;
+use super::query::{parse_usize_param, MAX_PAGE_SIZE};
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
@@ -326,7 +326,7 @@ pub async fn list_accounts(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
-    let limit: usize = parse_usize_param(&params, "limit", 100)?;
+    let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
     let offset: usize = parse_usize_param(&params, "offset", 0)?;
 
     let accounts = state.accounts.read().await;
