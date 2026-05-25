@@ -243,3 +243,42 @@ async fn accounts_invalid_limit() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn accounts_limit_is_clamped_to_max_page_size() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+
+    // Seed more accounts than the page-size cap so the clamp is observable.
+    for i in 0..1100 {
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: format!("a{i:04}"),
+                kind: "garnrolle".to_string(),
+                title: format!("Title {i}"),
+                summary: None,
+                public_pos: None,
+                mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: Role::Gast,
+            email: None,
+            webauthn_user_id: uuid::Uuid::new_v4(),
+        });
+    }
+
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // A limit above MAX_PAGE_SIZE (1000) must be clamped, mirroring /edges.
+    let req = Request::get("/accounts?limit=5000").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(v.as_array().context("must be array")?.len(), 1000);
+
+    Ok(())
+}
