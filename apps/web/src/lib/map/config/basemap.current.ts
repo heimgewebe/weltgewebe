@@ -49,17 +49,20 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-// Pure resolution policy. Documents how a raw env mode string maps to a
-// concrete basemap mode. The basemap mode policy (allowed modes, default) is
-// defined in basemap-mode.policy.json and enforced by the build-time
-// generator. This resolver applies the same policy for consistency.
+// Context-aware basemap mode resolver. Maps a raw env mode string to a
+// concrete basemap mode, with context-specific fallback behavior.
 //
-// isLocalContext: true  → fall back to "local-sovereign" when envMode is absent/invalid
+// Allowed modes are defined in basemap-mode.policy.json. When envMode is
+// explicitly set to an allowed value, it is always honored regardless of context.
+// When envMode is absent or invalid, the fallback depends on context:
+//
+// isLocalContext: true  → fall back to "local-sovereign" (local dev default)
 // isLocalContext: false → fall back to "remote-style" (production default)
 //
-// Note: The build-time generator is stricter — it always uses the policy
-// default for unset PUBLIC_BASEMAP_MODE. This resolver is kept as the
-// independently tested reference for the resolution contract.
+// Note: The build-time generator (scripts/generate-basemap-config.js) is stricter
+// — it always uses basemap-mode.policy.json's defaultMode ("local-sovereign") for
+// unset PUBLIC_BASEMAP_MODE. This resolver is a runtime fallback for test/runtime
+// scenarios where context matters.
 export function resolveBasemapMode(
   envMode: string | undefined,
   isLocalContext: boolean,
