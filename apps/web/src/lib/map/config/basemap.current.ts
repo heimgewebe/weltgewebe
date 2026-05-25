@@ -7,19 +7,12 @@
 // build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
 
 import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
+import {
+  BASEMAP_MODE_POLICY,
+  type BasemapMode,
+} from "../../generated/basemapModePolicy";
 
-export type BasemapMode = "remote-style" | "local-sovereign";
-
-// Mirrors basemap-mode.policy.json (canonical source for the build-time generator).
-// Keep in sync manually until the generator emits a TS policy artifact.
-// TODO: generate this from basemap-mode.policy.json to eliminate drift risk.
-const BASEMAP_MODE_POLICY = {
-  defaultMode: "local-sovereign",
-  allowedModes: ["local-sovereign", "remote-style"],
-} as const satisfies {
-  defaultMode: BasemapMode;
-  allowedModes: readonly BasemapMode[];
-};
+export type { BasemapMode };
 
 type BaseBasemapConfig = {
   center: [number, number];
