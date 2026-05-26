@@ -62,7 +62,15 @@
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
         "job": "db-session-persistence-proof (Phase 5) + Phase 6 Cookie-Proof Tests (Offline)",
-        "status": "Phase 5 CI-Gate konfiguriert / pending CI proof; Phase 6 Cookie-Proof-Tests laufen in der Offline-Test-Suite und sind lokal belegt, CI-Nachweis pending."
+        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI pending",
+        "run_id": "26394569642",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642",
+        "job_id": "77692063785",
+        "job_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785",
+        "commit_sha": "00a43a009c53c546355a14c08086131bd84cf8ad",
+        "branch": "main",
+        "direct_postgres_port": "5432",
+        "note": "Direkter PostgreSQL-Port 5432 (nicht PgBouncer 6432); test db_session_store_persistence ... ok, 6 passed; 0 failed. Phase 6 Cookie-Proof-Tests laufen in der Offline-Test-Suite und sind lokal belegt, CI-Nachweis pending."
       }
     },
     "session_refresh": {
