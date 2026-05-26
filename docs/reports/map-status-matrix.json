@@ -107,7 +107,7 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'.",
+      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. PROVEN (scope=pmtiles-content): CI-Lauf #26445893660, Commit ae9e2362, Job basemap-pmtiles-content-proof erfolgreich.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
@@ -131,12 +131,12 @@
       ],
       "proven": [
         "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content",
-        "CI-Pfad fuer PMTiles-Content-Proof ist als eigener blockierender Scope umgesetzt: basemap-pmtiles-content-proof baut ein echtes PMTiles-Artefakt und prueft per Guard Endpoint + HTTP 206 + Magic-Byte + optionale SHA256 (scope=pmtiles-content)"
+        "PMTiles-Content-Proof via GitHub Actions ist PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26445893660, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26445893660/job/77852013272, Commit ae9e2362, Guard-Output 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefaktname basemap-hamburg-v0.1.0.pmtiles, Evidence-Artefakt-Digest sha256:b618ff7c7b84db7c6d8b42a8f80deca538c5bd1c1b18fdade09622488215c8d4"
       ]
     }
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). PMTiles-Content-Proof ist als eigener blockierender Scope in GitHub Actions implementiert (basemap-pmtiles-content-proof mit echtem Artefakt + Magic-Byte/SHA256-Check). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
+    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). PROVEN (pmtiles-content): basemap-pmtiles-content-proof ist erfolgreich gelaufen (CI-Lauf #26445893660, Commit ae9e2362). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
   }
 }
