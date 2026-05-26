@@ -57,13 +57,19 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
 - **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (Endpoint + HTTP-206-Range + 7-Byte-Magic `PMTiles` + optionale SHA256-Validierung). Der CI-Workflow betreibt drei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose), `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) und `basemap-pmtiles-content-proof` (require-Modus + Scope `pmtiles-content`). Der Content-Job erzeugt ein echtes PMTiles-Artefakt ueber `scripts/basemap/build-hamburg-pmtiles.sh` (Planetiler-Pinning + verifizierter OSM-Snapshot), startet Caddy und laesst den Guard hart fehlschlagen, sobald Endpoint/206/Magic/SHA nicht stimmen.
-- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; pmtiles-content HTTP-served Magic proof implemented, pending CI proof)
+- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; pmtiles-content: PROVEN (scope=pmtiles-content) — CI-Lauf #26447341921, Job `basemap-pmtiles-content-proof` (#77857000606), Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output `PROVEN: HTTP-served PMTiles Magic verified` und `PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`, Artefakt `basemap-hamburg-v0.1.0.pmtiles`, SHA256 `3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab`, Groesse `23948909` Bytes)
 - **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
-- **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work. Erfolgreicher GitHub-Actions-Lauf nach HTTP-served-Magic-Fix.
+- **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work.
   **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
   (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
   CI-Ausführung des visuellen Proofs: NOT_PROVEN (noch nicht in GitHub Actions). Map-Interaktion und clientseite Fehlerbehandlung sind belegt.
   Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
+
+  **Fresh CI-Evidence pmtiles-content**:
+  Run-URL: `https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921`
+  Job-URL: `https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606`
+  Event: `pull_request`
+  Branch: `chore/api-dockerfile-cargo-build-jobs`
 
 ## Essenz
 
@@ -76,8 +82,14 @@ Der Scope `pmtiles-content` ist im selben Workflow als eigener blockierender
 Proof-Job hinterlegt (`basemap-pmtiles-content-proof`) und prueft Endpoint,
 HTTP-206-Range, 7-Byte-Magic `PMTiles` und optionale SHA256 gegen ein echtes
 in CI erzeugtes Artefakt. Der Guard ist fachlich erweitert um
-`PROVEN: HTTP-served PMTiles Magic verified`; die Statusmatrix wartet aber noch
-auf einen neuen GitHub-Actions-Lauf nach diesem Fix, damit die stärkere Semantik
-gegen den richtigen Run belegt ist.
+`PROVEN: HTTP-served PMTiles Magic verified`.
+Fuer Scope `pmtiles-content` ist der Proof jetzt PROVEN: [CI-Lauf 26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921)
+(Job `basemap-pmtiles-content-proof`, [Job 77857000606](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606),
+Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
+`PROVEN: HTTP-served PMTiles Magic verified` und
+`PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`, Artefakt
+`basemap-hamburg-v0.1.0.pmtiles` mit SHA256
+`3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab` und
+Groesse `23948909` Bytes.
 Offen bleiben die Produktionsentscheidung fuer den
 Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.
