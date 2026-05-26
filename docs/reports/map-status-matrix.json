@@ -107,15 +107,14 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. pmtiles-content HTTP-served Magic proof implemented, pending CI proof.",
+      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. PROVEN (scope=pmtiles-content): CI-Lauf #26447341921, Job basemap-pmtiles-content-proof (#77857000606), Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
       "missing_evidence": [
-        "Erfolgreicher GitHub-Actions-Lauf nach HTTP-served-Magic-Fix",
-        "Visuelle Abnahme der gerenderten Karte",
+        "Visuelle Abnahme der gerenderten Karte in GitHub Actions",
         "Tile-Directory- und strukturelle PMTiles-Validierung"
       ],
       "risk": "mittel",
@@ -130,13 +129,42 @@
         "apps/web/tests/basemap-client-integration.spec.ts (clientseitiger Mock-Test, kein Live-Caddy-Beweis)",
         "scripts/guard/caddy-basemap-route-guard.sh (statischer Konfigurations-Check, kein Runtime-Beweis)"
       ],
+      "scope_status": {
+        "range-delivery": "proven",
+        "pmtiles-content": "proven"
+      },
+      "evidence": {
+        "workflow": "Basemap Runtime Proof",
+        "run_id": 26447341921,
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921",
+        "event": "pull_request",
+        "branch": "chore/api-dockerfile-cargo-build-jobs",
+        "head_sha": "3410c872964669fa27bfee958169ad9ce95594ae",
+        "job": "basemap-pmtiles-content-proof",
+        "job_id": 77857000606,
+        "job_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606",
+        "conclusion": "success",
+        "guard_output": [
+          "PROVEN: HTTP-served PMTiles Magic verified",
+          "PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)"
+        ],
+        "artifact": {
+          "name": "basemap-hamburg-v0.1.0.pmtiles",
+          "sha256": "3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab",
+          "size_bytes": 23948909,
+          "generator": "planetiler",
+          "planetiler_image_digest": "ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb",
+          "input_sha256": "e9beba6f27594a3abe571dd632e752fb43c8a136b2517fa162988fd641f8cdc9"
+        }
+      },
       "proven": [
-        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content"
+        "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content",
+        "PMTiles-Content-Proof via Caddy gegen echtes CI-Artefakt (Scope pmtiles-content) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606, Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes"
       ]
     }
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). pmtiles-content HTTP-served Magic proof implemented, pending CI proof. Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
+    "Deploy_Artefakt": "PROVEN (scope=range-delivery und scope=pmtiles-content): blockierende Jobs basemap-range-delivery-proof und basemap-pmtiles-content-proof haben HTTP 206 via Caddy sowie HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
   }
 }
