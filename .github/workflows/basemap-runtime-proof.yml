@@ -22,8 +22,7 @@ name: Basemap Runtime Proof
 #   4. basemap-visual-proof  (Pfad 4 — visueller End-to-End-Proof, blockierend)
 #      Reuses the real Hamburg PMTiles artefact from Pfad 3, publishes the
 #      stable alias (basemap-hamburg.pmtiles), starts the Vite preview server
-#      with the
-#      local-basemap-serve middleware, and runs the Playwright visual proof
+#      with the local-basemap-serve middleware, and runs the Playwright visual proof
 #      (apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts) against it.
 #      Proves: Browser → Vite middleware → PMTiles alias → HTTP 206 Range delivery
 #      → MapLibre canvas visible + isStyleLoaded() → zero remote tile violations.
