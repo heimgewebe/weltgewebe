@@ -62,7 +62,7 @@
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
         "job": "db-session-persistence-proof (Phase 5) + Phase 6 Cookie-Proof Tests (Offline)",
-        "status": "PROVEN",
+        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI pending",
         "run_id": "26394569642",
         "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642",
         "job_id": "77692063785",
