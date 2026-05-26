@@ -70,7 +70,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Bereich               | Soll (Spec) | Ist (Beleg) | Status | Risiko |
 |-----------------------|-------------|-------------|--------|--------|
 | Magic Link            | vorhanden   | Ziel-Contract migriert, Legacy-Alias aktiv, Runtime-Beleg offen | Teil   | mittel  |
-| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; Phase 6: Cookie-Attribut-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓) und API-level Magic-Link-consume-CI-Proof belegt (Run 26455010837 / Job 77886363989, 2 passed; 0 failed) | Teil   | mittel  |
+| Session               | required    | API aktiv, DbSessionStore (Phase 5) implementiert — DB-Persistenz aktiv wenn `DATABASE_URL` gesetzt, sonst In-Memory-Fallback; Phase 6: Cookie-Attribut-Proof (httpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓) und API-level Magic-Link-consume-CI-Proof belegt (Run `26455010837` / Job `77886363989`, `2 passed; 0 failed`) | Teil   | mittel  |
 | Session Refresh       | required    | Route aktiv, Session-Rotation belegt, Token-Split offen | Teil   | mittel  |
 | Logout                | required    | verwandter Codepfad vorhanden, Zielrahmen-E2E offen | Teil   | mittel  |
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
