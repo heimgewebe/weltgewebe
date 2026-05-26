@@ -404,8 +404,8 @@ jobs:
             /tmp/magic-bytes.txt
             /tmp/response-headers.txt
             /tmp/caddy.log
-            ${{ env.ARTEFACT_PATH || '' }}
-            ${{ env.META_PATH || '' }}
+            build/basemap/basemap-hamburg-v0.1.0.pmtiles
+            build/basemap/basemap-hamburg-v0.1.0.meta.json
           if-no-files-found: warn
           retention-days: 14
 
