@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { selection } from '$lib/stores/uiView';
-
-  const API_BASE = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '';
+  import { buildPanelEndpoint, createPanelDetailsLoader } from '$lib/panels/panelDetails';
+  import { formatDate } from '$lib/utils/formatDate';
 
   let activeTab = 'uebersicht';
 
@@ -22,73 +23,19 @@
     activeTab = tab;
   }
 
-  // Explicitly reset tab when node ID changes
-  let currentSelectionId: string | undefined;
-  let lastSelectionId: string | undefined;
-
-  let nodeDetails: NodeDetails | null = null;
-  let isLoadingDetails = false;
-
-  let abortController: AbortController | null = null;
-
-  $: {
-    currentSelectionId = $selection?.id;
-    if (currentSelectionId !== lastSelectionId) {
-      lastSelectionId = currentSelectionId;
+  const detailsLoader = createPanelDetailsLoader<NodeDetails>(selection, {
+    buildEndpoint: (id) => buildPanelEndpoint('node', id),
+    onSelectionChange: () => {
       activeTab = 'uebersicht';
-      nodeDetails = null;
-      // explicitly reset loading state in case the selection was cleared entirely
-      isLoadingDetails = false;
+    },
+    resourceLabel: 'node details',
+  });
+  const nodeDetailsStore = detailsLoader.details;
+  const isLoadingDetailsStore = detailsLoader.isLoading;
+  onDestroy(detailsLoader.destroy);
 
-      // Cancel any ongoing fetch if selection changes rapidly
-      if (abortController) {
-        abortController.abort();
-      }
-
-      if (currentSelectionId) {
-        isLoadingDetails = true;
-        abortController = new AbortController();
-        const currentReqId = currentSelectionId;
-
-        // Use plural /api/nodes/[id] if hitting a remote API server
-        // Use singular /api/node/[id] locally to avoid SvelteKit static build file/folder collisions
-        const endpoint = API_BASE ? `${API_BASE}/api/nodes/${currentSelectionId}` : `/api/node/${currentSelectionId}`;
-
-        fetch(endpoint, {
-          signal: abortController.signal
-        })
-          .then((res) => {
-            if (res.ok) return res.json();
-            throw new Error('Failed to load node details');
-          })
-          .then((data) => {
-            // Only update state if this response matches the currently selected node
-            if (currentSelectionId === currentReqId) {
-              nodeDetails = data;
-            }
-          })
-          .catch((err) => {
-            if (err.name !== 'AbortError') {
-              console.error(err);
-            }
-          })
-          .finally(() => {
-            if (currentSelectionId === currentReqId) {
-              isLoadingDetails = false;
-            }
-          });
-      }
-    }
-  }
-
-  function formatDate(isoString: string | undefined) {
-    if (!isoString) return 'Unbekannt';
-    try {
-      return new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(isoString));
-    } catch (e) {
-      return 'Unbekannt';
-    }
-  }
+  $: nodeDetails = $nodeDetailsStore;
+  $: isLoadingDetails = $isLoadingDetailsStore;
 
   let displayLat: number | undefined;
   let displayLon: number | undefined;

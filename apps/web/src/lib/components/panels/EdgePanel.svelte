@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { selection } from '$lib/stores/uiView';
   import { onDestroy } from 'svelte';
-
-  // To support static builds and dynamic API switching similar to NodePanel
-  const API_BASE = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '';
+  import { selection } from '$lib/stores/uiView';
+  import { buildPanelEndpoint, createPanelDetailsLoader } from '$lib/panels/panelDetails';
+  import { formatDate } from '$lib/utils/formatDate';
 
   interface EdgeParticipantDetails {
     id: string;
@@ -20,73 +19,16 @@
     target_details?: EdgeParticipantDetails | null;
   }
 
-  let edgeDetails: EdgeDetails | null = null;
-  let isLoadingDetails = false;
-  let abortController: AbortController | null = null;
-  let lastSelectionId: string | null = null;
-
-  // Reactively fetch edge details when selection changes
-  $: {
-    const currentSelectionId = $selection?.id || null;
-
-    if (currentSelectionId !== lastSelectionId) {
-      lastSelectionId = currentSelectionId;
-      edgeDetails = null;
-      isLoadingDetails = false;
-
-      // Cancel any ongoing fetch if selection changes rapidly
-      if (abortController) {
-        abortController.abort();
-        abortController = null;
-      }
-
-      if (currentSelectionId) {
-        isLoadingDetails = true;
-        abortController = new AbortController();
-        const currentReqId = currentSelectionId;
-
-        const endpoint = API_BASE ? `${API_BASE}/api/edges/${currentSelectionId}` : `/api/edge/${currentSelectionId}`;
-
-        fetch(endpoint, {
-          signal: abortController.signal
-        })
-          .then((res) => {
-            if (res.ok) return res.json();
-            throw new Error('Failed to load edge details');
-          })
-          .then((data: EdgeDetails) => {
-            if ($selection?.id === currentReqId) {
-              edgeDetails = data;
-            }
-          })
-          .catch((err) => {
-            if (err.name !== 'AbortError') {
-              console.error(err);
-            }
-          })
-          .finally(() => {
-            if ($selection?.id === currentReqId) {
-              isLoadingDetails = false;
-            }
-          });
-      }
-    }
-  }
-
-  function formatDate(isoString: string | undefined) {
-    if (!isoString) return 'Unbekannt';
-    try {
-      return new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(isoString));
-    } catch (e) {
-      return 'Unbekannt';
-    }
-  }
-
-  onDestroy(() => {
-    if (abortController) {
-      abortController.abort();
-    }
+  const detailsLoader = createPanelDetailsLoader<EdgeDetails>(selection, {
+    buildEndpoint: (id) => buildPanelEndpoint('edge', id),
+    resourceLabel: 'edge details',
   });
+  const edgeDetailsStore = detailsLoader.details;
+  const isLoadingDetailsStore = detailsLoader.isLoading;
+  onDestroy(detailsLoader.destroy);
+
+  $: edgeDetails = $edgeDetailsStore;
+  $: isLoadingDetails = $isLoadingDetailsStore;
 </script>
 
 <div class="edge-mode">
