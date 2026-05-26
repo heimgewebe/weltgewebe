@@ -56,12 +56,10 @@ Repo-Stand tatsaechlich vorhanden sind.
 ## 6. Runtime-Integration
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
-- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (zusaetzliche Magic-Byte-Validierung). Der CI-Workflow betreibt zwei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose) und `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) — letzterer startet einen realen `caddy:2.7`-Container gegen ein deterministisches `.pmtiles`-Testartefakt und schlaegt bei abweichendem HTTP-Status hart fehl.
-- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; PMTiles-Magic-Byte-Check offen)
+- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (Endpoint + HTTP-206-Range + 7-Byte-Magic `PMTiles` + optionale SHA256-Validierung). Der CI-Workflow betreibt drei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose), `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) und `basemap-pmtiles-content-proof` (require-Modus + Scope `pmtiles-content`). Der Content-Job erzeugt ein echtes PMTiles-Artefakt ueber `scripts/basemap/build-hamburg-pmtiles.sh` (Planetiler-Pinning + verifizierter OSM-Snapshot), startet Caddy und laesst den Guard hart fehlschlagen, sobald Endpoint/206/Magic/SHA nicht stimmen.
+- **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; PMTiles-Content-Proof in GitHub Actions als eigener blockierender Job umgesetzt, visuelle Abnahme weiterhin getrennt)
 - **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
-- **Fehlend**: PMTiles-Magic-Byte-Check (7-Byte-Prefix) im CI; `BASEMAP_PROOF_SCOPE=pmtiles-content`
-  ist vorbereitet, der Job benoetigt aber ein echtes Artefakt. Tile-Directory- und
-  strukturelle PMTiles-Validierung bleiben Future Work.
+- **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work.
   **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
   (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
   CI-Ausführung des visuellen Proofs: NOT_PROVEN (noch nicht in GitHub Actions). Map-Interaktion und clientseite Fehlerbehandlung sind belegt.
@@ -73,5 +71,9 @@ Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte
 Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
 ist PROVEN: [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
 (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
-(scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`. Offen bleiben die Produktionsentscheidung fuer den
-Basemap-Modus, den PMTiles-Magic-Byte-Check im CI und die visuelle Kartenabnahme.
+(scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`.
+Der Scope `pmtiles-content` ist im selben Workflow als eigener blockierender
+Proof-Job hinterlegt (`basemap-pmtiles-content-proof`) und prueft Endpoint,
+HTTP-206-Range, 7-Byte-Magic `PMTiles` und optionale SHA256 gegen ein echtes
+in CI erzeugtes Artefakt. Offen bleiben die Produktionsentscheidung fuer den
+Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.

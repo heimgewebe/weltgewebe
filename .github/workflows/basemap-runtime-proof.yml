@@ -1,7 +1,7 @@
 ---
 name: Basemap Runtime Proof
 
-# This workflow runs two jobs:
+# This workflow runs three jobs:
 #
 #   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, nicht blockierend)
 #      Runs the guard in skip mode with no Caddy and no artefact. Reports
@@ -12,6 +12,12 @@ name: Basemap Runtime Proof
 #      under /local-basemap/* and runs the guard in require mode with
 #      scope=range-delivery. The guard issues a Range request via curl and
 #      asserts HTTP 206 plus Accept-Ranges/Content-Range. Failure fails the job.
+#
+#   3. basemap-pmtiles-content-proof (Pfad 3 — echter Content-Proof, blockierend)
+#      Builds a real PMTiles artefact via scripts/basemap/build-hamburg-pmtiles.sh,
+#      serves it through Caddy, and runs the guard with scope=pmtiles-content.
+#      The guard verifies endpoint/range delivery (HTTP 206), the PMTiles magic
+#      bytes "PMTiles" and an optional SHA256 match from the generated metadata.
 #
 # Scope distinction:
 #   Pfad 2 proves Caddy HTTP Range delivery against a .pmtiles file. It does
@@ -28,12 +34,14 @@ name: Basemap Runtime Proof
     branches: [main]
     paths:
       - "infra/caddy/**"
+      - "scripts/basemap/build-hamburg-pmtiles.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - ".github/workflows/basemap-runtime-proof.yml"
   push:
     branches: [main]
     paths:
       - "infra/caddy/**"
+      - "scripts/basemap/build-hamburg-pmtiles.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - ".github/workflows/basemap-runtime-proof.yml"
   workflow_dispatch: {}
@@ -279,5 +287,152 @@ jobs:
             cat "${HDR_FILE}" >> "${GITHUB_STEP_SUMMARY}"
           else
             printf 'No response headers captured.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
+
+  basemap-pmtiles-content-proof:
+    name: basemap-pmtiles-content-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      BASEMAP_PROOF_MODE: require
+      BASEMAP_PROOF_SCOPE: pmtiles-content
+      BASEMAP_CADDY_URL: http://localhost:8081
+      SOURCE_DATE_EPOCH: "1704067200"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Docker availability
+        run: |
+          set -euo pipefail
+          docker --version
+          docker info >/dev/null
+
+      - name: Build real PMTiles artefact (Hamburg)
+        run: |
+          set -euo pipefail
+          bash scripts/basemap/build-hamburg-pmtiles.sh
+
+          ARTEFACT_NAME="basemap-hamburg-v0.1.0.pmtiles"
+          ARTEFACT_PATH="build/basemap/${ARTEFACT_NAME}"
+          META_PATH="build/basemap/basemap-hamburg-v0.1.0.meta.json"
+
+          test -s "${ARTEFACT_PATH}"
+          test -s "${META_PATH}"
+
+          EXPECTED_SHA256="$(python3 - <<'PY'
+          import json
+          with open('build/basemap/basemap-hamburg-v0.1.0.meta.json', 'r', encoding='utf-8') as f:
+              meta = json.load(f)
+          value = meta.get('sha256', '')
+          if not value:
+              raise SystemExit('missing sha256 in metadata')
+          print(value)
+          PY
+          )"
+
+          FILE_SIZE="$(wc -c < "${ARTEFACT_PATH}" | tr -d '[:space:]')"
+
+          printf 'ARTEFACT_NAME=%s\n' "${ARTEFACT_NAME}" >> "${GITHUB_ENV}"
+          printf 'ARTEFACT_PATH=%s\n' "${ARTEFACT_PATH}" >> "${GITHUB_ENV}"
+          printf 'META_PATH=%s\n' "${META_PATH}" >> "${GITHUB_ENV}"
+          printf 'EXPECTED_SHA256=%s\n' "${EXPECTED_SHA256}" >> "${GITHUB_ENV}"
+          printf 'ARTEFACT_SIZE=%s\n' "${FILE_SIZE}" >> "${GITHUB_ENV}"
+
+      - name: Start Caddy serving /local-basemap/ from artefact directory
+        run: |
+          set -euo pipefail
+          docker run -d --name caddy-proof-content \
+            -p 8081:8081 \
+            -v "${PWD}/infra/caddy/Caddyfile.proof:/etc/caddy/Caddyfile:ro" \
+            -v "${PWD}/build/basemap:/srv/weltgewebe-basemap:ro" \
+            caddy:2.7 caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+          for i in $(seq 1 30); do
+            if curl -sf -o /dev/null --max-time 2 "${BASEMAP_CADDY_URL}/"; then
+              echo "caddy ready after ${i} attempts"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: caddy did not become ready in 30s" >&2
+          docker logs caddy-proof-content || true
+          exit 1
+
+      - name: Run basemap runtime proof guard (require + pmtiles-content)
+        id: proof
+        run: |
+          set -euo pipefail
+          BASEMAP_ENDPOINT_PATH="/local-basemap/${ARTEFACT_NAME}" \
+          BASEMAP_PMTILES_PATH="${PWD}/${ARTEFACT_PATH}" \
+          BASEMAP_EXPECTED_SHA256="${EXPECTED_SHA256}" \
+            scripts/guard/basemap-runtime-proof.sh 2>&1 | tee /tmp/proof-output.txt
+
+      - name: Capture raw PMTiles magic bytes and 206 headers
+        if: always()
+        run: |
+          set -euo pipefail
+          xxd -l 16 -g 1 "${ARTEFACT_PATH}" > /tmp/magic-bytes.txt
+          curl -sS -D /tmp/response-headers.txt -o /dev/null \
+            -H 'Range: bytes=0-511' \
+            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}" || true
+
+      - name: Collect caddy logs
+        if: always()
+        run: |
+          docker logs caddy-proof-content > /tmp/caddy.log 2>&1 || true
+          tail -n 100 /tmp/caddy.log || true
+
+      - name: Tear down Caddy container
+        if: always()
+        run: docker rm -f caddy-proof-content || true
+
+      - name: Upload proof evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basemap-pmtiles-content-proof-evidence
+          path: |
+            /tmp/proof-output.txt
+            /tmp/magic-bytes.txt
+            /tmp/response-headers.txt
+            /tmp/caddy.log
+            ${{ env.ARTEFACT_PATH }}
+            ${{ env.META_PATH }}
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          OUTPUT_FILE="/tmp/proof-output.txt"
+
+          printf '## Basemap PMTiles Content Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ -f "${OUTPUT_FILE}" ]] && grep -q '^PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)$' "${OUTPUT_FILE}"; then
+            printf '%s\n\n' '✅ **PROVEN (scope=pmtiles-content)** — Caddy endpoint, HTTP 206 range, PMTiles magic bytes, and SHA256 verified' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf '%s\n\n' 'Artefact provenance: built in CI via scripts/basemap/build-hamburg-pmtiles.sh (Planetiler pinned digest + pinned OSM snapshot hash).' \
+              >> "${GITHUB_STEP_SUMMARY}"
+            printf 'Artefact: %s (%s bytes)\n' "${ARTEFACT_NAME}" "${ARTEFACT_SIZE}" >> "${GITHUB_STEP_SUMMARY}"
+            printf 'SHA256: %s\n\n' "${EXPECTED_SHA256}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '%s\n\n' '❌ **FAILED** — guard did not report pmtiles-content as PROVEN' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+          printf '<details><summary>Guard output</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${OUTPUT_FILE}" ]]; then
+            cat "${OUTPUT_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No guard output captured.\n' >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          printf '```\n\n</details>\n\n' >> "${GITHUB_STEP_SUMMARY}"
+
+          printf '<details><summary>PMTiles magic bytes (first 16)</summary>\n\n```\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f /tmp/magic-bytes.txt ]]; then
+            cat /tmp/magic-bytes.txt >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf 'No magic-byte capture found.\n' >> "${GITHUB_STEP_SUMMARY}"
           fi
           printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
