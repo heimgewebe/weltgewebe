@@ -598,14 +598,10 @@ jobs:
           SUMMARY_FILE="build/proofs/basemap-visual/proof-summary.json"
           printf '## Basemap Visual Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
           if [[ -f "${SUMMARY_FILE}" ]]; then
-            VERDICT="$(python3 -c "
-          import json, sys
-          try:
-              d = json.load(open('${SUMMARY_FILE}'))
-              print(d.get('verdict', 'UNKNOWN'))
-          except Exception:
-              print('UNKNOWN')
-          " 2>/dev/null || echo 'UNKNOWN')"
+            VERDICT="$(
+              python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("verdict", "UNKNOWN"))' \
+                "${SUMMARY_FILE}" 2>/dev/null || echo 'UNKNOWN'
+            )"
             if [[ "${VERDICT}" == "PROVEN" ]]; then
               _msg='✅ **PROVEN** — MapLibre canvas visible, isStyleLoaded() true,'
               _msg="${_msg} HTTP 206 Range delivery confirmed, zero remote violations"
