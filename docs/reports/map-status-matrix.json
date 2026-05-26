@@ -165,6 +165,6 @@
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (scope=range-delivery und scope=pmtiles-content): blockierende Jobs basemap-range-delivery-proof und basemap-pmtiles-content-proof haben HTTP 206 via Caddy sowie HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt belegt (Runs #25970466659 und #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae fuer pmtiles-content). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
+    "Deploy_Artefakt": "PROVEN (scope=range-delivery und scope=pmtiles-content): blockierende Jobs basemap-range-delivery-proof und basemap-pmtiles-content-proof haben HTTP 206 via Caddy sowie HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
   }
 }
