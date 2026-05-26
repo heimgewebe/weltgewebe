@@ -62,7 +62,7 @@
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
         "job": "db-session-persistence-proof (Phase 5) + cookie session proof (phase 6)",
-        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI PROVEN; remaining auth/browser/passkey proofs pending where applicable.",
+        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI PROVEN; weitere Auth-/Browser-/Passkey-Nachweise sind, soweit zutreffend, noch offen.",
         "phase5": {
           "run_id": "26394569642",
           "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642",
@@ -91,7 +91,7 @@
           ],
           "result": "2 passed; 0 failed",
           "proof_line": "PROVEN: cookie/session proof tests passed (phase 6)",
-          "scope": "Cookie/session proof only; no full browser E2E/auth verify/passkey proof"
+          "scope": "Nur Cookie-/Session-Proof; kein vollständiger Browser-E2E-/Auth-Verify-/Passkey-Proof"
         },
         "note": "Phase 6 ist auf Cookie/session proof begrenzt; Session-Rotation/Leak/Refresh, Auth Verify, Passkey Register-Verify und Browser-/Mailer-End-to-End-Proofs bleiben offen."
       }
