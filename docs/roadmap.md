@@ -110,8 +110,8 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
     [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
 - [x] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · direkter SQLx/PostgreSQL-Persistenzpfad implementiert (PR #1072)
-- [x] Phase 5b — CI-Gate für `db_session_store_persistence`-Test · PROVEN · Run [`26394569642`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642), Job [`77692063785`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785), Commit `00a43a009c53c546355a14c08086131bd84cf8ad` (Branch `main`); direkter PostgreSQL-Port `5432` (nicht PgBouncer `6432`); `test db_session_store_persistence ... ok`, 6 passed; 0 failed
-- [ ] Phase 6 — Auth-Statusmatrix vollständig grün · [auth-status-matrix.md](reports/auth-status-matrix.md)
+- [x] Phase 5b — CI-Gate für `db_session_store_persistence`-Test · PROVEN · Run [`26394569642`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642), Job [`77692063785`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785), Commit `00a43a009c53c546355a14c08086131bd84cf8ad` (Branch `main`); direkter PostgreSQL-Port `5432` (nicht PgBouncer `6432`); `test db_session_store_persistence ... ok`, `6 passed; 0 failed`
+- [ ] Phase 6 — nachgelagerter Teilstand: Cookie/session proof CI PROVEN (begrenzt) · Run [`26455010837`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837), Job [`77886363989`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837/job/77886363989), headSha `20c7e30136fc5872e286ab17738a64b0d03aec56`; `session_cookie_has_secure_attributes_on_magic_link_consume ... ok`, `session_cookie_insecure_when_auth_cookie_secure_disabled ... ok`, `2 passed; 0 failed`, `PROVEN: cookie/session proof tests passed (phase 6)`; verbleibende Auth-/Browser-/Passkey-Proofs weiterhin offen · [auth-status-matrix.md](reports/auth-status-matrix.md)
 
 ## Strang UI
 
