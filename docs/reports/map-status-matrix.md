@@ -62,7 +62,9 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work.
   **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
   (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
-  CI-Ausführung des visuellen Proofs: NOT_PROVEN (noch nicht in GitHub Actions). Map-Interaktion und clientseite Fehlerbehandlung sind belegt.
+  CI-Ausführung des visuellen Proofs: READY_FOR_CI_PROOF — Job `basemap-visual-proof` in
+  `.github/workflows/basemap-runtime-proof.yml` eingerichtet; kein grüner GitHub-Actions-Lauf liegt noch vor.
+  Map-Interaktion und clientseitige Fehlerbehandlung sind belegt.
   Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
   **Fresh CI-Evidence pmtiles-content**:

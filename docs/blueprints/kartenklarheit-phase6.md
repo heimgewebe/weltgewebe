@@ -165,6 +165,9 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
   bleiben heavy und laufen nur via `workflow_dispatch`.
 - [ ] **Visuelle Abnahme.** Karte rendert ohne Fallback nach realem Tile-Load —
   separater Schritt, nicht durch den Range-Delivery-Proof gedeckt.
+  READY_FOR_CI_PROOF: Job `basemap-visual-proof` in `.github/workflows/basemap-runtime-proof.yml`
+  eingerichtet (Browser → Vite-Middleware → PMTiles-Alias → HTTP 206 → MapLibre canvas + isStyleLoaded()).
+  Kein grüner GitHub-Actions-Lauf liegt noch vor → Status bleibt NOT_PROVEN.
 
 ---
 
