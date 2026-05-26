@@ -420,15 +420,24 @@ jobs:
 
           printf '## Basemap PMTiles Content Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
 
-          if [[ -f "${OUTPUT_FILE}" ]] && grep -q '^PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)$' "${OUTPUT_FILE}"; then
-            printf '%s\n\n' '✅ **PROVEN (scope=pmtiles-content)** — Caddy endpoint, HTTP 206 range, PMTiles magic bytes, and SHA256 verified' \
-              >> "${GITHUB_STEP_SUMMARY}"
-            printf '%s\n\n' 'Artefact provenance: built in CI via scripts/basemap/build-hamburg-pmtiles.sh (Planetiler pinned digest + pinned OSM snapshot hash).' \
-              >> "${GITHUB_STEP_SUMMARY}"
-            printf 'Artefact: %s (%s bytes)\n' "${artefact_name}" "${artefact_size}" >> "${GITHUB_STEP_SUMMARY}"
-            printf 'PMTiles-Artefakt-SHA256 (from build/basemap/basemap-hamburg-v0.1.0.meta.json): %s\n\n' "${expected_sha256}" >> "${GITHUB_STEP_SUMMARY}"
+          PROVEN_PATTERN='^PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)$'
+          if [[ -f "${OUTPUT_FILE}" ]] && grep -q "${PROVEN_PATTERN}" "${OUTPUT_FILE}"; then
+            _msg='✅ **PROVEN (scope=pmtiles-content)**'
+            _msg="${_msg} — Caddy endpoint, HTTP 206 range, PMTiles magic bytes, and"
+            _msg="${_msg} SHA256 verified"
+            printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
+            _prov='Artefact provenance: built in CI via'
+            _prov="${_prov} scripts/basemap/build-hamburg-pmtiles.sh (Planetiler pinned"
+            _prov="${_prov} digest + pinned OSM snapshot hash)."
+            printf '%s\n\n' "${_prov}" >> "${GITHUB_STEP_SUMMARY}"
+            printf 'Artefact: %s (%s bytes)\n' \
+              "${artefact_name}" "${artefact_size}" >> "${GITHUB_STEP_SUMMARY}"
+            printf 'PMTiles-Artefakt-SHA256 (from build/basemap/' >> "${GITHUB_STEP_SUMMARY}"
+            printf 'basemap-hamburg-v0.1.0.meta.json): %s\n\n' \
+              "${expected_sha256}" >> "${GITHUB_STEP_SUMMARY}"
           else
-            printf '%s\n\n' '❌ **FAILED** — guard did not report pmtiles-content as PROVEN' \
+            printf '%s\n\n' \
+              '❌ **FAILED** — guard did not report pmtiles-content as PROVEN' \
               >> "${GITHUB_STEP_SUMMARY}"
           fi
 
