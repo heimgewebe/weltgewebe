@@ -35,7 +35,7 @@
     },
     "session": {
       "soll": "GET /auth/session, Cookie, belastbares Persistenzmodell",
-      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): API-level Magic-Link consume proof with seeded token + Cookie-Attribut-Proof (HttpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; authentifizierter Request mit Session-Cookie gegen /auth/session lokal belegt.",
+      "ist": "GET /auth/session implementiert (inkl. expires_at und device_id), durch API-Tests belegt. Phase 5 (PR #1072): DbSessionStore implementiert — direkte PostgreSQL-Persistenz über DATABASE_URL gemäß ADR-0007; In-Memory-SessionStore bleibt aktiv wenn DATABASE_URL nicht gesetzt. Harte Fehlermeldung bei Fehlkonfiguration. Query-Layer-Expiry-Filterung, 5-Minuten-Debounce auf touch(). ADR-0007: direkter PostgreSQL-Zugriff als Produktionspfad, PgBouncer kein Produktions-Gate. Cookie-Transport aktiv; httpOnly und SameSite=Lax bedingungslos gesetzt; Secure standardmäßig aktiv, konfigurierbar über AUTH_COOKIE_SECURE. Phase 6 (PR #1081): API-level Magic-Link consume proof with seeded token + Cookie-Attribut-Proof (HttpOnly ✓, SameSite=Lax ✓, Secure={ENV} ✓); Test mit AUTH_COOKIE_SECURE=0 für Dev-Modus; authentifizierter Request mit Session-Cookie gegen /auth/session lokal belegt. CI-Proof für Cookie/session (Run 26455010837 / Job 77886363989, 2 passed; 0 failed) ist belegt.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md",
@@ -61,16 +61,39 @@
       ],
       "ci_gate": {
         "workflow": ".github/workflows/api.yml",
-        "job": "db-session-persistence-proof (Phase 5) + Phase 6 Cookie-Proof Tests (Offline)",
-        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI pending",
-        "run_id": "26394569642",
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642",
-        "job_id": "77692063785",
-        "job_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785",
-        "commit_sha": "00a43a009c53c546355a14c08086131bd84cf8ad",
-        "branch": "main",
-        "direct_postgres_port": "5432",
-        "note": "Direkter PostgreSQL-Port 5432 (nicht PgBouncer 6432); test db_session_store_persistence ... ok, 6 passed; 0 failed. Phase 6 Cookie-Proof-Tests laufen in der Offline-Test-Suite und sind lokal belegt, CI-Nachweis pending."
+        "job": "db-session-persistence-proof (Phase 5) + cookie session proof (phase 6)",
+        "status": "Phase 5 DbSessionStore CI proof PROVEN; Phase 6 Cookie-Proof CI PROVEN; remaining auth/browser/passkey proofs pending where applicable.",
+        "phase5": {
+          "run_id": "26394569642",
+          "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642",
+          "job_id": "77692063785",
+          "job_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785",
+          "commit_sha": "00a43a009c53c546355a14c08086131bd84cf8ad",
+          "branch": "main",
+          "direct_postgres_port": "5432",
+          "test": "test db_session_store_persistence ... ok",
+          "result": "6 passed; 0 failed"
+        },
+        "phase6": {
+          "event": "pull_request",
+          "branch": "chore/auth-phase6-cookie-proof-ci",
+          "run_id": "26455010837",
+          "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837",
+          "job": "cookie session proof (phase 6)",
+          "job_id": "77886363989",
+          "job_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837/job/77886363989",
+          "head_sha": "20c7e30136fc5872e286ab17738a64b0d03aec56",
+          "cargo_term_color": "never",
+          "command": "cargo test --locked -p weltgewebe-api --test api_auth session_cookie_ -- --test-threads=1 --color never",
+          "tests": [
+            "session_cookie_has_secure_attributes_on_magic_link_consume",
+            "session_cookie_insecure_when_auth_cookie_secure_disabled"
+          ],
+          "result": "2 passed; 0 failed",
+          "proof_line": "PROVEN: cookie/session proof tests passed (phase 6)",
+          "scope": "Cookie/session proof only; no full browser E2E/auth verify/passkey proof"
+        },
+        "note": "Phase 6 ist auf Cookie/session proof begrenzt; Session-Rotation/Leak/Refresh, Auth Verify, Passkey Register-Verify und Browser-/Mailer-End-to-End-Proofs bleiben offen."
       }
     },
     "session_refresh": {
