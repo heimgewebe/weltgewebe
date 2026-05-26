@@ -72,6 +72,29 @@ jobs:
         working-directory: apps/api
         run: cargo test --all-features --verbose
 
+  cookie-session-proof:
+    name: cookie session proof (phase 6)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: "1.89.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run phase 6 cookie/session proof tests
+        run: >-
+          cargo test --locked -p weltgewebe-api
+          --test api_auth session_cookie_
+          -- --test-threads=1
+
   db-session-persistence-proof:
     name: db session persistence proof (direct postgres)
     runs-on: ubuntu-latest
