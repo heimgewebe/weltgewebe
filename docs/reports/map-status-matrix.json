@@ -107,16 +107,16 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt zwei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy, und 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl. Der Guard kennt die Scopes 'range-delivery' (HTTP-206-Beweis, im CI aktiv) und 'pmtiles-content' (Magic-Byte-Check der ersten 7 Bytes 'PMTiles' — kein vollstaendiger Struktur-Check, fuer ein echtes Artefakt vorbereitet). PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. Artifact: basemap-range-delivery-proof-evidence (ID 7035995961).",
+      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. pmtiles-content HTTP-served Magic proof implemented, pending CI proof.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
       "missing_evidence": [
-        "Echtes PMTiles-Artefakt im CI-Stack",
-        "PMTiles-Magic-Byte-Check (Scope pmtiles-content, 7-Byte-Prefix) gegen reales Artefakt",
-        "Visuelle Abnahme der gerenderten Karte"
+        "Erfolgreicher GitHub-Actions-Lauf nach HTTP-served-Magic-Fix",
+        "Visuelle Abnahme der gerenderten Karte",
+        "Tile-Directory- und strukturelle PMTiles-Validierung"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
@@ -137,6 +137,6 @@
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). Offen: reproduzierbare Bereitstellung eines echten PMTiles-Artefakts im CI fuer den Scope pmtiles-content (Magic-Byte-Check der ersten 7 Bytes)."
+    "Deploy_Artefakt": "PROVEN (range-delivery): blockierender Job basemap-range-delivery-proof hat HTTP 206 via Caddy bewiesen (CI-Lauf #25970466659, Commit 14feefd6). pmtiles-content HTTP-served Magic proof implemented, pending CI proof. Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
   }
 }

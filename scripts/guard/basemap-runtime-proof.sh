@@ -11,8 +11,9 @@ set -euo pipefail
 #     headers present.  Does NOT validate the artefact content itself.
 #
 #   pmtiles-content
-#     Proves that the local artefact exists, is non-empty, and carries the exact
-#     PMTiles magic header at byte offset 0 ("PMTiles", 7 bytes).
+#     Proves that the local artefact exists, is non-empty, carries the exact
+#     PMTiles magic header at byte offset 0 ("PMTiles", 7 bytes), and that
+#     Caddy delivers the same magic bytes 0-6 via HTTP Range request.
 #     Optionally verifies SHA256 when BASEMAP_EXPECTED_SHA256 is set.
 #     Explicitly NOT a deep PMTiles structure validation.
 #
@@ -58,6 +59,76 @@ REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 BASEMAP_PROOF_SCOPE="${BASEMAP_PROOF_SCOPE:-range-delivery}"
 BASEMAP_PROOF_MODE="${BASEMAP_PROOF_MODE:-require}"
 
+require_http_range_proof() {
+  local full_url="$1"
+  local header_tmp=""
+  local http_status=""
+  local has_accept_ranges=0
+  local has_content_range=0
+
+  header_tmp="$(mktemp)"
+
+  http_status="$({
+    curl --silent \
+         --max-time 10 \
+         --header 'Range: bytes=0-511' \
+         --output /dev/null \
+         --dump-header "${header_tmp}" \
+         --write-out '%{http_code}' \
+         "${full_url}" 2>/dev/null
+  })" || {
+    rm -f "${header_tmp}"
+    printf 'ERROR: curl request to %s failed\n' "${full_url}" >&2
+    return 1
+  }
+
+  if [[ "${http_status}" == "200" ]]; then
+    rm -f "${header_tmp}"
+    printf 'ERROR: Caddy returned HTTP 200 for a Range request — Range delivery is inactive\n' >&2
+    printf '  URL:    %s\n' "${full_url}" >&2
+    printf '  Status: 200 OK (expected 206 Partial Content)\n' >&2
+    printf '  A 200 response to a Range request means the server ignores Range headers.\n' >&2
+    return 1
+  fi
+
+  if [[ "${http_status}" != "206" ]]; then
+    rm -f "${header_tmp}"
+    printf 'ERROR: Unexpected HTTP status %s for Range request\n' "${http_status}" >&2
+    printf '  URL:      %s\n' "${full_url}" >&2
+    printf '  Expected: 206 Partial Content\n' >&2
+    return 1
+  fi
+
+  if grep -qi '^accept-ranges:' "${header_tmp}"; then
+    has_accept_ranges=1
+  fi
+  if grep -qi '^content-range:' "${header_tmp}"; then
+    has_content_range=1
+  fi
+
+  if [[ "${has_accept_ranges}" -eq 0 && "${has_content_range}" -eq 0 ]]; then
+    rm -f "${header_tmp}"
+    printf 'ERROR: Neither Accept-Ranges nor Content-Range header present in response\n' >&2
+    printf '  URL: %s\n' "${full_url}" >&2
+    return 1
+  fi
+
+  printf 'HTTP status: %s (206 Partial Content confirmed)\n' "${http_status}"
+
+  if [[ "${has_accept_ranges}" -eq 1 ]]; then
+    local accept_ranges_val=""
+    accept_ranges_val="$(grep -i '^accept-ranges:' "${header_tmp}" | head -1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')"
+    printf 'Accept-Ranges: %s (confirmed)\n' "${accept_ranges_val}"
+  fi
+  if [[ "${has_content_range}" -eq 1 ]]; then
+    local content_range_val=""
+    content_range_val="$(grep -i '^content-range:' "${header_tmp}" | head -1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')"
+    printf 'Content-Range: %s (confirmed)\n' "${content_range_val}"
+  fi
+
+  rm -f "${header_tmp}"
+}
+
 # Validate BASEMAP_PROOF_SCOPE
 if [[ "${BASEMAP_PROOF_SCOPE}" != "range-delivery" && "${BASEMAP_PROOF_SCOPE}" != "pmtiles-content" ]]; then
   printf 'ERROR: BASEMAP_PROOF_SCOPE must be "range-delivery" or "pmtiles-content", got: %s\n' "${BASEMAP_PROOF_SCOPE}" >&2
@@ -73,15 +144,18 @@ fi
 # ---------------------------------------------------------------------------
 # Scope: pmtiles-content
 # Proves: local file exists, non-empty, PMTiles magic header at offset 0,
-#         optional SHA256 checksum.
+#         optional SHA256 checksum, and Caddy delivers the same magic bytes
+#         via HTTP Range request (bytes 0-6).
 # Explicitly NOT: deep PMTiles structure validation.
 # ---------------------------------------------------------------------------
 
 if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
-  printf 'Proof scope: pmtiles-content (Magic/Header/Hash — not deep structure)\n'
+  printf 'Proof scope: pmtiles-content (local Magic/SHA + Caddy HTTP 206 + HTTP-served Magic; not deep structure)\n'
 
   BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
+  BASEMAP_CADDY_URL="${BASEMAP_CADDY_URL:-http://localhost:8081}"
   BASEMAP_PMTILES_PATH="${BASEMAP_PMTILES_PATH:-}"
+  BASEMAP_ENDPOINT_PATH="${BASEMAP_ENDPOINT_PATH:-}"
   BASEMAP_EXPECTED_SHA256="${BASEMAP_EXPECTED_SHA256:-}"
 
   # Resolve file path
@@ -146,12 +220,70 @@ if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
     SHA256_STATUS="PROVEN"
   fi
 
+  if [[ -z "${BASEMAP_ENDPOINT_PATH}" ]]; then
+    BASEMAP_ENDPOINT_PATH="/local-basemap/$(basename "${PMTILES_FILE}")"
+  fi
+
+  if [[ "${BASEMAP_ENDPOINT_PATH}" != /* ]]; then
+    printf 'ERROR: BASEMAP_ENDPOINT_PATH must start with "/", got: %s\n' "${BASEMAP_ENDPOINT_PATH}" >&2
+    exit 1
+  fi
+
+  FULL_URL="${BASEMAP_CADDY_URL}${BASEMAP_ENDPOINT_PATH}"
+  printf 'Issuing HTTP Range requests to: %s\n' "${FULL_URL}"
+
+  # Step 1: Verify HTTP-served PMTiles magic bytes (0-6)
+  printf 'Step 1: Verifying HTTP magic bytes (Range: bytes=0-6)...\n'
+  http_magic_tmp="$(mktemp)"
+  http_magic_status="$({ \
+    curl --silent \
+         --max-time 10 \
+         --range 0-6 \
+         --output "${http_magic_tmp}" \
+         --write-out '%{http_code}' \
+         "${FULL_URL}" 2>/dev/null; \
+  })"
+  http_magic_exit=$?
+  if [[ ${http_magic_exit} -ne 0 ]]; then
+    rm -f "${http_magic_tmp}"
+    printf 'ERROR: curl request to fetch HTTP magic bytes failed (exit: %d)\n' ${http_magic_exit} >&2
+    printf '  URL: %s\n' "${FULL_URL}" >&2
+    exit 1
+  fi
+
+  if [[ "${http_magic_status}" != "206" ]]; then
+    rm -f "${http_magic_tmp}"
+    printf 'ERROR: Expected HTTP 206 for PMTiles magic range, got %s\n' "${http_magic_status}" >&2
+    printf '  URL:      %s\n' "${FULL_URL}" >&2
+    printf '  Expected: 206 Partial Content\n' >&2
+    exit 1
+  fi
+
+  http_magic="$(cat "${http_magic_tmp}" 2>/dev/null | tr -d '\0')"
+  rm -f "${http_magic_tmp}"
+
+  if [[ "${http_magic}" != "PMTiles" ]]; then
+    printf 'ERROR: HTTP-served PMTiles magic bytes mismatch\n' >&2
+    printf '  Expected: PMTiles\n' >&2
+    printf '  Got:      %s\n' "${http_magic}" >&2
+    exit 1
+  fi
+  printf 'HTTP magic bytes (0-6): "%s" confirmed\n' "${http_magic}"
+
+  # Step 2: Verify HTTP Range delivery (206 + headers for bytes 0-511)
+  printf 'Step 2: Verifying HTTP Range delivery (Range: bytes=0-511)...\n'
+  require_http_range_proof "${FULL_URL}"
+
   printf '\n'
-  printf 'PROVEN: PMTiles Magic/Header verified\n'
-  printf '  File:         %s\n' "${PMTILES_FILE}"
-  printf '  Size:         %s bytes\n' "${FILE_SIZE}"
-  printf '  Magic header: "%s" at offset 0\n' "${MAGIC_ACTUAL}"
-  printf '  SHA256 check: %s\n' "${SHA256_STATUS}"
+  printf 'PROVEN: HTTP-served PMTiles Magic verified\n'
+  printf 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)\n'
+  printf '  Local file:     %s\n' "${PMTILES_FILE}"
+  printf '  File size:      %s bytes\n' "${FILE_SIZE}"
+  printf '  Local magic:    "%s" at offset 0\n' "${MAGIC_ACTUAL}"
+  printf '  HTTP endpoint:  %s\n' "${FULL_URL}"
+  printf '  HTTP magic:     "%s" (bytes 0-6)\n' "${http_magic}"
+  printf '  HTTP status:    206 Partial Content\n'
+  printf '  SHA256 check:   %s\n' "${SHA256_STATUS}"
   printf '\n'
   printf 'NOT_PROVEN: Deep PMTiles structure validation (tile index, directory, metadata integrity)\n'
   printf '  This scope validates magic/header/hash only — full structure proof not implemented.\n'
@@ -172,18 +304,6 @@ if [[ -n "${BASEMAP_ENDPOINT_PATH:-}" && "${BASEMAP_ENDPOINT_PATH}" != /* ]]; th
   printf 'ERROR: BASEMAP_ENDPOINT_PATH must start with "/", got: %s\n' "${BASEMAP_ENDPOINT_PATH}" >&2
   exit 1
 fi
-
-# ---------------------------------------------------------------------------
-# Cleanup
-# ---------------------------------------------------------------------------
-
-HEADER_TMP=""
-cleanup() {
-  if [[ -n "${HEADER_TMP}" && -f "${HEADER_TMP}" ]]; then
-    rm -f "${HEADER_TMP}"
-  fi
-}
-trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
 # Step 1: Locate PMTiles artefact
@@ -230,79 +350,13 @@ FULL_URL="${BASEMAP_CADDY_URL}${ENDPOINT_PATH}"
 # ---------------------------------------------------------------------------
 
 printf 'Issuing Range GET request: %s (Range: bytes=0-511)\n' "${FULL_URL}"
-
-HEADER_TMP="$(mktemp)"
-
-HTTP_STATUS="$(
-  curl --silent \
-       --max-time 10 \
-       --header 'Range: bytes=0-511' \
-       --output /dev/null \
-       --dump-header "${HEADER_TMP}" \
-       --write-out '%{http_code}' \
-       "${FULL_URL}" 2>/dev/null
-)" || {
-  printf 'ERROR: curl request to %s failed\n' "${FULL_URL}" >&2
-  exit 1
-}
-
-# ---------------------------------------------------------------------------
-# Step 3: Validate HTTP 206 — reject silent 200 OK on Range requests
-# ---------------------------------------------------------------------------
-
-if [[ "${HTTP_STATUS}" == "200" ]]; then
-  printf 'ERROR: Caddy returned HTTP 200 for a Range request — Range delivery is inactive\n' >&2
-  printf '  URL:    %s\n' "${FULL_URL}" >&2
-  printf '  Status: 200 OK (expected 206 Partial Content)\n' >&2
-  printf '  A 200 response to a Range request means the server ignores Range headers.\n' >&2
-  printf '  PMTiles clients rely on byte-range streaming; a 200 here breaks tile loading.\n' >&2
-  exit 1
-fi
-
-if [[ "${HTTP_STATUS}" != "206" ]]; then
-  printf 'ERROR: Unexpected HTTP status %s for Range request\n' "${HTTP_STATUS}" >&2
-  printf '  URL:      %s\n' "${FULL_URL}" >&2
-  printf '  Expected: 206 Partial Content\n' >&2
-  exit 1
-fi
-
-printf 'HTTP status: %s (206 Partial Content confirmed)\n' "${HTTP_STATUS}"
-
-# ---------------------------------------------------------------------------
-# Step 4: Verify Accept-Ranges or Content-Range header is present
-# ---------------------------------------------------------------------------
-
-HAS_ACCEPT_RANGES=0
-HAS_CONTENT_RANGE=0
-
-if grep -qi '^accept-ranges:' "${HEADER_TMP}"; then
-  HAS_ACCEPT_RANGES=1
-fi
-if grep -qi '^content-range:' "${HEADER_TMP}"; then
-  HAS_CONTENT_RANGE=1
-fi
-
-if [[ "${HAS_ACCEPT_RANGES}" -eq 0 && "${HAS_CONTENT_RANGE}" -eq 0 ]]; then
-  printf 'ERROR: Neither Accept-Ranges nor Content-Range header present in response\n' >&2
-  printf '  URL: %s\n' "${FULL_URL}" >&2
-  printf '  Without these headers PMTiles clients cannot reliably stream byte ranges.\n' >&2
-  exit 1
-fi
-
-if [[ "${HAS_ACCEPT_RANGES}" -eq 1 ]]; then
-  ACCEPT_RANGES_VAL="$(grep -i '^accept-ranges:' "${HEADER_TMP}" | head -1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')"
-  printf 'Accept-Ranges: %s (confirmed)\n' "${ACCEPT_RANGES_VAL}"
-fi
-if [[ "${HAS_CONTENT_RANGE}" -eq 1 ]]; then
-  CONTENT_RANGE_VAL="$(grep -i '^content-range:' "${HEADER_TMP}" | head -1 | sed 's/^[^:]*:[[:space:]]*//' | tr -d '\r')"
-  printf 'Content-Range: %s (confirmed)\n' "${CONTENT_RANGE_VAL}"
-fi
+require_http_range_proof "${FULL_URL}"
 
 # ---------------------------------------------------------------------------
 # Proof confirmed
 # ---------------------------------------------------------------------------
 
-printf '\nPROVEN: Caddy PMTiles Range delivery verified\n'
+printf '\nPROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)\n'
 printf '  Endpoint:      %s\n' "${FULL_URL}"
 printf '  HTTP status:   206 Partial Content\n'
 printf '  Range headers: present\n'
