@@ -76,7 +76,7 @@ jobs:
     name: cookie session proof (phase 6)
     runs-on: ubuntu-latest
     env:
-      CARGO_TERM_COLOR: always
+      CARGO_TERM_COLOR: never
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -95,13 +95,14 @@ jobs:
           set -euo pipefail
           cargo test --locked -p weltgewebe-api \
             --test api_auth session_cookie_ \
-            -- --test-threads=1 | tee /tmp/cookie-session-proof.log
+            -- --test-threads=1 --color never | tee /tmp/cookie-session-proof.log
 
           if grep -Eq "running 0 tests|0 passed; 0 failed" /tmp/cookie-session-proof.log; then
             echo "ERROR: cookie/session proof matched zero tests" >&2
             exit 1
           fi
 
+          grep -Eq "running [1-9][0-9]* tests" /tmp/cookie-session-proof.log
           grep -Eq "test result: ok\." /tmp/cookie-session-proof.log
           echo "PROVEN: cookie/session proof tests passed (phase 6)"
 
