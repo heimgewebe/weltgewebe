@@ -78,7 +78,10 @@ HTTP-206-Range, 7-Byte-Magic `PMTiles` und optionale SHA256 gegen ein echtes
 in CI erzeugtes Artefakt. CI-Nachweis: [CI-Lauf 26445893660](https://github.com/heimgewebe/weltgewebe/actions/runs/26445893660)
 (Commit ae9e2362), Job [basemap-pmtiles-content-proof](https://github.com/heimgewebe/weltgewebe/actions/runs/26445893660/job/77852013272),
 Guard-Zeile `PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`,
-Artefaktname `basemap-hamburg-v0.1.0.pmtiles`, Evidence-Artefakt-Digest
+PMTiles-Artefakt: `basemap-hamburg-v0.1.0.pmtiles`, sha256:
+`f0734f0137c69b345ea81ed865519402d96f226fe15bc6c976134d9ed1f28a8e`
+(aus `build/basemap/basemap-hamburg-v0.1.0.meta.json`, Feld `sha256`),
+Evidence-Upload-Digest:
 `sha256:b618ff7c7b84db7c6d8b42a8f80deca538c5bd1c1b18fdade09622488215c8d4`.
 Offen bleiben die Produktionsentscheidung fuer den
 Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.

@@ -371,10 +371,18 @@ jobs:
         if: always()
         run: |
           set -euo pipefail
-          xxd -l 16 -g 1 "${ARTEFACT_PATH}" > /tmp/magic-bytes.txt
-          curl -sS -D /tmp/response-headers.txt -o /dev/null \
-            -H 'Range: bytes=0-511' \
-            "${BASEMAP_CADDY_URL}/local-basemap/${ARTEFACT_NAME}" || true
+          artefact_path="${ARTEFACT_PATH:-}"
+          artefact_name="${ARTEFACT_NAME:-}"
+          if [[ -n "${artefact_path}" && -f "${artefact_path}" ]]; then
+            xxd -l 16 -g 1 "${artefact_path}" > /tmp/magic-bytes.txt
+          else
+            printf 'No PMTiles artefact available for magic-byte capture.\n' > /tmp/magic-bytes.txt
+          fi
+          if [[ -n "${artefact_name}" ]]; then
+            curl -sS -D /tmp/response-headers.txt -o /dev/null \
+              -H 'Range: bytes=0-511' \
+              "${BASEMAP_CADDY_URL}/local-basemap/${artefact_name}" || true
+          fi
 
       - name: Collect caddy logs
         if: always()
@@ -396,8 +404,8 @@ jobs:
             /tmp/magic-bytes.txt
             /tmp/response-headers.txt
             /tmp/caddy.log
-            ${{ env.ARTEFACT_PATH }}
-            ${{ env.META_PATH }}
+            ${{ env.ARTEFACT_PATH || '' }}
+            ${{ env.META_PATH || '' }}
           if-no-files-found: warn
           retention-days: 14
 
@@ -406,6 +414,9 @@ jobs:
         run: |
           set -euo pipefail
           OUTPUT_FILE="/tmp/proof-output.txt"
+          artefact_name="${ARTEFACT_NAME:-<unset>}"
+          artefact_size="${ARTEFACT_SIZE:-<unset>}"
+          expected_sha256="${EXPECTED_SHA256:-<unset>}"
 
           printf '## Basemap PMTiles Content Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
 
@@ -414,8 +425,8 @@ jobs:
               >> "${GITHUB_STEP_SUMMARY}"
             printf '%s\n\n' 'Artefact provenance: built in CI via scripts/basemap/build-hamburg-pmtiles.sh (Planetiler pinned digest + pinned OSM snapshot hash).' \
               >> "${GITHUB_STEP_SUMMARY}"
-            printf 'Artefact: %s (%s bytes)\n' "${ARTEFACT_NAME}" "${ARTEFACT_SIZE}" >> "${GITHUB_STEP_SUMMARY}"
-            printf 'SHA256: %s\n\n' "${EXPECTED_SHA256}" >> "${GITHUB_STEP_SUMMARY}"
+            printf 'Artefact: %s (%s bytes)\n' "${artefact_name}" "${artefact_size}" >> "${GITHUB_STEP_SUMMARY}"
+            printf 'PMTiles-Artefakt-SHA256 (from build/basemap/basemap-hamburg-v0.1.0.meta.json): %s\n\n' "${expected_sha256}" >> "${GITHUB_STEP_SUMMARY}"
           else
             printf '%s\n\n' '❌ **FAILED** — guard did not report pmtiles-content as PROVEN' \
               >> "${GITHUB_STEP_SUMMARY}"
