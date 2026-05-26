@@ -50,6 +50,7 @@ name: Basemap Runtime Proof
       - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
+      - "apps/web/package.json"
       - "apps/web/playwright.proof.config.ts"
       - "apps/web/vite.config.ts"
       - "map-style/**"
@@ -62,6 +63,7 @@ name: Basemap Runtime Proof
       - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
       - "apps/web/tests/proofs/**"
+      - "apps/web/package.json"
       - "apps/web/playwright.proof.config.ts"
       - "apps/web/vite.config.ts"
       - "map-style/**"
@@ -506,6 +508,8 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
 
       - name: Setup Node
         uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
@@ -622,4 +626,5 @@ jobs:
             printf '%s\n\n' \
               '❌ **FAILED** — no proof summary found (Playwright test may not have run to completion)' \
               >> "${GITHUB_STEP_SUMMARY}"
+            exit 1
           fi
