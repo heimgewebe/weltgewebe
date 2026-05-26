@@ -114,7 +114,7 @@
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
       "missing_evidence": [
-        "Visuelle Abnahme der gerenderten Karte in GitHub Actions",
+        "Gruener GitHub-Actions-Lauf fuer Job basemap-visual-proof (READY_FOR_CI_PROOF, nicht PROVEN)",
         "Tile-Directory- und strukturelle PMTiles-Validierung"
       ],
       "risk": "mittel",

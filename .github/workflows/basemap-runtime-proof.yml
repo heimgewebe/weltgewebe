@@ -1,7 +1,7 @@
 ---
 name: Basemap Runtime Proof
 
-# This workflow runs three jobs:
+# This workflow runs four jobs:
 #
 #   1. basemap-runtime-proof  (Pfad 1 — epistemischer Dry-Run, nicht blockierend)
 #      Runs the guard in skip mode with no Caddy and no artefact. Reports
@@ -19,11 +19,22 @@ name: Basemap Runtime Proof
 #      The guard verifies endpoint/range delivery (HTTP 206), the PMTiles magic
 #      bytes "PMTiles" and an optional SHA256 match from the generated metadata.
 #
+#   4. basemap-visual-proof  (Pfad 4 — visueller End-to-End-Proof, blockierend)
+#      Builds a real Hamburg PMTiles artefact, publishes the stable alias
+#      (basemap-hamburg.pmtiles), starts the Vite preview server with the
+#      local-basemap-serve middleware, and runs the Playwright visual proof
+#      (apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts) against it.
+#      Proves: Browser → Vite middleware → PMTiles alias → HTTP 206 Range delivery
+#      → MapLibre canvas visible + isStyleLoaded() → zero remote tile violations.
+#      Failure fails the job. Uploads screenshot, trace, and proof summary.
+#
 # Scope distinction:
 #   Pfad 2 proves Caddy HTTP Range delivery against a .pmtiles file. It does
 #   NOT validate PMTiles content beyond the delivery chain. The pmtiles-content
 #   scope (when used against a real artefact) adds a 7-byte magic-byte prefix
 #   check only; tile-directory and structural PMTiles validation remain future work.
+#   Pfad 4 proves the browser-side visual pipeline using the Vite middleware (not
+#   Caddy); it is a different proof path from Pfad 2/3, not a substitute.
 #
 # What is NOT a substitute for either proof:
 #   - basemap-client-integration.spec.ts (mocked MapLibre protocol handler)
@@ -35,14 +46,24 @@ name: Basemap Runtime Proof
     paths:
       - "infra/caddy/**"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
+      - "apps/web/tests/proofs/**"
+      - "apps/web/playwright.proof.config.ts"
+      - "apps/web/vite.config.ts"
+      - "map-style/**"
       - ".github/workflows/basemap-runtime-proof.yml"
   push:
     branches: [main]
     paths:
       - "infra/caddy/**"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/publish-basemap.sh"
       - "scripts/guard/basemap-runtime-proof.sh"
+      - "apps/web/tests/proofs/**"
+      - "apps/web/playwright.proof.config.ts"
+      - "apps/web/vite.config.ts"
+      - "map-style/**"
       - ".github/workflows/basemap-runtime-proof.yml"
   workflow_dispatch: {}
 
@@ -456,3 +477,126 @@ jobs:
             printf 'No magic-byte capture found.\n' >> "${GITHUB_STEP_SUMMARY}"
           fi
           printf '```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
+
+  basemap-visual-proof:
+    name: basemap-visual-proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      PUBLIC_BASEMAP_MODE: local-sovereign
+      PLAYWRIGHT_HTML_REPORT_OPEN: never
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Verify Docker availability
+        run: |
+          set -euo pipefail
+          docker --version
+          docker info >/dev/null
+
+      - name: Build Hamburg PMTiles artefact
+        run: bash scripts/basemap/build-hamburg-pmtiles.sh
+
+      - name: Publish basemap (create stable alias basemap-hamburg.pmtiles)
+        run: |
+          set -euo pipefail
+          bash scripts/basemap/publish-basemap.sh \
+            build/basemap/basemap-hamburg-v0.1.0.pmtiles \
+            build/basemap/basemap-hamburg-v0.1.0.meta.json \
+            build/basemap/
+          test -e build/basemap/basemap-hamburg.pmtiles
+          printf 'Alias verified: build/basemap/basemap-hamburg.pmtiles\n'
+          ls -la build/basemap/
+
+      - name: Run Playwright visual basemap proof
+        id: visual-proof
+        run: pnpm test:proof:basemap-real
+        working-directory: apps/web
+
+      - name: Upload visual proof screenshot and summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basemap-visual-proof-screenshot
+          path: |
+            build/proofs/basemap-visual/screenshot.png
+            build/proofs/basemap-visual/proof-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload visual proof trace and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basemap-visual-proof-trace
+          path: |
+            apps/web/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: basemap-visual-proof-report
+          path: |
+            apps/web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        run: |
+          set -euo pipefail
+          SUMMARY_FILE="build/proofs/basemap-visual/proof-summary.json"
+          printf '## Basemap Visual Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [[ -f "${SUMMARY_FILE}" ]]; then
+            VERDICT="$(python3 -c "
+          import json, sys
+          try:
+              d = json.load(open('${SUMMARY_FILE}'))
+              print(d.get('verdict', 'UNKNOWN'))
+          except Exception:
+              print('UNKNOWN')
+          " 2>/dev/null || echo 'UNKNOWN')"
+            if [[ "${VERDICT}" == "PROVEN" ]]; then
+              _msg='✅ **PROVEN** — MapLibre canvas visible, isStyleLoaded() true,'
+              _msg="${_msg} HTTP 206 Range delivery confirmed, zero remote violations"
+              printf '%s\n\n' "${_msg}" >> "${GITHUB_STEP_SUMMARY}"
+              printf '%s\n\n' \
+                'Chain: Browser → Vite middleware → basemap-hamburg.pmtiles → HTTP 206 → MapLibre rendered' \
+                >> "${GITHUB_STEP_SUMMARY}"
+            else
+              printf '%s\n\n' \
+                '❌ **NOT PROVEN** — see test results for details' \
+                >> "${GITHUB_STEP_SUMMARY}"
+            fi
+            printf '<details><summary>Proof summary</summary>\n\n```json\n' >> "${GITHUB_STEP_SUMMARY}"
+            cat "${SUMMARY_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+            printf '\n```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '%s\n\n' \
+              '❌ **FAILED** — no proof summary found (Playwright test may not have run to completion)' \
+              >> "${GITHUB_STEP_SUMMARY}"
+          fi
