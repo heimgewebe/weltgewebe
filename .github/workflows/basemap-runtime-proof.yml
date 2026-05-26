@@ -535,8 +535,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p build/basemap
-          ARTEFACT_SRC="$(find /tmp/basemap-visual-proof-input -type f -name 'basemap-hamburg-v0.1.0.pmtiles' | head -n 1)"
-          META_SRC="$(find /tmp/basemap-visual-proof-input -type f -name 'basemap-hamburg-v0.1.0.meta.json' | head -n 1)"
+          ARTEFACT_SRC="$(find /tmp/basemap-visual-proof-input -type f \
+            -name 'basemap-hamburg-v0.1.0.pmtiles' | head -n 1)"
+          META_SRC="$(find /tmp/basemap-visual-proof-input -type f \
+            -name 'basemap-hamburg-v0.1.0.meta.json' | head -n 1)"
           test -n "${ARTEFACT_SRC}"
           test -n "${META_SRC}"
           cp "${ARTEFACT_SRC}" build/basemap/basemap-hamburg-v0.1.0.pmtiles
@@ -599,7 +601,8 @@ jobs:
           printf '## Basemap Visual Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
           if [[ -f "${SUMMARY_FILE}" ]]; then
             VERDICT="$(
-              python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("verdict", "UNKNOWN"))' \
+              python3 -c \
+                'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("verdict", "UNKNOWN"))' \
                 "${SUMMARY_FILE}" 2>/dev/null || echo 'UNKNOWN'
             )"
             if [[ "${VERDICT}" == "PROVEN" ]]; then
