@@ -90,10 +90,20 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run phase 6 cookie/session proof tests
-        run: >-
-          cargo test --locked -p weltgewebe-api
-          --test api_auth session_cookie_
-          -- --test-threads=1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked -p weltgewebe-api \
+            --test api_auth session_cookie_ \
+            -- --test-threads=1 | tee /tmp/cookie-session-proof.log
+
+          if grep -Eq "running 0 tests|0 passed; 0 failed" /tmp/cookie-session-proof.log; then
+            echo "ERROR: cookie/session proof matched zero tests" >&2
+            exit 1
+          fi
+
+          grep -Eq "test result: ok\." /tmp/cookie-session-proof.log
+          echo "PROVEN: cookie/session proof tests passed (phase 6)"
 
   db-session-persistence-proof:
     name: db session persistence proof (direct postgres)
