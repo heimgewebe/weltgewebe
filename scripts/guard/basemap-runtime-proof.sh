@@ -150,7 +150,7 @@ fi
 # ---------------------------------------------------------------------------
 
 if [[ "${BASEMAP_PROOF_SCOPE}" == "pmtiles-content" ]]; then
-  printf 'Proof scope: pmtiles-content (Magic/Header/Hash — not deep structure)\n'
+  printf 'Proof scope: pmtiles-content (local Magic/SHA + Caddy HTTP 206 + HTTP-served Magic; not deep structure)\n'
 
   BASEMAP_ARTIFACT_DIR="${BASEMAP_ARTIFACT_DIR:-${REPO_ROOT}/build/basemap}"
   BASEMAP_CADDY_URL="${BASEMAP_CADDY_URL:-http://localhost:8081}"
