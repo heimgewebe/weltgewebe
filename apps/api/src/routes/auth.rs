@@ -37,6 +37,8 @@ const PASSKEY_PROOF_ACCOUNT_EMAIL: &str = "proof-passkey-user@example.com";
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
+/// Maximum email length in bytes (RFC 5321 forward path limit).
+pub const MAX_EMAIL_LEN: usize = 254;
 
 fn get_request_id(headers: &HeaderMap) -> String {
     headers
@@ -561,6 +563,21 @@ pub async fn request_login(
     // 1. Validate email format (simple check)
     if !payload.email.contains('@') {
         tracing::warn!(%request_id, %client_ip, "Invalid email format in login request");
+        return (StatusCode::OK, Json(generic_response)).into_response();
+    }
+
+    // 1a. Reject overly long emails before any further processing (hashing, rate limiting,
+    // mailing). Bounds the work an unauthenticated client can force per request and matches
+    // RFC 5321 forward path semantics. Response stays identical for Anti-Enumeration parity.
+    if payload.email.len() > MAX_EMAIL_LEN {
+        tracing::warn!(
+            event = "login.email_too_long",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            email_len = payload.email.len(),
+            max_len = MAX_EMAIL_LEN,
+            "Email exceeds maximum length in login request"
+        );
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 

@@ -616,6 +616,44 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[serial]
+async fn request_login_rejects_overlong_email_with_generic_response() -> Result<()> {
+    // Guards against unbounded work (hashing, rate-limit lookups, mailer dispatch) on
+    // arbitrary client input. Anti-Enumeration parity must hold: the response shape
+    // matches the known-/unknown-user baseline above and emits no Set-Cookie.
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state);
+
+    let local_part = "a".repeat(260);
+    let body_str = format!(r#"{{"email":"{}@example.com"}}"#, local_part);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let headers = res.headers().clone();
+    assert!(
+        headers.get_all("set-cookie").iter().next().is_none(),
+        "overlong-email rejection must not emit any Set-Cookie header"
+    );
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+    assert!(!body_val.to_string().contains(&local_part));
+
+    Ok(())
+}
+
 fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
