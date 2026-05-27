@@ -29,6 +29,11 @@ use crate::{
 };
 use webauthn_rs::prelude::RegisterPublicKeyCredential;
 
+#[cfg(feature = "integration-testing")]
+const PASSKEY_PROOF_ACCOUNT_ID: &str = "proof-passkey-user";
+#[cfg(feature = "integration-testing")]
+const PASSKEY_PROOF_ACCOUNT_EMAIL: &str = "proof-passkey-user@example.com";
+
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
 pub const GENERIC_LOGIN_MSG: &str = "If your email is registered, you will receive a login link.";
@@ -2041,6 +2046,173 @@ pub async fn passkey_register_verify(
     );
 
     let body = serde_json::json!({"ok": true});
+    (StatusCode::OK, Json(body)).into_response()
+}
+
+#[cfg(feature = "integration-testing")]
+/// POST /auth/testing/passkeys/bootstrap-session
+///
+/// Test-only helper for browser proofs. Ensures a deterministic proof account
+/// exists and returns a real authenticated session cookie for it.
+pub async fn passkey_testing_bootstrap_session(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    {
+        let mut accounts = state.accounts.write().await;
+        if accounts.get(PASSKEY_PROOF_ACCOUNT_ID).is_none() {
+            accounts.insert(AccountInternal {
+                public: AccountPublic {
+                    id: PASSKEY_PROOF_ACCOUNT_ID.to_string(),
+                    kind: "garnrolle".to_string(),
+                    title: "Passkey Proof User".to_string(),
+                    summary: None,
+                    public_pos: None,
+                    mode: crate::routes::accounts::AccountMode::Ron,
+                    radius_m: 0,
+                    disabled: false,
+                    tags: vec![],
+                },
+                role: Role::Gast,
+                email: Some(PASSKEY_PROOF_ACCOUNT_EMAIL.to_string()),
+                webauthn_user_id: Uuid::new_v4(),
+            });
+        }
+    }
+
+    let session = match state
+        .sessions
+        .create(
+            PASSKEY_PROOF_ACCOUNT_ID.to_string(),
+            Some("proof-passkey-device".to_string()),
+        )
+        .await
+    {
+        Ok(session) => session,
+        Err(error) => {
+            return session_backend_json_response_with_jar(
+                "passkey_testing_bootstrap_session.create",
+                &error,
+                jar,
+            );
+        }
+    };
+
+    tracing::info!(
+        event = "auth.passkey.testing_bootstrap_session.ok",
+        request_id = %request_id,
+        account_id = %session.account_id,
+        device_id = %session.device_id,
+        "Bootstrapped integration-testing session for passkey proof"
+    );
+
+    let cookie = build_session_cookie(session.id, None);
+    let body = serde_json::json!({
+        "account_id": session.account_id,
+        "device_id": session.device_id,
+    });
+    (StatusCode::OK, jar.add(cookie), Json(body)).into_response()
+}
+
+#[cfg(feature = "integration-testing")]
+/// POST /auth/testing/passkeys/register/grant
+///
+/// Test-only helper for browser proofs. Requires an authenticated session and
+/// issues a real `registration_grant_id` in the production store so that the
+/// browser proof can exercise the genuine `register/options` and
+/// `register/verify` handlers without faking WebAuthn verification or the
+/// grant format.
+pub async fn passkey_testing_issue_grant(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    let account_id = match &ctx.account_id {
+        Some(id) => id.clone(),
+        None => {
+            let err = serde_json::json!({
+                "error": "UNAUTHORIZED",
+                "message": "Authentication required"
+            });
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    let device_id = match &ctx.device_id {
+        Some(id) => id.clone(),
+        None => {
+            tracing::error!(
+                event = "auth.passkey.testing_issue_grant.missing_device_id",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Authenticated context missing device_id"
+            );
+            let err = serde_json::json!({
+                "error": "INTERNAL_SERVER_ERROR",
+                "message": "Authenticated context missing device_id"
+            });
+            return (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response();
+        }
+    };
+
+    let grant_id = state
+        .passkey_registration_grants
+        .insert(account_id.clone(), device_id.clone());
+
+    tracing::info!(
+        event = "auth.passkey.testing_issue_grant.ok",
+        request_id = %request_id,
+        account_id = %account_id,
+        device_id = %device_id,
+        "Issued integration-testing registration grant for passkey proof"
+    );
+
+    let body = serde_json::json!({
+        "registration_grant_id": grant_id,
+    });
+    (StatusCode::OK, Json(body)).into_response()
+}
+
+#[cfg(feature = "integration-testing")]
+/// GET /auth/testing/passkeys
+///
+/// Test-only helper that exposes the stored passkey credential IDs for the
+/// currently authenticated account. Used to prove that `register/verify`
+/// persisted the credential in `PasskeyStore`.
+pub async fn passkey_testing_list_credentials(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+) -> impl IntoResponse {
+    let account_id = match &ctx.account_id {
+        Some(id) => id.clone(),
+        None => {
+            let err = serde_json::json!({
+                "error": "UNAUTHORIZED",
+                "message": "Authentication required"
+            });
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    let credential_ids = state
+        .passkeys
+        .credential_ids_for_account(&account_id)
+        .into_iter()
+        .map(|credential_id| {
+            serde_json::to_value(credential_id)
+                .expect("CredentialID must serialize for integration-testing response")
+        })
+        .collect::<Vec<_>>();
+
+    let body = serde_json::json!({
+        "account_id": account_id,
+        "credential_ids": credential_ids,
+    });
     (StatusCode::OK, Json(body)).into_response()
 }
 

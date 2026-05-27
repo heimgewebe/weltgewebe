@@ -27,7 +27,7 @@ use self::{
 };
 
 pub fn api_router() -> Router<ApiState> {
-    Router::new()
+    let router = Router::new()
         .route("/nodes", get(list_nodes))
         .route(
             "/nodes/:id",
@@ -68,5 +68,25 @@ pub fn api_router() -> Router<ApiState> {
         .route(
             "/auth/passkeys/register/verify",
             post(passkey_register_verify),
-        )
+        );
+
+    #[cfg(feature = "integration-testing")]
+    let router = router.route(
+        "/auth/testing/passkeys/bootstrap-session",
+        post(auth::passkey_testing_bootstrap_session),
+    );
+
+    #[cfg(feature = "integration-testing")]
+    let router = router.route(
+        "/auth/testing/passkeys/register/grant",
+        post(auth::passkey_testing_issue_grant),
+    );
+
+    #[cfg(feature = "integration-testing")]
+    let router = router.route(
+        "/auth/testing/passkeys",
+        get(auth::passkey_testing_list_credentials),
+    );
+
+    router
 }
