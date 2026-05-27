@@ -248,6 +248,62 @@ device-gebunden). Ohne Grant liefert der Endpunkt `403 STEP_UP_REQUIRED` mit
 
 `POST /auth/passkeys/register/verify`
 
+**Voraussetzung:** Aktive authentifizierte Session und eine zuvor aus
+`POST /auth/passkeys/register/options` erhaltene `registration_id`.
+
+**Zweck:** Schließt die WebAuthn-Registrierung ab. Der Server verifiziert die vom
+Client gelieferte `RegisterPublicKeyCredential` echt kryptographisch über
+`webauthn.finish_passkey_registration(...)`. Bei Erfolg wird das `Passkey` im
+account-gebundenen Credential-Store abgelegt; eine vorhandene `webauthn_user_id`
+des Accounts wird in die Datenquelle zurückgeschrieben. Der Endpunkt etabliert
+**keine neue Session** und setzt **keine Cookies**.
+
+**Request-Body:**
+
+```json
+{
+  "registration_id": "<uuid aus register/options>",
+  "credential": { }
+}
+```
+
+- `registration_id`: Opaque UUID aus dem `register/options`-Response. Single-use
+  und account-gebunden. Wird vor der WebAuthn-Verifikation konsumiert, sodass
+  jeder Verify-Versuch — auch ein kryptographisch fehlgeschlagener — die
+  `registration_id` verbraucht. Erneute Aufrufe mit derselben ID schlagen mit
+  `REGISTRATION_INVALID` fehl; der Client muss eine neue Ceremony starten.
+- `credential`: Vollständige `RegisterPublicKeyCredential` aus
+  `navigator.credentials.create()`. Die Shape entspricht dem webauthn-rs-Protokoll.
+
+**Response `200 OK`:**
+
+```json
+{ "ok": true }
+```
+
+**Fehlerfälle:**
+
+| HTTP-Status | `error`-Code                   | Ursache                                                              |
+|-------------|--------------------------------|----------------------------------------------------------------------|
+| `401`       | `UNAUTHORIZED`                 | Keine aktive Session                                                 |
+| `503`       | `PASSKEYS_NOT_CONFIGURED`      | WebAuthn ist auf diesem Server nicht konfiguriert                    |
+| `400`       | `REGISTRATION_INVALID`         | `registration_id` unbekannt, abgelaufen oder gehört zu anderem Account |
+| `400`       | `CREDENTIAL_INVALID`           | WebAuthn-Verifikation der Credential-Antwort fehlgeschlagen          |
+| `409`       | `CREDENTIAL_ALREADY_REGISTERED`| Credential-ID ist bereits an einen Account gebunden                  |
+
+**Architekturanmerkungen:**
+
+- Account-Mismatch (`registration_id` gehört einem anderen Account) ist
+  non-destructive: die Registrierung bleibt für den rechtmäßigen Account
+  konsumierbar (`PasskeyRegistrationStore`-Semantik).
+- Eine fehlgeschlagene Credential-Verifikation verbrennt die `registration_id`
+  trotzdem (consume-first-Semantik). Das ist beabsichtigt: WebAuthn-Ceremonies
+  sind single-use; ein zweiter Versuch mit demselben Server-State wäre
+  semantisch ungültig.
+- Persistente Credential-Ablage über Neustart und ein Datenquellen-Writeback der
+  `webauthn_user_id` setzen eine persistente Account-/Passkey-Datenquelle
+  voraus, die in dieser Phase noch nicht existiert.
+
 ### Login starten
 
 `POST /auth/passkeys/auth/options`

@@ -135,6 +135,16 @@ impl AccountStore {
     pub fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
+
+    pub fn remove(&mut self, account_id: &str) -> bool {
+        let removed = self.map.remove(account_id);
+        if let Some(account) = &removed {
+            if let Some(email) = &account.email {
+                self.recompute_email_index_for_key(&normalize_email_key(email));
+            }
+        }
+        removed.is_some()
+    }
 }
 
 #[cfg(test)]

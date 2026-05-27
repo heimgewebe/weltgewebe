@@ -76,7 +76,7 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 | Logout All            | required    | Challenge belegt, Consume implementiert (LogoutAll-Intent via Step-up-Consume), kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Devices               | required    | API aktiv (Liste, Self-Delete), RemoveDevice-Intent via Step-up-Consume implementiert, kein E2E-Email-Flow-Test | Teil   | mittel  |
 | Step-up Auth          | required    | Challenge-Store, Request, Consume für Magic-Link implementiert; `BeginPasskeyRegistration`-Consume erzeugt jetzt `registration_grant_id` (TTL 5 Min, single-use, account/device-gebunden); Handoff vollständig | Teil   | mittel  |
-| Passkeys              | optional    | Register-Options mit Grant-Handoff: Step-up erzeugt Grant, `register/options` konsumiert Grant und startet WebAuthn-Ceremony; PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; register/verify und Login-/Management-Pfade offen | Teil  | mittel  |
+| Passkeys              | optional    | Register-Options mit Grant-Handoff: Step-up erzeugt Grant, `register/options` konsumiert Grant und startet WebAuthn-Ceremony; PasskeyStore + `webauthn_user_id`-Writeback-Mutation vorhanden; `register/verify` API-seitig implementiert (echte `finish_passkey_registration`, single-use, Duplicate-Detection, Writeback) — Negativpfade getestet, positiver Verify-Pfad braucht weiterhin Browser-/Authenticator-Beleg; Login-/Management-Pfade offen | Teil  | mittel  |
 | Sicherheitsinvarianten| required    | Codepfade für alle fünf Aspekte implementiert; Anti-Enumeration-Parität und systematische CSRF-Abdeckung aller aktuell gelisteten CSRF-pflichtigen mutierenden Endpunkte reproduzierbar belegt (Phase 7), ergänzt um eine quelltextbasierte CSRF-Routen-Drift-Prüfung gegen neue unklassifizierte Mutationsrouten; CI-Prüfung für den Runtime-Smoke des E-Mail-Rate-Limits bei `/auth/magic-link/request` hinzugefügt (READY_FOR_CI_PROOF), IP-Rate-Limit-Runtime-Beweis und End-to-End-Token-Leak-Test offen | Teil   | mittel  |
 
 ---
@@ -160,25 +160,27 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 **Soll:** register (options + verify), auth (options + verify), list/remove.
 **Ist:**
 
-- `webauthn_user_id` als dedizierte UUID pro Account eingeführt (nicht aus `account_id` abgeleitet); wenn in der Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil (Writeback-Persistenz ist Voraussetzung für Register-Verify, noch offen)
+- `webauthn_user_id` als dedizierte UUID pro Account eingeführt (nicht aus `account_id` abgeleitet); wenn in der Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil. Writeback im Verify-Pfad implementiert (siehe unten); reale Datenquellen-Persistenz folgt mit persistenter Account-Ablage.
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`) aus `AppConfig` mit Validierung und Env-Override
 - `POST /auth/passkeys/register/options` implementiert: ohne `registration_grant_id` fail-closed mit `STEP_UP_REQUIRED` + `challenge_id`; mit gültigem Grant wird die WebAuthn-Ceremony gestartet und `registration_id` + `options` zurückgegeben
+- `POST /auth/passkeys/register/verify` API-seitig implementiert: prüft Session, fail-closed bei fehlender WebAuthn-Konfiguration (`503 PASSKEYS_NOT_CONFIGURED`), konsumiert `registration_id` single-use über `PasskeyRegistrationStore.consume(...)` (non-destructive bei Account-Mismatch), ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, legt das resultierende `Passkey` über `PasskeyStore.insert(...)` ab (Duplicate-Detection → `409 CONFLICT`), schreibt `webauthn_user_id` via `AccountStore.update_webauthn_user_id(...)` zurück. Erfolg liefert `200 OK` mit `{"ok": true}` — keine Session, kein Cookie. Negativpfade (401, 503, 400 unknown/mismatch, 400 invalid credential, kein Session-Cookie) sind durch Integrationstests in `apps/api/tests/api_auth.rs` belegt; ein positiver Verify-Pfad mit echter Browser-/Authenticator-Antwort ist als Folgearbeit dokumentiert.
 - `PasskeyRegistrationGrantStore` (In-Memory, TTL 5 Min, single-use, account- und device-gebunden) eingeführt; Consume für `BeginPasskeyRegistration` erzeugt einen Grant
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) aktiv genutzt (nach Grant-Consume)
 - Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
-- **Offen:** Register-Verify, Auth-Options, Auth-Verify, Passkey-Login/-Management, UI
+- **Offen:** Positiver Verify-Pfad mit echter WebAuthn-Antwort (Browser-/Authenticator-Beleg), Auth-Options, Auth-Verify, Passkey-Login/-Management, persistente Ablage über Neustart, UI
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
 
 - `apps/api/src/auth/passkeys.rs` — Modul mit Builder, Store, Registrierung
-- `apps/api/src/routes/auth.rs` — `passkey_register_options` Endpunkt
+- `apps/api/src/routes/auth.rs` — `passkey_register_options`- und `passkey_register_verify`-Endpunkte
+- `apps/api/src/routes/mod.rs` — Router-Eintrag `POST /auth/passkeys/register/verify`
 - `apps/api/src/config.rs` — `webauthn_rp_id`, `webauthn_rp_origin`, `webauthn_rp_name`
 - `apps/api/src/routes/accounts.rs` — `webauthn_user_id` am Account-Modell
-- Unit-Tests in `apps/api/src/auth/passkeys.rs` und `apps/api/src/auth/accounts.rs`; Integrationstests in `apps/api/tests/api_auth.rs`
+- Unit-Tests in `apps/api/src/auth/passkeys.rs` und `apps/api/src/auth/accounts.rs`; Integrationstests in `apps/api/tests/api_auth.rs` (inkl. `passkey_register_verify_*`-Negativpfade) und `apps/api/tests/auth_security_invariants.rs` (CSRF-Drift-Guard erfasst `POST /auth/passkeys/register/verify`)
 
-**Fehlende Belege:** Register-Verify, Auth-Flow, persistente Ablage über Neustart, E2E-UI
+**Fehlende Belege:** Positiver `register/verify`-Pfad mit echter WebAuthn-Antwort (Browser- oder Soft-Authenticator-Beleg — `webauthn-rs 0.5` enthält keinen integrierten Soft-Authenticator); Auth-Flow (Options/Verify); persistente Ablage über Neustart; E2E-UI
 **Status:** Teil
 **Risiko:** mittel
 

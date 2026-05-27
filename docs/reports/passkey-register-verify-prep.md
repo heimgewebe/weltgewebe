@@ -301,8 +301,10 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 **Pfad B ist umgesetzt.** Damit ist Pfad A jetzt gangbar. Der nächste sinnvolle Schritt ist:
 
 ```text
-feat(auth): implement passkey register verify
+feat(auth): implement passkey register verify endpoint
 ```
+
+**Status:** Umgesetzt durch den genannten Folge-PR. Endpunkt `POST /auth/passkeys/register/verify` ist registriert, ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, konsumiert die `registration_id` single-use, legt das Credential im `PasskeyStore` ab (mit Duplicate-Detection → `409 CONFLICT`) und schreibt `webauthn_user_id` zurück. Erfolg liefert `200 OK {"ok": true}` ohne Session/Cookie. Negativpfade (T2 401, T4/T6/T7 400, T8 503) sind getestet. T1 (positiver Pfad) und T9 (Duplicate-Detection auf API-Ebene) bleiben offen, weil sie eine echte WebAuthn-Antwort erfordern — siehe Restlücken.
 
 ---
 
@@ -386,9 +388,9 @@ Der `validate_relations`-Fehler ist **pre-existing** und nicht durch diesen PR v
 
 | Lücke | Konsequenz |
 |---|---|
-| Finaler Step-up-Handoff vor `register/options` fehlt | Der Intent ist ergänzt, aber die Ceremony-Übergabe ist noch nicht end-to-end geschlossen |
-| Kein persistenter Passkey-Store | In-Memory-Store ist vorhanden, verliert Daten bei Neustart |
-| Datenquellen-Writeback für `webauthn_user_id` im Register-Verify-Pfad fehlt | Mutation existiert, aber der echte Persistenzpunkt wird erst mit `register/verify` umgesetzt |
-| Test-Fixtures für `finish_passkey_registration` | `webauthn_rs` benötigt kryptografisch korrekte Antworten; Strategie für realistische Tests im Folge-PR festlegen |
-| `excludeCredentials` im `register/options` | Grundsätzlich an `PasskeyStore` angebunden; reale Wirkung erst nach Register-Verify und tatsächlicher Credential-Ablage |
-| E2E-Test für vollständige Register-Ceremony | Folgt aus Implementierung, nicht Vorbereitung |
+| Finaler Step-up-Handoff vor `register/options` fehlt | Geschlossen — `BeginPasskeyRegistration`-Consume erzeugt `registration_grant_id`; `register/options` konsumiert den Grant und startet die Ceremony |
+| Kein persistenter Passkey-Store | In-Memory-Store ist vorhanden, verliert Daten bei Neustart — `register/verify` legt Credentials ab, aber persistente Ablage bleibt offen |
+| Datenquellen-Writeback für `webauthn_user_id` im Register-Verify-Pfad fehlt | Mutation wird im Verify-Pfad aktiv aufgerufen; reale Datenquellen-Persistenz folgt mit persistenter Account-Ablage |
+| Test-Fixtures für `finish_passkey_registration` | `webauthn-rs 0.5.4` enthält keinen Soft-Authenticator (kein `softpasskey`-Modul, kein `SoftToken`); eine seriöse positive Verifikation benötigt entweder einen Browser-E2E oder eine separate Authenticator-Crate (z.B. `webauthn-authenticator-rs`) — beides ist nicht Teil des Folge-PR. Negativpfade nutzen strukturell gültige aber kryptografisch ungültige `RegisterPublicKeyCredential`-JSON-Payloads und treffen `finish_passkey_registration` echt. |
+| `excludeCredentials` im `register/options` | Grundsätzlich an `PasskeyStore` angebunden; reale Wirkung greift erst, sobald positiv verifizierte Credentials abgelegt sind |
+| E2E-Test für vollständige Register-Ceremony | Folgt aus Browser-/Authenticator-Beleg — bleibt offene Folgearbeit |

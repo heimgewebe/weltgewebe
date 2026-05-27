@@ -285,7 +285,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 1. [x] Statusbeweis: Was existiert bereits?
 2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt, Step-up-403, Grant-Handoff implementiert; `BeginPasskeyRegistration`-Consume erzeugt `registration_grant_id`; `register/options` konsumiert Grant und startet WebAuthn-Ceremony
-3. [ ] Register-Verify — Vorbereitungsbericht: [reports/passkey-register-verify-prep.md](../reports/passkey-register-verify-prep.md)
+3. [~] Register-Verify (`POST /auth/passkeys/register/verify`) — API-seitig implementiert mit echter `webauthn.finish_passkey_registration(...)`-Verifikation, single-use-Consume der `registration_id`, Credential-Speicherung über `PasskeyStore` (Duplicate-Detection → `409 CONFLICT`), `webauthn_user_id`-Writeback und session-neutralem Erfolgspfad (`200 OK`, kein Cookie). Negativpfade (401, 503, 400 unknown/mismatch/invalid credential, kein Set-Cookie) sind getestet. **Offen:** positiver Verify-Pfad mit echter WebAuthn-Antwort (Browser-/Authenticator-Beleg)
 4. [x] Voraussetzungen für Register-Verify — PasskeyStore + Writeback-Mutation implementiert; `register/options` vollständiger Grant-Handoff implementiert
 5. [ ] Auth-Options
 6. [ ] Auth-Verify
@@ -295,18 +295,19 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 ### Aktueller Stand
 
-- `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; persistenzpflichtig ab register/verify)
+- `webauthn_user_id` als dediziertes Feld am Account-Modell eingeführt (Lazy Backfill, prozessstabil; Writeback im Verify-Pfad implementiert, Datenquellen-Persistenz folgt mit persistenter Account-Ablage)
 - WebAuthn-Konfiguration (`rp_id`, `rp_origin`, optional `rp_name`) aus `AppConfig` mit Validierung
 - `Webauthn`-Instanz wird beim Start einmalig gebaut (optional, nur wenn konfiguriert)
 - `PasskeyRegistrationGrantStore` (In-Memory, TTL 5 Min, single-use, account- und device-gebunden) eingeführt
 - Register-Options-Endpunkt: ohne Grant fail-closed `403 STEP_UP_REQUIRED` mit `challenge_id`; mit gültigem Grant wird die WebAuthn-Ceremony gestartet (`200 OK` mit `registration_id` + `options`)
+- Register-Verify-Endpunkt: prüft Session/Konfiguration, konsumiert `registration_id` single-use, verifiziert die Credential-Antwort über `webauthn.finish_passkey_registration(...)` (echte Krypto, kein Mock), legt das `Passkey` über `PasskeyStore.insert(...)` mit Duplicate-Detection ab, schreibt `webauthn_user_id` zurück und antwortet session-neutral mit `200 OK {"ok": true}` — kein Cookie, kein neuer Session-Token
 - `BeginPasskeyRegistration`-Consume erzeugt einen kurzlebigen `registration_grant_id` (TTL 5 Min)
 - In-Memory-Store für laufende Registrierungen (`PasskeyRegistrationStore`, TTL 5 Min) wird nach Grant-Consume aktiv genutzt
 - Langlebiger In-Memory-`PasskeyStore` (account-gebunden, duplicate detection, list/find/remove)
-- `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet
+- `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet und im Verify-Pfad aktiv aufgerufen
 - Step-up-Intent `BeginPasskeyRegistration` ergänzt (vollständiger Handoff mit Grant-Erzeugung und -Konsum)
-- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Grant-Handoff, fail-closed `register/options` ohne Grant und erfolgreichen Ceremony-Start mit Grant
-- **Offen:** Register-Verify (inkl. tatsächlichem Datenquellen-Writeback), Auth-Optionen/Verify, Passkey-Login/Management, UI
+- Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Grant-Handoff, fail-closed `register/options` ohne Grant, erfolgreichen Ceremony-Start mit Grant sowie alle dokumentierten Negativpfade von `register/verify` (401, 503, 400 unknown/mismatch/invalid credential, kein Session-Cookie); CSRF-Drift-Guard erfasst die neue Route
+- **Offen:** Positiver Verify-Pfad mit echter WebAuthn-Antwort (Browser-/Authenticator-Beleg — `webauthn-rs 0.5` enthält keinen Soft-Authenticator), persistente Account-Datenquelle für den `webauthn_user_id`-Writeback, Auth-Optionen/Verify, Passkey-Login/Management, UI
 
 ### Voraussetzungen
 
