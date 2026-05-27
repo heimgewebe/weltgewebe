@@ -4162,6 +4162,7 @@ async fn session_cookie_insecure_when_auth_cookie_secure_disabled() -> Result<()
     Ok(())
 }
 
+#[cfg(feature = "integration-testing")]
 #[tokio::test]
 #[serial]
 async fn magic_link_full_round_trip_request_to_session() -> Result<()> {
