@@ -241,9 +241,12 @@ describe("createPanelDetailsLoader", () => {
 
     selection.set({ id: "node-1" });
     expect(calls[0].signal?.aborted).toBe(false);
+    expect(get(loader.isLoading)).toBe(true);
 
     loader.destroy();
     expect(calls[0].signal?.aborted).toBe(true);
+    expect(get(loader.details)).toBeNull();
+    expect(get(loader.isLoading)).toBe(false);
   });
 
   it("reports an error when fetch resolves with a non-ok response", async () => {

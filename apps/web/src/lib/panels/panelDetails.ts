@@ -103,6 +103,8 @@ export function createPanelDetailsLoader<T>(
       abortController = null;
     }
     activeRequestId = undefined;
+    details.set(null);
+    isLoading.set(false);
     unsubscribe();
   }
 
