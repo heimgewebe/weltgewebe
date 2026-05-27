@@ -4039,6 +4039,291 @@ async fn passkey_register_options_expired_grant_rejected() -> Result<()> {
     Ok(())
 }
 
+// ── Passkey Register-Verify ───────────────────────────────────────────────
+//
+// These tests cover the negative paths and structural guarantees of
+// `POST /auth/passkeys/register/verify`. A reproducible positive proof
+// (success path with a real Passkey from `navigator.credentials.create()`)
+// requires either a browser E2E test or a soft-authenticator crate
+// (e.g. `webauthn-authenticator-rs`); neither is part of this repository's
+// current dependency set. See `docs/reports/passkey-register-verify-prep.md`.
+//
+// The structurally-valid but cryptographically-bogus credential used below
+// matches the `RegisterPublicKeyCredential` shape defined in
+// `webauthn-rs-proto::attest::RegisterPublicKeyCredential` so that the JSON
+// deserialiser accepts it; `webauthn.finish_passkey_registration` then
+// rejects it during the real cryptographic checks.
+
+fn bogus_register_credential() -> serde_json::Value {
+    serde_json::json!({
+        "id": "AAAA",
+        "rawId": "AAAA",
+        "response": {
+            "attestationObject": "AAAA",
+            "clientDataJSON": "AAAA"
+        },
+        "type": "public-key"
+    })
+}
+
+async fn obtain_registration_id_via_api(
+    state: &ApiState,
+    session_cookie: &str,
+    account_id: &str,
+    device_id: &str,
+) -> Result<String> {
+    let challenge_id = request_passkey_registration_challenge(state, session_cookie).await?;
+    let grant_id = consume_begin_passkey_registration_step_up(
+        state,
+        session_cookie,
+        &challenge_id,
+        account_id,
+        device_id,
+    )
+    .await?;
+
+    let app = app_with_auth(state.clone());
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", session_cookie.to_string())
+        .body(body::Body::from(
+            serde_json::json!({"registration_grant_id": grant_id}).to_string(),
+        ))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "register/options must succeed with valid grant"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let registration_id = body["registration_id"]
+        .as_str()
+        .context("response must contain registration_id")?
+        .to_string();
+    Ok(registration_id)
+}
+
+#[tokio::test]
+async fn passkey_register_verify_requires_authentication() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let body_payload = serde_json::json!({
+        "registration_id": "any-id",
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_payload.to_string()))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "unauthenticated register-verify must be rejected"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_verify_returns_503_when_not_configured() -> Result<()> {
+    let state = test_state_with_accounts()?;
+    let session = create_session(&state, "u1", None).await;
+    let app = app_with_auth(state);
+
+    let body_payload = serde_json::json!({
+        "registration_id": "any-id",
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Content-Type", "application/json")
+        .header("Cookie", format!("{}={}", SESSION_COOKIE_NAME, session.id))
+        .body(body::Body::from(body_payload.to_string()))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "register-verify must fail closed when WebAuthn is not configured"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["error"], "PASSKEYS_NOT_CONFIGURED");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_verify_unknown_registration_id_returns_400() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let app = app_with_auth(state);
+    let body_payload = serde_json::json!({
+        "registration_id": "not-a-real-registration",
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie)
+        .body(body::Body::from(body_payload.to_string()))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "unknown registration_id must yield 400"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["error"], "REGISTRATION_INVALID");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_verify_wrong_account_rejected_and_non_destructive() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let session_u1 = create_session(&state, "u1", Some("dev-passkey")).await;
+    let session_a1 = create_session(&state, "a1", Some("dev-a1")).await;
+    let cookie_u1 = format!("{}={}", SESSION_COOKIE_NAME, session_u1.id);
+    let cookie_a1 = format!("{}={}", SESSION_COOKIE_NAME, session_a1.id);
+
+    let registration_id = obtain_registration_id_via_api(
+        &state,
+        &cookie_u1,
+        &session_u1.account_id,
+        &session_u1.device_id,
+    )
+    .await?;
+
+    // a1 tries to verify u1's registration — must fail with 400.
+    let app = app_with_auth(state.clone());
+    let body_payload = serde_json::json!({
+        "registration_id": registration_id,
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_a1)
+        .body(body::Body::from(body_payload.to_string()))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "verify with mismatching account must be rejected"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["error"], "REGISTRATION_INVALID");
+
+    // The registration must still be consumable by the legitimate owner u1
+    // (PasskeyRegistrationStore::consume is non-destructive on wrong account).
+    let still_there = state
+        .passkey_registrations
+        .consume(&registration_id, &session_u1.account_id)
+        .await;
+    assert!(
+        still_there.is_some(),
+        "wrong-account verify must not burn the registration for the legitimate owner"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn passkey_register_verify_invalid_credential_returns_400_and_consumes_registration(
+) -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let registration_id =
+        obtain_registration_id_via_api(&state, &cookie, &session.account_id, &session.device_id)
+            .await?;
+
+    // First attempt: structurally valid but cryptographically bogus credential.
+    let app = app_with_auth(state.clone());
+    let body_payload = serde_json::json!({
+        "registration_id": registration_id,
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie)
+        .body(body::Body::from(body_payload.to_string()))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::BAD_REQUEST,
+        "invalid credential must be rejected by WebAuthn verification"
+    );
+    // Snapshot Set-Cookie headers before consuming the body — register/verify
+    // never establishes a session, even on the happy path, and must not set a
+    // session cookie on the failure path either.
+    let res_cookies_str: Vec<String> = res
+        .headers()
+        .get_all("set-cookie")
+        .iter()
+        .filter_map(|v| v.to_str().ok().map(str::to_string))
+        .collect();
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    // The error code differentiates from REGISTRATION_INVALID so that the
+    // caller can tell "your registration_id is gone" from "your credential
+    // failed verification".
+    assert_eq!(body["error"], "CREDENTIAL_INVALID");
+
+    assert!(
+        res_cookies_str
+            .iter()
+            .all(|c| !c.starts_with(&format!("{}=", SESSION_COOKIE_NAME))),
+        "register/verify must not set a session cookie; got: {:?}",
+        res_cookies_str
+    );
+
+    // Second attempt with the same registration_id must now fail with
+    // REGISTRATION_INVALID — the registration_id is single-use and was
+    // consumed before WebAuthn verification (consume-first semantics).
+    let app2 = app_with_auth(state.clone());
+    let body_payload2 = serde_json::json!({
+        "registration_id": registration_id,
+        "credential": bogus_register_credential(),
+    });
+    let req2 = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie)
+        .body(body::Body::from(body_payload2.to_string()))?;
+    let res2 = app2.oneshot(req2).await?;
+    assert_eq!(
+        res2.status(),
+        StatusCode::BAD_REQUEST,
+        "second verify with the same registration_id must be rejected"
+    );
+    let bytes2 = body::to_bytes(res2.into_body(), usize::MAX).await?;
+    let body2: serde_json::Value = serde_json::from_slice(&bytes2)?;
+    assert_eq!(body2["error"], "REGISTRATION_INVALID");
+
+    Ok(())
+}
+
 // Phase 6 API-level Proof: Session Cookie Security Attributes
 //
 // This test proves that:

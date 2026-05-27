@@ -17,7 +17,9 @@ use uuid::Uuid;
 
 use crate::{
     auth::challenges::ChallengeIntent,
-    auth::passkeys::{start_passkey_registration, ConsumeGrantResult, RegistrationInput},
+    auth::passkeys::{
+        start_passkey_registration, ConsumeGrantResult, PasskeyStoreInsertError, RegistrationInput,
+    },
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
     auth::{role::Role, tokens::TokenStore},
@@ -25,6 +27,7 @@ use crate::{
     routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
 };
+use webauthn_rs::prelude::RegisterPublicKeyCredential;
 
 pub const SESSION_COOKIE_NAME: &str = "gewebe_session";
 pub const NONCE_COOKIE_NAME: &str = "auth_nonce";
@@ -1894,6 +1897,143 @@ pub async fn passkey_register_options(
             (StatusCode::OK, Json(body)).into_response()
         }
     }
+}
+
+// ── Passkey Registration Verify ───────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct PasskeyRegisterVerifyPayload {
+    pub registration_id: String,
+    pub credential: RegisterPublicKeyCredential,
+}
+
+/// POST /auth/passkeys/register/verify
+///
+/// Completes the WebAuthn registration ceremony started by
+/// `POST /auth/passkeys/register/options`.
+///
+/// The handler performs a real cryptographic verification via
+/// `webauthn.finish_passkey_registration` — no shortcuts. On success the
+/// resulting credential is stored in `PasskeyStore` (account-bound, duplicate
+/// detection enforced) and the lazily generated `webauthn_user_id` is written
+/// back through `AccountStore::update_webauthn_user_id`, so the account binding
+/// survives a future persistent store.
+///
+/// The endpoint never establishes a session and never sets a cookie.
+pub async fn passkey_register_verify(
+    State(state): State<ApiState>,
+    Extension(ctx): Extension<AuthContext>,
+    headers: HeaderMap,
+    Json(payload): Json<PasskeyRegisterVerifyPayload>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    let account_id = match &ctx.account_id {
+        Some(id) => id.clone(),
+        None => {
+            let err = serde_json::json!({
+                "error": "UNAUTHORIZED",
+                "message": "Authentication required"
+            });
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    let webauthn = match state.webauthn.as_ref() {
+        Some(w) => w,
+        None => {
+            tracing::warn!(
+                event = "auth.passkey.register_verify.not_configured",
+                request_id = %request_id,
+                "Passkey register-verify called but WebAuthn is not configured"
+            );
+            let err = serde_json::json!({
+                "error": "PASSKEYS_NOT_CONFIGURED",
+                "message": "Passkey support is not enabled on this server"
+            });
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+        }
+    };
+
+    let reg_state = match state
+        .passkey_registrations
+        .consume(&payload.registration_id, &account_id)
+        .await
+    {
+        Some(state) => state,
+        None => {
+            tracing::warn!(
+                event = "auth.passkey.register_verify.registration_invalid",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Passkey register-verify: registration_id unknown, expired, or bound to a different account"
+            );
+            let err = serde_json::json!({"error": "REGISTRATION_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    let passkey = match webauthn.finish_passkey_registration(&payload.credential, &reg_state) {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(
+                event = "auth.passkey.register_verify.webauthn_error",
+                request_id = %request_id,
+                account_id = %account_id,
+                error = %e,
+                "WebAuthn finish_passkey_registration rejected the credential"
+            );
+            let err = serde_json::json!({"error": "CREDENTIAL_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    if let Err(PasskeyStoreInsertError::DuplicateCredentialId) =
+        state.passkeys.insert(account_id.clone(), passkey)
+    {
+        tracing::warn!(
+            event = "auth.passkey.register_verify.duplicate_credential",
+            request_id = %request_id,
+            account_id = %account_id,
+            "Passkey register-verify: credential already registered"
+        );
+        let err = serde_json::json!({"error": "CREDENTIAL_ALREADY_REGISTERED"});
+        return (StatusCode::CONFLICT, Json(err)).into_response();
+    }
+
+    let webauthn_user_id = {
+        let accounts = state.accounts.read().await;
+        accounts.get(&account_id).map(|a| a.webauthn_user_id)
+    };
+    if let Some(webauthn_user_id) = webauthn_user_id {
+        let mut accounts = state.accounts.write().await;
+        let updated = accounts.update_webauthn_user_id(&account_id, webauthn_user_id);
+        if !updated {
+            tracing::warn!(
+                event = "auth.passkey.register_verify.account_writeback_missing",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Account disappeared between credential storage and webauthn_user_id writeback"
+            );
+        }
+    } else {
+        tracing::warn!(
+            event = "auth.passkey.register_verify.account_writeback_missing",
+            request_id = %request_id,
+            account_id = %account_id,
+            "Account missing during webauthn_user_id writeback after successful registration"
+        );
+    }
+
+    tracing::info!(
+        event = "auth.passkey.register_verify.ok",
+        request_id = %request_id,
+        account_id = %account_id,
+        "Passkey registration verified and credential stored"
+    );
+
+    let body = serde_json::json!({"ok": true});
+    (StatusCode::OK, Json(body)).into_response()
 }
 
 #[cfg(test)]

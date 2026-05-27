@@ -359,6 +359,7 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/auth/step-up/magic-link/request"),
     ("POST", "/auth/step-up/magic-link/consume"),
     ("POST", "/auth/passkeys/register/options"),
+    ("POST", "/auth/passkeys/register/verify"),
     ("PATCH", "/nodes/:id"),
     ("POST", "/accounts"),
 ];
