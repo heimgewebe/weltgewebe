@@ -35,6 +35,11 @@ tower-http = { version = "0.6.8", features = ["request-id", "util"] }
 webauthn-rs = "0.5"
 url = "2"
 
+[features]
+# Enables test-helper APIs (e.g. token introspection) used by integration tests.
+# Must never be enabled in production builds.
+integration-testing = []
+
 [dev-dependencies]
 base64 = "0.22"
 serial_test = "3"

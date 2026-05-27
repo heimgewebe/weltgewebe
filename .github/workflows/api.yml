@@ -179,7 +179,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo test --locked -p weltgewebe-api \
+          cargo test --locked -p weltgewebe-api --features integration-testing \
             --test api_auth magic_link_full_round_trip_ \
             -- --test-threads=1 --color never | tee /tmp/magic-link-flow-proof.log
 
@@ -188,7 +188,7 @@ jobs:
             exit 1
           fi
 
-          grep -Eq "running [1-9][0-9]* tests" /tmp/magic-link-flow-proof.log
+          grep -Eq "running [1-9][0-9]* tests?" /tmp/magic-link-flow-proof.log
           grep -Eq "test result: ok\." /tmp/magic-link-flow-proof.log
           echo "PROVEN: magic-link flow proof tests passed"
 
