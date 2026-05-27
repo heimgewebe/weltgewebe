@@ -45,6 +45,7 @@
     "pretest:unit": "pnpm run generate:basemap-config",
     "test:unit": "vitest run",
     "test": "playwright test",
+    "test:proof:auth-passkey-register": "playwright test --config=playwright.auth.proof.config.ts --reporter=dot,html,junit",
     "test:proof:basemap-real": "playwright test --config=playwright.proof.config.ts --reporter=dot,html,junit",
     "test:report": "playwright show-report",
     "test:ci": "playwright test --reporter=dot,html,junit",

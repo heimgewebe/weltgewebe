@@ -367,6 +367,9 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
 const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[
     // Dev login is explicitly feature-gated and intentionally kept outside the CSRF policy.
     ("POST", "/auth/dev/login"),
+    // Integration-testing-only browser-proof hooks. They do not ship in production builds.
+    ("POST", "/auth/testing/passkeys/bootstrap-session"),
+    ("POST", "/auth/testing/passkeys/register/grant"),
     // Magic-link request/consume are pre-session or redirect-driven entry points with their own flow handling.
     ("POST", "/auth/magic-link/request"),
     ("POST", "/auth/magic-link/consume"),

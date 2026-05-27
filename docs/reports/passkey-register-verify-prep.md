@@ -28,7 +28,7 @@ relations:
 
 ## 1. Zweck
 
-Dieser Bericht bereitet den Folge-PR für `POST /auth/passkeys/register/verify` vor.
+Dieser Bericht bereitete den Folge-PR für `POST /auth/passkeys/register/verify` vor und dient jetzt zusätzlich als Diagnose- und Nachtragsdokument für den ersten positiven Lauf.
 
 Er enthält ausschließlich:
 
@@ -304,7 +304,7 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 feat(auth): implement passkey register verify endpoint
 ```
 
-**Status:** Umgesetzt durch den genannten Folge-PR. Endpunkt `POST /auth/passkeys/register/verify` ist registriert, ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, konsumiert die `registration_id` single-use, legt das Credential im `PasskeyStore` ab (mit Duplicate-Detection → `409 CONFLICT`) und schreibt `webauthn_user_id` zurück. Erfolg liefert `200 OK {"ok": true}` ohne Session/Cookie. Negativpfade (T2 401, T4/T6/T7 400, T8 503) sind getestet. T1 (positiver Pfad) und T9 (Duplicate-Detection auf API-Ebene) bleiben offen, weil sie eine echte WebAuthn-Antwort erfordern — siehe Restlücken.
+**Status:** Umgesetzt durch den genannten Folge-PR. Endpunkt `POST /auth/passkeys/register/verify` ist registriert, ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, konsumiert die `registration_id` single-use, legt das Credential im `PasskeyStore` ab (mit Duplicate-Detection → `409 CONFLICT`) und schreibt `webauthn_user_id` zurück. Erfolg liefert `200 OK {"ok": true}` ohne Session/Cookie. Negativpfade (T2 401, T4/T6/T7 400, T8 503) sind getestet. T1 (positiver Pfad) ist inzwischen lokal mit echtem Browser-/Authenticator-Flow belegt (`LOCAL_PROOF_ONLY`); T9 (Duplicate-Detection auf API-Ebene) bleibt offen. Ein verpflichtender/grüner CI-Lauf für T1 fehlt noch (`READY_FOR_CI_PROOF`).
 
 ---
 
@@ -318,13 +318,25 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 | `AccountStore.update_webauthn_user_id()` implementiert | **belegt** |
 | Step-up-Handoff-Zielbild entschieden | **belegt (Pfad A: Step-up vor `register/options`)** |
 | Step-up-Handoff technisch realisiert | **belegt** — `PasskeyRegistrationGrantStore` (TTL 5 Min, single-use, account/device-gebunden); `BeginPasskeyRegistration`-Consume erzeugt Grant; `register/options` konsumiert Grant und startet Ceremony |
-| Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **offen** |
+| Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **teilweise obsolet** — lokaler Browser-/Virtual-Authenticator-Proof existiert; für CI bleibt die Stabilisierung des Browser-Pfads offen |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |
 
 ---
 
-## 10. Diagnoseausgaben (Rohdaten)
+## 10. Nachtrag 2026-05-27 — Positiver Lokalbeweis
+
+Der zuvor offene positive Register-Verify-Pfad ist jetzt lokal mit einem echten Browser-/Authenticator-Flow belegt.
+
+- Proof-Pfad: Step-up-/Grant-Handoff zu `POST /auth/passkeys/register/options`, echte Browser-Credential über `navigator.credentials.create(...)`, danach `POST /auth/passkeys/register/verify`
+- Transport: Playwright + Chromium, CDP-`WebAuthn.enable` und `WebAuthn.addVirtualAuthenticator`
+- Belegt: `200 OK {"ok": true}`, kein `Set-Cookie` auf `register/verify`, Session-Cookie bleibt unverändert, Credential wird im `PasskeyStore` sichtbar
+- Einstufung: `LOCAL_PROOF_ONLY` — derselbe Proof ist noch nicht als verpflichtender CI-Job etabliert
+- Folgezustand: `READY_FOR_CI_PROOF` für einen stabilisierten CI-Lauf desselben Browser-Belegs
+
+---
+
+## 11. Diagnoseausgaben (Rohdaten)
 
 ### git status --short
 
