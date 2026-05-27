@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { selection } from '$lib/stores/uiView';
-
-  const API_BASE = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? '';
+  import { buildPanelEndpoint, createPanelDetailsLoader } from '$lib/panels/panelDetails';
+  import { formatDate } from '$lib/utils/formatDate';
 
   let activeTab = 'profil';
 
@@ -20,72 +21,19 @@
     activeTab = tab;
   }
 
-  // Explicitly reset tab when account ID changes
-  let currentSelectionId: string | undefined;
-  let lastSelectionId: string | undefined;
-
-  let accountDetails: AccountDetails | null = null;
-  let isLoadingDetails = false;
-
-  let abortController: AbortController | null = null;
-
-  $: {
-    currentSelectionId = $selection?.id;
-    if (currentSelectionId !== lastSelectionId) {
-      lastSelectionId = currentSelectionId;
+  const detailsLoader = createPanelDetailsLoader<AccountDetails>(selection, {
+    buildEndpoint: (id) => buildPanelEndpoint('account', id),
+    onSelectionChange: () => {
       activeTab = 'profil';
-      accountDetails = null;
-      isLoadingDetails = false;
+    },
+    resourceLabel: 'account details',
+  });
+  const accountDetailsStore = detailsLoader.details;
+  const isLoadingDetailsStore = detailsLoader.isLoading;
+  onDestroy(detailsLoader.destroy);
 
-      // Cancel any ongoing fetch if selection changes rapidly
-      if (abortController) {
-        abortController.abort();
-      }
-
-      if (currentSelectionId) {
-        isLoadingDetails = true;
-        abortController = new AbortController();
-        const currentReqId = currentSelectionId;
-
-        // Use plural /api/accounts/[id] if hitting a remote API server
-        // Use singular /api/account/[id] locally to avoid SvelteKit static build file/folder collisions
-        const endpoint = API_BASE ? `${API_BASE}/api/accounts/${currentSelectionId}` : `/api/account/${currentSelectionId}`;
-
-        fetch(endpoint, {
-          signal: abortController.signal
-        })
-          .then((res) => {
-            if (res.ok) return res.json();
-            throw new Error('Failed to load account details');
-          })
-          .then((data) => {
-            // Only update state if this response matches the currently selected account
-            if (currentSelectionId === currentReqId) {
-              accountDetails = data;
-            }
-          })
-          .catch((err) => {
-            if (err.name !== 'AbortError') {
-              console.error(err);
-            }
-          })
-          .finally(() => {
-            if (currentSelectionId === currentReqId) {
-              isLoadingDetails = false;
-            }
-          });
-      }
-    }
-  }
-
-  function formatDate(isoString: string | undefined) {
-    if (!isoString) return 'Unbekannt';
-    try {
-      return new Intl.DateTimeFormat('de-DE', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(isoString));
-    } catch (e) {
-      return 'Unbekannt';
-    }
-  }
+  $: accountDetails = $accountDetailsStore;
+  $: isLoadingDetails = $isLoadingDetailsStore;
 
   const tabs = ['profil', 'aktivitaet', 'knoten'];
 
