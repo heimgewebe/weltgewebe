@@ -25,25 +25,15 @@ type RegisterOptionsResponse = {
   };
 };
 
-function toBase64Url(input: ArrayBuffer | Uint8Array): string {
-  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return Buffer.from(binary, "binary")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
-}
-
 test.describe("Passkey Register Positive Proof", () => {
   test(
     "proves positive passkey register verify with a virtual authenticator",
     { tag: "@proof" },
     async ({ browserName, page }, testInfo) => {
-      test.skip(browserName !== "chromium", "virtual WebAuthn authenticator requires Chromium CDP");
+      test.skip(
+        browserName !== "chromium",
+        "virtual WebAuthn authenticator requires Chromium CDP",
+      );
 
       const proofDir = path.resolve(
         process.cwd(),
@@ -59,16 +49,19 @@ test.describe("Passkey Register Positive Proof", () => {
 
       const cdp = await context.newCDPSession(page);
       await cdp.send("WebAuthn.enable");
-      const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
-        options: {
-          protocol: "ctap2",
-          transport: "internal",
-          hasResidentKey: true,
-          hasUserVerification: true,
-          isUserVerified: true,
-          automaticPresenceSimulation: true,
+      const { authenticatorId } = await cdp.send(
+        "WebAuthn.addVirtualAuthenticator",
+        {
+          options: {
+            protocol: "ctap2",
+            transport: "internal",
+            hasResidentKey: true,
+            hasUserVerification: true,
+            isUserVerified: true,
+            automaticPresenceSimulation: true,
+          },
         },
-      });
+      );
 
       const request = context.request;
 
@@ -116,7 +109,10 @@ test.describe("Passkey Register Positive Proof", () => {
       const loginRes = await request.post(
         `${baseURL}/api/auth/testing/passkeys/bootstrap-session`,
       );
-      expect(loginRes.status(), "bootstrap-session must create an authenticated session").toBe(200);
+      expect(
+        loginRes.status(),
+        "bootstrap-session must create an authenticated session",
+      ).toBe(200);
       const loginBody = (await loginRes.json()) as {
         account_id: string;
         device_id: string;
@@ -126,7 +122,10 @@ test.describe("Passkey Register Positive Proof", () => {
       const sessionCookieBefore = cookiesBeforeVerify.find(
         (cookie) => cookie.name === "gewebe_session",
       );
-      expect(sessionCookieBefore, "proof setup must yield a session cookie").toBeTruthy();
+      expect(
+        sessionCookieBefore,
+        "proof setup must yield a session cookie",
+      ).toBeTruthy();
 
       await page.goto(`${baseURL}/build?proof=passkey-register`);
 
@@ -153,7 +152,10 @@ test.describe("Passkey Register Positive Proof", () => {
 
       const credential = await page.evaluate(async (creationOptions) => {
         const decodeBase64Url = (value: string): Uint8Array => {
-          const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+          const padded = value
+            .replace(/-/g, "+")
+            .replace(/_/g, "/")
+            .padEnd(Math.ceil(value.length / 4) * 4, "=");
           const binary = atob(padded);
           return Uint8Array.from(binary, (char) => char.charCodeAt(0));
         };
@@ -164,7 +166,10 @@ test.describe("Passkey Register Positive Proof", () => {
           for (const byte of bytes) {
             binary += String.fromCharCode(byte);
           }
-          return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+          return btoa(binary)
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/g, "");
         };
 
         const publicKey: PublicKeyCredentialCreationOptions = {
@@ -174,15 +179,19 @@ test.describe("Passkey Register Positive Proof", () => {
             ...creationOptions.user,
             id: decodeBase64Url(creationOptions.user.id),
           },
-          excludeCredentials: (creationOptions.excludeCredentials ?? []).map((descriptor) => ({
-            ...descriptor,
-            id: decodeBase64Url(descriptor.id),
-          })),
+          excludeCredentials: (creationOptions.excludeCredentials ?? []).map(
+            (descriptor) => ({
+              ...descriptor,
+              id: decodeBase64Url(descriptor.id),
+            }),
+          ),
         };
 
         const created = await navigator.credentials.create({ publicKey });
         if (!(created instanceof PublicKeyCredential)) {
-          throw new Error("navigator.credentials.create did not return a PublicKeyCredential");
+          throw new Error(
+            "navigator.credentials.create did not return a PublicKeyCredential",
+          );
         }
         const response = created.response as AuthenticatorAttestationResponse;
 
@@ -251,7 +260,12 @@ test.describe("Passkey Register Positive Proof", () => {
 
       const virtualCredentials = (await cdp.send("WebAuthn.getCredentials", {
         authenticatorId,
-      })) as { credentials: Array<{ credentialId: string; isResidentCredential: boolean }> };
+      })) as {
+        credentials: Array<{
+          credentialId: string;
+          isResidentCredential: boolean;
+        }>;
+      };
 
       const proofSummary = {
         proof: "passkey-register-positive",
@@ -260,15 +274,20 @@ test.describe("Passkey Register Positive Proof", () => {
         register_verify_status: verifyRes.status,
         register_verify_set_cookie:
           verifyNetworkResponse.headers()["set-cookie"] ?? null,
-        session_cookie_unchanged: JSON.stringify(cookiesBeforeVerify) === JSON.stringify(cookiesAfterVerify),
+        session_cookie_unchanged:
+          JSON.stringify(cookiesBeforeVerify) ===
+          JSON.stringify(cookiesAfterVerify),
         stored_credential_count: storedCredentialsBody.credential_ids.length,
-        stored_credential_reflected: storedCredentialsBody.credential_ids.includes(
-          credential.rawId,
-        ),
-        virtual_authenticator_credentials: virtualCredentials.credentials.length,
+        stored_credential_reflected:
+          storedCredentialsBody.credential_ids.includes(credential.rawId),
+        virtual_authenticator_credentials:
+          virtualCredentials.credentials.length,
       };
 
-      console.log("PASSKEY_REGISTER_PROOF_SUMMARY:", JSON.stringify(proofSummary, null, 2));
+      console.log(
+        "PASSKEY_REGISTER_PROOF_SUMMARY:",
+        JSON.stringify(proofSummary, null, 2),
+      );
       fs.writeFileSync(
         testInfo.outputPath("proof-summary.json"),
         JSON.stringify(proofSummary, null, 2),

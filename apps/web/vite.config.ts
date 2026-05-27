@@ -191,12 +191,15 @@ export default defineConfig({
       ? parseInt(process.env.PREVIEW_PORT, 10) || 4173
       : 4173,
     strictPort: true,
-    proxy: {
-      "/api": {
-        target: "http://127.0.0.1:8080",
-        changeOrigin: true,
-      },
-    },
+    proxy:
+      process.env.AUTH_PASSKEY_PROOF_PROXY === "1"
+        ? {
+            "/api": {
+              target: "http://127.0.0.1:8080",
+              changeOrigin: true,
+            },
+          }
+        : undefined,
   },
   // Expose PUBLIC_ prefixed env vars to import.meta.env for public build-time
   // settings (VITE_ is always included by default). NOTE: this is a convenience

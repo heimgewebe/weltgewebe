@@ -60,6 +60,7 @@ export default defineConfig({
       env: {
         ...process.env,
         PORT: String(PORT),
+        AUTH_PASSKEY_PROOF_PROXY: "1",
       },
     },
   ],
