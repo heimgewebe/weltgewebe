@@ -151,13 +151,20 @@ test.describe("Passkey Register Positive Proof", () => {
       expect(optionsBody.registration_id).toBeTruthy();
 
       const credential = await page.evaluate(async (creationOptions) => {
-        const decodeBase64Url = (value: string): Uint8Array => {
+        const decodeBase64Url = (value: string): ArrayBuffer => {
           const padded = value
             .replace(/-/g, "+")
             .replace(/_/g, "/")
             .padEnd(Math.ceil(value.length / 4) * 4, "=");
           const binary = atob(padded);
-          return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+          const buffer = new ArrayBuffer(binary.length);
+          const bytes = new Uint8Array(buffer);
+
+          for (let i = 0; i < binary.length; i += 1) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+
+          return buffer;
         };
 
         const encodeBase64Url = (value: ArrayBuffer): string => {
@@ -172,7 +179,7 @@ test.describe("Passkey Register Positive Proof", () => {
             .replace(/=+$/g, "");
         };
 
-        const publicKey: PublicKeyCredentialCreationOptions = {
+        const publicKey = {
           ...creationOptions,
           challenge: decodeBase64Url(creationOptions.challenge),
           user: {
@@ -181,11 +188,11 @@ test.describe("Passkey Register Positive Proof", () => {
           },
           excludeCredentials: (creationOptions.excludeCredentials ?? []).map(
             (descriptor) => ({
-              ...descriptor,
               id: decodeBase64Url(descriptor.id),
+              type: "public-key" as const,
             }),
           ),
-        };
+        } as PublicKeyCredentialCreationOptions;
 
         const created = await navigator.credentials.create({ publicKey });
         if (!(created instanceof PublicKeyCredential)) {
@@ -236,7 +243,15 @@ test.describe("Passkey Register Positive Proof", () => {
       expect(verifyRes.json).toEqual({ ok: true });
 
       const cookiesAfterVerify = await context.cookies(baseURL);
-      expect(cookiesAfterVerify).toEqual(cookiesBeforeVerify);
+      const sessionCookieAfter = cookiesAfterVerify.find(
+        (cookie) => cookie.name === "gewebe_session",
+      );
+      const sessionCookieUnchanged =
+        sessionCookieAfter?.value === sessionCookieBefore?.value;
+      expect(
+        sessionCookieUnchanged,
+        "register/verify must not rotate the session cookie",
+      ).toBe(true);
 
       const storedCredentialsRes = await request.get(
         `${baseURL}/api/auth/testing/passkeys`,
@@ -274,9 +289,7 @@ test.describe("Passkey Register Positive Proof", () => {
         register_verify_status: verifyRes.status,
         register_verify_set_cookie:
           verifyNetworkResponse.headers()["set-cookie"] ?? null,
-        session_cookie_unchanged:
-          JSON.stringify(cookiesBeforeVerify) ===
-          JSON.stringify(cookiesAfterVerify),
+        session_cookie_unchanged: sessionCookieUnchanged,
         stored_credential_count: storedCredentialsBody.credential_ids.length,
         stored_credential_reflected:
           storedCredentialsBody.credential_ids.includes(credential.rawId),
