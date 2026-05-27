@@ -1955,6 +1955,24 @@ pub async fn passkey_register_verify(
         }
     };
 
+    let webauthn_user_id = {
+        let accounts = state.accounts.read().await;
+        match accounts.get(&account_id) {
+            Some(a) => a.webauthn_user_id,
+            None => {
+                tracing::error!(
+                    event = "auth.passkey.register_verify.account_not_found",
+                    request_id = %request_id,
+                    account_id = %account_id,
+                    "Session references non-existent account"
+                );
+                let err =
+                    serde_json::json!({"error": "ACCOUNT_INVALID", "message": "Account not found"});
+                return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+            }
+        }
+    };
+
     let reg_state = match state
         .passkey_registrations
         .consume(&payload.registration_id, &account_id)
@@ -1988,24 +2006,21 @@ pub async fn passkey_register_verify(
         }
     };
 
-    if let Err(PasskeyStoreInsertError::DuplicateCredentialId) =
-        state.passkeys.insert(account_id.clone(), passkey)
-    {
-        tracing::warn!(
-            event = "auth.passkey.register_verify.duplicate_credential",
-            request_id = %request_id,
-            account_id = %account_id,
-            "Passkey register-verify: credential already registered"
-        );
-        let err = serde_json::json!({"error": "CREDENTIAL_ALREADY_REGISTERED"});
-        return (StatusCode::CONFLICT, Json(err)).into_response();
+    match state.passkeys.insert(account_id.clone(), passkey) {
+        Ok(()) => {}
+        Err(PasskeyStoreInsertError::DuplicateCredentialId) => {
+            tracing::warn!(
+                event = "auth.passkey.register_verify.duplicate_credential",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Passkey register-verify: credential already registered"
+            );
+            let err = serde_json::json!({"error": "CREDENTIAL_ALREADY_REGISTERED"});
+            return (StatusCode::CONFLICT, Json(err)).into_response();
+        }
     }
 
-    let webauthn_user_id = {
-        let accounts = state.accounts.read().await;
-        accounts.get(&account_id).map(|a| a.webauthn_user_id)
-    };
-    if let Some(webauthn_user_id) = webauthn_user_id {
+    {
         let mut accounts = state.accounts.write().await;
         let updated = accounts.update_webauthn_user_id(&account_id, webauthn_user_id);
         if !updated {
@@ -2013,16 +2028,9 @@ pub async fn passkey_register_verify(
                 event = "auth.passkey.register_verify.account_writeback_missing",
                 request_id = %request_id,
                 account_id = %account_id,
-                "Account disappeared between credential storage and webauthn_user_id writeback"
+                "Account disappeared between account guard and webauthn_user_id writeback"
             );
         }
-    } else {
-        tracing::warn!(
-            event = "auth.passkey.register_verify.account_writeback_missing",
-            request_id = %request_id,
-            account_id = %account_id,
-            "Account missing during webauthn_user_id writeback after successful registration"
-        );
     }
 
     tracing::info!(

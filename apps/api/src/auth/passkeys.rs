@@ -13,8 +13,8 @@
 //!   **Persistence status:** the value is read from the account data source when
 //!   present and generated fresh (lazy backfill) when absent. It is stable for
 //!   the lifetime of the running process. Across restarts it is only stable once
-//!   the value has been written back to the account data source — which is a
-//!   prerequisite for `register/verify` and is NOT yet implemented.
+//!   the value has been written back to the account data source. This writeback
+//!   is performed by the `register/verify` handler upon successful registration.
 //! * **`rp_id` / `rp_origin`** come from `AppConfig` (env overrides supported).
 //!   No hardcoded defaults — missing values cause an explicit startup error when
 //!   passkeys are enabled.

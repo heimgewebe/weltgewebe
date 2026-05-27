@@ -4324,6 +4324,64 @@ async fn passkey_register_verify_invalid_credential_returns_400_and_consumes_reg
     Ok(())
 }
 
+#[tokio::test]
+#[serial]
+async fn passkey_register_verify_deleted_account_returns_401_and_does_not_consume_registration(
+) -> Result<()> {
+    // Defense-in-depth layering: `auth_middleware` checks account existence and
+    // only populates `AuthContext.account_id` when the account is in state. If
+    // the account is deleted after session creation, the middleware returns 401
+    // before the handler executes — so the handler's inner ACCOUNT_INVALID guard
+    // never fires in practice. This test proves the middleware layer holds and
+    // that no registration_id is consumed.
+    let state = test_state_with_webauthn()?;
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+    let account_id = session.account_id.clone();
+
+    let registration_id =
+        obtain_registration_id_via_api(&state, &cookie, &account_id, &session.device_id).await?;
+
+    // Remove the account from the store to simulate a deleted/ghost account.
+    {
+        let mut accounts = state.accounts.write().await;
+        let removed = accounts.remove(&account_id);
+        assert!(removed, "account must be present before removal");
+    }
+
+    let app = app_with_auth(state.clone());
+    let body_payload = serde_json::json!({
+        "registration_id": registration_id,
+        "credential": bogus_register_credential(),
+    });
+    let req = Request::post("/auth/passkeys/register/verify")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie)
+        .body(body::Body::from(body_payload.to_string()))?;
+    let res = app.oneshot(req).await?;
+    // `auth_middleware` fires first: no account in state → ctx.account_id = None → 401.
+    assert_eq!(
+        res.status(),
+        StatusCode::UNAUTHORIZED,
+        "deleted account: middleware must return 401 before handler executes"
+    );
+
+    // The registration_id must NOT have been consumed — the request was rejected
+    // before the consume step.
+    let reg_state = state
+        .passkey_registrations
+        .consume(&registration_id, &account_id)
+        .await;
+    assert!(
+        reg_state.is_some(),
+        "registration_id must not be consumed when middleware rejects the request"
+    );
+
+    Ok(())
+}
+
 // Phase 6 API-level Proof: Session Cookie Security Attributes
 //
 // This test proves that:
