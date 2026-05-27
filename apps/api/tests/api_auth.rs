@@ -4211,7 +4211,7 @@ async fn passkey_register_verify_wrong_account_rejected_and_non_destructive() ->
     // a1 tries to verify u1's registration — must fail with 400.
     let app = app_with_auth(state.clone());
     let body_payload = serde_json::json!({
-        "registration_id": registration_id,
+        "registration_id": registration_id.as_str(),
         "credential": bogus_register_credential(),
     });
     let req = Request::post("/auth/passkeys/register/verify")
@@ -4258,7 +4258,7 @@ async fn passkey_register_verify_invalid_credential_returns_400_and_consumes_reg
     // First attempt: structurally valid but cryptographically bogus credential.
     let app = app_with_auth(state.clone());
     let body_payload = serde_json::json!({
-        "registration_id": registration_id,
+        "registration_id": registration_id.as_str(),
         "credential": bogus_register_credential(),
     });
     let req = Request::post("/auth/passkeys/register/verify")
@@ -4302,7 +4302,7 @@ async fn passkey_register_verify_invalid_credential_returns_400_and_consumes_reg
     // consumed before WebAuthn verification (consume-first semantics).
     let app2 = app_with_auth(state.clone());
     let body_payload2 = serde_json::json!({
-        "registration_id": registration_id,
+        "registration_id": registration_id.as_str(),
         "credential": bogus_register_credential(),
     });
     let req2 = Request::post("/auth/passkeys/register/verify")
@@ -4351,7 +4351,7 @@ async fn passkey_register_verify_deleted_account_returns_401_and_does_not_consum
 
     let app = app_with_auth(state.clone());
     let body_payload = serde_json::json!({
-        "registration_id": registration_id,
+        "registration_id": registration_id.as_str(),
         "credential": bogus_register_credential(),
     });
     let req = Request::post("/auth/passkeys/register/verify")

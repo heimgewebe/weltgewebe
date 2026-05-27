@@ -12,9 +12,9 @@
 //!   internal account semantics and protects against future migration pain.
 //!   **Persistence status:** the value is read from the account data source when
 //!   present and generated fresh (lazy backfill) when absent. It is stable for
-//!   the lifetime of the running process. Across restarts it is only stable once
-//!   the value has been written back to the account data source. This writeback
-//!   is performed by the `register/verify` handler upon successful registration.
+//!   the lifetime of the running process. The `register/verify` handler writes
+//!   the value back into the current `AccountStore` on successful registration;
+//!   cross-restart stability still requires a persistent account data source.
 //! * **`rp_id` / `rp_origin`** come from `AppConfig` (env overrides supported).
 //!   No hardcoded defaults — missing values cause an explicit startup error when
 //!   passkeys are enabled.
