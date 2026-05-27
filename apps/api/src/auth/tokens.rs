@@ -14,12 +14,22 @@ pub struct TokenData {
 #[derive(Clone, Default)]
 pub struct TokenStore {
     store: Arc<RwLock<HashMap<String, TokenData>>>,
+    /// Maps email → most recently created raw token.
+    ///
+    /// Populated only when the `integration-testing` feature is enabled or in
+    /// unit-test builds. Used by integration tests to retrieve the token
+    /// generated inside request handlers without seeding it manually.
+    /// Never compiled into production builds.
+    #[cfg(any(test, feature = "integration-testing"))]
+    raw_by_email: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl TokenStore {
     pub fn new() -> Self {
         Self {
             store: Arc::new(RwLock::new(HashMap::new())),
+            #[cfg(any(test, feature = "integration-testing"))]
+            raw_by_email: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -56,6 +66,9 @@ impl TokenStore {
         let now = Utc::now();
         let expires_at = now + duration;
 
+        #[cfg(any(test, feature = "integration-testing"))]
+        let email_for_capture = email.clone();
+
         let data = TokenData { email, expires_at };
 
         let mut store = self.store.write_recover();
@@ -64,7 +77,24 @@ impl TokenStore {
 
         store.insert(hash, data);
 
+        #[cfg(any(test, feature = "integration-testing"))]
+        {
+            let mut raw = self.raw_by_email.write_recover();
+            raw.insert(email_for_capture, token.clone());
+        }
+
         token
+    }
+
+    /// Return the most recently created raw token for the given email.
+    ///
+    /// Enables round-trip tests to retrieve the token generated inside a request handler
+    /// without seeding it manually, proving the full request → consume flow.
+    /// Only compiled when the `integration-testing` feature is enabled or in unit-test builds.
+    #[cfg(any(test, feature = "integration-testing"))]
+    pub fn latest_raw_for_email(&self, email: &str) -> Option<String> {
+        let raw = self.raw_by_email.read_recover();
+        raw.get(email).cloned()
     }
 
     pub fn consume(&self, token: &str) -> Option<String> {
