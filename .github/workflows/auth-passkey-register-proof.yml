@@ -87,7 +87,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RUST_VERSION="$(sed -nE 's/^rust:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*$/\1/p' toolchain.versions.yml | head -n1 | xargs)"
+          RUST_VERSION="$(sed -nE "s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p" toolchain.versions.yml | head -n1 | xargs)"
           if [ -z "${RUST_VERSION}" ]; then
             echo "failed to parse rust version from toolchain.versions.yml" >&2
             exit 1
