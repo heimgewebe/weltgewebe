@@ -96,7 +96,9 @@ just down
 - [Optimierungsstatus](docs/reports/optimierungsstatus.md)
 - [Task-Control-Roadmap](docs/blueprints/doc-structure-task-control-roadmap.md)
 
-Task-Control-Artefakte wie `docs/tasks/index.json`, `docs/tasks/board.md` und `docs/reports/optimierungsstatus.json` sind in der Roadmap geplant, in diesem PR aber **noch nicht umgesetzt**. Verweise auf sie müssen entsprechend als geplant gekennzeichnet werden.
+Task-Control Phase 2 ist eingeführt. Die Arbeitssteuerung liegt jetzt unter `docs/tasks/`; der maschinenlesbare Optimierungsstatus liegt unter `docs/reports/optimierungsstatus.json`.
+
+Offen bleiben Folgephasen: GitHub Issue Forms, PR-Template, Release-Konfig, Task-Index-Generator, CI-Guard und Implementierungs-Mapping.
 
 ## Semantik (ausgesetzt)
 
