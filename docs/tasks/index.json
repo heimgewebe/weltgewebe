@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": null,
+  "curation": "manual_phase2_seed",
+  "source_files": [
+    "docs/reports/optimierungsstatus.md",
+    "docs/reports/auth-status-matrix.json",
+    "docs/reports/map-status-matrix.json",
+    "docs/tasks/board.md"
+  ],
+  "tasks": [
+    {
+      "id": "TASK-CTL-001",
+      "title": "Task-Control Phase 2 etablieren",
+      "area": "docs",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "docs/tasks/README.md",
+        "docs/tasks/board.md",
+        "docs/tasks/index.json",
+        "docs/tasks/schema.json",
+        "docs/reports/optimierungsstatus.json",
+        "scripts/docmeta/validate_task_index.py"
+      ],
+      "missing_evidence": [
+        "PR-Merge-Nachweis steht aus"
+      ],
+      "acceptance": [
+        "docs/tasks/ existiert und alle Phase-2-Artefakte sind vorhanden",
+        "Validator läuft mit exit 0 gegen docs/tasks/index.json",
+        "README, CONTRIBUTING und docs/index.md beschreiben Task-Control korrekt"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/tasks/README.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "TASK-CTL-002",
+      "title": "GitHub-native Arbeitsobjekte einführen (Phase 3)",
+      "area": "governance",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [],
+      "missing_evidence": [
+        "keine Issue Forms vorhanden",
+        "kein PR-Template vorhanden",
+        "keine Release-Konfiguration vorhanden"
+      ],
+      "acceptance": [],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": []
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "TASK-CTL-003",
+      "title": "Task-Index Generator und CI-Guard einführen (Phase 4)",
+      "area": "ci",
+      "status": "open",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [],
+      "missing_evidence": [
+        "generate_task_index.py nicht vorhanden",
+        "CI-Workflow task-index.yml nicht vorhanden"
+      ],
+      "acceptance": [],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": []
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "OPT-API-001",
+      "title": "Paginierung Listen-Endpunkte",
+      "area": "api",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/src/routes/accounts.rs"
+      ],
+      "missing_evidence": [
+        "Cursor-Variante fehlt",
+        "Response-Metadaten (total, next_cursor) fehlen",
+        "dokumentierter Sortierungsvertrag fehlt"
+      ],
+      "acceptance": [
+        "Cursor-Paginierung implementiert und per Test belegt",
+        "Response-Metadaten in API-Spec dokumentiert",
+        "Sortierungsvertrag explizit definiert"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "OPT-CON-001",
+      "title": "additionalProperties: false und String-Constraints in Domain-Schemas",
+      "area": "ci",
+      "status": "partial",
+      "priority": "high",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "contracts/domain/node.schema.json",
+        "contracts/domain/account.schema.json",
+        "contracts/domain/role.schema.json"
+      ],
+      "missing_evidence": [
+        "vollständiges Schema-für-Schema-Audit fehlt",
+        "verbleibende permissive Felder nicht inventarisiert"
+      ],
+      "acceptance": [
+        "alle 6 Domain-Schemas haben additionalProperties: false",
+        "String-Constraints (minLength, maxLength, pattern) konsistent gesetzt",
+        "just contracts-domain-check pass"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "OPT-DOC-001",
+      "title": "Incident-/DB-Recovery-Runbooks",
+      "area": "docs",
+      "status": "partial",
+      "priority": "high",
+      "effort": "S",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "docs/runbook.md",
+        "docs/runbook.observability.md",
+        "docs/runbooks/README.md"
+      ],
+      "missing_evidence": [
+        "eigenständiger Incident-Response-Ablauf fehlt",
+        "eigenständiger DB-Recovery-Ablauf fehlt"
+      ],
+      "acceptance": [
+        "docs/runbooks/incident-response.md existiert mit vollständigem Ablauf",
+        "docs/runbooks/db-recovery.md existiert mit vollständigem Ablauf"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/runbook.md",
+          "docs/runbooks/README.md"
+        ]
+      },
+      "updated_at": "2026-05-28"
+    },
+    {
+      "id": "OPT-ARC-001",
+      "title": "JSONL-Datenquelle zu PostgreSQL migrieren",
+      "area": "api",
+      "status": "open",
+      "priority": "high",
+      "effort": "XL",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [],
+      "missing_evidence": [
+        "Migrations- und Cutover-Plan fehlt",
+        "Domain-Migrationen für Nodes/Accounts/Edges fehlen",
+        "kein Runtime-Nachweis für PostgreSQL-Pfad in Domänen-Endpunkten"
+      ],
+      "acceptance": [
+        "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
+        "JSONL-Pfad deaktiviert oder als Legacy klar markiert",
+        "Migrations-SQL vorhanden und per CI belegt"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-05-28"
+    }
+  ]
+}

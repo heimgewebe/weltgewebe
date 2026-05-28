@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Weltgewebe Task Index",
+  "description": "Validierungsvertrag für docs/tasks/index.json",
+  "type": "object",
+  "required": ["schema_version", "curation", "source_files", "tasks"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "oneOf": [{"type": "string"}, {"type": "null"}]
+    },
+    "curation": {
+      "type": "string",
+      "description": "Beschreibt, wie der Index gepflegt wird: 'manual_phase2_seed', 'manual', 'generated', 'hybrid'"
+    },
+    "source_files": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Quelldateien, aus denen der Index gespeist wird"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "area", "status", "priority", "effort", "risk", "owner", "evidence", "missing_evidence", "acceptance", "links", "updated_at"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z]+(-[A-Z]+)*-[0-9]{3}$",
+            "description": "Eindeutige Task-ID, z.B. TASK-CTL-001 oder OPT-API-001"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "enum": ["docs", "ci", "api", "web", "infra", "release", "auth", "map", "governance"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["open", "partial", "done", "blocked", "obsolete", "contradicted"]
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "effort": {
+            "type": "string",
+            "enum": ["XS", "S", "M", "L", "XL"]
+          },
+          "risk": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "owner": {
+            "type": "string",
+            "description": "'unknown' ist erlaubt"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Belegte Repo-Pfade, CI-Runs oder Commit-Hashes als Nachweis"
+          },
+          "missing_evidence": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Explizite Benennung fehlender Nachweise"
+          },
+          "acceptance": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Akzeptanzkriterien; High-Priority-Tasks brauchen mindestens eines"
+          },
+          "links": {
+            "type": "object",
+            "required": ["issues", "prs", "docs"],
+            "additionalProperties": false,
+            "properties": {
+              "issues": {"type": "array", "items": {"type": "string"}},
+              "prs": {"type": "array", "items": {"type": "string"}},
+              "docs": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Repo-root-relative Pfade zu existierenden Dokumenten"
+              }
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          }
+        }
+      }
+    }
+  }
+}

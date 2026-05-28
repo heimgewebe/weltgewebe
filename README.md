@@ -214,6 +214,24 @@ See: `docs/deploy/heimserver.integration.md`
 - **Gate A (Preview/Docs):** [apps/web/README.md](apps/web/README.md)
   (Frontend-Prototyp für Karte · Kontextpanel · Aktionsleiste · Ethik-UI)
 
+## Task-Control
+
+Die operative Arbeitssteuerung liegt in `docs/tasks/`:
+
+| Datei | Zweck |
+|---|---|
+| `docs/tasks/board.md` | Menschliche Arbeitskarte (aktive Prioritäten, Blocker) |
+| `docs/tasks/index.json` | Maschinenlesbarer Task-Index (Phase-2-Seed: manuell) |
+| `docs/tasks/schema.json` | Validierungsvertrag |
+| `docs/reports/optimierungsstatus.md` | Maßgebliche Statusmatrix (Wahrheitsquelle für OPT-* Einträge) |
+| `docs/reports/optimierungsstatus.json` | Maschinenlesbarer Zwilling der Statusmatrix |
+
+Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator und CI-Guard.
+
+```bash
+python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
+```
+
 ## Beiträge & Docs
 
 Stilprüfung via Vale läuft automatisch bei Doku-PRs; lokal `vale docs/` für Hinweise.

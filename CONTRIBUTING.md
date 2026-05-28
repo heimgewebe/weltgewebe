@@ -164,6 +164,29 @@ CI-Gates (brechen Builds):
 
 Generierte Dateien sind abgeleitete Diagnoseartefakte. Sie sind nicht erforderlich für die Commit-Validität. CI regeneriert ausgewählte Diagnosen für die Beobachtbarkeit, und Drift in generierten Dateien wird nicht-blockierend berichtet.
 
+### Task-Control-Artefakte
+
+`docs/tasks/` ist die Arbeitssteuerungs-Schicht:
+
+- `docs/tasks/board.md` ist eine **menschliche Arbeitskarte**, keine Wahrheitsschicht.
+- `docs/tasks/index.json` ist ein **maschinenlesbarer Task-Index**.
+  Manuelle Änderungen sind erlaubt, solange `curation` klar als `"manual_phase2_seed"` oder `"manual"` gesetzt ist.
+  Sobald ein Generator eingeführt wird (Phase 4), muss der Schreibstatus neu bewertet werden.
+- `docs/tasks/schema.json` ist der **Validierungsvertrag** – Änderungen brauchen einen begründeten PR.
+- `docs/reports/optimierungsstatus.md` bleibt die **Wahrheitsquelle** für OPT-* Einträge.
+  `docs/reports/optimierungsstatus.json` ist deren maschinenlesbarer Zwilling, kein eigenständiger Statusträger.
+
+Kein Status in `index.json` oder `optimierungsstatus.json` darf dem Markdown widersprechen.
+Stille Status-Upgrades sind verboten. `done` erfordert Evidenz in der Statusmatrix.
+
+Validator lokal ausführen:
+
+```bash
+python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
+```
+
+Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator/CI-Guard.
+
 Blockierende Docs-Validierung ist zwischen lokal und CI deterministisch über `make ci-validate` (Alias zu `make validate`).
 Bei gemeldetem Drift in den Diagnoseartefakten soll der Drift zeitnah behoben oder bewusst dokumentiert werden. CI macht den Drift zusätzlich über Warning-Hinweise und Artefakt-Upload sichtbar.
 

@@ -69,10 +69,17 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Runbook:** [runbook.md](runbook.md)
 – **Observability:** [runbook.observability.md](runbook.observability.md)
 
+### Task-Control
+
+– **Task-Control Einstieg:** [tasks/README.md](tasks/README.md) (Rollenklärung und Phase-Stand)
+– **Task Board:** [tasks/board.md](tasks/board.md) (Menschliche Arbeitskarte – aktive Prioritäten, Blocker, nächste PR-Kandidaten)
+– **Task Index:** [tasks/index.json](tasks/index.json) (Maschinenlesbarer Task-Index – Phase-2-Seed, manuell gepflegt)
+– **Optimierungsstatus JSON:** [reports/optimierungsstatus.json](reports/optimierungsstatus.json) (Maschinenlesbarer Zwilling der OPT-Statusmatrix)
+
 ### Berichte & Audits
 
 – **Optimierungsbericht:** [reports/optimierungsbericht.md](reports/optimierungsbericht.md) (Schichtenanalyse mit Handlungsempfehlungen)
-– **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen)
+– **Optimierungsstatus:** [reports/optimierungsstatus.md](reports/optimierungsstatus.md) (Operative Statusmatrix mit Nachweisen – Wahrheitsquelle für OPT-* Einträge)
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
 – **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (ADR-0007: Produktion direkter Postgres; PgBouncer Dev-/Spezialpfad)
 – **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
