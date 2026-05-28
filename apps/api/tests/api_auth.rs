@@ -618,6 +618,7 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
 
 #[tokio::test]
 #[serial]
+#[cfg(feature = "integration-testing")]
 async fn request_login_rejects_overlong_email_with_generic_response() -> Result<()> {
     // Guards against unbounded work (hashing, rate-limit lookups, mailer dispatch) on
     // arbitrary client input. Anti-Enumeration parity must hold: the response shape
@@ -701,6 +702,7 @@ async fn request_login_rejects_overlong_email_with_generic_response() -> Result<
 
 #[tokio::test]
 #[serial]
+#[cfg(feature = "integration-testing")]
 async fn request_login_accepts_boundary_254_byte_email_for_known_account() -> Result<()> {
     // Verify that the 254-byte limit accepts exactly 254 bytes for known accounts.
     // This tests the boundary: 254 bytes PASSES, 255 bytes FAILS.
@@ -764,6 +766,7 @@ async fn request_login_accepts_boundary_254_byte_email_for_known_account() -> Re
 
 #[tokio::test]
 #[serial]
+#[cfg(feature = "integration-testing")]
 async fn request_login_rejects_boundary_255_byte_email_for_known_account() -> Result<()> {
     // Verify that the 254-byte limit rejects 255 bytes for known accounts.
     // Email of 255 bytes should NOT create a token for a known account.
