@@ -41,6 +41,7 @@ name: Auth Passkey Register Proof
       - "apps/web/vite.config.ts"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "toolchain.versions.yml"
       - ".github/workflows/auth-passkey-register-proof.yml"
   push:
     branches: [main]
@@ -55,6 +56,7 @@ name: Auth Passkey Register Proof
       - "apps/web/vite.config.ts"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "toolchain.versions.yml"
       - ".github/workflows/auth-passkey-register-proof.yml"
   workflow_dispatch: {}
 
@@ -80,10 +82,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Rust version
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUST_VERSION="$(sed -nE 's/^rust:[[:space:]]*"?([^"#[:space:]]+)"?[[:space:]]*$/\1/p' toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'RUST_VERSION=%s\n' "${RUST_VERSION}" >> "${GITHUB_ENV}"
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ env.RUST_VERSION }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
