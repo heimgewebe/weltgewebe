@@ -616,6 +616,304 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test]
+#[serial]
+async fn request_login_rejects_overlong_email_with_generic_response() -> Result<()> {
+    // Guards against unbounded work (hashing, rate-limit lookups, mailer dispatch) on
+    // arbitrary client input. Anti-Enumeration parity must hold: the response shape
+    // matches the known-/unknown-user baseline above and emits no Set-Cookie.
+    let mut state = test_state()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state);
+
+    // Create an overlong email (260 bytes)
+    let local_part = "overlong".repeat(30); // ~240 bytes
+    let email_long = format!("{}@example.com", local_part);
+    let email_long = if email_long.len() < 260 {
+        let padding = "x".repeat(260 - email_long.len());
+        format!("{}{}@example.com", local_part, padding)
+    } else {
+        email_long[..260].to_string()
+    };
+
+    let body_str = format!(r#"{{"email":"{}"}}"#, email_long);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let headers = res.headers().clone();
+    assert!(
+        headers.get_all("set-cookie").iter().next().is_none(),
+        "overlong-email rejection must not emit any Set-Cookie header"
+    );
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+    assert!(!body_val.to_string().contains(&local_part));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "integration-testing")]
+async fn request_login_overlong_known_email_skips_token_creation() -> Result<()> {
+    // Prove that NO token is created for overlong emails when sent to a known account.
+    // This is the critical proof that the MAX_EMAIL_LEN guard prevents downstream work
+    // (token generation) for overlong inputs, even for known accounts.
+    // Without the guard, a token WOULD be created for this known account.
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Create an account with a 260-byte email
+    let local_part = "overlong".repeat(30); // ~240 bytes
+    let email_long = format!("{}@example.com", local_part);
+    let email_long = if email_long.len() < 260 {
+        let padding = "x".repeat(260 - email_long.len());
+        format!("{}{}@example.com", local_part, padding)
+    } else {
+        email_long[..260].to_string()
+    };
+
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u_long".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Long Email User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: Some(email_long.clone()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    };
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(account);
+    }
+
+    let app = app(state.clone());
+
+    let body_str = format!(r#"{{"email":"{}"}}"#, email_long);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    // Prove that NO token was created for the overlong email (guards against token generation).
+    // Without the MAX_EMAIL_LEN check, a token WOULD be created for this known account.
+    // This assertion would fail, proving the guard is working.
+    assert_eq!(
+        state.tokens.latest_raw_for_email(&email_long),
+        None,
+        "overlong email for known account must not trigger token creation (proves guard works)"
+    );
+
+    Ok(())
+}
+
+/// Generates an ASCII email-shaped address with valid local/domain label structure
+/// and the exact target byte length.
+///
+/// For 254 bytes this is within the RFC 5321 mailbox limit. For 255 bytes this
+/// intentionally exceeds that limit while keeping DNS label structure valid.
+///
+/// Local-part is limited to 64 octets (RFC 5321), domain labels to 63 octets each (RFC 1035).
+/// Structure: "aaaa...aaaa" (64) + "@" (1) + "aaaa...aaaa.aaaa...aaaa.co" (remaining)
+#[cfg(feature = "integration-testing")]
+fn generate_rfc_email_with_length(target_len: usize) -> String {
+    const LOCAL_PART_LEN: usize = 64;
+    const AT_LEN: usize = 1;
+    const MAX_LABEL_LEN: usize = 63; // RFC 1035 DNS label limit
+
+    assert!(
+        target_len > LOCAL_PART_LEN + AT_LEN,
+        "target_len must be greater than {} bytes (local + @)",
+        LOCAL_PART_LEN + AT_LEN
+    );
+
+    let local_part = "a".repeat(LOCAL_PART_LEN);
+    let domain_bytes_available = target_len.saturating_sub(LOCAL_PART_LEN + AT_LEN);
+
+    let mut domain = String::new();
+    let mut remaining = domain_bytes_available;
+
+    // Build labels separated by dots, with final label having no trailing dot
+    while remaining > MAX_LABEL_LEN {
+        // Add a full 63-byte label + dot
+        domain.push_str(&"a".repeat(MAX_LABEL_LEN));
+        domain.push('.');
+        remaining -= MAX_LABEL_LEN + 1; // 63 bytes label + 1 byte dot
+    }
+
+    // Add final label with all remaining bytes (no trailing dot)
+    if remaining > 0 {
+        domain.push_str(&"a".repeat(remaining));
+    }
+
+    // Verify RFC compliance invariants
+    assert!(!domain.starts_with('.'), "domain must not start with a dot");
+    assert!(!domain.ends_with('.'), "domain must not end with a dot");
+    assert!(
+        domain
+            .split('.')
+            .all(|label| !label.is_empty() && label.len() <= MAX_LABEL_LEN),
+        "domain labels must be non-empty and <= 63 bytes"
+    );
+
+    let email = format!("{}@{}", local_part, domain);
+    assert_eq!(
+        email.len(),
+        target_len,
+        "generated email must be exactly {} bytes",
+        target_len
+    );
+    email
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "integration-testing")]
+async fn request_login_accepts_boundary_254_byte_email_for_known_account() -> Result<()> {
+    // Verify that the 254-byte limit accepts exactly 254 bytes for known accounts.
+    // This tests the boundary: 254 bytes PASSES, 255 bytes FAILS.
+    // Email of exactly 254 bytes should create a token for a known account.
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Create an account with an email of exactly 254 bytes using RFC-valid structure
+    // (local_part 64 bytes + '@' 1 byte + domain 189 bytes = 254 bytes total)
+    let email = generate_rfc_email_with_length(254);
+    assert_eq!(email.len(), 254, "email must be exactly 254 bytes");
+
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u_boundary_254".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Boundary 254 User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: Some(email.clone()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    };
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(account);
+    }
+
+    let app = app(state.clone());
+
+    let body_str = format!(r#"{{"email":"{}"}}"#, email);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+
+    // Verify token WAS created for 254-byte email (proves the boundary is correct and inclusive)
+    assert!(
+        state.tokens.latest_raw_for_email(&email).is_some(),
+        "254-byte email for known account must create a token (boundary inclusive)"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "integration-testing")]
+async fn request_login_rejects_boundary_255_byte_email_for_known_account() -> Result<()> {
+    // Verify that the 254-byte limit rejects 255 bytes for known accounts.
+    // Email of 255 bytes should NOT create a token for a known account.
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    // Create an account with an email of exactly 255 bytes using RFC-valid structure
+    // (local_part 64 bytes + '@' 1 byte + domain 190 bytes = 255 bytes total)
+    let email = generate_rfc_email_with_length(255);
+    assert_eq!(email.len(), 255, "email must be exactly 255 bytes");
+
+    let account = AccountInternal {
+        public: AccountPublic {
+            id: "u_boundary_255".to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Boundary 255 User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: Some(email.clone()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    };
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(account);
+    }
+
+    let app = app(state.clone());
+
+    let body_str = format!(r#"{{"email":"{}"}}"#, email);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+
+    // Verify NO token was created for 255-byte email (proves rejection)
+    assert_eq!(
+        state.tokens.latest_raw_for_email(&email),
+        None,
+        "255-byte email for known account must be rejected and not create a token"
+    );
+
+    Ok(())
+}
+
 fn hash_token(token: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(token.as_bytes());
