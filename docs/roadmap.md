@@ -90,7 +90,7 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 | Kartenklarheit | [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) | [map-architekturkritik.md](reports/map-architekturkritik.md) |
 | Kartenklarheit Phase 6 (Wahrheitsbeweis) | [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) | [map-status-matrix.md](reports/map-status-matrix.md) |
 | Agent-Operability | [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) | [agent-readiness-audit.md](reports/agent-readiness-audit.md) |
-| Dokumentationsstruktur & Task-Steuerung | [doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md), [Blueprint](blueprints/doc-structure-task-control.md) | [optimierungsstatus.md](reports/optimierungsstatus.md) |
+| Dokumentationsstruktur & Task-Steuerung | [doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md), [Blueprint](blueprints/doc-structure-task-control.md) | Statusbeleg ausstehend — noch kein Eintrag in `reports/optimierungsstatus.md` |
 | Versionierung | [versionierungs-blaupause.md](blueprints/versionierungs-blaupause.md) | [versionierungs-statusgrundlage.md](blueprints/versionierungs-statusgrundlage.md) |
 | Optimierungsfront | (kein Sub-Plan) | [optimierungsstatus.md](reports/optimierungsstatus.md), [optimierungsbericht.md](reports/optimierungsbericht.md) |
 
