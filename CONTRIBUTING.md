@@ -54,11 +54,13 @@ Nur reale Zielordner. Was nicht existiert, wird hier nicht aufgelistet.
 - **Neue Seite oder Route im UI:** `apps/web/src/routes/...` (`+page.svelte`, `+page.ts`, `+server.ts`).
 - **UI-Komponente, Store, Util:** `apps/web/src/lib/...`.
 - **Statische Assets:** `apps/web/static/`.
-- **Neuer API-Endpoint:** `apps/api/src/routes/...`.
-- **Geschäftslogik / Service:** `apps/api/src/domain/...`.
-- **DB-Zugriff (PostgreSQL):** `apps/api/src/repo/...` (sqlx).
-- **Events / Outbox-Publizierer:** `apps/api/src/events/...`.
+- **Neuer API-Endpoint:** `apps/api/src/routes/...`; reale Route-Module: `accounts`, `auth`, `edges`, `health`, `meta`, `nodes`, `query`.
+- **Auth-Logik:** `apps/api/src/auth/...` (Sessions, Passkeys, Tokens, Rate-Limiting, Rollen).
+- **Middleware:** `apps/api/src/middleware/...` (Auth, AuthZ, CSRF).
+- **Querschnitt:** `apps/api/src/{config,state,mailer,utils}.rs`, `apps/api/src/telemetry/...`.
 - **DB-Migrationen:** `apps/api/migrations/` (`YYYYMMDDHHMM__beschreibung.sql`).
+
+Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps/api/src/events/` sind **Zielbild**, aber aktuell nicht vorhanden. Neue Unterordner erst nach eigenem Architektur- oder Refactoring-PR einführen — nicht als freie Routing-Entscheidung.
 - **Compose-Profile:** `infra/compose/*.yml`.
 - **Proxy, Headers, CSP:** `infra/caddy/`.
 - **CI-Workflow:** `.github/workflows/*.yml`.
