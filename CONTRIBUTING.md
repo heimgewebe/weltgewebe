@@ -17,11 +17,12 @@ Weitere Referenzen:
 - [`docs/datenmodell.md`](docs/datenmodell.md) — Tabellen, Projektionen, Events.
 - [`ci/budget.json`](ci/budget.json) — Performance-Budgets.
 
-Kurzprinzip: **„Richtig routen, klein schneiden, sauber messen."**
+Kurzprinzip: **„Richtig routen, klein schneiden, sauber messen.“**
 
 ## 1. Reale Repo-Topographie
 
-**Auszug der Hauptverzeichnisse** (vollständige Discovery-Liste siehe [`repo.meta.yaml:discovery_roots`](repo.meta.yaml)):
+**Auszug wichtiger Hauptverzeichnisse und Hilfsbereiche**  
+Vollständige Discovery-Liste: [`repo.meta.yaml:discovery_roots`](repo.meta.yaml).
 
 ```text
 .github/
@@ -33,26 +34,26 @@ architecture/          # Architektur-Notizen
 audit/                 # impl-registry.yaml — Implementierungs-Mapping
 configs/               # App-Defaults (app.defaults.yml)
 contracts/
-  domain/              # JSON-Schema-Domain-Contracts (höchste Wahrheits-Präzedenz)
-docs/                  # ADRs, Blueprints, Specs, Reports, Policies, _generated/
+  domain/              # JSON-Schema-Domain-Contracts
+docs/                  # ADRs, Blueprints, Specs, Reports, Policies, _generated/, tasks/
 infra/
   caddy/               # Reverse Proxy
   compose/             # Docker-Compose-Profile
-policies/              # Soft-Limits (limits.yaml, perf.json, retention.yml, slo.yaml ...)
-scripts/               # Tooling, insb. scripts/docmeta/ für Doku-Indexer und Guards
+policies/              # Soft-Limits, Performance, Retention, SLOs
+scripts/               # Tooling, insbesondere scripts/docmeta/
 src/                   # Gemeinsame Sources
 tools/                 # Development Tools
 ci/                    # Budgets, Smoke-Tests
 Root                   # Justfile, Makefile, repo.meta.yaml, AGENTS.md, README.md, Lizenz
 ```
 
-Noch nicht im Repo, aber im Zielbild vorgesehen: `apps/worker/` (Outbox-Projektoren, DSGVO-/DR-Rebuilder), `apps/search/` (Search-Adapter), gemeinsame Library-Pakete unter `packages/`. Patches dürfen diese Strukturen **nicht erfinden**; sie entstehen erst, wenn die jeweilige Gate-Phase erreicht ist.
+Noch nicht als reale Zielstruktur zu verwenden: `apps/worker/`, `apps/search/` und gemeinsame Library-Pakete unter `packages/`. Diese Strukturen sind Zielbild oder spätere Gate-Arbeit. Patches dürfen sie nicht nebenbei erfinden.
 
 Details: siehe [`docs/architekturstruktur.md`](docs/architekturstruktur.md).
 
-## 2. Routing-Matrix „Wohin gehört was?"
+## 2. Routing-Matrix „Wohin gehört was?“
 
-Nur reale Zielordner. Was nicht existiert, wird hier nicht aufgelistet.
+Nur reale Zielordner. Was nicht existiert, wird hier nicht als Gegenwart aufgelistet.
 
 - **Neue Seite oder Route im UI:** `apps/web/src/routes/...` (`+page.svelte`, `+page.ts`, `+server.ts`).
 - **UI-Komponente, Store, Util:** `apps/web/src/lib/...`.
@@ -62,9 +63,6 @@ Nur reale Zielordner. Was nicht existiert, wird hier nicht aufgelistet.
 - **Middleware:** `apps/api/src/middleware/...` (Auth, AuthZ, CSRF).
 - **Querschnitt:** `apps/api/src/{config,state,mailer,utils}.rs`, `apps/api/src/telemetry/...`.
 - **DB-Migrationen:** `apps/api/migrations/` (`YYYYMMDDHHMM__beschreibung.sql`).
-
-Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps/api/src/events/` sind **Zielbild**, aber aktuell nicht vorhanden. Neue Unterordner erst nach eigenem Architektur- oder Refactoring-PR einführen — nicht als freie Routing-Entscheidung.
-
 - **Compose-Profile:** `infra/compose/*.yml`.
 - **Proxy, Headers, CSP:** `infra/caddy/`.
 - **CI-Workflow:** `.github/workflows/*.yml`.
@@ -74,12 +72,15 @@ Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps
 - **Architektur-Entscheidung:** `docs/adr/ADR-xxx__<slug>.md`.
 - **Architektur-Blaupause:** `docs/blueprints/<slug>.md`.
 - **Spezifikation:** `docs/specs/<slug>.md`.
-- **Statusbericht / Diagnose:** `docs/reports/<slug>.md` (Markdown plus optional `.json`-Zwilling, dokumentiert).
-- **Runbook:** `docs/runbook.md` oder `docs/runbooks/<slug>.md`.
+- **Statusbericht / Diagnose:** `docs/reports/<slug>.md` plus optional dokumentierter `.json`-Zwilling.
+- **Runbook:** `docs/runbook.md` oder vorhandene Runbook-Pfade gemäß `docs/index.md`.
 - **Domain-Contract:** `contracts/domain/<entity>.schema.json`.
+- **Task-Control-Artefakt:** `docs/tasks/...`.
 - **Doku-Indexer / Relations-Skript:** `scripts/docmeta/`.
 
-Outbox-Projektoren (Timeline, Search), DSGVO-/DR-Rebuilder und Search-Adapter haben noch keinen realen Zielordner und entstehen erst mit der entsprechenden Gate-Phase.
+Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps/api/src/events/` sind Zielbild, aber aktuell nicht als reale Zielordner zu verwenden. Neue Unterordner erst nach eigenem Architektur- oder Refactoring-PR einführen — nicht als freie Routing-Entscheidung.
+
+Outbox-Projektoren, Search-Projektoren, DSGVO-/DR-Rebuilder und Search-Adapter entstehen erst mit der entsprechenden Gate-Phase.
 
 ## 3. Doku-Rollen und Schreibgrenzen
 
@@ -90,43 +91,111 @@ Outbox-Projektoren (Timeline, Search), DSGVO-/DR-Rebuilder und Search-Adapter ha
 | `docs/adr/*`, `docs/specs/*`, `docs/blueprints/*` | Normative Spezifikation und Architekturplanung | guarded |
 | `docs/reports/*` | Diagnostische Berichte und Statusmatrizen mit Evidenz | guarded |
 | `docs/index.md` | Navigation, **keine** Wahrheit | guarded |
+| `docs/tasks/*` | Task-Control-Arbeitssteuerung, **keine** Wahrheitsschicht | manuell kuratiert in Phase 2; Statuswechsel nur mit Evidenz |
 | `docs/_generated/*` | Diagnose, automatisch generiert | **forbidden** für manuelle Edits |
-| `audit/impl-registry.yaml` | Implementations-Mapping | siehe `repo.meta.yaml` / `agent-policy.yaml` (nicht als guarded geführt) |
-| `docs/tasks/*` | Geplante Task-Control-Schicht (Roadmap) | noch nicht eingeführt — nicht ohne Roadmap-Phase 2 anlegen |
+| `audit/impl-registry.yaml` | Implementierungs-Mapping | dokumentiert; Änderungen nur mit konkretem Zielbeleg und Review |
 | `secrets/`, `snapshots/` | Sensitive Daten / Snapshots | **forbidden** |
 
 Vollständige bindende Pfadliste siehe [`agent-policy.yaml`](agent-policy.yaml).
 
-## 4. Arbeitsweise und Workflow
+## 4. Task-Control-Artefakte
 
-- Branch-Strategie: kurzes Feature-Branching gegen `main`. Kleine, thematisch fokussierte Pull Requests.
+`docs/tasks/` ist die Arbeitssteuerungs-Schicht. Sie macht offene Arbeit auffindbar, ersetzt aber keine Statusmatrix, keinen Report und keinen Codebeweis.
+
+- [`docs/tasks/README.md`](docs/tasks/README.md) erklärt Rolle, Grenzen und Pflege der Task-Control-Artefakte.
+- [`docs/tasks/board.md`](docs/tasks/board.md) ist eine **menschliche Arbeitskarte**, keine Wahrheitsschicht.
+- [`docs/tasks/index.json`](docs/tasks/index.json) ist ein **maschinenlesbarer Task-Index**. Manuelle Änderungen sind in Phase 2 erlaubt, solange `curation` klar als `"manual_phase2_seed"` oder vergleichbar markiert ist.
+- [`docs/tasks/schema.json`](docs/tasks/schema.json) ist der **Validierungsvertrag**. Änderungen brauchen einen begründeten PR.
+- [`docs/reports/optimierungsstatus.md`](docs/reports/optimierungsstatus.md) bleibt die menschliche Statusmatrix für OPT-* Einträge.
+- [`docs/reports/optimierungsstatus.json`](docs/reports/optimierungsstatus.json) ist deren maschinenlesbarer Zwilling, kein eigenständiger Statusträger.
+
+Kein Status in `docs/tasks/index.json` oder `docs/reports/optimierungsstatus.json` darf dem Markdown widersprechen. Stille Status-Upgrades sind verboten. `done` erfordert Evidenz.
+
+Validator lokal ausführen:
+
+```bash
+python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
+```
+
+Noch offen für Folge-PRs:
+
+- GitHub Issue Forms
+- PR-Template
+- Release-Konfig
+- Task-Index-Generator
+- CI-Guard / Workflow
+- Implementierungs-Mapping-Ausbau
+
+## 5. Arbeitsweise und Workflow
+
+- Branch-Strategie: kurzes Feature-Branching gegen `main`.
+- Pull Requests: klein, thematisch fokussiert, mit klarer Evidenz.
 - Commit-Präfixe: `feat(web): …`, `feat(api): …`, `feat(infra): …`, `fix(...)`, `chore(...)`, `refactor(...)`, `docs(adr|runbook|...)`.
-- PR-Prozess:
-  1. Lokal: `just check` für schnelle Hygiene-Checks (Rust fmt/clippy/test, Demo-Daten, Domain-Contracts, `cargo deny`).
-  2. Bei Änderungen unter `apps/web/`: zusätzlich `just ci` oder spezifische Web-Checks in `apps/web/` ausführen (Web-Install, Sync, Build, `pnpm run ci`).
-  3. PR klein halten; Zweck und „Wie getestet" kurz erläutern.
-  4. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
-- CI-Gates (brechen Builds):
-  - Frontend-Budget aus `ci/budget.json` (Initial-JS ≤ 60 KB, TTI ≤ 2000 ms).
-  - Lints/Formatter: Web (ESLint/Prettier, `max-warnings=0`), Rust (`cargo fmt`, `cargo clippy -D warnings`).
-  - Tests (`pnpm test`, `cargo test --locked`).
-  - Sicherheits- und Konsistenzchecks (`cargo deny`, Workflow `docs-guard.yml`, Compose-Smoke).
 
-Generierte Dateien unter `docs/_generated/` sind abgeleitete Diagnoseartefakte und werden nicht manuell editiert. CI regeneriert sie für Beobachtbarkeit; Drift wird gemeldet und soll zeitnah behoben oder bewusst dokumentiert werden.
+PR-Prozess:
 
-Blockierende Doku-Validierung läuft deterministisch über `make ci-validate` (Alias zu `make validate`).
+1. Lokal mindestens `just check` für schnelle Hygiene-Checks ausführen.
+2. Bei Änderungen unter `apps/web/`: zusätzlich `just ci` oder spezifische Web-Checks in `apps/web/` ausführen.
+3. Zweck, Scope und „Wie getestet“ im PR kurz erläutern.
+4. Bei Architektur- oder Sicherheitsauswirkungen: ADR, Blueprint, Report oder Runbook-Update beilegen oder verlinken.
+5. Keine generierten Diagnoseartefakte manuell editieren.
 
-## 5. Domain-Contracts lokal validieren
+Check-Logik:
+
+- `just check` = schneller lokaler Hygiene-Check: Rust fmt/clippy/test, Demo-Daten, Domain-Contracts, `cargo deny`.
+- `just ci` = breiterer CI-Spiegel, insbesondere bei Web/API-Änderungen.
+- `make ci-validate` = deterministische Doku-/Validierungsstrecke, Alias zu `make validate`.
+
+CI-Gates können Builds brechen:
+
+- Frontend-Budget aus `ci/budget.json`.
+- Lints/Formatter: Web (ESLint/Prettier, `max-warnings=0`), Rust (`cargo fmt`, `cargo clippy -D warnings`).
+- Tests (`pnpm test`, `cargo test --locked`).
+- Sicherheits- und Konsistenzchecks (`cargo deny`, `docs-guard.yml`, Compose-Smoke).
+
+Generierte Dateien unter `docs/_generated/` sind abgeleitete Diagnoseartefakte. CI kann sie für Beobachtbarkeit regenerieren; Drift wird gemeldet und soll zeitnah behoben oder bewusst dokumentiert werden.
+
+## 6. Domain-Contracts lokal validieren
 
 JSON-Schemas und Beispiele unter `contracts/domain/` prüfen:
 
-- Voraussetzungen: Node.js ≥ 20, `ajv-cli` und `ajv-formats` (z. B. `pnpm install -g ajv-cli ajv-formats`).
-- Ausführung: `just contracts-domain-check` oder `npm run contracts:domain:check`.
+Voraussetzungen:
+
+- Node.js ≥ 20
+- `ajv-cli` und `ajv-formats`, zum Beispiel:
+
+```bash
+pnpm install -g ajv-cli ajv-formats
+```
+
+Ausführung:
+
+```bash
+just contracts-domain-check
+```
+
+oder:
+
+```bash
+npm run contracts:domain:check
+```
 
 Das Skript kompiliert alle Schemas und validiert die Beispiel-Instanzen dagegen.
 
-## 6. Tooling-Differenzierung (Lokal vs. CI)
+## 7. Tooling-Differenzierung: lokal vs. CI
 
-- **`scripts/tools/yq-pin.sh`** — lokaler Installer für reproduzierbare Umgebung (ohne sudo). Lädt `yq` mit Wiederholungen, prüft Checksums, legt das Binary unter `~/.local/bin` ab (inkl. PATH-Hinzufügung).
-- **CI-Workflows (`.github/workflows/ci.yml`)** — eigener gepinnter `yq`-Installer, da Runner root-Rechte und frisches Dateisystem haben.
-- **Link-Prüfung:** Im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige Parallelität). Der nächtliche Workflow (`links.yml`) ist Watchdog mit reduziertem Profil, kein hartes Qualitäts-Gate.
+- **`scripts/tools/yq-pin.sh`** — lokaler Installer für reproduzierbare Umgebung ohne `sudo`. Lädt `yq` mit Wiederholungen, prüft Checksums und legt das Binary unter `~/.local/bin` ab.
+- **CI-Workflows (`.github/workflows/ci.yml`)** — nutzen einen eigenen gepinnten `yq`-Installer, da Runner root-Rechte und ein frisches Dateisystem haben.
+- **Link-Prüfung** — im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige Parallelität). Der nächtliche Workflow (`links.yml`) ist Watchdog mit reduziertem Profil, kein hartes Qualitäts-Gate.
+
+## 8. Konflikt- und Drift-Regel
+
+Wenn Dokumente widersprechen:
+
+1. `repo.meta.yaml` und explizite Contracts prüfen.
+2. Danach `AGENTS.md`, `agent-policy.yaml` und Policies prüfen.
+3. Danach ADRs, Specs, Blueprints, Reports und Codepfade prüfen.
+4. Navigation wie `docs/index.md` nicht als Wahrheit verwenden.
+5. Widerspruch nicht glätten. Blockieren, Befund dokumentieren, minimalen Patch vorschlagen.
+
+Wenn ein Pfad nicht existiert, wird er nicht als Gegenwarts-Zielpfad dokumentiert. Zielbilder müssen als Zielbilder markiert werden.

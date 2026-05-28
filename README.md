@@ -96,12 +96,32 @@ just down
 - [Optimierungsstatus](docs/reports/optimierungsstatus.md)
 - [Task-Control-Roadmap](docs/blueprints/doc-structure-task-control-roadmap.md)
 
-Task-Control-Artefakte wie `docs/tasks/index.json`, `docs/tasks/board.md` und `docs/reports/optimierungsstatus.json` sind in der Roadmap geplant, in diesem PR aber **noch nicht umgesetzt**. Verweise auf sie müssen entsprechend als geplant gekennzeichnet werden.
+Task-Control Phase 2 ist eingeführt. Die Arbeitssteuerung liegt jetzt unter `docs/tasks/`; der maschinenlesbare Optimierungsstatus liegt unter `docs/reports/optimierungsstatus.json`.
+
+Offen bleiben Folgephasen: GitHub Issue Forms, PR-Template, Release-Konfig, Task-Index-Generator, CI-Guard und Implementierungs-Mapping.
 
 ## Semantik (ausgesetzt)
 
 Die ursprünglich geplante `semantAH`-Integration (ADR-0042) ist ausgesetzt; Contracts und CI-Jobs wurden entfernt. Eine Reaktivierung würde eine neue ADR erfordern.
 
-## Beiträge und Doku-Style
+## Task-Control
+
+Die operative Arbeitssteuerung liegt in `docs/tasks/`:
+
+| Datei | Zweck |
+|---|---|
+| `docs/tasks/board.md` | Menschliche Arbeitskarte (aktive Prioritäten, Blocker) |
+| `docs/tasks/index.json` | Maschinenlesbarer Task-Index (Phase-2-Seed: manuell) |
+| `docs/tasks/schema.json` | Validierungsvertrag |
+| `docs/reports/optimierungsstatus.md` | Maßgebliche Statusmatrix (Wahrheitsquelle für OPT-* Einträge) |
+| `docs/reports/optimierungsstatus.json` | Maschinenlesbarer Zwilling der Statusmatrix |
+
+Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator und CI-Guard.
+
+```bash
+python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
+```
+
+## Beiträge & Docs
 
 Stilprüfung via Vale läuft automatisch bei Doku-PRs; lokal `vale docs/` für Hinweise.

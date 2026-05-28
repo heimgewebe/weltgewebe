@@ -1,0 +1,365 @@
+{
+  "schema_version": "1.0.0",
+  "source_markdown": "docs/reports/optimierungsstatus.md",
+  "curation": "manual_phase2_seed",
+  "generated_at": null,
+  "items": [
+    {
+      "id": "OPT-API-001",
+      "area": "API",
+      "title": "Paginierung Listen-Endpunkte",
+      "status": "partial",
+      "priority": "high",
+      "risk": "medium",
+      "effort": "medium",
+      "evidence_status": "code+test",
+      "evidence": [
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/src/routes/accounts.rs"
+      ],
+      "missing_evidence": [
+        "Cursor-Variante fehlt",
+        "Response-Metadaten und dokumentierter Sortierungsvertrag fehlen"
+      ],
+      "next_action": "Cursor-Variante + Response-Metadaten implementieren",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-CON-001",
+      "area": "Contracts",
+      "title": "additionalProperties: false + String-Constraints",
+      "status": "partial",
+      "priority": "high",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "code",
+      "evidence": [
+        "contracts/domain/node.schema.json",
+        "contracts/domain/account.schema.json",
+        "contracts/domain/role.schema.json"
+      ],
+      "missing_evidence": [
+        "Vollständiges Schema-für-Schema-Audit inkl. verbleibender permissiver Felder fehlt"
+      ],
+      "next_action": "Schema-für-Schema-Audit abschließen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-DOC-001",
+      "area": "Dokumentation",
+      "title": "Incident-/DB-Recovery-Runbooks",
+      "status": "partial",
+      "priority": "high",
+      "risk": "high",
+      "effort": "low",
+      "evidence_status": "doc-only",
+      "evidence": [
+        "docs/runbook.md",
+        "docs/runbook.observability.md",
+        "docs/runbooks/README.md"
+      ],
+      "missing_evidence": [
+        "Eigenständige Incident-Response- und DB-Recovery-Abläufe fehlen"
+      ],
+      "next_action": "Eigenständige Runbooks unter docs/runbooks/ erstellen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-CI-001",
+      "area": "CI/CD",
+      "title": "Workflow-Redundanz",
+      "status": "partial",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "medium",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/web.yml",
+        ".github/workflows/heavy.yml"
+      ],
+      "missing_evidence": [
+        "Konsolidierungskonzept via workflow_call fehlt",
+        "Redundanzkriterien und eigener CI-Strukturcheck fehlen"
+      ],
+      "next_action": "Konsolidierungskonzept erstellen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-MAP-001",
+      "area": "Frontend/Maps",
+      "title": "Basemap Runtime Proof",
+      "status": "done",
+      "priority": "high",
+      "risk": "high",
+      "effort": "medium",
+      "evidence_status": "runtime",
+      "evidence": [
+        "scripts/guard/basemap-runtime-proof.sh",
+        ".github/workflows/basemap-runtime-proof.yml",
+        "infra/caddy/Caddyfile.proof",
+        "scripts/basemap/build-hamburg-pmtiles.sh",
+        "apps/web/tests/basemap-client-integration.spec.ts"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine – visuelle Abnahme separat in map-status-matrix.md",
+      "updated_at": "2026-05-27"
+    },
+    {
+      "id": "OPT-API-002",
+      "area": "API",
+      "title": "Session-Persistenz Redis/DB",
+      "status": "done",
+      "priority": "high",
+      "risk": "high",
+      "effort": "medium",
+      "evidence_status": "ci",
+      "evidence": [
+        "apps/api/src/auth/session_db.rs",
+        "apps/api/src/lib.rs",
+        "apps/api/src/auth/session.rs",
+        "docs/adr/ADR-0007__auth-persistence-production-db-path.md"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine – Refresh-Token-Persistenz und Session-Leak-Tests sind eigenständige Auth-Phase-6-Themen",
+      "updated_at": "2026-05-27"
+    },
+    {
+      "id": "OPT-API-003",
+      "area": "API",
+      "title": "DB-Migrationen",
+      "status": "done",
+      "priority": "high",
+      "risk": "high",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        "apps/api/migrations/20260428000000_create_sessions.up.sql",
+        "apps/api/migrations/20260428000000_create_sessions.down.sql",
+        "apps/api/src/lib.rs"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine – weitere Domain-Migrationen gehören zu OPT-ARC-001",
+      "updated_at": "2026-05-27"
+    },
+    {
+      "id": "OPT-FE-001",
+      "area": "Frontend",
+      "title": "Svelte-5-Runes-Migration",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "high",
+      "evidence_status": "code",
+      "evidence": [
+        "apps/web/src/routes/map/+page.svelte",
+        "apps/web/src/lib/maplibre/Marker.svelte"
+      ],
+      "missing_evidence": [
+        "Keine belegte Nutzung von $state, $derived, $effect in Kernkomponenten"
+      ],
+      "next_action": "Runes-Migration in Kernkomponenten beginnen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-FE-002",
+      "area": "Frontend",
+      "title": "Map-Aufteilung",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "medium",
+      "evidence_status": "code",
+      "evidence": [
+        "apps/web/src/routes/map/+page.svelte"
+      ],
+      "missing_evidence": [
+        "Aufteilung in klar getrennte Teilkomponenten fehlt"
+      ],
+      "next_action": "Monolithische Route in Teilkomponenten aufteilen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-INF-001",
+      "area": "Infrastruktur",
+      "title": "Trivy Image Scanning",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/security.yml"
+      ],
+      "missing_evidence": [
+        "Kein Trivy-Container-Scan-Schritt definiert"
+      ],
+      "next_action": "Trivy-Schritt in security.yml ergänzen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-ARC-001",
+      "area": "Architektur",
+      "title": "JSONL → PostgreSQL",
+      "status": "open",
+      "priority": "high",
+      "risk": "high",
+      "effort": "high",
+      "evidence_status": "code",
+      "evidence": [
+        "apps/api/src/routes/nodes.rs"
+      ],
+      "missing_evidence": [
+        "Migrations- und Cutover-Plan fehlt"
+      ],
+      "next_action": "Migrations- und Cutover-Plan für Domänen-Daten erstellen",
+      "updated_at": "2026-04-27"
+    },
+    {
+      "id": "OPT-API-004",
+      "area": "API",
+      "title": "Limit-Obergrenze /nodes & /accounts (Parität zu /edges)",
+      "status": "done",
+      "priority": "high",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "code+test",
+      "evidence": [
+        "apps/api/src/routes/query.rs",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/routes/edges.rs"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine – Cursor-Paginierung bleibt unter OPT-API-001",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-API-005",
+      "area": "API",
+      "title": "Login-E-Mail Längenbegrenzung",
+      "status": "done",
+      "priority": "low",
+      "risk": "low",
+      "effort": "low",
+      "evidence_status": "code+test",
+      "evidence": [
+        "apps/api/src/routes/auth.rs"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine",
+      "updated_at": "2026-05-27"
+    },
+    {
+      "id": "OPT-CON-002",
+      "area": "Contracts",
+      "title": "maxLength + verbleibende additionalProperties: false",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "code",
+      "evidence": [
+        "contracts/domain/message.schema.json",
+        "contracts/domain/role.schema.json"
+      ],
+      "missing_evidence": [
+        "maxLength fehlt in allen sechs Schemas",
+        "restliche permissive Nested-Objects offen"
+      ],
+      "next_action": "maxLength und fehlende additionalProperties: false ergänzen",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-CI-002",
+      "area": "CI/CD",
+      "title": "Rust-Toolchain-Version aus kanonischer Quelle lesen",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/security.yml",
+        ".github/workflows/api.yml",
+        ".github/workflows/api-smoke.yml"
+      ],
+      "missing_evidence": [
+        "Sechs hartkodierte Toolchain-Versionen driften potenziell"
+      ],
+      "next_action": "Alle Workflows auf toolchain.versions.yml-Lesung umstellen",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-CI-003",
+      "area": "CI/CD",
+      "title": "Action-Refs vereinheitlichen",
+      "status": "partial",
+      "priority": "low",
+      "risk": "low",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/python-tooling.yml"
+      ],
+      "missing_evidence": [
+        "dtolnay/rust-toolchain weiterhin gemischt @stable/@v1",
+        "gepinnte uv-Version nicht erzwungen"
+      ],
+      "next_action": "Rust-Toolchain-Action-Refs vereinheitlichen",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-CI-004",
+      "area": "CI/CD",
+      "title": "Dependency-Update-Automation (Dependabot/Renovate)",
+      "status": "open",
+      "priority": "medium",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "none",
+      "evidence": [],
+      "missing_evidence": [
+        "keine .github/dependabot.yml oder Renovate-Config vorhanden"
+      ],
+      "next_action": "Dependabot oder Renovate konfigurieren",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-INF-002",
+      "area": "Infrastruktur",
+      "title": "Third-Party-Actions per Commit-SHA pinnen",
+      "status": "open",
+      "priority": "low",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/"
+      ],
+      "missing_evidence": [
+        "repo-weit nur Tag-Pinning, kein SHA-Pinning"
+      ],
+      "next_action": "Actions auf Commit-SHA umstellen",
+      "updated_at": "2026-05-25"
+    },
+    {
+      "id": "OPT-FE-003",
+      "area": "Frontend",
+      "title": "Panel-Detail-Fetch-Logik extrahieren",
+      "status": "done",
+      "priority": "low",
+      "risk": "low",
+      "effort": "medium",
+      "evidence_status": "code+test",
+      "evidence": [
+        "apps/web/src/lib/panels/panelDetails.ts",
+        "apps/web/src/lib/utils/formatDate.ts"
+      ],
+      "missing_evidence": [],
+      "next_action": "keine",
+      "updated_at": "2026-05-26"
+    }
+  ]
+}
