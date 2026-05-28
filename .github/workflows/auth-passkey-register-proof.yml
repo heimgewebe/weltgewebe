@@ -1,0 +1,181 @@
+---
+# Auth Passkey Register Positive Proof (CI)
+#
+# Executes the existing local proof for the positive passkey
+# register-verify path inside CI:
+#
+#   apps/web/tests/proofs/passkey-register-positive.proof.ts
+#
+# The proof is driven by Playwright/Chromium plus a virtual
+# WebAuthn authenticator. It exercises the real API
+# (`cargo run --locked --features integration-testing`) through
+# the Vite preview server proxy and asserts the documented
+# proof-summary invariants:
+#
+#   - register_options_status: 200
+#   - register_verify_status: 200
+#   - register_verify_set_cookie: null
+#   - session_cookie_unchanged: true
+#   - stored_credential_reflected: true
+#   - virtual_authenticator_credentials > 0
+#
+# Scope distinction:
+#   This workflow runs ONLY the auth passkey register positive
+#   proof (`pnpm test:proof:auth-passkey-register`).
+#   It does NOT touch or share configuration with the basemap
+#   proof (`pnpm test:proof:basemap-real`, see
+#   `.github/workflows/basemap-runtime-proof.yml`).
+name: Auth Passkey Register Proof
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/src/**"
+      - "apps/api/Cargo.toml"
+      - "apps/api/tests/api_auth.rs"
+      - "apps/web/package.json"
+      - "apps/web/pnpm-lock.yaml"
+      - "apps/web/playwright.auth.proof.config.ts"
+      - "apps/web/tests/proofs/passkey-register-positive.proof.ts"
+      - "apps/web/vite.config.ts"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/auth-passkey-register-proof.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/src/**"
+      - "apps/api/Cargo.toml"
+      - "apps/api/tests/api_auth.rs"
+      - "apps/web/package.json"
+      - "apps/web/pnpm-lock.yaml"
+      - "apps/web/playwright.auth.proof.config.ts"
+      - "apps/web/tests/proofs/passkey-register-positive.proof.ts"
+      - "apps/web/vite.config.ts"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/auth-passkey-register-proof.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-passkey-register-proof:
+    name: auth passkey register positive proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_TERM_COLOR: always
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      PLAYWRIGHT_HTML_REPORT_OPEN: never
+      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: "1.89.0"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.11.0
+
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
+        with:
+          node-version-file: '.node-version'
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Pre-build API with integration-testing feature
+        # Builds the API binary once with cached cargo so the Playwright
+        # webServer step does not have to compile from scratch under its
+        # own 120s readiness timeout.
+        run: cargo build --locked --features integration-testing
+        working-directory: apps/api
+
+      - name: Get Playwright version
+        shell: bash
+        run: |
+          set -euo pipefail
+          PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | awk '{print $2}')
+          printf 'PLAYWRIGHT_VERSION=%s\n' "$PLAYWRIGHT_VERSION" >> "$GITHUB_ENV"
+        working-directory: apps/web
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-playwright-
+
+      - name: Install Playwright Chromium with system deps
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: apps/web
+
+      - name: Run auth passkey register positive proof
+        run: pnpm test:proof:auth-passkey-register
+        working-directory: apps/web
+
+      - name: Upload proof summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-passkey-register-proof-summary
+          path: build/proofs/auth-passkey-register/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-passkey-register-proof-report
+          path: apps/web/playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload Playwright traces and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-passkey-register-proof-traces
+          path: apps/web/test-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUMMARY_FILE="build/proofs/auth-passkey-register/proof-summary.json"
+          printf '## Auth Passkey Register Positive Proof\n\n' >> "${GITHUB_STEP_SUMMARY}"
+          if [ -f "${SUMMARY_FILE}" ]; then
+            printf '<details><summary>proof-summary.json</summary>\n\n```json\n' >> "${GITHUB_STEP_SUMMARY}"
+            cat "${SUMMARY_FILE}" >> "${GITHUB_STEP_SUMMARY}"
+            printf '\n```\n\n</details>\n' >> "${GITHUB_STEP_SUMMARY}"
+          else
+            printf '%s\n' 'No proof-summary.json produced.' >> "${GITHUB_STEP_SUMMARY}"
+          fi
