@@ -729,6 +729,45 @@ async fn request_login_overlong_known_email_skips_token_creation() -> Result<()>
     Ok(())
 }
 
+/// Generates a valid RFC 5321/RFC 1035 compliant email with the exact target byte length.
+///
+/// Local-part is limited to 64 octets (RFC 5321), domain labels to 63 octets each (RFC 1035).
+/// Structure: "aaaa...aaaa" (64) + "@" (1) + "aaaa...aaaa.aaaa...aaaa.co" (remaining)
+#[allow(dead_code)]
+fn generate_rfc_email_with_length(target_len: usize) -> String {
+    const LOCAL_PART_LEN: usize = 64;
+    const AT_LEN: usize = 1;
+    const LABEL_WITH_DOT_LEN: usize = 63; // 62 'a's + 1 dot
+
+    let local_part = "a".repeat(LOCAL_PART_LEN);
+    let domain_len = target_len.saturating_sub(LOCAL_PART_LEN + AT_LEN);
+
+    let mut domain = String::new();
+    let mut remaining = domain_len;
+
+    // Build domain using 62-char labels with dots (63 bytes each)
+    while remaining >= LABEL_WITH_DOT_LEN {
+        domain.push_str(&"a".repeat(62));
+        domain.push('.');
+        remaining -= LABEL_WITH_DOT_LEN;
+    }
+
+    // Handle remaining bytes
+    if remaining > 0 {
+        if remaining >= 2 {
+            // Add final label with padding and "co" TLD
+            let padding_len = remaining - 2;
+            domain.push_str(&"a".repeat(padding_len));
+            domain.push_str("co");
+        } else {
+            // Shouldn't happen with proper boundary calculations, but handle edge case
+            domain.push_str(&"a".repeat(remaining));
+        }
+    }
+
+    format!("{}@{}", local_part, domain)
+}
+
 #[tokio::test]
 #[serial]
 #[cfg(feature = "integration-testing")]
@@ -740,10 +779,9 @@ async fn request_login_accepts_boundary_254_byte_email_for_known_account() -> Re
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
-    // Create an account with an email of exactly 254 bytes
-    // 254 = local_part (242) + '@' (1) + 'example.com' (11)
-    let local_part = "b".repeat(242);
-    let email = format!("{}@example.com", local_part);
+    // Create an account with an email of exactly 254 bytes using RFC-valid structure
+    // (local_part 64 bytes + '@' 1 byte + domain 189 bytes = 254 bytes total)
+    let email = generate_rfc_email_with_length(254);
     assert_eq!(email.len(), 254, "email must be exactly 254 bytes");
 
     let account = AccountInternal {
@@ -803,10 +841,9 @@ async fn request_login_rejects_boundary_255_byte_email_for_known_account() -> Re
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
 
-    // Create an account with an email of exactly 255 bytes
-    // 255 = local_part (243) + '@' (1) + 'example.com' (11)
-    let local_part = "c".repeat(243);
-    let email = format!("{}@example.com", local_part);
+    // Create an account with an email of exactly 255 bytes using RFC-valid structure
+    // (local_part 64 bytes + '@' 1 byte + domain 190 bytes = 255 bytes total)
+    let email = generate_rfc_email_with_length(255);
     assert_eq!(email.len(), 255, "email must be exactly 255 bytes");
 
     let account = AccountInternal {
