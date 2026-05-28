@@ -758,6 +758,22 @@ fn generate_rfc_email_with_length(target_len: usize) -> String {
         domain.push_str(&"a".repeat(remaining));
     }
 
+    // Verify RFC compliance invariants
+    assert!(
+        !domain.starts_with('.'),
+        "domain must not start with a dot"
+    );
+    assert!(
+        !domain.ends_with('.'),
+        "domain must not end with a dot"
+    );
+    assert!(
+        domain
+            .split('.')
+            .all(|label| !label.is_empty() && label.len() <= MAX_LABEL_LEN),
+        "domain labels must be non-empty and <= 63 bytes"
+    );
+
     format!("{}@{}", local_part, domain)
 }
 
