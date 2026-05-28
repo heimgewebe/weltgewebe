@@ -1,5 +1,9 @@
 """
-validate_task_index.py — Validates docs/tasks/index.json against schema and business rules.
+validate_task_index.py — Validates docs/tasks/index.json against the task-index contract.
+
+This is a hand-coded validator that mirrors the constraints defined in
+docs/tasks/schema.json plus business rules. It does not use a generic
+JSON-Schema library; schema.json remains the canonical human-readable contract.
 
 Usage:
     python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
@@ -109,7 +113,7 @@ def _validate_task(task, index, prefix, errors):
             )
         if isinstance(tid, str) and tid in index:
             errors.append(
-                f"{prefix}: duplicate id '{tid}' (also at tasks[{index[tid]}])"
+                f"{prefix}: duplicate id '{tid}' (first seen at {index[tid]})"
             )
         elif isinstance(tid, str):
             index[tid] = prefix
