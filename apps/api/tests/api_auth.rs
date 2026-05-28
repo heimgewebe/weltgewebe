@@ -769,14 +769,8 @@ fn generate_rfc_email_with_length(target_len: usize) -> String {
     }
 
     // Verify RFC compliance invariants
-    assert!(
-        !domain.starts_with('.'),
-        "domain must not start with a dot"
-    );
-    assert!(
-        !domain.ends_with('.'),
-        "domain must not end with a dot"
-    );
+    assert!(!domain.starts_with('.'), "domain must not start with a dot");
+    assert!(!domain.ends_with('.'), "domain must not end with a dot");
     assert!(
         domain
             .split('.')
