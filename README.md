@@ -63,7 +63,8 @@ just down
 ## Entwicklung und Qualität
 
 - Beitragsregeln und Routing: [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Lokaler Komplett-Check: `just check`
+- Schneller lokaler Hygiene-Check: `just check` (Rust/API-Grundchecks, Demo-Daten, Domain-Contracts, `cargo deny`)
+- Breiterer CI-Spiegel bei Web/API-Änderungen: `just ci`
 - Frontend-/Gate-A-Prototyp: [`apps/web/README.md`](apps/web/README.md)
 - Web-E2E (Playwright): siehe Workflow [`.github/workflows/web-e2e.yml`](.github/workflows/web-e2e.yml); lokal in `apps/web/` mit `pnpm test:setup` (einmalig) und `pnpm test`.
 - Performance-Budgets: [`ci/budget.json`](ci/budget.json); Soft-Limits in [`policies/`](policies/).
