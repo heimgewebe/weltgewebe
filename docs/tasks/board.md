@@ -24,7 +24,6 @@ relations:
 
 | ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |
 |---|---|---|---|---|---|---|
-| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | partial | high | `docs/tasks/README.md`, `scripts/docmeta/validate_task_index.py` | PR mergen, Validator-Pass bestätigen |
 | OPT-API-001 | api | Paginierung Listen-Endpunkte | partial | high | `apps/api/src/routes/nodes.rs` | Cursor-Variante + Response-Metadaten implementieren |
 | OPT-CON-001 | ci | `additionalProperties: false` + String-Constraints | partial | high | `contracts/domain/node.schema.json` | Schema-für-Schema-Audit abschließen |
 | OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | partial | high | `docs/runbook.md` | Eigenständige Runbooks unter `docs/runbooks/` erstellen |
@@ -45,10 +44,11 @@ relations:
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
 | OPT-DOC-001 | Runbooks: `docs/runbooks/incident-response.md` + `db-recovery.md` | Eigenständige Abläufe, kein DSGVO-Leak-Risiko |
 
-## Erledigte Tasks (Phase 1–2 Referenz)
+## Erledigte Tasks (Phase 1–3 Referenz)
 
 | ID | Bereich | Titel | Evidenz |
 |---|---|---|---|
+| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `scripts/docmeta/validate_task_index.py`, Tests passed |
 | OPT-MAP-001 | map | Basemap Runtime Proof | CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |
 | OPT-API-002 | api | Session-Persistenz PostgreSQL | `apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, CI PROVEN, Commit `00a43a00` |

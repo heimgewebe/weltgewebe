@@ -13,7 +13,7 @@
       "id": "TASK-CTL-001",
       "title": "Task-Control Phase 2 etablieren",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
@@ -24,11 +24,10 @@
         "docs/tasks/index.json",
         "docs/tasks/schema.json",
         "docs/reports/optimierungsstatus.json",
-        "scripts/docmeta/validate_task_index.py"
+        "scripts/docmeta/validate_task_index.py",
+        "scripts/docmeta/tests/test_validate_task_index.py"
       ],
-      "missing_evidence": [
-        "PR-Merge-Nachweis steht aus"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "docs/tasks/ existiert und alle Phase-2-Artefakte sind vorhanden",
         "Validator läuft mit exit 0 gegen docs/tasks/index.json",
