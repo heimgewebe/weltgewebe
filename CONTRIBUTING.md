@@ -61,6 +61,7 @@ Nur reale Zielordner. Was nicht existiert, wird hier nicht aufgelistet.
 - **DB-Migrationen:** `apps/api/migrations/` (`YYYYMMDDHHMM__beschreibung.sql`).
 
 Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps/api/src/events/` sind **Zielbild**, aber aktuell nicht vorhanden. Neue Unterordner erst nach eigenem Architektur- oder Refactoring-PR einführen — nicht als freie Routing-Entscheidung.
+
 - **Compose-Profile:** `infra/compose/*.yml`.
 - **Proxy, Headers, CSP:** `infra/caddy/`.
 - **CI-Workflow:** `.github/workflows/*.yml`.
