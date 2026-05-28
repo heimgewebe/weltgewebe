@@ -737,7 +737,7 @@ async fn request_login_overlong_known_email_skips_token_creation() -> Result<()>
 ///
 /// Local-part is limited to 64 octets (RFC 5321), domain labels to 63 octets each (RFC 1035).
 /// Structure: "aaaa...aaaa" (64) + "@" (1) + "aaaa...aaaa.aaaa...aaaa.co" (remaining)
-#[allow(dead_code)]
+#[cfg(feature = "integration-testing")]
 fn generate_rfc_email_with_length(target_len: usize) -> String {
     const LOCAL_PART_LEN: usize = 64;
     const AT_LEN: usize = 1;

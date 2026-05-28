@@ -566,23 +566,27 @@ pub async fn request_login(
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
+    // Normalize email input for semantic checks and downstream processing.
+    let email_raw = payload.email.trim();
+
     // 1a. Reject overly long emails before any further processing (hashing, rate limiting,
     // mailing). Bounds the work an unauthenticated client can force per request and matches
-    // RFC 5321 forward path semantics. Response stays identical for Anti-Enumeration parity.
-    if payload.email.len() > MAX_EMAIL_LEN {
+    // RFC 5321 mailbox semantics after trimming surrounding whitespace. Response stays
+    // identical for Anti-Enumeration parity.
+    if email_raw.len() > MAX_EMAIL_LEN {
         tracing::warn!(
             event = "login.email_too_long",
             request_id = %request_id,
             client_ip = %client_ip,
-            email_len = payload.email.len(),
+            email_len = email_raw.len(),
             max_len = MAX_EMAIL_LEN,
             "Email exceeds maximum length in login request"
         );
         return (StatusCode::OK, Json(generic_response)).into_response();
     }
 
-    // Normalize email: trim and lowercase
-    let email_norm = payload.email.trim().to_ascii_lowercase();
+    // Normalize email: lowercase
+    let email_norm = email_raw.to_ascii_lowercase();
 
     // Compute hash for privacy-preserving logging
     let mut hasher = Sha256::new();
