@@ -729,7 +729,11 @@ async fn request_login_overlong_known_email_skips_token_creation() -> Result<()>
     Ok(())
 }
 
-/// Generates a valid RFC 5321/RFC 1035 compliant email with the exact target byte length.
+/// Generates an ASCII email-shaped address with valid local/domain label structure
+/// and the exact target byte length.
+///
+/// For 254 bytes this is within the RFC 5321 mailbox limit. For 255 bytes this
+/// intentionally exceeds that limit while keeping DNS label structure valid.
 ///
 /// Local-part is limited to 64 octets (RFC 5321), domain labels to 63 octets each (RFC 1035).
 /// Structure: "aaaa...aaaa" (64) + "@" (1) + "aaaa...aaaa.aaaa...aaaa.co" (remaining)
@@ -738,6 +742,12 @@ fn generate_rfc_email_with_length(target_len: usize) -> String {
     const LOCAL_PART_LEN: usize = 64;
     const AT_LEN: usize = 1;
     const MAX_LABEL_LEN: usize = 63; // RFC 1035 DNS label limit
+
+    assert!(
+        target_len > LOCAL_PART_LEN + AT_LEN,
+        "target_len must be greater than {} bytes (local + @)",
+        LOCAL_PART_LEN + AT_LEN
+    );
 
     let local_part = "a".repeat(LOCAL_PART_LEN);
     let domain_bytes_available = target_len.saturating_sub(LOCAL_PART_LEN + AT_LEN);
@@ -774,7 +784,14 @@ fn generate_rfc_email_with_length(target_len: usize) -> String {
         "domain labels must be non-empty and <= 63 bytes"
     );
 
-    format!("{}@{}", local_part, domain)
+    let email = format!("{}@{}", local_part, domain);
+    assert_eq!(
+        email.len(),
+        target_len,
+        "generated email must be exactly {} bytes",
+        target_len
+    );
+    email
 }
 
 #[tokio::test]
