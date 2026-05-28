@@ -180,10 +180,10 @@ Die Task-Control-Schicht besteht aus schmalen, getrennten Artefakten:
 | `docs/tasks/index.json` | Maschinenlesbarer Task-Index | abgeleitet / validiert |
 | `docs/tasks/schema.json` | Schema für Task-Index | Validierungsvertrag |
 | `docs/reports/optimierungsstatus.json` | Maschinenlesbarer Zwilling des Markdown-Status | abgeleitet aus Statusmatrix |
-| Issue Forms | GitHub-native Eingabe strukturierter Tasks | Arbeitsobjekte |
-| PR-Template | leichter Review-Kontext | Arbeitsobjekt |
-| Label-Taxonomie | Triage- und Release-Sprache | Prozesskonvention |
-| Generator/Guard | Drift-Abwehr | Prüfmechanismus |
+| Issue Forms | GitHub-native Eingabe strukturierter Tasks | Arbeitsobjekte — **optional, aktuell zurückgestellt** |
+| PR-Template | leichter Review-Kontext | Arbeitsobjekt — **optional, aktuell zurückgestellt** |
+| Label-Taxonomie | Triage- und Release-Sprache | Prozesskonvention — optional |
+| Generator/Guard | Drift-Abwehr | Prüfmechanismus — **nächste Priorität** |
 
 Wichtig: Sobald `docs/tasks/index.json` oder
 `docs/reports/optimierungsstatus.json` eingeführt werden, muss explizit
@@ -311,8 +311,9 @@ Für die endgültige Betriebsentscheidung fehlen:
 3. Automationsgrad: nur prüfen, Bot-PRs erzeugen oder Project-Felder setzen ist
    offen.
 
-Diese Leerstellen müssen vor Phase 3 und Phase 4 der Roadmap geschlossen oder
-als explizite Lücken markiert werden.
+Diese Leerstellen müssen vor Phase 4 der Roadmap geschlossen oder als explizite
+Lücken markiert werden. Phase 3 (GitHub-Arbeitsobjekte) ist bewusst zurückgestellt;
+sie setzt keine Klärung dieser Leerstellen voraus.
 
 ## 13. Essenz
 

@@ -13,7 +13,7 @@
       "id": "TASK-CTL-001",
       "title": "Task-Control Phase 2 etablieren",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
@@ -24,11 +24,10 @@
         "docs/tasks/index.json",
         "docs/tasks/schema.json",
         "docs/reports/optimierungsstatus.json",
-        "scripts/docmeta/validate_task_index.py"
+        "scripts/docmeta/validate_task_index.py",
+        "scripts/docmeta/tests/test_validate_task_index.py"
       ],
-      "missing_evidence": [
-        "PR-Merge-Nachweis steht aus"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "docs/tasks/ existiert und alle Phase-2-Artefakte sind vorhanden",
         "Validator läuft mit exit 0 gegen docs/tasks/index.json",
@@ -46,30 +45,34 @@
     },
     {
       "id": "TASK-CTL-002",
-      "title": "GitHub-native Arbeitsobjekte einführen (Phase 3)",
+      "title": "GitHub-native Arbeitsobjekte minimal evaluieren",
       "area": "governance",
       "status": "open",
-      "priority": "medium",
+      "priority": "low",
       "effort": "S",
       "risk": "low",
       "owner": "unknown",
       "evidence": [],
       "missing_evidence": [
-        "keine Issue Forms vorhanden",
-        "kein PR-Template vorhanden",
-        "keine Release-Konfiguration vorhanden"
+        "Issue Forms, PR-Template und Release-Konfiguration bewusst zurückgestellt: erhöhen Formular-Overhead ohne belegten Mehrwert gegenüber kontextgenauen PR-Bodies",
+        "Wiederaufnahme sinnvoll wenn: externe Beitragende ohne Projekteinblick aktiv werden oder Release-Prozess stabilisiert ist"
       ],
-      "acceptance": [],
+      "acceptance": [
+        "Entscheidung dokumentiert in CONTRIBUTING.md und board.md",
+        "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingeführt"
+      ],
       "links": {
         "issues": [],
         "prs": [],
-        "docs": []
+        "docs": [
+          "docs/blueprints/doc-structure-task-control.md"
+        ]
       },
       "updated_at": "2026-05-28"
     },
     {
       "id": "TASK-CTL-003",
-      "title": "Task-Index Generator und CI-Guard einführen (Phase 4)",
+      "title": "Task-Index Generator und CI-Guard einführen",
       "area": "ci",
       "status": "open",
       "priority": "medium",
@@ -78,14 +81,21 @@
       "owner": "unknown",
       "evidence": [],
       "missing_evidence": [
-        "generate_task_index.py nicht vorhanden",
-        "CI-Workflow task-index.yml nicht vorhanden"
+        "scripts/docmeta/generate_task_index.py nicht vorhanden",
+        "CI-Workflow .github/workflows/task-index.yml nicht vorhanden"
       ],
-      "acceptance": [],
+      "acceptance": [
+        "Generator erzeugt oder prüft docs/tasks/index.json deterministisch (--check-Modus)",
+        "CI prüft Drift zwischen board.md, index.json und optimierungsstatus.json, schreibt aber nicht still",
+        "Fehlende Evidenz wird gemeldet, nicht geglättet",
+        "docs/_generated/* werden nicht manuell geändert"
+      ],
       "links": {
         "issues": [],
         "prs": [],
-        "docs": []
+        "docs": [
+          "docs/blueprints/doc-structure-task-control-roadmap.md"
+        ]
       },
       "updated_at": "2026-05-28"
     },

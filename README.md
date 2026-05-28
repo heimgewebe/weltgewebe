@@ -98,7 +98,9 @@ just down
 
 Task-Control Phase 2 ist eingeführt. Die Arbeitssteuerung liegt jetzt unter `docs/tasks/`; der maschinenlesbare Optimierungsstatus liegt unter `docs/reports/optimierungsstatus.json`.
 
-Offen bleiben Folgephasen: GitHub Issue Forms, PR-Template, Release-Konfig, Task-Index-Generator, CI-Guard und Implementierungs-Mapping.
+Offen bleiben Folgephasen: Task-Index-Generator, CI-Guard und Implementierungs-Mapping.
+
+GitHub Issue Forms, PR-Template und Release-Konfiguration sind bewusst zurückgestellt. Sie werden erst wieder aufgenommen, wenn ihr Nutzen gegenüber kontextgenauen PR-Bodies belegt ist oder externe Beitragende bzw. ein stabilisierter Release-Prozess sie erforderlich machen.
 
 ## Semantik (ausgesetzt)
 
@@ -116,7 +118,7 @@ Die operative Arbeitssteuerung liegt in `docs/tasks/`:
 | `docs/reports/optimierungsstatus.md` | Maßgebliche Statusmatrix (Wahrheitsquelle für OPT-* Einträge) |
 | `docs/reports/optimierungsstatus.json` | Maschinenlesbarer Zwilling der Statusmatrix |
 
-Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator und CI-Guard.
+Nächste Priorität: Task-Index-Generator und CI-Guard (TASK-CTL-003). GitHub Issue Forms und PR-Template sind zurückgestellt.
 
 ```bash
 python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json

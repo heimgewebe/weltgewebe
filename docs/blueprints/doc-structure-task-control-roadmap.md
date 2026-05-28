@@ -102,32 +102,19 @@ Akzeptanz:
 - High-Priority-Tasks haben Akzeptanzkriterien.
 - Geschlossene Tasks haben Evidenz.
 
-## Phase 3: GitHub-native Arbeitsobjekte anbinden
+## Phase 3: GitHub-native Arbeitsobjekte evaluieren
 
-Scope:
+Status: **zurückgestellt / optional.**
 
-```text
-.github/ISSUE_TEMPLATE/*.yml
-.github/pull_request_template.md
-.github/release.yml
-docs/process/labels.md
-```
+Issue Forms, PR-Template und Release-Konfiguration werden derzeit nicht eingeführt. Der Nutzen ist gegenüber freien, kontextgenauen PR-Bodies noch nicht belegt. Zu starre Templates können Agents schlechter machen, weil sie Formulartext statt präziser Evidenzberichte erzeugen.
 
-Änderungen:
+Wiederaufnahmebedingungen:
 
-- Issue Forms einführen.
-- Leichtes PR-Meta-Template einführen.
-- Label-Taxonomie dokumentieren.
-- Optional GitHub Project v2 konfigurieren, aber nur nach Klärung von Rechten
-  und Ownern.
+- Externe Beitragende ohne Projekteinblick werden relevant.
+- PR-Bodies verlieren wiederholt Task-ID, Evidenz oder Restlücken.
+- Release-Prozess und Release-Labels sind stabil genug, um eine Release-Konfiguration sinnvoll zu machen.
 
-Akzeptanz:
-
-- Neue Arbeitspakete enthalten Task-ID, Bereich, Priorität und
-  Akzeptanzkriterien.
-- PRs verweisen auf Tasks, Docs oder Issues.
-- Labels folgen derselben Taxonomie wie Issue Forms und Release Notes.
-- Das Template bleibt kurz genug, damit keine Formularlyrik entsteht.
+Bis dahin ist Phase 4 / `TASK-CTL-003` führend: Task-Index-Generator und CI-Guard.
 
 ## Phase 4: Generator und Guard integrieren
 
@@ -183,8 +170,8 @@ Akzeptanz:
 |---|---|---|---|
 | PR 1 | Navigation reparieren | `README.md`, `CONTRIBUTING.md`, `docs/index.md`, `repo.meta.yaml` | Links korrekt, reale Topologie, Rollen erklärt |
 | PR 2 | Task-Artefakte | `docs/tasks/*`, `docs/reports/optimierungsstatus.json` | JSON valide, Top-Prioritäten sichtbar |
-| PR 3 | GitHub-Struktur | Issue Forms, PR-Template, Release-Konfig, Labels-Doku | strukturierte Issues und Release-Kategorien |
-| PR 4 | Generator und CI | Docmeta-Skripte, Task-Index-Workflow | deterministische Prüfung, Drift-Erkennung |
+| PR 3 | GitHub-Struktur | Issue Forms, PR-Template, Release-Konfig | zurückgestellt / optional — Wiederaufnahme nur bei belegtem Bedarf |
+| PR 4 | Generator und CI | Docmeta-Skripte, Task-Index-Workflow | deterministische Prüfung, Drift-Erkennung — **nächste Priorität** |
 | PR 5 | Implementierungs-Mapping | `audit/impl-registry.yaml`, generierte Diagnosen | Kernpfade verknüpft und belegbar |
 
 ## Messbare Erfolgskriterien

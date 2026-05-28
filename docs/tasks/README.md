@@ -51,9 +51,17 @@ neu bewertet und in `CONTRIBUTING.md` dokumentiert werden.
 | Phase | Artefakte | Status |
 |---|---|---|
 | Phase 2 | `docs/tasks/*`, `docs/reports/optimierungsstatus.json`, Validator | **Vorhanden** |
-| Phase 3 | `.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md` | Geplant |
-| Phase 4 | `scripts/docmeta/generate_task_index.py`, CI-Guard | Geplant |
+| Phase 3 | `.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md` | **Zurückgestellt** — kein belegter Mehrwert gegenüber freien PR-Bodies |
+| Phase 4 | `scripts/docmeta/generate_task_index.py`, CI-Guard | **Nächste Priorität** (TASK-CTL-003) |
 | Phase 5 | `audit/impl-registry.yaml`-Ausbau | Geplant |
+
+## GitHub-Arbeitsobjekte
+
+Issue Forms, PR-Template und Release-Konfiguration sind aktuell zurückgestellt. Sie sind keine Voraussetzung für die Task-Control-Schicht.
+
+Begründung: Der aktuelle Engpass ist nicht fehlende Formularstruktur, sondern Drift-Gefahr zwischen Task-Board, Task-Index, Optimierungsstatus und Evidenz. Der nächste operative Schritt ist daher `TASK-CTL-003`: Task-Index-Generator und CI-Guard.
+
+Wiederaufnahme ist sinnvoll, wenn externe Beitragende ohne Projekteinblick aktiv werden, PR-Bodies wiederholt Task-/Evidenzbezüge verlieren oder der Release-Prozess stabil genug für Release-Labels ist.
 
 ## Validator
 
