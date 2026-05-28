@@ -42,6 +42,7 @@ name: Auth Passkey Register Proof
       - "Cargo.toml"
       - "Cargo.lock"
       - "toolchain.versions.yml"
+      - ".node-version"
       - ".github/workflows/auth-passkey-register-proof.yml"
   push:
     branches: [main]
@@ -57,6 +58,7 @@ name: Auth Passkey Register Proof
       - "Cargo.toml"
       - "Cargo.lock"
       - "toolchain.versions.yml"
+      - ".node-version"
       - ".github/workflows/auth-passkey-register-proof.yml"
   workflow_dispatch: {}
 
@@ -87,7 +89,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RUST_VERSION="$(sed -nE "s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p" toolchain.versions.yml | head -n1 | xargs)"
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
           if [ -z "${RUST_VERSION}" ]; then
             echo "failed to parse rust version from toolchain.versions.yml" >&2
             exit 1
