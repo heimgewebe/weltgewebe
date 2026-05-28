@@ -618,16 +618,59 @@ async fn request_login_unknown_user_returns_identical_response() -> Result<()> {
 
 #[tokio::test]
 #[serial]
-#[cfg(feature = "integration-testing")]
 async fn request_login_rejects_overlong_email_with_generic_response() -> Result<()> {
     // Guards against unbounded work (hashing, rate-limit lookups, mailer dispatch) on
     // arbitrary client input. Anti-Enumeration parity must hold: the response shape
     // matches the known-/unknown-user baseline above and emits no Set-Cookie.
-    // Critically: verifies that NO token is created for overlong emails,
-    // proving the guard skips downstream token generation.
-    //
-    // Uses a KNOWN account with an overlong email to prove that the guard prevents
-    // token creation: without the guard, a token would be created.
+    let mut state = test_state()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let app = app(state);
+
+    // Create an overlong email (260 bytes)
+    let local_part = "overlong".repeat(30); // ~240 bytes
+    let email_long = format!("{}@example.com", local_part);
+    let email_long = if email_long.len() < 260 {
+        let padding = "x".repeat(260 - email_long.len());
+        format!("{}{}@example.com", local_part, padding)
+    } else {
+        email_long[..260].to_string()
+    };
+
+    let body_str = format!(r#"{{"email":"{}"}}"#, email_long);
+
+    let req = Request::post("/auth/magic-link/request")
+        .header("Content-Type", "application/json")
+        .body(body::Body::from(body_str))?;
+
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let headers = res.headers().clone();
+    assert!(
+        headers.get_all("set-cookie").iter().next().is_none(),
+        "overlong-email rejection must not emit any Set-Cookie header"
+    );
+
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
+
+    assert_eq!(body_val["ok"], true);
+    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
+    assert!(!body_val.to_string().contains(&local_part));
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+#[cfg(feature = "integration-testing")]
+async fn request_login_overlong_known_email_skips_token_creation() -> Result<()> {
+    // Prove that NO token is created for overlong emails when sent to a known account.
+    // This is the critical proof that the MAX_EMAIL_LEN guard prevents downstream work
+    // (token generation) for overlong inputs, even for known accounts.
+    // Without the guard, a token WOULD be created for this known account.
     let mut state = test_state_with_accounts()?;
     state.config.auth_public_login = true;
     state.config.app_base_url = Some("http://localhost".to_string());
@@ -635,7 +678,6 @@ async fn request_login_rejects_overlong_email_with_generic_response() -> Result<
     // Create an account with a 260-byte email
     let local_part = "overlong".repeat(30); // ~240 bytes
     let email_long = format!("{}@example.com", local_part);
-    // Pad to exactly 260 bytes if needed
     let email_long = if email_long.len() < 260 {
         let padding = "x".repeat(260 - email_long.len());
         format!("{}{}@example.com", local_part, padding)
@@ -674,19 +716,6 @@ async fn request_login_rejects_overlong_email_with_generic_response() -> Result<
 
     let res = app.oneshot(req).await?;
     assert_eq!(res.status(), StatusCode::OK);
-
-    let headers = res.headers().clone();
-    assert!(
-        headers.get_all("set-cookie").iter().next().is_none(),
-        "overlong-email rejection must not emit any Set-Cookie header"
-    );
-
-    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
-    let body_val: serde_json::Value = serde_json::from_slice(&body)?;
-
-    assert_eq!(body_val["ok"], true);
-    assert_eq!(body_val["message"], GENERIC_LOGIN_MSG);
-    assert!(!body_val.to_string().contains(&local_part));
 
     // Prove that NO token was created for the overlong email (guards against token generation).
     // Without the MAX_EMAIL_LEN check, a token WOULD be created for this known account.
