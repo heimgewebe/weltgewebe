@@ -44,11 +44,11 @@ relations:
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
 | OPT-DOC-001 | Runbooks: `docs/runbooks/incident-response.md` + `db-recovery.md` | Eigenständige Abläufe, kein DSGVO-Leak-Risiko |
 
-## Erledigte Tasks (Phase 1–3 Referenz)
+## Erledigte Tasks
 
 | ID | Bereich | Titel | Evidenz |
 |---|---|---|---|
-| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `scripts/docmeta/validate_task_index.py`, Tests passed |
+| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `docs/reports/optimierungsstatus.json`, `scripts/docmeta/validate_task_index.py`, `scripts/docmeta/tests/test_validate_task_index.py` |
 | OPT-MAP-001 | map | Basemap Runtime Proof | CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |
 | OPT-API-002 | api | Session-Persistenz PostgreSQL | `apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, CI PROVEN, Commit `00a43a00` |
