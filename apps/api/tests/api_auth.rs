@@ -737,32 +737,25 @@ async fn request_login_overlong_known_email_skips_token_creation() -> Result<()>
 fn generate_rfc_email_with_length(target_len: usize) -> String {
     const LOCAL_PART_LEN: usize = 64;
     const AT_LEN: usize = 1;
-    const LABEL_WITH_DOT_LEN: usize = 63; // 62 'a's + 1 dot
+    const MAX_LABEL_LEN: usize = 63; // RFC 1035 DNS label limit
 
     let local_part = "a".repeat(LOCAL_PART_LEN);
-    let domain_len = target_len.saturating_sub(LOCAL_PART_LEN + AT_LEN);
+    let domain_bytes_available = target_len.saturating_sub(LOCAL_PART_LEN + AT_LEN);
 
     let mut domain = String::new();
-    let mut remaining = domain_len;
+    let mut remaining = domain_bytes_available;
 
-    // Build domain using 62-char labels with dots (63 bytes each)
-    while remaining >= LABEL_WITH_DOT_LEN {
-        domain.push_str(&"a".repeat(62));
+    // Build labels separated by dots, with final label having no trailing dot
+    while remaining > MAX_LABEL_LEN {
+        // Add a full 63-byte label + dot
+        domain.push_str(&"a".repeat(MAX_LABEL_LEN));
         domain.push('.');
-        remaining -= LABEL_WITH_DOT_LEN;
+        remaining -= MAX_LABEL_LEN + 1; // 63 bytes label + 1 byte dot
     }
 
-    // Handle remaining bytes
+    // Add final label with all remaining bytes (no trailing dot)
     if remaining > 0 {
-        if remaining >= 2 {
-            // Add final label with padding and "co" TLD
-            let padding_len = remaining - 2;
-            domain.push_str(&"a".repeat(padding_len));
-            domain.push_str("co");
-        } else {
-            // Shouldn't happen with proper boundary calculations, but handle edge case
-            domain.push_str(&"a".repeat(remaining));
-        }
+        domain.push_str(&"a".repeat(remaining));
     }
 
     format!("{}@{}", local_part, domain)
