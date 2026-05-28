@@ -72,7 +72,10 @@ just down
 
 ### Build- und Konfigurationsdetails
 
-- Die API liefert `/version` mit Build-Metadaten. `GIT_COMMIT_SHA`, `CARGO_PKG_VERSION` und `BUILD_TIMESTAMP` werden vom CI gesetzt; ohne CI-Kontext fallen sie auf `"unknown"` zurück. Sie werden **nicht** in `.env` gepflegt.
+- Die API liefert `/version` mit Build-Metadaten:
+  - `version` kommt aus `env!("CARGO_PKG_VERSION")` (Cargo-Paketmetadaten; **kein Fallback** auf `"unknown"`).
+  - `GIT_COMMIT_SHA` und `BUILD_TIMESTAMP` sind optional; sie fallen über `option_env!(...).unwrap_or("unknown")` auf `"unknown"` zurück, wenn nicht vom CI gesetzt.
+  - Diese Werte werden **nicht** in `.env` gepflegt.
 - Defaults: [`configs/app.defaults.yml`](configs/app.defaults.yml). Overrides via Env-Variablen `HA_FADE_DAYS`, `HA_RON_DAYS`, `HA_ANONYMIZE_OPT_IN`, `HA_DELEGATION_EXPIRE_DAYS` oder `APP_CONFIG_PATH`.
 - Policies-Pfad-Override: `POLICY_LIMITS_PATH=/pfad/zur/limits.yaml`.
 

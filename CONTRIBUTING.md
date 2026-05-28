@@ -21,25 +21,28 @@ Kurzprinzip: **„Richtig routen, klein schneiden, sauber messen."**
 
 ## 1. Reale Repo-Topographie
 
+**Auszug der Hauptverzeichnisse** (vollständige Discovery-Liste siehe [`repo.meta.yaml:discovery_roots`](repo.meta.yaml)):
+
 ```text
+.github/
+  workflows/           # CI/CD
 apps/
   api/                 # Rust/Axum HTTP-API
   web/                 # SvelteKit-Frontend
+architecture/          # Architektur-Notizen
+audit/                 # impl-registry.yaml — Implementierungs-Mapping
+configs/               # App-Defaults (app.defaults.yml)
 contracts/
   domain/              # JSON-Schema-Domain-Contracts (höchste Wahrheits-Präzedenz)
+docs/                  # ADRs, Blueprints, Specs, Reports, Policies, _generated/
 infra/
   caddy/               # Reverse Proxy
   compose/             # Docker-Compose-Profile
-docs/                  # ADRs, Blueprints, Specs, Reports, Policies, _generated/
-ci/                    # Budgets, Smoke-Tests
-scripts/               # Tooling, insb. scripts/docmeta/ für Doku-Indexer und Guards
-.github/
-  workflows/           # CI/CD
-audit/                 # impl-registry.yaml — Implementierungs-Mapping
 policies/              # Soft-Limits (limits.yaml, perf.json, retention.yml, slo.yaml ...)
-configs/               # App-Defaults (app.defaults.yml)
-architecture/          # Architektur-Notizen
-runbooks/              # Operative Runbooks
+scripts/               # Tooling, insb. scripts/docmeta/ für Doku-Indexer und Guards
+src/                   # Gemeinsame Sources
+tools/                 # Development Tools
+ci/                    # Budgets, Smoke-Tests
 Root                   # Justfile, Makefile, repo.meta.yaml, AGENTS.md, README.md, Lizenz
 ```
 
@@ -88,7 +91,7 @@ Outbox-Projektoren (Timeline, Search), DSGVO-/DR-Rebuilder und Search-Adapter ha
 | `docs/reports/*` | Diagnostische Berichte und Statusmatrizen mit Evidenz | guarded |
 | `docs/index.md` | Navigation, **keine** Wahrheit | guarded |
 | `docs/_generated/*` | Diagnose, automatisch generiert | **forbidden** für manuelle Edits |
-| `audit/impl-registry.yaml` | Implementations-Mapping | guarded |
+| `audit/impl-registry.yaml` | Implementations-Mapping | siehe `repo.meta.yaml` / `agent-policy.yaml` (nicht als guarded geführt) |
 | `docs/tasks/*` | Geplante Task-Control-Schicht (Roadmap) | noch nicht eingeführt — nicht ohne Roadmap-Phase 2 anlegen |
 | `secrets/`, `snapshots/` | Sensitive Daten / Snapshots | **forbidden** |
 
@@ -99,9 +102,10 @@ Vollständige bindende Pfadliste siehe [`agent-policy.yaml`](agent-policy.yaml).
 - Branch-Strategie: kurzes Feature-Branching gegen `main`. Kleine, thematisch fokussierte Pull Requests.
 - Commit-Präfixe: `feat(web): …`, `feat(api): …`, `feat(infra): …`, `fix(...)`, `chore(...)`, `refactor(...)`, `docs(adr|runbook|...)`.
 - PR-Prozess:
-  1. Lokal: Lints, Tests und Budgets ausführen (`just check`).
-  2. PR klein halten; Zweck und „Wie getestet" kurz erläutern.
-  3. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
+  1. Lokal: `just check` für schnelle Hygiene-Checks (Rust fmt/clippy/test, Demo-Daten, Domain-Contracts, `cargo deny`).
+  2. Bei Änderungen unter `apps/web/`: zusätzlich `just ci` oder spezifische Web-Checks in `apps/web/` ausführen (Web-Install, Sync, Build, `pnpm run ci`).
+  3. PR klein halten; Zweck und „Wie getestet" kurz erläutern.
+  4. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
 - CI-Gates (brechen Builds):
   - Frontend-Budget aus `ci/budget.json` (Initial-JS ≤ 60 KB, TTI ≤ 2000 ms).
   - Lints/Formatter: Web (ESLint/Prettier, `max-warnings=0`), Rust (`cargo fmt`, `cargo clippy -D warnings`).
