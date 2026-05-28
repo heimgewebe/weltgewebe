@@ -24,7 +24,7 @@ relations:
 
 | ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |
 |---|---|---|---|---|---|---|
-| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | partial | high | Phase-2-PR (dieser PR) | PR mergen, Validator-Pass bestätigen |
+| TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | partial | high | `docs/tasks/README.md`, `scripts/docmeta/validate_task_index.py` | PR mergen, Validator-Pass bestätigen |
 | OPT-API-001 | api | Paginierung Listen-Endpunkte | partial | high | `apps/api/src/routes/nodes.rs` | Cursor-Variante + Response-Metadaten implementieren |
 | OPT-CON-001 | ci | `additionalProperties: false` + String-Constraints | partial | high | `contracts/domain/node.schema.json` | Schema-für-Schema-Audit abschließen |
 | OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | partial | high | `docs/runbook.md` | Eigenständige Runbooks unter `docs/runbooks/` erstellen |
@@ -41,7 +41,7 @@ relations:
 
 | ID | PR-Schnitt | Akzeptanzkriterium |
 |---|---|---|
-| TASK-CTL-002 | Phase 3: `.github/ISSUE_TEMPLATE/*.yml` + PR-Template | Issue Forms existieren, PR-Template verlinkt Task-Index |
+| TASK-CTL-003 | Phase 4: `scripts/docmeta/generate_task_index.py` + CI-Guard | Deterministischer Task-Index, Drift-Erkennung im CI |
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
 | OPT-DOC-001 | Runbooks: `docs/runbooks/incident-response.md` + `db-recovery.md` | Eigenständige Abläufe, kein DSGVO-Leak-Risiko |
 

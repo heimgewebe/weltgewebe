@@ -117,13 +117,15 @@ Validator lokal ausführen:
 python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 ```
 
+### GitHub-Arbeitsobjekte (Phase 3 — bewusst zurückgestellt)
+
+Issue Forms, PR-Template und Release-Konfiguration werden aktuell nicht eingeführt. Begründung: Ein fixes PR-Template erhöht den Formular-Overhead und kann Agents schlechter machen, weil sie dann Formulartext produzieren statt kontextgenau zu berichten. Der eigentliche Engpass ist die manuelle Drift-Gefahr im Task-Index — nicht fehlende Formulare.
+
+Issue Forms können später separat eingeführt werden, wenn externe Beitragende ohne Projekteinblick aktiv werden. Release-Konfiguration kann separat betrachtet werden, wenn der Release-Prozess stabilisiert ist.
+
 Noch offen für Folge-PRs:
 
-- GitHub Issue Forms
-- PR-Template
-- Release-Konfig
-- Task-Index-Generator
-- CI-Guard / Workflow
+- **Task-Index-Generator und CI-Guard** (TASK-CTL-003) — nächste Priorität
 - Implementierungs-Mapping-Ausbau
 
 ## 5. Arbeitsweise und Workflow
