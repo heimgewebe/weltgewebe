@@ -10,6 +10,10 @@ summary: >
 
 ## Canonical Knowledge
 
+> Dieser Index ist kanonische Navigation, keine eigenständige Wahrheitsschicht.
+> Bei Konflikten führen Spezifikationen, ADRs, Policies, Statusmatrizen und
+> Code gemäß `repo.meta.yaml`.
+
 <!--
 NOTE:
 Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
@@ -27,7 +31,13 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Techstack:** [techstack.md](techstack.md)
 – **Datenmodell:** [datenmodell.md](datenmodell.md)
 – **Vision:** [vision.md](vision.md)
+
+### Agenten & Arbeitssteuerung
+
 – **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
+– **Dokumentationsstruktur & Task-Steuerung:** [blueprints/doc-structure-task-control.md](blueprints/doc-structure-task-control.md) (Blueprint)
+– **Task-Control Roadmap:** [blueprints/doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md) (Roadmap)
+– **Task-Control Beispiele:** [blueprints/doc-structure-task-control-examples.md](blueprints/doc-structure-task-control-examples.md) (Referenz)
 
 ### Domäne
 
