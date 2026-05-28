@@ -336,6 +336,22 @@ Der zuvor offene positive Register-Verify-Pfad ist jetzt lokal mit einem echten 
 
 ---
 
+## 10a. Nachtrag 2026-05-28 — CI-Job hinzugefügt (grüner Lauf steht noch aus)
+
+Der dedizierte CI-Job für denselben positiven Browser-Proof ist hinzugefügt.
+
+- Workflow: `.github/workflows/auth-passkey-register-proof.yml`
+- Job: `auth-passkey-register-proof`
+- Trigger: `pull_request` und `push` auf `main` mit Pfaden, die den Proof-Stack betreffen (kein `if:`-Guard, kein workflow_dispatch-only)
+- Schritt: `pnpm test:proof:auth-passkey-register` aus `apps/web`
+- API-Start: über `playwright.auth.proof.config.ts` mit `cargo run --locked --features integration-testing` (Pre-Build-Schritt im Workflow)
+- Toolchain: Rust aus `toolchain.versions.yml`, Node aus `.node-version`, pnpm 9.11.0, Playwright Chromium mit System-Deps
+- Scope-Trennung: der Job führt ausschließlich `passkey-register-positive.proof.ts` aus. Der Basemap-Proof bleibt in `.github/workflows/basemap-runtime-proof.yml`; `playwright.proof.config.ts` bleibt auf `basemap-real-hamburg-visual.proof.ts` beschränkt.
+- Erwartete Proof-Summary: `register_options_status: 200`, `register_verify_status: 200`, `register_verify_set_cookie: null`, `session_cookie_unchanged: true`, `stored_credential_reflected: true`, `virtual_authenticator_credentials > 0`
+- Statuslogik: CI-Job hinzugefügt; grüner Lauf steht noch aus. Status bleibt `READY_FOR_CI_PROOF`, bis ein grüner Lauf referenziert werden kann. Erst dann darf die Doku auf `PROVEN` aktualisiert werden (mit Run-ID/Link/Commit).
+
+---
+
 ## 11. Diagnoseausgaben (Rohdaten)
 
 ### git status --short
