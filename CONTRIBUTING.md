@@ -1,183 +1,115 @@
-Hier ist das finale CONTRIBUTING.md – optimiert, konsistent mit docs/architekturstruktur.md, und so
-geschrieben, dass Menschen
-und KIs sofort wissen, was wohin gehört, warum, und wie gearbeitet wird.
+# CONTRIBUTING
 
-⸻
+Wie im Weltgewebe-Repository gearbeitet wird: Orientierung, Routing, Workflow, Qualität.
 
-# CONTRIBUTING.md
+Verbindliche Grundlagen vor jedem Patch:
 
-## Weltgewebe – Beiträge, Qualität, Wegeführung
+- [`repo.meta.yaml`](repo.meta.yaml) — Truth Model und Konfliktauflösung.
+- [`AGENTS.md`](AGENTS.md) — Agentenleitfaden und Coding Guidelines.
+- [`agent-policy.yaml`](agent-policy.yaml) — Schreibrechte und Required Checks.
+- [`docs/policies/agent-reading-protocol.md`](docs/policies/agent-reading-protocol.md) — bindendes Lese- und Abbruchprotokoll.
 
-Dieses Dokument erklärt, wie im Weltgewebe-Repository gearbeitet wird: Ordner-Orientierung,
-Workflows, Qualitätsmaßstäbe und
-Entscheidungswege.
+Weitere Referenzen:
 
-Es baut auf folgenden Dateien auf:
+- [`docs/architekturstruktur.md`](docs/architekturstruktur.md) — Repo-Architekturüberblick.
+- [`docs/techstack.md`](docs/techstack.md) — Stack-Referenz (SvelteKit, Rust/Axum, Postgres + Outbox, JetStream, Caddy).
+- [`docs/runbook.md`](docs/runbook.md) — Betrieb, DR/DSGVO-Drills.
+- [`docs/datenmodell.md`](docs/datenmodell.md) — Tabellen, Projektionen, Events.
+- [`ci/budget.json`](ci/budget.json) — Performance-Budgets.
 
-- docs/architekturstruktur.md – verbindliche Repo-Struktur (Ordner, Inhalte, Zweck).
-- docs/techstack.md – Stack-Referenz (SvelteKit, Rust/Axum, Postgres+Outbox, JetStream, Caddy,
-  Observability).
-- ci/budget.json – Performance-Budgets (Frontend).
-- docs/runbook.md – Woche-1/2, DR/DSGVO-Drills.
-- docs/datenmodell.md – Tabellen, Projektionen, Events.
+Kurzprinzip: **„Richtig routen, klein schneiden, sauber messen.“**
 
-Kurzprinzip: „Richtig routen, klein schneiden, sauber messen.“ Beiträge landen im richtigen Ordner,
-klein und testbar, mit
-Metriken und Budgets im Blick.
+## 1. Reale Repo-Topographie
 
-⸻
+**Auszug wichtiger Hauptverzeichnisse und Hilfsbereiche**  
+Vollständige Discovery-Liste: [`repo.meta.yaml:discovery_roots`](repo.meta.yaml).
 
-## 1. Repo-Topographie in 30 Sekunden
+```text
+.github/
+  workflows/           # CI/CD
+apps/
+  api/                 # Rust/Axum HTTP-API
+  web/                 # SvelteKit-Frontend
+architecture/          # Architektur-Notizen
+audit/                 # impl-registry.yaml — Implementierungs-Mapping
+configs/               # App-Defaults (app.defaults.yml)
+contracts/
+  domain/              # JSON-Schema-Domain-Contracts
+docs/                  # ADRs, Blueprints, Specs, Reports, Policies, _generated/, tasks/
+infra/
+  caddy/               # Reverse Proxy
+  compose/             # Docker-Compose-Profile
+policies/              # Soft-Limits, Performance, Retention, SLOs
+scripts/               # Tooling, insbesondere scripts/docmeta/
+src/                   # Gemeinsame Sources
+tools/                 # Development Tools
+ci/                    # Budgets, Smoke-Tests
+Root                   # Justfile, Makefile, repo.meta.yaml, AGENTS.md, README.md, Lizenz
+```
 
-- apps/ – Business-Code (Web-Frontend, API, Worker, optionale Search-Adapter).
-- packages/ – gemeinsame Libraries/SDKs (optional).
-- infra/ – Compose-Profile, Proxy (Caddy), DB-Init, Monitoring, optional Nomad/K8s.
-- docs/ – ADRs, Architektur-Poster, Datenmodell, Runbook.
-- ci/ – GitHub-Workflows, Skripte, Performance-Budgets.
-- Root – .env.example, Editor/Git-Konfig, Lizenz, README.
+Noch nicht als reale Zielstruktur zu verwenden: `apps/worker/`, `apps/search/` und gemeinsame Library-Pakete unter `packages/`. Diese Strukturen sind Zielbild oder spätere Gate-Arbeit. Patches dürfen sie nicht nebenbei erfinden.
 
-Details: siehe docs/architekturstruktur.md.
-
-⸻
+Details: siehe [`docs/architekturstruktur.md`](docs/architekturstruktur.md).
 
 ## 2. Routing-Matrix „Wohin gehört was?“
 
-- Neue Seite oder Route im UI
-  - Zielordner/Datei: apps/web/src/routes/...
-  - Typisches Pattern: +page.svelte, +page.ts, +server.ts.
-  - Grund: SvelteKit-Routing, SSR/Islands, nahe an UI.
+Nur reale Zielordner. Was nicht existiert, wird hier nicht als Gegenwart aufgelistet.
 
-- UI-Komponente, Store oder Util
-  - Zielordner/Datei: apps/web/src/lib/...
-  - Typisches Pattern: *.svelte, stores.ts, utils.ts.
-  - Grund: Wiederverwendung, klare Trennung vom Routing.
+- **Neue Seite oder Route im UI:** `apps/web/src/routes/...` (`+page.svelte`, `+page.ts`, `+server.ts`).
+- **UI-Komponente, Store, Util:** `apps/web/src/lib/...`.
+- **Statische Assets:** `apps/web/static/`.
+- **Neuer API-Endpoint:** `apps/api/src/routes/...`; reale Route-Module: `accounts`, `auth`, `edges`, `health`, `meta`, `nodes`, `query`.
+- **Auth-Logik:** `apps/api/src/auth/...` (Sessions, Passkeys, Tokens, Rate-Limiting, Rollen).
+- **Middleware:** `apps/api/src/middleware/...` (Auth, AuthZ, CSRF).
+- **Querschnitt:** `apps/api/src/{config,state,mailer,utils}.rs`, `apps/api/src/telemetry/...`.
+- **DB-Migrationen:** `apps/api/migrations/` (`YYYYMMDDHHMM__beschreibung.sql`).
+- **Compose-Profile:** `infra/compose/*.yml`.
+- **Proxy, Headers, CSP:** `infra/caddy/`.
+- **CI-Workflow:** `.github/workflows/*.yml`.
+- **Performance-Budget:** `ci/budget.json`.
+- **Soft-Limits / SLOs:** `policies/`.
+- **App-Defaults:** `configs/app.defaults.yml`.
+- **Architektur-Entscheidung:** `docs/adr/ADR-xxx__<slug>.md`.
+- **Architektur-Blaupause:** `docs/blueprints/<slug>.md`.
+- **Spezifikation:** `docs/specs/<slug>.md`.
+- **Statusbericht / Diagnose:** `docs/reports/<slug>.md` plus optional dokumentierter `.json`-Zwilling.
+- **Runbook:** `docs/runbook.md` oder vorhandene Runbook-Pfade gemäß `docs/index.md`.
+- **Domain-Contract:** `contracts/domain/<entity>.schema.json`.
+- **Task-Control-Artefakt:** `docs/tasks/...`.
+- **Doku-Indexer / Relations-Skript:** `scripts/docmeta/`.
 
-- Statische Assets
-  - Zielordner/Datei: apps/web/static/.
-  - Typisches Pattern: manifest.webmanifest, Icons, Fonts.
-  - Grund: Build-unabhängige Auslieferung.
+Fachliche Trennungen wie `apps/api/src/domain/`, `apps/api/src/repo/` oder `apps/api/src/events/` sind Zielbild, aber aktuell nicht als reale Zielordner zu verwenden. Neue Unterordner erst nach eigenem Architektur- oder Refactoring-PR einführen — nicht als freie Routing-Entscheidung.
 
-- Neuer API-Endpoint
-  - Zielordner/Datei: apps/api/src/routes/...
-  - Typisches Pattern: mod.rs, Handler, Router.
-  - Grund: HTTP/SSE-Schnittstelle gehört in routes.
+Outbox-Projektoren, Search-Projektoren, DSGVO-/DR-Rebuilder und Search-Adapter entstehen erst mit der entsprechenden Gate-Phase.
 
-- Geschäftslogik oder Service
-  - Zielordner/Datei: apps/api/src/domain/...
-  - Typisches Pattern: Use-Case-Funktionen.
-  - Grund: Fachlogik von I/O trennen.
+## 3. Doku-Rollen und Schreibgrenzen
 
-- DB-Zugriff (nur PostgreSQL)
-  - Zielordner/Datei: apps/api/src/repo/...
-  - Typisches Pattern: sqlx-Queries, Mappings.
-  - Grund: Konsistente Datenzugriffe.
+| Pfad | Rolle | Schreibstatus |
+|---|---|---|
+| `repo.meta.yaml`, `AGENTS.md`, `agent-policy.yaml`, `docs/policies/*` | Kanonische Wahrheits- und Steuerungsschicht | guarded |
+| `contracts/domain/*.schema.json` | Höchste Wahrheits-Präzedenz | guarded, erfordert `contracts-domain-check` |
+| `docs/adr/*`, `docs/specs/*`, `docs/blueprints/*` | Normative Spezifikation und Architekturplanung | guarded |
+| `docs/reports/*` | Diagnostische Berichte und Statusmatrizen mit Evidenz | guarded |
+| `docs/index.md` | Navigation, **keine** Wahrheit | guarded |
+| `docs/tasks/*` | Task-Control-Arbeitssteuerung, **keine** Wahrheitsschicht | manuell kuratiert in Phase 2; Statuswechsel nur mit Evidenz |
+| `docs/_generated/*` | Diagnose, automatisch generiert | **forbidden** für manuelle Edits |
+| `audit/impl-registry.yaml` | Implementierungs-Mapping | dokumentiert; Änderungen nur mit konkretem Zielbeleg und Review |
+| `secrets/`, `snapshots/` | Sensitive Daten / Snapshots | **forbidden** |
 
-- Outbox-Publizierer oder Eventtypen
-  - Zielordner/Datei: apps/api/src/events/...
-  - Typisches Pattern: publish_*, Event-Schema.
-  - Grund: Transaktionale Events am System of Truth.
+Vollständige bindende Pfadliste siehe [`agent-policy.yaml`](agent-policy.yaml).
 
-- DB-Migrationen
-  - Zielordner/Datei: apps/api/migrations/.
-  - Typisches Pattern: YYYYMMDDHHMM__beschreibung.sql.
-  - Grund: Änderungsverfolgung am Schema.
+## 4. Task-Control-Artefakte
 
-- Timeline-Projektor
-  - Zielordner/Datei: apps/worker/src/projector_timeline.rs.
-  - Typisches Pattern: Outbox → Timeline.
-  - Grund: Read-Model separat, idempotent.
+`docs/tasks/` ist die Arbeitssteuerungs-Schicht. Sie macht offene Arbeit auffindbar, ersetzt aber keine Statusmatrix, keinen Report und keinen Codebeweis.
 
-- Search-Projektor
-  - Zielordner/Datei: apps/worker/src/projector_search.rs.
-  - Typisches Pattern: Outbox → Typesense/Meili.
-  - Grund: Indexing asynchron.
+- [`docs/tasks/README.md`](docs/tasks/README.md) erklärt Rolle, Grenzen und Pflege der Task-Control-Artefakte.
+- [`docs/tasks/board.md`](docs/tasks/board.md) ist eine **menschliche Arbeitskarte**, keine Wahrheitsschicht.
+- [`docs/tasks/index.json`](docs/tasks/index.json) ist ein **maschinenlesbarer Task-Index**. Manuelle Änderungen sind in Phase 2 erlaubt, solange `curation` klar als `"manual_phase2_seed"` oder vergleichbar markiert ist.
+- [`docs/tasks/schema.json`](docs/tasks/schema.json) ist der **Validierungsvertrag**. Änderungen brauchen einen begründeten PR.
+- [`docs/reports/optimierungsstatus.md`](docs/reports/optimierungsstatus.md) bleibt die menschliche Statusmatrix für OPT-* Einträge.
+- [`docs/reports/optimierungsstatus.json`](docs/reports/optimierungsstatus.json) ist deren maschinenlesbarer Zwilling, kein eigenständiger Statusträger.
 
-- DSGVO- oder DR-Rebuilder
-  - Zielordner/Datei: apps/worker/src/replayer.rs.
-  - Typisches Pattern: Replay/Shadow-Rebuild.
-  - Grund: Audit- und Forget-Pfad.
-
-- Search-Adapter oder SDK
-  - Zielordner/Datei: apps/search/adapters/...
-  - Typisches Pattern: typesense.ts, meili.ts.
-  - Grund: Client-Adapter gekapselt.
-
-- Compose-Profile
-  - Zielordner/Datei: infra/compose/*.yml.
-  - Typisches Pattern: compose.core.yml usw.
-  - Grund: Start- und Betriebsprofile.
-
-- Proxy, Headers, CSP
-  - Zielordner/Datei: infra/caddy/Caddyfile.
-  - Typisches Pattern: HTTP/3, TLS, CSP.
-  - Grund: Auslieferung & Sicherheit.
-
-- DB-Init und Partitionierung
-  - Zielordner/Datei: infra/db/{init,partman}/.
-  - Typisches Pattern: Extensions, Partman.
-  - Grund: Basis-Setup für PostgreSQL.
-
-- Monitoring
-  - Zielordner/Datei: infra/monitoring/...
-  - Typisches Pattern: prometheus.yml, Dashboards, Alerts.
-  - Grund: Metriken, SLO-Wächter.
-
-- Architektur-Entscheidung
-  - Zielordner/Datei: docs/adr/ADR-xxx.md.
-  - Typisches Pattern: Datum- oder Nummernschema.
-  - Grund: Nachvollziehbarkeit.
-
-- Runbook
-  - Zielordner/Datei: docs/runbook.md.
-  - Typisches Pattern: Woche-1/2, DR/DSGVO.
-  - Grund: Betrieb in der Praxis.
-
-- Datenmodell
-  - Zielordner/Datei: docs/datenmodell.md.
-  - Typisches Pattern: Tabellen/Projektionen.
-  - Grund: Referenz für API/Worker.
-
-⸻
-
-## 3. Arbeitsweise / Workflow
-
-Branch-Strategie: kurzes Feature-Branching gegen main.
-Kleine, thematisch fokussierte Pull Requests.
-
-Commit-Präfixe:
-
-- feat(web): … | feat(api): … | feat(worker): … | feat(infra): …
-- fix(...) | chore(...) | refactor(...) | docs(adr|runbook|...)
-
-PR-Prozess:
-
-1. Lokal: Lints, Tests und Budgets laufen lassen.
-2. PR klein halten, Zweck und „Wie getestet“ kurz erläutern.
-3. Bei Architektur- oder Sicherheitsauswirkungen: ADR oder Runbook-Update beilegen oder verlinken.
-
-CI-Gates (brechen Builds):
-
-- Frontend-Budget aus ci/budget.json (Initial-JS ≤ 60 KB, TTI ≤ 2000 ms).
-- Lints/Formatter (Web: ESLint/Prettier; API/Worker: cargo fmt, cargo clippy -D).
-- Tests (npm test, cargo test).
-- Sicherheitschecks (cargo audit/deny), Konfiglint (Prometheus, Caddy).
-
-Generierte Dateien sind abgeleitete Diagnoseartefakte. Sie sind nicht erforderlich für die Commit-Validität. CI regeneriert ausgewählte Diagnosen für die Beobachtbarkeit, und Drift in generierten Dateien wird nicht-blockierend berichtet.
-
-### Task-Control-Artefakte
-
-`docs/tasks/` ist die Arbeitssteuerungs-Schicht:
-
-- `docs/tasks/board.md` ist eine **menschliche Arbeitskarte**, keine Wahrheitsschicht.
-- `docs/tasks/index.json` ist ein **maschinenlesbarer Task-Index**.
-  Manuelle Änderungen sind erlaubt, solange `curation` klar als `"manual_phase2_seed"` oder `"manual"` gesetzt ist.
-  Sobald ein Generator eingeführt wird (Phase 4), muss der Schreibstatus neu bewertet werden.
-- `docs/tasks/schema.json` ist der **Validierungsvertrag** – Änderungen brauchen einen begründeten PR.
-- `docs/reports/optimierungsstatus.md` bleibt die **Wahrheitsquelle** für OPT-* Einträge.
-  `docs/reports/optimierungsstatus.json` ist deren maschinenlesbarer Zwilling, kein eigenständiger Statusträger.
-
-Kein Status in `index.json` oder `optimierungsstatus.json` darf dem Markdown widersprechen.
-Stille Status-Upgrades sind verboten. `done` erfordert Evidenz in der Statusmatrix.
+Kein Status in `docs/tasks/index.json` oder `docs/reports/optimierungsstatus.json` darf dem Markdown widersprechen. Stille Status-Upgrades sind verboten. `done` erfordert Evidenz.
 
 Validator lokal ausführen:
 
@@ -185,38 +117,85 @@ Validator lokal ausführen:
 python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
 ```
 
-Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator/CI-Guard.
+Noch offen für Folge-PRs:
 
-Blockierende Docs-Validierung ist zwischen lokal und CI deterministisch über `make ci-validate` (Alias zu `make validate`).
-Bei gemeldetem Drift in den Diagnoseartefakten soll der Drift zeitnah behoben oder bewusst dokumentiert werden. CI macht den Drift zusätzlich über Warning-Hinweise und Artefakt-Upload sichtbar.
+- GitHub Issue Forms
+- PR-Template
+- Release-Konfig
+- Task-Index-Generator
+- CI-Guard / Workflow
+- Implementierungs-Mapping-Ausbau
 
-### Domain-Contracts lokal validieren
+## 5. Arbeitsweise und Workflow
 
-Um die JSON-Schemas und Beispiele unter `contracts/domain/` lokal zu prüfen und sicherzustellen, dass sie
-mit der CI übereinstimmen, kann ein Validierungsskript ausgeführt werden.
+- Branch-Strategie: kurzes Feature-Branching gegen `main`.
+- Pull Requests: klein, thematisch fokussiert, mit klarer Evidenz.
+- Commit-Präfixe: `feat(web): …`, `feat(api): …`, `feat(infra): …`, `fix(...)`, `chore(...)`, `refactor(...)`, `docs(adr|runbook|...)`.
 
-**Voraussetzungen:**
+PR-Prozess:
+
+1. Lokal mindestens `just check` für schnelle Hygiene-Checks ausführen.
+2. Bei Änderungen unter `apps/web/`: zusätzlich `just ci` oder spezifische Web-Checks in `apps/web/` ausführen.
+3. Zweck, Scope und „Wie getestet“ im PR kurz erläutern.
+4. Bei Architektur- oder Sicherheitsauswirkungen: ADR, Blueprint, Report oder Runbook-Update beilegen oder verlinken.
+5. Keine generierten Diagnoseartefakte manuell editieren.
+
+Check-Logik:
+
+- `just check` = schneller lokaler Hygiene-Check: Rust fmt/clippy/test, Demo-Daten, Domain-Contracts, `cargo deny`.
+- `just ci` = breiterer CI-Spiegel, insbesondere bei Web/API-Änderungen.
+- `make ci-validate` = deterministische Doku-/Validierungsstrecke, Alias zu `make validate`.
+
+CI-Gates können Builds brechen:
+
+- Frontend-Budget aus `ci/budget.json`.
+- Lints/Formatter: Web (ESLint/Prettier, `max-warnings=0`), Rust (`cargo fmt`, `cargo clippy -D warnings`).
+- Tests (`pnpm test`, `cargo test --locked`).
+- Sicherheits- und Konsistenzchecks (`cargo deny`, `docs-guard.yml`, Compose-Smoke).
+
+Generierte Dateien unter `docs/_generated/` sind abgeleitete Diagnoseartefakte. CI kann sie für Beobachtbarkeit regenerieren; Drift wird gemeldet und soll zeitnah behoben oder bewusst dokumentiert werden.
+
+## 6. Domain-Contracts lokal validieren
+
+JSON-Schemas und Beispiele unter `contracts/domain/` prüfen:
+
+Voraussetzungen:
 
 - Node.js ≥ 20
-- `ajv-cli` und `ajv-formats` global installiert (z.B. mit `pnpm install -g ajv-cli ajv-formats`)
+- `ajv-cli` und `ajv-formats`, zum Beispiel:
 
-**Ausführung:**
+```bash
+pnpm install -g ajv-cli ajv-formats
+```
 
-- `just contracts-domain-check`
-- oder `npm run contracts:domain:check`
+Ausführung:
+
+```bash
+just contracts-domain-check
+```
+
+oder:
+
+```bash
+npm run contracts:domain:check
+```
 
 Das Skript kompiliert alle Schemas und validiert die Beispiel-Instanzen dagegen.
 
-## 4. Tooling-Differenzierung (Lokal vs. CI)
+## 7. Tooling-Differenzierung: lokal vs. CI
 
-- **`scripts/tools/yq-pin.sh`** – lokaler Installer für eine reproduzierbare Umgebung (ohne sudo).
-  Erkennt Download-Ziele, lädt mit Wiederholungen (`curl --retry*`), prüft Checksums und legt
-  alles unter `~/.local/bin` ab (inkl. PATH-Hinzufügung).
+- **`scripts/tools/yq-pin.sh`** — lokaler Installer für reproduzierbare Umgebung ohne `sudo`. Lädt `yq` mit Wiederholungen, prüft Checksums und legt das Binary unter `~/.local/bin` ab.
+- **CI-Workflows (`.github/workflows/ci.yml`)** — nutzen einen eigenen gepinnten `yq`-Installer, da Runner root-Rechte und ein frisches Dateisystem haben.
+- **Link-Prüfung** — im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige Parallelität). Der nächtliche Workflow (`links.yml`) ist Watchdog mit reduziertem Profil, kein hartes Qualitäts-Gate.
 
-- **CI-Workflows (`.github/workflows/ci.yml`)** – nutzen einen eigenen `yq`-Installer (gepinnte Version,
-  direkter Download), da Runner root-Rechte und ein frisches Dateisystem haben. So bleibt der
-  Workflow ohne Dotfiles/Cache deterministisch.
+## 8. Konflikt- und Drift-Regel
 
-- **Link-Prüfung:** Im CI läuft `lychee` mit strengen Parametern (`--retry`, niedrige Parallelität),
-  um Flakes zu vermeiden. Der nächtliche Workflow (`links.yml`) dient als Watchdog mit
-  reduziertem Profil und ist kein hartes Qualitäts-Gate.
+Wenn Dokumente widersprechen:
+
+1. `repo.meta.yaml` und explizite Contracts prüfen.
+2. Danach `AGENTS.md`, `agent-policy.yaml` und Policies prüfen.
+3. Danach ADRs, Specs, Blueprints, Reports und Codepfade prüfen.
+4. Navigation wie `docs/index.md` nicht als Wahrheit verwenden.
+5. Widerspruch nicht glätten. Blockieren, Befund dokumentieren, minimalen Patch vorschlagen.
+
+Wenn ein Pfad nicht existiert, wird er nicht als Gegenwarts-Zielpfad dokumentiert. Zielbilder müssen als Zielbilder markiert werden.
