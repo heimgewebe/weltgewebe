@@ -117,7 +117,7 @@ Die operative Arbeitssteuerung liegt in `docs/tasks/`:
 Noch nicht umgesetzt (Folge-PRs): GitHub Issue Forms, PR-Template, Release-Konfig, Generator und CI-Guard.
 
 ```bash
-python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
+python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 ```
 
 ## Beiträge & Docs

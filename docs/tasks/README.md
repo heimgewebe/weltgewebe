@@ -58,7 +58,7 @@ neu bewertet und in `CONTRIBUTING.md` dokumentiert werden.
 ## Validator
 
 ```bash
-python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
+python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 ```
 
 Exit 0 bei Erfolg, 1 bei Validierungsfehlern.

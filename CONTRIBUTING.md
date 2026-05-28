@@ -114,7 +114,7 @@ Kein Status in `docs/tasks/index.json` oder `docs/reports/optimierungsstatus.jso
 Validator lokal ausführen:
 
 ```bash
-python3 scripts/docmeta/validate_task_index.py docs/tasks/index.json
+python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 ```
 
 Noch offen für Folge-PRs:
