@@ -33,7 +33,8 @@
       "type": "object",
       "description": "Optional metadata for the message (z.B. Client-Infos oder Rendering-Hinweise).",
       "additionalProperties": {
-        "type": ["string", "number", "boolean", "null"]
+        "type": ["string", "number", "boolean", "null"],
+        "maxLength": 1000
       }
     }
   },
