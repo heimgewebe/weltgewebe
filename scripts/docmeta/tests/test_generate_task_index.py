@@ -215,6 +215,16 @@ class TestGenerateTaskIndex(unittest.TestCase):
             any("OPT-CON-001" in e and "board.md" in e for e in errors), errors
         )
 
+    def test_low_priority_task_not_in_board_passes(self):
+        # low-priority done/open tasks need not appear in board.md
+        self._write(
+            _index([_task(id="OPT-API-001", priority="low", status="open", evidence=[])]),
+            _board(),  # board is empty
+            _status([]),
+        )
+        errors = self._run()
+        self.assertFalse(any("board.md" in e for e in errors), errors)
+
     def test_done_without_evidence_fails(self):
         self._write(
             _index([_task(status="done", priority="medium", evidence=[])]),

@@ -58,10 +58,7 @@ KNOWN_ROOTS = (
     "contracts/",
     "docs/",
     "infra/",
-    "manifest/",
     "policies/",
-    "runbooks/",
-    "runtime/",
     "scripts/",
     "src/",
     "tools/",
@@ -214,11 +211,17 @@ def check_task_control(index, board_sections, status, repo_root):
                 f"and docs/reports/optimierungsstatus.json"
             )
 
-    # 3. Every index.json task must be visible somewhere in board.md.
+    # 3. High/medium open or partial tasks must be visible in board.md.
+    #    Low-priority, done, or deferred tasks do not need board-level visibility.
     for tid in sorted(index_ids):
-        if tid not in board_all:
+        task = index_tasks[tid]
+        status_val = task.get("status")
+        priority = task.get("priority")
+        must_be_visible = status_val in {"open", "partial"} and priority in {"high", "medium"}
+        if must_be_visible and tid not in board_all:
             errors.append(
-                f"docs/tasks/index.json task '{tid}' does not appear in docs/tasks/board.md (work-card drift)"
+                f"docs/tasks/index.json task '{tid}' is {priority}/{status_val} "
+                f"but does not appear in docs/tasks/board.md"
             )
 
     # Per-task business rules and path checks.
