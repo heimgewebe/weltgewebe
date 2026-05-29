@@ -121,9 +121,11 @@ def parse_board(text):
     """
     Parse board.md into a mapping of section-key -> set of task ids.
 
-    Task ids are collected from Markdown table rows (lines starting with '|')
-    within each section. Header and separator rows contain no matching ids and
-    are therefore harmless.
+    Task ids are collected from the *first* cell (the ID column) of Markdown
+    table rows (lines starting with '|') within each section. Restricting to
+    the first cell prevents task ids that are only mentioned in evidence,
+    rationale or next-action columns from being treated as board entries.
+    Header and separator rows contain no matching ids and are harmless.
     """
     sections = {
         "active": set(),
@@ -141,7 +143,11 @@ def parse_board(text):
             current = _classify_section(heading.group(1))
             continue
         if current and stripped.startswith("|"):
-            for match in TASK_ID_RE.finditer(line):
+            cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+            if not cells:
+                continue
+            first_cell = cells[0]
+            for match in TASK_ID_RE.finditer(first_cell):
                 sections[current].add(match.group(0))
     return sections
 

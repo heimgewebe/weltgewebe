@@ -366,6 +366,23 @@ class TestGenerateTaskIndex(unittest.TestCase):
         self.assertEqual(sections["deferred"], {"TASK-CTL-002"})
         self.assertEqual(sections["done"], {"TASK-CTL-001", "OPT-MAP-001"})
 
+    def test_parse_board_ignores_task_ids_outside_first_cell(self):
+        # Only the ID column drives board visibility; task ids mentioned in
+        # evidence / next-action columns must not count as board entries.
+        text = "\n".join(
+            [
+                "# Board",
+                "## Aktive Prioritäten",
+                "| ID | Info |",
+                "|---|---|",
+                "| OPT-API-001 | Mentions TASK-CTL-003 only as related work |",
+                "",
+            ]
+        )
+        sections = parse_board(text)
+        self.assertEqual(sections["active"], {"OPT-API-001"})
+        self.assertNotIn("TASK-CTL-003", sections["active"])
+
 
 if __name__ == "__main__":
     unittest.main()
