@@ -74,15 +74,18 @@
       "id": "TASK-CTL-003",
       "title": "Task-Index Generator und CI-Guard einführen",
       "area": "ci",
-      "status": "open",
+      "status": "partial",
       "priority": "medium",
       "effort": "M",
       "risk": "medium",
       "owner": "unknown",
-      "evidence": [],
+      "evidence": [
+        "scripts/docmeta/generate_task_index.py",
+        "scripts/docmeta/tests/test_generate_task_index.py",
+        ".github/workflows/task-index.yml"
+      ],
       "missing_evidence": [
-        "scripts/docmeta/generate_task_index.py nicht vorhanden",
-        "CI-Workflow .github/workflows/task-index.yml nicht vorhanden"
+        "CI-Lauf von .github/workflows/task-index.yml noch nicht nachgewiesen (erst nach PR/Run belegbar)"
       ],
       "acceptance": [
         "Generator erzeugt oder prüft docs/tasks/index.json deterministisch (--check-Modus)",
@@ -97,7 +100,7 @@
           "docs/blueprints/doc-structure-task-control-roadmap.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-05-29"
     },
     {
       "id": "OPT-API-001",

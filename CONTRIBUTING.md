@@ -117,6 +117,14 @@ Validator lokal ausführen:
 python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 ```
 
+Drift-Check lokal ausführen:
+
+```bash
+python3 -m scripts.docmeta.generate_task_index --check
+```
+
+Task-Control-Artefakte bleiben manuell kuratiert, werden aber durch den `--check`-Modus gegen Drift geprüft (Board ↔ Index ↔ Optimierungsstatus, Evidenz- und Doku-Pfade). Der Check ist ein Prüfmechanismus, keine neue Wahrheitsschicht, und schreibt keine Dateien. Automatische Generierung oder Bot-PRs bleiben eine spätere Entscheidung. Im CI läuft der Check über `.github/workflows/task-index.yml`.
+
 ### GitHub-Arbeitsobjekte (Phase 3 — bewusst zurückgestellt)
 
 Issue Forms, PR-Template und Release-Konfiguration werden aktuell nicht eingeführt. Begründung: Ein fixes PR-Template erhöht den Formular-Overhead und kann Agents schlechter machen, weil sie dann Formulartext produzieren statt kontextgenau zu berichten. Der eigentliche Engpass ist die manuelle Drift-Gefahr im Task-Index — nicht fehlende Formulare.
@@ -125,7 +133,7 @@ Issue Forms können später separat eingeführt werden, wenn externe Beitragende
 
 Noch offen für Folge-PRs:
 
-- **Task-Index-Generator und CI-Guard** (TASK-CTL-003) — nächste Priorität
+- **Task-Index-Generator und CI-Guard** (TASK-CTL-003) — Drift-Check (`generate_task_index.py --check`) und `.github/workflows/task-index.yml` eingeführt; CI-Lauf-Nachweis steht noch aus
 - Implementierungs-Mapping-Ausbau
 
 ## 5. Arbeitsweise und Workflow
