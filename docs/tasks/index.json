@@ -157,7 +157,7 @@
         "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
       "acceptance": [
-        "alle 6 Domain-Schemas haben additionalProperties: false",
+        "alle 6 Domain-Schemas schließen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Flächen sind wertseitig begrenzt",
         "String-Constraints (minLength, maxLength, pattern) konsistent gesetzt",
         "just contracts-domain-check pass"
       ],
