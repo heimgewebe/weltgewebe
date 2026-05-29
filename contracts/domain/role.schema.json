@@ -15,8 +15,22 @@
     },
     "permissions": {
       "type": "object",
-      "description": "Arbitrary permission flags and scopes for this role.",
-      "additionalProperties": true
+      "description": "Intentional extension surface: permission flags and scopes for this role. Keys stay deliberately open so the permission model can evolve without a schema change; values are constrained to booleans (flags), strings (single scope) or string arrays (scope lists) so that no arbitrary nested structures can be stored.",
+      "additionalProperties": {
+        "type": [
+          "boolean",
+          "string",
+          "array"
+        ],
+        "maxLength": 128,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "maxItems": 50,
+        "minLength": 1
+      }
     },
     "created_at": {
       "type": "string",

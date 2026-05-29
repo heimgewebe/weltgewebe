@@ -23,17 +23,27 @@
     },
     "content": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 10000
     },
     "in_reply_to_id": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "format": "uuid"
     },
     "metadata": {
       "type": "object",
-      "description": "Optional metadata for the message (z.B. Client-Infos oder Rendering-Hinweise).",
+      "description": "Intentional extension surface: open-keyed metadata for the message (z.B. Client-Infos oder Rendering-Hinweise). Keys stay deliberately open; values are constrained to scalar types so that no arbitrary nested structures can be stored.",
       "additionalProperties": {
-        "type": ["string", "number", "boolean", "null"]
+        "type": [
+          "string",
+          "number",
+          "boolean",
+          "null"
+        ],
+        "maxLength": 1000
       }
     }
   },
