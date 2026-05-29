@@ -40,10 +40,22 @@ jobs:
       (github.event_name == 'schedule')
     steps:
       - uses: actions/checkout@v4
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Install cargo-audit
@@ -69,10 +81,22 @@ jobs:
       (github.event_name == 'schedule' && github.event.schedule.cron == '10 3 * * 0')
     steps:
       - uses: actions/checkout@v4
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       - name: Install cargo-deny

@@ -52,10 +52,23 @@ jobs:
           print("configs/app.defaults.yml: OK")
           PY
 
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
           components: rustfmt, clippy
 
       - name: Cache cargo
@@ -81,10 +94,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -130,10 +156,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -167,10 +206,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -202,10 +254,22 @@ jobs:
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'security'))
     steps:
       - uses: actions/checkout@v4
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@v1
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Install cargo-audit
         run: cargo install cargo-audit --force --locked
       - name: cargo audit
