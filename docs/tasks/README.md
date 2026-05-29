@@ -43,8 +43,12 @@ Sie ergänzt die Statusmatrizen in `docs/reports/`, ist aber keine zweite Wahrhe
 ## Curation-Status
 
 Solange `curation: "manual_phase2_seed"` gesetzt ist, darf `index.json` manuell
-gepflegt werden. Sobald ein Generator eingeführt wird (Phase 4), muss der Schreibstatus
-neu bewertet und in `CONTRIBUTING.md` dokumentiert werden.
+gepflegt werden. Sobald ein echter Generator (mit Schreibzugriff) eingeführt wird, muss der
+Schreibstatus neu bewertet und in `CONTRIBUTING.md` dokumentiert werden.
+
+Der in TASK-CTL-003 eingeführte `generate_task_index.py --check` ist ein reiner
+Drift-Prüfmechanismus ohne Schreibzugriff und ändert den manuellen Pflegestatus nicht.
+Automatische Generierung und Bot-PRs bleiben eine spätere Entscheidung.
 
 ## Phase-Stand
 
@@ -52,7 +56,7 @@ neu bewertet und in `CONTRIBUTING.md` dokumentiert werden.
 |---|---|---|
 | Phase 2 | `docs/tasks/*`, `docs/reports/optimierungsstatus.json`, Validator | **Vorhanden** |
 | Phase 3 | `.github/ISSUE_TEMPLATE/*`, `.github/pull_request_template.md` | **Zurückgestellt** — kein belegter Mehrwert gegenüber freien PR-Bodies |
-| Phase 4 | `scripts/docmeta/generate_task_index.py`, CI-Guard | **Nächste Priorität** (TASK-CTL-003) |
+| Phase 4 | `scripts/docmeta/generate_task_index.py`, CI-Guard | **In Arbeit** — Check-Modus + CI-Guard vorhanden, CI-Lauf-Nachweis ausstehend (TASK-CTL-003) |
 | Phase 5 | `audit/impl-registry.yaml`-Ausbau | Geplant |
 
 ## GitHub-Arbeitsobjekte
@@ -71,3 +75,18 @@ python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 
 Exit 0 bei Erfolg, 1 bei Validierungsfehlern.
 Keine stillen Fixes, kein Schreiben durch den Validator.
+
+## Drift-Check
+
+```bash
+python3 -m scripts.docmeta.generate_task_index --check
+```
+
+Vergleicht `board.md`, `index.json` und `docs/reports/optimierungsstatus.json` auf Drift:
+Aktive Board-Tasks, Blocker oder PR-Kandidaten ohne Index-Eintrag; `open`/`partial` Tasks mit `high`/`medium` Priorität ohne Board-Sichtbarkeit; `done` ohne Evidenz;
+High-Priority ohne Akzeptanzkriterium; nicht existierende Evidenz-/Doku-Pfade;
+`docs/_generated/*` als Schreibziel; sowie Statuswidersprüche zur Optimierungsstatus-Matrix.
+
+Exit 0 ohne Drift, sonst 1. Reiner Prüfmechanismus, keine neue Wahrheitsschicht: Im
+`--check`-Modus werden keine Dateien geschrieben. Läuft im CI über
+`.github/workflows/task-index.yml`.

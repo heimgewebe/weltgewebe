@@ -1,0 +1,32 @@
+---
+name: task-index
+
+"on":
+  pull_request:
+    paths:
+      - "docs/tasks/**"
+      - "docs/reports/optimierungsstatus.json"
+      - "docs/reports/optimierungsstatus.md"
+      - "docs/blueprints/doc-structure-task-control*"
+      - "README.md"
+      - "CONTRIBUTING.md"
+      - "scripts/docmeta/**"
+      - ".github/workflows/task-index.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: task-index-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  task-index-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate task index schema
+        run: python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
+      - name: Check task-control drift
+        run: python3 -m scripts.docmeta.generate_task_index --check

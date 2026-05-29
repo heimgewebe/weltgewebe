@@ -28,6 +28,7 @@ relations:
 | OPT-CON-001 | ci | `additionalProperties: false` + String-Constraints | partial | high | `contracts/domain/node.schema.json` | Schema-für-Schema-Audit abschließen |
 | OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | partial | high | `docs/runbook.md` | Eigenständige Runbooks unter `docs/runbooks/` erstellen |
 | OPT-ARC-001 | api | JSONL → PostgreSQL | open | high | `apps/api/src/routes/nodes.rs` (Ist-Befund) | Migrations- und Cutover-Plan erstellen |
+| TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | partial | medium | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `.github/workflows/task-index.yml` | CI-Lauf des `task-index`-Workflows nachweisen, dann auf `done` setzen |
 
 ## Blocker
 
@@ -40,7 +41,6 @@ relations:
 
 | ID | PR-Schnitt | Akzeptanzkriterium |
 |---|---|---|
-| TASK-CTL-003 | Phase 4: `scripts/docmeta/generate_task_index.py` + CI-Guard | Deterministischer Task-Index, Drift-Erkennung im CI |
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
 | OPT-DOC-001 | Runbooks: `docs/runbooks/incident-response.md` + `db-recovery.md` | Eigenständige Abläufe, kein DSGVO-Leak-Risiko |
 
