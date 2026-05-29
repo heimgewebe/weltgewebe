@@ -145,13 +145,16 @@
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
-        "contracts/domain/node.schema.json",
         "contracts/domain/account.schema.json",
-        "contracts/domain/role.schema.json"
+        "contracts/domain/conversation.schema.json",
+        "contracts/domain/edge.schema.json",
+        "contracts/domain/message.schema.json",
+        "contracts/domain/node.schema.json",
+        "contracts/domain/role.schema.json",
+        "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "vollständiges Schema-für-Schema-Audit fehlt",
-        "verbleibende permissive Felder nicht inventarisiert"
+        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus (lokal grün, Beleg folgt mit PR-Run)"
       ],
       "acceptance": [
         "alle 6 Domain-Schemas haben additionalProperties: false",
@@ -165,7 +168,7 @@
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-05-29"
     },
     {
       "id": "OPT-DOC-001",

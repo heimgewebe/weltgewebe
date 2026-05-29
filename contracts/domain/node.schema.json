@@ -11,11 +11,13 @@
     },
     "kind": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 100
     },
     "title": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 200
     },
     "created_at": {
       "type": "string",
@@ -27,18 +29,21 @@
     },
     "info": {
       "type": ["string", "null"],
+      "maxLength": 20000,
       "description": "Freitext-Info (Markdown erlaubt)."
     },
     "summary": {
       "type": "string",
       "minLength": 1,
+      "maxLength": 500,
       "description": "Short summary. A longer 'description' field is reserved for future use."
     },
     "tags": {
       "type": "array",
       "items": {
         "type": "string",
-        "minLength": 1
+        "minLength": 1,
+        "maxLength": 64
       }
     },
     "location": {
