@@ -83,9 +83,9 @@ python3 -m scripts.docmeta.generate_task_index --check
 ```
 
 Vergleicht `board.md`, `index.json` und `docs/reports/optimierungsstatus.json` auf Drift:
-Board-Tasks ohne Index-Eintrag, `open`/`partial` Tasks mit `high`/`medium` Priorität ohne Board-Sichtbarkeit, `done` ohne Evidenz,
-High-Priority ohne Akzeptanzkriterium, nicht existierende Evidenz-/Doku-Pfade,
-`docs/_generated/*` als Schreibziel sowie Statuswidersprüche zur Optimierungsstatus-Matrix.
+Aktive Board-Tasks, Blocker oder PR-Kandidaten ohne Index-Eintrag; `open`/`partial` Tasks mit `high`/`medium` Priorität ohne Board-Sichtbarkeit; `done` ohne Evidenz;
+High-Priority ohne Akzeptanzkriterium; nicht existierende Evidenz-/Doku-Pfade;
+`docs/_generated/*` als Schreibziel; sowie Statuswidersprüche zur Optimierungsstatus-Matrix.
 
 Exit 0 ohne Drift, sonst 1. Reiner Prüfmechanismus, keine neue Wahrheitsschicht: Im
 `--check`-Modus werden keine Dateien geschrieben. Läuft im CI über

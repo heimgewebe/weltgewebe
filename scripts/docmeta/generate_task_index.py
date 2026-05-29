@@ -66,9 +66,6 @@ KNOWN_ROOTS = (
 
 # Board sections whose tasks are live work items and must exist in index.json.
 LIVE_SECTIONS = ("active", "blocker", "candidates")
-# Board sections that record historical or deliberately parked tasks; these must
-# only be known to the machine layer (index.json OR optimierungsstatus.json).
-ARCHIVE_SECTIONS = ("done", "deferred")
 
 
 def _load_json(path):
