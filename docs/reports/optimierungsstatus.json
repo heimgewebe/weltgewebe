@@ -283,7 +283,7 @@
       "id": "OPT-CI-002",
       "area": "CI/CD",
       "title": "Rust-Toolchain-Version aus kanonischer Quelle lesen",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
@@ -294,10 +294,8 @@
         ".github/workflows/security.yml",
         "toolchain.versions.yml"
       ],
-      "missing_evidence": [
-        "Grüner CI-Lauf zur Bestätigung der dynamischen Toolchain-Auflösung in api.yml/api-smoke.yml/security.yml steht aus; Workflows triggern nur auf PR/Push gegen main"
-      ],
-      "next_action": "Grünen CI-Lauf abwarten, dann als done markieren",
+      "missing_evidence": [],
+      "next_action": "keine",
       "updated_at": "2026-05-29"
     },
     {
