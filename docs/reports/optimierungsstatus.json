@@ -35,15 +35,19 @@
       "effort": "low",
       "evidence_status": "code",
       "evidence": [
-        "contracts/domain/node.schema.json",
         "contracts/domain/account.schema.json",
-        "contracts/domain/role.schema.json"
+        "contracts/domain/conversation.schema.json",
+        "contracts/domain/edge.schema.json",
+        "contracts/domain/message.schema.json",
+        "contracts/domain/node.schema.json",
+        "contracts/domain/role.schema.json",
+        "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "Vollständiges Schema-für-Schema-Audit inkl. verbleibender permissiver Felder fehlt"
+        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
-      "next_action": "Schema-für-Schema-Audit abschließen",
-      "updated_at": "2026-04-27"
+      "next_action": "CI-Lauf abwarten; bei grünem contracts-domain-check / Validate Domain Schemas als erledigt markieren",
+      "updated_at": "2026-05-29"
     },
     {
       "id": "OPT-DOC-001",
@@ -255,21 +259,25 @@
       "id": "OPT-CON-002",
       "area": "Contracts",
       "title": "maxLength + verbleibende additionalProperties: false",
-      "status": "open",
+      "status": "partial",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
       "evidence_status": "code",
       "evidence": [
+        "contracts/domain/account.schema.json",
+        "contracts/domain/conversation.schema.json",
+        "contracts/domain/edge.schema.json",
         "contracts/domain/message.schema.json",
-        "contracts/domain/role.schema.json"
+        "contracts/domain/node.schema.json",
+        "contracts/domain/role.schema.json",
+        "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "maxLength fehlt in allen sechs Schemas",
-        "restliche permissive Nested-Objects offen"
+        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
-      "next_action": "maxLength und fehlende additionalProperties: false ergänzen",
-      "updated_at": "2026-05-25"
+      "next_action": "CI-Lauf abwarten; danach mit OPT-CON-001 konsolidieren oder als erledigt markieren",
+      "updated_at": "2026-05-29"
     },
     {
       "id": "OPT-CI-002",

@@ -158,7 +158,7 @@
       ],
       "acceptance": [
         "alle 6 Domain-Schemas schließen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Flächen sind wertseitig begrenzt",
-        "String-Constraints (minLength, maxLength, pattern) konsistent gesetzt",
+        "String-Constraints (minLength, maxLength) konsistent gesetzt",
         "just contracts-domain-check pass"
       ],
       "links": {

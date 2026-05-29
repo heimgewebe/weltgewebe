@@ -28,7 +28,8 @@
           "minLength": 1,
           "maxLength": 128
         },
-        "maxItems": 50
+        "maxItems": 50,
+        "minLength": 1
       }
     },
     "created_at": {
