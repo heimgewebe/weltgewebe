@@ -154,7 +154,7 @@
         "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus (lokal grün, Beleg folgt mit PR-Run)"
+        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
       "acceptance": [
         "alle 6 Domain-Schemas haben additionalProperties: false",
