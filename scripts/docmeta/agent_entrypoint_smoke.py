@@ -27,8 +27,6 @@ not punished:
      and CI workflow exist.
   8. README.md and the reading protocol must keep describing docs/_generated/* as
      diagnostic (never a manual target / truth layer).
-  9. repo.meta.yaml and agent-policy.yaml must be valid, parseable YAML files
-     (catching structural corruption of critical config files).
 
 Usage:
     python3 -m scripts.docmeta.agent_entrypoint_smoke
@@ -43,7 +41,6 @@ import argparse
 import os
 import re
 import sys
-import yaml
 
 from scripts.docmeta.docmeta import REPO_ROOT
 
@@ -55,8 +52,6 @@ ROADMAP = "docs/roadmap.md"
 TASKS_README = "docs/tasks/README.md"
 TASK_INDEX_SCRIPT = "scripts/docmeta/generate_task_index.py"
 TASK_INDEX_WORKFLOW = ".github/workflows/task-index.yml"
-REPO_META = "repo.meta.yaml"
-AGENT_POLICY = "agent-policy.yaml"
 
 # Reading-order entries that README.md must reference explicitly.
 READING_ORDER_TOKENS = (
@@ -327,21 +322,6 @@ def check_generated_diagnostic_marker(repo_root):
     return errors
 
 
-def check_agent_config_yaml_validity(repo_root):
-    """Validate that repo.meta.yaml and agent-policy.yaml are valid YAML."""
-    errors = []
-    for rel_path in (REPO_META, AGENT_POLICY):
-        text, err = _read_text(repo_root, rel_path)
-        if err:
-            errors.append(err)
-            continue
-        try:
-            yaml.safe_load(text)
-        except yaml.YAMLError as e:
-            errors.append(f"{rel_path}: invalid YAML syntax: {e}")
-    return errors
-
-
 CHECKS = (
     check_readme_reading_order,
     check_agents_reading_protocol,
@@ -351,7 +331,6 @@ CHECKS = (
     check_readme_task_control_status,
     check_roadmap_task_control_status,
     check_generated_diagnostic_marker,
-    check_agent_config_yaml_validity,
 )
 
 

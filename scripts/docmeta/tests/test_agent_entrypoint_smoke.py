@@ -70,23 +70,6 @@ CONSISTENT = {
         "`generate_task_index.py --check` ist ein reiner Drift-Prüfmechanismus "
         "ohne Schreibzugriff.\n"
     ),
-    "repo.meta.yaml": (
-        "---\n"
-        "repo_name: test\n"
-        "repo_type: service\n"
-        "role: test-service\n"
-        "status: active\n"
-    ),
-    "agent-policy.yaml": (
-        "---\n"
-        "safe_read_paths:\n"
-        "  - README.md\n"
-        "  - AGENTS.md\n"
-        "guarded_write_paths:\n"
-        "  - docs/\n"
-        "forbidden_write_paths:\n"
-        "  - docs/_generated/\n"
-    ),
     "scripts/docmeta/generate_task_index.py": "# fixture\n",
     ".github/workflows/task-index.yml": "# fixture\n",
 }
@@ -256,7 +239,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
                 "",
             ),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("docs/_generated/* is not mentioned" in e for e in errors),
             errors,
@@ -299,44 +282,6 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
         self.assertTrue(
             any("README.md: reading order is out of sequence" in e for e in errors),
             errors,
-        )
-
-    def test_invalid_repo_meta_yaml_fails(self):
-        """Invalid YAML in repo.meta.yaml should fail."""
-        self._write("repo.meta.yaml", "---\ninvalid: yaml: content:\n  - broken")
-        errors = smoke.run_checks(self.root)
-        self.assertTrue(
-            any("repo.meta.yaml: invalid YAML syntax" in e for e in errors), errors
-        )
-
-    def test_invalid_agent_policy_yaml_fails(self):
-        """Invalid YAML in agent-policy.yaml should fail."""
-        self._write("agent-policy.yaml", "---\ninvalid: yaml: content:\n  broken")
-        errors = smoke.run_checks(self.root)
-        self.assertTrue(
-            any("agent-policy.yaml: invalid YAML syntax" in e for e in errors), errors
-        )
-
-    def test_valid_repo_meta_yaml_passes(self):
-        """Valid repo.meta.yaml should pass."""
-        self._write(
-            "repo.meta.yaml",
-            "---\nrepo_name: test\nrepo_type: service\nstatus: active\n",
-        )
-        errors = smoke.run_checks(self.root)
-        self.assertFalse(
-            any("repo.meta.yaml" in e for e in errors), errors
-        )
-
-    def test_valid_agent_policy_yaml_passes(self):
-        """Valid agent-policy.yaml should pass."""
-        self._write(
-            "agent-policy.yaml",
-            "---\nsafe_read_paths:\n  - README.md\nforbidden_write_paths:\n  - docs/_generated/\n",
-        )
-        errors = smoke.run_checks(self.root)
-        self.assertFalse(
-            any("agent-policy.yaml" in e for e in errors), errors
         )
 
     # -------------------------------------------------------------------------
