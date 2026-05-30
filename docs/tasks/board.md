@@ -26,7 +26,6 @@ relations:
 |---|---|---|---|---|---|---|
 | OPT-API-001 | api | Paginierung Listen-Endpunkte | partial | high | `apps/api/src/routes/nodes.rs` | Cursor-Variante + Response-Metadaten implementieren |
 | OPT-CON-001 | ci | geschlossene Schemas + begrenzte Extension-Flächen | partial | high | `contracts/domain/*.schema.json` (alle 6 gehärtet) | CI-Nachweis `contracts-domain-check` abwarten, dann auf `done` |
-| OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | partial | high | `docs/runbook.md` | Eigenständige Runbooks unter `docs/runbooks/` erstellen |
 | OPT-ARC-001 | api | JSONL → PostgreSQL | open | high | `apps/api/src/routes/nodes.rs` (Ist-Befund) | Migrations- und Cutover-Plan erstellen |
 | TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | partial | medium | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `scripts/docmeta/agent_entrypoint_smoke.py`, `scripts/docmeta/tests/test_agent_entrypoint_smoke.py`, `.github/workflows/task-index.yml` | CI-Lauf des `task-index`-Workflows nachweisen, dann auf `done` setzen |
 
@@ -42,7 +41,6 @@ relations:
 | ID | PR-Schnitt | Akzeptanzkriterium |
 |---|---|---|
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
-| OPT-DOC-001 | Runbooks: `docs/runbooks/incident-response.md` + `db-recovery.md` | Eigenständige Abläufe, kein DSGVO-Leak-Risiko |
 
 ## Zurückgestellte / optionale Tasks
 
@@ -55,6 +53,7 @@ relations:
 | ID | Bereich | Titel | Evidenz |
 |---|---|---|---|
 | TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `docs/reports/optimierungsstatus.json`, `scripts/docmeta/validate_task_index.py`, `scripts/docmeta/tests/test_validate_task_index.py` |
+| OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | `docs/runbooks/incident-response.md`, `docs/runbooks/db-recovery.md`; Navigation in `docs/runbooks/README.md` + `docs/index.md`; Drill-Querverweis in `docs/runbook.md` §2; Doku-Hygiene-Guards grün |
 | OPT-MAP-001 | map | Basemap Runtime Proof | CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |
 | OPT-API-002 | api | Session-Persistenz PostgreSQL | `apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, CI PROVEN, Commit `00a43a00` |

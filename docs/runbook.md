@@ -80,6 +80,11 @@ Dieses Runbook beschreibt die Schritte zur Simulation eines Totalausfalls und de
 des Systems. Der Drill sollte quartalsweise durchgeführt werden, um die Betriebsbereitschaft
 sicherzustellen.
 
+> **Eigenständige Runbooks:** Dieser Abschnitt ist der **Probelauf**. Der
+> reale Vorfallprozess steht in [Incident Response](runbooks/incident-response.md),
+> der detaillierte Datenwiederherstellungs-Ablauf in
+> [DB Recovery](runbooks/db-recovery.md).
+
 **Szenario:** Das primäre Rechenzentrum ist vollständig ausgefallen. Das System muss aus Backups in
 einer sauberen Umgebung wiederhergestellt werden.
 

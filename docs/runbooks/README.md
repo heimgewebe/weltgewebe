@@ -8,6 +8,10 @@ relations:
   - type: relates_to
     target: docs/runbook.md
   - type: relates_to
+    target: docs/runbooks/incident-response.md
+  - type: relates_to
+    target: docs/runbooks/db-recovery.md
+  - type: relates_to
     target: docs/runbooks/codespaces-recovery.md
   - type: relates_to
     target: docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
@@ -18,6 +22,8 @@ relations:
 
 Anleitungen für wiederkehrende Aufgaben.
 
+- [Incident Response](incident-response.md)
+- [DB Recovery](db-recovery.md)
 - [UV Tooling – Ist-Stand & Ausbauoptionen](uv-tooling.md)
 - [Codespaces Recovery](codespaces-recovery.md)
 - [Zurück zum Doku-Index](../index.md)

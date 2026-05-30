@@ -176,20 +176,19 @@
       "id": "OPT-DOC-001",
       "title": "Incident-/DB-Recovery-Runbooks",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "S",
       "risk": "high",
       "owner": "unknown",
       "evidence": [
-        "docs/runbook.md",
-        "docs/runbook.observability.md",
-        "docs/runbooks/README.md"
+        "docs/runbooks/incident-response.md",
+        "docs/runbooks/db-recovery.md",
+        "docs/runbooks/README.md",
+        "docs/index.md",
+        "docs/runbook.md"
       ],
-      "missing_evidence": [
-        "eigenständiger Incident-Response-Ablauf fehlt",
-        "eigenständiger DB-Recovery-Ablauf fehlt"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "docs/runbooks/incident-response.md existiert mit vollständigem Ablauf",
         "docs/runbooks/db-recovery.md existiert mit vollständigem Ablauf"
@@ -198,11 +197,13 @@
         "issues": [],
         "prs": [],
         "docs": [
-          "docs/runbook.md",
-          "docs/runbooks/README.md"
+          "docs/runbooks/incident-response.md",
+          "docs/runbooks/db-recovery.md",
+          "docs/runbooks/README.md",
+          "docs/runbook.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-05-30"
     },
     {
       "id": "OPT-ARC-001",

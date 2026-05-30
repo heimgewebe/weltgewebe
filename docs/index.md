@@ -78,6 +78,8 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Heimserver:** [deploy/heimserver.deployment.md](deploy/heimserver.deployment.md), [deploy/heimserver.integration.md](deploy/heimserver.integration.md)
 – **Runbook:** [runbook.md](runbook.md)
 – **Observability:** [runbook.observability.md](runbook.observability.md)
+– **Incident Response:** [runbooks/incident-response.md](runbooks/incident-response.md)
+– **DB Recovery:** [runbooks/db-recovery.md](runbooks/db-recovery.md)
 
 ### Task-Control
 
