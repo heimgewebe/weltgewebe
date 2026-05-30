@@ -125,6 +125,8 @@ python3 -m scripts.docmeta.generate_task_index --check
 
 Task-Control-Artefakte bleiben manuell kuratiert, werden aber durch den `--check`-Modus gegen Drift geprüft (Board ↔ Index ↔ Optimierungsstatus, Evidenz- und Doku-Pfade). Der Check ist ein Prüfmechanismus, keine neue Wahrheitsschicht, und schreibt keine Dateien. Automatische Generierung oder Bot-PRs bleiben eine spätere Entscheidung. Im CI läuft der Check über `.github/workflows/task-index.yml`.
 
+Derselbe Workflow prüft über `scripts/docmeta/agent_entrypoint_smoke.py` zusätzlich die Grund-Synchronität der Agenten-Einstiegspunkte: dass README, `AGENTS.md` und das [Agent Reading Protocol](docs/policies/agent-reading-protocol.md) dieselbe Leseordnung führen, `docs/index.md` sich als Navigation markiert und README/Roadmap keine veralteten Task-Control-Aussagen mehr behaupten. Auch dieser Guard ist nur ein deterministischer Prüfmechanismus ohne Schreibzugriff und keine neue Wahrheitsschicht.
+
 ### GitHub-Arbeitsobjekte (Phase 3 — bewusst zurückgestellt)
 
 Issue Forms, PR-Template und Release-Konfiguration werden aktuell nicht eingeführt. Begründung: Ein fixes PR-Template erhöht den Formular-Overhead und kann Agents schlechter machen, weil sie dann Formulartext produzieren statt kontextgenau zu berichten. Der eigentliche Engpass ist die manuelle Drift-Gefahr im Task-Index — nicht fehlende Formulare.
