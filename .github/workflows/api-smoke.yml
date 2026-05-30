@@ -4,6 +4,7 @@ name: api-smoke
   pull_request:
     branches: [main]
     paths:
+      - "toolchain.versions.yml"
       - "apps/api/**"
       - "scripts/guard/auth-rate-limit-runtime-smoke.sh"
       - "Cargo.toml"
@@ -12,6 +13,7 @@ name: api-smoke
   push:
     branches: [main]
     paths:
+      - "toolchain.versions.yml"
       - "apps/api/**"
       - "scripts/guard/auth-rate-limit-runtime-smoke.sh"
       - "Cargo.toml"
@@ -44,10 +46,26 @@ jobs:
         run: |
           echo "GIT_COMMIT_SHA=${{ github.sha }}" >> "$GITHUB_ENV"
           echo "BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Read Rust version
+        id: rust-version
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          if [ ! -f toolchain.versions.yml ]; then
+            echo "toolchain.versions.yml not found" >&2
+            exit 1
+          fi
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.89.0"
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
       - name: Print Rust versions
         run: |
           rustc --version
