@@ -245,6 +245,40 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             errors,
         )
 
+    def test_protocol_generated_not_mentioned_fails(self):
+        # The reading protocol must mention docs/_generated/* too, not only README.
+        self._write(
+            "docs/policies/agent-reading-protocol.md",
+            CONSISTENT["docs/policies/agent-reading-protocol.md"].replace(
+                "## _generated\n\n"
+                "`docs/_generated/*` ist Diagnose, nicht Ursprung.\n",
+                "",
+            ),
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertTrue(
+            any(
+                "docs/policies/agent-reading-protocol.md: docs/_generated/* is not mentioned" in e
+                for e in errors
+            ),
+            errors,
+        )
+
+    def test_generated_truth_layer_phrasing_passes(self):
+        # "keine eigenständige Wahrheitsschicht" is an accepted marker, even
+        # without the word "Diagnose".
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace(
+                "`docs/_generated/*` ist Diagnose, nicht Ursprung.",
+                "`docs/_generated/*` ist abgeleitet und keine eigenständige Wahrheitsschicht.",
+            ),
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertFalse(
+            any("README.md: docs/_generated" in e for e in errors), errors
+        )
+
     def test_missing_file_reported(self):
         os.remove(os.path.join(self.root, "docs/index.md"))
         errors = smoke.run_checks(self.root)

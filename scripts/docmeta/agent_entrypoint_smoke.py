@@ -311,7 +311,12 @@ def check_generated_diagnostic_marker(repo_root):
             continue
         marker = re.search(
             r"_generated[^.\n]{0,120}"
-            r"(diagnose|diagnostic|nicht ursprung|nicht kanonisch|niemals kanonisch|never canonical)",
+            r"("
+            r"diagnose|diagnostic"
+            r"|nicht ursprung|nicht kanonisch|niemals kanonisch|never canonical"
+            r"|keine?[^.\n]{0,40}wahrheitsschicht"
+            r"|not[^.\n]{0,40}truth[^.\n]{0,20}layer"
+            r")",
             norm,
         )
         if not marker:
