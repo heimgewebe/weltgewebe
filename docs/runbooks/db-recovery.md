@@ -57,11 +57,13 @@ Zielwerte aus dem DR-Drill ([`docs/runbook.md` §2](../runbook.md)):
 |---|---|---|
 | Sessions / Auth | PostgreSQL `sessions` | Base-Backup + WAL (PITR); Migrationen `apps/api/migrations/` |
 | Nodes / Accounts / Edges (Domäne) | JSONL unter `GEWEBE_IN_DIR` (`.gewebe/in`) | Backup der JSONL-Dateien; In-Memory-Store lädt beim Start neu |
-| Outbox / Events (Gate C) | PostgreSQL `outbox` → NATS JetStream | Base-Backup + WAL; Replay über Outbox-Relay + Projektoren |
-| Lese-Modelle (`faden_view` etc.) | abgeleitet | Rebuild durch Projektoren aus Events — **keine** primäre Quelle |
+| Outbox / Events (Gate C) | PostgreSQL `outbox` → NATS JetStream | **Nur falls Gate C / Outbox im Deployment aktiv und schema-seitig vorhanden.** Base-Backup + WAL; Replay über Outbox-Relay + Projektoren. Ist Gate C nicht aktiv, entfällt diese Zeile vollständig. |
+| Lese-Modelle (`faden_view` etc.) | abgeleitet — **nur falls Gate C aktiv** | Rebuild durch Projektoren aus Events — **keine** primäre Quelle; nur anwendbar, wenn Outbox/Event-Pfad im Deployment vorhanden ist |
 
 Lese-Modelle sind abgeleitet und werden neu aufgebaut, niemals als Wahrheitsquelle
-restauriert. Das Domänenmodell beschreibt [`docs/datenmodell.md`](../datenmodell.md).
+restauriert. Sie existieren als Recovery-Ziel nur, wenn Gate C / Outbox im jeweiligen
+Deployment aktiv ist. Das Domänenmodell beschreibt
+[`docs/datenmodell.md`](../datenmodell.md).
 
 ## 3. Backup-/Restore-Annahmen
 
@@ -110,8 +112,11 @@ restauriert. Das Domänenmodell beschreibt [`docs/datenmodell.md`](../datenmodel
    (`.gewebe/in`) legen.
 7. **API starten:** Der In-Memory-Store lädt die Domänendaten aus dem JSONL;
    Sessions kommen aus PostgreSQL.
-8. **Event-Pfad neu starten (nur Gate C / NATS):** Outbox-Relay starten, dann
-   Projektoren — diese bauen die Lese-Modelle (`faden_view` etc.) neu auf.
+8. **Event-Pfad neu starten (nur falls Gate C / Outbox im Deployment aktiv und
+   schema-seitig vorhanden):** Outbox-Relay starten, dann Projektoren — diese
+   bauen die Lese-Modelle (`faden_view` etc.) neu auf. **Falls Gate C nicht
+   aktiv: diesen Schritt überspringen und als „nicht anwendbar" in der Incident-
+   Timeline dokumentieren.**
 9. **Service freigeben:** Edge/Caddy wieder auf den Stack zeigen lassen.
 
 ## 5. Integritätsprüfung
@@ -124,7 +129,9 @@ just db-wait
 
 - Migrationsstand prüfen (Tabelle `_sqlx_migrations` vollständig angewendet).
 - Zeilenzahlen in `sessions` plausibilisieren.
-- `outbox` auf unverarbeitete Events prüfen (Backlog für [§4 Schritt 8](#4-recovery-ablauf)).
+- **Nur falls Gate C / Outbox aktiv:** `outbox` auf unverarbeiteten Backlog
+  prüfen (relevant für [§4 Schritt 8](#4-recovery-ablauf)). Ist Gate C nicht
+  aktiv, entfällt dieser Schritt.
 
 **JSONL-Domänendaten:**
 
@@ -137,7 +144,8 @@ just db-wait
 **Querschnitt:**
 
 - Zeilen-/Datensatzzahlen gegen Last-Known-Good vergleichen.
-- Lese-Modelle stimmen mit den replayten Events überein.
+- **Nur falls Gate C / Outbox aktiv:** Lese-Modelle gegen replayed Events
+  prüfen. Ist Gate C nicht aktiv, entfällt dieser Schritt.
 
 ## 6. Rollback-/Fallback-Pfad
 
@@ -187,7 +195,9 @@ Integrität der Domänendaten Vorrang.
 
 - **Funktionspfad:** Login (Magic-Link oder Dev-Login) funktioniert; Karte zeigt
   Accounts.
-- **Event-Pfad:** kein unverarbeiteter `outbox`-Backlog; Projektoren aufgeschlossen.
+- **Event-Pfad (nur falls Gate C / Outbox aktiv):** kein unverarbeiteter
+  `outbox`-Backlog; Projektoren aufgeschlossen. Falls Gate C nicht aktiv:
+  als „nicht anwendbar" in der Incident-Timeline notieren.
 - **Zielwerte:** Wiederherstellzeit gegen **RTO < 4 h** und Datenverlust gegen
   **RPO < 5 min** prüfen. War dies ein Drill, die Ergebnistabelle in
   [`docs/runbook.md` §2](../runbook.md) ausfüllen.

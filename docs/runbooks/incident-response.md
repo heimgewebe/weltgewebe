@@ -130,7 +130,8 @@ Ziel: Schaden stoppen, **ohne Evidenz oder Daten zu zerstören**.
   (`GIT_COMMIT_SHA`, `BUILD_TIMESTAMP`), Konfigurations-Drift gegen
   [`docs/deploy/DRIFT_POLICY.md`](../deploy/DRIFT_POLICY.md).
 - **Datenebene begutachten:** JSONL unter `GEWEBE_IN_DIR` (`.gewebe/in`) und
-  PostgreSQL-Zustand (Migrationsstand, `sessions`, `outbox`).
+  PostgreSQL-Zustand (Migrationsstand, `sessions`; `outbox` nur falls Gate C /
+  Outbox im Deployment aktiv).
 - **Reproduktion:** Wenn möglich in isolierter Umgebung nachstellen, nicht am
   Produktivsystem.
 
@@ -144,8 +145,9 @@ Je nach Ursache:
   (`infra/compose/*`, `infra/caddy/*`).
 - **Schemastand:** Bei Bedarf Migrationen erneut anwenden (`just db-migrate`);
   die API führt `sqlx::migrate!` ohnehin beim Start aus.
-- **Event-Pfad:** Outbox-Relay und Projektoren neu starten, damit Lese-Modelle
-  (`faden_view` etc.) wieder aufschließen.
+- **Event-Pfad (nur falls Gate C / Outbox im Deployment aktiv):** Outbox-Relay
+  und Projektoren neu starten, damit Lese-Modelle (`faden_view` etc.) wieder
+  aufschließen. Falls nicht aktiv: diesen Schritt überspringen.
 
 Abschluss erst nach erfolgreicher Verifikation (siehe
 [DB Recovery §8](db-recovery.md) und [§2 Erkennung](#2-erkennung)):
