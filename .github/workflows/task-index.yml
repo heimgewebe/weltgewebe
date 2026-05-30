@@ -8,8 +8,14 @@ name: task-index
       - "docs/reports/optimierungsstatus.json"
       - "docs/reports/optimierungsstatus.md"
       - "docs/blueprints/doc-structure-task-control*"
+      - "docs/index.md"
+      - "docs/roadmap.md"
+      - "docs/policies/agent-reading-protocol.md"
       - "README.md"
+      - "AGENTS.md"
       - "CONTRIBUTING.md"
+      - "repo.meta.yaml"
+      - "agent-policy.yaml"
       - "scripts/docmeta/**"
       - ".github/workflows/task-index.yml"
   workflow_dispatch: {}
@@ -30,3 +36,5 @@ jobs:
         run: python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
       - name: Check task-control drift
         run: python3 -m scripts.docmeta.generate_task_index --check
+      - name: Check agent entrypoint / roadmap sync
+        run: python3 -m scripts.docmeta.agent_entrypoint_smoke
