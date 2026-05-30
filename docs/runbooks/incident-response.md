@@ -77,7 +77,9 @@ Signalquellen:
   [Observability Runbook](../runbook.observability.md)): Prometheus
   (`:9090`), Grafana (`:3001`), Loki-Logs (`:3100`), Tempo-Traces (`:3200`).
 - **Auth-Anomalien:** `429`-Wellen oder ungewöhnliche Magic-Link-Anfragen
-  (Rate-Limits in `infra/caddy/Caddyfile.prod`).
+  in API-/Edge-Logs; aktive Drosselung liegt je nach Deployment bei
+  API-Rate-Limits, vorgeschaltetem LB/WAF, Firewall oder fail2ban. Caddy-
+  Rate-Limits in `infra/caddy/Caddyfile.prod` sind aktuell nicht aktiv.
 - **Nutzermeldungen.**
 
 Erste Sichtprüfung:
