@@ -97,7 +97,7 @@ docker compose -f infra/compose/compose.prod.yml logs -n 200 api
 2. **Blast Radius bestimmen:** betroffene Schicht (Edge/Web/API/DB/Stream).
 3. **Datenschutzfrage zuerst klären:** Sind personenbezogene Daten betroffen?
    Wenn ja → DSGVO-Pfad in [§9](#9-kommunikationspfad) aktivieren.
-4. **Lauf­zustand:** einmaliger Crash oder andauernder Angriff/Fehler?
+4. **Laufzustand:** einmaliger Crash oder andauernder Angriff/Fehler?
 5. **Vorfall ausrufen:** Lead benennen, Timeline starten (Zeitstempel, Beobachtung,
    Maßnahme, Wirkung).
 
@@ -105,8 +105,11 @@ docker compose -f infra/compose/compose.prod.yml logs -n 200 api
 
 Ziel: Schaden stoppen, **ohne Evidenz oder Daten zu zerstören**.
 
-- **Edge zuerst:** Bei Missbrauch Rate-Limits in `infra/caddy/Caddyfile.prod`
-  verschärfen oder auffällige Quellen sperren.
+- **Edge zuerst:** Bei Missbrauch zuerst eine aktive Schutzebene nutzen:
+  vorgeschalteter LB/WAF, Firewall oder fail2ban (falls vorhanden).
+- **Caddy-Hinweis:** Rate-Limits in `infra/caddy/Caddyfile.prod` sind aktuell
+  nicht aktiv/verfügbar; Änderungen dort wirken erst mit passendem
+  Caddy-Build/-Deployment.
 - **Public Login drosseln:** Bei Magic-Link-Missbrauch `AUTH_PUBLIC_LOGIN=0`
   setzen (siehe [`docs/runbook.md` §3](../runbook.md)).
 - **Secrets rotieren:** Bei Verdacht auf Leak SMTP-Zugang, Cookie-/Session-
@@ -126,9 +129,10 @@ Ziel: Schaden stoppen, **ohne Evidenz oder Daten zu zerstören**.
 
 - **Logs korrelieren:** Loki / `docker compose ... logs` über Web, API, Caddy.
 - **Metriken/Traces:** Prometheus und Tempo für Zeitfenster und Latenzspitzen.
-- **Letzte Änderung prüfen:** `git log`, Build-Metadaten über `GET /version`
-  (`GIT_COMMIT_SHA`, `BUILD_TIMESTAMP`), Konfigurations-Drift gegen
-  [`docs/deploy/DRIFT_POLICY.md`](../deploy/DRIFT_POLICY.md).
+- **Letzte Änderung prüfen:** `git log`, Build-Metadaten öffentlich über
+  `GET /api/version` (Edge) und intern im Compose-/Container-Netz über
+  `http://api:8080/version` (`GIT_COMMIT_SHA`, `BUILD_TIMESTAMP`),
+  Konfigurations-Drift gegen [`docs/deploy/DRIFT_POLICY.md`](../deploy/DRIFT_POLICY.md).
 - **Datenebene begutachten:** JSONL unter `GEWEBE_IN_DIR` (`.gewebe/in`) und
   PostgreSQL-Zustand (Migrationsstand, `sessions`; `outbox` nur falls Gate C /
   Outbox im Deployment aktiv).
@@ -170,7 +174,7 @@ just smoke-seed
 Vor jeder verändernden Maßnahme sichern:
 
 - **Logs:** `docker compose -f infra/compose/compose.prod.yml logs --no-color > incident-<zeitstempel>-api.log`
-- **Laufzeitstand:** Container-/Image-IDs, `GET /version`, relevante Metriken.
+- **Laufzeitstand:** Container-/Image-IDs, `GET /api/version` (Edge) bzw. intern `http://api:8080/version`, relevante Metriken.
 - **Datenstand:** Bei Datenvorfällen forensische Kopie ziehen (PostgreSQL-Dump,
   Kopie der JSONL-Dateien) — getrennt vom späteren Restore-Ziel.
 
@@ -204,5 +208,5 @@ Vor jeder verändernden Maßnahme sichern:
 - [`docs/deploy/DRIFT_POLICY.md`](../deploy/DRIFT_POLICY.md) — Konfigurations-Drift
 - `infra/compose/*` — Compose-Profile (`compose.core.yml`, `compose.prod.yml`,
   `compose.observ.yml`, `compose.stream.yml`)
-- `infra/caddy/Caddyfile.prod` — Edge-Rate-Limits und Routing
-- `apps/api` — Healthchecks (`/api/health/live`), `/version`
+- `infra/caddy/Caddyfile.prod` — Edge-Routing (Rate-Limits dort aktuell nicht aktiv/verfügbar)
+- `apps/api` — Healthchecks (`/api/health/live`), `/api/version` (Edge) bzw. intern `/version`

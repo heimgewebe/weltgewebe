@@ -115,7 +115,7 @@ Deployment aktiv ist. Das Domänenmodell beschreibt
 8. **Event-Pfad neu starten (nur falls Gate C / Outbox im Deployment aktiv und
    schema-seitig vorhanden):** Outbox-Relay starten, dann Projektoren — diese
    bauen die Lese-Modelle (`faden_view` etc.) neu auf. **Falls Gate C nicht
-   aktiv: diesen Schritt überspringen und als „nicht anwendbar" in der Incident-
+   aktiv: diesen Schritt überspringen und als „nicht anwendbar“ in der Incident-
    Timeline dokumentieren.**
 9. **Service freigeben:** Edge/Caddy wieder auf den Stack zeigen lassen.
 
@@ -185,8 +185,7 @@ Integrität der Domänendaten Vorrang.
 
 - **Health:** `curl -fsS https://<domain>/api/health/live` (lokal
   `http://localhost:8081/api/health/live`).
-- **Smoke:** Bootstrap-Account und Account-Erstellung gegen den wiederher­
-  gestellten Stand (siehe [`docs/runbook.md` §4](../runbook.md)):
+- **Smoke:** Bootstrap-Account und Account-Erstellung gegen den wiederhergestellten Stand (siehe [`docs/runbook.md` §4](../runbook.md)):
 
   ```bash
   just smoke-seed
@@ -197,7 +196,7 @@ Integrität der Domänendaten Vorrang.
   Accounts.
 - **Event-Pfad (nur falls Gate C / Outbox aktiv):** kein unverarbeiteter
   `outbox`-Backlog; Projektoren aufgeschlossen. Falls Gate C nicht aktiv:
-  als „nicht anwendbar" in der Incident-Timeline notieren.
+  als „nicht anwendbar“ in der Incident-Timeline notieren.
 - **Zielwerte:** Wiederherstellzeit gegen **RTO < 4 h** und Datenverlust gegen
   **RPO < 5 min** prüfen. War dies ein Drill, die Ergebnistabelle in
   [`docs/runbook.md` §2](../runbook.md) ausfüllen.
