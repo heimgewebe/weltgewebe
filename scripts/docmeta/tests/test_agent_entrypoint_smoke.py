@@ -248,6 +248,20 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             errors,
         )
 
+    def test_generated_not_mentioned_fails(self):
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace(
+                "`docs/_generated/*` ist Diagnose, nicht Ursprung.\n\n",
+                "",
+            ),
+        )
+        errors = run_checks(self.root)
+        self.assertTrue(
+            any("docs/_generated/* is not mentioned" in e for e in errors),
+            errors,
+        )
+
     def test_missing_file_reported(self):
         os.remove(os.path.join(self.root, "docs/index.md"))
         errors = smoke.run_checks(self.root)

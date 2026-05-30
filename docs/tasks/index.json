@@ -82,6 +82,8 @@
       "evidence": [
         "scripts/docmeta/generate_task_index.py",
         "scripts/docmeta/tests/test_generate_task_index.py",
+        "scripts/docmeta/agent_entrypoint_smoke.py",
+        "scripts/docmeta/tests/test_agent_entrypoint_smoke.py",
         ".github/workflows/task-index.yml"
       ],
       "missing_evidence": [
@@ -100,7 +102,7 @@
           "docs/blueprints/doc-structure-task-control-roadmap.md"
         ]
       },
-      "updated_at": "2026-05-29"
+      "updated_at": "2026-05-30"
     },
     {
       "id": "OPT-API-001",

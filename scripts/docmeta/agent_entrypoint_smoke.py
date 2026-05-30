@@ -309,6 +309,10 @@ def check_generated_diagnostic_marker(repo_root):
             continue
         norm = _norm(text)
         if "_generated" not in norm:
+            errors.append(
+                f"{rel_path}: docs/_generated/* is not mentioned; "
+                "must describe it as diagnostic / not a truth layer"
+            )
             continue
         marker = re.search(
             r"_generated[^.\n]{0,120}"
