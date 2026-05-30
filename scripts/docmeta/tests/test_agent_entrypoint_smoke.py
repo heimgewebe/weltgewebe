@@ -8,10 +8,9 @@ import hashlib
 import os
 import tempfile
 import unittest
-from unittest import mock
+import unittest.mock
 
 import scripts.docmeta.agent_entrypoint_smoke as smoke
-from scripts.docmeta.agent_entrypoint_smoke import run_checks
 
 CONSISTENT = {
     "README.md": (
@@ -110,7 +109,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
     # -------------------------------------------------------------------------
 
     def test_consistent_minimal_fixture_passes(self):
-        self.assertEqual(run_checks(self.root), [])
+        self.assertEqual(smoke.run_checks(self.root), [])
 
     # -------------------------------------------------------------------------
     # Drift cases
@@ -126,7 +125,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
                 "Implementierungs-Mapping.",
             ),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("README.md: stale Task-Control statement" in e for e in errors), errors
         )
@@ -137,7 +136,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             CONSISTENT["README.md"]
             + "\nNächste Priorität: Task-Index-Generator und CI-Guard (TASK-CTL-003).\n",
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("README.md: stale Task-Control statement" in e for e in errors), errors
         )
@@ -149,7 +148,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             CONSISTENT["README.md"]
             + "\nTask-Index-Generator und CI-Guard sind vorhanden und getestet.\n",
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertFalse(
             any("stale Task-Control statement" in e for e in errors), errors
         )
@@ -165,7 +164,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
                 "Implementierungs-Mapping.",
             ),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertFalse(
             any("stale Task-Control statement" in e for e in errors), errors
         )
@@ -180,7 +179,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
                 "`reports/optimierungsstatus.md`",
             ),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("docs/roadmap.md: stale Task-Control status proof statement" in e for e in errors),
             errors,
@@ -192,7 +191,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             "---\nid: docs.index\ntitle: Index\nstatus: active\nsummary: test\n---\n\n"
             "# Index\n\nEinfach nur Inhalt ohne Markierung.\n",
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertIn("docs/index.md: missing navigation-not-truth marker", errors)
 
     def test_missing_reading_order_entry_fails(self):
@@ -200,7 +199,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             "README.md",
             CONSISTENT["README.md"].replace("4. `docs/policies/agent-reading-protocol.md`\n", ""),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("missing reading-order entry" in e for e in errors), errors
         )
@@ -213,7 +212,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
             "`docs/tasks/` ist die Arbeitssteuerungs-Schicht, aber keine zweite "
             "Wahrheitsschicht.\n",
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("write-free '--check' drift-mechanism" in e for e in errors), errors
         )
@@ -226,7 +225,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
                 "`docs/_generated/*` enthält die maßgeblichen Statusdaten.",
             ),
         )
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(
             any("docs/_generated/* is mentioned without a diagnostic" in e for e in errors),
             errors,
@@ -234,8 +233,42 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
 
     def test_missing_file_reported(self):
         os.remove(os.path.join(self.root, "docs/index.md"))
-        errors = run_checks(self.root)
+        errors = smoke.run_checks(self.root)
         self.assertTrue(any("docs/index.md: file not found" in e for e in errors), errors)
+
+    def test_readme_missing_entry_in_order_block_fails_even_if_token_exists_elsewhere(self):
+        """Missing entry in order block should fail even if token exists elsewhere in README."""
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace(
+                "4. `docs/policies/agent-reading-protocol.md`\n",
+                "",
+            )
+            + "\nQuick link: `docs/policies/agent-reading-protocol.md`\n",
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertTrue(
+            any(
+                "README.md: missing reading-order entry: docs/policies/agent-reading-protocol.md" in e
+                for e in errors
+            ),
+            errors,
+        )
+
+    def test_readme_reading_order_sequence_fails(self):
+        """Out-of-sequence reading order should fail."""
+        self._write(
+            "README.md",
+            CONSISTENT["README.md"].replace(
+                "2. `AGENTS.md`\n3. `agent-policy.yaml`\n",
+                "2. `agent-policy.yaml`\n3. `AGENTS.md`\n",
+            ),
+        )
+        errors = smoke.run_checks(self.root)
+        self.assertTrue(
+            any("README.md: reading order is out of sequence" in e for e in errors),
+            errors,
+        )
 
     # -------------------------------------------------------------------------
     # No-write guarantee
@@ -243,7 +276,7 @@ class TestAgentEntrypointSmoke(unittest.TestCase):
 
     def test_run_writes_no_files(self):
         before = self._snapshot()
-        with mock.patch.object(smoke, "REPO_ROOT", self.root):
+        with unittest.mock.patch.object(smoke, "REPO_ROOT", self.root):
             rc = smoke.main([])
         after = self._snapshot()
         self.assertEqual(rc, 0)

@@ -119,15 +119,54 @@ def _strip_frontmatter(text):
     return text
 
 
+def _extract_reading_order_block(text):
+    """
+    Return the README reading-order block, not the whole README.
+    The guard must prove the binding list itself, because the same paths may
+    appear elsewhere in README quick links or status paragraphs.
+
+    Looks for a section marker containing "leseordnung" or "reading order" and
+    returns everything from that marker to the next Markdown heading or EOF.
+    """
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        n = _norm(line)
+        if "leseordnung" in n or "reading order" in n:
+            start = i
+            break
+    if start is None:
+        return ""
+    block = []
+    for line in lines[start:]:
+        # Stop at the next Markdown heading after the block has started.
+        if block and re.match(r"^#{1,6}\s+", line):
+            break
+        block.append(line)
+    return "\n".join(block)
+
+
 def check_readme_reading_order(repo_root):
     text, err = _read_text(repo_root, README)
     if err:
         return [err]
-    norm = _norm(text)
+    block = _extract_reading_order_block(text)
+    norm = _norm(block)
     errors = []
+    if not block:
+        errors.append("README.md: missing reading-order block")
+        return errors
+    positions = []
     for token in READING_ORDER_TOKENS:
-        if token not in norm:
+        idx = norm.find(token)
+        if idx == -1:
             errors.append(f"README.md: missing reading-order entry: {token}")
+        else:
+            positions.append((token, idx))
+    if not errors:
+        ordered = [idx for _token, idx in positions]
+        if ordered != sorted(ordered):
+            errors.append("README.md: reading order is out of sequence")
     return errors
 
 
