@@ -27,6 +27,8 @@ not punished:
      and CI workflow exist.
   8. README.md and the reading protocol must keep describing docs/_generated/* as
      diagnostic (never a manual target / truth layer).
+  9. repo.meta.yaml and agent-policy.yaml must be valid, parseable YAML files
+     (catching structural corruption of critical config files).
 
 Usage:
     python3 -m scripts.docmeta.agent_entrypoint_smoke
