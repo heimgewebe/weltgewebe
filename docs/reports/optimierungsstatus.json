@@ -53,21 +53,21 @@
       "id": "OPT-DOC-001",
       "area": "Dokumentation",
       "title": "Incident-/DB-Recovery-Runbooks",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "risk": "high",
       "effort": "low",
       "evidence_status": "doc-only",
       "evidence": [
-        "docs/runbook.md",
-        "docs/runbook.observability.md",
-        "docs/runbooks/README.md"
+        "docs/runbooks/incident-response.md",
+        "docs/runbooks/db-recovery.md",
+        "docs/runbooks/README.md",
+        "docs/index.md",
+        "docs/runbook.md"
       ],
-      "missing_evidence": [
-        "Eigenständige Incident-Response- und DB-Recovery-Abläufe fehlen"
-      ],
-      "next_action": "Eigenständige Runbooks unter docs/runbooks/ erstellen",
-      "updated_at": "2026-04-27"
+      "missing_evidence": [],
+      "next_action": "keine – eigenständige Runbooks erstellt und über Doku-Hygiene-Guards (validate_relations, docs-relations-guard, generate_task_index --check) verifiziert",
+      "updated_at": "2026-05-30"
     },
     {
       "id": "OPT-CI-001",
