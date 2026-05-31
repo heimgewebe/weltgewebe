@@ -224,11 +224,14 @@
         "apps/api/migrations/20260531000002_create_domain_edges.down.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.up.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.down.sql",
-        "apps/api/tests/db_domain_schema_migrations.rs"
+        "apps/api/tests/db_domain_schema_migrations.rs",
+        ".github/workflows/api.yml (job: db-domain-schema-migrations-proof)"
       ],
       "missing_evidence": [
-        "CI-Nachweis der Migration-Tests ausstehend (Phase-B-CI-Gate, requires DATABASE_URL)",
-        "kein Runtime-Nachweis für PostgreSQL-Pfad in Domänen-Endpunkten"
+        "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
+        "Phase C (Backfill-/Import-Pfad) fehlt",
+        "Phase D (Read-Path-Switch) fehlt",
+        "Phase E (Write-Path-Switch) fehlt"
       ],
       "acceptance": [
         "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
