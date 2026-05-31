@@ -1,8 +1,11 @@
 //! Integration proof: domain schema migrations (nodes, edges, accounts).
 //!
-//! Verifies that Phase B migrations for OPT-ARC-001 create and drop domain
-//! tables correctly. No runtime cutover is tested here — JSONL remains the
-//! active data source until Phase D/E.
+//! Verifies that Phase B migrations for OPT-ARC-001 create domain tables and
+//! indexes correctly, and that basic structural inserts and constraints hold.
+//! Does NOT verify down-migration / DROP behaviour — that requires a
+//! disposable database and is deferred to a dedicated revert-proof gate.
+//! No runtime cutover is tested here — JSONL remains the active data source
+//! until Phase D/E.
 //!
 //! Run with:
 //!   DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
@@ -150,11 +153,16 @@ async fn domain_schema_basic_insert_and_read() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
 
+    // Pre-test cleanup to avoid stale rows from a previously interrupted run.
+    sqlx::query("DELETE FROM domain_nodes WHERE id = 'test-node-schema-probe'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup of domain_nodes failed");
+
     // --- domain_nodes: insert and read back ---
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload)
-         VALUES ('test-node-schema-probe', 'TestKind', 'Test Node', 53.55, 10.00, '{\"info\":\"probe\"}'::jsonb)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ('test-node-schema-probe', 'TestKind', 'Test Node', 53.55, 10.00, '{\"info\":\"probe\"}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -176,10 +184,15 @@ async fn domain_schema_basic_insert_and_read() {
         .expect("failed to clean up domain_nodes probe row");
 
     // --- domain_edges: insert and read back ---
+    // Pre-test cleanup
+    sqlx::query("DELETE FROM domain_edges WHERE id = 'test-edge-schema-probe'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup of domain_edges failed");
+
     sqlx::query(
         "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, payload)
-         VALUES ('test-edge-schema-probe', 'src-001', 'tgt-001', 'TestKind', '{}'::jsonb)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ('test-edge-schema-probe', 'src-001', 'tgt-001', 'TestKind', '{}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -201,10 +214,15 @@ async fn domain_schema_basic_insert_and_read() {
         .expect("failed to clean up domain_edges probe row");
 
     // --- domain_accounts: insert and read back ---
+    // Pre-test cleanup
+    sqlx::query("DELETE FROM domain_accounts WHERE id = 'test-account-schema-probe'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup of domain_accounts failed");
+
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
-         VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', 'ron', 0, 'user', '{}'::jsonb, '{}'::jsonb)
-         ON CONFLICT (id) DO NOTHING",
+         VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', 'ron', 0, 'user', '{}'::jsonb, '{}'::jsonb)",
     )
     .execute(&pool)
     .await

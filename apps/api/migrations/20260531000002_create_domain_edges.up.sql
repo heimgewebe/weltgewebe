@@ -18,6 +18,11 @@
 --   - note: optional free text; not queried.
 --   Later promotion or normalisation decisions remain open.
 
+-- Note: updated_at is intentionally omitted. The Edge struct
+-- (apps/api/src/routes/edges.rs) and domain contract
+-- (contracts/domain/edge.schema.json) do not define updated_at.
+-- If edge-mutation semantics are introduced later, a separate migration
+-- must add updated_at at that point.
 CREATE TABLE domain_edges (
     id         TEXT        PRIMARY KEY,
     source_id  TEXT        NOT NULL,

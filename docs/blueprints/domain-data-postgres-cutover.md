@@ -116,7 +116,12 @@ Migration.
 - Primärschlüssel: `id` als unveränderte, string-basierte Domänen-ID.
 - Payload: ein flexibles `jsonb`-Dokument für nicht normalisierte Felder.
 - Explizite Spalten: `source_id`, `target_id`, optional ein Relationstyp oder
-  Label, dazu `created_at` und `updated_at`.
+  Label, dazu `created_at`.
+- `updated_at` ist **nicht** in der aktuellen `Edge`-Struct
+  (`apps/api/src/routes/edges.rs`) und nicht im Domain-Vertrag
+  (`contracts/domain/edge.schema.json`) definiert. Die Spalte wird in der
+  Phase-B-Migration daher weggelassen. Falls Edge-Mutations-Semantik später
+  eingeführt wird, muss eine eigene Migration `updated_at` ergänzen.
 - Indexe: Primärschlüssel auf `id`, Einzelindizes auf `source_id` und
   `target_id`, plus ein zusammengesetzter Index für häufige Join-/Filterpfade.
 - Eindeutigkeitsregeln: mindestens `id`; weitere Constraints nur, wenn sie aus
@@ -139,9 +144,13 @@ Migration.
 - Payload: getrennte Speicherung von öffentlicher Projektion und privaten/
   operativen Feldern, zum Beispiel via `public_payload jsonb` und
   `private_payload jsonb` oder über klar benannte Einzelspalten.
-- Explizite Spalten: öffentliche Projektion inklusive `public_pos` und
-  `radius_m`, `role`, `email`, `webauthn_user_id`, Statusfelder wie
-  `disabled`, dazu `created_at` und `updated_at`.
+- Explizite Spalten: `radius_m`, `role`, `email`, `webauthn_user_id`,
+  Statusfelder wie `disabled`, dazu `created_at` und `updated_at`.
+- `public_pos` ist **keine gespeicherte Spalte**. Sie ist eine deterministische
+  Laufzeit-Projektion aus `location_lat`, `location_lon`, `radius_m` und `id`
+  via `calculate_jittered_pos` (verifiziert in `apps/api/src/routes/accounts.rs`).
+  Eine spätere Migration kann eine materialisierte Spalte ergänzen, wenn der
+  Lese-Aufwand das rechtfertigt; das ist aber eine explizite Folge-Entscheidung.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
   Step-up-E-Mail-Änderungen und WebAuthn-User-ID-Writeback.
