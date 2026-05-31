@@ -108,7 +108,7 @@
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
@@ -123,9 +123,7 @@
         "apps/api/tests/api_accounts.rs",
         "docs/specs/list-pagination-api.md"
       ],
-      "missing_evidence": [
-        "CI-Nachweis der Cursor-Paginierung via api.yml steht aus; lokal sind cargo-Tests grün (Cursor-Envelope, Sortierungsvertrag, Legacy-Kompatibilität)"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Cursor-Paginierung implementiert und per Test belegt",
         "Response-Metadaten in API-Spec dokumentiert",

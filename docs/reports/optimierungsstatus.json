@@ -8,11 +8,11 @@
       "id": "OPT-API-001",
       "area": "API",
       "title": "Paginierung Listen-Endpunkte",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "risk": "medium",
       "effort": "medium",
-      "evidence_status": "code+test",
+      "evidence_status": "ci-proven",
       "evidence": [
         "apps/api/src/routes/query.rs",
         "apps/api/src/routes/nodes.rs",
@@ -23,10 +23,8 @@
         "apps/api/tests/api_accounts.rs",
         "docs/specs/list-pagination-api.md"
       ],
-      "missing_evidence": [
-        "CI-Nachweis der Cursor-Paginierung via api.yml steht aus; lokaler cargo-Testlauf ist grün"
-      ],
-      "next_action": "CI-Lauf api.yml abwarten; bei grünem Cursor-Test als done markieren",
+      "missing_evidence": [],
+      "next_action": "keine – CI PROVEN: 'test and lint (rust)' grün auf PR #1121 (Commit d047f4a)",
       "updated_at": "2026-05-31"
     },
     {
