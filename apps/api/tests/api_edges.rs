@@ -243,3 +243,134 @@ async fn edges_invalid_limit() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn edges_cursor_pagination_envelope_and_walk() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Insertion order is deliberately unsorted to prove cursor mode sorts by id.
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e3","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // Page 1: envelope shape with id-ascending order.
+    let res = app
+        .clone()
+        .oneshot(Request::get("/edges?pagination=cursor&limit=2").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "e1");
+    assert_eq!(items[1]["id"], "e2");
+    assert_eq!(v["page"]["has_more"], true);
+    let cursor1 = v["page"]["next_cursor"]
+        .as_str()
+        .context("next_cursor must be present on page 1")?
+        .to_string();
+
+    // Page 2 (last): remaining id, no duplicates, has_more false, next_cursor null.
+    let uri = format!("/edges?cursor={cursor1}&limit=2");
+    let res = app
+        .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], "e3");
+    assert_eq!(v["page"]["has_more"], false);
+    assert!(v["page"]["next_cursor"].is_null());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn edges_cursor_respects_filter_and_invalid_cursor() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n9","target_id":"n3","edge_kind":"reference"}"#,
+            r#"{"id":"e3","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // Cursor mode keeps the source_id filter: only e1 and e3 match n1.
+    let res = app
+        .clone()
+        .oneshot(
+            Request::get("/edges?pagination=cursor&source_id=n1&limit=10")
+                .body(body::Body::empty())?,
+        )
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "e1");
+    assert_eq!(items[1]["id"], "e3");
+    assert_eq!(v["page"]["has_more"], false);
+    assert!(v["page"]["next_cursor"].is_null());
+
+    // Malformed cursor -> deterministic 400.
+    let res = app
+        .oneshot(Request::get("/edges?cursor=abc").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn edges_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n9","target_id":"n3","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // In cursor mode, limit=0 must return 400 Bad Request.
+    let res = app
+        .oneshot(Request::get("/edges?pagination=cursor&limit=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}

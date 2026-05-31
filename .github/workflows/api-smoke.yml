@@ -118,17 +118,24 @@ jobs:
 
           nohup "$BIN" >/tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
-          # Wait up to 5 seconds for the PID file to exist
-          for _ in {1..10}; do
-            [ -f /tmp/api.pid ] && break
+          # Wait for the server to accept connections before declaring ready (up to 30 s)
+          ready=0
+          for _ in {1..60}; do
+            if curl -fsS http://127.0.0.1:8787/health/live >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "$(cat /tmp/api.pid)" 2>/dev/null; then
+              echo "API process exited before becoming ready"
+              cat /tmp/api.log || true
+              exit 1
+            fi
             sleep 0.5
           done
-          if [ ! -f /tmp/api.pid ]; then
-            echo "PID file not found after waiting"
-            exit 1
-          fi
-          if ! kill -0 "$(cat /tmp/api.pid)" 2>/dev/null; then
-            echo "API process failed to start"
+          if [ "$ready" -ne 1 ]; then
+            echo "server did not become ready on 127.0.0.1:8787 within 30 s"
+            cat /tmp/api.log || true
+            ss -ltnp || true
             exit 1
           fi
       - name: Probe /version (startup)

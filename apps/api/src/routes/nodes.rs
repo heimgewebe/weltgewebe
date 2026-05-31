@@ -1,4 +1,7 @@
-use super::query::{parse_usize_param, MAX_PAGE_SIZE};
+use super::query::{
+    cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
+    MAX_PAGE_SIZE,
+};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
@@ -563,29 +566,47 @@ pub async fn patch_node(
 pub async fn list_nodes(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<Node>>, StatusCode> {
+) -> Result<Json<ListResponse<Node>>, StatusCode> {
     let bbox = match params.get("bbox") {
         Some(raw_bbox) => Some(parse_bbox(raw_bbox).ok_or(StatusCode::BAD_REQUEST)?),
         None => None,
     };
     let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
-    let offset: usize = parse_usize_param(&params, "offset", 0)?;
+    let (cursor_mode, after_id) = parse_cursor_params(&params)?;
+    validate_cursor_limit(cursor_mode, limit)?;
 
     let cache = state.nodes.read().await;
 
-    let out: Vec<Node> = cache
-        .iter_in_order()
-        .filter(|node| {
-            if let Some(bb) = &bbox {
-                point_in_bbox(node.location.lon, node.location.lat, bb)
-            } else {
-                true
-            }
-        })
-        .skip(offset)
-        .take(limit)
-        .cloned()
-        .collect();
-
-    Ok(Json(out))
+    if cursor_mode {
+        // Cursor mode sorts by stable id ascending (see query::cursor_page),
+        // independent of the file/insertion order used by the legacy path.
+        let refs: Vec<&Node> = cache
+            .iter_in_order()
+            .filter(|node| match &bbox {
+                Some(bb) => point_in_bbox(node.location.lon, node.location.lat, bb),
+                None => true,
+            })
+            .collect();
+        let page = cursor_page(
+            refs,
+            limit,
+            after_id.as_deref(),
+            |node: &Node| node.id.as_str(),
+            |node: &Node| node.clone(),
+        );
+        Ok(Json(ListResponse::Cursor(page)))
+    } else {
+        let offset: usize = parse_usize_param(&params, "offset", 0)?;
+        let out: Vec<Node> = cache
+            .iter_in_order()
+            .filter(|node| match &bbox {
+                Some(bb) => point_in_bbox(node.location.lon, node.location.lat, bb),
+                None => true,
+            })
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
+        Ok(Json(ListResponse::Legacy(out)))
+    }
 }

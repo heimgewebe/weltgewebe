@@ -108,21 +108,22 @@
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
+        "apps/api/src/routes/query.rs",
         "apps/api/src/routes/nodes.rs",
         "apps/api/src/routes/edges.rs",
-        "apps/api/src/routes/accounts.rs"
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/tests/api_nodes.rs",
+        "apps/api/tests/api_edges.rs",
+        "apps/api/tests/api_accounts.rs",
+        "docs/specs/list-pagination-api.md"
       ],
-      "missing_evidence": [
-        "Cursor-Variante fehlt",
-        "Response-Metadaten (total, next_cursor) fehlen",
-        "dokumentierter Sortierungsvertrag fehlt"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Cursor-Paginierung implementiert und per Test belegt",
         "Response-Metadaten in API-Spec dokumentiert",
@@ -132,10 +133,11 @@
         "issues": [],
         "prs": [],
         "docs": [
+          "docs/specs/list-pagination-api.md",
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-05-31"
     },
     {
       "id": "OPT-CON-001",

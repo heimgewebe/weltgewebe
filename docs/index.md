@@ -44,6 +44,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Vokabular:** [domain/vocabulary.md](domain/vocabulary.md)
 – **Module:** [domain/modules.md](domain/modules.md)
 – **Datenvertrag:** [specs/contract.md](specs/contract.md)
+– **Listen-Paginierung (API):** [specs/list-pagination-api.md](specs/list-pagination-api.md)
 
 ### UI-System
 

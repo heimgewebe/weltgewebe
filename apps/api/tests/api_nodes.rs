@@ -642,3 +642,154 @@ async fn nodes_limit_is_clamped_to_max_page_size() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn nodes_cursor_pagination_envelope_and_walk() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    // Insertion order is deliberately unsorted to prove cursor mode sorts by
+    // stable id ascending, independent of the legacy file/insertion order.
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[
+            r#"{"id":"n3","location":{"lon":10.0,"lat":53.5},"title":"C"}"#,
+            r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A"}"#,
+            r#"{"id":"n5","location":{"lon":10.0,"lat":53.5},"title":"E"}"#,
+            r#"{"id":"n2","location":{"lon":10.0,"lat":53.5},"title":"B"}"#,
+            r#"{"id":"n4","location":{"lon":10.0,"lat":53.5},"title":"D"}"#,
+        ],
+    )
+    .await;
+
+    // Page 1: cursor mode returns the {items, page} envelope, not a bare array.
+    let res = app
+        .clone()
+        .oneshot(Request::get("/nodes?pagination=cursor&limit=2").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    assert!(v.is_object(), "cursor mode must return an envelope object");
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "n1");
+    assert_eq!(items[1]["id"], "n2");
+    assert_eq!(v["page"]["limit"], 2);
+    assert_eq!(v["page"]["has_more"], true);
+    let cursor1 = v["page"]["next_cursor"]
+        .as_str()
+        .context("next_cursor must be present on page 1")?
+        .to_string();
+
+    // Page 2: following next_cursor yields the next id-ordered slice with no
+    // duplicates from page 1.
+    let uri = format!("/nodes?cursor={cursor1}&limit=2");
+    let res = app
+        .clone()
+        .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "n3");
+    assert_eq!(items[1]["id"], "n4");
+    assert_eq!(v["page"]["has_more"], true);
+    let cursor2 = v["page"]["next_cursor"]
+        .as_str()
+        .context("next_cursor must be present on page 2")?
+        .to_string();
+
+    // Page 3 (last): has_more is false and next_cursor is null.
+    let uri = format!("/nodes?cursor={cursor2}&limit=2");
+    let res = app
+        .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], "n5");
+    assert_eq!(v["page"]["has_more"], false);
+    assert!(
+        v["page"]["next_cursor"].is_null(),
+        "last page next_cursor must be null"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_cursor_invalid_is_bad_request() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let (app, _env) = app_with_nodes(
+        &in_dir,
+        &[r#"{"id":"n1","location":{"lon":9.9,"lat":53.55},"title":"A"}"#],
+    )
+    .await;
+
+    // A malformed cursor token is a deterministic 400, never silent mis-pagination.
+    let res = app
+        .oneshot(Request::get("/nodes?cursor=zz").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_cursor_limit_is_clamped_to_max_page_size() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    // Zero-padded ids keep lexicographic order aligned with numeric order.
+    let lines: Vec<String> = (0..1100)
+        .map(|i| {
+            format!(r#"{{"id":"n{i:04}","location":{{"lon":10.0,"lat":53.5}},"title":"N{i}"}}"#)
+        })
+        .collect();
+    let line_refs: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let (app, _env) = app_with_nodes(&in_dir, &line_refs).await;
+
+    // Even in cursor mode, a limit above MAX_PAGE_SIZE (1000) is clamped.
+    let res = app
+        .oneshot(Request::get("/nodes?pagination=cursor&limit=5000").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 1000);
+    assert_eq!(v["page"]["limit"], 1000);
+    assert_eq!(v["page"]["has_more"], true);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn nodes_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    let lines = vec![
+        r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"N1"}"#,
+        r#"{"id":"n2","location":{"lon":10.0,"lat":53.5},"title":"N2"}"#,
+    ];
+    let (app, _env) = app_with_nodes(&in_dir, &lines).await;
+
+    // In cursor mode, limit=0 must return 400 Bad Request.
+    let res = app
+        .oneshot(Request::get("/nodes?pagination=cursor&limit=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
