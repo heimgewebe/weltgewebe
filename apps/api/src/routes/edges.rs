@@ -1,5 +1,6 @@
 use super::query::{
-    cursor_page, parse_cursor_params, parse_usize_param, ListResponse, MAX_PAGE_SIZE,
+    cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
+    MAX_PAGE_SIZE,
 };
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
@@ -122,6 +123,7 @@ pub async fn list_edges(
     let dst = params.get("target_id");
     let limit: usize = parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
     let (cursor_mode, after_id) = parse_cursor_params(&params)?;
+    validate_cursor_limit(cursor_mode, limit)?;
 
     let matches = |edge: &&Edge| {
         if let Some(s) = src {

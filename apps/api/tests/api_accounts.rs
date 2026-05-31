@@ -403,3 +403,15 @@ async fn accounts_cursor_limit_is_clamped_to_max_page_size() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn accounts_cursor_limit_zero_is_bad_request() -> Result<()> {
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    let req = Request::get("/accounts?pagination=cursor&limit=0").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}

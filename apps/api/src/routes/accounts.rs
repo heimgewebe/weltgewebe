@@ -1,5 +1,6 @@
 use super::query::{
-    cursor_page, parse_cursor_params, parse_usize_param, ListResponse, MAX_PAGE_SIZE,
+    cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
+    MAX_PAGE_SIZE,
 };
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::middleware::auth::AuthContext;
@@ -330,6 +331,7 @@ pub async fn list_accounts(
 ) -> Result<Json<ListResponse<AccountPublic>>, StatusCode> {
     let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
     let (cursor_mode, after_id) = parse_cursor_params(&params)?;
+    validate_cursor_limit(cursor_mode, limit)?;
 
     let accounts = state.accounts.read().await;
 

@@ -118,6 +118,17 @@ pub fn parse_cursor_params(
     }
 }
 
+/// Validate cursor mode pagination parameters.
+///
+/// In cursor mode, `limit` must be greater than 0 (cannot materialize a page
+/// without a forward anchor). Returns `400 Bad Request` if validation fails.
+pub fn validate_cursor_limit(cursor_mode: bool, limit: usize) -> Result<(), StatusCode> {
+    if cursor_mode && limit == 0 {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    Ok(())
+}
+
 /// Build a cursor page from references into a backing store.
 ///
 /// The sorting contract is **stable id ascending** for every cursor endpoint.
@@ -252,5 +263,16 @@ mod tests {
         assert!(page.items.is_empty());
         assert!(!page.page.has_more);
         assert!(page.page.next_cursor.is_none());
+    }
+
+    #[test]
+    fn validate_cursor_limit_rejects_zero_in_cursor_mode() {
+        // In cursor mode, limit=0 returns 400.
+        assert_eq!(validate_cursor_limit(true, 0), Err(StatusCode::BAD_REQUEST));
+        // In legacy mode, limit=0 is allowed (caller's responsibility).
+        assert_eq!(validate_cursor_limit(false, 0), Ok(()));
+        // In cursor mode, limit > 0 is allowed.
+        assert_eq!(validate_cursor_limit(true, 1), Ok(()));
+        assert_eq!(validate_cursor_limit(true, 100), Ok(()));
     }
 }

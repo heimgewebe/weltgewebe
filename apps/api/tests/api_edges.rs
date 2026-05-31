@@ -346,3 +346,30 @@ async fn edges_cursor_respects_filter_and_invalid_cursor() -> anyhow::Result<()>
 
     Ok(())
 }
+
+#[tokio::test]
+async fn edges_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    write_lines(
+        &edges_path,
+        &[
+            r#"{"id":"e1","source_id":"n1","target_id":"n2","edge_kind":"reference"}"#,
+            r#"{"id":"e2","source_id":"n9","target_id":"n3","edge_kind":"reference"}"#,
+        ],
+    );
+
+    let state = test_state().await?;
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // In cursor mode, limit=0 must return 400 Bad Request.
+    let res = app
+        .oneshot(Request::get("/edges?pagination=cursor&limit=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}

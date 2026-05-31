@@ -772,3 +772,23 @@ async fn nodes_cursor_limit_is_clamped_to_max_page_size() -> anyhow::Result<()> 
 
     Ok(())
 }
+
+#[tokio::test]
+async fn nodes_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+
+    let lines = vec![
+        r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"N1"}"#,
+        r#"{"id":"n2","location":{"lon":10.0,"lat":53.5},"title":"N2"}"#,
+    ];
+    let (app, _env) = app_with_nodes(&in_dir, &lines).await;
+
+    // In cursor mode, limit=0 must return 400 Bad Request.
+    let res = app
+        .oneshot(Request::get("/nodes?pagination=cursor&limit=0").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
