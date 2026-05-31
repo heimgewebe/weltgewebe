@@ -102,8 +102,9 @@ Migration.
 - Explizite Spalten: mindestens `kind`, `title`, eine geographisch
   indexierbare Standortrepräsentation für `location.lat`/`location.lon`,
   sowie `created_at` und `updated_at`.
-- Indexe: Primärschlüssel auf `id`, geographischer Index für `bbox`, plus
-  ggf. ein Zeitindex für Sortier-/Pflegezwecke.
+- Indexe: Primärschlüssel auf `id`, geographischer Index auf der
+  Standortrepräsentation (`location.lat`/`location.lon` oder spätere
+  PostGIS-/bbox-Spalte), plus ggf. ein Zeitindex für Sortier-/Pflegezwecke.
 - Eindeutigkeitsregeln: `id` bleibt eindeutig; zusätzliche fachliche
   Eindeutigkeiten nur dann, wenn die bestehende Domäne sie ausdrücklich verlangt.
 - Migrationsprovenienz: `source_format`, `source_path`, `source_row`,
@@ -138,9 +139,9 @@ Migration.
 - Payload: getrennte Speicherung von öffentlicher Projektion und privaten/
   operativen Feldern, zum Beispiel via `public_payload jsonb` und
   `private_payload jsonb` oder über klar benannte Einzelspalten.
-- Explizite Spalten: öffentliche Projektion, `role`, `email`,
-  `webauthn_user_id`, Statusfelder wie `disabled`, dazu `created_at` und
-  `updated_at`.
+- Explizite Spalten: öffentliche Projektion inklusive `public_pos` und
+  `radius_m`, `role`, `email`, `webauthn_user_id`, Statusfelder wie
+  `disabled`, dazu `created_at` und `updated_at`.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
   Step-up-E-Mail-Änderungen und WebAuthn-User-ID-Writeback.
