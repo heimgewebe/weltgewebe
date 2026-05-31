@@ -59,7 +59,7 @@ Rückfalllogik, bevor Produktionscode verändert wird.
 |---|---|---|---|---|
 | nodes | JSONL über `nodes_path()`, `BufReader::lines`, `serde_json::from_str` | JSONL-Rückschreibung über `patch_node` mit Temp-Datei + Rename | `OrderedCache<Node>` | nicht primär |
 | edges | JSONL über `edges_path()`, `BufReader::lines`, `serde_json::from_str` | kein Schreibpfad im geprüften Code gefunden; aktuell nur JSONL-gestützter Lese-/Ladepfad belegt | `OrderedCache<Edge>` | nicht primär |
-| accounts | `demo.accounts.jsonl` über `accounts_path()` und `BufReader::lines` | JSONL-Append über `append_account_line` | `AccountStore` | nicht primär |
+| accounts | `demo.accounts.jsonl` über `accounts_path()` und `BufReader::lines` | gemischt: JSONL-Append über `append_account_line` beim Anlegen; In-Memory-Mutationen in Auth-Flows, u. a. Step-up-E-Mail-Änderung und WebAuthn-User-ID-Writeback über `AccountStore` | `AccountStore` | nicht primär |
 
 Zusatzbefund:
 
@@ -68,6 +68,9 @@ Zusatzbefund:
   Domänendaten noch nicht als primäre Persistenzschicht verwendet wird.
 - `apps/api/migrations/` enthält derzeit nur die Session-Migrationen; es gibt
   dort noch keine PostgreSQL-Tabellen für `nodes`, `edges` oder `accounts`.
+- Account-Schreibpfade sind breiter als der JSONL-Append-Pfad: Neben dem
+  Anlegen von Accounts müssen spätere Auth-Mutationen wie E-Mail-Änderung
+  und WebAuthn-User-ID-Writeback im Cutover explizit erfasst werden.
 
 ## Zielzustand
 
@@ -96,9 +99,9 @@ Migration.
 
 - Primärschlüssel: `id` als unveränderte, string-basierte Domänen-ID.
 - Payload: ein flexibles `jsonb`-Dokument für nicht normalisierte Felder.
-- Explizite Spalten: mindestens `title`, `mode`, `radius_m`,
-  eine geographisch indexierbare Standortrepräsentation für `bbox`, sowie
-  `created_at` und `updated_at`.
+- Explizite Spalten: mindestens `kind`, `title`, eine geographisch
+  indexierbare Standortrepräsentation für `location.lat`/`location.lon`,
+  sowie `created_at` und `updated_at`.
 - Indexe: Primärschlüssel auf `id`, geographischer Index für `bbox`, plus
   ggf. ein Zeitindex für Sortier-/Pflegezwecke.
 - Eindeutigkeitsregeln: `id` bleibt eindeutig; zusätzliche fachliche
@@ -118,7 +121,7 @@ Migration.
 - Eindeutigkeitsregeln: mindestens `id`; weitere Constraints nur, wenn sie aus
   dem aktuellen Domänenvertrag ableitbar sind.
 - Migrationsprovenienz: analog zu `domain_nodes`.
-- Foreign-Key-Entscheidung: **pending explicit orphan/reference audit**.
+- Foreign-Key-Entscheidung: **ausstehendes explizites Orphan-/Referenz-Audit**.
   Default-Kandidat sind strikte FKs auf `domain_nodes(id)` für `source_id`
   und `target_id`, weil sie die stärkere Integritätsgarantie liefern.
   Der spätere SQL-Migrations-PR muss diese Entscheidung aber anhand eines
@@ -138,6 +141,9 @@ Migration.
 - Explizite Spalten: öffentliche Projektion, `role`, `email`,
   `webauthn_user_id`, Statusfelder wie `disabled`, dazu `created_at` und
   `updated_at`.
+- Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
+  sondern auch spätere Account-Mutationen abdecken, insbesondere
+  Step-up-E-Mail-Änderungen und WebAuthn-User-ID-Writeback.
 - Indexe: Primärschlüssel auf `id`, eindeutiger Index auf `email` oder
   `lower(email)`, falls E-Mail-Login oder Lookup das benötigen.
 - Eindeutigkeitsregeln: öffentliche und private Sicht müssen getrennt bleiben;
@@ -162,10 +168,13 @@ Migration.
 - IDs müssen unverändert bleiben.
 - Sortier- und Cursorverhalten darf sich nicht ändern.
 - Accounts müssen öffentliche und private Projektion strikt getrennt halten.
+- Accounts müssen Standort- und Privacy-Radius-Semantik exakt bewahren.
 - Sensible Felder wie E-Mail, WebAuthn- und Session-bezogene Daten dürfen nicht
   in öffentliche Projektionen auslaufen.
+- Account-Mutationen aus Auth-Flows müssen persistent, restart-stabil und
+  paritätsgetestet sein; cache-only Writebacks sind nach dem Cutover unzulässig.
 - Edges müssen `source_id` und `target_id` exakt bewahren.
-- Nodes müssen Standortfelder und Privacy-Radius-Semantik exakt bewahren.
+- Nodes müssen Standortfelder exakt bewahren.
 - Der Backfill muss idempotent sein.
 - Import muss bei malformed JSONL laut scheitern, sofern keine explizite
   Quarantäne-Strategie dokumentiert ist.
@@ -193,6 +202,8 @@ vorzusehen:
 - API-Integrations-Tests gegen PostgreSQL.
 - Runtime-Smoke für `/nodes`, `/edges` und `/accounts`.
 - Paritäts-Tests für Cursor-Paginierung und Legacy-Listenverhalten.
+- Account-Write-Paritäts-Tests für Create, Step-up-E-Mail-Änderung und
+  WebAuthn-User-ID-Writeback.
 - Orphan-/Referenz-Audit vor der FK-Entscheidung: Anzahl und IDs
   potenziell verwaister Edges müssen ausgewiesen werden; das Ergebnis
   entscheidet zwischen strikten FKs und loser Referenzsemantik mit Guard oder
