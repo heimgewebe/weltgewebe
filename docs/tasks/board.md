@@ -26,14 +26,14 @@ relations:
 |---|---|---|---|---|---|---|
 | OPT-API-001 | api | Paginierung Listen-Endpunkte | done | high | `apps/api/src/routes/query.rs`, `docs/specs/list-pagination-api.md`, `apps/api/tests/api_{nodes,edges,accounts}.rs` | Implementiert in PR #1121 (Commit 98bb7e2); Cursor-Paginierung für /nodes, /edges, /accounts mit limit=0-Validierung |
 | OPT-CON-001 | ci | geschlossene Schemas + begrenzte Extension-Flächen | partial | high | `contracts/domain/*.schema.json` (alle 6 gehärtet) | CI-Nachweis `contracts-domain-check` abwarten, dann auf `done` |
-| OPT-ARC-001 | api | JSONL → PostgreSQL | open | high | `apps/api/src/routes/nodes.rs` (Ist-Befund) | Migrations- und Cutover-Plan erstellen |
+| OPT-ARC-001 | api | JSONL → PostgreSQL | partial | high | `docs/blueprints/domain-data-postgres-cutover.md`, `apps/api/src/routes/nodes.rs`, `apps/api/src/routes/edges.rs`, `apps/api/src/routes/accounts.rs`, `apps/api/src/state.rs`, `apps/api/migrations/20260428000000_create_sessions.up.sql`, `apps/api/migrations/20260428000000_create_sessions.down.sql` | SQL schema/migration PR vorbereiten; JSONL→PostgreSQL Backfill- und Parity-Tests implementieren |
 | TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | partial | medium | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `scripts/docmeta/agent_entrypoint_smoke.py`, `scripts/docmeta/tests/test_agent_entrypoint_smoke.py`, `.github/workflows/task-index.yml` | CI-Lauf des `task-index`-Workflows nachweisen, dann auf `done` setzen |
 
 ## Blocker
 
 | ID | Blocker | Fehlt | Folge |
 |---|---|---|---|
-| OPT-ARC-001 | Kein Migrations-/Cutover-Plan | Konzept für sicheren Cutover | JSONL bleibt aktive Datenquelle |
+| OPT-ARC-001 | Kein implementierter SQL-Schema-/Backfill-Pfad | Implementierter Cutover und Parity-Nachweis fehlen | JSONL bleibt aktive Datenquelle |
 
 ## Nächste PR-Kandidaten
 

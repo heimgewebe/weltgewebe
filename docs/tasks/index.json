@@ -211,15 +211,22 @@
       "id": "OPT-ARC-001",
       "title": "JSONL-Datenquelle zu PostgreSQL migrieren",
       "area": "api",
-      "status": "open",
+      "status": "partial",
       "priority": "high",
       "effort": "XL",
       "risk": "high",
       "owner": "unknown",
-      "evidence": [],
+      "evidence": [
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/state.rs",
+        "apps/api/migrations/20260428000000_create_sessions.up.sql",
+        "apps/api/migrations/20260428000000_create_sessions.down.sql"
+      ],
       "missing_evidence": [
-        "Migrations- und Cutover-Plan fehlt",
-        "Domain-Migrationen für Nodes/Accounts/Edges fehlen",
+        "Kein implementierter SQL-Schema-/Backfill-/Read- oder Write-Cutover für Nodes, Edges und Accounts",
         "kein Runtime-Nachweis für PostgreSQL-Pfad in Domänen-Endpunkten"
       ],
       "acceptance": [
@@ -231,10 +238,11 @@
         "issues": [],
         "prs": [],
         "docs": [
+          "docs/blueprints/domain-data-postgres-cutover.md",
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-05-28"
+      "updated_at": "2026-05-31"
     }
   ]
 }
