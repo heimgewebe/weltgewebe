@@ -118,10 +118,16 @@ Migration.
 - Eindeutigkeitsregeln: mindestens `id`; weitere Constraints nur, wenn sie aus
   dem aktuellen Domänenvertrag ableitbar sind.
 - Migrationsprovenienz: analog zu `domain_nodes`.
-- Foreign-Key-Entscheidung: **strikte FKs** auf `domain_nodes(id)` für
-  `source_id` und `target_id`, mit harter Fehlerbehandlung beim Import.
-  Orphaned Edges dürfen nicht still akzeptiert werden. Wenn der Backfill eine
-  Inkonsistenz findet, muss er abbrechen statt still zu glätten.
+- Foreign-Key-Entscheidung: **pending explicit orphan/reference audit**.
+  Default-Kandidat sind strikte FKs auf `domain_nodes(id)` für `source_id`
+  und `target_id`, weil sie die stärkere Integritätsgarantie liefern.
+  Der spätere SQL-Migrations-PR muss diese Entscheidung aber anhand eines
+  Daten-/Code-Audits treffen: Falls das aktuelle Modell externe, fehlende oder
+  entitätsübergreifende Referenzen zulässt, ist alternativ eine lose
+  Referenzsemantik mit explizitem Integrity-Guard oder Quarantäne-Report zu
+  wählen. Der Backfill darf Orphaned Edges niemals still verwerfen,
+  normalisieren oder glätten; er muss entweder laut scheitern oder die Fälle
+  explizit quarantänisieren.
 
 ### `domain_accounts`
 
@@ -187,6 +193,10 @@ vorzusehen:
 - API-Integrations-Tests gegen PostgreSQL.
 - Runtime-Smoke für `/nodes`, `/edges` und `/accounts`.
 - Paritäts-Tests für Cursor-Paginierung und Legacy-Listenverhalten.
+- Orphan-/Referenz-Audit vor der FK-Entscheidung: Anzahl und IDs
+  potenziell verwaister Edges müssen ausgewiesen werden; das Ergebnis
+  entscheidet zwischen strikten FKs und loser Referenzsemantik mit Guard oder
+  Quarantäne.
 - Doku-/Task-Guards wie `validate_relations`, `docs-relations-guard`,
   `generate_task_index --check` und `validate_task_index`.
 
