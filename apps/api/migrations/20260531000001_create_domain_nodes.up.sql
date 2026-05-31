@@ -32,7 +32,6 @@ CREATE INDEX domain_nodes_kind ON domain_nodes (kind);
 -- extension and bbox/geometry representation are decided.
 CREATE INDEX domain_nodes_lat_lon ON domain_nodes (lat, lon);
 
--- Cursor-order index: ensures stable ascending id ordering for cursor pagination.
--- The primary key index covers id lookups; this explicit index is documented
--- to make the cursor-order dependency visible for later query planners.
--- (PostgreSQL will use the PK index; kept as comment for clarity.)
+-- Cursor-order note: stable ascending id ordering for cursor pagination is
+-- covered by the primary-key index on id. No separate duplicate id index is
+-- created here; this comment documents the later query-planner dependency.

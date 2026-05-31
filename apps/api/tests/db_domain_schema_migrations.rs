@@ -225,7 +225,7 @@ async fn domain_schema_basic_insert_and_read() {
 
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
-         VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', 'ron', 0, 'user', '{}'::jsonb, '{}'::jsonb)",
+            VALUES ('test-account-schema-probe', 'garnrolle', 'Test Account', 'ron', 0, 'gast', '{}'::jsonb, '{}'::jsonb)",
     )
     .execute(&pool)
     .await
