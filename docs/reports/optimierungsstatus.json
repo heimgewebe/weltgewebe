@@ -212,20 +212,23 @@
       "priority": "high",
       "risk": "high",
       "effort": "high",
-      "evidence_status": "doc-only",
+      "evidence_status": "code",
       "evidence": [
         "docs/blueprints/domain-data-postgres-cutover.md",
-        "apps/api/src/routes/nodes.rs",
-        "apps/api/src/routes/edges.rs",
-        "apps/api/src/routes/accounts.rs",
-        "apps/api/src/state.rs",
-        "apps/api/migrations/20260428000000_create_sessions.up.sql",
-        "apps/api/migrations/20260428000000_create_sessions.down.sql"
+        "apps/api/migrations/20260531000001_create_domain_nodes.up.sql",
+        "apps/api/migrations/20260531000001_create_domain_nodes.down.sql",
+        "apps/api/migrations/20260531000002_create_domain_edges.up.sql",
+        "apps/api/migrations/20260531000002_create_domain_edges.down.sql",
+        "apps/api/migrations/20260531000003_create_domain_accounts.up.sql",
+        "apps/api/migrations/20260531000003_create_domain_accounts.down.sql",
+        "apps/api/tests/db_domain_schema_migrations.rs"
       ],
       "missing_evidence": [
-        "Kein implementierter SQL-Schema-/Backfill-/Read- oder Write-Cutover für Domänendaten"
+        "CI-Nachweis der Migration-Tests ausstehend (Phase-B-CI-Gate, requires DATABASE_URL)",
+        "Kein implementierter Backfill-/Read- oder Write-Cutover für Domänendaten",
+        "JSONL bleibt aktive Runtime-Wahrheit"
       ],
-      "next_action": "SQL schema/migration PR vorbereiten; JSONL→PostgreSQL Backfill- und Parity-Tests implementieren",
+      "next_action": "CI-Gate für Migration-Tests ergänzen; danach Phase C (Backfill-/Import-Pfad) angehen",
       "updated_at": "2026-05-31"
     },
     {
