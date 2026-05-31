@@ -1,4 +1,6 @@
-use super::query::{parse_usize_param, MAX_PAGE_SIZE};
+use super::query::{
+    cursor_page, parse_cursor_params, parse_usize_param, ListResponse, MAX_PAGE_SIZE,
+};
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
@@ -325,21 +327,37 @@ pub async fn load_all_accounts() -> AccountStore {
 pub async fn list_accounts(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<AccountPublic>>, StatusCode> {
+) -> Result<Json<ListResponse<AccountPublic>>, StatusCode> {
     let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
-    let offset: usize = parse_usize_param(&params, "offset", 0)?;
+    let (cursor_mode, after_id) = parse_cursor_params(&params)?;
 
     let accounts = state.accounts.read().await;
 
-    // BTreeMap iterates in ascending key order, so output is deterministic by account id.
-    let accounts: Vec<AccountPublic> = accounts
-        .iter()
-        .skip(offset)
-        .take(limit)
-        .map(|(_id, internal)| internal.public.clone())
-        .collect();
+    if cursor_mode {
+        // The AccountStore is a BTreeMap (already id-ascending); cursor_page
+        // re-affirms the stable id-ascending contract shared by all cursor
+        // endpoints and projects each account to its public view.
+        let refs: Vec<&AccountInternal> = accounts.iter().map(|(_id, internal)| internal).collect();
+        let page = cursor_page(
+            refs,
+            limit,
+            after_id.as_deref(),
+            |internal: &AccountInternal| internal.public.id.as_str(),
+            |internal: &AccountInternal| internal.public.clone(),
+        );
+        Ok(Json(ListResponse::Cursor(page)))
+    } else {
+        let offset: usize = parse_usize_param(&params, "offset", 0)?;
+        // BTreeMap iterates in ascending key order, so output is deterministic by account id.
+        let accounts: Vec<AccountPublic> = accounts
+            .iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(_id, internal)| internal.public.clone())
+            .collect();
 
-    Ok(Json(accounts))
+        Ok(Json(ListResponse::Legacy(accounts)))
+    }
 }
 
 pub async fn get_account(

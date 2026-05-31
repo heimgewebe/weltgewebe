@@ -282,3 +282,124 @@ async fn accounts_limit_is_clamped_to_max_page_size() -> Result<()> {
 
     Ok(())
 }
+
+fn seed_account(id: &str) -> AccountInternal {
+    AccountInternal {
+        public: AccountPublic {
+            id: id.to_string(),
+            kind: "garnrolle".to_string(),
+            title: format!("Title {id}"),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+            radius_m: 0,
+            disabled: false,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: None,
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    }
+}
+
+#[tokio::test]
+async fn accounts_cursor_pagination_envelope_and_walk() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+
+    // Insert unsorted; BTreeMap + cursor_page both yield id-ascending order.
+    for id in &["a3", "a1", "a5", "a2", "a4"] {
+        accounts.insert(seed_account(id));
+    }
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // Page 1: envelope with the first two ids.
+    let req = Request::get("/accounts?pagination=cursor&limit=2").body(body::Body::empty())?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "a1");
+    assert_eq!(items[1]["id"], "a2");
+    assert_eq!(v["page"]["has_more"], true);
+    let cursor1 = v["page"]["next_cursor"]
+        .as_str()
+        .context("next_cursor must be present on page 1")?
+        .to_string();
+
+    // Page 2: next id-ordered slice, no duplicates from page 1.
+    let uri = format!("/accounts?cursor={cursor1}&limit=2");
+    let res = app
+        .clone()
+        .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["id"], "a3");
+    assert_eq!(items[1]["id"], "a4");
+    let cursor2 = v["page"]["next_cursor"]
+        .as_str()
+        .context("next_cursor must be present on page 2")?
+        .to_string();
+
+    // Page 3 (last): single remaining id, has_more false, next_cursor null.
+    let uri = format!("/accounts?cursor={cursor2}&limit=2");
+    let res = app
+        .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["id"], "a5");
+    assert_eq!(v["page"]["has_more"], false);
+    assert!(v["page"]["next_cursor"].is_null());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn accounts_cursor_invalid_is_bad_request() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account("a1"));
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    // Odd-length / non-hex cursor token -> deterministic 400.
+    let req = Request::get("/accounts?cursor=zzz").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn accounts_cursor_limit_is_clamped_to_max_page_size() -> Result<()> {
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    for i in 0..1100 {
+        accounts.insert(seed_account(&format!("a{i:04}")));
+    }
+    state.accounts = Arc::new(RwLock::new(accounts));
+    let app = Router::new().merge(api_router()).with_state(state);
+
+    let req = Request::get("/accounts?pagination=cursor&limit=5000").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+    let body = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let v: serde_json::Value = serde_json::from_slice(&body)?;
+    let items = v["items"].as_array().context("items must be array")?;
+    assert_eq!(items.len(), 1000);
+    assert_eq!(v["page"]["limit"], 1000);
+    assert_eq!(v["page"]["has_more"], true);
+
+    Ok(())
+}

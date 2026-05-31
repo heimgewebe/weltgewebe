@@ -1,4 +1,6 @@
-use super::query::{parse_usize_param, MAX_PAGE_SIZE};
+use super::query::{
+    cursor_page, parse_cursor_params, parse_usize_param, ListResponse, MAX_PAGE_SIZE,
+};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
@@ -115,35 +117,51 @@ pub async fn load_edges() -> OrderedCache<Edge> {
 pub async fn list_edges(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
-) -> Result<Json<Vec<Edge>>, StatusCode> {
+) -> Result<Json<ListResponse<Edge>>, StatusCode> {
     let src = params.get("source_id");
     let dst = params.get("target_id");
     let limit: usize = parse_usize_param(&params, "limit", 250)?.min(MAX_PAGE_SIZE);
-    let offset: usize = parse_usize_param(&params, "offset", 0)?;
+    let (cursor_mode, after_id) = parse_cursor_params(&params)?;
+
+    let matches = |edge: &&Edge| {
+        if let Some(s) = src {
+            if edge.source_id != *s {
+                return false;
+            }
+        }
+        if let Some(d) = dst {
+            if edge.target_id != *d {
+                return false;
+            }
+        }
+        true
+    };
 
     let cache = state.edges.read().await;
 
-    let out: Vec<Edge> = cache
-        .iter_in_order()
-        .filter(|edge| {
-            if let Some(s) = src {
-                if edge.source_id != *s {
-                    return false;
-                }
-            }
-            if let Some(d) = dst {
-                if edge.target_id != *d {
-                    return false;
-                }
-            }
-            true
-        })
-        .skip(offset)
-        .take(limit)
-        .cloned()
-        .collect();
-
-    Ok(Json(out))
+    if cursor_mode {
+        // Cursor mode sorts by stable id ascending (see query::cursor_page),
+        // independent of the file/insertion order used by the legacy path.
+        let refs: Vec<&Edge> = cache.iter_in_order().filter(matches).collect();
+        let page = cursor_page(
+            refs,
+            limit,
+            after_id.as_deref(),
+            |edge: &Edge| edge.id.as_str(),
+            |edge: &Edge| edge.clone(),
+        );
+        Ok(Json(ListResponse::Cursor(page)))
+    } else {
+        let offset: usize = parse_usize_param(&params, "offset", 0)?;
+        let out: Vec<Edge> = cache
+            .iter_in_order()
+            .filter(matches)
+            .skip(offset)
+            .take(limit)
+            .cloned()
+            .collect();
+        Ok(Json(ListResponse::Legacy(out)))
+    }
 }
 
 pub async fn get_edge(
