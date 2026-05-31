@@ -24,6 +24,7 @@ relations:
 
 | ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |
 |---|---|---|---|---|---|---|
+| OPT-API-001 | api | Paginierung Listen-Endpunkte | partial | high | `apps/api/src/routes/query.rs`, `docs/specs/list-pagination-api.md`, `apps/api/tests/api_{nodes,edges,accounts}.rs` | CI-Nachweis (`api.yml`) der Cursor-Tests abwarten, dann auf `done` |
 | OPT-CON-001 | ci | geschlossene Schemas + begrenzte Extension-Flächen | partial | high | `contracts/domain/*.schema.json` (alle 6 gehärtet) | CI-Nachweis `contracts-domain-check` abwarten, dann auf `done` |
 | OPT-ARC-001 | api | JSONL → PostgreSQL | open | high | `apps/api/src/routes/nodes.rs` (Ist-Befund) | Migrations- und Cutover-Plan erstellen |
 | TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | partial | medium | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `scripts/docmeta/agent_entrypoint_smoke.py`, `scripts/docmeta/tests/test_agent_entrypoint_smoke.py`, `.github/workflows/task-index.yml` | CI-Lauf des `task-index`-Workflows nachweisen, dann auf `done` setzen |
@@ -33,6 +34,7 @@ relations:
 | ID | Blocker | Fehlt | Folge |
 |---|---|---|---|
 | OPT-ARC-001 | Kein Migrations-/Cutover-Plan | Konzept für sicheren Cutover | JSONL bleibt aktive Datenquelle |
+| OPT-API-001 | CI-Nachweis steht aus | grüner `api.yml`-Lauf der Cursor-Tests | Status bleibt `partial` bis CI grün |
 
 ## Nächste PR-Kandidaten
 
@@ -56,5 +58,4 @@ relations:
 | OPT-API-002 | api | Session-Persistenz PostgreSQL | `apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-004 | api | Limit-Obergrenze `/nodes` & `/accounts` | `apps/api/src/routes/query.rs`, Tests 4+9 passed |
-| OPT-API-001 | api | Paginierung Listen-Endpunkte | `apps/api/src/routes/query.rs` (Cursor-Envelope), `apps/api/tests/api_{nodes,edges,accounts}.rs`, `docs/specs/list-pagination-api.md`; CI PROVEN (`test and lint (rust)` grün, PR #1121), Commit `d047f4a` |
 | OPT-FE-003 | web | Panel-Detail-Fetch-Logik extrahieren | `apps/web/src/lib/panels/panelDetails.ts`, 10+5 Tests passed |
