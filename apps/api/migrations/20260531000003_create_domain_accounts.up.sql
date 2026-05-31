@@ -26,10 +26,11 @@
 CREATE TABLE domain_accounts (
     id               TEXT             PRIMARY KEY,
     -- Public projection fields (safe to expose via API)
-    kind             TEXT             NOT NULL DEFAULT '',
+    kind             TEXT             NOT NULL DEFAULT 'ron',
     title            TEXT             NOT NULL DEFAULT 'Untitled',
     mode             TEXT             NOT NULL DEFAULT 'ron',
-    radius_m         INTEGER          NOT NULL DEFAULT 0,
+    radius_m         BIGINT           NOT NULL DEFAULT 0
+                                      CHECK (radius_m >= 0 AND radius_m <= 4294967295),
     disabled         BOOLEAN          NOT NULL DEFAULT FALSE,
     -- Private location: real residence, never exposed directly.
     -- public_pos is derived at runtime from (location_lat, location_lon,
@@ -37,7 +38,7 @@ CREATE TABLE domain_accounts (
     location_lat     DOUBLE PRECISION,
     location_lon     DOUBLE PRECISION,
     -- Auth-sensitive operational fields
-    role             TEXT             NOT NULL DEFAULT 'user',
+    role             TEXT             NOT NULL DEFAULT 'gast',
     email            TEXT,
     webauthn_user_id UUID,
     -- Timestamps
@@ -48,8 +49,9 @@ CREATE TABLE domain_accounts (
     private_payload  JSONB            NOT NULL DEFAULT '{}'
 );
 
--- Case-insensitive unique index on email for login/lookup.
--- Partial index excludes NULL emails (accounts without email login).
-CREATE UNIQUE INDEX domain_accounts_email
+-- Case-insensitive lookup index on email for login/lookup.
+-- Non-unique by design in Phase B to avoid rejecting currently tolerated
+-- duplicate emails before Phase C duplicate-audit/quarantine decisions.
+CREATE INDEX domain_accounts_email_lookup
     ON domain_accounts (lower(email))
     WHERE email IS NOT NULL;

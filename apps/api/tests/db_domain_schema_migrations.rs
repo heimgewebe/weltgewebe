@@ -2,6 +2,9 @@
 //!
 //! Verifies that Phase B migrations for OPT-ARC-001 create domain tables and
 //! indexes correctly, and that basic structural inserts and constraints hold.
+//! In particular, the accounts schema intentionally keeps email non-unique in
+//! Phase B to remain compatible with current JSONL/runtime tolerance until
+//! Phase C duplicate-audit/quarantine policy is implemented.
 //! Does NOT verify down-migration / DROP behaviour — that requires a
 //! disposable database and is deferred to a dedicated revert-proof gate.
 //! No runtime cutover is tested here — JSONL remains the active data source
@@ -135,8 +138,8 @@ async fn domain_schema_tables_exist_after_migration() {
         "domain_accounts table must exist after migration"
     );
     assert!(
-        index_exists(&pool, "domain_accounts_email").await,
-        "domain_accounts_email unique index must exist"
+        index_exists(&pool, "domain_accounts_email_lookup").await,
+        "domain_accounts_email_lookup index must exist"
     );
 
     pool.close().await;
@@ -246,18 +249,19 @@ async fn domain_schema_basic_insert_and_read() {
     pool.close().await;
 }
 
-/// Verifies that the domain_accounts email unique constraint rejects duplicate
-/// emails (case-insensitive) and allows NULL emails without constraint violations.
+/// Verifies that the Phase-B accounts schema currently allows duplicate emails
+/// (case-insensitive) while still providing a case-insensitive lookup index.
+/// NULL emails are also allowed.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn domain_accounts_email_uniqueness_constraint() {
+async fn domain_accounts_email_duplicates_are_allowed_in_phase_b() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
 
     // Clean up any prior probe rows
     sqlx::query(
         "DELETE FROM domain_accounts WHERE id IN (
-            'test-email-unique-a', 'test-email-unique-b', 'test-email-null-a', 'test-email-null-b'
+            'test-email-dup-a', 'test-email-dup-b', 'test-email-null-a', 'test-email-null-b'
         )",
     )
     .execute(&pool)
@@ -267,29 +271,25 @@ async fn domain_accounts_email_uniqueness_constraint() {
     // Insert first account with email
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-unique-a', '', '', 'ron', 0, 'user', 'probe@example.com', '{}', '{}')",
+         VALUES ('test-email-dup-a', 'ron', 'dup-a', 'ron', 0, 'gast', 'probe@example.com', '{}', '{}')",
     )
     .execute(&pool)
     .await
     .expect("first insert with email must succeed");
 
-    // Second account with same email (different case) must fail
-    let result = sqlx::query(
+    // Second account with same email (different case) currently also succeeds.
+    sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-unique-b', '', '', 'ron', 0, 'user', 'PROBE@example.com', '{}', '{}')",
+         VALUES ('test-email-dup-b', 'ron', 'dup-b', 'ron', 0, 'gast', 'PROBE@example.com', '{}', '{}')",
     )
     .execute(&pool)
-    .await;
-
-    assert!(
-        result.is_err(),
-        "inserting duplicate email (different case) must violate unique constraint"
-    );
+    .await
+    .expect("duplicate email insert must succeed in Phase B");
 
     // Two accounts without email (NULL) must both succeed
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
-         VALUES ('test-email-null-a', '', '', 'ron', 0, 'user', '{}', '{}')",
+         VALUES ('test-email-null-a', 'ron', 'null-a', 'ron', 0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await
@@ -297,16 +297,43 @@ async fn domain_accounts_email_uniqueness_constraint() {
 
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
-         VALUES ('test-email-null-b', '', '', 'ron', 0, 'user', '{}', '{}')",
+         VALUES ('test-email-null-b', 'ron', 'null-b', 'ron', 0, 'gast', '{}', '{}')",
     )
     .execute(&pool)
     .await
-    .expect("second NULL-email insert must succeed (partial index excludes NULLs)");
+    .expect("second NULL-email insert must succeed");
+
+    // Radius supports full u32 range via BIGINT + CHECK constraint.
+    sqlx::query("DELETE FROM domain_accounts WHERE id = 'test-radius-u32-max'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup of test-radius-u32-max failed");
+
+    sqlx::query(
+        "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
+         VALUES ('test-radius-u32-max', 'ron', 'radius-max', 'ron', 4294967295, 'gast', '{}', '{}')",
+    )
+    .execute(&pool)
+    .await
+    .expect("u32::MAX radius_m must be accepted");
+
+    let overflow_result = sqlx::query(
+        "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, public_payload, private_payload)
+         VALUES ('test-radius-overflow', 'ron', 'radius-overflow', 'ron', 4294967296, 'gast', '{}', '{}')",
+    )
+    .execute(&pool)
+    .await;
+
+    assert!(
+        overflow_result.is_err(),
+        "radius_m above u32::MAX must violate check constraint"
+    );
 
     // Clean up
     sqlx::query(
         "DELETE FROM domain_accounts WHERE id IN (
-            'test-email-unique-a', 'test-email-unique-b', 'test-email-null-a', 'test-email-null-b'
+            'test-email-dup-a', 'test-email-dup-b', 'test-email-null-a', 'test-email-null-b',
+            'test-radius-u32-max', 'test-radius-overflow'
         )",
     )
     .execute(&pool)
