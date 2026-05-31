@@ -124,7 +124,7 @@
         "docs/specs/list-pagination-api.md"
       ],
       "missing_evidence": [
-        "api-smoke.yml: Race condition im Readiness-Wait behoben (PR #1121); CI-Nachweis ausstehend nach erneutem Lauf"
+        "Rust/API-Tests belegen Cursor-Paginierung; api-smoke.yml belegt Runtime-Readiness nach Race-Fix. Nach grünem PR-CI-Lauf als done markieren."
       ],
       "acceptance": [
         "Cursor-Paginierung implementiert und per Test belegt",

@@ -117,8 +117,10 @@ Hinweise:
 
 - `items` trägt dieselbe Element-Form wie das Legacy-Array
   (z. B. die öffentliche Projektion eines Accounts ohne `location`).
-- Ein `total`-Zähler wird bewusst **nicht** geliefert: Cursor-Paginierung
-  materialisiert die Gesamtmenge nicht; `has_more` genügt zum Weiterblättern.
+- Ein `total`-Zähler wird bewusst **nicht** geliefert: Clients benötigen für den
+  Cursor-Walk nur `has_more`. Die aktuelle In-Memory-Implementierung kann die
+  gefilterten Referenzen intern materialisieren und sortieren; der API-Vertrag
+  legt aber keinen `total`-Zähler fest.
 
 ## Sortierungsvertrag
 

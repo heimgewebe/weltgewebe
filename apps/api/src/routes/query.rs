@@ -22,8 +22,9 @@ pub fn parse_usize_param(
 ///
 /// `next_cursor` is serialised as `null` on the last page; `has_more` indicates
 /// whether a further page exists. A `total` count is intentionally omitted:
-/// cursor pagination does not require materialising the full result set, and
-/// `has_more` already tells the client whether to keep walking.
+/// clients only need `has_more` to continue walking. The current in-memory
+/// implementation may materialise and sort the filtered references, but the
+/// wire contract does not expose or require a total count.
 #[derive(Debug, Serialize)]
 pub struct PageMeta {
     pub limit: usize,
