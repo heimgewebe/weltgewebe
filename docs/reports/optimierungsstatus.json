@@ -222,7 +222,8 @@
         "apps/api/migrations/20260531000003_create_domain_accounts.up.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.down.sql",
         "apps/api/tests/db_domain_schema_migrations.rs",
-        ".github/workflows/api.yml (job: db-domain-schema-migrations-proof)"
+        ".github/workflows/api.yml",
+        "CI-Job: db-domain-schema-migrations-proof"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
