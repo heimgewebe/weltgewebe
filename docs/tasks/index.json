@@ -108,7 +108,7 @@
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
@@ -123,9 +123,7 @@
         "apps/api/tests/api_accounts.rs",
         "docs/specs/list-pagination-api.md"
       ],
-      "missing_evidence": [
-        "Rust/API-Tests belegen Cursor-Paginierung; api-smoke.yml belegt Runtime-Readiness nach Race-Fix. Nach grünem PR-CI-Lauf als done markieren."
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Cursor-Paginierung implementiert und per Test belegt",
         "Response-Metadaten in API-Spec dokumentiert",

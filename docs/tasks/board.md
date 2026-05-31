@@ -24,7 +24,7 @@ relations:
 
 | ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |
 |---|---|---|---|---|---|---|
-| OPT-API-001 | api | Paginierung Listen-Endpunkte | partial | high | `apps/api/src/routes/query.rs`, `docs/specs/list-pagination-api.md`, `apps/api/tests/api_{nodes,edges,accounts}.rs` | CI-Nachweis der PR-Checks abwarten: Rust/API-Tests für Cursor-Paginierung und `api-smoke.yml` nach Readiness-Fix müssen grün laufen; dann auf `done` |
+| OPT-API-001 | api | Paginierung Listen-Endpunkte | done | high | `apps/api/src/routes/query.rs`, `docs/specs/list-pagination-api.md`, `apps/api/tests/api_{nodes,edges,accounts}.rs` | Implementiert in PR #1121 (Commit 98bb7e2); Cursor-Paginierung für /nodes, /edges, /accounts mit limit=0-Validierung |
 | OPT-CON-001 | ci | geschlossene Schemas + begrenzte Extension-Flächen | partial | high | `contracts/domain/*.schema.json` (alle 6 gehärtet) | CI-Nachweis `contracts-domain-check` abwarten, dann auf `done` |
 | OPT-ARC-001 | api | JSONL → PostgreSQL | open | high | `apps/api/src/routes/nodes.rs` (Ist-Befund) | Migrations- und Cutover-Plan erstellen |
 | TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | partial | medium | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `scripts/docmeta/agent_entrypoint_smoke.py`, `scripts/docmeta/tests/test_agent_entrypoint_smoke.py`, `.github/workflows/task-index.yml` | CI-Lauf des `task-index`-Workflows nachweisen, dann auf `done` setzen |
@@ -34,7 +34,6 @@ relations:
 | ID | Blocker | Fehlt | Folge |
 |---|---|---|---|
 | OPT-ARC-001 | Kein Migrations-/Cutover-Plan | Konzept für sicheren Cutover | JSONL bleibt aktive Datenquelle |
-| OPT-API-001 | CI-Nachweis steht aus | Rust/API-Tests belegen Cursor-Paginierung; `api-smoke.yml` belegt Runtime-Readiness nach Race-Fix | Status bleibt `partial` bis PR-CI grün |
 
 ## Nächste PR-Kandidaten
 
