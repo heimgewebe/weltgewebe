@@ -96,8 +96,8 @@ fn hex_val(byte: u8) -> Option<u8> {
 
 /// Determine pagination mode from query parameters.
 ///
-/// Cursor mode is opt-in: it is active when `pagination=cursor` is set or when a
-/// non-empty `cursor` token is present (matching the `?cursor=...&limit=...`
+/// Cursor mode is opt-in: it is active when `pagination=cursor` is set or when any
+/// `cursor` parameter is present, even if empty (matching the `?cursor=...&limit=...`
 /// convention recommended in the optimisation report). Returns
 /// `(cursor_mode, after_id)`, where `after_id` is the decoded anchor (exclusive
 /// lower bound) or `None` for the first page. A present-but-malformed `cursor`
@@ -216,6 +216,11 @@ mod tests {
             parse_cursor_params(&bad_cursor),
             Err(StatusCode::BAD_REQUEST)
         );
+
+        // Empty cursor parameter activates cursor mode (start from beginning).
+        let mut empty_cursor = HashMap::new();
+        empty_cursor.insert("cursor".to_string(), "".to_string());
+        assert_eq!(parse_cursor_params(&empty_cursor).unwrap(), (true, None));
     }
 
     // Mirrors a real domain row (e.g. a Node): the id is a field, so `id_of`
