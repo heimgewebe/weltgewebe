@@ -137,7 +137,9 @@ pub fn validate_cursor_limit(cursor_mode: bool, limit: usize) -> Result<(), Stat
 /// on the last returned id, so the next page contains strictly larger ids and
 /// can therefore never duplicate or skip an entry across a stable store.
 ///
-/// The caller passes `limit` already clamped to [`MAX_PAGE_SIZE`].
+/// **Precondition:** The caller must validate `limit > 0` in cursor mode via
+/// [`validate_cursor_limit`] before calling this function. The caller passes
+/// `limit` already clamped to [`MAX_PAGE_SIZE`].
 pub fn cursor_page<I, O>(
     mut refs: Vec<&I>,
     limit: usize,

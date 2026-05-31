@@ -348,6 +348,7 @@ async fn edges_cursor_respects_filter_and_invalid_cursor() -> anyhow::Result<()>
 }
 
 #[tokio::test]
+#[serial]
 async fn edges_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");

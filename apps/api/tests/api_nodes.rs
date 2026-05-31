@@ -774,6 +774,7 @@ async fn nodes_cursor_limit_is_clamped_to_max_page_size() -> anyhow::Result<()> 
 }
 
 #[tokio::test]
+#[serial]
 async fn nodes_cursor_limit_zero_is_bad_request() -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
