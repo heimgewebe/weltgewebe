@@ -58,8 +58,8 @@ GET /nodes?limit=50&offset=100
 
 ### Cursor-Modus (opt-in)
 
-- Aktiv, sobald `pagination=cursor` gesetzt ist **oder** ein nicht-leerer
-  `cursor`-Parameter vorliegt.
+- Aktiv, sobald `pagination=cursor` gesetzt ist **oder** ein `cursor`-Parameter
+  vorliegt (auch wenn leer).
 - Parameter: `limit`, `cursor` (statt `offset`).
 - Antwort: **Envelope** mit `items` und `page`.
 
