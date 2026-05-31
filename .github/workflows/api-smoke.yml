@@ -118,11 +118,6 @@ jobs:
 
           nohup "$BIN" >/tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
-          if ! kill -0 "$(cat /tmp/api.pid)" 2>/dev/null; then
-            echo "API process failed to start"
-            cat /tmp/api.log || true
-            exit 1
-          fi
           # Wait for the server to accept connections before declaring ready (up to 30 s)
           ready=0
           for _ in {1..60}; do
