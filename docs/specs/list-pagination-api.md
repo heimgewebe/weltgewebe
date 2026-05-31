@@ -100,7 +100,11 @@ GET /nodes?cursor=6e303530&limit=50
 Ein nicht-numerisches oder negatives `limit`/`offset` ergibt `400 Bad Request`
 (unverändert gegenüber dem bisherigen Verhalten).
 
-**Im Cursor-Modus** ist zusätzlich `limit=0` ungültig und ergibt `400 Bad Request`. Dies verhindert ein Vertragsverletzung: Bei `limit=0` würde eine leere Seite (`items=[]`, `has_more=false`, `next_cursor=null`) zurückgegeben, obwohl eine weitere Seite existieren kann. Der Cursor kann keinen sinnvollen Fortschrittsanker bilden. Im **Legacy-Modus** bleibt `limit=0` weiterhin erlaubt und liefert ein leeres Array.
+**Im Cursor-Modus** ist zusätzlich `limit=0` ungültig und ergibt `400 Bad Request`.
+Dies verhindert eine Vertragsverletzung: Bei `limit=0` würde eine leere Seite
+(`items=[]`, `has_more=false`, `next_cursor=null`) zurückgegeben, obwohl eine weitere Seite
+existieren kann. Der Cursor kann keinen sinnvollen Fortschrittsanker bilden.
+Im **Legacy-Modus** bleibt `limit=0` weiterhin erlaubt und liefert ein leeres Array.
 
 ## Response-Envelope (Cursor-Modus)
 
