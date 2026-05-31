@@ -208,19 +208,25 @@
       "id": "OPT-ARC-001",
       "area": "Architektur",
       "title": "JSONL → PostgreSQL",
-      "status": "open",
+      "status": "partial",
       "priority": "high",
       "risk": "high",
       "effort": "high",
-      "evidence_status": "code",
+      "evidence_status": "doc-only",
       "evidence": [
-        "apps/api/src/routes/nodes.rs"
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/src/routes/accounts.rs",
+        "apps/api/src/state.rs",
+        "apps/api/migrations/20260428000000_create_sessions.up.sql",
+        "apps/api/migrations/20260428000000_create_sessions.down.sql"
       ],
       "missing_evidence": [
-        "Migrations- und Cutover-Plan fehlt"
+        "Kein implementierter SQL-Schema-/Backfill-/Read- oder Write-Cutover für Domänendaten"
       ],
-      "next_action": "Migrations- und Cutover-Plan für Domänen-Daten erstellen",
-      "updated_at": "2026-04-27"
+      "next_action": "SQL schema/migration PR vorbereiten; JSONL→PostgreSQL Backfill- und Parity-Tests implementieren",
+      "updated_at": "2026-05-31"
     },
     {
       "id": "OPT-API-004",
