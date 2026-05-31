@@ -221,14 +221,18 @@
         "apps/api/migrations/20260531000002_create_domain_edges.down.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.up.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.down.sql",
-        "apps/api/tests/db_domain_schema_migrations.rs"
+        "apps/api/tests/db_domain_schema_migrations.rs",
+        ".github/workflows/api.yml",
+        "CI-Job: db-domain-schema-migrations-proof"
       ],
       "missing_evidence": [
-        "CI-Nachweis der Migration-Tests ausstehend (Phase-B-CI-Gate, requires DATABASE_URL)",
-        "Kein implementierter Backfill-/Read- oder Write-Cutover für Domänendaten",
-        "JSONL bleibt aktive Runtime-Wahrheit"
+        "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
+        "Phase C (Backfill-/Import-Pfad) für Domänendaten fehlt",
+        "Phase D (Read-Path-Switch) für Domänendaten fehlt",
+        "Phase E (Write-Path-Switch) für Domänendaten fehlt",
+        "JSONL bleibt aktive Runtime-Wahrheit bis zum Cutover"
       ],
-      "next_action": "CI-Gate für Migration-Tests ergänzen; danach Phase C (Backfill-/Import-Pfad) angehen",
+      "next_action": "PR-CI-Lauf des neuen Phase-B-Migrationsjobs belegen; danach Phase C (Backfill-/Import-Pfad) angehen",
       "updated_at": "2026-05-31"
     },
     {
