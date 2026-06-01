@@ -18,6 +18,19 @@ from scripts.docmeta.validate_claim_registry import load_registry, validate_regi
 
 TASK_ID_RE = re.compile(r"^[A-Z]+(-[A-Z]+)*-[0-9]{3}$")
 TASK_TYPES = {"doc_change", "ci_change", "infra_change", "governance", "generated_refresh"}
+TASK_REQUIRED_FIELDS = {
+    "task_id",
+    "goal",
+    "task_type",
+    "allowed_paths",
+    "forbidden_paths",
+    "claims",
+    "expected_evidence",
+    "validation_commands",
+    "delete_allowed",
+}
+TASK_OPTIONAL_FIELDS = {"status", "decision", "repo_status"}
+TASK_ALLOWED_FIELDS = TASK_REQUIRED_FIELDS | TASK_OPTIONAL_FIELDS
 
 DISALLOWED_SCOPE_MARKERS = {
     "",
@@ -82,28 +95,30 @@ def _load_json(path: Path) -> tuple[Any | None, str | None]:
         return None, f"JSON parse error: {exc.msg}"
 
 
+def _resolve_repo_relative(repo_root: Path, value: str) -> Path:
+    raw = Path(value)
+    if raw.is_absolute():
+        raise ValueError(f"Path must be repository-relative: {value}")
+
+    root = repo_root.resolve()
+    resolved = (root / raw).resolve()
+
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Path escapes repository root: {value}") from exc
+
+    return resolved
+
+
 def _validate_task_schema(task: Any) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
     if not isinstance(task, dict):
         return [_finding("TASK_SCHEMA_INVALID", "Task contract must be a JSON object")]
 
-    allowed_keys = {
-        "task_id",
-        "goal",
-        "task_type",
-        "allowed_paths",
-        "forbidden_paths",
-        "claims",
-        "expected_evidence",
-        "validation_commands",
-        "delete_allowed",
-        "status",
-        "decision",
-        "repo_status",
-    }
     for key in task:
-        if key not in allowed_keys:
+        if key not in TASK_ALLOWED_FIELDS:
             findings.append(
                 _finding(
                     "TASK_SCHEMA_INVALID",
@@ -400,7 +415,22 @@ def main(argv: list[str] | None = None) -> int:
         return code if code == 0 else 2
 
     repo_root = Path(REPO_ROOT)
-    task_file = repo_root / args.task_file
+    try:
+        task_file = _resolve_repo_relative(repo_root, args.task_file)
+        claim_registry_file = _resolve_repo_relative(repo_root, args.claim_registry)
+    except ValueError as exc:
+        print(
+            json.dumps(
+                {
+                    "error": str(exc),
+                    "code": "PATH_OUT_OF_REPO",
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
     if not task_file.is_file():
         print(
             json.dumps(
@@ -414,7 +444,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    claim_registry_file = repo_root / args.claim_registry
     if not claim_registry_file.exists():
         print(
             json.dumps(

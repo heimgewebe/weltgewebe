@@ -238,6 +238,41 @@ class TestCheckNonIdealTask(unittest.TestCase):
             task_path.unlink(missing_ok=True)
             bad_registry_path.unlink(missing_ok=True)
 
+    def test_absolute_task_path_rejected_with_exit_2(self):
+        absolute_task = str((self.repo_root / self._fixture("valid-doc-drift-task.json")).resolve())
+        proc = self._run_cli(absolute_task)
+        self.assertEqual(proc.returncode, 2)
+        parsed = json.loads(proc.stderr)
+        self.assertEqual(parsed["code"], "PATH_OUT_OF_REPO")
+
+    def test_parent_traversal_task_path_rejected_with_exit_2(self):
+        proc = self._run_cli("../outside.json")
+        self.assertEqual(proc.returncode, 2)
+        parsed = json.loads(proc.stderr)
+        self.assertEqual(parsed["code"], "PATH_OUT_OF_REPO")
+
+    def test_guard_contract_required_fields_match_schema(self):
+        schema_path = self.repo_root / "contracts/agent/task.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        required = set(schema.get("required", []))
+
+        self.assertEqual(required, guard.TASK_REQUIRED_FIELDS)
+
+    def test_guard_task_types_match_schema_enum(self):
+        schema_path = self.repo_root / "contracts/agent/task.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        task_type_enum = set(schema.get("properties", {}).get("task_type", {}).get("enum", []))
+
+        self.assertEqual(task_type_enum, guard.TASK_TYPES)
+
+    def test_schema_disallows_additional_properties_and_matches_guard_fields(self):
+        schema_path = self.repo_root / "contracts/agent/task.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+        self.assertFalse(schema.get("additionalProperties", True))
+        schema_fields = set(schema.get("properties", {}).keys())
+        self.assertEqual(schema_fields, guard.TASK_ALLOWED_FIELDS)
+
 
 if __name__ == "__main__":
     unittest.main()
