@@ -11,7 +11,7 @@ import scripts.docmeta.validate_claim_registry as validator
 class TestValidateClaimRegistry(unittest.TestCase):
     def setUp(self) -> None:
         self.repo_root = Path(validator.REPO_ROOT)
-        self.temp_dir = Path(tempfile.mkdtemp(prefix="claim-registry-test-", dir=self.repo_root))
+        self.temp_dir = Path(tempfile.mkdtemp(prefix="claim-registry-test-"))
 
     def tearDown(self) -> None:
         shutil.rmtree(self.temp_dir, ignore_errors=True)
@@ -20,7 +20,7 @@ class TestValidateClaimRegistry(unittest.TestCase):
         path = self.temp_dir / file_name
         with path.open("w", encoding="utf-8") as handle:
             json.dump(payload, handle, ensure_ascii=False, indent=2)
-        return str(path.relative_to(self.repo_root))
+        return str(path)
 
     def _valid_claim(self) -> dict:
         return {
@@ -28,7 +28,7 @@ class TestValidateClaimRegistry(unittest.TestCase):
             "status": "established",
             "subject": "AGENT-SAFE-003",
             "statement": "Minimal claim-evidence spine exists",
-            "evidence": [{"path": "README.md", "kind": "documentation"}],
+            "evidence": [{"path": "docs/claims/README.md", "kind": "documentation"}],
             "validation": ["python3 scripts/docmeta/validate_claim_registry.py"],
             "updated": "2026-06-01",
         }
@@ -69,6 +69,38 @@ class TestValidateClaimRegistry(unittest.TestCase):
         output, exit_code = validator.run_validation(registry)
         self.assertEqual(exit_code, 1)
         self.assertTrue(any(f["code"] == "CLAIM_MISSING_FIELD" for f in output["findings"]))
+
+    def test_required_field_id_as_number_rejected(self):
+        claim = self._valid_claim()
+        claim["id"] = 123
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "CLAIM_FIELD_NOT_STRING" and f.get("field") == "id" for f in output["findings"]))
+
+    def test_required_field_subject_as_object_rejected(self):
+        claim = self._valid_claim()
+        claim["subject"] = {"bad": True}
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "CLAIM_FIELD_NOT_STRING" and f.get("field") == "subject" for f in output["findings"]))
+
+    def test_required_field_updated_as_list_rejected(self):
+        claim = self._valid_claim()
+        claim["updated"] = ["2026-06-01"]
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "CLAIM_FIELD_NOT_STRING" and f.get("field") == "updated" for f in output["findings"]))
+
+    def test_required_field_empty_string_rejected(self):
+        claim = self._valid_claim()
+        claim["subject"] = "   "
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "CLAIM_MISSING_FIELD" and f.get("field") == "subject" for f in output["findings"]))
 
     def test_invalid_claim_id(self):
         claim = self._valid_claim()
@@ -137,7 +169,7 @@ class TestValidateClaimRegistry(unittest.TestCase):
 
     def test_valid_relative_evidence_path_still_passes(self):
         claim = self._valid_claim()
-        claim["evidence"] = [{"path": "README.md", "kind": "documentation"}]
+        claim["evidence"] = [{"path": "docs/claims/registry.yml", "kind": "documentation"}]
         registry = self._write_registry({"version": 1, "claims": [claim]})
         output, exit_code = validator.run_validation(registry)
         self.assertEqual(exit_code, 0)
@@ -145,7 +177,7 @@ class TestValidateClaimRegistry(unittest.TestCase):
 
     def test_evidence_missing_kind(self):
         claim = self._valid_claim()
-        claim["evidence"] = [{"path": "README.md"}]
+        claim["evidence"] = [{"path": "docs/claims/README.md"}]
         registry = self._write_registry({"version": 1, "claims": [claim]})
         output, exit_code = validator.run_validation(registry)
         self.assertEqual(exit_code, 1)
@@ -186,8 +218,7 @@ class TestValidateClaimRegistry(unittest.TestCase):
     def test_parse_error_returns_exit_2(self):
         broken_path = self.temp_dir / "broken.yml"
         broken_path.write_text("{not-json", encoding="utf-8")
-        rel = str(broken_path.relative_to(self.repo_root))
-        output, exit_code = validator.run_validation(rel)
+        output, exit_code = validator.run_validation(str(broken_path))
         self.assertEqual(exit_code, 2)
         self.assertEqual(output["findings"][0]["code"], "REGISTRY_PARSE_ERROR")
 

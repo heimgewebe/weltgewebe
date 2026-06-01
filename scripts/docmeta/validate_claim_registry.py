@@ -25,6 +25,13 @@ REQUIRED_CLAIM_FIELDS = (
     "validation",
     "updated",
 )
+REQUIRED_STRING_CLAIM_FIELDS = (
+    "id",
+    "status",
+    "subject",
+    "statement",
+    "updated",
+)
 
 
 def _resolve_repo_relative_path(repo_root: Path, path: str) -> tuple[Path | None, str | None]:
@@ -109,8 +116,31 @@ def validate_registry_data(data: dict, repo_root: Path) -> list[dict[str, str]]:
         claim_id = claim.get("id") if isinstance(claim.get("id"), str) else None
 
         for field in REQUIRED_CLAIM_FIELDS:
+            if field not in claim:
+                findings.append(
+                    _finding(
+                        "CLAIM_MISSING_FIELD",
+                        claim_id,
+                        f"Claim field '{field}' is required",
+                        field=field,
+                    )
+                )
+
+        for field in REQUIRED_STRING_CLAIM_FIELDS:
+            if field not in claim:
+                continue
             value = claim.get(field)
-            if value is None or (isinstance(value, str) and not value.strip()):
+            if not isinstance(value, str):
+                findings.append(
+                    _finding(
+                        "CLAIM_FIELD_NOT_STRING",
+                        claim_id,
+                        f"Claim field '{field}' must be a string",
+                        field=field,
+                    )
+                )
+                continue
+            if not value.strip():
                 findings.append(
                     _finding(
                         "CLAIM_MISSING_FIELD",

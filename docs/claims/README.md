@@ -1,6 +1,6 @@
 ---
 id: docs.claims.readme
-title: Claims Registry
+title: Claim-Registry
 doc_type: reference
 status: active
 summary: Minimal machine-readable Claim-Evidence registry for AGENT-SAFE-003.
@@ -13,7 +13,7 @@ relations:
     target: scripts/docmeta/validate_claim_registry.py
 ---
 
-# Claims Registry
+# Claim-Registry
 
 ## Zweck
 
