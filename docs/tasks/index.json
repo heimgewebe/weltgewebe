@@ -146,20 +146,19 @@
       "id": "AGENT-SAFE-001",
       "title": "Safety-Preflight Guard minimal einführen",
       "area": "governance",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
       "owner": "unknown",
       "evidence": [
-        "docs/blueprints/blueprint-agent-safety-control-layer.md",
-        "docs/roadmap.md",
-        "docs/tasks/board.md"
+        "scripts/agent/check_agent_preflight.py",
+        "scripts/agent/tests/test_check_agent_preflight.py",
+        ".github/workflows/agent-safety-preflight.yml",
+        "docs/security/agent-write-scope-baseline.md"
       ],
       "missing_evidence": [
-        "scripts/agent/safety_preflight.py oder äquivalenter Guard existiert noch nicht",
-        "Task-Pflichtfelder werden vor Schreiboperationen noch nicht maschinell geprüft",
-        "CI-/Runner-Anbindung für den minimalen Safety-Preflight ist noch offen"
+        "Claim-Spine, Agent-Contracts und Blocking-Mode sind bewusst in AGENT-SAFE-002 bis AGENT-SAFE-004 nachgelagert"
       ],
       "acceptance": [
         "ein minimaler Preflight prüft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
@@ -181,24 +180,26 @@
       "id": "AGENT-SAFE-002",
       "title": "Readiness Hard Fail für Agent-Fähigkeiten einführen",
       "area": "governance",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "S",
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
-        "docs/blueprints/blueprint-agent-safety-control-layer.md",
-        "docs/roadmap.md",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
         "docs/tasks/board.md"
       ],
       "missing_evidence": [
-        "Readiness-/Capability-Matrix blockiert fehlende Agent-Fähigkeiten noch nicht hart",
-        "Agenten können fehlende Kernfähigkeiten derzeit noch als degradierbaren Zustand behandeln"
+        "Claim-Evidence-Spine ist noch nicht implementiert",
+        "Agent-Contracts sind noch nicht implementiert",
+        "Handoff-Validierung, Non-Ideal-Guard und Dry-Run-Runner sind noch nicht implementiert"
       ],
       "acceptance": [
         "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
         "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
-        "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus"
+        "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus",
+        "offene Capability-Artefakte bleiben explizit in missing_evidence und Folge-Slices AGENT-SAFE-003/004"
       ],
       "links": {
         "issues": [],
