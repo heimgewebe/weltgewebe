@@ -118,6 +118,38 @@ class TestGenerateAgentReadiness(unittest.TestCase):
 
         self.assertEqual(status["handoff_validation"], "partial")
 
+    def test_agent_policy_directory_artifact_fails_overall(self):
+        (self.root / "AGENTS.md").mkdir(parents=True, exist_ok=True)
+        self._touch("agent-policy.yaml")
+
+        out_file = gen.generate(self.root)
+        report = out_file.read_text(encoding="utf-8")
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+        overall, reason, _hard_gaps = gen.determine_overall_status(results)
+
+        self.assertEqual(status["agent_policy"], "fail")
+        self.assertEqual(overall, "fail")
+        self.assertIn("agent_policy", reason)
+        self.assertIn("- **Overall:** fail", report)
+
+    def test_claim_registry_directory_artifact_is_hard_fail_and_gap(self):
+        self._touch("AGENTS.md")
+        self._touch("agent-policy.yaml")
+        (self.root / "docs" / "claims" / "registry.yml").mkdir(parents=True, exist_ok=True)
+
+        out_file = gen.generate(self.root)
+        report = out_file.read_text(encoding="utf-8")
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+        overall, reason, hard_gaps = gen.determine_overall_status(results)
+
+        self.assertEqual(status["claim_evidence_spine"], "fail")
+        self.assertEqual(overall, "fail")
+        self.assertIn("claim_evidence_spine", reason)
+        self.assertIn("claim_evidence_spine", hard_gaps)
+        self.assertIn("- Hard capability missing: claim_evidence_spine", report)
+
 
 if __name__ == "__main__":
     unittest.main()

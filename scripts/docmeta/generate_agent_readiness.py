@@ -129,17 +129,13 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    claim_registry_paths = ["docs/claims/registry.yml"]
-    claim_evidence = [rel for rel in claim_registry_paths if (repo_root / rel).is_file()]
-    claim_missing = [] if claim_evidence else claim_registry_paths
     results.append(
-        CapabilityResult(
-            id="claim_evidence_spine",
+        _evaluate_required_files(
+            root=repo_root,
+            cap_id="claim_evidence_spine",
             title="Claim evidence spine",
             hard=True,
-            status="pass" if claim_evidence else "open",
-            evidence=claim_evidence,
-            missing=claim_missing,
+            required_files=["docs/claims/registry.yml"],
             rationale="Ohne Claim-Registry fehlt maschinenlesbare Evidenzbindung.",
         )
     )
@@ -301,18 +297,18 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
 
 
 def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str, list[str]]:
-    hard_missing = [r.id for r in results if r.hard and r.status in {"open", "partial"}]
+    hard_gaps = [r.id for r in results if r.hard and r.status != "pass"]
     failing = [r.id for r in results if r.status == "fail"]
     passing = [r.id for r in results if r.status == "pass"]
     partial = [r.id for r in results if r.status == "partial"]
 
     if failing:
         reason = f"Inconsistent capability state detected: {', '.join(failing)}"
-        return "fail", reason, hard_missing
+        return "fail", reason, hard_gaps
 
-    if hard_missing:
-        reason = f"Hard capabilities are still missing: {', '.join(hard_missing)}"
-        return "partial", reason, hard_missing
+    if hard_gaps:
+        reason = f"Hard capabilities are still missing: {', '.join(hard_gaps)}"
+        return "partial", reason, hard_gaps
 
     if len(passing) == len(results):
         return "pass", "All hard and non-hard capabilities are present.", []
@@ -320,10 +316,10 @@ def determine_overall_status(results: list[CapabilityResult]) -> tuple[str, str,
     if not passing and not partial:
         return "open", "No capability evidence detected yet.", [r.id for r in results if r.hard]
 
-    return "partial", "Capabilities are partially implemented.", hard_missing
+    return "partial", "Capabilities are partially implemented.", hard_gaps
 
 
-def render_report(results: list[CapabilityResult], overall: str, reason: str, hard_missing: list[str]) -> str:
+def render_report(results: list[CapabilityResult], overall: str, reason: str, hard_gaps: list[str]) -> str:
     lines: list[str] = []
     lines.append("---")
     lines.append("id: docs.generated.agent-readiness")
@@ -358,8 +354,8 @@ def render_report(results: list[CapabilityResult], overall: str, reason: str, ha
     lines.append("")
     lines.append("## Residual Gaps")
     lines.append("")
-    if hard_missing:
-        for capability in hard_missing:
+    if hard_gaps:
+        for capability in hard_gaps:
             lines.append(f"- Hard capability missing: {capability}")
     else:
         lines.append("- No residual hard gaps detected.")
