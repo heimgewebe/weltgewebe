@@ -143,7 +143,7 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 
 - [?] Minimaler Action-Layer · Zielbild dokumentiert, Implementierungsstand prüfen · [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md)
 - [?] Agent-Readiness vollständig grün · [agent-readiness-audit.md](reports/agent-readiness-audit.md)
-- [~] Agent Safety Control Layer · Blueprint gemergt, Umsetzung offen; erste Slices sind als offene Task-Control-Tickets `AGENT-SAFE-001` bis `AGENT-SAFE-004` erfasst. Keine Behauptung, dass PR 1–PR 16 bereits umgesetzt seien · [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md)
+- [ ] Agent Safety Control Layer · Blueprint gemergt, Umsetzung offen; erste Slices sind als offene Task-Control-Tickets `AGENT-SAFE-001` bis `AGENT-SAFE-004` erfasst. Keine Behauptung, dass PR 1–PR 16 bereits umgesetzt seien · [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md)
 - [ ] Blueprint-/Roadmap-Registration-Guard · Folgeslice `TASK-CTL-004`, damit neue Blueprints, Roadmaps und größere Pläne nicht ohne Index-/Roadmap-/Task-Control-Einordnung gemergt werden · [board.md](tasks/board.md)
 
 ## Strang Versionierung
