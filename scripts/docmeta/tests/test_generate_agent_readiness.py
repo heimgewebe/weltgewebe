@@ -103,6 +103,21 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self.assertRegex(report, r"\| safety_preflight \| (pass|partial|open|fail) \|")
         self.assertRegex(report, r"\| claim_evidence_spine \| (pass|partial|open|fail) \|")
 
+    def test_handoff_docs_only_is_partial(self):
+        self._touch("AGENTS.md")
+        self._touch("agent-policy.yaml")
+        self._touch("scripts/agent/check_agent_preflight.py")
+        self._touch("scripts/agent/tests/test_check_agent_preflight.py")
+        self._touch(".github/workflows/agent-safety-preflight.yml")
+        self._touch("docs/security/agent-write-scope-baseline.md")
+        self._touch("docs/process/handoff-guideline.md")
+
+        gen.generate(self.root)
+        results = gen.evaluate_capabilities(self.root)
+        status = self._status_map(results)
+
+        self.assertEqual(status["handoff_validation"], "partial")
+
 
 if __name__ == "__main__":
     unittest.main()

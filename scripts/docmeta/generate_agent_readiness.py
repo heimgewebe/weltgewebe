@@ -184,26 +184,43 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     results.append(contracts_result)
 
-    handoff_evidence = _files_for_patterns(
+    handoff_impl_evidence = _files_for_patterns(
         repo_root,
         [
             "scripts/agent/*handoff*",
             "contracts/agent/*handoff*",
-            "docs/**/*handoff*",
         ],
     )
+    handoff_doc_evidence = _files_for_patterns(
+        repo_root,
+        ["docs/**/*handoff*"],
+    )
+    handoff_evidence = sorted(set(handoff_impl_evidence + handoff_doc_evidence))
+    if handoff_impl_evidence:
+        handoff_status = "pass"
+        handoff_missing: list[str] = []
+    elif handoff_doc_evidence:
+        handoff_status = "partial"
+        handoff_missing = [
+            "scripts/agent/*handoff*",
+            "contracts/agent/*handoff*",
+        ]
+    else:
+        handoff_status = "open"
+        handoff_missing = [
+            "scripts/agent/*handoff*",
+            "contracts/agent/*handoff*",
+            "docs/**/*handoff*",
+        ]
+
     results.append(
         CapabilityResult(
             id="handoff_validation",
             title="Handoff validation",
             hard=True,
-            status="pass" if handoff_evidence else "open",
+            status=handoff_status,
             evidence=handoff_evidence,
-            missing=[] if handoff_evidence else [
-                "scripts/agent/*handoff*",
-                "contracts/agent/*handoff*",
-                "docs/**/*handoff*",
-            ],
+            missing=handoff_missing,
             rationale="Handoff-Checks begrenzen unvollstaendige oder unsichere Uebergaben.",
         )
     )
