@@ -60,6 +60,14 @@ Typische `kind`-Werte:
 - `generated-report`
 - `registry`
 
+## Evidence-Pfade
+
+- Evidence-`path` muss relativ zum Repository-Root sein.
+- Absolute Pfade (zum Beispiel `/etc/hosts`) sind unzulaessig.
+- Parent-Traversal (zum Beispiel `../foo`) ist unzulaessig.
+- Bei `status: established` muessen repo-interne Evidence-Pfade zusaetzlich
+  existieren.
+
 ## Nicht-Ziele dieses Slices
 
 Dieser Slice fuehrt nicht ein:

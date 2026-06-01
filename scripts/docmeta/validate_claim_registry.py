@@ -27,6 +27,22 @@ REQUIRED_CLAIM_FIELDS = (
 )
 
 
+def _resolve_repo_relative_path(repo_root: Path, path: str) -> tuple[Path | None, str | None]:
+    repo_root_resolved = repo_root.resolve()
+    candidate = Path(path)
+
+    if candidate.is_absolute():
+        return None, "Evidence path must be relative to repository root"
+
+    resolved = (repo_root_resolved / candidate).resolve()
+    try:
+        resolved.relative_to(repo_root_resolved)
+    except ValueError:
+        return None, "Evidence path resolves outside repository root"
+
+    return resolved, None
+
+
 def _finding(
     code: str,
     claim_id: str | None,
@@ -154,7 +170,19 @@ def validate_registry_data(data: dict, repo_root: Path) -> list[dict[str, str]]:
                         field="kind",
                     )
                 )
-            if status == "established" and not (repo_root / path).exists():
+            resolved_path, path_error = _resolve_repo_relative_path(repo_root, path)
+            if path_error is not None:
+                findings.append(
+                    _finding(
+                        "EVIDENCE_PATH_OUTSIDE_REPO",
+                        claim_id,
+                        path_error,
+                        path=path,
+                    )
+                )
+                continue
+
+            if status == "established" and resolved_path is not None and not resolved_path.exists():
                 findings.append(
                     _finding(
                         "EVIDENCE_PATH_MISSING",

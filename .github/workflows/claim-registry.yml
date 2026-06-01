@@ -1,0 +1,34 @@
+---
+name: claim-registry
+
+"on":
+  pull_request:
+    paths:
+      - "docs/claims/**"
+      - "scripts/docmeta/validate_claim_registry.py"
+      - "scripts/docmeta/tests/test_validate_claim_registry.py"
+      - ".github/workflows/claim-registry.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claim-registry-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-claim-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Validate claim registry
+        run: python3 scripts/docmeta/validate_claim_registry.py
+
+      - name: Run claim registry tests
+        run: python3 -m unittest scripts.docmeta.tests.test_validate_claim_registry -v

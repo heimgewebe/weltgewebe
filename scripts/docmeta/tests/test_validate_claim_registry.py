@@ -101,6 +101,22 @@ class TestValidateClaimRegistry(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertTrue(any(f["code"] == "EVIDENCE_PATH_MISSING" for f in output["findings"]))
 
+    def test_absolute_evidence_path_rejected(self):
+        claim = self._valid_claim()
+        claim["evidence"] = [{"path": "/etc/hosts", "kind": "documentation"}]
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "EVIDENCE_PATH_OUTSIDE_REPO" for f in output["findings"]))
+
+    def test_parent_traversal_evidence_path_rejected(self):
+        claim = self._valid_claim()
+        claim["evidence"] = [{"path": "../outside.md", "kind": "documentation"}]
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "EVIDENCE_PATH_OUTSIDE_REPO" for f in output["findings"]))
+
     def test_proposed_missing_evidence_path_allowed(self):
         claim = self._valid_claim()
         claim["status"] = "proposed"
@@ -109,6 +125,23 @@ class TestValidateClaimRegistry(unittest.TestCase):
         output, exit_code = validator.run_validation(registry)
         self.assertEqual(exit_code, 0)
         self.assertFalse(any(f["code"] == "EVIDENCE_PATH_MISSING" for f in output["findings"]))
+
+    def test_proposed_absolute_evidence_path_still_rejected(self):
+        claim = self._valid_claim()
+        claim["status"] = "proposed"
+        claim["evidence"] = [{"path": "/etc/hosts", "kind": "documentation"}]
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(any(f["code"] == "EVIDENCE_PATH_OUTSIDE_REPO" for f in output["findings"]))
+
+    def test_valid_relative_evidence_path_still_passes(self):
+        claim = self._valid_claim()
+        claim["evidence"] = [{"path": "README.md", "kind": "documentation"}]
+        registry = self._write_registry({"version": 1, "claims": [claim]})
+        output, exit_code = validator.run_validation(registry)
+        self.assertEqual(exit_code, 0)
+        self.assertFalse(any(f["code"] == "EVIDENCE_PATH_OUTSIDE_REPO" for f in output["findings"]))
 
     def test_evidence_missing_kind(self):
         claim = self._valid_claim()
