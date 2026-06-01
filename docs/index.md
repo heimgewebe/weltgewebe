@@ -35,6 +35,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 ### Agenten & Arbeitssteuerung
 
 – **Agent Operability:** [blueprints/agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) (Blueprint)
+– **Agent Safety Control Layer:** [blueprints/blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md) (Blueprint)
 – **Dokumentationsstruktur & Task-Steuerung:** [blueprints/doc-structure-task-control.md](blueprints/doc-structure-task-control.md) (Blueprint)
 – **Task-Control Roadmap:** [blueprints/doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md) (Roadmap)
 – **Task-Control Beispiele:** [blueprints/doc-structure-task-control-examples.md](blueprints/doc-structure-task-control-examples.md) (Referenz)
