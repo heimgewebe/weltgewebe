@@ -225,7 +225,8 @@
         "docs/claims/README.md",
         "scripts/docmeta/validate_claim_registry.py",
         "scripts/docmeta/tests/test_validate_claim_registry.py",
-        "docs/_generated/agent-readiness.md"
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py"
       ],
       "missing_evidence": [],
       "acceptance": [
