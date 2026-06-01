@@ -188,7 +188,6 @@
       "evidence": [
         "scripts/docmeta/generate_agent_readiness.py",
         "scripts/docmeta/tests/test_generate_agent_readiness.py",
-        "docs/_generated/agent-readiness.md",
         "docs/tasks/board.md"
       ],
       "missing_evidence": [
