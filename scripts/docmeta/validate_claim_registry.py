@@ -55,8 +55,15 @@ def load_registry(registry_path: Path) -> tuple[dict | None, list[dict[str, str]
     except OSError as exc:
         return None, [_finding("REGISTRY_PARSE_ERROR", None, f"Registry is not readable: {exc}", str(registry_path))], 2
 
+    normalized = raw.lstrip("\ufeff").strip()
+    if normalized.startswith("---"):
+        lines = normalized.splitlines()
+        normalized = "\n".join(lines[1:]).strip()
+    if normalized.endswith("..."):
+        normalized = normalized[:-3].strip()
+
     try:
-        data = json.loads(raw)
+        data = json.loads(normalized)
     except json.JSONDecodeError as exc:
         return None, [_finding("REGISTRY_PARSE_ERROR", None, f"Registry parse error: {exc.msg}", str(registry_path))], 2
 
