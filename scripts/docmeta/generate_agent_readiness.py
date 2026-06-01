@@ -143,45 +143,16 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    contracts_dir = repo_root / "contracts" / "agent"
-    if contracts_dir.exists() and not contracts_dir.is_dir():
-        contracts_result = CapabilityResult(
-            id="agent_contracts",
+    results.append(
+        _evaluate_required_files(
+            root=repo_root,
+            cap_id="agent_contracts",
             title="Agent contracts",
             hard=True,
-            status="fail",
-            evidence=[],
-            missing=["contracts/agent/*.schema.json"],
-            rationale="contracts/agent muss ein Verzeichnis fuer JSON-Schemas sein.",
-        )
-    else:
-        schemas = sorted(
-            _as_rel(repo_root, path)
-            for path in contracts_dir.glob("*.schema.json")
-            if path.is_file()
-        ) if contracts_dir.is_dir() else []
-        if schemas:
-            contracts_status = "pass"
-            contracts_evidence = schemas
-            contracts_missing: list[str] = []
-        elif contracts_dir.is_dir():
-            contracts_status = "partial"
-            contracts_evidence = ["contracts/agent/"]
-            contracts_missing = ["contracts/agent/*.schema.json"]
-        else:
-            contracts_status = "open"
-            contracts_evidence = []
-            contracts_missing = ["contracts/agent/*.schema.json"]
-        contracts_result = CapabilityResult(
-            id="agent_contracts",
-            title="Agent contracts",
-            hard=True,
-            status=contracts_status,
-            evidence=contracts_evidence,
-            missing=contracts_missing,
+            required_files=["contracts/agent/task.schema.json"],
             rationale="Contracts definieren maschinenlesbare Agent-Task-Grenzen.",
         )
-    results.append(contracts_result)
+    )
 
     handoff_impl_evidence = _files_for_patterns(
         repo_root,
@@ -224,36 +195,16 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
         )
     )
 
-    non_ideal_evidence = _files_for_regex(
-        repo_root,
-        ["scripts/agent", "contracts/agent", "docs/security"],
-        r"(?=.*non[_-]?ideal)(?=.*guard)",
-    )
-    non_ideal_partial = _files_for_regex(
-        repo_root,
-        ["scripts/agent", "contracts/agent", "docs/security"],
-        r"non[_-]?ideal|guard",
-    )
-    if non_ideal_evidence:
-        non_ideal_status = "pass"
-        non_ideal_missing: list[str] = []
-        non_ideal_report = non_ideal_evidence
-    elif non_ideal_partial:
-        non_ideal_status = "partial"
-        non_ideal_missing = ["non_ideal/non-ideal + guard artifact"]
-        non_ideal_report = non_ideal_partial
-    else:
-        non_ideal_status = "open"
-        non_ideal_missing = ["non_ideal/non-ideal + guard artifact"]
-        non_ideal_report = []
     results.append(
-        CapabilityResult(
-            id="non_ideal_guard",
+        _evaluate_required_files(
+            root=repo_root,
+            cap_id="non_ideal_guard",
             title="Non-ideal guard",
             hard=True,
-            status=non_ideal_status,
-            evidence=non_ideal_report,
-            missing=non_ideal_missing,
+            required_files=[
+                "scripts/agent/check_non_ideal_task.py",
+                "scripts/agent/tests/test_check_non_ideal_task.py",
+            ],
             rationale="Non-Ideal-Guard erkennt riskante Ausnahmefaelle vor Ausfuehrung.",
         )
     )

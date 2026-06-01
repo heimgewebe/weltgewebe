@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://weltgewebe.org/schemas/agent/task.schema.json",
+  "title": "Agent Task Contract",
+  "description": "Minimal machine-readable contract for agent task definitions.",
+  "type": "object",
+  "required": [
+    "task_id",
+    "goal",
+    "task_type",
+    "allowed_paths",
+    "forbidden_paths",
+    "claims",
+    "expected_evidence",
+    "validation_commands",
+    "delete_allowed"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+(-[A-Z]+)*-[0-9]{3}$"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_type": {
+      "type": "string",
+      "enum": [
+        "doc_change",
+        "ci_change",
+        "infra_change",
+        "governance",
+        "generated_refresh"
+      ]
+    },
+    "allowed_paths": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "forbidden_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "claims": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "expected_evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "validation_commands": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "delete_allowed": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string"
+    },
+    "repo_status": {
+      "type": "string"
+    }
+  }
+}

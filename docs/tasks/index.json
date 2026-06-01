@@ -249,25 +249,33 @@
       "id": "AGENT-SAFE-004",
       "title": "Minimale Agent-Contracts und Non-Ideal-Guard einführen",
       "area": "governance",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
       "owner": "unknown",
       "evidence": [
-        "docs/blueprints/blueprint-agent-safety-control-layer.md",
-        "docs/roadmap.md",
-        "docs/tasks/board.md"
+        "contracts/agent/task.schema.json",
+        "scripts/agent/check_non_ideal_task.py",
+        "scripts/agent/tests/test_check_non_ideal_task.py",
+        "tests/fixtures/agent/valid-doc-drift-task.json",
+        "tests/fixtures/agent/valid-roadmap-claim-task.json",
+        "tests/fixtures/agent/valid-generated-refresh-task.json",
+        "tests/fixtures/agent/invalid-missing-scope.json",
+        "tests/fixtures/agent/invalid-missing-validation.json",
+        "tests/fixtures/agent/invalid-missing-evidence.json",
+        "tests/fixtures/agent/invalid-forbidden-path.json",
+        "tests/fixtures/agent/invalid-status-done-by-agent.json",
+        "docs/reference/agent-operability-fixture-matrix.md",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        "docs/_generated/agent-readiness.md"
       ],
-      "missing_evidence": [
-        "contracts/agent/*.schema.json oder äquivalente Agent-Contracts fehlen noch",
-        "Non-Ideal-Task-Guard für unvollständige Arbeitsaufträge ist noch nicht implementiert",
-        "Handoff- oder Runner-Integration für die Minimal-Contracts fehlt noch"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade für agentische Tasks",
         "ein Guard blockiert Non-Ideal-Tasks ohne vollständigen Arbeitsauftrag",
-        "die Einführung bleibt als offener Slice sichtbar, bis Contract und Guard lokal und in CI belegt sind"
+        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu glätten"
       ],
       "links": {
         "issues": [],

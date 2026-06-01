@@ -1,0 +1,25 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Dokumentationsdrift zwischen Task-Control und Claims bereinigen",
+  "task_type": "doc_change",
+  "allowed_paths": [
+    "docs/"
+  ],
+  "forbidden_paths": [
+    "docs/_generated/",
+    "secrets/",
+    "snapshots/"
+  ],
+  "claims": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "expected_evidence": [
+    "docs/tasks/board.md",
+    "docs/tasks/index.json"
+  ],
+  "validation_commands": [
+    "python3 -m scripts.docmeta.validate_claim_registry",
+    "python3 -m scripts.docmeta.validate_schema"
+  ],
+  "delete_allowed": false
+}

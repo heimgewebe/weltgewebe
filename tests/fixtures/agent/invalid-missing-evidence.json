@@ -1,0 +1,18 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Fehlende Evidence muss vom Guard erkannt werden",
+  "task_type": "governance",
+  "allowed_paths": [
+    "docs/"
+  ],
+  "forbidden_paths": [
+    "docs/_generated/"
+  ],
+  "claims": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "validation_commands": [
+    "python3 -m scripts.docmeta.validate_claim_registry"
+  ],
+  "delete_allowed": false
+}
