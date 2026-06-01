@@ -79,7 +79,7 @@ Der Preflight Guard erzeugt maschinenlesbare Fehlercodes:
 
 | Code | Beschreibung |
 |---|---|
-| `MISSING_TASK_ID` | `task_id` fehlt oder ist leer |
+| `MISSING_TASK_ID` | `task_id` fehlt/ist leer oder entspricht nicht dem Format `^[A-Z]+(-[A-Z]+)*-[0-9]{3}$` |
 | `MISSING_TASK_TYPE` | `task_type` fehlt oder ist leer |
 | `MISSING_ALLOWED_PATHS` | `allowed_paths` fehlt oder ist leer |
 | `MISSING_VALIDATION` | Weder `validation` noch `validation_commands` vorhanden |

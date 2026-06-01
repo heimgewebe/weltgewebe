@@ -63,6 +63,13 @@ _DONE_CLAIM_HINT_RE = re.compile(
 # Gültige task_id nach docs/tasks/schema.json
 TASK_ID_RE = re.compile(r"^[A-Z]+(-[A-Z]+)*-[0-9]{3}$")
 
+
+class _PreflightArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser, der bei Aufruffehlern ValueError statt SystemExit wirft."""
+
+    def error(self, message: str) -> None:
+        raise ValueError(message)
+
 # ---------------------------------------------------------------------------
 # YAML-Minimalparser für Task-Dateien
 # (kein PyYAML, um externe Abhängigkeiten zu vermeiden)
@@ -268,13 +275,19 @@ def check_status_done_without_proof(
     changed_paths: list[str],
 ) -> list[dict[str, str]]:
     """
-    Erkennt 'status: done' in YAML-Dateien unter docs/tasks/ und docs/reports/
+    Erkennt 'status: done' in YAML-/JSON-Dateien unter docs/tasks/ und docs/reports/
     ohne proof_ref oder Claim-Bezug in derselben Zeile oder der nächsten Zeile.
     """
     findings: list[dict[str, str]] = []
     for path in changed_paths:
         norm = path.replace("\\", "/")
-        if not norm.endswith((".yaml", ".yml", ".json", ".md")):
+        in_scope = any(
+            _is_under_allowed_path(norm, scope_prefix)
+            for scope_prefix in ("docs/tasks/", "docs/reports/")
+        )
+        if not in_scope:
+            continue
+        if not norm.endswith((".yaml", ".yml", ".json")):
             continue
         if not os.path.isfile(path):
             continue
@@ -423,7 +436,7 @@ def run_preflight(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _PreflightArgumentParser(
         description=(
             "Safety-Preflight Guard (AGENT-SAFE-001, report-only). "
             "Prüft agentische Änderungen deterministisch auf bekannte Fehlermuster."
@@ -463,7 +476,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except ValueError as exc:
+        print(
+            json.dumps({"error": f"Ungültiger Aufruf: {exc}"}, ensure_ascii=False),
+            file=sys.stderr,
+        )
+        return 2
+    except SystemExit as exc:
+        code = exc.code if isinstance(exc.code, int) else 2
+        return code if code == 0 else 2
 
     if not os.path.isfile(args.task_file):
         print(

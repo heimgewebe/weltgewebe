@@ -312,44 +312,87 @@ class TestCheckRoadmapDoneWithoutClaim(unittest.TestCase):
 
 class TestCheckStatusDoneWithoutProof(unittest.TestCase):
     def test_status_done_without_proof_flagged(self):
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs", "tasks"))
+            with open(os.path.join(tmpdir, "docs", "tasks", "task.yaml"), "w", encoding="utf-8") as f:
+                f.write("status: done\ntitle: Foo\n")
+            os.chdir(tmpdir)
+            findings = check_status_done_without_proof(["docs/tasks/task.yaml"])
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["code"], "STATUS_DONE_WITHOUT_PROOF")
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_status_done_with_proof_not_flagged(self):
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs", "reports"))
+            with open(os.path.join(tmpdir, "docs", "reports", "status.yaml"), "w", encoding="utf-8") as f:
+                f.write("status: done\nproof_ref: PR#42\n")
+            os.chdir(tmpdir)
+            findings = check_status_done_without_proof(["docs/reports/status.yaml"])
+            self.assertEqual(findings, [])
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_status_open_not_flagged(self):
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs", "tasks"))
+            with open(os.path.join(tmpdir, "docs", "tasks", "task.yaml"), "w", encoding="utf-8") as f:
+                f.write("status: open\ntitle: Foo\n")
+            os.chdir(tmpdir)
+            findings = check_status_done_without_proof(["docs/tasks/task.yaml"])
+            self.assertEqual(findings, [])
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_status_done_next_line_has_evidence(self):
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs", "tasks"))
+            with open(os.path.join(tmpdir, "docs", "tasks", "task.yaml"), "w", encoding="utf-8") as f:
+                f.write("status: done\nevidence: some/proof.md\n")
+            os.chdir(tmpdir)
+            findings = check_status_done_without_proof(["docs/tasks/task.yaml"])
+            self.assertEqual(findings, [])
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_json_status_done_without_proof_flagged(self):
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs", "tasks"))
+            with open(os.path.join(tmpdir, "docs", "tasks", "index.json"), "w", encoding="utf-8") as f:
+                f.write('{"status": "done", "title": "Foo"}\n')
+            os.chdir(tmpdir)
+            findings = check_status_done_without_proof(["docs/tasks/index.json"])
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["code"], "STATUS_DONE_WITHOUT_PROOF")
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_status_done_outside_scope_not_flagged(self):
         path = _write_yaml("status: done\ntitle: Foo\n")
         try:
             findings = check_status_done_without_proof([path])
-            self.assertEqual(len(findings), 1)
-            self.assertEqual(findings[0]["code"], "STATUS_DONE_WITHOUT_PROOF")
-        finally:
-            os.unlink(path)
-
-    def test_status_done_with_proof_not_flagged(self):
-        path = _write_yaml("status: done\nproof_ref: PR#42\n")
-        try:
-            findings = check_status_done_without_proof([path])
             self.assertEqual(findings, [])
-        finally:
-            os.unlink(path)
-
-    def test_status_open_not_flagged(self):
-        path = _write_yaml("status: open\ntitle: Foo\n")
-        try:
-            findings = check_status_done_without_proof([path])
-            self.assertEqual(findings, [])
-        finally:
-            os.unlink(path)
-
-    def test_status_done_next_line_has_evidence(self):
-        path = _write_yaml("status: done\nevidence: some/proof.md\n")
-        try:
-            findings = check_status_done_without_proof([path])
-            self.assertEqual(findings, [])
-        finally:
-            os.unlink(path)
-
-    def test_json_status_done_without_proof_flagged(self):
-        path = _write_md('{"status": "done", "title": "Foo"}\n', suffix=".json")
-        try:
-            findings = check_status_done_without_proof([path])
-            self.assertEqual(len(findings), 1)
-            self.assertEqual(findings[0]["code"], "STATUS_DONE_WITHOUT_PROOF")
         finally:
             os.unlink(path)
 
@@ -550,7 +593,7 @@ class TestMain(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_output_is_valid_json(self, capsys=None):
+    def test_output_is_valid_json(self):
         path = self._task_file()
         import io
         from contextlib import redirect_stdout
@@ -565,6 +608,10 @@ class TestMain(unittest.TestCase):
             self.assertIn("mode", data)
         finally:
             os.unlink(path)
+
+    def test_missing_required_task_file_arg_returns_2(self):
+        rc = main([])
+        self.assertEqual(rc, 2)
 
     def test_changed_paths_out_of_scope_reported(self):
         path = self._task_file()
