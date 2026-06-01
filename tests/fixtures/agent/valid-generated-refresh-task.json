@@ -1,0 +1,25 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Agent-Readiness Report ueber Generator aktualisieren",
+  "task_type": "generated_refresh",
+  "allowed_paths": [
+    "scripts/docmeta/",
+    "docs/_generated/"
+  ],
+  "forbidden_paths": [
+    "secrets/",
+    "snapshots/"
+  ],
+  "claims": [
+    "CLAIM-AGENT-SAFE-002"
+  ],
+  "expected_evidence": [
+    "scripts/docmeta/generate_agent_readiness.py",
+    "docs/_generated/agent-readiness.md"
+  ],
+  "validation_commands": [
+    "python3 scripts/docmeta/generate_agent_readiness.py",
+    "python3 -m unittest discover scripts/docmeta/tests/ -v"
+  ],
+  "delete_allowed": false
+}

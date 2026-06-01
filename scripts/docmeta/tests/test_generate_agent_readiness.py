@@ -65,8 +65,9 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch("docs/claims/registry.yml")
         self._touch("scripts/docmeta/validate_claim_registry.py")
         self._touch("contracts/agent/task.schema.json", "{}\n")
+        self._touch("scripts/agent/check_non_ideal_task.py")
+        self._touch("scripts/agent/tests/test_check_non_ideal_task.py")
         self._touch("scripts/agent/handoff_validator.py")
-        self._touch("scripts/agent/non_ideal_guard.py")
         self._touch("scripts/agent/dry_run_runner.py")
 
         gen.generate(self.root)

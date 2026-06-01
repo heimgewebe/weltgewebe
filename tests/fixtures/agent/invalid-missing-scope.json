@@ -1,0 +1,16 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Fehlender Scope muss vom Guard erkannt werden",
+  "task_type": "governance",
+  "forbidden_paths": [],
+  "claims": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "expected_evidence": [
+    "docs/tasks/board.md"
+  ],
+  "validation_commands": [
+    "python3 -m scripts.docmeta.validate_claim_registry"
+  ],
+  "delete_allowed": false
+}

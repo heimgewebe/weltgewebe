@@ -1,0 +1,18 @@
+{
+  "task_id": "AGENT-SAFE-004",
+  "goal": "Fehlende Validation muss vom Guard erkannt werden",
+  "task_type": "governance",
+  "allowed_paths": [
+    "docs/"
+  ],
+  "forbidden_paths": [
+    "docs/_generated/"
+  ],
+  "claims": [
+    "CLAIM-AGENT-SAFE-003"
+  ],
+  "expected_evidence": [
+    "docs/tasks/index.json"
+  ],
+  "delete_allowed": false
+}
