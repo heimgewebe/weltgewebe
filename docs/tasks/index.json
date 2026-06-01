@@ -180,7 +180,7 @@
       "id": "AGENT-SAFE-002",
       "title": "Readiness Hard Fail für Agent-Fähigkeiten einführen",
       "area": "governance",
-      "status": "partial",
+      "status": "done",
       "priority": "high",
       "effort": "S",
       "risk": "medium",
@@ -188,6 +188,7 @@
       "evidence": [
         "scripts/docmeta/generate_agent_readiness.py",
         "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        "docs/_generated/agent-readiness.md",
         "docs/tasks/board.md"
       ],
       "missing_evidence": [
@@ -198,7 +199,8 @@
       "acceptance": [
         "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
         "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
-        "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus"
+        "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus",
+        "offene Capability-Artefakte bleiben explizit in missing_evidence und Folge-Slices AGENT-SAFE-003/004"
       ],
       "links": {
         "issues": [],
