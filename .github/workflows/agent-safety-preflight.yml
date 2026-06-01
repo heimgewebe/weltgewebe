@@ -1,0 +1,70 @@
+---
+name: agent-safety-preflight
+
+"on":
+  pull_request:
+    paths:
+      - "scripts/agent/**"
+      - "docs/security/**"
+      - "agent-policy.yaml"
+      - "AGENTS.md"
+      - "repo.meta.yaml"
+      - ".github/workflows/agent-safety-preflight.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-safety-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  preflight-tests:
+    name: Safety-Preflight Guard Tests (AGENT-SAFE-001)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Run preflight unit tests
+        run: python3 -m unittest discover scripts/agent/tests/ -v
+
+      - name: Smoke-check CLI (report-only, no task file needed error)
+        run: |
+          set -euo pipefail
+          set +e
+          python3 -m scripts.agent.check_agent_preflight \
+            --task-file /nonexistent/task.yaml 2>/dev/null
+          rc=$?
+          set -e
+          if [ "$rc" -ne 2 ]; then
+            printf 'Expected exit code 2 for missing task file, got %s\n' "$rc" >&2
+            exit 1
+          fi
+          printf 'CLI smoke check passed (exit 2 for missing file).\n'
+
+      - name: Smoke-check CLI (valid task fixture, no findings)
+        run: |
+          set -euo pipefail
+          cat > /tmp/agent-task.yaml <<'YAML'
+          task_id: AGENT-SAFE-001
+          task_type: doc_change
+          allowed_paths:
+            - docs/security/
+          validation:
+            - make ci-validate
+          expected_evidence:
+            - docs/security/agent-write-scope-baseline.md
+          YAML
+          python3 -m scripts.agent.check_agent_preflight \
+            --task-file /tmp/agent-task.yaml \
+            --changed-paths docs/security/agent-write-scope-baseline.md \
+            --mode report-only
