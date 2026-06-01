@@ -135,8 +135,11 @@ def evaluate_capabilities(repo_root: Path) -> list[CapabilityResult]:
             cap_id="claim_evidence_spine",
             title="Claim evidence spine",
             hard=True,
-            required_files=["docs/claims/registry.yml"],
-            rationale="Ohne Claim-Registry fehlt maschinenlesbare Evidenzbindung.",
+            required_files=[
+                "docs/claims/registry.yml",
+                "scripts/docmeta/validate_claim_registry.py",
+            ],
+            rationale="Ohne Claim-Registry und Validator fehlt maschinenlesbare Evidenzbindung.",
         )
     )
 

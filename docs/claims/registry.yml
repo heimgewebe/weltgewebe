@@ -1,0 +1,91 @@
+---
+{
+  "version": 1,
+  "claims": [
+    {
+      "id": "CLAIM-AGENT-SAFE-001",
+      "status": "established",
+      "subject": "AGENT-SAFE-001",
+      "statement": "Der report-only Safety-Preflight Guard ist implementiert und testseitig angebunden.",
+      "evidence": [
+        {
+          "path": "scripts/agent/check_agent_preflight.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/tests/test_check_agent_preflight.py",
+          "kind": "test"
+        },
+        {
+          "path": ".github/workflows/agent-safety-preflight.yml",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/security/agent-write-scope-baseline.md",
+          "kind": "documentation"
+        }
+      ],
+      "validation": [
+        "python3 -m unittest discover scripts/agent/tests/ -v"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-01"
+    },
+    {
+      "id": "CLAIM-AGENT-SAFE-002",
+      "status": "established",
+      "subject": "AGENT-SAFE-002",
+      "statement": "Die Agent-Readiness-Matrix verhindert einen Overall-Pass, solange harte Agent-Faehigkeiten fehlen.",
+      "evidence": [
+        {
+          "path": "scripts/docmeta/generate_agent_readiness.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_generate_agent_readiness.py",
+          "kind": "test"
+        },
+        {
+          "path": "docs/_generated/agent-readiness.md",
+          "kind": "generated-report"
+        }
+      ],
+      "validation": [
+        "python3 -m unittest discover scripts/docmeta/tests/ -v",
+        "python3 scripts/docmeta/generate_agent_readiness.py"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-01"
+    },
+    {
+      "id": "CLAIM-AGENT-SAFE-003",
+      "status": "established",
+      "subject": "AGENT-SAFE-003",
+      "statement": "Eine minimale Claim-Evidence-Spine ist vorhanden und deterministisch validierbar.",
+      "evidence": [
+        {
+          "path": "docs/claims/registry.yml",
+          "kind": "registry"
+        },
+        {
+          "path": "docs/claims/README.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "scripts/docmeta/validate_claim_registry.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_validate_claim_registry.py",
+          "kind": "test"
+        }
+      ],
+      "validation": [
+        "python3 scripts/docmeta/validate_claim_registry.py",
+        "python3 -m unittest discover scripts/docmeta/tests/ -v"
+      ],
+      "owner": "unknown",
+      "updated": "2026-06-01"
+    }
+  ]
+}

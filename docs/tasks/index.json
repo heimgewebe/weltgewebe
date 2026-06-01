@@ -191,7 +191,6 @@
         "docs/tasks/board.md"
       ],
       "missing_evidence": [
-        "Claim-Evidence-Spine ist noch nicht implementiert",
         "Agent-Contracts sind noch nicht implementiert",
         "Handoff-Validierung, Non-Ideal-Guard und Dry-Run-Runner sind noch nicht implementiert"
       ],
@@ -216,25 +215,24 @@
       "id": "AGENT-SAFE-003",
       "title": "Minimale Claim-Evidence-Spine aufbauen",
       "area": "governance",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
       "owner": "unknown",
       "evidence": [
-        "docs/blueprints/blueprint-agent-safety-control-layer.md",
-        "docs/roadmap.md",
-        "docs/tasks/board.md"
+        "docs/claims/registry.yml",
+        "docs/claims/README.md",
+        "scripts/docmeta/validate_claim_registry.py",
+        "scripts/docmeta/tests/test_validate_claim_registry.py",
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py"
       ],
-      "missing_evidence": [
-        "docs/claims/registry.yml ist noch nicht eingeführt",
-        "Claim-Typen, Statuswerte und Evidence-Verknüpfung sind noch nicht maschinenlesbar hinterlegt",
-        "Generated Claim-Evidence-Sichten fehlen noch"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "eine minimale Claim-Spine bildet zentrale Implementierungs- und Guard-Claims maschinenlesbar ab",
         "Claim-Status und Evidence-Verweise lassen sich deterministisch validieren",
-        "ohne Claim-Evidence bleibt der Task offen und erzeugt keinen Done-Claim für die Safety-Architektur"
+        "Claim-Registry und Validator sind in die Readiness-Logik angebunden"
       ],
       "links": {
         "issues": [],

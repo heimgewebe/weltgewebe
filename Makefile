@@ -3,6 +3,7 @@
 validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m unittest discover scripts/agent/tests/
+	python3 scripts/docmeta/validate_claim_registry.py
 
 validate-core:
 	python3 -m scripts.docmeta.validate_schema

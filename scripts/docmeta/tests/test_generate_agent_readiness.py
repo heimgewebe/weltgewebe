@@ -63,6 +63,7 @@ class TestGenerateAgentReadiness(unittest.TestCase):
         self._touch(".github/workflows/agent-safety-preflight.yml")
         self._touch("docs/security/agent-write-scope-baseline.md")
         self._touch("docs/claims/registry.yml")
+        self._touch("scripts/docmeta/validate_claim_registry.py")
         self._touch("contracts/agent/task.schema.json", "{}\n")
         self._touch("scripts/agent/handoff_validator.py")
         self._touch("scripts/agent/non_ideal_guard.py")
