@@ -64,13 +64,19 @@ pub struct PasskeyStore {
     // We intentionally use std::sync::RwLock here because operations are
     // short, purely in-memory mutations/lookups without async-await sections
     // while the lock is held.
-    store: Arc<StdRwLock<HashMap<String, Vec<Passkey>>>>,
+    store: Arc<StdRwLock<PasskeyStoreInner>>,
+}
+
+#[derive(Clone, Default)]
+struct PasskeyStoreInner {
+    account_passkeys: HashMap<String, Vec<Passkey>>,
+    credential_index: HashMap<CredentialID, String>,
 }
 
 impl PasskeyStore {
     pub fn new() -> Self {
         Self {
-            store: Arc::new(StdRwLock::new(HashMap::new())),
+            store: Arc::new(StdRwLock::new(PasskeyStoreInner::default())),
         }
     }
 
@@ -84,28 +90,35 @@ impl PasskeyStore {
     ) -> Result<(), PasskeyStoreInsertError> {
         let mut store = self.store.write_recover();
         let credential_id = passkey.cred_id().clone();
-        let duplicate = store.values().any(|passkeys| {
-            passkeys
-                .iter()
-                .any(|existing| existing.cred_id() == &credential_id)
-        });
-        if duplicate {
+        if store.credential_index.contains_key(&credential_id) {
             return Err(PasskeyStoreInsertError::DuplicateCredentialId);
         }
-        store.entry(account_id).or_default().push(passkey);
+        store
+            .credential_index
+            .insert(credential_id, account_id.clone());
+        store
+            .account_passkeys
+            .entry(account_id)
+            .or_default()
+            .push(passkey);
         Ok(())
     }
 
     /// Lists all passkeys owned by the given account.
     pub fn list_for_account(&self, account_id: &str) -> Vec<Passkey> {
         let store = self.store.read_recover();
-        store.get(account_id).cloned().unwrap_or_default()
+        store
+            .account_passkeys
+            .get(account_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Returns all credential IDs for passkeys owned by the given account.
     pub fn credential_ids_for_account(&self, account_id: &str) -> Vec<CredentialID> {
         let store = self.store.read_recover();
         store
+            .account_passkeys
             .get(account_id)
             .map(|passkeys| {
                 passkeys
@@ -119,18 +132,15 @@ impl PasskeyStore {
     /// Finds a passkey by credential ID across all accounts.
     pub fn find_by_credential_id(&self, credential_id: &CredentialID) -> Option<StoredPasskey> {
         let store = self.store.read_recover();
-        for (account_id, passkeys) in store.iter() {
-            if let Some(passkey) = passkeys
-                .iter()
-                .find(|candidate| candidate.cred_id() == credential_id)
-            {
-                return Some(StoredPasskey {
-                    account_id: account_id.clone(),
-                    passkey: passkey.clone(),
-                });
-            }
-        }
-        None
+        let account_id = store.credential_index.get(credential_id)?;
+        let passkeys = store.account_passkeys.get(account_id)?;
+        let passkey = passkeys
+            .iter()
+            .find(|candidate| candidate.cred_id() == credential_id)?;
+        Some(StoredPasskey {
+            account_id: account_id.clone(),
+            passkey: passkey.clone(),
+        })
     }
 
     /// Removes a credential for an account.
@@ -139,14 +149,17 @@ impl PasskeyStore {
     /// removed. Credentials of other accounts are left untouched.
     pub fn remove_for_account(&self, account_id: &str, credential_id: &CredentialID) -> bool {
         let mut store = self.store.write_recover();
-        let Some(passkeys) = store.get_mut(account_id) else {
+        let Some(passkeys) = store.account_passkeys.get_mut(account_id) else {
             return false;
         };
         let original_len = passkeys.len();
         passkeys.retain(|candidate| candidate.cred_id() != credential_id);
         let changed = passkeys.len() != original_len;
         if passkeys.is_empty() {
-            store.remove(account_id);
+            store.account_passkeys.remove(account_id);
+        }
+        if changed {
+            store.credential_index.remove(credential_id);
         }
         changed
     }
