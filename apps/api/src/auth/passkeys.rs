@@ -710,6 +710,59 @@ webauthn_rp_id: example.com\n";
             "other account credential must remain"
         );
     }
+    #[test]
+    fn passkey_store_allows_reinsert_after_remove() {
+        let store = PasskeyStore::new();
+        let passkey = test_passkey(55);
+        let credential_id = passkey.cred_id().clone();
+
+        store
+            .insert("acct-a".to_string(), passkey.clone())
+            .expect("first insert should succeed");
+
+        assert!(
+            store.remove_for_account("acct-a", &credential_id),
+            "owner account should remove credential"
+        );
+
+        store
+            .insert("acct-b".to_string(), passkey)
+            .expect("removed credential id should be insertable again");
+
+        let found = store
+            .find_by_credential_id(&credential_id)
+            .expect("reinserted credential should be found");
+
+        assert_eq!(found.account_id, "acct-b");
+    }
+
+    #[test]
+    fn passkey_store_remove_one_of_multiple_credentials_keeps_other_indexed() {
+        let store = PasskeyStore::new();
+        let first = test_passkey(61);
+        let second = test_passkey(62);
+        let first_id = first.cred_id().clone();
+        let second_id = second.cred_id().clone();
+
+        store
+            .insert("acct-a".to_string(), first)
+            .expect("insert first credential");
+        store
+            .insert("acct-a".to_string(), second)
+            .expect("insert second credential");
+
+        assert!(store.remove_for_account("acct-a", &first_id));
+
+        assert!(
+            store.find_by_credential_id(&first_id).is_none(),
+            "removed credential must not remain indexed"
+        );
+        assert!(
+            store.find_by_credential_id(&second_id).is_some(),
+            "remaining credential must stay indexed"
+        );
+        assert_eq!(store.credential_ids_for_account("acct-a").len(), 1);
+    }
 
     // ── helpers ───────────────────────────────────────────────────────────
 
