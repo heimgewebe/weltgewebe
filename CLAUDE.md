@@ -305,6 +305,8 @@ This file only highlights operational implications:
 | `Justfile` | All development tasks |
 
 ## Secondary Index Synchronization Invariants
+
 When refactoring linear scans into O(1) lookups via secondary HashMaps (e.g., `account_passkeys` and `credential_index`), always introduce explicit tests that enforce the synchronization invariant:
+
 - **Reinsert after remove**: Verify that removing a primary key successfully unlinks the secondary index, allowing subsequent re-insertion without collision.
 - **Partial removal**: Verify that removing one value from a one-to-many relationship (like an account owning multiple keys) only removes the targeted key from the secondary index, leaving others intact.
