@@ -9,13 +9,13 @@ relations:
     target: docs/blueprints/agent-operability-blaupause.md
   - type: relates_to
     target: docs/roadmap.md
-  - type: depends_on
+  - type: relates_to
     target: repo.meta.yaml
-  - type: depends_on
+  - type: relates_to
     target: AGENTS.md
-  - type: depends_on
+  - type: relates_to
     target: agent-policy.yaml
-  - type: depends_on
+  - type: relates_to
     target: docs/policies/agent-reading-protocol.md
   - type: relates_to
     target: docs/tasks/index.json
@@ -248,14 +248,19 @@ Diese Artefakte definieren, woran gearbeitet wird.
 
 ### 5.3 Evidence-Flächen
 
-- `docs/claims/registry.yml`
+Bestehende Evidence-Flächen:
+
 - `audit/impl-registry.yaml`
 - `docs/proofs/**`
-- `artifacts/agent-runs/**`
 - CI-Workflows
 - Runtime-/Deploy-Snapshots
 
-Diese Artefakte definieren, was belegt ist.
+Geplante Evidence-Flächen:
+
+- `docs/claims/registry.yml` — erst nach PR 3 `evidence/minimal-claim-spine`
+- `artifacts/agent-runs/**` — erst nach PR 7 `agent/run-evidence-lite`
+
+Diese Artefakte definieren, was belegt ist. Geplante Evidence-Flächen dürfen bis zu ihrer Implementierung nicht als verfügbare Primärquelle gelesen werden.
 
 ### 5.4 Diagnose und Projektion
 
@@ -271,11 +276,11 @@ Der Ausbau erfolgt nicht als Big Bang. Jede Welle muss eine konkrete Fehlerklass
 
 #### PR 1 — agent/safety-preflight
 
-**Zweck**
+##### Zweck
 
 Gefährliche Agentenfehler sofort blockieren, noch bevor ein vollständiger Agent-Runner existiert.
 
-**Neue oder geänderte Artefakte**
+##### Neue oder geänderte Artefakte
 
 - `docs/security/agent-write-scope-baseline.md`
 - `scripts/agent/check_changed_paths_scope.py`
@@ -289,7 +294,7 @@ Optional:
 
 Bevorzugt wird aber die Integration in bestehende Guard-Strukturen, sofern das ohne Verrenkung möglich ist.
 
-**Regeln**
+##### Regeln
 
 1. `docs/_generated/*` darf nicht direkt editiert werden.
 2. Roadmap-`[x]` braucht Claim- oder Proof-Referenz.
@@ -300,7 +305,7 @@ Bevorzugt wird aber die Integration in bestehende Guard-Strukturen, sofern das o
 7. Delete braucht `delete_allowed: true`.
 8. Agent darf kein `done` setzen.
 
-**Minimaler Agent-Marker**
+##### Minimaler Agent-Marker
 
 Zu Beginn genügt ein YAML-Block im PR-Body oder eine kleine Task-Datei:
 
@@ -316,7 +321,7 @@ validation:
 delete_allowed: false
 ```
 
-**Ratchet**
+##### Ratchet
 
 - Stufe 1: report-only
 - Stufe 2: warn
@@ -326,7 +331,7 @@ delete_allowed: false
   - Status `done` ohne `proof_ref`
   - forbidden paths
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Ein Patch mit direktem Edit an `docs/_generated/*` wird erkannt.
 - Ein Roadmap-Haken ohne Claim/Proof wird erkannt.
@@ -334,7 +339,7 @@ delete_allowed: false
 - Ein Pfad außerhalb `allowed_paths` wird erkannt.
 - Alle Checks liefern maschinenlesbare Fehlercodes.
 
-**Fehlercodes**
+##### Fehlercodes
 
 - `GENERATED_DIRECT_EDIT`
 - `ROADMAP_DONE_WITHOUT_CLAIM`
@@ -346,17 +351,17 @@ delete_allowed: false
 
 #### PR 2 — agent/readiness-hard-fail
 
-**Zweck**
+##### Zweck
 
 Agent-Readiness darf keine Reife suggerieren, solange Kernmechaniken fehlen.
 
-**Artefakte**
+##### Artefakte
 
 - `scripts/docmeta/generate_agent_readiness.py`
 - `docs/_generated/agent-readiness.md`
 - `docs/_generated/agent-readiness.json`
 
-**Capability-Matrix**
+##### Capability-Matrix
 
 | Capability | Statusregel |
 |---|---|
@@ -369,7 +374,7 @@ Agent-Readiness darf keine Reife suggerieren, solange Kernmechaniken fehlen.
 | Run Evidence | `open`, solange Run-Artefakte fehlen |
 | Overall | maximal `partial`, solange eine Hard-Capability fehlt |
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Gesamtstatus kann nicht `pass` sein, solange Contracts, Handoff-Validator oder Runner fehlen.
 - Report nennt fehlende Artefakte konkret.
@@ -380,11 +385,11 @@ Agent-Readiness darf keine Reife suggerieren, solange Kernmechaniken fehlen.
 
 #### PR 3 — evidence/minimal-claim-spine
 
-**Zweck**
+##### Zweck
 
 Handlungsleitende Claims werden maschinenlesbar und beweispflichtig.
 
-**Artefakte**
+##### Artefakte
 
 - `docs/claims/registry.yml`
 - `docs/claims/schema.json`
@@ -392,7 +397,7 @@ Handlungsleitende Claims werden maschinenlesbar und beweispflichtig.
 - `docs/_generated/claim-evidence.md`
 - `docs/_generated/claim-evidence.json`
 
-**Start-Claim-Typen**
+##### Start-Claim-Typen
 
 ```yaml
 claim_type:
@@ -403,7 +408,7 @@ claim_type:
   - security_guard_enforced
 ```
 
-**Beispiel**
+##### Beispiel
 
 ```yaml
 - id: claim.agent.safety_preflight.enforced
@@ -422,7 +427,7 @@ claim_type:
       - .github/workflows/agent-safety-preflight.yml
 ```
 
-**Statuswerte**
+##### Statuswerte
 
 - `open`
 - `partial`
@@ -430,7 +435,7 @@ claim_type:
 - `stale`
 - `contradicted`
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Mindestens zehn handlungsleitende Claims sind modelliert.
 - Roadmap-`[x]` in Agent-/CI-/Generated-/Guard-Bereichen braucht Claim-Eintrag.
@@ -440,11 +445,11 @@ claim_type:
 
 #### PR 4 — evidence/impl-registry-critical
 
-**Zweck**
+##### Zweck
 
 Die vorhandene `audit/impl-registry.yaml` wird für kritische Pfade evidence-fähig gemacht.
 
-**Startumfang**
+##### Startumfang
 
 - `impl.workflow.ci`
 - `impl.contracts`
@@ -453,7 +458,7 @@ Die vorhandene `audit/impl-registry.yaml` wird für kritische Pfade evidence-fä
 - `impl.infra.compose`
 - `impl.agent.safety-preflight`
 
-**Schema-Erweiterung**
+##### Schema-Erweiterung
 
 ```yaml
 id: impl.workflow.ci
@@ -470,14 +475,14 @@ evidence_level: ci
 last_verified: "2026-06-01"
 ```
 
-**Regeln**
+##### Regeln
 
 - Impl-Registry ist Evidence-Quelle, nicht Claim-Wahrheit.
 - Claims dürfen auf Impl-Entries verweisen.
 - Impl-Entries dürfen nicht automatisch Roadmap-Status setzen.
 - `criticality: high` ohne `verified_by` wird zunächst warn, später fail.
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 Alle kritischen Einträge haben:
 
@@ -490,13 +495,13 @@ Alle kritischen Einträge haben:
 
 #### PR 5 — agent/minimal-contracts-and-guard
 
-**Zweck**
+##### Zweck
 
 Agent-Tasks erhalten ein maschinenlesbares Minimalformat, und unklare Tasks werden blockiert.
 
 Contracts ohne Guard sind zu weich. Guard ohne Contracts ist zu schwammig. Diese PR verbindet beides.
 
-**Artefakte**
+##### Artefakte
 
 - `contracts/agent/task.schema.json`
 - `contracts/agent/command.read_context.schema.json`
@@ -513,7 +518,7 @@ Contracts ohne Guard sind zu weich. Guard ohne Contracts ist zu schwammig. Diese
 - `tests/fixtures/agent/invalid-status-done-by-agent.json`
 - `docs/reference/agent-operability-fixture-matrix.md`
 
-**Task-Pflichtfelder**
+##### Task-Pflichtfelder
 
 ```yaml
 task_id:
@@ -527,7 +532,7 @@ validation_commands:
 delete_allowed: false
 ```
 
-**Command-Kette**
+##### Command-Kette
 
 ```text
 read_context
@@ -536,7 +541,7 @@ read_context
 → emit_handoff
 ```
 
-**Non-Ideal-Fehlercodes**
+##### Non-Ideal-Fehlercodes
 
 - `NO_ALLOWED_PATHS`
 - `NO_VALIDATION_COMMAND`
@@ -548,7 +553,7 @@ read_context
 - `STATUS_DONE_BY_AGENT`
 - `CONTRADICTION_FOUND`
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Drei reale Weltgewebe-Tasktypen sind valide modelliert.
 - Drei gefährliche Negativfälle scheitern.
@@ -560,16 +565,16 @@ read_context
 
 #### PR 6 — agent/dry-run-runner
 
-**Zweck**
+##### Zweck
 
 Agenten können echte Tasks trocken ausführen, ohne Dateien zu ändern.
 
-**Artefakte**
+##### Artefakte
 
 - `scripts/agent/run_task.py`
 - `.github/workflows/agent-operability-smoke.yml`
 
-**Ablauf**
+##### Ablauf
 
 ```text
 load task
@@ -582,12 +587,12 @@ emit handoff.json
 emit run-result.json
 ```
 
-**Standard**
+##### Standard
 
 - `--dry-run` ist default.
 - `--write` existiert noch nicht.
 
-**Smoke-Test**
+##### Smoke-Test
 
 ```bash
 python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-doc-drift-task.json
@@ -595,7 +600,7 @@ python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-roadmap-cl
 python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-generated-refresh-task.json
 ```
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Drei reale Tasktypen laufen deterministisch durch.
 - Keine Dateien werden geändert.
@@ -605,11 +610,11 @@ python scripts/agent/run_task.py --dry-run tests/fixtures/agent/valid-generated-
 
 #### PR 7 — agent/run-evidence-lite
 
-**Zweck**
+##### Zweck
 
 Jeder Dry-Run erzeugt minimale, schema-valide Evidence.
 
-**Artefakte**
+##### Artefakte
 
 ```text
 artifacts/agent-runs/<run-id>/
@@ -619,7 +624,7 @@ artifacts/agent-runs/<run-id>/
   run-result.json
 ```
 
-**Noch nicht enthalten**
+##### Noch nicht enthalten
 
 - `evidence.jsonl`
 - `decision.yml`
@@ -627,7 +632,7 @@ artifacts/agent-runs/<run-id>/
 
 Diese kommen erst nach stabilem Runner.
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Jeder Dry-Run erzeugt einen eindeutigen `run_id`.
 - Jeder Dry-Run schreibt schema-valide Run-Artefakte.
@@ -638,21 +643,21 @@ Diese kommen erst nach stabilem Runner.
 
 #### PR 8 — docs/generated-control-minimal
 
-**Zweck**
+##### Zweck
 
 Die gefährlichsten Generated-Artefakte werden zuerst kontrolliert.
 
-**Startumfang**
+##### Startumfang
 
 - `docs/_generated/agent-readiness.md`
 - `docs/_generated/claim-evidence.md`
 - `docs/tasks/index.json`
 
-**Artefakt**
+##### Artefakt
 
 - `.wgx/generated-artifacts.yml`
 
-**Beispiel**
+##### Beispiel
 
 ```yaml
 artifacts:
@@ -668,7 +673,7 @@ artifacts:
     blocking: true
 ```
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Agent-Readiness, Claim-Evidence und Task-Index dürfen nicht manuell editiert werden.
 - Alle drei Artefakte sind aus Quellen regenerierbar.
@@ -677,23 +682,23 @@ artifacts:
 
 #### PR 9 — docs/roadmap-ratchet-minimal
 
-**Zweck**
+##### Zweck
 
 Gefährliche Statuslügen werden blockiert.
 
-**Regeln**
+##### Regeln
 
 - Roadmap-`[x]` in Agent-/CI-/Generated-Bereichen braucht verified Claim.
 - Statusmatrix `done` braucht `proof_ref`.
 - Blueprint `active` im Agent-Bereich braucht verified Claim-Gruppe.
 
-**Artefakte**
+##### Artefakte
 
 - `scripts/docmeta/check_roadmap_claims.py`
 - `scripts/docmeta/check_statusmatrix_proofs.py`
 - `scripts/docmeta/check_blueprint_activation.py`
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Agent-Operability-Haken kann nicht gesetzt werden, solange Contracts, Guard oder Runner fehlen.
 - `done` ohne `proof_ref` scheitert.
@@ -704,11 +709,11 @@ Gefährliche Statuslügen werden blockiert.
 
 #### PR 10 — agent/write-mode-opt-in
 
-**Zweck**
+##### Zweck
 
 Echte Agent-Writes werden möglich, aber nur streng begrenzt.
 
-**Voraussetzungen**
+##### Voraussetzungen
 
 - Safety Preflight pass
 - Readiness hard fail aktiv
@@ -718,13 +723,13 @@ Echte Agent-Writes werden möglich, aber nur streng begrenzt.
 - Dry-Run Runner pass
 - Run Evidence Lite pass
 
-**Befehl**
+##### Befehl
 
 ```bash
 python scripts/agent/run_task.py --write tasks/WG-TASK-....yml
 ```
 
-**Einschränkungen**
+##### Einschränkungen
 
 - nur `allowed_paths`
 - kein `docs/_generated` direkt
@@ -733,7 +738,7 @@ python scripts/agent/run_task.py --write tasks/WG-TASK-....yml
 - kein infra ohne `task_type=infra_change` und `proof_ref`
 - kein roadmap done ohne `claim.status=verified`
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Ein kleiner Doku-Code-Drift-Fix läuft end-to-end.
 - Patch wird erzeugt.
@@ -743,11 +748,11 @@ python scripts/agent/run_task.py --write tasks/WG-TASK-....yml
 
 #### PR 11 — agent/run-evidence-full
 
-**Zweck**
+##### Zweck
 
 Vollständige Agent-Observability.
 
-**Artefakte**
+##### Artefakte
 
 ```text
 artifacts/agent-runs/<run-id>/
@@ -760,12 +765,12 @@ artifacts/agent-runs/<run-id>/
   run-result.json
 ```
 
-**Regel**
+##### Regel
 
 Agent darf:
 
 ```yaml
-decision: pass
+decision: pass_proposed
 ```
 
 Agent darf nicht:
@@ -774,7 +779,7 @@ Agent darf nicht:
 repo-status: done
 ```
 
-**Akzeptanzkriterien**
+##### Akzeptanzkriterien
 
 - Dry-Run und Write-Run erzeugen vollständige, schema-valide Evidence.
 - `decision.yml` verweist auf Claims, Validation und Residual Gaps.
@@ -793,7 +798,7 @@ Ausweitung auf:
 - Docmeta
 - Security
 
-**Akzeptanzkriterium**
+##### Akzeptanzkriterium
 
 Alle zentralen Roadmap-Haken in Kernbereichen haben Claim-Evidence.
 
@@ -808,7 +813,7 @@ Alle `docs/_generated/*` bekommen:
 - `commit_required`
 - `blocking`
 
-**Akzeptanzkriterium**
+##### Akzeptanzkriterium
 
 Alle Generated-Artefakte sind klassifiziert, regenerierbar und gegen direkte Edits geschützt.
 
@@ -830,7 +835,7 @@ Nicht für:
 - kleine Doku-Fixes
 - normale Statusupdates
 
-**Artefakte**
+##### Artefakte
 
 ```text
 experiments/<id>/
@@ -842,7 +847,7 @@ experiments/<id>/
   decision.yml
 ```
 
-**Akzeptanzkriterium**
+##### Akzeptanzkriterium
 
 `adopted` ohne `run_meta.json`, Evidence und Decision ist unmöglich.
 
@@ -865,7 +870,7 @@ no-task-required: true
 reason: typo-only
 ```
 
-**Akzeptanzkriterium**
+##### Akzeptanzkriterium
 
 Kein relevanter PR ohne Task-/Claim-/Evidence-Verbindung.
 
@@ -873,7 +878,7 @@ Kein relevanter PR ohne Task-/Claim-/Evidence-Verbindung.
 
 Owner/Review-Intervalle für langlebige Roadmaps und Blueprints.
 
-**Frontmatter-Erweiterung**
+##### Frontmatter-Erweiterung
 
 ```yaml
 owner: alex
@@ -883,7 +888,7 @@ next_review_due: "2026-07-16"
 staleness_policy: warn
 ```
 
-**Akzeptanzkriterium**
+##### Akzeptanzkriterium
 
 Keine aktive Roadmap oder Policy ohne Owner und Review-Intervall.
 
