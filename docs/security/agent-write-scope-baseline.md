@@ -63,7 +63,7 @@ Quelle: `agent-policy.yaml` → `requires_target_proof_for`, `human_review_requi
 ## Pflichtfelder in Task-Metadaten
 
 Jede agentische Änderung muss vor der Ausführung folgende Felder in der Task-Datei
-oder im Preflight-Aufruf aufweisen:
+aufweisen:
 
 | Feld | Beschreibung |
 |---|---|
