@@ -90,6 +90,7 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 | Kartenklarheit | [kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) | [map-architekturkritik.md](reports/map-architekturkritik.md) |
 | Kartenklarheit Phase 6 (Wahrheitsbeweis) | [kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) | [map-status-matrix.md](reports/map-status-matrix.md) |
 | Agent-Operability | [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) | [agent-readiness-audit.md](reports/agent-readiness-audit.md) |
+| Agent Safety Control Layer | [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md) | Blueprint gemergt; Umsetzung offen in der Task-Control-Schicht: [board.md](tasks/board.md), [index.json](tasks/index.json) (`AGENT-SAFE-001` bis `AGENT-SAFE-004`, `TASK-CTL-004`). Keine Aussage, dass PR 1–PR 16 bereits umgesetzt seien. |
 | Dokumentationsstruktur & Task-Steuerung | [doc-structure-task-control-roadmap.md](blueprints/doc-structure-task-control-roadmap.md), [Blueprint](blueprints/doc-structure-task-control.md) | Beleg in der Task-Control-Schicht: [tasks/README.md](tasks/README.md), [board.md](tasks/board.md), [index.json](tasks/index.json), Drift-Guard `.github/workflows/task-index.yml`. Phase 2 vorhanden; Phase 4 Check-Modus + CI-Guard vorhanden (CI-Lauf-Nachweis offen, `TASK-CTL-003`); Schreibgenerator/Bot-PRs und Implementierungs-Mapping offen. Kein gesonderter OPT-Eintrag in `reports/optimierungsstatus.md` — Task-Control-Phasen laufen über `docs/tasks/`. |
 | Versionierung | [versionierungs-blaupause.md](blueprints/versionierungs-blaupause.md) | [versionierungs-statusgrundlage.md](blueprints/versionierungs-statusgrundlage.md) |
 | Optimierungsfront | (kein Sub-Plan) | [optimierungsstatus.md](reports/optimierungsstatus.md), [optimierungsbericht.md](reports/optimierungsbericht.md) |
@@ -142,6 +143,8 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 
 - [?] Minimaler Action-Layer · Zielbild dokumentiert, Implementierungsstand prüfen · [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md)
 - [?] Agent-Readiness vollständig grün · [agent-readiness-audit.md](reports/agent-readiness-audit.md)
+- [ ] Agent Safety Control Layer · Blueprint gemergt, Umsetzung offen; erste Slices sind als offene Task-Control-Tickets `AGENT-SAFE-001` bis `AGENT-SAFE-004` erfasst. Keine Behauptung, dass PR 1–PR 16 bereits umgesetzt seien · [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md)
+- [ ] Blueprint-/Roadmap-Registration-Guard · Folgeslice `TASK-CTL-004`, damit neue Blueprints, Roadmaps und größere Pläne nicht ohne Index-/Roadmap-/Task-Control-Einordnung gemergt werden · [board.md](tasks/board.md)
 
 ## Strang Versionierung
 
