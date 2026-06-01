@@ -1,9 +1,9 @@
 ---
 id: docs.reference.agent-operability-fixture-matrix
-title: Agent Operability Fixture Matrix
+title: Agent-Betriebsfaehigkeit: Fixture-Matrix
 doc_type: reference
 status: active
-summary: Fixture matrix for AGENT-SAFE-004 task contracts and non-ideal guard.
+summary: Fixture-Matrix fuer AGENT-SAFE-004 Task-Contracts und den Non-Ideal-Guard.
 relations:
   - type: relates_to
     target: contracts/agent/task.schema.json
@@ -13,7 +13,7 @@ relations:
     target: scripts/agent/tests/test_check_non_ideal_task.py
 ---
 
-# Agent Operability Fixture Matrix
+# Agent-Betriebsfaehigkeit: Fixture-Matrix
 
 ## Zweck
 

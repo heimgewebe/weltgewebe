@@ -76,6 +76,11 @@ def _forbidden_blocks_allowed(allowed: str, forbidden: str) -> bool:
     return normalized_allowed.startswith(normalized_forbidden + "/")
 
 
+def _is_generated_path(path: str) -> bool:
+    normalized = _normalize_path(path).strip("/")
+    return normalized == "docs/_generated" or normalized.startswith("docs/_generated/")
+
+
 def _finding(code: str, message: str, field: str | None = None) -> dict[str, str]:
     item: dict[str, str] = {"code": code, "message": message}
     if field is not None:
@@ -253,7 +258,7 @@ def _validate_scope_rules(task: dict[str, Any]) -> list[dict[str, str]]:
                     )
                 )
 
-    allows_generated = any(_normalize_path(path).startswith("docs/_generated") for path in allowed_paths)
+    allows_generated = any(_is_generated_path(path) for path in allowed_paths)
     if allows_generated:
         task_type = task.get("task_type")
         commands = task.get("validation_commands")
@@ -444,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    if not claim_registry_file.exists():
+    if not claim_registry_file.is_file():
         print(
             json.dumps(
                 {

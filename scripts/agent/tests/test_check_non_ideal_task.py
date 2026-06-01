@@ -58,6 +58,76 @@ class TestCheckNonIdealTask(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
         self.assertEqual(payload["findings_count"], 0)
 
+    def test_docs_generated_allowed_with_generated_refresh_and_generator(self):
+        with tempfile.NamedTemporaryFile(
+            "w",
+            suffix=".json",
+            dir=self.repo_root,
+            delete=False,
+            encoding="utf-8",
+        ) as temp_file:
+            temp_file.write(
+                json.dumps(
+                    {
+                        "task_id": "AGENT-SAFE-004",
+                        "goal": "Generated refresh with generated output path",
+                        "task_type": "generated_refresh",
+                        "allowed_paths": ["docs/_generated/"],
+                        "forbidden_paths": [],
+                        "claims": ["CLAIM-AGENT-SAFE-002"],
+                        "expected_evidence": ["docs/_generated/agent-readiness.md"],
+                        "validation_commands": ["python3 scripts/docmeta/generate_agent_readiness.py"],
+                        "delete_allowed": False,
+                    }
+                )
+            )
+            temp_path = Path(temp_file.name)
+
+        try:
+            rel_path = str(temp_path.relative_to(self.repo_root))
+            proc = self._run_cli(rel_path)
+            payload = self._parse_stdout(proc)
+            self.assertEqual(proc.returncode, 0)
+            codes = [item["code"] for item in payload["findings"]]
+            self.assertNotIn("FORBIDDEN_PATH", codes)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
+    def test_docs_generated_backup_not_treated_as_generated_special_case(self):
+        with tempfile.NamedTemporaryFile(
+            "w",
+            suffix=".json",
+            dir=self.repo_root,
+            delete=False,
+            encoding="utf-8",
+        ) as temp_file:
+            temp_file.write(
+                json.dumps(
+                    {
+                        "task_id": "AGENT-SAFE-004",
+                        "goal": "Backup directory is not generated special path",
+                        "task_type": "doc_change",
+                        "allowed_paths": ["docs/_generated_backup/"],
+                        "forbidden_paths": [],
+                        "claims": ["CLAIM-AGENT-SAFE-003"],
+                        "expected_evidence": ["docs/tasks/board.md"],
+                        "validation_commands": ["python3 -m scripts.docmeta.validate_claim_registry"],
+                        "delete_allowed": False,
+                    }
+                )
+            )
+            temp_path = Path(temp_file.name)
+
+        try:
+            rel_path = str(temp_path.relative_to(self.repo_root))
+            proc = self._run_cli(rel_path)
+            payload = self._parse_stdout(proc)
+            self.assertEqual(proc.returncode, 0)
+            codes = [item["code"] for item in payload["findings"]]
+            self.assertNotIn("FORBIDDEN_PATH", codes)
+        finally:
+            temp_path.unlink(missing_ok=True)
+
     def test_missing_scope_emits_code(self):
         proc = self._run_cli(self._fixture("invalid-missing-scope.json"))
         payload = self._parse_stdout(proc)
