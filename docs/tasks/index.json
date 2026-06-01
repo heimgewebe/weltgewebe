@@ -268,8 +268,7 @@
         "tests/fixtures/agent/invalid-status-done-by-agent.json",
         "docs/reference/agent-operability-fixture-matrix.md",
         "scripts/docmeta/generate_agent_readiness.py",
-        "scripts/docmeta/tests/test_generate_agent_readiness.py",
-        "docs/_generated/agent-readiness.md"
+        "scripts/docmeta/tests/test_generate_agent_readiness.py"
       ],
       "missing_evidence": [],
       "acceptance": [
