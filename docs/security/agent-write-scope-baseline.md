@@ -34,7 +34,7 @@ Kein automatisches Blockieren, kein Write-Mode, keine Claim-Registry.
 ## Erlaubte Schreibpfade
 
 Agenten dürfen nur Pfade beschreiben, die explizit als `allowed_paths` in der Task-Datei
-oder im `--allowed-paths`-Argument deklariert sind.
+deklariert sind.
 
 ## Verbotene Pfade (immer)
 
