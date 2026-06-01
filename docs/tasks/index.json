@@ -105,6 +105,183 @@
       "updated_at": "2026-05-30"
     },
     {
+      "id": "TASK-CTL-004",
+      "title": "Guard gegen uneingeordnete Blueprints und Pläne einführen",
+      "area": "docs",
+      "status": "open",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "docs/blueprints/blueprint-agent-safety-control-layer.md",
+        "docs/roadmap.md",
+        "docs/tasks/board.md",
+        "docs/tasks/index.json"
+      ],
+      "missing_evidence": [
+        "scripts/docmeta/check_blueprint_roadmap_registration.py fehlt noch",
+        "Tests für eingeordnete und uneingeordnete Blueprint-/Roadmap-Dateien fehlen noch",
+        "CI-Anbindung des Registration-Guards ist noch offen",
+        "Expliziter Ausnahmefluss für registrierungsbefreite Planungsdokumente ist noch nicht festgelegt"
+      ],
+      "acceptance": [
+        "neuer Blueprint oder Plan ohne Index-/Roadmap-/Task-Control-Einordnung wird im Check-Modus gemeldet",
+        "eingeordnete neue Blueprint-/Roadmap-Dateien bestehen den Guard",
+        "explizite Ausnahmen sind schema-konform und begründet",
+        "Ratchet kann mindestens report-only und warn unterscheiden, bevor blocking aktiviert wird"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/roadmap.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-01"
+    },
+    {
+      "id": "AGENT-SAFE-001",
+      "title": "Safety-Preflight Guard minimal einführen",
+      "area": "governance",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "docs/blueprints/blueprint-agent-safety-control-layer.md",
+        "docs/roadmap.md",
+        "docs/tasks/board.md"
+      ],
+      "missing_evidence": [
+        "scripts/agent/safety_preflight.py oder äquivalenter Guard existiert noch nicht",
+        "Task-Pflichtfelder werden vor Schreiboperationen noch nicht maschinell geprüft",
+        "CI-/Runner-Anbindung für den minimalen Safety-Preflight ist noch offen"
+      ],
+      "acceptance": [
+        "ein minimaler Preflight prüft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
+        "fehlende Pflichtfelder blockieren den Task deterministisch statt still weiterzulaufen",
+        "der erste Slice bleibt report-only oder warn und setzt keinen Done-Status für Folgepfade"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/roadmap.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-01"
+    },
+    {
+      "id": "AGENT-SAFE-002",
+      "title": "Readiness Hard Fail für Agent-Fähigkeiten einführen",
+      "area": "governance",
+      "status": "open",
+      "priority": "high",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "docs/blueprints/blueprint-agent-safety-control-layer.md",
+        "docs/roadmap.md",
+        "docs/tasks/board.md"
+      ],
+      "missing_evidence": [
+        "Readiness-/Capability-Matrix blockiert fehlende Agent-Fähigkeiten noch nicht hart",
+        "Agenten können fehlende Kernfähigkeiten derzeit noch als degradierbaren Zustand behandeln"
+      ],
+      "acceptance": [
+        "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
+        "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
+        "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/roadmap.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-01"
+    },
+    {
+      "id": "AGENT-SAFE-003",
+      "title": "Minimale Claim-Evidence-Spine aufbauen",
+      "area": "governance",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "docs/blueprints/blueprint-agent-safety-control-layer.md",
+        "docs/roadmap.md",
+        "docs/tasks/board.md"
+      ],
+      "missing_evidence": [
+        "docs/claims/registry.yml ist noch nicht eingeführt",
+        "Claim-Typen, Statuswerte und Evidence-Verknüpfung sind noch nicht maschinenlesbar hinterlegt",
+        "Generated Claim-Evidence-Sichten fehlen noch"
+      ],
+      "acceptance": [
+        "eine minimale Claim-Spine bildet zentrale Implementierungs- und Guard-Claims maschinenlesbar ab",
+        "Claim-Status und Evidence-Verweise lassen sich deterministisch validieren",
+        "ohne Claim-Evidence bleibt der Task offen und erzeugt keinen Done-Claim für die Safety-Architektur"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/roadmap.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-01"
+    },
+    {
+      "id": "AGENT-SAFE-004",
+      "title": "Minimale Agent-Contracts und Non-Ideal-Guard einführen",
+      "area": "governance",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "docs/blueprints/blueprint-agent-safety-control-layer.md",
+        "docs/roadmap.md",
+        "docs/tasks/board.md"
+      ],
+      "missing_evidence": [
+        "contracts/agent/*.schema.json oder äquivalente Agent-Contracts fehlen noch",
+        "Non-Ideal-Task-Guard für unvollständige Arbeitsaufträge ist noch nicht implementiert",
+        "Handoff- oder Runner-Integration für die Minimal-Contracts fehlt noch"
+      ],
+      "acceptance": [
+        "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade für agentische Tasks",
+        "ein Guard blockiert Non-Ideal-Tasks ohne vollständigen Arbeitsauftrag",
+        "die Einführung bleibt als offener Slice sichtbar, bis Contract und Guard lokal und in CI belegt sind"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "docs/roadmap.md",
+          "docs/tasks/board.md"
+        ]
+      },
+      "updated_at": "2026-06-01"
+    },
+    {
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",
