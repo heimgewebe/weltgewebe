@@ -211,6 +211,11 @@ class TestCheckPathScope(unittest.TestCase):
         findings = check_path_scope(["docs\\foo.md"], ["docs/"])
         self.assertEqual(findings, [])
 
+    def test_docs_bad_is_not_allowed_by_docs_prefix(self):
+        findings = check_path_scope(["docs_bad/foo.md"], ["docs/"])
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["code"], "PATH_OUT_OF_SCOPE")
+
 
 # ---------------------------------------------------------------------------
 # check_generated_direct_edit
@@ -240,60 +245,59 @@ class TestCheckGeneratedDirectEdit(unittest.TestCase):
 
 
 class TestCheckRoadmapDoneWithoutClaim(unittest.TestCase):
-    def _roadmap_with(self, line: str) -> str:
-        """Schreibt eine temporäre Markdown-Datei unter docs/."""
-        f = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".md",
-            delete=False,
-            encoding="utf-8",
-            prefix="docs_",
-        )
-        f.write(line + "\n")
-        f.close()
-        # Wir patchen den Pfad so, dass er mit 'docs/' beginnt
-        return f.name
-
     def test_done_checkbox_without_claim_flagged(self):
-        path = self._roadmap_with("- [x] Implementiert")
-        # Rename-Trick: Wir können den Pfad nicht umbenennen zu docs/...,
-        # also testen wir check_roadmap_done_without_claim mit einem Wrapper,
-        # der den absoluten Pfad direkt öffnet.
-        # Stattdessen: Wir testen die interne Logik via run_preflight mit
-        # einem gemockten Pfad, der tatsächlich existiert.
+        """[x] ohne Claim in docs/roadmap.md wird erkannt."""
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
         try:
-            # Der Check öffnet die Datei direkt; wir übergeben den echten tmp-Pfad,
-            # aber er startet nicht mit 'docs/' — also kein Fund erwartet.
-            findings = check_roadmap_done_without_claim([path])
-            self.assertEqual(findings, [])
+            os.makedirs(os.path.join(tmpdir, "docs"))
+            with open(os.path.join(tmpdir, "docs", "roadmap.md"), "w", encoding="utf-8") as f:
+                f.write("- [x] Implementiert\n")
+            os.chdir(tmpdir)
+            findings = check_roadmap_done_without_claim(["docs/roadmap.md"])
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["code"], "ROADMAP_DONE_WITHOUT_CLAIM")
         finally:
-            os.unlink(path)
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
 
     def test_done_checkbox_in_docs_path_flagged(self):
-        # Erstelle tmp-Datei in einem docs-ähnlichen Pfad
+        """Alias-Test: gleicher positiver Fund."""
+        import shutil
+        cwd = os.getcwd()
         tmpdir = tempfile.mkdtemp()
-        docs_dir = os.path.join(tmpdir, "docs")
-        os.makedirs(docs_dir)
-        md_path = os.path.join(docs_dir, "roadmap.md")
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write("- [x] Implementiert\n")
         try:
-            # Der Pfad muss mit 'docs/' beginnen (relativ gesehen)
-            # Wir übergeben den relativen Pfad vom tmpdir aus
-            rel_path = "docs/roadmap.md"
-            findings = check_roadmap_done_without_claim(
-                [os.path.join(tmpdir, rel_path)]
-            )
-            # Absoluter Pfad beginnt nicht mit 'docs/' — kein Fund
-            # Der Check filtert nach norm.startswith("docs/")
-            self.assertEqual(findings, [])
+            os.makedirs(os.path.join(tmpdir, "docs"))
+            with open(os.path.join(tmpdir, "docs", "roadmap.md"), "w", encoding="utf-8") as f:
+                f.write("- [x] Implementiert\n")
+            os.chdir(tmpdir)
+            findings = check_roadmap_done_without_claim(["docs/roadmap.md"])
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["code"], "ROADMAP_DONE_WITHOUT_CLAIM")
         finally:
-            import shutil
+            os.chdir(cwd)
             shutil.rmtree(tmpdir)
 
     def test_done_checkbox_with_proof_not_flagged(self):
-        # Erstelle eine Datei mit [x] und proof_ref
-        path = _write_md("- [x] Implementiert proof_ref: PR#42\n")
+        """[x] mit proof_ref in docs/roadmap.md wird nicht gemeldet."""
+        import shutil
+        cwd = os.getcwd()
+        tmpdir = tempfile.mkdtemp()
+        try:
+            os.makedirs(os.path.join(tmpdir, "docs"))
+            with open(os.path.join(tmpdir, "docs", "roadmap.md"), "w", encoding="utf-8") as f:
+                f.write("- [x] Implementiert proof_ref: PR#42\n")
+            os.chdir(tmpdir)
+            findings = check_roadmap_done_without_claim(["docs/roadmap.md"])
+            self.assertEqual(findings, [])
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmpdir)
+
+    def test_non_docs_path_not_flagged(self):
+        """Absoluter oder nicht-docs/ Pfad mit [x] wird nicht gemeldet."""
+        path = _write_md("- [x] Implementiert\n")
         try:
             findings = check_roadmap_done_without_claim([path])
             self.assertEqual(findings, [])
@@ -337,6 +341,15 @@ class TestCheckStatusDoneWithoutProof(unittest.TestCase):
         try:
             findings = check_status_done_without_proof([path])
             self.assertEqual(findings, [])
+        finally:
+            os.unlink(path)
+
+    def test_json_status_done_without_proof_flagged(self):
+        path = _write_md('{"status": "done", "title": "Foo"}\n', suffix=".json")
+        try:
+            findings = check_status_done_without_proof([path])
+            self.assertEqual(len(findings), 1)
+            self.assertEqual(findings[0]["code"], "STATUS_DONE_WITHOUT_PROOF")
         finally:
             os.unlink(path)
 

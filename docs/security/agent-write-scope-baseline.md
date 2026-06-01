@@ -100,6 +100,16 @@ Er erkennt und meldet Verletzungen, blockiert aber keinen PR automatisch.
 Stufe 3 (blocking) wird erst aktiviert, wenn spätere Slices (`AGENT-SAFE-002` bis `AGENT-SAFE-004`)
 die nötigen Claim-/Proof-Mechaniken aufgebaut haben.
 
+### Dateibasiertes Scanning
+
+Der Guard (`AGENT-SAFE-001`) scannt vollständige Dateien, nicht einzelne Diff-Hunks.
+Geänderte Dateien werden komplett gelesen. Dadurch können bestehende `[x]`-Einträge
+oder `status: done`-Felder in noch nicht bereinigten Dateien als Befund erscheinen,
+auch wenn der aktuelle PR diese Zeilen nicht eingeführt hat (Altbefunde).
+
+Das ist der Grund, warum Blocking explizit nicht aktiviert ist.
+Diff-hunk-basiertes Scanning ist für einen späteren Slice vorgesehen.
+
 ## Residual Gaps
 
 Folgende Punkte sind bekannt und werden in späteren Slices adressiert:

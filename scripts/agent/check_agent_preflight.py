@@ -55,7 +55,7 @@ INFRA_PREFIXES = ("infra/", "deployment/")
 
 # Indikatoren, die einen Done-Status in Roadmaps/Status-Matrizen ohne Proof anzeigen
 _DONE_CHECKBOX_RE = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
-_DONE_STATUS_RE = re.compile(r"\bstatus\s*:\s*done\b", re.IGNORECASE)
+_DONE_STATUS_RE = re.compile(r'"?status"?\s*:\s*"?done"?', re.IGNORECASE)
 _DONE_CLAIM_HINT_RE = re.compile(
     r"\bproof_ref\b|\bclaim\b|\bclaim_ref\b|\bevidence\b", re.IGNORECASE
 )
@@ -181,6 +181,18 @@ def check_task_metadata(task: dict[str, Any]) -> list[dict[str, str]]:
     return findings
 
 
+def _is_under_allowed_path(path: str, allowed: str) -> bool:
+    """Prüft exakt, ob path unter dem allowed-Präfix liegt.
+
+    'docs/' erlaubt 'docs/foo.md' und 'docs/', aber nicht 'docs_bad/foo.md'.
+    """
+    norm = path.replace("\\", "/").strip("/")
+    prefix = allowed.replace("\\", "/").strip("/")
+    if not prefix:
+        return False
+    return norm == prefix or norm.startswith(prefix + "/")
+
+
 def check_path_scope(
     changed_paths: list[str], allowed_paths: list[str]
 ) -> list[dict[str, str]]:
@@ -190,8 +202,7 @@ def check_path_scope(
         return findings
 
     for path in changed_paths:
-        norm = path.replace("\\", "/")
-        if not any(norm.startswith(ap.rstrip("/")) for ap in allowed_paths):
+        if not any(_is_under_allowed_path(path, ap) for ap in allowed_paths):
             findings.append({
                 "code": "PATH_OUT_OF_SCOPE",
                 "message": f"Pfad '{path}' liegt außerhalb von allowed_paths",
