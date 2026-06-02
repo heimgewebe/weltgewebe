@@ -4883,3 +4883,92 @@ async fn magic_link_full_round_trip_request_to_session() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn passkey_register_options_excludes_existing_credentials() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+
+    let credential_id = vec![42_u8; 32];
+    let credential_id_b64 = {
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use base64::Engine;
+        URL_SAFE_NO_PAD.encode(&credential_id)
+    };
+    let passkey: webauthn_rs::prelude::Passkey = serde_json::from_value(serde_json::json!({
+        "cred": {
+            "cred_id": credential_id_b64,
+            "cred": {
+                "type_": "ES256",
+                "key": {
+                    "EC_EC2": {
+                        "curve": "SECP256R1",
+                        "x": vec![1_u8; 32],
+                        "y": vec![2_u8; 32]
+                    }
+                }
+            },
+            "counter": 0,
+            "transports": null,
+            "user_verified": false,
+            "backup_eligible": false,
+            "backup_state": false,
+            "registration_policy": "preferred",
+            "extensions": {
+                "cred_protect": "NotRequested",
+                "hmac_create_secret": "NotRequested"
+            },
+            "attestation": {
+                "data": "None",
+                "metadata": "None"
+            },
+            "attestation_format": "None"
+        }
+    })).unwrap();
+
+    let expected_cred_id = passkey.cred_id().clone();
+    state.passkeys.insert("u1".to_string(), passkey).unwrap();
+
+    let session = create_session(&state, "u1", Some("dev-passkey")).await;
+    let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
+
+    let challenge_id = request_passkey_registration_challenge(&state, &cookie).await?;
+
+    let grant_id = consume_begin_passkey_registration_step_up(
+        &state,
+        &cookie,
+        &challenge_id,
+        &session.account_id,
+        &session.device_id,
+    )
+    .await?;
+
+    let app = app_with_auth(state.clone());
+    let req = Request::post("/auth/passkeys/register/options")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost:3000")
+        .header("Content-Type", "application/json")
+        .header("Cookie", cookie)
+        .body(body::Body::from(
+            serde_json::json!({"registration_grant_id": grant_id}).to_string(),
+        ))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::OK);
+
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+
+    assert!(body.get("registration_id").is_some());
+    assert!(body.get("options").is_some());
+
+    let exclude_credentials = body["options"]["publicKey"]["excludeCredentials"].as_array()
+        .context("excludeCredentials must be an array")?;
+    assert_eq!(exclude_credentials.len(), 1, "must exclude exactly one credential");
+
+    let id_b64 = exclude_credentials[0]["id"].as_str().context("id must be string")?;
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+    let decoded_id = URL_SAFE_NO_PAD.decode(id_b64)?;
+    assert_eq!(decoded_id, expected_cred_id);
+
+    Ok(())
+}
