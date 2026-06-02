@@ -70,7 +70,7 @@ class TestCheckPlanningRegistration(unittest.TestCase):
 
         findings = check_plan.run_checks()
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(len(unregistered), 0)
+        self.assertEqual(unregistered, [])
 
     def test_generated_and_proofs_files_are_ignored(self):
         self.write_file("docs/_generated/reports/my-status-1.md", "---\nstatus: active\n---\nBody")
@@ -78,7 +78,7 @@ class TestCheckPlanningRegistration(unittest.TestCase):
 
         findings = check_plan.run_checks()
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(len(unregistered), 0)
+        self.assertEqual(unregistered, [])
 
 
     def test_active_blueprint_with_frontmatter_relation_passes(self):
@@ -89,7 +89,7 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         findings = check_plan.run_checks()
         # Ensure it doesn't appear in the unregistered list
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(len(unregistered), 0)
+        self.assertEqual(unregistered, [])
 
     def test_archived_and_deferred_blueprint_is_ignored(self):
         self.write_file("docs/blueprints/arch.md", "---\nstatus: archived\n---\nBody")
@@ -97,7 +97,7 @@ class TestCheckPlanningRegistration(unittest.TestCase):
 
         findings = check_plan.run_checks()
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(len(unregistered), 0)
+        self.assertEqual(unregistered, [])
 
     def test_invalid_control_file_errors(self):
         # We start with valid control files in setUp, let's break one
@@ -145,6 +145,25 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         self.assertEqual(len(parse_errors), 1)
         self.assertEqual(parse_errors[0]["code"], "UNREGISTERED_PLANNING_ARTIFACT")
         self.assertEqual(parse_errors[0]["path"], "docs/specs/auth-next-step.md")
+
+
+    def test_quoted_scalar_frontmatter_plan_is_reported(self):
+        self.write_file(
+            "docs/specs/quoted-plan.md",
+            "---\ndoc_type: \"plan\"\nstatus: \"active\"\n---\nBody"
+        )
+        findings = check_plan.run_checks()
+        unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-plan" in f["path"]]
+        self.assertEqual(len(unreg), 1)
+
+    def test_quoted_scalar_frontmatter_spec_is_ignored(self):
+        self.write_file(
+            "docs/specs/quoted-spec.md",
+            "---\ndoc_type: \"spec\"\nstatus: \"draft\"\n---\nBody"
+        )
+        findings = check_plan.run_checks()
+        unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-spec" in f["path"]]
+        self.assertEqual(unreg, [])
 
     @patch("sys.stderr", new_callable=StringIO)
     def test_strict_exits_non_zero_when_findings_exist(self, mock_stderr):

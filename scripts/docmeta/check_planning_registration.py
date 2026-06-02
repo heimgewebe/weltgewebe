@@ -17,6 +17,8 @@ def _read_text(rel_path):
     except OSError as e:
         return None, f"cannot read file: {e}"
 
+SCALAR_FIELD_REGEX = re.compile(r"^(status|doc_type|id):\s*(.+)$", re.MULTILINE)
+
 def parse_frontmatter(text):
     """
     Implements a basic frontmatter parser for the required fields:
@@ -39,10 +41,11 @@ def parse_frontmatter(text):
     }
 
     # Extract scalar fields
-    for field in ["status", "doc_type", "id"]:
-        match = re.search(fr"^{field}:\s*(.+)$", frontmatter_block, re.MULTILINE)
-        if match:
-            meta[field] = match.group(1).strip()
+    for match in SCALAR_FIELD_REGEX.finditer(frontmatter_block):
+        field = match.group(1)
+        value = match.group(2).strip().strip('"\'')
+        if field in meta:
+            meta[field] = value
 
     # Extract relations
     in_relations = False
@@ -133,20 +136,25 @@ def get_all_planning_artifacts():
     ]
 
     files = set()
+
+    EXCLUDED_PREFIXES = (
+        "docs/_generated/",
+        "docs/proofs/",
+        "docs/runbooks/",
+        "docs/reference/",
+        "docs/adr/",
+        "docs/policies/",
+        "docs/process/",
+        "docs/claims/"
+    )
+
     for pattern in patterns:
         matched = glob.glob(os.path.join(REPO_ROOT, pattern))
         for path in matched:
             rel_path = os.path.relpath(path, REPO_ROOT)
 
             # Hard exclusions
-            if rel_path.startswith("docs/_generated/"): continue
-            if rel_path.startswith("docs/proofs/"): continue
-            if rel_path.startswith("docs/runbooks/"): continue
-            if rel_path.startswith("docs/reference/"): continue
-            if rel_path.startswith("docs/adr/"): continue
-            if rel_path.startswith("docs/policies/"): continue
-            if rel_path.startswith("docs/process/"): continue
-            if rel_path.startswith("docs/claims/"): continue
+            if rel_path.startswith(EXCLUDED_PREFIXES): continue
             if rel_path == "docs/deploy/CHANGELOG.md": continue
 
             files.add(rel_path)
