@@ -17,6 +17,8 @@ relations:
     target: docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
   - type: relates_to
     target: docs/runbooks/uv-tooling.md
+  - type: relates_to
+    target: docs/runbooks/domain-mail-cutover.md
 ---
 # Runbooks
 
@@ -25,5 +27,6 @@ Anleitungen für wiederkehrende Aufgaben.
 - [Incident Response](incident-response.md)
 - [DB Recovery](db-recovery.md)
 - [UV Tooling – Ist-Stand & Ausbauoptionen](uv-tooling.md)
+- [Domain-/Mail-Cutover](domain-mail-cutover.md)
 - [Codespaces Recovery](codespaces-recovery.md)
 - [Zurück zum Doku-Index](../index.md)
