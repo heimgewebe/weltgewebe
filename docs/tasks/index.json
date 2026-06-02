@@ -108,7 +108,7 @@
       "id": "TASK-CTL-004",
       "title": "Guard gegen uneingeordnete Blueprints und Pläne einführen",
       "area": "docs",
-      "status": "open",
+      "status": "partial",
       "priority": "medium",
       "effort": "M",
       "risk": "medium",
@@ -117,13 +117,15 @@
         "docs/blueprints/blueprint-agent-safety-control-layer.md",
         "docs/roadmap.md",
         "docs/tasks/board.md",
-        "docs/tasks/index.json"
+        "docs/tasks/index.json",
+        "scripts/docmeta/check_planning_registration.py",
+        "scripts/docmeta/tests/test_check_planning_registration.py",
+        ".github/workflows/task-index.yml"
       ],
       "missing_evidence": [
-        "scripts/docmeta/check_blueprint_roadmap_registration.py fehlt noch",
-        "Tests für eingeordnete und uneingeordnete Blueprint-/Roadmap-Dateien fehlen noch",
-        "CI-Anbindung des Registration-Guards ist noch offen",
-        "Expliziter Ausnahmefluss für registrierungsbefreite Planungsdokumente ist noch nicht festgelegt"
+        "Warn-/Ratchet-Modus ist noch nicht separat von report-only und strict modelliert",
+        "Expliziter Ausnahmefluss für registrierungsbefreite Planungsdokumente ist noch nicht schema-/frontmatter-stabil belegt",
+        "CI ist report-only angebunden; blocking/ratchet bleibt bewusst ausstehend"
       ],
       "acceptance": [
         "neuer Blueprint oder Plan ohne Index-/Roadmap-/Task-Control-Einordnung wird im Check-Modus gemeldet",
