@@ -242,7 +242,7 @@ device-gebunden). Ohne Grant liefert der Endpunkt `403 STEP_UP_REQUIRED` mit
 - Die `webauthn_user_id` des Accounts ist bei bereits persistiertem Wert dauerhaft stabil;
   bei Accounts ohne persistierten Wert ist sie lazy-backfill/prozessstabil
   (kein Writeback in dieser Phase). Writeback-Persistenz ist Voraussetzung für `register/verify`.
-- `register/verify`, Auth-Optionen/Verify, Passkey-Speicherung über Neustart, List, Remove und UI sind offen.
+- Auth-Optionen/Verify, Passkey-Speicherung über Neustart, List, Remove und UI sind offen.
 
 ### Registrierung abschließen
 
