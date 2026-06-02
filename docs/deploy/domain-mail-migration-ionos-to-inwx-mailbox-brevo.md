@@ -37,7 +37,7 @@ INWX:
   - weltweberei.org
 
 mailbox.org:
-  - <kontakt@weltgewebe.net>
+  - `kontakt@weltgewebe.net`
   - admin@weltgewebe.net optional als Alias
   - optional temporäre Weiterleitung an externe Recovery-Mail
 
@@ -207,11 +207,11 @@ Sollte ein Migrationsschritt scheitern, müssen DNS und Einstellungen auf die le
 
 - Vollständige IONOS-DNS-Zone für weltgewebe.net, weltweb.net, weltweberei.org.
 - MX-Prioritäten und TTLs gesichert.
-- mailbox.org Empfang und Versand für <kontakt@weltgewebe.net> getestet.
+- mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` getestet.
 - Brevo Sending-Domain/Subdomain verifiziert.
 - Brevo SPF/DKIM/DMARC im Test geprüft.
 - AUTH_LOG_MAGIC_TOKEN lokal als 0 bestätigt.
 - Runtime nach Recreate zeigt Brevo-SMTP-Werte.
 - Weltgewebe Magic-Link wird über Brevo verschickt.
-- Magic-Link zeigt auf <https://weltgewebe.net>.
+- Magic-Link zeigt auf `https://weltgewebe.net`.
 - Login erzeugt Session.
