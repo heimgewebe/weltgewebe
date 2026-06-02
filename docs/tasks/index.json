@@ -30,7 +30,7 @@
       "missing_evidence": [],
       "acceptance": [
         "docs/tasks/ existiert und alle Phase-2-Artefakte sind vorhanden",
-        "Validator läuft mit exit 0 gegen docs/tasks/index.json",
+        "Validator l\u00e4uft mit exit 0 gegen docs/tasks/index.json",
         "README, CONTRIBUTING und docs/index.md beschreiben Task-Control korrekt"
       ],
       "links": {
@@ -54,12 +54,12 @@
       "owner": "unknown",
       "evidence": [],
       "missing_evidence": [
-        "Issue Forms, PR-Template und Release-Konfiguration bewusst zurückgestellt: erhöhen Formular-Overhead ohne belegten Mehrwert gegenüber kontextgenauen PR-Bodies",
+        "Issue Forms, PR-Template und Release-Konfiguration bewusst zur\u00fcckgestellt: erh\u00f6hen Formular-Overhead ohne belegten Mehrwert gegen\u00fcber kontextgenauen PR-Bodies",
         "Wiederaufnahme sinnvoll wenn: externe Beitragende ohne Projekteinblick aktiv werden oder Release-Prozess stabilisiert ist"
       ],
       "acceptance": [
         "Entscheidung dokumentiert in CONTRIBUTING.md und board.md",
-        "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingeführt"
+        "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingef\u00fchrt"
       ],
       "links": {
         "issues": [],
@@ -72,7 +72,7 @@
     },
     {
       "id": "TASK-CTL-003",
-      "title": "Task-Index Generator und CI-Guard einführen",
+      "title": "Task-Index Generator und CI-Guard einf\u00fchren",
       "area": "ci",
       "status": "partial",
       "priority": "medium",
@@ -90,10 +90,10 @@
         "CI-Lauf von .github/workflows/task-index.yml noch nicht nachgewiesen (erst nach PR/Run belegbar)"
       ],
       "acceptance": [
-        "Generator erzeugt oder prüft docs/tasks/index.json deterministisch (--check-Modus)",
-        "CI prüft Drift zwischen board.md, index.json und optimierungsstatus.json, schreibt aber nicht still",
-        "Fehlende Evidenz wird gemeldet, nicht geglättet",
-        "docs/_generated/* werden nicht manuell geändert"
+        "Generator erzeugt oder pr\u00fcft docs/tasks/index.json deterministisch (--check-Modus)",
+        "CI pr\u00fcft Drift zwischen board.md, index.json und optimierungsstatus.json, schreibt aber nicht still",
+        "Fehlende Evidenz wird gemeldet, nicht gegl\u00e4ttet",
+        "docs/_generated/* werden nicht manuell ge\u00e4ndert"
       ],
       "links": {
         "issues": [],
@@ -106,9 +106,9 @@
     },
     {
       "id": "TASK-CTL-004",
-      "title": "Guard gegen uneingeordnete Blueprints und Pläne einführen",
+      "title": "Guard gegen uneingeordnete Blueprints und Pl\u00e4ne einf\u00fchren",
       "area": "docs",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "M",
       "risk": "medium",
@@ -117,18 +117,16 @@
         "docs/blueprints/blueprint-agent-safety-control-layer.md",
         "docs/roadmap.md",
         "docs/tasks/board.md",
-        "docs/tasks/index.json"
+        "docs/tasks/index.json",
+        "scripts/docmeta/check_planning_registration.py",
+        "scripts/docmeta/tests/test_check_planning_registration.py",
+        ".github/workflows/task-index.yml"
       ],
-      "missing_evidence": [
-        "scripts/docmeta/check_blueprint_roadmap_registration.py fehlt noch",
-        "Tests für eingeordnete und uneingeordnete Blueprint-/Roadmap-Dateien fehlen noch",
-        "CI-Anbindung des Registration-Guards ist noch offen",
-        "Expliziter Ausnahmefluss für registrierungsbefreite Planungsdokumente ist noch nicht festgelegt"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "neuer Blueprint oder Plan ohne Index-/Roadmap-/Task-Control-Einordnung wird im Check-Modus gemeldet",
         "eingeordnete neue Blueprint-/Roadmap-Dateien bestehen den Guard",
-        "explizite Ausnahmen sind schema-konform und begründet",
+        "explizite Ausnahmen sind schema-konform und begr\u00fcndet",
         "Ratchet kann mindestens report-only und warn unterscheiden, bevor blocking aktiviert wird"
       ],
       "links": {
@@ -144,7 +142,7 @@
     },
     {
       "id": "AGENT-SAFE-001",
-      "title": "Safety-Preflight Guard minimal einführen",
+      "title": "Safety-Preflight Guard minimal einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -161,9 +159,9 @@
         "Claim-Spine, Agent-Contracts und Blocking-Mode sind bewusst in AGENT-SAFE-002 bis AGENT-SAFE-004 nachgelagert"
       ],
       "acceptance": [
-        "ein minimaler Preflight prüft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
+        "ein minimaler Preflight pr\u00fcft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
         "fehlende Pflichtfelder blockieren den Task deterministisch statt still weiterzulaufen",
-        "der erste Slice bleibt report-only oder warn und setzt keinen Done-Status für Folgepfade"
+        "der erste Slice bleibt report-only oder warn und setzt keinen Done-Status f\u00fcr Folgepfade"
       ],
       "links": {
         "issues": [],
@@ -178,7 +176,7 @@
     },
     {
       "id": "AGENT-SAFE-002",
-      "title": "Readiness Hard Fail für Agent-Fähigkeiten einführen",
+      "title": "Readiness Hard Fail f\u00fcr Agent-F\u00e4higkeiten einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -195,8 +193,8 @@
         "Handoff-Validierung, Non-Ideal-Guard und Dry-Run-Runner sind noch nicht implementiert"
       ],
       "acceptance": [
-        "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
-        "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
+        "fehlende als verpflichtend markierte Agent-F\u00e4higkeiten f\u00fchren zu hard fail statt soft degrade",
+        "Capability-Matrix oder \u00e4quivalente Quelle unterscheidet optionale und verpflichtende F\u00e4higkeiten",
         "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus",
         "offene Capability-Artefakte bleiben explizit in missing_evidence und Folge-Slices AGENT-SAFE-003/004"
       ],
@@ -247,7 +245,7 @@
     },
     {
       "id": "AGENT-SAFE-004",
-      "title": "Minimale Agent-Contracts und Non-Ideal-Guard einführen",
+      "title": "Minimale Agent-Contracts und Non-Ideal-Guard einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -272,9 +270,9 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade für agentische Tasks",
-        "ein Guard blockiert Non-Ideal-Tasks ohne vollständigen Arbeitsauftrag",
-        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu glätten"
+        "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade f\u00fcr agentische Tasks",
+        "ein Guard blockiert Non-Ideal-Tasks ohne vollst\u00e4ndigen Arbeitsauftrag",
+        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu gl\u00e4tten"
       ],
       "links": {
         "issues": [],
@@ -341,10 +339,10 @@
         "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
+        "CI-Nachweis der geh\u00e4rteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
       "acceptance": [
-        "alle 6 Domain-Schemas schließen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Flächen sind wertseitig begrenzt",
+        "alle 6 Domain-Schemas schlie\u00dfen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Fl\u00e4chen sind wertseitig begrenzt",
         "String-Constraints (minLength, maxLength) konsistent gesetzt",
         "just contracts-domain-check pass"
       ],
@@ -375,8 +373,8 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "docs/runbooks/incident-response.md existiert mit vollständigem Ablauf",
-        "docs/runbooks/db-recovery.md existiert mit vollständigem Ablauf"
+        "docs/runbooks/incident-response.md existiert mit vollst\u00e4ndigem Ablauf",
+        "docs/runbooks/db-recovery.md existiert mit vollst\u00e4ndigem Ablauf"
       ],
       "links": {
         "issues": [],
@@ -412,13 +410,13 @@
         "CI-Job: db-domain-schema-migrations-proof"
       ],
       "missing_evidence": [
-        "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
+        "Gr\u00fcner PR-CI-Laufbeleg f\u00fcr db_domain_schema_migrations ausstehend",
         "Phase C (Backfill-/Import-Pfad) fehlt",
         "Phase D (Read-Path-Switch) fehlt",
         "Phase E (Write-Path-Switch) fehlt"
       ],
       "acceptance": [
-        "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
+        "PostgreSQL-Pfad f\u00fcr alle Dom\u00e4nen-Endpunkte (nodes, accounts, edges) aktiv",
         "JSONL-Pfad deaktiviert oder als Legacy klar markiert",
         "Migrations-SQL vorhanden und per CI belegt"
       ],
