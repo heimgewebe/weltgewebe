@@ -25,7 +25,7 @@ Es ist normativ. Abweichungen davon gelten als Drift.
 
 **Weitere Dokumente:**
 
-- [Domain-/Mail-Migration](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – Plan für den Umzug von IONOS
+- [Domain-/Mail-Migration](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – Plan für den Umzug von IONOS zu INWX + mailbox.org + Brevo
 - [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
 - [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift
 
