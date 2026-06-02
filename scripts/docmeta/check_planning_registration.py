@@ -5,9 +5,15 @@ Checks that planning artifacts (blueprints, roadmaps, status docs) are
 registered in task-control or roadmap documents.
 
 Config: scripts/docmeta/planning_registration.yml
-  PyYAML is used for config parsing. It is available on ubuntu-latest CI
-  and in the project Python environment (verified before this dependency
-  was introduced).
+  Parsed with a stdlib-only minimal YAML subset parser (_parse_config_yaml).
+  No external dependencies are required. PyYAML is intentionally NOT used
+  here because the task-index CI workflow installs no Python packages before
+  running docmeta scripts (tools/py/pyproject.toml has empty dependencies
+  and the workflow has no pip/uv install step). Using stdlib keeps this
+  script reproducible across any Python 3.11+ environment without implicit
+  ambient package assumptions.
+
+  Supported YAML subset (see _parse_config_yaml docstring).
 
 Modes:
   report  — print findings, exit 0 (default)
@@ -60,10 +66,149 @@ _DEFAULT_CONFIG = {
 }
 
 
+# ── stdlib YAML subset parser for config ─────────────────────────────────────
+
+def _parse_config_yaml(text):
+    """Parse a strict YAML subset sufficient for planning_registration.yml.
+
+    Supported:
+    - Top-level scalar:          key: value  (unquoted string or integer)
+    - Top-level block list:      key:\\n  - item\\n  - item
+    - Top-level block mapping:   key:\\n  subkey: value
+    - Comment lines (# ...) ignored everywhere
+    - Blank lines ignored everywhere
+
+    Not supported (raises ValueError):
+    - Inline mappings: {key: val}
+    - Anchors/aliases
+    - Multi-line scalars
+    - Quoted keys
+
+    This parser is deliberately narrow so that unsupported syntax fails fast
+    rather than silently misinterpreting.
+    """
+    result = {}
+    current_key = None
+    current_type = None  # 'scalar', 'list', 'mapping', or None (undecided)
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        indent = len(raw_line) - len(raw_line.lstrip())
+
+        if indent == 0:
+            # Flush current block (new top-level key resets state)
+            current_type = None
+            if ":" not in stripped:
+                raise ValueError(f"Expected 'key: value', got: {stripped!r}")
+            key, _, val = stripped.partition(":")
+            key = key.strip()
+            val = val.strip()
+            if val == "":
+                current_key = key
+                result[key] = None  # will be overwritten once block type known
+            else:
+                try:
+                    result[key] = int(val)
+                except ValueError:
+                    result[key] = val
+                current_key = None
+                current_type = "scalar"
+        else:
+            if current_key is None:
+                raise ValueError(f"Unexpected indented line with no parent key: {raw_line!r}")
+            if stripped.startswith("- "):
+                # List item
+                if current_type is None:
+                    current_type = "list"
+                    result[current_key] = []
+                elif current_type != "list":
+                    raise ValueError(
+                        f"Key '{current_key}' mixes list and mapping items"
+                    )
+                result[current_key].append(stripped[2:].strip())
+            elif ":" in stripped:
+                # Mapping item
+                if current_type is None:
+                    current_type = "mapping"
+                    result[current_key] = {}
+                elif current_type != "mapping":
+                    raise ValueError(
+                        f"Key '{current_key}' mixes list and mapping items"
+                    )
+                k, _, v = stripped.partition(":")
+                result[current_key][k.strip()] = v.strip()
+            else:
+                raise ValueError(f"Unrecognised indented line: {raw_line!r}")
+
+    return result
+
+
+def _validate_config(raw):
+    """Validate the parsed config dict.
+
+    Checks required keys, correct types, and required sub-keys.
+    Raises ValueError with a descriptive message on any failure.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError(f"Config root must be a mapping, got {type(raw).__name__}")
+
+    required = (
+        "version", "scan_patterns", "excluded_prefixes",
+        "planning_doc_types", "terminal_statuses", "registration_sources",
+    )
+    for k in required:
+        if k not in raw:
+            raise ValueError(f"Missing required key: '{k}'")
+
+    if raw["version"] != 1:
+        raise ValueError(f"Unsupported config version: {raw['version']!r}. Expected 1.")
+
+    for list_key in ("scan_patterns", "excluded_prefixes", "planning_doc_types", "terminal_statuses"):
+        val = raw[list_key]
+        if not isinstance(val, list):
+            raise ValueError(
+                f"'{list_key}' must be a list, got {type(val).__name__}"
+            )
+        for i, item in enumerate(val):
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"'{list_key}[{i}]' must be a string, got {type(item).__name__}"
+                )
+
+    ep = raw.get("excluded_paths")
+    if ep is not None:
+        if not isinstance(ep, list):
+            raise ValueError(f"'excluded_paths' must be a list, got {type(ep).__name__}")
+        for i, item in enumerate(ep):
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"'excluded_paths[{i}]' must be a string, got {type(item).__name__}"
+                )
+
+    rs = raw["registration_sources"]
+    if not isinstance(rs, dict):
+        raise ValueError(
+            f"'registration_sources' must be a mapping, got {type(rs).__name__}"
+        )
+    for subkey in ("task_index", "board", "roadmap"):
+        if subkey not in rs:
+            raise ValueError(f"'registration_sources.{subkey}' is required")
+        if not isinstance(rs[subkey], str):
+            raise ValueError(
+                f"'registration_sources.{subkey}' must be a string, "
+                f"got {type(rs[subkey]).__name__}"
+            )
+
+    return raw
+
+
 # ── config loading ────────────────────────────────────────────────────────────
 
 def load_config():
-    """Load and validate planning_registration.yml.
+    """Load and validate planning_registration.yml using stdlib-only parsing.
 
     Returns (config_dict, finding_or_None). On missing/invalid config,
     returns (_DEFAULT_CONFIG, finding) so scanning continues with defaults.
@@ -77,17 +222,10 @@ def load_config():
             "source": "planning-registration",
         }
     try:
-        import yaml  # PyYAML — verified available in CI before introduction
         with open(CONFIG_PATH, "r", encoding="utf-8") as fh:
-            raw = yaml.safe_load(fh)
-        if not isinstance(raw, dict):
-            raise ValueError("Config root must be a YAML mapping.")
-        for k in (
-            "version", "scan_patterns", "excluded_prefixes",
-            "planning_doc_types", "terminal_statuses", "registration_sources",
-        ):
-            if k not in raw:
-                raise ValueError(f"Missing required key: '{k}'")
+            text = fh.read()
+        raw = _parse_config_yaml(text)
+        _validate_config(raw)
         return raw, None
     except Exception as exc:
         return _DEFAULT_CONFIG, {

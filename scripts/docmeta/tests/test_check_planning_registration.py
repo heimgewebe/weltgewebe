@@ -108,6 +108,145 @@ class TestCheckPlanningRegistration(unittest.TestCase):
             os.unlink(tmp_path)
         self.assertEqual(exit_code, 1)
 
+    def test_config_version_wrong_produces_invalid(self):
+        minimal_valid = (
+            "version: 2\n"
+            "scan_patterns:\n  - docs/*.md\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources:\n"
+            "  task_index: docs/tasks/index.json\n"
+            "  board: docs/tasks/board.md\n"
+            "  roadmap: docs/roadmap.md\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(minimal_valid)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("version", finding["reason"])
+
+    def test_config_non_list_scan_patterns_produces_invalid(self):
+        broken = (
+            "version: 1\n"
+            "scan_patterns: not_a_list\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources:\n"
+            "  task_index: docs/tasks/index.json\n"
+            "  board: docs/tasks/board.md\n"
+            "  roadmap: docs/roadmap.md\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(broken)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("scan_patterns", finding["reason"])
+
+    def test_config_invalid_registration_sources_produces_invalid(self):
+        broken = (
+            "version: 1\n"
+            "scan_patterns:\n  - docs/*.md\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources: flat_string\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(broken)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("registration_sources", finding["reason"])
+
+    # ── _validate_config unit tests ───────────────────────────────────────────
+
+    def test_validate_config_wrong_version(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "version": 2}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("version", str(ctx.exception))
+
+    def test_validate_config_non_list_scan_patterns(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "scan_patterns": "not a list"}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("scan_patterns", str(ctx.exception))
+
+    def test_validate_config_non_string_item_in_list(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "scan_patterns": [123, "docs/*.md"]}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("scan_patterns", str(ctx.exception))
+
+    def test_validate_config_invalid_registration_sources_type(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "registration_sources": "flat"}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("registration_sources", str(ctx.exception))
+
+    def test_validate_config_missing_registration_sources_subkey(self):
+        raw = {
+            **check_plan._DEFAULT_CONFIG,
+            "registration_sources": {"task_index": "docs/tasks/index.json"},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("registration_sources", str(ctx.exception))
+
+    # ── _parse_config_yaml unit tests ─────────────────────────────────────────
+
+    def test_parse_config_yaml_scalar_integer(self):
+        result = check_plan._parse_config_yaml("version: 1\n")
+        self.assertEqual(result["version"], 1)
+        self.assertIsInstance(result["version"], int)
+
+    def test_parse_config_yaml_list(self):
+        text = "scan_patterns:\n  - docs/a.md\n  - docs/b.md\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["scan_patterns"], ["docs/a.md", "docs/b.md"])
+
+    def test_parse_config_yaml_mapping(self):
+        text = "registration_sources:\n  task_index: docs/tasks/index.json\n  board: docs/tasks/board.md\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["registration_sources"]["task_index"], "docs/tasks/index.json")
+        self.assertEqual(result["registration_sources"]["board"], "docs/tasks/board.md")
+
+    def test_parse_config_yaml_comments_and_blank_lines_ignored(self):
+        text = "# comment\nversion: 1\n\n# another comment\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["version"], 1)
+
+    def test_parse_config_yaml_invalid_raises(self):
+        with self.assertRaises(ValueError):
+            check_plan._parse_config_yaml("not_a_mapping_no_colon\n")
+
+    def test_parse_config_yaml_full_config(self):
+        with open(check_plan.CONFIG_PATH, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["version"], 1)
+        self.assertIsInstance(result["scan_patterns"], list)
+        self.assertIsInstance(result["registration_sources"], dict)
+
     # ── mode tests ───────────────────────────────────────────────────────────
 
     def test_report_mode_exits_zero_with_findings(self):
