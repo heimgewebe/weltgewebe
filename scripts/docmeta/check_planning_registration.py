@@ -45,25 +45,31 @@ def parse_frontmatter(text):
             meta[field] = match.group(1).strip()
 
     # Extract relations
-    relations_match = re.search(r"^relations:\s*\n((?:\s+-\s+.*(?:\n|$))+)", frontmatter_block, re.MULTILINE)
-    if relations_match:
-        relations_block = relations_match.group(1)
-        for line in relations_block.split("\n"):
-            line = line.strip()
-            if line.startswith("- target:"):
-                meta["relations"].append(line.replace("- target:", "").strip())
-            elif line.startswith("target:"):
-                meta["relations"].append(line.replace("target:", "").strip())
+    in_relations = False
+    for line in frontmatter_block.splitlines():
+        if line.startswith("relations:"):
+            in_relations = True
+            continue
+        if in_relations:
+            if line and not line.startswith((" ", "-")):
+                in_relations = False
+                continue
+            if "target:" in line:
+                target = line.split("target:", 1)[1].strip().strip('"\'')
+                meta["relations"].append(target)
 
     return meta
 
 def get_registered_paths():
     """Extract registered paths from index.json, board.md, and roadmap.md"""
     registered = set()
+    errors = []
 
     # 1. docs/tasks/index.json
     index_text, err = _read_text("docs/tasks/index.json")
-    if not err and index_text:
+    if err:
+        errors.append(("CONTROL_FILE_MISSING", "docs/tasks/index.json", err))
+    else:
         try:
             data = json.loads(index_text)
             for task in data.get("tasks", []):
@@ -75,12 +81,14 @@ def get_registered_paths():
                     for word in words:
                         if word.startswith("docs/") or word.startswith("scripts/"):
                             registered.add(word)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            errors.append(("CONTROL_FILE_PARSE_ERROR", "docs/tasks/index.json", f"Invalid JSON: {e}"))
 
     # 2. docs/tasks/board.md
     board_text, err = _read_text("docs/tasks/board.md")
-    if not err and board_text:
+    if err:
+        errors.append(("CONTROL_FILE_MISSING", "docs/tasks/board.md", err))
+    else:
         # Extract paths in backticks or just docs/ paths
         matches = re.findall(r'`(docs/[^`]+)`', board_text)
         registered.update(matches)
@@ -91,7 +99,9 @@ def get_registered_paths():
 
     # 3. docs/roadmap.md
     roadmap_text, err = _read_text("docs/roadmap.md")
-    if not err and roadmap_text:
+    if err:
+        errors.append(("CONTROL_FILE_MISSING", "docs/roadmap.md", err))
+    else:
         matches = re.findall(r'\]\(([^)]+)\)', roadmap_text)
         for match in matches:
             if match.endswith('.md'):
@@ -109,7 +119,7 @@ def get_registered_paths():
     registered.add("docs/tasks/board.md")
     registered.add("docs/roadmap.md")
 
-    return registered
+    return registered, errors
 
 def get_all_planning_artifacts():
     """Find all potential planning artifacts"""
@@ -177,12 +187,22 @@ def is_planning_doc(rel_path, meta):
     return False
 
 def run_checks():
-    registered_paths = get_registered_paths()
+    registered_paths, control_errors = get_registered_paths()
     artifacts = get_all_planning_artifacts()
 
     findings = []
 
+
+    for code, path, reason in control_errors:
+        findings.append({
+            "code": code,
+            "path": path,
+            "reason": reason,
+            "suggestion": "Ensure the control file exists and is valid."
+        })
+
     for rel_path in artifacts:
+
         text, err = _read_text(rel_path)
         if err:
             findings.append({

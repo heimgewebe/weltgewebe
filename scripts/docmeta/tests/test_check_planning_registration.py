@@ -80,6 +80,45 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
         self.assertEqual(len(unregistered), 0)
 
+
+    def test_active_blueprint_with_frontmatter_relation_passes(self):
+        # Even without explicit registration in the control file, if the frontmatter has a relation
+        # to a control file, it should pass.
+        self.write_file("docs/blueprints/related.md", "---\nrelations:\n  - type: relates_to\n    target: docs/tasks/index.json\n---\nBody")
+
+        findings = check_plan.run_checks()
+        # Ensure it doesn't appear in the unregistered list
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(len(unregistered), 0)
+
+    def test_archived_and_deferred_blueprint_is_ignored(self):
+        self.write_file("docs/blueprints/arch.md", "---\nstatus: archived\n---\nBody")
+        self.write_file("docs/blueprints/def.md", "---\nstatus: deferred\n---\nBody")
+
+        findings = check_plan.run_checks()
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(len(unregistered), 0)
+
+    def test_invalid_control_file_errors(self):
+        # We start with valid control files in setUp, let's break one
+        self.write_file("docs/tasks/index.json", "{invalid_json}")
+        self.write_file("docs/blueprints/unregistered.md", "---\nid: unreg\nstatus: active\n---\nBody")
+
+        findings = check_plan.run_checks()
+
+        parse_errors = [f for f in findings if f["code"] == "CONTROL_FILE_PARSE_ERROR"]
+        self.assertEqual(len(parse_errors), 1)
+        self.assertEqual(parse_errors[0]["path"], "docs/tasks/index.json")
+
+    def test_missing_control_file_errors(self):
+        os.remove(os.path.join(self.repo_root, "docs/tasks/index.json"))
+
+        findings = check_plan.run_checks()
+
+        missing_errors = [f for f in findings if f["code"] == "CONTROL_FILE_MISSING"]
+        self.assertEqual(len(missing_errors), 1)
+        self.assertEqual(missing_errors[0]["path"], "docs/tasks/index.json")
+
     @patch("sys.stderr", new_callable=StringIO)
     def test_strict_exits_non_zero_when_findings_exist(self, mock_stderr):
         self.write_file("docs/blueprints/unregistered.md", "---\nstatus: active\n---\nBody")
