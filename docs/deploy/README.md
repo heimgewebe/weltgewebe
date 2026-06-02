@@ -15,6 +15,8 @@ relations:
     target: docs/deploy/heimserver.integration.md
   - type: relates_to
     target: docs/deploy/security.md
+  - type: relates_to
+    target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 ---
 # Weltgewebe – Deployment
 
@@ -23,6 +25,7 @@ Es ist normativ. Abweichungen davon gelten als Drift.
 
 **Weitere Dokumente:**
 
+- [Domain-/Mail-Migration](domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) – Plan für den Umzug von IONOS
 - [Deployment-Änderungsprotokoll](./CHANGELOG.md) – Infrastrukturänderungen und deren Auswirkungen
 - [Drift-Taxonomie & Guard-Policy](./DRIFT_POLICY.md) – Klassifizierung und Handling von Drift
 
