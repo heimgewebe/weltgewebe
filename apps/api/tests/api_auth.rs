@@ -4884,16 +4884,9 @@ async fn magic_link_full_round_trip_request_to_session() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn passkey_register_options_excludes_existing_credentials() -> Result<()> {
-    let state = test_state_with_webauthn()?;
-
-    let credential_id = vec![42_u8; 32];
-    let credential_id_b64 = {
-        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-        use base64::Engine;
-        URL_SAFE_NO_PAD.encode(&credential_id)
-    };
+fn mock_passkey_with_credential_id(
+    credential_id_b64: &str,
+) -> Result<webauthn_rs::prelude::Passkey> {
     let passkey: webauthn_rs::prelude::Passkey = serde_json::from_value(serde_json::json!({
         "cred": {
             "cred_id": credential_id_b64,
@@ -4923,8 +4916,20 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
             },
             "attestation_format": "None"
         }
-    }))
-    .unwrap();
+    }))?;
+    Ok(passkey)
+}
+
+#[tokio::test]
+async fn passkey_register_options_excludes_existing_credentials() -> Result<()> {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+
+    let state = test_state_with_webauthn()?;
+
+    let credential_id = vec![42_u8; 32];
+    let credential_id_b64 = URL_SAFE_NO_PAD.encode(&credential_id);
+    let passkey = mock_passkey_with_credential_id(&credential_id_b64)?;
 
     let expected_cred_id = passkey.cred_id().clone();
     state.passkeys.insert("u1".to_string(), passkey).unwrap();
@@ -4973,8 +4978,6 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
     let id_b64 = exclude_credentials[0]["id"]
         .as_str()
         .context("id must be string")?;
-    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    use base64::Engine;
     let decoded_id = URL_SAFE_NO_PAD.decode(id_b64)?;
     assert_eq!(decoded_id, expected_cred_id);
 
