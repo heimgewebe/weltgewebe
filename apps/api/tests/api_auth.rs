@@ -4932,7 +4932,10 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
     let passkey = mock_passkey_with_credential_id(&credential_id_b64)?;
 
     let expected_cred_id = passkey.cred_id().clone();
-    state.passkeys.insert("u1".to_string(), passkey).unwrap();
+    state
+        .passkeys
+        .insert("u1".to_string(), passkey)
+        .context("mock passkey insert should succeed")?;
 
     let session = create_session(&state, "u1", Some("dev-passkey")).await;
     let cookie = format!("{}={}", SESSION_COOKIE_NAME, session.id);
