@@ -98,14 +98,24 @@ AUTH_LOG_MAGIC_TOKEN=0
 
 ### Mail-Gates
 
-- mailbox.org Empfang/Versand
-- Brevo-Testmail
-- Headerprüfung
-- Weltgewebe Magic-Link
-- Session-Proof
+- Mail an `kontakt@weltgewebe.net` kommt bei mailbox.org an.
+- Antwort von `kontakt@weltgewebe.net` kommt extern an.
+- Brevo-Testmail von `login@weltgewebe.net` kommt an.
+- Headerprüfung: SPF pass, DKIM pass, DMARC nicht fail.
+- Weltgewebe Magic-Link kommt an.
+- Magic-Link zeigt auf `https://weltgewebe.net`.
+- Login erzeugt Session.
 
 ## Rollback
 
 - MX zurück auf IONOS, falls IONOS aktiv
 - SMTP zurück auf IONOS, falls Credentials aktiv
 - A/CNAME zurück auf letzte bekannte funktionierende Zone
+
+## Post-Cutover
+
+- 48 Stunden Beobachtungsfenster einhalten.
+- Brevo Bounces/Logs prüfen.
+- mailbox.org Empfang/Versand erneut prüfen.
+- IONOS erst nach erfolgreichen Gates und Beobachtungsfenster kündigen.
+- Nach IONOS-Kündigung ist Rollback über IONOS nicht mehr verfügbar.

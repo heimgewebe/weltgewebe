@@ -122,7 +122,7 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 
 ### Phase 1 — Zielkonten vorbereiten
 
-- **Ziel**: accounts anlegen und bereitstellen.
+- **Ziel**: Zielkonten anlegen und bereitstellen.
 - **Aktionen**: Accounts bei INWX, mailbox.org und Brevo einrichten.
 - **Gate**: Konten sind zugreifbar.
 - **Rollback-Hinweis**: Konten können wieder gelöscht werden.
@@ -151,7 +151,7 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 ### Phase 5 — INWX/DNS-Cutover
 
 - **Ziel**: INWX übernimmt die aktive DNS-Auflösung.
-- **Aktionen**: Nameserver beim Registrar umstellen, MX auf mailbox.org und TXT auf Brevo.
+- **Aktionen**: Nameserver/DNS-Autorität auf INWX umstellen; in der INWX-Zone MX für mailbox.org sowie Brevo-Verifikations-/DKIM-/SPF-Records aktivieren.
 - **Gate**: DNS-Propagation abgeschlossen. `dig`-Checks erfolgreich.
 - **Rollback-Hinweis**: Nameserver zurück auf IONOS stellen.
 
