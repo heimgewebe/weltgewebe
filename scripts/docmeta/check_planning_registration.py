@@ -93,7 +93,7 @@ def _parse_config_yaml(text):
 
     for raw_line in text.splitlines():
         stripped = raw_line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped or stripped.startswith("#") or stripped == "---":
             continue
 
         indent = len(raw_line) - len(raw_line.lstrip())
