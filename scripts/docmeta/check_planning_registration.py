@@ -176,13 +176,20 @@ def is_planning_doc(rel_path, meta):
     if "blueprints/" in rel_path or "roadmap" in rel_path or "status" in rel_path:
         return True
 
-    if meta:
-        doc_type = meta.get("doc_type")
-        if doc_type in ["roadmap", "plan", "status"]:
-            return True
-        status = meta.get("status")
-        if status in ["draft", "open", "in-progress"]:
-            return True
+    if not meta:
+        return False
+
+    doc_type = meta.get("doc_type")
+    if doc_type in ["roadmap", "plan", "status", "status-matrix"]:
+        return True
+
+    # Specs are not planning docs merely because they are draft/open.
+    if rel_path.startswith("docs/specs/"):
+        return False
+
+    status = meta.get("status")
+    if status in ["draft", "open", "in-progress"]:
+        return True
 
     return False
 

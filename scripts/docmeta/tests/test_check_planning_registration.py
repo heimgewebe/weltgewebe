@@ -119,6 +119,33 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         self.assertEqual(len(missing_errors), 1)
         self.assertEqual(missing_errors[0]["path"], "docs/tasks/index.json")
 
+
+    def test_draft_spec_without_planning_doc_type_is_not_reported(self):
+        self.write_file(
+            "docs/specs/auth-api.md",
+            "---\nstatus: draft\ndoc_type: spec\n---\nBody"
+        )
+
+        findings = check_plan.run_checks()
+        unregistered = [
+            f for f in findings
+            if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"
+        ]
+        self.assertEqual(unregistered, [])
+
+    def test_spec_with_plan_doc_type_is_reported_when_unregistered(self):
+        self.write_file(
+            "docs/specs/auth-next-step.md",
+            "---\ndoc_type: plan\nstatus: active\n---\nBody"
+        )
+
+        findings = check_plan.run_checks()
+
+        parse_errors = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(len(parse_errors), 1)
+        self.assertEqual(parse_errors[0]["code"], "UNREGISTERED_PLANNING_ARTIFACT")
+        self.assertEqual(parse_errors[0]["path"], "docs/specs/auth-next-step.md")
+
     @patch("sys.stderr", new_callable=StringIO)
     def test_strict_exits_non_zero_when_findings_exist(self, mock_stderr):
         self.write_file("docs/blueprints/unregistered.md", "---\nstatus: active\n---\nBody")
