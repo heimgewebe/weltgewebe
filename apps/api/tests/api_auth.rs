@@ -4923,7 +4923,8 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
             },
             "attestation_format": "None"
         }
-    })).unwrap();
+    }))
+    .unwrap();
 
     let expected_cred_id = passkey.cred_id().clone();
     state.passkeys.insert("u1".to_string(), passkey).unwrap();
@@ -4960,11 +4961,18 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
     assert!(body.get("registration_id").is_some());
     assert!(body.get("options").is_some());
 
-    let exclude_credentials = body["options"]["publicKey"]["excludeCredentials"].as_array()
+    let exclude_credentials = body["options"]["publicKey"]["excludeCredentials"]
+        .as_array()
         .context("excludeCredentials must be an array")?;
-    assert_eq!(exclude_credentials.len(), 1, "must exclude exactly one credential");
+    assert_eq!(
+        exclude_credentials.len(),
+        1,
+        "must exclude exactly one credential"
+    );
 
-    let id_b64 = exclude_credentials[0]["id"].as_str().context("id must be string")?;
+    let id_b64 = exclude_credentials[0]["id"]
+        .as_str()
+        .context("id must be string")?;
     use base64::engine::general_purpose::URL_SAFE_NO_PAD;
     use base64::Engine;
     let decoded_id = URL_SAFE_NO_PAD.decode(id_b64)?;
