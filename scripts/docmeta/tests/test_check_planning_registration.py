@@ -1,17 +1,22 @@
+import io
 import json
 import os
 import tempfile
 import unittest
-from io import StringIO
 from unittest.mock import patch
+
 import scripts.docmeta.check_planning_registration as check_plan
+
 
 class TestCheckPlanningRegistration(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.TemporaryDirectory()
         self.repo_root = self.test_dir.name
 
-        self.patcher = patch("scripts.docmeta.check_planning_registration.REPO_ROOT", self.repo_root)
+        self.patcher = patch(
+            "scripts.docmeta.check_planning_registration.REPO_ROOT",
+            self.repo_root,
+        )
         self.patcher.start()
 
         os.makedirs(os.path.join(self.repo_root, "docs/tasks"), exist_ok=True)
@@ -32,6 +37,338 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
+
+    # ── config tests ─────────────────────────────────────────────────────────
+
+    def test_config_loads_successfully(self):
+        config, finding = check_plan.load_config()
+        self.assertIsNone(finding)
+        self.assertIn("scan_patterns", config)
+        self.assertIn("planning_doc_types", config)
+        self.assertIn("terminal_statuses", config)
+        self.assertIn("registration_sources", config)
+        self.assertEqual(config["version"], 1)
+
+    def test_missing_config_is_reported(self):
+        with patch(
+            "scripts.docmeta.check_planning_registration.CONFIG_PATH",
+            "/nonexistent/planning_registration.yml",
+        ):
+            config, finding = check_plan.load_config()
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_MISSING")
+        self.assertEqual(config, check_plan._DEFAULT_CONFIG)
+
+    def test_invalid_config_is_reported(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(": this is not valid yaml mapping root\n")
+            tmp_path = f.name
+        try:
+            with patch(
+                "scripts.docmeta.check_planning_registration.CONFIG_PATH",
+                tmp_path,
+            ):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertEqual(config, check_plan._DEFAULT_CONFIG)
+
+    def test_missing_config_produces_finding_in_main(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch(
+            "scripts.docmeta.check_planning_registration.CONFIG_PATH",
+            "/nonexistent/planning_registration.yml",
+        ):
+            with patch("sys.stderr", new_callable=io.StringIO):
+                with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                    exit_code = check_plan.main(["--format", "json"])
+        data = json.loads(mock_out.getvalue())
+        codes = [f["code"] for f in data["findings"]]
+        self.assertIn("CONFIG_MISSING", codes)
+        self.assertEqual(exit_code, 0)
+
+    def test_invalid_config_produces_finding_in_strict(self):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".yml", delete=False, encoding="utf-8"
+        ) as f:
+            f.write("not_a_mapping\n")
+            tmp_path = f.name
+        try:
+            with patch(
+                "scripts.docmeta.check_planning_registration.CONFIG_PATH",
+                tmp_path,
+            ):
+                with patch("sys.stderr", new_callable=io.StringIO):
+                    exit_code = check_plan.main(["--mode", "strict"])
+        finally:
+            os.unlink(tmp_path)
+        self.assertEqual(exit_code, 1)
+
+    def test_config_version_wrong_produces_invalid(self):
+        minimal_valid = (
+            "version: 2\n"
+            "scan_patterns:\n  - docs/*.md\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources:\n"
+            "  task_index: docs/tasks/index.json\n"
+            "  board: docs/tasks/board.md\n"
+            "  roadmap: docs/roadmap.md\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(minimal_valid)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("version", finding["reason"])
+
+    def test_config_non_list_scan_patterns_produces_invalid(self):
+        broken = (
+            "version: 1\n"
+            "scan_patterns: not_a_list\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources:\n"
+            "  task_index: docs/tasks/index.json\n"
+            "  board: docs/tasks/board.md\n"
+            "  roadmap: docs/roadmap.md\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(broken)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("scan_patterns", finding["reason"])
+
+    def test_config_invalid_registration_sources_produces_invalid(self):
+        broken = (
+            "version: 1\n"
+            "scan_patterns:\n  - docs/*.md\n"
+            "excluded_prefixes:\n  - docs/_generated/\n"
+            "planning_doc_types:\n  - roadmap\n"
+            "terminal_statuses:\n  - deprecated\n"
+            "registration_sources: flat_string\n"
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=False, encoding="utf-8") as f:
+            f.write(broken)
+            tmp_path = f.name
+        try:
+            with patch("scripts.docmeta.check_planning_registration.CONFIG_PATH", tmp_path):
+                config, finding = check_plan.load_config()
+        finally:
+            os.unlink(tmp_path)
+        self.assertIsNotNone(finding)
+        self.assertEqual(finding["code"], "CONFIG_INVALID")
+        self.assertIn("registration_sources", finding["reason"])
+
+    # ── _validate_config unit tests ───────────────────────────────────────────
+
+    def test_validate_config_wrong_version(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "version": 2}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("version", str(ctx.exception))
+
+    def test_validate_config_non_list_scan_patterns(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "scan_patterns": "not a list"}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("scan_patterns", str(ctx.exception))
+
+    def test_validate_config_non_string_item_in_list(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "scan_patterns": [123, "docs/*.md"]}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("scan_patterns", str(ctx.exception))
+
+    def test_validate_config_invalid_registration_sources_type(self):
+        raw = {**check_plan._DEFAULT_CONFIG, "registration_sources": "flat"}
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("registration_sources", str(ctx.exception))
+
+    def test_validate_config_missing_registration_sources_subkey(self):
+        raw = {
+            **check_plan._DEFAULT_CONFIG,
+            "registration_sources": {"task_index": "docs/tasks/index.json"},
+        }
+        with self.assertRaises(ValueError) as ctx:
+            check_plan._validate_config(raw)
+        self.assertIn("registration_sources", str(ctx.exception))
+
+    # ── _parse_config_yaml unit tests ─────────────────────────────────────────
+
+    def test_parse_config_yaml_scalar_integer(self):
+        result = check_plan._parse_config_yaml("version: 1\n")
+        self.assertEqual(result["version"], 1)
+        self.assertIsInstance(result["version"], int)
+
+    def test_parse_config_yaml_list(self):
+        text = "scan_patterns:\n  - docs/a.md\n  - docs/b.md\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["scan_patterns"], ["docs/a.md", "docs/b.md"])
+
+    def test_parse_config_yaml_mapping(self):
+        text = "registration_sources:\n  task_index: docs/tasks/index.json\n  board: docs/tasks/board.md\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["registration_sources"]["task_index"], "docs/tasks/index.json")
+        self.assertEqual(result["registration_sources"]["board"], "docs/tasks/board.md")
+
+    def test_parse_config_yaml_comments_and_blank_lines_ignored(self):
+        text = "# comment\nversion: 1\n\n# another comment\n"
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["version"], 1)
+
+    def test_parse_config_yaml_invalid_raises(self):
+        with self.assertRaises(ValueError):
+            check_plan._parse_config_yaml("not_a_mapping_no_colon\n")
+
+    def test_parse_config_yaml_full_config(self):
+        with open(check_plan.CONFIG_PATH, "r", encoding="utf-8") as fh:
+            text = fh.read()
+        result = check_plan._parse_config_yaml(text)
+        self.assertEqual(result["version"], 1)
+        self.assertIsInstance(result["scan_patterns"], list)
+        self.assertIsInstance(result["registration_sources"], dict)
+
+    # ── mode tests ───────────────────────────────────────────────────────────
+
+    def test_report_mode_exits_zero_with_findings(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            exit_code = check_plan.main(["--mode", "report"])
+        self.assertEqual(exit_code, 0)
+
+    def test_warn_mode_exits_zero_with_findings(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO):
+                exit_code = check_plan.main(["--mode", "warn"])
+        self.assertEqual(exit_code, 0)
+
+    def test_warn_mode_emits_github_annotation(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                check_plan.main(["--mode", "warn"])
+        self.assertIn("::warning", mock_out.getvalue())
+
+    def test_strict_mode_exits_one_with_findings(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            exit_code = check_plan.main(["--mode", "strict"])
+        self.assertEqual(exit_code, 1)
+
+    def test_strict_mode_exits_zero_without_findings(self):
+        with patch("sys.stdout", new_callable=io.StringIO):
+            exit_code = check_plan.main(["--mode", "strict"])
+        self.assertEqual(exit_code, 0)
+
+    def test_no_mode_defaults_to_report(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            exit_code = check_plan.main([])
+        self.assertEqual(exit_code, 0)
+
+    def test_strict_alias_same_as_mode_strict(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            code_alias = check_plan.main(["--strict"])
+            code_mode = check_plan.main(["--mode", "strict"])
+        self.assertEqual(code_alias, 1)
+        self.assertEqual(code_mode, 1)
+        self.assertEqual(code_alias, code_mode)
+
+    # ── JSON output tests ─────────────────────────────────────────────────────
+
+    def test_json_output_valid_no_findings(self):
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+            exit_code = check_plan.main(["--format", "json"])
+        data = json.loads(mock_out.getvalue())
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["finding_count"], 0)
+        self.assertEqual(data["findings"], [])
+        self.assertEqual(data["format"], "json")
+        self.assertEqual(data["mode"], "report")
+        self.assertEqual(exit_code, 0)
+
+    def test_json_output_valid_with_findings(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                exit_code = check_plan.main(["--format", "json"])
+        data = json.loads(mock_out.getvalue())
+        self.assertFalse(data["ok"])
+        self.assertGreater(data["finding_count"], 0)
+        self.assertIsInstance(data["findings"], list)
+        self.assertEqual(data["format"], "json")
+        self.assertEqual(data["mode"], "report")
+        self.assertEqual(exit_code, 0)
+
+    def test_json_output_deterministic(self):
+        self.write_file("docs/blueprints/b.md", "---\nstatus: active\n---\nBody")
+        self.write_file("docs/blueprints/a.md", "---\nstatus: active\n---\nBody")
+
+        results = []
+        for _ in range(2):
+            with patch("sys.stderr", new_callable=io.StringIO):
+                with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                    check_plan.main(["--format", "json"])
+            results.append(mock_out.getvalue())
+
+        self.assertEqual(results[0], results[1])
+        data = json.loads(results[0])
+        paths = [f["path"] for f in data["findings"]]
+        self.assertEqual(paths, sorted(paths))
+
+    def test_json_output_strict_exits_one(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                exit_code = check_plan.main(["--format", "json", "--mode", "strict"])
+        data = json.loads(mock_out.getvalue())
+        self.assertEqual(data["mode"], "strict")
+        self.assertFalse(data["ok"])
+        self.assertEqual(exit_code, 1)
+
+    def test_json_output_warn_mode(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                exit_code = check_plan.main(["--format", "json", "--mode", "warn"])
+        data = json.loads(mock_out.getvalue())
+        self.assertEqual(data["mode"], "warn")
+        self.assertEqual(exit_code, 0)
+
+    def test_json_finding_has_required_fields(self):
+        self.write_file("docs/blueprints/unreg.md", "---\nstatus: active\n---\nBody")
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with patch("sys.stdout", new_callable=io.StringIO) as mock_out:
+                check_plan.main(["--format", "json"])
+        data = json.loads(mock_out.getvalue())
+        unreg = [f for f in data["findings"] if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(len(unreg), 1)
+        for field in ("code", "path", "reason", "suggestion", "source"):
+            self.assertIn(field, unreg[0])
+        self.assertEqual(unreg[0]["source"], "planning-registration")
+
+    # ── registration behavior tests ───────────────────────────────────────────
 
     def test_active_blueprint_in_index_json_passes(self):
         self.write_file("docs/tasks/index.json", json.dumps({
@@ -56,8 +393,30 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         findings = check_plan.run_checks()
         self.assertEqual(len(findings), 0)
 
-    def test_active_blueprint_without_registration_is_reported(self):
-        self.write_file("docs/blueprints/unregistered.md", "---\nid: unreg\nstatus: active\n---\nBody")
+    def test_active_blueprint_with_frontmatter_relation_to_tasks_passes(self):
+        self.write_file(
+            "docs/blueprints/related.md",
+            "---\nrelations:\n  - type: relates_to\n    target: docs/tasks/index.json\n---\nBody",
+        )
+
+        findings = check_plan.run_checks()
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(unregistered, [])
+
+    def test_active_blueprint_with_frontmatter_relation_to_roadmap_passes(self):
+        self.write_file(
+            "docs/blueprints/related.md",
+            "---\nrelations:\n  - type: relates_to\n    target: docs/roadmap.md\n---\nBody",
+        )
+
+        findings = check_plan.run_checks()
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(unregistered, [])
+
+    def test_unregistered_active_blueprint_is_reported(self):
+        self.write_file(
+            "docs/blueprints/unregistered.md", "---\nid: unreg\nstatus: active\n---\nBody"
+        )
 
         findings = check_plan.run_checks()
         self.assertEqual(len(findings), 1)
@@ -72,25 +431,6 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
         self.assertEqual(unregistered, [])
 
-    def test_generated_and_proofs_files_are_ignored(self):
-        self.write_file("docs/_generated/reports/my-status-1.md", "---\nstatus: active\n---\nBody")
-        self.write_file("docs/proofs/blueprint2.md", "---\nstatus: active\n---\nBody")
-
-        findings = check_plan.run_checks()
-        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(unregistered, [])
-
-
-    def test_active_blueprint_with_frontmatter_relation_passes(self):
-        # Even without explicit registration in the control file, if the frontmatter has a relation
-        # to a control file, it should pass.
-        self.write_file("docs/blueprints/related.md", "---\nrelations:\n  - type: relates_to\n    target: docs/tasks/index.json\n---\nBody")
-
-        findings = check_plan.run_checks()
-        # Ensure it doesn't appear in the unregistered list
-        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(unregistered, [])
-
     def test_archived_and_deferred_blueprint_is_ignored(self):
         self.write_file("docs/blueprints/arch.md", "---\nstatus: archived\n---\nBody")
         self.write_file("docs/blueprints/def.md", "---\nstatus: deferred\n---\nBody")
@@ -99,13 +439,73 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
         self.assertEqual(unregistered, [])
 
-    def test_invalid_control_file_errors(self):
-        # We start with valid control files in setUp, let's break one
-        self.write_file("docs/tasks/index.json", "{invalid_json}")
-        self.write_file("docs/blueprints/unregistered.md", "---\nid: unreg\nstatus: active\n---\nBody")
+    def test_generated_and_proofs_files_are_ignored(self):
+        self.write_file("docs/_generated/reports/my-status-1.md", "---\nstatus: active\n---\nBody")
+        self.write_file("docs/proofs/blueprint2.md", "---\nstatus: active\n---\nBody")
 
         findings = check_plan.run_checks()
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(unregistered, [])
 
+    def test_draft_spec_without_planning_doc_type_is_not_reported(self):
+        self.write_file(
+            "docs/specs/auth-api.md", "---\nstatus: draft\ndoc_type: spec\n---\nBody"
+        )
+        os.makedirs(os.path.join(self.repo_root, "docs/specs"), exist_ok=True)
+
+        findings = check_plan.run_checks()
+        unregistered = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(unregistered, [])
+
+    def test_spec_with_plan_doc_type_is_reported_when_unregistered(self):
+        os.makedirs(os.path.join(self.repo_root, "docs/specs"), exist_ok=True)
+        self.write_file(
+            "docs/specs/auth-next-step.md",
+            "---\ndoc_type: plan\nstatus: active\n---\nBody",
+        )
+
+        findings = check_plan.run_checks()
+        unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
+        self.assertEqual(len(unreg), 1)
+        self.assertEqual(unreg[0]["path"], "docs/specs/auth-next-step.md")
+
+    def test_quoted_scalar_frontmatter_plan_is_reported(self):
+        os.makedirs(os.path.join(self.repo_root, "docs/specs"), exist_ok=True)
+        self.write_file(
+            "docs/specs/quoted-plan.md",
+            '---\ndoc_type: "plan"\nstatus: "active"\n---\nBody',
+        )
+
+        findings = check_plan.run_checks()
+        unreg = [
+            f for f in findings
+            if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-plan" in f["path"]
+        ]
+        self.assertEqual(len(unreg), 1)
+
+    def test_quoted_scalar_frontmatter_spec_is_ignored(self):
+        os.makedirs(os.path.join(self.repo_root, "docs/specs"), exist_ok=True)
+        self.write_file(
+            "docs/specs/quoted-spec.md",
+            '---\ndoc_type: "spec"\nstatus: "draft"\n---\nBody',
+        )
+
+        findings = check_plan.run_checks()
+        unreg = [
+            f for f in findings
+            if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-spec" in f["path"]
+        ]
+        self.assertEqual(unreg, [])
+
+    # ── control-file error tests ──────────────────────────────────────────────
+
+    def test_invalid_control_file_errors(self):
+        self.write_file("docs/tasks/index.json", "{invalid_json}")
+        self.write_file(
+            "docs/blueprints/unregistered.md", "---\nid: unreg\nstatus: active\n---\nBody"
+        )
+
+        findings = check_plan.run_checks()
         parse_errors = [f for f in findings if f["code"] == "CONTROL_FILE_PARSE_ERROR"]
         self.assertEqual(len(parse_errors), 1)
         self.assertEqual(parse_errors[0]["path"], "docs/tasks/index.json")
@@ -114,66 +514,23 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         os.remove(os.path.join(self.repo_root, "docs/tasks/index.json"))
 
         findings = check_plan.run_checks()
-
         missing_errors = [f for f in findings if f["code"] == "CONTROL_FILE_MISSING"]
         self.assertEqual(len(missing_errors), 1)
         self.assertEqual(missing_errors[0]["path"], "docs/tasks/index.json")
 
+    # ── backwards compatibility ───────────────────────────────────────────────
 
-    def test_draft_spec_without_planning_doc_type_is_not_reported(self):
-        self.write_file(
-            "docs/specs/auth-api.md",
-            "---\nstatus: draft\ndoc_type: spec\n---\nBody"
-        )
-
-        findings = check_plan.run_checks()
-        unregistered = [
-            f for f in findings
-            if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"
-        ]
-        self.assertEqual(unregistered, [])
-
-    def test_spec_with_plan_doc_type_is_reported_when_unregistered(self):
-        self.write_file(
-            "docs/specs/auth-next-step.md",
-            "---\ndoc_type: plan\nstatus: active\n---\nBody"
-        )
-
-        findings = check_plan.run_checks()
-
-        parse_errors = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT"]
-        self.assertEqual(len(parse_errors), 1)
-        self.assertEqual(parse_errors[0]["code"], "UNREGISTERED_PLANNING_ARTIFACT")
-        self.assertEqual(parse_errors[0]["path"], "docs/specs/auth-next-step.md")
-
-
-    def test_quoted_scalar_frontmatter_plan_is_reported(self):
-        self.write_file(
-            "docs/specs/quoted-plan.md",
-            "---\ndoc_type: \"plan\"\nstatus: \"active\"\n---\nBody"
-        )
-        findings = check_plan.run_checks()
-        unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-plan" in f["path"]]
-        self.assertEqual(len(unreg), 1)
-
-    def test_quoted_scalar_frontmatter_spec_is_ignored(self):
-        self.write_file(
-            "docs/specs/quoted-spec.md",
-            "---\ndoc_type: \"spec\"\nstatus: \"draft\"\n---\nBody"
-        )
-        findings = check_plan.run_checks()
-        unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-spec" in f["path"]]
-        self.assertEqual(unreg, [])
-
-    @patch("sys.stderr", new_callable=StringIO)
-    def test_strict_exits_non_zero_when_findings_exist(self, mock_stderr):
+    def test_strict_flag_exits_non_zero_when_findings_exist(self):
         self.write_file("docs/blueprints/unregistered.md", "---\nstatus: active\n---\nBody")
 
-        exit_code = check_plan.main([])
-        self.assertEqual(exit_code, 0)
+        with patch("sys.stderr", new_callable=io.StringIO):
+            exit_code_report = check_plan.main([])
+        self.assertEqual(exit_code_report, 0)
 
-        exit_code = check_plan.main(["--strict"])
-        self.assertEqual(exit_code, 1)
+        with patch("sys.stderr", new_callable=io.StringIO):
+            exit_code_strict = check_plan.main(["--strict"])
+        self.assertEqual(exit_code_strict, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

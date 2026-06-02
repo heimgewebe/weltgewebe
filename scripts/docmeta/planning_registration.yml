@@ -1,0 +1,39 @@
+version: 1
+
+scan_patterns:
+  - docs/blueprints/*.md
+  - docs/roadmap.md
+  - docs/reports/*status*.md
+  - docs/reports/*roadmap*.md
+  - docs/reports/*next-step*.md
+  - docs/specs/*.md
+
+excluded_prefixes:
+  - docs/_generated/
+  - docs/proofs/
+  - docs/runbooks/
+  - docs/reference/
+  - docs/adr/
+  - docs/policies/
+  - docs/process/
+  - docs/claims/
+
+excluded_paths:
+  - docs/deploy/CHANGELOG.md
+
+planning_doc_types:
+  - roadmap
+  - plan
+  - status
+  - status-matrix
+
+terminal_statuses:
+  - deprecated
+  - superseded
+  - archived
+  - deferred
+
+registration_sources:
+  task_index: docs/tasks/index.json
+  board: docs/tasks/board.md
+  roadmap: docs/roadmap.md
