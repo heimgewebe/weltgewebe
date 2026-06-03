@@ -12,6 +12,8 @@ relations:
     target: docs/blueprints/map-roadmap.md
   - type: relates_to
     target: docs/reports/map-status-matrix.md
+  - type: relates_to
+    target: docs/roadmap.md
 summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu expliziter Szene.
 ---
 # Blaupause zur Optimierung der Karte

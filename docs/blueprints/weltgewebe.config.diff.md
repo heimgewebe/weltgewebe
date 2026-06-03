@@ -2,13 +2,23 @@
 id: blueprints.weltgewebe.config.diff
 title: Config Diff
 doc_type: reference
-status: active
+status: deprecated
 summary: Vergleich und Dokumentation von Konfigurationsunterschieden.
 relations:
   - type: relates_to
     target: docs/deployment.md
+  - type: relates_to
+    target: docs/deploy/heim-first-phase0.md
 ---
 # Blueprint Configuration Diff
+
+> **Status: deprecated (abgelöst).** Dieses frühe Phase-0-Konfigurations-Diff ist
+> umgesetzt und durch die kanonische Deployment-Dokumentation abgelöst: Die
+> beschriebenen Änderungen leben jetzt in `infra/caddy/Caddyfile.heim` und
+> `infra/compose/compose.prod.yml`. Kanonischer Deployment-Stand:
+> [docs/deploy/README.md](../deploy/README.md) und
+> [docs/deploy/heim-first-phase0.md](../deploy/heim-first-phase0.md).
+> Inhalt nur noch als historischer Planungsbeleg lesen.
 
 ## 1. Web Service (Docker Compose)
 

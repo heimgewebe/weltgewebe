@@ -360,28 +360,42 @@
       "id": "TASK-CTL-005",
       "title": "Bestehende Planning-Registration-Findings triagieren und Ratchet vorbereiten",
       "area": "docs",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "S",
       "risk": "low",
-      "evidence": [],
-      "missing_evidence": [
-        "Die 8 bestehenden pre-existing Findings aus Check_planning_registration klaeren",
-        "Ratchet vorbereiten (--mode strict fuer CI)"
+      "evidence": [
+        "docs/reports/planning-registration-findings.md",
+        ".github/workflows/task-index.yml",
+        "docs/tasks/board.md",
+        "docs/tasks/index.json",
+        "docs/roadmap.md",
+        "scripts/docmeta/check_planning_registration.py",
+        "scripts/docmeta/tests/test_check_planning_registration.py",
+        "docs/blueprints/kartenklarheit.md",
+        "docs/blueprints/map-blaupause.md",
+        "docs/blueprints/ui-blaupause.md",
+        "docs/blueprints/ui-state-machine.md",
+        "docs/blueprints/doc-structure-task-control-examples.md",
+        "docs/blueprints/weltgewebe.auth-and-ui-routing.md",
+        "docs/blueprints/weltgewebe.config.diff.md",
+        "docs/blueprints/weltgewebe.deploy.plan.md"
       ],
+      "missing_evidence": [],
       "acceptance": [
         "Alle 8 Findings (u.a. in docs/blueprints/) sind als gueltige Task-Evidenz, Roadmap-Einordnung oder als false positive klassifiziert",
         "Der Guard laeuft blockierend (--mode strict)"
       ],
       "links": {
         "docs": [
-          "docs/tasks/board.md"
+          "docs/tasks/board.md",
+          "docs/reports/planning-registration-findings.md"
         ],
         "issues": [],
         "prs": []
       },
       "owner": "jules",
-      "updated_at": "2026-06-02"
+      "updated_at": "2026-06-03"
     },
     {
       "id": "OPT-DOC-001",

@@ -9,6 +9,8 @@ relations:
     target: docs/blueprints/ui-state-machine.md
   - type: relates_to
     target: docs/blueprints/ui-roadmap.md
+  - type: relates_to
+    target: docs/roadmap.md
 ---
 
 # Weltgewebe – UI-Blaupause

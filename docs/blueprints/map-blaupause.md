@@ -10,6 +10,8 @@ summary: >
 relations:
   - type: relates_to
     target: docs/blueprints/map-roadmap.md
+  - type: relates_to
+    target: docs/roadmap.md
 ---
 
 # Basemap-Architektur-Blaupause
