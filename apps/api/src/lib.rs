@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+pub mod domain_db;
 pub mod mailer;
 pub mod middleware;
 pub mod routes;
