@@ -5,9 +5,9 @@
 //! in-memory types used by the JSONL runtime path — with account privacy and
 //! id-ascending ordering preserved.
 //!
-//! Phase scope: loader proof only. No runtime read/write path is switched here;
-//! JSONL remains the default and only active runtime read source. There is no
-//! write path, no backfill, and no startup integration in this test.
+//! Phase scope: loader proof plus startup switch. The startup switch is
+//! implemented behind `WELTGEWEBE_DOMAIN_READ_SOURCE`. JSONL remains the
+//! default; Postgres is opt-in. Write path remains JSONL until Phase E.
 //!
 //! Run with:
 //!   DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
@@ -466,6 +466,100 @@ async fn accounts_loader_ron_and_ron_flag_suppress_public_pos() {
     assert!(
         ron_flag.public.public_pos.is_none(),
         "ron_flag must suppress public_pos even with a residence"
+    );
+
+    clear_domain_tables(&pool).await;
+    pool.close().await;
+}
+
+/// Proves that the `mode` DB column is the primary source of truth: a
+/// `garnrolle` with `mode='ron'` and a set location must still resolve to
+/// `AccountMode::Ron` with `public_pos == None`, even though the legacy
+/// fallback (absent mode key + location present) would have inferred Verortet.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn accounts_loader_respects_mode_column_ron_even_with_location() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clear_domain_tables(&pool).await;
+
+    // mode='ron' in the DB column, but location is set and private_payload
+    // is empty (no ron_flag, no visibility). Without reading the mode column,
+    // the loader would fall through to legacy derivation and infer Verortet
+    // from the presence of location_lat/location_lon.
+    insert_account(
+        &pool,
+        "rp-acc-mode-ron",
+        "garnrolle",
+        "ron",
+        0,
+        Some(53.5),
+        Some(10.0),
+        None,
+        "{}",
+        "{}",
+    )
+    .await;
+
+    let store = load_accounts_from_postgres(&pool)
+        .await
+        .expect("account loader must succeed");
+    let account = store
+        .get("rp-acc-mode-ron")
+        .expect("mode-ron account loads");
+
+    assert_eq!(
+        account.public.mode,
+        AccountMode::Ron,
+        "DB mode='ron' must be honored even when location is set"
+    );
+    assert!(
+        account.public.public_pos.is_none(),
+        "ron mode must suppress public_pos"
+    );
+
+    clear_domain_tables(&pool).await;
+    pool.close().await;
+}
+
+/// Proves that `mode='verortet'` with a location produces Verortet mode and
+/// an exposed `public_pos` (baseline sanity check).
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn accounts_loader_respects_mode_column_verortet_with_location() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clear_domain_tables(&pool).await;
+
+    insert_account(
+        &pool,
+        "rp-acc-mode-verortet",
+        "garnrolle",
+        "verortet",
+        0,
+        Some(52.0),
+        Some(12.0),
+        None,
+        "{}",
+        "{}",
+    )
+    .await;
+
+    let store = load_accounts_from_postgres(&pool)
+        .await
+        .expect("account loader must succeed");
+    let account = store
+        .get("rp-acc-mode-verortet")
+        .expect("mode-verortet account loads");
+
+    assert_eq!(
+        account.public.mode,
+        AccountMode::Verortet,
+        "DB mode='verortet' must produce Verortet"
+    );
+    assert!(
+        account.public.public_pos.is_some(),
+        "verortet account with location must expose public_pos"
     );
 
     clear_domain_tables(&pool).await;

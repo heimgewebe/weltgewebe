@@ -92,9 +92,14 @@ required, and JSONB booleans are never cast with `::bool`.
 
 The public projection of an account is computed by the **same** function as the
 JSONL runtime path — `map_json_to_public_account` (made `pub(crate)`; its logic
-is unchanged) — fed a JSONL-shaped record reconstructed from the row. The single
-rule that function does not model, an explicit `suppress_public_pos`, is applied
-as an override afterwards.
+is unchanged) — fed a JSONL-shaped record reconstructed from the row. The loader
+reads the `mode` column from `domain_accounts` and uses it as the primary source
+of truth; kind-override rules (`kind == "ron"` or `ron_flag = true`) are applied
+before the record is passed to the projection function. The `approximate` +
+radius-0 → 250 adjustment is also pre-applied in the loader because
+`map_json_to_public_account` only runs that adjustment in its legacy fallback
+path. The single rule that function does not model, an explicit
+`suppress_public_pos`, is applied as an override afterwards.
 
 | Rule | Behaviour | Proof test |
 |---|---|---|
@@ -103,6 +108,8 @@ as an override afterwards.
 | `suppress_public_pos = true` without `visibility` | `public_pos` suppressed (explicit override) | `accounts_loader_suppress_public_pos_without_visibility` |
 | `visibility = "approximate"` + radius 0/missing | `radius_m` becomes `250` | `accounts_loader_approximate_radius_zero_becomes_250` |
 | `mode = "ron"` or `ron_flag = true` | no `public_pos` | `accounts_loader_ron_and_ron_flag_suppress_public_pos` |
+| DB `mode = "ron"` with location set (no `ron_flag`) | `mode` honoured, `public_pos` suppressed | `accounts_loader_respects_mode_column_ron_even_with_location` |
+| DB `mode = "verortet"` with location set | `mode` honoured, `public_pos` exposed | `accounts_loader_respects_mode_column_verortet_with_location` |
 | email index | rebuilt for case-insensitive `get_by_email` | `accounts_loader_email_index_is_rebuilt_for_case_insensitive_lookup` |
 
 ## Ordering
@@ -140,7 +147,7 @@ DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
 A direct PostgreSQL 16 instance was available in the development environment and
 was used to run the proof:
 
-- `db_domain_read_path` — **10 passed** (`--include-ignored --test-threads=1`).
+- `db_domain_read_path` — **12 passed** (`--include-ignored --test-threads=1`).
 - `db_domain_schema_migrations` (3) and `db_domain_backfill` (7) — still pass (no regression).
 - Runtime smoke against the binary: in `postgres` mode, `GET /nodes` and
   `GET /accounts/:id` served DB-backed rows with the privacy projection intact

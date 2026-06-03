@@ -8,12 +8,12 @@
 //! They are strictly read-only:
 //!
 //! - no writes, no upserts, no migrations, no JSONL backfill;
-//! - no startup integration (this module is not wired into `run()` in this
-//!   slice — JSONL remains the default and only active runtime read source);
-//! - no endpoint handler changes.
+//! - the startup switch is implemented behind [`crate::config::DomainReadSource`];
+//!   JSONL remains the default; Postgres is opt-in;
+//! - write path remains JSONL until Phase E.
 //!
 //! A loader is only ever invoked when an operator explicitly opts in via the
-//! [`crate::config::DomainReadSource`] gate, which is a separate slice.
+//! [`crate::config::DomainReadSource`] gate.
 //!
 //! ## Ordering contract
 //!
@@ -79,23 +79,25 @@ type EdgeRow = (
 );
 
 /// Positional row shape for `domain_accounts`
-/// (`id, kind, title, radius_m, disabled, location_lat, location_lon, role,
-/// email, webauthn_user_id::text, public_payload::text, private_payload::text`).
+/// (`id, kind, title, mode, radius_m, disabled, location_lat, location_lon,
+/// role, email, webauthn_user_id::text, public_payload::text,
+/// private_payload::text`).
 /// Positional tuples keep mapping independent of column labels and avoid the
 /// sqlx `json`/`uuid` features (JSONB and UUID are read as TEXT).
 type AccountRow = (
-    String,
-    String,
-    String,
-    i64,
-    bool,
-    Option<f64>,
-    Option<f64>,
-    String,
-    Option<String>,
-    Option<String>,
-    String,
-    String,
+    String,         // id
+    String,         // kind
+    String,         // title
+    String,         // mode
+    i64,            // radius_m
+    bool,           // disabled
+    Option<f64>,    // location_lat
+    Option<f64>,    // location_lon
+    String,         // role
+    Option<String>, // email
+    Option<String>, // webauthn_user_id::text
+    String,         // public_payload::text
+    String,         // private_payload::text
 );
 
 /// Parse a JSONB text column into a `Value`, defaulting to an empty object on
@@ -234,7 +236,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
 /// loader does), so case-insensitive `get_by_email` lookups work.
 pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> {
     let rows: Vec<AccountRow> = sqlx::query_as(
-        "SELECT id, kind, title, radius_m, disabled, \
+        "SELECT id, kind, title, mode, radius_m, disabled, \
                 location_lat, location_lon, role, email, \
                 webauthn_user_id::text, public_payload::text, private_payload::text \
          FROM domain_accounts ORDER BY id ASC",
@@ -250,6 +252,7 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         id,
         kind,
         title,
+        db_mode,
         radius_m,
         disabled,
         location_lat,
@@ -265,16 +268,43 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         let private_payload = parse_payload(&private_text);
 
         // Reconstruct a JSONL-shaped record so the public projection is computed
-        // by the SAME function as the JSONL runtime path. Only fields that the
-        // original JSONL record could have carried are reconstructed; in
-        // particular `mode` is set only when the backfill preserved an explicit
-        // mode (in private_payload), so map_json's legacy derivation — including
-        // the `approximate` + radius-0 => 250 adjustment — runs exactly as it
-        // would for the JSONL source.
+        // by the SAME function as the JSONL runtime path.
+        //
+        // The `mode` DB column is the primary source of truth. Kind-override
+        // rules (kind=="ron" or private ron_flag) are applied before inserting
+        // into the record so that map_json_to_public_account receives the
+        // effective mode directly.
+        //
+        // The `approximate` + radius_m==0 => 250 adjustment is also applied
+        // here because map_json_to_public_account only runs that adjustment
+        // in its legacy fallback path (when `mode` is absent from the record).
+        let ron_flag = private_payload
+            .get("ron_flag")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let visibility = private_payload.get("visibility").and_then(|v| v.as_str());
+
+        // Effective mode: kind=="ron" or ron_flag always wins over the DB column.
+        let effective_mode = if kind == "ron" || ron_flag {
+            "ron".to_string()
+        } else {
+            db_mode
+        };
+
+        // Effective radius: approximate with radius_m==0 raises to 250.
+        let effective_radius_m = if visibility == Some("approximate") && radius_m == 0 {
+            250
+        } else {
+            radius_m
+        };
+
         let mut record = Map::new();
         record.insert("id".to_string(), json!(id));
         record.insert("type".to_string(), json!(kind));
         record.insert("title".to_string(), json!(title));
+        // mode is always inserted — map_json_to_public_account will use it
+        // directly instead of falling through to legacy derivation.
+        record.insert("mode".to_string(), json!(effective_mode));
         if let Some(summary) = public_payload.get("summary").and_then(|v| v.as_str()) {
             record.insert("summary".to_string(), json!(summary));
         }
@@ -286,21 +316,15 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
         if let (Some(lat), Some(lon)) = (location_lat, location_lon) {
             record.insert("location".to_string(), json!({ "lat": lat, "lon": lon }));
         }
-        // radius_m column is the stored source of truth (CHECK keeps it in u32
-        // range); map_json reads it via `as_u64`.
-        record.insert("radius_m".to_string(), json!(radius_m.max(0) as u64));
+        record.insert(
+            "radius_m".to_string(),
+            json!(effective_radius_m.max(0) as u64),
+        );
         record.insert("disabled".to_string(), json!(disabled));
-        if let Some(mode) = private_payload.get("mode").and_then(|v| v.as_str()) {
-            record.insert("mode".to_string(), json!(mode));
+        if let Some(vis) = visibility {
+            record.insert("visibility".to_string(), json!(vis));
         }
-        if let Some(visibility) = private_payload.get("visibility").and_then(|v| v.as_str()) {
-            record.insert("visibility".to_string(), json!(visibility));
-        }
-        if private_payload
-            .get("ron_flag")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false)
-        {
+        if ron_flag {
             record.insert("ron_flag".to_string(), json!(true));
         }
 
