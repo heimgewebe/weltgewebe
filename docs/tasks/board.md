@@ -32,7 +32,7 @@ relations:
 | AGENT-SAFE-002 | governance | Readiness Hard Fail für Agent-Fähigkeiten einführen | done | high | `scripts/docmeta/generate_agent_readiness.py`, `scripts/docmeta/tests/test_generate_agent_readiness.py`, `docs/tasks/index.json` | Slice abgeschlossen: deterministische Capability-Matrix aktiv und `overall=pass` bei fehlenden Hard-Capabilities ausgeschlossen; offene Capability-Gaps laufen weiter in `AGENT-SAFE-003`/`AGENT-SAFE-004` |
 | AGENT-SAFE-003 | governance | Minimale Claim-Evidence-Spine aufbauen | done | high | `docs/claims/registry.yml`, `docs/claims/README.md`, `scripts/docmeta/validate_claim_registry.py`, `scripts/docmeta/tests/test_validate_claim_registry.py`, `scripts/docmeta/generate_agent_readiness.py`, `scripts/docmeta/tests/test_generate_agent_readiness.py` | Slice abgeschlossen: minimale Claim-Evidence-Spine ist maschinenlesbar validierbar; Folge-Slice AGENT-SAFE-004 bleibt offen |
 | AGENT-SAFE-004 | governance | Minimale Agent-Contracts und Non-Ideal-Guard einführen | done | high | `contracts/agent/task.schema.json`, `scripts/agent/check_non_ideal_task.py`, `scripts/agent/tests/test_check_non_ideal_task.py`, `tests/fixtures/agent/`, `docs/reference/agent-operability-fixture-matrix.md`, `scripts/docmeta/generate_agent_readiness.py`, `scripts/docmeta/tests/test_generate_agent_readiness.py` | Slice abgeschlossen: minimaler Task-Contract und deterministischer Non-Ideal-Guard sind implementiert; Readiness integriert, weitere Hard-Capabilities (Handoff, Dry-Run, Write-Mode) bleiben offen |
-| TASK-CTL-004 | docs | Guard gegen uneingeordnete Blueprints und Pläne einführen | partial | medium | `scripts/docmeta/check_planning_registration.py`, `scripts/docmeta/tests/test_check_planning_registration.py`, `.github/workflows/task-index.yml` | CI report-only aktiv; Warn/Ratchet-Modus und Ausnahmefluss fehlen noch |
+| TASK-CTL-005 | docs | Bestehende Planning-Registration-Findings triagieren und Ratchet vorbereiten | open | medium | - | 8 Findings (Altlasten) aufräumen oder Baselining definieren, CI bleibt solange warn |
 
 ## Blocker
 
@@ -63,3 +63,4 @@ relations:
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, CI PROVEN, Commit `00a43a00` |
 | OPT-API-004 | api | Limit-Obergrenze `/nodes` & `/accounts` | `apps/api/src/routes/query.rs`, Tests 4+9 passed |
 | OPT-FE-003 | web | Panel-Detail-Fetch-Logik extrahieren | `apps/web/src/lib/panels/panelDetails.ts`, 10+5 Tests passed |
+| TASK-CTL-004 | docs | Guard gegen uneingeordnete Blueprints und Pläne einführen | `scripts/docmeta/check_planning_registration.py`, `scripts/docmeta/tests/test_check_planning_registration.py`, `.github/workflows/task-index.yml` (Planning-registration and docmeta test suites pass) |
