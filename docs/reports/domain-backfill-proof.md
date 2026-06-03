@@ -126,27 +126,34 @@ This audit is a Phase C diagnostic; enforcement policy is deferred to Phase D/E.
 
 ## Validation
 
+### Compile check (no PostgreSQL required)
+
 ```bash
-# Run backfill proof (requires direct PostgreSQL):
+cargo test --locked -p weltgewebe-api --test db_domain_backfill --no-run
+```
+
+This verifies the test syntax and type mappings without needing a database.
+
+### Full integration test (requires direct PostgreSQL)
+
+```bash
 DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
   cargo test --locked -p weltgewebe-api --test db_domain_backfill \
   -- --include-ignored --test-threads=1
+```
 
-# Run existing schema migration proof (unchanged, still required):
-DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
-  cargo test --locked -p weltgewebe-api --test db_domain_schema_migrations \
-  -- --include-ignored
+### Task index and docmeta (no database required)
 
-# Task index validation:
+```bash
 python3 -m scripts.docmeta.validate_task_index docs/tasks/index.json
 python3 -m scripts.docmeta.generate_task_index --check
 python3 -m scripts.docmeta.agent_entrypoint_smoke
 python3 -m scripts.docmeta.check_planning_registration --mode strict
 ```
 
-**Local PostgreSQL status:** Direct PostgreSQL not available in this remote
-execution environment. CI proof via job `db-domain-backfill-proof` in
-`.github/workflows/api.yml`. PR-CI-Laufbeleg ausstehend.
+### Local PostgreSQL status
+
+Direct PostgreSQL not available in this remote execution environment. Full integration proof via CI job `db-domain-backfill-proof` in `.github/workflows/api.yml` (PostgreSQL 16 service on direct port 5432, runs all 6 tests with `--include-ignored --test-threads=1`). **PR-CI-Laufbeleg ausstehend.**
 
 ## Remaining OPT-ARC-001 Phases
 

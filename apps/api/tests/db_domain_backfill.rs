@@ -582,15 +582,14 @@ async fn domain_backfill_edges_deterministic_and_idempotent() {
     assert_eq!(target_id, "backfill-proof-node-beta");
     assert_eq!(edge_kind, "knows");
 
-    // note goes into payload jsonb
-    let (payload,): (serde_json::Value,) =
-        sqlx::query_as("SELECT payload FROM domain_edges WHERE id = $1")
-            .bind("backfill-proof-edge-alpha")
-            .fetch_one(&pool)
-            .await
-            .expect("edge alpha payload must be readable");
+    // note goes into payload jsonb; extract via SQL to avoid sqlx json feature
+    let (note,): (Option<String>,) = sqlx::query_as("SELECT payload->>'note' FROM domain_edges WHERE id = $1")
+        .bind("backfill-proof-edge-alpha")
+        .fetch_one(&pool)
+        .await
+        .expect("edge alpha payload note must be readable");
     assert_eq!(
-        payload.get("note").and_then(|v| v.as_str()),
+        note.as_deref(),
         Some("Test note"),
         "note must be preserved in payload jsonb"
     );
