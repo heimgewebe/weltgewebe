@@ -119,3 +119,46 @@ AUTH_LOG_MAGIC_TOKEN=0
 - mailbox.org Empfang/Versand erneut prüfen.
 - IONOS erst nach erfolgreichen Gates und Beobachtungsfenster kündigen.
 - Nach IONOS-Kündigung ist Rollback über IONOS nicht mehr verfügbar.
+
+### Brevo-Subdomain-DNS-Gate
+
+Da der technische Magic-Link-Absender `noreply@login.weltgewebe.net` verwendet, müssen zusätzlich zu den Apex-Mail-Records auch die Brevo-Records der Subdomain geprüft werden.
+
+```bash
+set -euo pipefail
+
+CHECK="$(mktemp)"
+
+{
+  echo "== TXT login.weltgewebe.net =="
+  dig +short TXT login.weltgewebe.net
+  echo
+
+  echo "== CNAME brevo1._domainkey.login.weltgewebe.net =="
+  dig +short CNAME brevo1._domainkey.login.weltgewebe.net
+  echo
+
+  echo "== CNAME brevo2._domainkey.login.weltgewebe.net =="
+  dig +short CNAME brevo2._domainkey.login.weltgewebe.net
+  echo
+
+  echo "== TXT _dmarc.login.weltgewebe.net =="
+  dig +short TXT _dmarc.login.weltgewebe.net
+  echo
+} | tee "$CHECK"
+
+grep -F "brevo-code:d9e7825df780e9cce6c9fbe8d1ea5abd" "$CHECK"
+grep -F "b1.login-weltgewebe-net.dkim.brevo.com" "$CHECK"
+grep -F "b2.login-weltgewebe-net.dkim.brevo.com" "$CHECK"
+grep -F "v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com" "$CHECK"
+
+echo "OK: Brevo subdomain DNS records present"
+```
+
+Erwartung:
+
+```text
+OK: Brevo subdomain DNS records present
+```
+
+Hinweis: Kein SPF-/Return-Path-Record wird hier ergänzt, solange Brevo keinen separaten Zielwert dafür ausgibt.
