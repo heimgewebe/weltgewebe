@@ -1052,16 +1052,13 @@ delegation_expire_days: 28
 
     // ── Phase D: domain_read_source config-gate tests ─────────────────────
 
-    fn reset_domain_read_source_env() {
-        let _ = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
-    }
 
     #[test]
     #[serial]
     fn domain_read_source_defaults_to_jsonl_without_env() -> Result<()> {
         let file = NamedTempFile::new()?;
         std::fs::write(file.path(), YAML)?;
-        reset_domain_read_source_env();
+        let _env = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert_eq!(

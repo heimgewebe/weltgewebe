@@ -122,7 +122,6 @@ Implementiert in `apps/api/src/config.rs`:
 | `payload->>'note'` | `note` | optional |
 
 Stabile ID-ascending-Reihenfolge via `ORDER BY id ASC`. Legacy-Offset-Parität zur JSONL-Dateireihenfolge ist in Phase D nicht garantiert.
-JSONL-Pfad-Sortierung (Insertion-Order + Last-Write-Wins per ID).
 
 ### Accounts — Privacy-Rekonstruktion (kritisch)
 
