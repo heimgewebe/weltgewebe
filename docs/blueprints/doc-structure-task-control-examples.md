@@ -11,6 +11,8 @@ relations:
     target: docs/blueprints/doc-structure-task-control.md
   - type: relates_to
     target: docs/blueprints/doc-structure-task-control-roadmap.md
+  - type: relates_to
+    target: docs/tasks/index.json
 ---
 
 # Beispiele: Dokumentationsstruktur und Task-Steuerung

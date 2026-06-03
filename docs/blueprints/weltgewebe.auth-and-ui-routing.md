@@ -9,6 +9,8 @@ relations:
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
   - type: relates_to
     target: docs/blueprints/ui-blaupause.md
+  - type: relates_to
+    target: docs/roadmap.md
 ---
 # Blueprint: Heim-first Auth & UI Routing
 

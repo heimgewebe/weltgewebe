@@ -38,5 +38,5 @@ jobs:
         run: python3 -m scripts.docmeta.generate_task_index --check
       - name: Check agent entrypoint / roadmap sync
         run: python3 -m scripts.docmeta.agent_entrypoint_smoke
-      - name: Check planning registration drift (warn)
-        run: python3 -m scripts.docmeta.check_planning_registration --mode warn
+      - name: Check planning registration drift (strict)
+        run: python3 -m scripts.docmeta.check_planning_registration --mode strict

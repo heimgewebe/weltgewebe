@@ -2,15 +2,26 @@
 id: blueprints.weltgewebe.deploy.plan
 title: Deploy-Plan
 doc_type: reference
-status: active
+status: deprecated
 summary: Deployment-Planungsdokument für das Weltgewebe.
 relations:
   - type: relates_to
     target: docs/deployment.md
   - type: relates_to
     target: docs/deploy/README.md
+  - type: relates_to
+    target: docs/deploy/heim-first-phase0.md
 ---
 # Migrationsplan: Heim-first Deployment (Phase 0)
+
+> **Status: deprecated (abgelöst).** Dieser Phase-0-Migrationsplan ist umgesetzt und
+> durch die kanonische Deployment-Dokumentation abgelöst. Phase 0 ist in
+> [docs/deploy/heim-first-phase0.md](../deploy/heim-first-phase0.md) belegt
+> (`infra/caddy/Caddyfile.heim`, `infra/compose/compose.prod.yml`); kanonischer
+> Deployment-Stand: [docs/deploy/README.md](../deploy/README.md). Die unten genannten
+> 404/405-Auth-Routen-Befunde sind veraltet — die Auth-Routen sind implementiert und
+> in [auth-status-matrix.md](../reports/auth-status-matrix.md) nachgewiesen.
+> Inhalt nur noch als historischer Planungsbeleg lesen.
 
 Ziel: Deployment des UI im Heimnetzwerk als kanonischer Einstiegspunkt.
 

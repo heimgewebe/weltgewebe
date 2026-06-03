@@ -144,8 +144,8 @@ Reihenfolge: Daten-/Szenenklarheit → Souveräne Basemap-Pipeline → Runtime-P
 - [?] Minimaler Action-Layer · Zielbild dokumentiert, Implementierungsstand prüfen · [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md)
 - [?] Agent-Readiness vollständig grün · [agent-readiness-audit.md](reports/agent-readiness-audit.md)
 - [ ] Agent Safety Control Layer · Blueprint gemergt, Umsetzung offen; erste Slices sind als offene Task-Control-Tickets `AGENT-SAFE-001` bis `AGENT-SAFE-004` erfasst. Keine Behauptung, dass PR 1–PR 16 bereits umgesetzt seien · [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md)
-- [x] Blueprint-/Roadmap-Registration-Guard · Guard-Mechanismus umgesetzt in `TASK-CTL-004`; bestehende 8 Findings und Strict-Ratchet werden in `TASK-CTL-005` weitergeführt · [board.md](tasks/board.md)
-- [ ] Planning-Registration-Findings triagieren und Strict-Ratchet vorbereiten · Folge-Slice `TASK-CTL-005` · [board.md](tasks/board.md)
+- [x] Blueprint-/Roadmap-Registration-Guard · Guard-Mechanismus umgesetzt in `TASK-CTL-004` · [board.md](tasks/board.md)
+- [x] Planning-Registration-Findings triagiert und Strict-Ratchet aktiv · `TASK-CTL-005`: 8 bestehende Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal), Guard läuft blockierend in `--mode strict` · [board.md](tasks/board.md), [planning-registration-findings.md](reports/planning-registration-findings.md)
 
 ## Strang Versionierung
 
