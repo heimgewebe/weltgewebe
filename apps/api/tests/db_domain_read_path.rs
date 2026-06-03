@@ -661,3 +661,99 @@ async fn loaders_succeed_after_fixture_cleanup() {
 
     pool.close().await;
 }
+
+// ── MAX_EDGES_CACHE ─────────────────────────────────────────────────────────
+
+/// Proves that `MAX_EDGES_CACHE` is honoured by the PostgreSQL edge loader:
+/// with the env var set to `2` and three `rp-` edge fixtures inserted, only
+/// two edges are loaded.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn edges_loader_respects_max_edges_cache_limit() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clear_fixture_rows(&pool).await;
+
+    // Set the cap to 2 before calling the loader.
+    std::env::set_var("MAX_EDGES_CACHE", "2");
+
+    insert_edge(
+        &pool,
+        "rp-edge-cache-a",
+        "rp-node-x",
+        "rp-node-y",
+        "knows",
+        "{}",
+    )
+    .await;
+    insert_edge(
+        &pool,
+        "rp-edge-cache-b",
+        "rp-node-x",
+        "rp-node-y",
+        "knows",
+        "{}",
+    )
+    .await;
+    insert_edge(
+        &pool,
+        "rp-edge-cache-c",
+        "rp-node-x",
+        "rp-node-y",
+        "knows",
+        "{}",
+    )
+    .await;
+
+    let cache = load_edges_from_postgres(&pool)
+        .await
+        .expect("edge loader must succeed");
+
+    assert_eq!(
+        cache.len(),
+        2,
+        "with MAX_EDGES_CACHE=2 and 3 edges, only 2 must be loaded"
+    );
+    assert!(
+        cache.get("rp-edge-cache-a").is_some(),
+        "first edge must be present (id-ascending)"
+    );
+    assert!(
+        cache.get("rp-edge-cache-b").is_some(),
+        "second edge must be present (id-ascending)"
+    );
+    assert!(
+        cache.get("rp-edge-cache-c").is_none(),
+        "third edge must be truncated"
+    );
+
+    // Clean up: restore default.
+    std::env::remove_var("MAX_EDGES_CACHE");
+
+    clear_fixture_rows(&pool).await;
+    pool.close().await;
+}
+
+/// Proves that an invalid `MAX_EDGES_CACHE` value falls back to the default
+/// (500,000). This is a pure env-parse test — no database required beyond the
+/// connection the ignored guard checks.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn max_edges_cache_invalid_falls_back_to_default() {
+    use weltgewebe_api::domain_db::DEFAULT_MAX_EDGES_CACHE;
+
+    std::env::set_var("MAX_EDGES_CACHE", "not-a-number");
+    let limit = weltgewebe_api::domain_db::max_edges_cache_limit();
+    assert_eq!(
+        limit, DEFAULT_MAX_EDGES_CACHE,
+        "invalid MAX_EDGES_CACHE must fall back to default"
+    );
+    std::env::remove_var("MAX_EDGES_CACHE");
+
+    // Absent env also returns default.
+    let limit = weltgewebe_api::domain_db::max_edges_cache_limit();
+    assert_eq!(
+        limit, DEFAULT_MAX_EDGES_CACHE,
+        "absent MAX_EDGES_CACHE must return default"
+    );
+}

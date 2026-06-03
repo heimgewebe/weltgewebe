@@ -66,19 +66,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let mut records_read = 0;
     let mut duplicates_count = 0;
 
-    let max_edges = match std::env::var("MAX_EDGES_CACHE") {
-        Ok(val) => match val.parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!(
-                    value = %val,
-                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
-                );
-                500_000
-            }
-        },
-        Err(_) => 500_000,
-    };
+    let max_edges = crate::domain_db::max_edges_cache_limit();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if records_read >= max_edges {

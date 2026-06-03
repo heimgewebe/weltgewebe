@@ -82,6 +82,11 @@ return rows ordered by `id ASC`. JSONB columns are read as `::text` and parsed
 with `serde_json` in Rust; UUID is read as `::text`; no new sqlx feature is
 required, and JSONB booleans are never cast with `::bool`.
 
+The PostgreSQL edge loader honours `MAX_EDGES_CACHE` (shared with the JSONL
+loader via `max_edges_cache_limit()`). It fetches at most `limit + 1` rows
+to detect truncation without materialising the entire table, and emits a
+warning when truncation occurs. JSONL remains the default; Phase E remains open.
+
 | Loader | Source table | Target type |
 |---|---|---|
 | `load_nodes_from_postgres` | `domain_nodes` | `OrderedCache<Node>` |

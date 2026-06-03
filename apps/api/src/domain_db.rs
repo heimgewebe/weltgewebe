@@ -54,6 +54,29 @@ use crate::state::OrderedCache;
 /// Matches the JSONL `Node` fallback timestamp (see `From<NodeDto> for Node`).
 const DEFAULT_TIMESTAMP: &str = "1970-01-01T00:00:00Z";
 
+/// Default maximum number of edges loaded into memory. Shared between the JSONL
+/// and PostgreSQL edge loaders so that startup memory bounds are consistent.
+pub const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
+
+/// Parse the `MAX_EDGES_CACHE` environment variable into a `usize` limit.
+/// Falls back to [`DEFAULT_MAX_EDGES_CACHE`] when the variable is absent or
+/// contains an invalid value.
+pub fn max_edges_cache_limit() -> usize {
+    match std::env::var("MAX_EDGES_CACHE") {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    value = %val,
+                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
+                );
+                DEFAULT_MAX_EDGES_CACHE
+            }
+        },
+        Err(_) => DEFAULT_MAX_EDGES_CACHE,
+    }
+}
+
 /// Positional row shape for `domain_nodes`
 /// (`id, kind, title, lat, lon, created_at, updated_at, payload::text`).
 type NodeRow = (
@@ -195,17 +218,29 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 
 /// Load all edges from `domain_edges` into an [`OrderedCache<Edge>`], ordered by
 /// `id ASC`. Read-only.
+///
+/// The loader honours [`max_edges_cache_limit()`] — the same startup memory
+/// bound used by the JSONL edge loader. It fetches at most `limit + 1` rows
+/// to detect truncation without materialising the entire table.
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
+    let max_edges = max_edges_cache_limit();
+    // Fetch one extra row to detect truncation without a COUNT(*) query.
+    let fetch_limit = (max_edges as i64).saturating_add(1);
+
     let rows: Vec<EdgeRow> = sqlx::query_as(
         "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-         FROM domain_edges ORDER BY id ASC",
+         FROM domain_edges ORDER BY id ASC LIMIT $1",
     )
+    .bind(fetch_limit)
     .fetch_all(pool)
     .await
     .context("failed to load edges from domain_edges")?;
 
+    let truncated = rows.len() > max_edges;
     let mut cache = OrderedCache::new();
-    for (id, source_id, target_id, edge_kind, created_at, payload_text) in rows {
+    for (id, source_id, target_id, edge_kind, created_at, payload_text) in
+        rows.into_iter().take(max_edges)
+    {
         let payload = parse_payload(&payload_text);
         let edge = Edge {
             id: id.clone(),
@@ -220,8 +255,16 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
         cache.insert(id, edge);
     }
 
+    if truncated {
+        tracing::warn!(
+            max_edges,
+            "Edges cache limit reached, truncating PostgreSQL domain_edges load"
+        );
+    }
+
     tracing::info!(
         count = cache.len(),
+        truncated,
         "Loaded edges from PostgreSQL (domain_edges)"
     );
     Ok(cache)
