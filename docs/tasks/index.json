@@ -448,14 +448,18 @@
         "apps/api/migrations/20260531000003_create_domain_accounts.up.sql",
         "apps/api/migrations/20260531000003_create_domain_accounts.down.sql",
         "apps/api/tests/db_domain_schema_migrations.rs",
+        "apps/api/tests/db_domain_backfill.rs",
+        "docs/reports/domain-backfill-proof.md",
         ".github/workflows/api.yml",
-        "CI-Job: db-domain-schema-migrations-proof"
+        "CI-Job: db-domain-schema-migrations-proof",
+        "CI-Job: db-domain-backfill-proof"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
-        "Phase C (Backfill-/Import-Pfad) fehlt",
+        "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
         "Phase D (Read-Path-Switch) fehlt",
-        "Phase E (Write-Path-Switch) fehlt"
+        "Phase E (Write-Path-Switch) fehlt",
+        "JSONL bleibt aktive Runtime-Wahrheit bis Cutover"
       ],
       "acceptance": [
         "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
@@ -467,10 +471,11 @@
         "prs": [],
         "docs": [
           "docs/blueprints/domain-data-postgres-cutover.md",
-          "docs/reports/optimierungsstatus.md"
+          "docs/reports/optimierungsstatus.md",
+          "docs/reports/domain-backfill-proof.md"
         ]
       },
-      "updated_at": "2026-05-31"
+      "updated_at": "2026-06-03"
     }
   ]
 }
