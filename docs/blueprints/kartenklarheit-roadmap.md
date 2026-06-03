@@ -96,17 +96,33 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
 
 ### Arbeitspakete der Phase 2
 
-- [~] Auswahlzustand, Markerbeschreibung und Paneldaten aus `+page.svelte` entkoppeln.
+- [x] Auswahlzustand, Markerbeschreibung und Paneldaten aus `+page.svelte` entkoppeln.
+  - Auswahlzustand: `selectMapEntity(...)` in `apps/web/src/lib/stores/mapView.ts`
+    delegiert an `enterFokus(...)` in `apps/web/src/lib/stores/uiView.ts`; die Route
+    behaelt nur noch die kartenseitige `flyTo`-Verdrahtung.
+  - Markerbeschreibung: `markers`, `filteredMarkers`, `availableFilterTypes`,
+    `searchResults`, `searchMatchIds` und `visibleEdges` sind dedizierte
+    Derived-Stores in `apps/web/src/lib/stores/mapView.ts`.
+  - Paneldaten: Das selektierte Entity reist als `selection.data` ueber `uiView`;
+    der `ContextPanel` liest es direkt aus dem Store statt aus der Route.
 - [x] Ein kleines Karten-View-Model oder Szenenmodell definieren.
-- [ ] Query-Parameter-Zustand (`l`, `r`, `t`) und Kartenzustand getrennt dokumentieren.
+- [x] Query-Parameter-Zustand (`l`, `r`, `t`) und Kartenzustand getrennt dokumentieren.
+  - Dokumentiert in `docs/reports/map-status-matrix.md`, Abschnitt
+    „Query-Parameter-Zustand vs. Kartenzustand".
 
 ### Verifikation der Phase 2
 
 - [x] `apps/web/src/lib/map/scene.test.ts` prueft das Szenenmodell als reine Transformation.
+- [x] `apps/web/src/lib/stores/mapView.test.ts` prueft die entkoppelten
+  Presentation-Stores (Filter, Suche, Kantenfilter, Selektion) als Unit-Tests.
 
 ### Stop-Kriterium der Phase 2
 
-- [~] Die Route ist nicht mehr alleinige Quelle fuer Kartenrendering; Interaktions- und Panel-Orchestrierung leben aber noch teilweise im Routenorchestrator.
+- [x] Auswahlzustand, Markerbeschreibung und Paneldaten leben in dedizierten Stores
+  (`uiView`, `mapView`); die Route haelt nur noch die imperative MapLibre-/Overlay-
+  Lebenszyklus-Orchestrierung. Die URL-Parameter-Schicht (`l`, `r`, `t`) ist
+  dokumentarisch vom Kartenzustand getrennt; die tatsaechliche Query-Parameter-
+  Navigation bleibt als Arbeitspaket in Phase 4 offen.
 
 ---
 

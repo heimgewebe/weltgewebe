@@ -33,17 +33,39 @@
       ]
     },
     "interaktion_und_panel": {
-      "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich",
-      "ist": "Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt.",
+      "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich; Auswahl-, Marker- und Paneldaten liegen nicht alle in der Routendatei",
+      "ist": "Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt. Kartenklarheit Phase 2 hat Auswahlzustand, Markerbeschreibung und Paneldaten in dedizierte Stores entkoppelt: selectMapEntity (mapView.ts) delegiert an enterFokus (uiView.ts); markers/filteredMarkers/availableFilterTypes/searchResults/searchMatchIds/visibleEdges sind Derived-Stores in mapView.ts. Die Route haelt nur noch den imperativen MapLibre-/Overlay-Lebenszyklus und die flyTo-Verdrahtung.",
       "status": "Erledigt",
       "documentation_evidence": [
-        "docs/reports/map-architekturkritik.md"
+        "docs/reports/map-architekturkritik.md",
+        "docs/blueprints/kartenklarheit-roadmap.md"
       ],
       "missing_evidence": [],
       "risk": "gering",
       "code_runtime_evidence": [
         "apps/web/src/routes/map/+page.svelte",
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/lib/stores/uiView.ts",
+        "apps/web/src/lib/stores/mapView.test.ts",
         "apps/web/tests/map-interaction.spec.ts"
+      ]
+    },
+    "query_parameter_vs_kartenzustand": {
+      "soll": "URL-Parameter (l, r, t) und Kartenzustand sind klar getrennt dokumentiert",
+      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, Presentation-Derivate) ist fluechtig und wird nicht in die URL gespiegelt. Der Deep-Link-Contract l (linker Drawer/Filter), r (rechter Drawer/Selektion), t (aktiver Tab) ist als eigene, URL-besessene Schicht definiert und bewusst aus den Presentation-Stores herausgehalten. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts dokumentiert.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/reports/map-status-matrix.md",
+        "docs/blueprints/kartenklarheit-roadmap.md"
+      ],
+      "missing_evidence": [
+        "Verdrahtung der l/r/t-Navigation in die Route",
+        "Gezielte Query-Parameter-Tests (Phase 4)"
+      ],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/lib/stores/uiView.ts"
       ]
     },
     "basemap_abhaengigkeit": {
@@ -85,7 +107,7 @@
     },
     "testabdeckung": {
       "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
-      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab.",
+      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Stores (Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
@@ -98,6 +120,7 @@
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
+        "apps/web/src/lib/stores/mapView.test.ts",
         "apps/web/tests/map-interaction.spec.ts",
         "apps/web/tests/map-load-fallback.spec.ts",
         "apps/web/tests/basemap.spec.ts",
