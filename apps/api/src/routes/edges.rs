@@ -236,3 +236,55 @@ pub async fn get_edge(
         target_details,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Simple RAII guard that restores an env var to its previous value on drop.
+    struct EnvGuard {
+        key: String,
+        old_value: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &str, value: &str) -> Self {
+            let old_value = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self {
+                key: key.to_string(),
+                old_value,
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.old_value {
+                Some(v) => std::env::set_var(&self.key, v),
+                None => std::env::remove_var(&self.key),
+            }
+        }
+    }
+
+    #[test]
+    fn max_edges_cache_invalid_falls_back_to_default() {
+        let _guard = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
+        assert_eq!(
+            max_edges_cache_limit(),
+            DEFAULT_MAX_EDGES_CACHE,
+            "invalid MAX_EDGES_CACHE must fall back to default"
+        );
+    }
+
+    #[test]
+    fn max_edges_cache_absent_returns_default() {
+        let _guard = EnvGuard::set("MAX_EDGES_CACHE", "");
+        std::env::remove_var("MAX_EDGES_CACHE");
+        assert_eq!(
+            max_edges_cache_limit(),
+            DEFAULT_MAX_EDGES_CACHE,
+            "absent MAX_EDGES_CACHE must return default"
+        );
+    }
+}

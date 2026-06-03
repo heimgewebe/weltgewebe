@@ -53,6 +53,14 @@ Implemented in this slice:
 - No endpoint behaviour change in default (JSONL) mode.
 - Does not mark OPT-ARC-001 done. Phase E remains open.
 
+## Operational Warning — Read/Write Divergence Before Phase E
+
+`WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` is a **Phase-D read-only startup mode**.
+Until Phase E, API writes still go to JSONL. Running postgres read mode in a
+mutable deployment can cause restart-visible divergence unless JSONL changes are
+backfilled into `domain_*` before restart. Use this mode only for proof or
+read-only deployments, or with an explicit backfill discipline.
+
 ## Default Invariant
 
 With no configuration, or with `WELTGEWEBE_DOMAIN_READ_SOURCE` absent/empty,
