@@ -42,7 +42,7 @@ mailbox.org:
   - optional temporäre Weiterleitung an externe Recovery-Mail
 
 Brevo:
-  - login@weltgewebe.net
+  - noreply@login.weltgewebe.net
   - optional noreply@weltgewebe.net
   - technische Magic-Link-Mail
 
@@ -52,7 +52,7 @@ Weltgewebe Runtime:
   SMTP_PORT=587
   SMTP_USER=<Brevo SMTP User>
   SMTP_PASS=<Secret Store>
-  SMTP_FROM=login@weltgewebe.net
+  SMTP_FROM=noreply@login.weltgewebe.net
 ```
 
 ## 3. Aktueller redigierter Ist-Zustand
@@ -150,7 +150,7 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 
 ### Phase 4 — Brevo vorbereiten und testen
 
-- **Ziel**: `login@weltgewebe.net` ist sendebereit.
+- **Ziel**: `noreply@login.weltgewebe.net` ist sendebereit.
 - **Aktionen**: Brevo-Dashboard-Verifikationscodes abrufen, ggf. anlegen.
 - **Gate**: Brevo-Verifikationsdaten liegen vor.
 - **Rollback-Hinweis**: Keine Live-Auswirkung auf bisherigen Versand.
