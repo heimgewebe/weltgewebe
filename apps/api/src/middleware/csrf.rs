@@ -25,7 +25,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
 
     // 2. Explicit exemptions
     let path = req.uri().path();
-    if is_magic_link_consume_post(method, path) {
+    if is_magic_link_consume_post(req.method(), path) {
         // Magic-link consume is a one-time login confirmation POST that may be
         // submitted from an email-opened document with `Origin: null`. It must
         // remain narrowly exempt from the session-cookie Origin/Referer guard
@@ -217,6 +217,10 @@ fn parse_host_header(input: &str) -> (String, Option<u16>) {
     (input.to_string(), None)
 }
 
+fn is_magic_link_consume_post(method: &Method, path: &str) -> bool {
+    *method == Method::POST
+        && (path == "/auth/magic-link/consume" || path == "/api/auth/magic-link/consume")
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,9 +295,4 @@ mod tests {
         // Host has explicit port, Origin has different port -> FAIL
         assert!(!check_ports(Some(8080), Some(9090)));
     }
-}
-
-fn is_magic_link_consume_post(method: &Method, path: &str) -> bool {
-    *method == Method::POST
-        && (path == "/auth/magic-link/consume" || path == "/api/auth/magic-link/consume")
 }
