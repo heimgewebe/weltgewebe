@@ -369,6 +369,7 @@
         ".github/workflows/task-index.yml",
         "docs/tasks/board.md",
         "docs/tasks/index.json",
+        "docs/roadmap.md",
         "scripts/docmeta/check_planning_registration.py",
         "scripts/docmeta/tests/test_check_planning_registration.py",
         "docs/blueprints/kartenklarheit.md",
