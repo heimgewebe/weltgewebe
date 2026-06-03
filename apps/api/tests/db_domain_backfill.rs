@@ -377,9 +377,7 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
             m.to_string()
         } else if kind == "ron" || ron_flag {
             "ron".to_string()
-        } else if visibility.is_some() {
-            "verortet".to_string()
-        } else if location_lat.is_some() && location_lon.is_some() {
+        } else if visibility.is_some() || (location_lat.is_some() && location_lon.is_some()) {
             "verortet".to_string()
         } else {
             "ron".to_string()
