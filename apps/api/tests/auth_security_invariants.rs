@@ -247,6 +247,24 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
         assert_csrf_blocked(&app, method.clone(), path, &session_cookie).await;
     }
 
+    let origin_null_refresh = Request::post("/auth/session/refresh")
+        .header("Cookie", &session_cookie)
+        .header("Host", "localhost")
+        .header("Origin", "null")
+        .body(body::Body::empty())?;
+    let origin_null_refresh_res = app.clone().oneshot(origin_null_refresh).await?;
+    assert_eq!(
+        origin_null_refresh_res.status(),
+        StatusCode::FORBIDDEN,
+        "session refresh with Origin:null must remain protected by CSRF middleware"
+    );
+    let origin_null_refresh_body =
+        body::to_bytes(origin_null_refresh_res.into_body(), usize::MAX).await?;
+    assert!(
+        origin_null_refresh_body.is_empty(),
+        "Origin:null session refresh rejection must be the bare CSRF 403"
+    );
+
     // Positive control: the same refresh request *with* a matching Origin passes
     // the CSRF guard, proving the rejections above are specifically CSRF-driven
     // and the middleware does not blanket-block legitimate same-origin traffic.

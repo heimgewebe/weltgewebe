@@ -180,6 +180,22 @@ fn app_with_addr(state: ApiState, addr: SocketAddr) -> Router {
         .with_state(state)
 }
 
+fn app_with_security(state: ApiState) -> Router {
+    Router::new()
+        .merge(
+            api_router()
+                .route_layer(axum::middleware::from_fn_with_state(
+                    state.clone(),
+                    weltgewebe_api::middleware::auth::auth_middleware,
+                ))
+                .layer(axum::middleware::from_fn(
+                    weltgewebe_api::middleware::csrf::require_csrf,
+                )),
+        )
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 8080))))
+        .with_state(state)
+}
+
 struct DeferEnvRemove(&'static str);
 impl Drop for DeferEnvRemove {
     fn drop(&mut self) {
@@ -1013,6 +1029,142 @@ async fn consume_legacy_alias_returns_404() -> Result<()> {
         .body(body::Body::from("token=any&nonce=any"))?;
     let res_post = app.clone().oneshot(req_post).await?;
     assert_eq!(res_post.status(), StatusCode::NOT_FOUND);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn magic_link_consume_origin_null_succeeds_through_security_middleware() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let stale_session = create_session(&state, "u1", Some("stale-device")).await;
+    let token = state.tokens.create("u1@example.com".to_string());
+    let app = app_with_security(state.clone());
+
+    let uri = format!("/auth/magic-link/consume?token={}", token);
+    let req_get = Request::get(&uri)
+        .header("Host", "localhost")
+        .body(body::Body::empty())?;
+    let res_get = app.clone().oneshot(req_get).await?;
+    assert_eq!(res_get.status(), StatusCode::OK);
+
+    let nonce_val = extract_cookie_value(res_get.headers(), NONCE_COOKIE_NAME)
+        .context("GET consume must set nonce cookie")?;
+    let (stored_hash, nonce) = nonce_val.split_once('.').context("invalid nonce format")?;
+    assert_eq!(stored_hash, hash_token(&token));
+
+    let body_str = format!("token={}&nonce={}", token, nonce);
+    let req_post = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Host", "localhost")
+        .header("Origin", "null")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}; {}={}",
+                SESSION_COOKIE_NAME, stale_session.id, NONCE_COOKIE_NAME, nonce_val
+            ),
+        )
+        .body(body::Body::from(body_str))?;
+    let res_post = app.oneshot(req_post).await?;
+
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(res_post.headers().get("location").unwrap(), "/");
+
+    let session_id = extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME)
+        .context("valid magic-link consume must create a session cookie")?;
+    assert!(
+        get_session(&state, &session_id).await.is_some(),
+        "created session id must exist in the session backend"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn magic_link_consume_origin_null_invalid_token_does_not_create_session() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let stale_session = create_session(&state, "u1", Some("stale-device")).await;
+    let invalid_token = "invalid-token-for-origin-null-proof";
+    let nonce = "valid-nonce-for-invalid-token-proof";
+    let nonce_val = format!("{}.{}", hash_token(invalid_token), nonce);
+    let app = app_with_security(state);
+
+    let body_str = format!("token={}&nonce={}", invalid_token, nonce);
+    let req_post = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Host", "localhost")
+        .header("Origin", "null")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}; {}={}",
+                SESSION_COOKIE_NAME, stale_session.id, NONCE_COOKIE_NAME, nonce_val
+            ),
+        )
+        .body(body::Body::from(body_str))?;
+    let res_post = app.oneshot(req_post).await?;
+
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res_post.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+    assert!(
+        extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME).is_none(),
+        "invalid token must not create a session cookie"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn magic_link_consume_origin_null_invalid_nonce_does_not_create_session() -> Result<()> {
+    let mut state = test_state_with_accounts()?;
+    state.config.auth_public_login = true;
+    state.config.app_base_url = Some("http://localhost".to_string());
+
+    let stale_session = create_session(&state, "u1", Some("stale-device")).await;
+    let token = state.tokens.create("u1@example.com".to_string());
+    let nonce_val = format!("{}.{}", hash_token(&token), "stored-nonce");
+    let app = app_with_security(state.clone());
+
+    let body_str = format!("token={}&nonce={}", token, "submitted-different-nonce");
+    let req_post = Request::post("/auth/magic-link/consume")
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Host", "localhost")
+        .header("Origin", "null")
+        .header(
+            "Cookie",
+            format!(
+                "{}={}; {}={}",
+                SESSION_COOKIE_NAME, stale_session.id, NONCE_COOKIE_NAME, nonce_val
+            ),
+        )
+        .body(body::Body::from(body_str))?;
+    let res_post = app.oneshot(req_post).await?;
+
+    assert_eq!(res_post.status(), StatusCode::SEE_OTHER);
+    assert_eq!(
+        res_post.headers().get("location").unwrap(),
+        "/login?error=invalid_token"
+    );
+    assert!(
+        extract_cookie_value(res_post.headers(), SESSION_COOKIE_NAME).is_none(),
+        "invalid nonce must not create a session cookie"
+    );
+    assert!(
+        state.tokens.peek(&token).is_some(),
+        "invalid nonce must not consume the one-time token"
+    );
 
     Ok(())
 }
