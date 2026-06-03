@@ -17,9 +17,9 @@
 //! Notes:
 //! - Tests are ignored by default to keep offline paths green.
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
-//! - Use --test-threads=1: the loaders read ALL rows, and each test clears the
-//!   domain tables at start and end so assertions (including counts) are
-//!   deterministic.
+//! - Use --test-threads=1: the loaders read ALL rows, and each test cleans up
+//!   only its own fixture rows (prefix `rp-`) at start and end so assertions
+//!   are deterministic without being destructive to the local database.
 
 use std::{path::PathBuf, str::FromStr};
 
@@ -60,19 +60,19 @@ async fn run_migrations(pool: &sqlx::PgPool) {
     migrator.run(pool).await.expect("failed to run migrations");
 }
 
-/// Clear all three domain tables. The loaders read every row, so each test runs
-/// against a known-empty baseline to keep count/order assertions deterministic.
+/// Remove test fixture rows (all prefixed `rp-`) from the three domain tables.
+/// Only fixture rows are deleted — production or non-test data is never touched.
 /// There are no foreign keys between the tables (see Phase B migrations).
-async fn clear_domain_tables(pool: &sqlx::PgPool) {
+async fn clear_fixture_rows(pool: &sqlx::PgPool) {
     for stmt in [
-        "DELETE FROM domain_edges",
-        "DELETE FROM domain_nodes",
-        "DELETE FROM domain_accounts",
+        "DELETE FROM domain_edges WHERE id LIKE 'rp-%'",
+        "DELETE FROM domain_nodes WHERE id LIKE 'rp-%'",
+        "DELETE FROM domain_accounts WHERE id LIKE 'rp-%'",
     ] {
         sqlx::query(stmt)
             .execute(pool)
             .await
-            .unwrap_or_else(|e| panic!("failed to clear domain tables ({stmt}): {e}"));
+            .unwrap_or_else(|e| panic!("failed to clear fixture rows ({stmt}): {e}"));
     }
 }
 
@@ -172,7 +172,7 @@ async fn insert_account(
 async fn nodes_loader_reads_columns_and_payload() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     insert_node(
         &pool,
@@ -203,18 +203,18 @@ async fn nodes_loader_reads_columns_and_payload() {
         node.created_at
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
-// ── Edge loader ─────────────────────────────────────────────────────────────
+// ── Edge loader
 
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn edges_loader_reads_columns_and_payload() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     insert_edge(
         &pool,
@@ -238,18 +238,18 @@ async fn edges_loader_reads_columns_and_payload() {
     assert_eq!(edge.target_type.as_deref(), Some("account"));
     assert_eq!(edge.note.as_deref(), Some("Edge note"));
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
-// ── Account loader: privacy ──────────────────────────────────────────────────
+// ── Account loader: privacy
 
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn accounts_loader_verortet_exposes_public_pos_and_never_leaks_location() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // Verortet, radius 0, no suppression: public_pos is exposed.
     insert_account(
@@ -287,7 +287,7 @@ async fn accounts_loader_verortet_exposes_public_pos_and_never_leaks_location() 
     );
     assert!(serialized.get("public_pos").is_some());
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -296,7 +296,7 @@ async fn accounts_loader_verortet_exposes_public_pos_and_never_leaks_location() 
 async fn accounts_loader_private_visibility_suppresses_public_pos() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // Mirrors the Phase C backfill: visibility=private also sets suppress_public_pos.
     insert_account(
@@ -328,7 +328,7 @@ async fn accounts_loader_private_visibility_suppresses_public_pos() {
         "visibility=private must suppress public_pos"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -337,7 +337,7 @@ async fn accounts_loader_private_visibility_suppresses_public_pos() {
 async fn accounts_loader_suppress_public_pos_without_visibility() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // suppress_public_pos=true WITHOUT any visibility key: this rule is not
     // modelled by map_json_to_public_account and is applied as an explicit
@@ -369,7 +369,7 @@ async fn accounts_loader_suppress_public_pos_without_visibility() {
         "suppress_public_pos=true must hide public_pos even without visibility=private"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -378,7 +378,7 @@ async fn accounts_loader_suppress_public_pos_without_visibility() {
 async fn accounts_loader_approximate_radius_zero_becomes_250() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // visibility=approximate with radius 0 and no explicit mode: the loader
     // re-derives mode via map_json, which raises the radius to 250.
@@ -413,7 +413,7 @@ async fn accounts_loader_approximate_radius_zero_becomes_250() {
         "approximate account exposes a (jittered) public_pos"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -422,7 +422,7 @@ async fn accounts_loader_approximate_radius_zero_becomes_250() {
 async fn accounts_loader_ron_and_ron_flag_suppress_public_pos() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // RoN by kind/mode: no residence, no public_pos.
     insert_account(
@@ -468,7 +468,7 @@ async fn accounts_loader_ron_and_ron_flag_suppress_public_pos() {
         "ron_flag must suppress public_pos even with a residence"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -481,7 +481,7 @@ async fn accounts_loader_ron_and_ron_flag_suppress_public_pos() {
 async fn accounts_loader_respects_mode_column_ron_even_with_location() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // mode='ron' in the DB column, but location is set and private_payload
     // is empty (no ron_flag, no visibility). Without reading the mode column,
@@ -518,7 +518,7 @@ async fn accounts_loader_respects_mode_column_ron_even_with_location() {
         "ron mode must suppress public_pos"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -529,7 +529,7 @@ async fn accounts_loader_respects_mode_column_ron_even_with_location() {
 async fn accounts_loader_respects_mode_column_verortet_with_location() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     insert_account(
         &pool,
@@ -562,7 +562,7 @@ async fn accounts_loader_respects_mode_column_verortet_with_location() {
         "verortet account with location must expose public_pos"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
@@ -571,7 +571,7 @@ async fn accounts_loader_respects_mode_column_verortet_with_location() {
 async fn accounts_loader_email_index_is_rebuilt_for_case_insensitive_lookup() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     insert_account(
         &pool,
@@ -596,18 +596,18 @@ async fn accounts_loader_email_index_is_rebuilt_for_case_insensitive_lookup() {
         .expect("case-insensitive email lookup must work after rebuild");
     assert_eq!(by_email.public.id, "rp-acc-email");
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
-// ── Ordering ─────────────────────────────────────────────────────────────────
+// ── Ordering
 
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn loaders_return_rows_in_id_ascending_order() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
     // Insert in deliberately non-id order; loader must return id-ascending.
     insert_node(&pool, "rp-ord-c", "K", "C", 1.0, 1.0, "{}").await;
@@ -618,7 +618,12 @@ async fn loaders_return_rows_in_id_ascending_order() {
         .await
         .expect("node loader must succeed");
 
-    let ids: Vec<String> = cache.iter_in_order().map(|n| n.id.clone()).collect();
+    // Filter to rp-ord- fixtures only; other pre-existing rows are ignored.
+    let ids: Vec<String> = cache
+        .iter_in_order()
+        .map(|n| n.id.clone())
+        .filter(|id| id.starts_with("rp-ord-"))
+        .collect();
     assert_eq!(
         ids,
         vec![
@@ -626,35 +631,33 @@ async fn loaders_return_rows_in_id_ascending_order() {
             "rp-ord-b".to_string(),
             "rp-ord-c".to_string()
         ],
-        "loader must return rows in id-ascending order (NOT legacy JSONL offset order)"
+        "fixture nodes must be returned in id-ascending order (NOT legacy JSONL offset order)"
     );
 
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
     pool.close().await;
 }
 
-// ── Empty / smoke ────────────────────────────────────────────────────────────
+// ── Smoke ──────────────────────────────────────────────────────────────────
 
+/// Verify that all three loaders succeed after fixture cleanup. This does NOT
+/// assert global table emptiness — pre-existing (non-fixture) rows are ignored.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn loaders_succeed_on_empty_tables() {
+async fn loaders_succeed_after_fixture_cleanup() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
-    clear_domain_tables(&pool).await;
+    clear_fixture_rows(&pool).await;
 
-    let nodes = load_nodes_from_postgres(&pool)
+    load_nodes_from_postgres(&pool)
         .await
-        .expect("node loader must succeed on empty table");
-    let edges = load_edges_from_postgres(&pool)
+        .expect("node loader must succeed after fixture cleanup");
+    load_edges_from_postgres(&pool)
         .await
-        .expect("edge loader must succeed on empty table");
-    let accounts = load_accounts_from_postgres(&pool)
+        .expect("edge loader must succeed after fixture cleanup");
+    load_accounts_from_postgres(&pool)
         .await
-        .expect("account loader must succeed on empty table");
-
-    assert!(nodes.is_empty(), "no nodes after clearing the table");
-    assert!(edges.is_empty(), "no edges after clearing the table");
-    assert!(accounts.is_empty(), "no accounts after clearing the table");
+        .expect("account loader must succeed after fixture cleanup");
 
     pool.close().await;
 }

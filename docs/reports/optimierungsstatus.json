@@ -241,7 +241,7 @@
         "Phase E (Write-Path-Switch) für Domänendaten fehlt",
         "JSONL bleibt Default-Lesequelle und Schreibwahrheit bis Phase E"
       ],
-      "next_action": "Phase D als Config-Gate + read-only Loader + Startup-Switch implementiert und lokal gegen PostgreSQL bewiesen (10 Read-Path-Tests + Runtime-Smoke); PR-CI-Lauf der drei DB-Jobs belegen; danach Phase E (Write-Path-Switch) angehen",
+      "next_action": "Phase D als Config-Gate + read-only Loader + Startup-Switch implementiert und lokal gegen PostgreSQL bewiesen (12 Read-Path-Tests); lokaler Loader-Proof berichtet, PR-CI-Beleg ausstehend; danach Phase E (Write-Path-Switch) angehen",
       "updated_at": "2026-06-03"
     },
     {

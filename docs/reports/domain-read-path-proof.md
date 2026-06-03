@@ -149,11 +149,7 @@ was used to run the proof:
 
 - `db_domain_read_path` — **12 passed** (`--include-ignored --test-threads=1`).
 - `db_domain_schema_migrations` (3) and `db_domain_backfill` (7) — still pass (no regression).
-- Runtime smoke against the binary: in `postgres` mode, `GET /nodes` and
-  `GET /accounts/:id` served DB-backed rows with the privacy projection intact
-  (no `location` leak); in default `jsonl` mode the endpoints read JSONL;
-  `postgres` mode without `DATABASE_URL` aborts startup with a hard error (no
-  silent fallback).
+- Local loader proof reported by agent; PR-CI proof pending.
 
 The **canonical PR proof** is the CI job `db-domain-read-path-proof` in
 `.github/workflows/api.yml` (PostgreSQL 16 service on direct port 5432,
