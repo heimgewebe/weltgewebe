@@ -1,11 +1,13 @@
 pub mod auth;
 pub mod config;
+pub mod domain_db;
 pub mod mailer;
 pub mod middleware;
 pub mod routes;
 pub mod state;
 pub mod telemetry;
 pub mod utils;
+
 
 #[doc(hidden)]
 pub mod test_helpers;
@@ -15,7 +17,7 @@ use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
-use config::AppConfig;
+use config::{AppConfig, DomainReadSource};
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
@@ -26,6 +28,7 @@ use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::request_id::{MakeRequestUuid, SetRequestIdLayer};
 use tracing_subscriber::{fmt, EnvFilter};
+
 
 pub async fn run() -> anyhow::Result<()> {
     let dotenv = dotenvy::dotenv();
@@ -52,6 +55,33 @@ pub async fn run() -> anyhow::Result<()> {
             .context("database migration failed")?;
     }
 
+    // OPT-ARC-001 Phase D: domain read source gate. When the gate is set to
+    // `Postgres`, both the database pool and DATABASE_URL must be available
+    // — a misconfiguration is a hard startup error, never a silent fallback
+    // to JSONL. In `Jsonl` mode (default) we use the existing JSONL loaders
+    // and ignore `db_pool` for domain data.
+    match app_config.domain_read_source {
+        DomainReadSource::Jsonl => {
+            tracing::info!(
+                source = "jsonl",
+                "OPT-ARC-001 Phase D inactive: domain read path is JSONL (default)"
+            );
+        }
+        DomainReadSource::Postgres => {
+            if !db_pool_configured || db_pool.is_none() {
+                return Err(anyhow!(
+                    "WELTGEWEBE_DOMAIN_READ_SOURCE=postgres requires DATABASE_URL and a configured \
+                     PostgreSQL pool; refusing silent JSONL fallback"
+                ));
+            }
+            tracing::info!(
+                source = "postgres",
+                "OPT-ARC-001 Phase D active: domain read path is PostgreSQL (write path remains JSONL)"
+            );
+        }
+    }
+
+
     let metrics = Metrics::try_new(BuildInfo::collect())?;
 
     let sessions = match (db_pool_configured, db_pool.as_ref()) {
@@ -74,19 +104,42 @@ pub async fn run() -> anyhow::Result<()> {
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
-    let accounts = Arc::new(tokio::sync::RwLock::new(
-        routes::accounts::load_all_accounts().await,
-    ));
+    // OPT-ARC-001 Phase D: choose the domain read source for the startup
+    // population. Default is JSONL (unchanged runtime); Postgres is opt-in
+    // and requires a configured pool (validated above).
+    let domain_pool = match app_config.domain_read_source {
+        DomainReadSource::Jsonl => None,
+        DomainReadSource::Postgres => db_pool.clone(),
+    };
 
-    let nodes_cache = routes::nodes::load_nodes().await;
+    let accounts = match domain_pool.as_ref() {
+        Some(pool) => {
+            tracing::info!("loading accounts from PostgreSQL (Phase D)");
+            Arc::new(tokio::sync::RwLock::new(
+                domain_db::load_accounts_from_postgres(pool).await?,
+            ))
+        }
+        None => Arc::new(tokio::sync::RwLock::new(
+            routes::accounts::load_all_accounts().await,
+        )),
+    };
+
+    let nodes_cache = match domain_pool.as_ref() {
+        Some(pool) => domain_db::load_nodes_from_postgres(pool).await?,
+        None => routes::nodes::load_nodes().await,
+    };
     metrics.set_nodes_cache_count(nodes_cache.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_cache));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
     let accounts_persist = Arc::new(tokio::sync::Mutex::new(()));
 
-    let edges_cache = routes::edges::load_edges().await;
+    let edges_cache = match domain_pool.as_ref() {
+        Some(pool) => domain_db::load_edges_from_postgres(pool).await?,
+        None => routes::edges::load_edges().await,
+    };
     metrics.set_edges_cache_count(edges_cache.len() as i64);
     let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
+
 
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
 

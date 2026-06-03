@@ -30,7 +30,14 @@ relations:
     target: apps/api/src/routes/accounts.rs
   - type: relates_to
     target: apps/api/src/state.rs
+  - type: relates_to
+    target: apps/api/src/domain_db.rs
+  - type: relates_to
+    target: apps/api/src/config.rs
+  - type: relates_to
+    target: docs/reports/domain-read-path-proof.md
 ---
+
 
 # Domain Data PostgreSQL Cutover
 
@@ -168,10 +175,11 @@ Migration.
 | A | Blueprint und Statusabgleich | Diese PR: Cutover-Plan, Ist-Befund und Statuspflege; kein Produktionscode, keine Migrationen |
 | B | SQL-Schema-Entwurf und Migrationstests | Tabellen für Nodes, Edges und Accounts; Down-Migrationen wo sinnvoll; kein Runtime-Switch |
 | C | Backfill-/Import-Pfad | Deterministischer JSONL→PostgreSQL-Import mit ID-Erhalt, Zähl- und Checksum-Prüfung, idempotent |
-| D | Read-Path hinter Feature-Flag/Config | PostgreSQL-Lesepfad für alle drei Domänen; JSONL nur noch als explizite Fallback-Option |
+| D | Read-Path hinter Feature-Flag/Config | PostgreSQL-Lesepfad für alle drei Domänen; JSONL nur noch als explizite Fallback-Option | **implementiert** (PR-CI-Laufbeleg ausstehend): `WELTGEWEBE_DOMAIN_READ_SOURCE=jsonl\|postgres` Gate in `apps/api/src/config.rs`; Loader in `apps/api/src/domain_db.rs`; Startup-Switch in `apps/api/src/lib.rs` (harter Fehler bei Postgres-Fehlkonfiguration); Proof-Report `docs/reports/domain-read-path-proof.md` |
 | E | Write-Path-Cutover | Schreibpfade wechseln auf PostgreSQL; Dual-Write nur falls bewusst entschieden und reconciliation-fähig |
 | F | Runtime-Smoke und CI-Beweis | API-Smoke gegen PostgreSQL-Domänendaten; Cursor- und Legacy-Listenverhalten geprüft |
 | G | JSONL-Demontage | JSONL verlässt den primären Runtime-Pfad; Seed-/Export-Artefakte bleiben nur dokumentiert erhalten |
+
 
 ## Regeln für die Datenmigration
 

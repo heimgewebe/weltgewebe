@@ -1,9 +1,46 @@
-use std::{env, fs, path::Path};
+use std::{env, fs, path::Path, str::FromStr};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+/// Selects the source the API uses to populate domain caches (`/nodes`,
+/// `/edges`, `/accounts`) at startup.
+///
+/// Default is `Jsonl` so production startup is unchanged. `Postgres` is the
+/// opt-in Phase D read source: it requires `DATABASE_URL` and a configured
+/// `db_pool` — misconfiguration is a hard startup error, never a silent
+/// fallback to JSONL. Write paths remain JSONL until Phase E regardless of
+/// this setting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub enum DomainReadSource {
+    #[serde(alias = "file", alias = "files")]
+    Jsonl,
+    #[serde(alias = "pg", alias = "db")]
+    Postgres,
+}
+
+impl Default for DomainReadSource {
+    fn default() -> Self {
+        DomainReadSource::Jsonl
+    }
+}
+
+impl FromStr for DomainReadSource {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "jsonl" | "file" | "files" => Ok(DomainReadSource::Jsonl),
+            "postgres" | "pg" | "db" => Ok(DomainReadSource::Postgres),
+            other => Err(format!(
+                "invalid WELTGEWEBE_DOMAIN_READ_SOURCE value '{other}'; expected one of: jsonl, postgres"
+            )),
+        }
+    }
+}
+
 macro_rules! apply_env_override {
+
     ($self:ident, $field:ident, $env_var:literal) => {
         if let Ok(value) = env::var($env_var) {
             match value.trim().parse() {
@@ -101,7 +138,15 @@ pub struct AppConfig {
     // Dev/Ops Configuration
     #[serde(default)]
     pub auth_log_magic_token: bool,
+
+    // Phase D (OPT-ARC-001): domain read source switch.
+    // Default is JSONL to preserve production startup; opt-in to PostgreSQL
+    // requires DATABASE_URL and a configured pool — see lib.rs for hard
+    // startup error if either is missing.
+    #[serde(default)]
+    pub domain_read_source: DomainReadSource,
 }
+
 
 impl AppConfig {
     const DEFAULT_CONFIG: &'static str = include_str!("../../../configs/app.defaults.yml");
@@ -259,7 +304,20 @@ impl AppConfig {
             }
         }
 
+        // Phase D: domain read source override. Invalid value is a hard
+        // startup error (no silent fallback to default) to make the gate
+        // honest — Phase D must never quietly degrade to JSONL.
+        if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
+            let val = val.trim();
+            if !val.is_empty() {
+                self.domain_read_source = val.parse::<DomainReadSource>().map_err(|e| {
+                    anyhow::anyhow!("WELTGEWEBE_DOMAIN_READ_SOURCE: {e}")
+                })?;
+            }
+        }
+
         self.normalize().validate()
+
     }
 
     fn normalize(mut self) -> Self {
@@ -989,4 +1047,99 @@ delegation_expire_days: 28
         assert!(res.is_err(), "origin with a fragment must be rejected");
         Ok(())
     }
+
+    // ── Phase D: domain_read_source config-gate tests ─────────────────────
+
+    fn reset_domain_read_source_env() {
+        let _ = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_defaults_to_jsonl_without_env() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        reset_domain_read_source_env();
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(
+            cfg.domain_read_source,
+            super::DomainReadSource::Jsonl,
+            "default must remain JSONL to preserve current runtime behavior"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_accepts_jsonl_variants() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        for value in ["jsonl", "JSONL", "  jsonl  ", "file", "files"] {
+            let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", value);
+            let cfg = AppConfig::load_from_path(file.path())?;
+            assert_eq!(
+                cfg.domain_read_source,
+                super::DomainReadSource::Jsonl,
+                "value '{value}' must map to Jsonl"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_accepts_postgres_variants() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+
+        for value in ["postgres", "Postgres", "POSTGRES", "pg", "db"] {
+            let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", value);
+            let cfg = AppConfig::load_from_path(file.path())?;
+            assert_eq!(
+                cfg.domain_read_source,
+                super::DomainReadSource::Postgres,
+                "value '{value}' must map to Postgres"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_rejects_invalid_value_as_hard_error() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "mongodb");
+
+        let res = AppConfig::load_from_path(file.path());
+        assert!(
+            res.is_err(),
+            "invalid WELTGEWEBE_DOMAIN_READ_SOURCE value must hard-fail config load"
+        );
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("WELTGEWEBE_DOMAIN_READ_SOURCE"),
+            "error message must name the offending env var, got: {msg}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_empty_value_keeps_default() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(
+            cfg.domain_read_source,
+            super::DomainReadSource::Jsonl,
+            "empty WELTGEWEBE_DOMAIN_READ_SOURCE must keep the JSONL default"
+        );
+        Ok(())
+    }
 }
+

@@ -355,6 +355,84 @@ jobs:
               --test db_domain_backfill \
               -- --include-ignored --test-threads=1
 
+  db-domain-read-path-proof:
+    name: db domain read path proof (phase d)
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      PGUSER: welt
+      PGPASSWORD: gewebe
+      PGDATABASE: weltgewebe
+      # Phase D opt-in: prove the PostgreSQL read path explicitly. The
+      # API itself is not started here — the proof targets the loader
+      # in apps/api/src/domain_db.rs and the in-memory cache shapes it
+      # produces. The default JSONL runtime is unchanged.
+      WELTGEWEBE_DOMAIN_READ_SOURCE: postgres
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: welt
+          POSTGRES_PASSWORD: gewebe
+          POSTGRES_DB: weltgewebe
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read Rust version
+        id: rust-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f toolchain.versions.yml ]; then
+            echo "toolchain.versions.yml not found" >&2
+            exit 1
+          fi
+          SED_EXPR="s/^[[:space:]]*rust:[[:space:]]*['\"]?([^'\"#[:space:]]+)['\"]?[[:space:]]*(#.*)?$/\1/p"
+          RUST_VERSION="$(sed -nE "${SED_EXPR}" toolchain.versions.yml | head -n1 | xargs)"
+          if [ -z "${RUST_VERSION}" ]; then
+            echo "failed to parse rust version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'rust_version=%s\n' "${RUST_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-version.outputs.rust_version }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Wait for PostgreSQL
+        run: |
+          max_attempts=15
+          for attempt in $(seq 1 "$max_attempts"); do
+            if pg_isready -h localhost -p 5432 -U welt -d weltgewebe; then
+              echo "PostgreSQL is ready."
+              exit 0
+            fi
+            echo "Waiting for postgres... attempt ${attempt}/${max_attempts}"
+            sleep 2
+          done
+          echo "ERROR: PostgreSQL did not become ready after ${max_attempts} attempts." >&2
+          exit 1
+
+      - name: Run domain read path proof (direct PostgreSQL, --include-ignored)
+        run: |
+          DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
+            cargo test --locked -p weltgewebe-api \
+              --test db_domain_read_path \
+              -- --include-ignored --test-threads=1
+
+
   magic-link-flow-proof:
     name: magic link flow proof (request to session)
     runs-on: ubuntu-latest
