@@ -225,6 +225,14 @@ const ACCOUNT_APPROX_ROW: &str = r#"{"id":"readpath-account-approx","kind":"garn
 /// RoN account: no public_pos even if location is set in DB columns.
 const ACCOUNT_RON_ROW: &str = r#"{"id":"readpath-account-ron","kind":"ron","title":"Ron","mode":"ron","radius_m":0,"role":"gast","public_payload":{},"private_payload":{"ron_flag":true}}"#;
 
+/// Suppress-only account: `suppress_public_pos=true` WITHOUT an explicit
+/// `visibility` field. This is the privacy signal Phase C documents
+/// (legacy entries that came from outside the JSONL loader). The
+/// Phase-D contract says: `public_pos` must be suppressed regardless
+/// of legacy visibility being absent.
+const ACCOUNT_SUPPRESS_ONLY_ROW: &str = r#"{"id":"readpath-account-suppress-only","kind":"garnrolle","title":"Suppress Only","mode":"verortet","radius_m":0,"location":{"lat":54.0,"lon":11.0},"role":"gast","public_payload":{},"private_payload":{"suppress_public_pos":true}}"#;
+
+
 async fn insert_account_row(pool: &sqlx::PgPool, json_row: &str) {
     let v: serde_json::Value = serde_json::from_str(json_row).expect("fixture parse");
     let id = v["id"].as_str().unwrap();
@@ -282,11 +290,14 @@ async fn db_read_path_accounts_reconstruct_privacy_semantics() {
     insert_account_row(&pool, ACCOUNT_PRIVATE_ROW).await;
     insert_account_row(&pool, ACCOUNT_APPROX_ROW).await;
     insert_account_row(&pool, ACCOUNT_RON_ROW).await;
+    insert_account_row(&pool, ACCOUNT_SUPPRESS_ONLY_ROW).await;
+
 
     let store = load_accounts_from_postgres(&pool)
         .await
         .expect("loader should succeed");
-    assert_eq!(store.len(), 4, "must read all 4 fixture accounts");
+    assert_eq!(store.len(), 5, "must read all 5 fixture accounts");
+
 
     // 1) Verortet account: must have a public_pos and the expected kind.
     let verortet = store
@@ -350,11 +361,28 @@ async fn db_read_path_accounts_reconstruct_privacy_semantics() {
         "RoN account must not expose a public_pos"
     );
 
+    // 5) Suppress-only account: no `visibility` field, but
+    //    `suppress_public_pos=true` ⇒ public_pos must be None and the
+    //    account must remain Verortet (privacy intent, not classification).
+    let suppress_only = store
+        .get("readpath-account-suppress-only")
+        .expect("suppress_only must be loaded");
+    assert_eq!(
+        suppress_only.public.mode,
+        weltgewebe_api::routes::accounts::AccountMode::Verortet,
+        "suppress-only account stays Verortet (suppress is a privacy signal, not a mode)"
+    );
+    assert!(
+        suppress_only.public.public_pos.is_none(),
+        "suppress_public_pos=true without legacy visibility must still suppress public_pos"
+    );
+
     // Email index is rebuilt.
     assert!(
         store.get_by_email("verortet@readpath.example").is_some(),
         "email index must be populated for the verortet account"
     );
+
 
     sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'readpath-account-%'")
         .execute(&pool)
@@ -365,12 +393,12 @@ async fn db_read_path_accounts_reconstruct_privacy_semantics() {
 
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn db_read_path_empty_table_returns_empty_caches() {
+async fn db_read_path_loaders_succeed_without_matching_fixture_rows() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
 
-    // Clean any leftover readpath rows from other tests; we only assert the
-    // loaders behave on a (potentially) empty table, so we delete narrowly.
+    // Clean any leftover readpath rows from other tests. The contract is
+    // that the loaders succeed even when the queried prefix has no rows.
     sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'readpath-empty-%'")
         .execute(&pool)
         .await
@@ -384,25 +412,90 @@ async fn db_read_path_empty_table_returns_empty_caches() {
         .await
         .expect("pre-test cleanup of accounts failed");
 
-    // We don't assert .is_empty() because other tests/operators may have
-    // written rows; the contract here is simply that the loaders succeed
-    // and return some cache shape. Detailed population is already proven
-    // by the preceding dedicated tests.
+    // Smoke: loaders must return non-error results without panicking,
+    // even when no rows match the cleanup prefix. Detailed population is
+    // already proven by the preceding dedicated tests; this test exists
+    // only to assert the contract is not violated by an empty result set.
     let nodes = load_nodes_from_postgres(&pool)
         .await
-        .expect("node loader must succeed on an empty/narrow table");
+        .expect("node loader must succeed without matching fixture rows");
     let edges = load_edges_from_postgres(&pool)
         .await
-        .expect("edge loader must succeed on an empty/narrow table");
+        .expect("edge loader must succeed without matching fixture rows");
     let accounts = load_accounts_from_postgres(&pool)
         .await
-        .expect("account loader must succeed on an empty/narrow table");
+        .expect("account loader must succeed without matching fixture rows");
 
-    // All three loaders must return a cache/store type, never an error,
-    // even when the queried prefix has no rows. We assert the read-only
-    // contract: caches accept arbitrary input size without panicking.
     let _ = (nodes.len(), edges.len(), accounts.len());
 
     pool.close().await;
 }
+
+/// Proves the Phase-D contract that DB-loaded caches are stable id-ascending.
+///
+/// The cursor-pagination endpoints re-sort by id anyway, so id-ascending is
+/// the correct contract for cursor mode. Legacy offset mode in the JSONL
+/// path is insertion-order; this test only asserts the Phase-D DB mode
+/// contract and does NOT prove legacy-offset parity with JSONL file order
+/// (which is documented as out of scope for Phase D).
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn db_read_path_nodes_are_stable_id_ascending() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'readpath-ord-%'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup failed");
+
+    // Insert in a deliberately non-ascending order to prove the loader
+    // sorts, not the input sequence.
+    for line in [
+        r#"{"id":"readpath-ord-zeta","kind":"Z","title":"Zeta","location":{"lat":1.0,"lon":1.0}}"#,
+        r#"{"id":"readpath-ord-alpha","kind":"A","title":"Alpha","location":{"lat":2.0,"lon":2.0}}"#,
+        r#"{"id":"readpath-ord-mike","kind":"M","title":"Mike","location":{"lat":3.0,"lon":3.0}}"#,
+    ] {
+        let v: serde_json::Value = serde_json::from_str(line).expect("fixture parse");
+        let id = v["id"].as_str().unwrap();
+        let kind = v["kind"].as_str().unwrap_or("Unknown");
+        let title = v["title"].as_str().unwrap_or("Untitled");
+        let lat = v["location"]["lat"].as_f64();
+        let lon = v["location"]["lon"].as_f64();
+        sqlx::query(
+            "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload)
+             VALUES ($1, $2, $3, $4, $5, '{}'::jsonb)",
+        )
+        .bind(id)
+        .bind(kind)
+        .bind(title)
+        .bind(lat)
+        .bind(lon)
+        .execute(&pool)
+        .await
+        .expect("failed to insert ordered fixture node");
+    }
+
+    let cache = load_nodes_from_postgres(&pool)
+        .await
+        .expect("loader should succeed");
+
+    let order: Vec<&str> = cache.iter_in_order().map(|n| n.id.as_str()).collect();
+    assert_eq!(
+        order,
+        vec![
+            "readpath-ord-alpha",
+            "readpath-ord-mike",
+            "readpath-ord-zeta",
+        ],
+        "DB-loaded node cache must be stable id-ascending for cursor-pagination parity"
+    );
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id LIKE 'readpath-ord-%'")
+        .execute(&pool)
+        .await
+        .expect("post-test cleanup failed");
+    pool.close().await;
+}
+
 

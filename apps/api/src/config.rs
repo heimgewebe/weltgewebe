@@ -12,12 +12,14 @@ use serde::Deserialize;
 /// fallback to JSONL. Write paths remain JSONL until Phase E regardless of
 /// this setting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum DomainReadSource {
     #[serde(alias = "file", alias = "files")]
     Jsonl,
     #[serde(alias = "pg", alias = "db")]
     Postgres,
 }
+
 
 impl Default for DomainReadSource {
     fn default() -> Self {
@@ -1141,5 +1143,27 @@ delegation_expire_days: 28
         );
         Ok(())
     }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_accepts_yaml_values() -> Result<()> {
+        // YAML-side aliasing: lower-case enum names must round-trip.
+        for (yaml_value, expected) in [
+            ("jsonl", super::DomainReadSource::Jsonl),
+            ("postgres", super::DomainReadSource::Postgres),
+        ] {
+            let file = NamedTempFile::new()?;
+            let body = format!("{YAML}\ndomain_read_source: {yaml_value}\n");
+            std::fs::write(file.path(), body)?;
+            let _env = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+            let cfg = AppConfig::load_from_path(file.path())?;
+            assert_eq!(
+                cfg.domain_read_source, expected,
+                "yaml value '{yaml_value}' must map to {expected:?}"
+            );
+        }
+        Ok(())
+    }
 }
+
 

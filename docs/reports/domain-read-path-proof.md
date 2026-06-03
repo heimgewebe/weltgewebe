@@ -149,6 +149,34 @@ Privacy-Regeln — getestet in `apps/api/tests/db_domain_read_path.rs`:
 benutzt, um `public_pos` (deterministisch gejittert) zu berechnen,
 wenn die Privacy-Regel das erlaubt.
 
+## Ordering-Kontrakt (ehrlich)
+
+- **DB-Loader** (Phase D, opt-in): stabile id-ascending-Reihenfolge via
+  `ORDER BY id ASC` (`db_read_path_nodes_are_stable_id_ascending`
+  beweist das unabhängig von der DB-Insertion-Reihenfolge).
+- **Cursor-Pagination** (alle Modi): sortiert zusätzlich stabil nach
+  id ascending — die DB-Loader-Reihenfolge ist also konsistent mit
+  dem Wire-Vertrag.
+- **Legacy-Offset-Modus** im JSONL-Pfad nutzt die Insertion-Order
+  der Datei. Exakte Parität zur JSONL-File-Order im DB-Modus ist
+  **nicht** garantiert (und war nie versprochen); sie würde ein
+  zusätzliches `source_order`-Feld im Schema erfordern, das Phase E
+  oder später gehört.
+
+## Loader-Proof vs. Startup-Proof
+
+- `db-domain-read-path-proof` (CI) beweist **die Loader** in
+  `apps/api/src/domain_db.rs` mit direkten PostgreSQL-Inserts.
+  Er startet **nicht** die API.
+- Der Startup-Switch in `apps/api/src/lib.rs` (harter Fehler bei
+  `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` ohne Pool, sonst
+  `domain_db::load_*_from_postgres(...)`) ist durch die
+  `AppConfig`-Unit-Tests + den Loader-Proof **plausibel**, aber
+  nicht durch einen API-Runtime-Smoketest abgesichert. Phase F
+  ist der natürliche Ort, um den vollständigen Startup-Pfad in
+  einer API-Integration zu beweisen.
+
+
 ## Validation
 
 ### Compile-Check (kein PostgreSQL nötig)
@@ -193,13 +221,23 @@ Port `5432` (kein PgBouncer `:6432`) aus.
    - **approximate** (`visibility:"approximate"` + `radius_m=0`):
      `radius_m == 250`
    - **ron** (`mode:"ron"` + `ron_flag:true`): `public_pos == None`
+   - **suppress-only** (`suppress_public_pos:true`, **kein** legacy
+     `visibility`-Feld): `public_pos == None` und `mode` bleibt
+     `Verortet`. Der Loader materialisiert
+     `suppress_public_pos=true` als effektive `visibility="private"`,
+     bevor `map_json_to_public_account` die Privacy-Entscheidung trifft.
 2. `db_read_path_loads_nodes_with_payload_fields`:
    - `kind`, `title`, `location`, `summary`, `info`, `tags` korrekt
    - Last-write-wins per ID bleibt durch Cache-Insertion erhalten
 3. `db_read_path_loads_edges_with_payload_fields`:
    - `source_id`, `target_id`, `edge_kind`, `note` korrekt
-4. `db_read_path_empty_table_returns_empty_caches`:
-   - Loader scheitern nicht auf einer leeren Tabelle (Smoke)
+4. `db_read_path_nodes_are_stable_id_ascending`:
+   - DB-Loader-Cache ist stabil id-ascending (unabhängig von der
+     Insertion-Reihenfolge in der DB). Das deckt die Cursor-Pagination-
+     Parität, die im Wire-Vertrag verlangt wird.
+5. `db_read_path_loaders_succeed_without_matching_fixture_rows`:
+   - Smoke: Loader scheitern nicht auf einer leeren Tabelle.
+
 
 ## Out of Scope / Phase E Risiko
 

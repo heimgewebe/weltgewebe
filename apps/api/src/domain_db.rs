@@ -57,7 +57,8 @@ pub enum DomainDbLoadError {
 /// canonical id set.
 pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node>, DomainDbLoadError> {
     let rows = sqlx::query(
-        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload
+        "SELECT id, kind, title, lat, lon, created_at, updated_at,
+                payload::text AS payload_text
          FROM domain_nodes
          ORDER BY id ASC",
     )
@@ -77,10 +78,11 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
         let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at").ok();
         let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at").ok();
         let payload_text: String = row
-            .try_get::<Option<String>, _>("payload")
+            .try_get::<Option<String>, _>("payload_text")
             .ok()
             .flatten()
             .unwrap_or_else(|| "{}".to_string());
+
         let payload: serde_json::Value = serde_json::from_str(&payload_text).unwrap_or_else(|_| {
             tracing::warn!(
                 node_id = %id,
@@ -160,7 +162,8 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 /// Stable id-ascending ordering is preserved.
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>, DomainDbLoadError> {
     let rows = sqlx::query(
-        "SELECT id, source_id, target_id, edge_kind, created_at, payload
+        "SELECT id, source_id, target_id, edge_kind, created_at,
+                payload::text AS payload_text
          FROM domain_edges
          ORDER BY id ASC",
     )
@@ -199,10 +202,11 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             .unwrap_or_else(|_| String::new());
         let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at").ok();
         let payload_text: String = row
-            .try_get::<Option<String>, _>("payload")
+            .try_get::<Option<String>, _>("payload_text")
             .ok()
             .flatten()
             .unwrap_or_else(|| "{}".to_string());
+
         let payload: serde_json::Value = serde_json::from_str(&payload_text).unwrap_or_default();
 
         let source_type = payload
@@ -267,12 +271,17 @@ pub async fn load_accounts_from_postgres(
                 location_lat, location_lon,
                 role, email, webauthn_user_id,
                 created_at, updated_at,
-                public_payload, private_payload
+                public_payload::text AS public_payload_text,
+                private_payload::text AS private_payload_text,
+                private_payload->>'visibility' AS priv_visibility,
+                (private_payload->>'suppress_public_pos')::bool AS priv_suppress_public_pos,
+                (private_payload->>'ron_flag')::bool AS priv_ron_flag
          FROM domain_accounts
          ORDER BY id ASC",
     )
     .fetch_all(pool)
     .await?;
+
 
     let mut store = AccountStore::new();
     let mut skipped = 0usize;
@@ -304,18 +313,21 @@ pub async fn load_accounts_from_postgres(
         let created_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("created_at").ok();
         let updated_at: Option<chrono::DateTime<chrono::Utc>> = row.try_get("updated_at").ok();
         let public_payload_text: String = row
-            .try_get::<Option<String>, _>("public_payload")
+            .try_get::<Option<String>, _>("public_payload_text")
             .ok()
             .flatten()
             .unwrap_or_else(|| "{}".to_string());
         let private_payload_text: String = row
-            .try_get::<Option<String>, _>("private_payload")
+            .try_get::<Option<String>, _>("private_payload_text")
             .ok()
             .flatten()
             .unwrap_or_else(|| "{}".to_string());
 
-        // Reconstruct the JSON shape map_json_to_public_account expects,
-        // so Phase D uses the exact same privacy rules as the JSONL path.
+        // Scalar extraction already done in SQL (no sqlx/json feature needed).
+        // We also parse the JSON text so we keep the same path semantics as
+        // the JSONL loader: tolerant of malformed JSON, never silently
+        // accepting it. The scalar fields are authoritative for the
+        // privacy decisions below.
         let private_payload: serde_json::Value =
             serde_json::from_str(&private_payload_text).unwrap_or_else(|_| {
                 tracing::warn!(
@@ -326,6 +338,31 @@ pub async fn load_accounts_from_postgres(
             });
         let public_payload: serde_json::Value =
             serde_json::from_str(&public_payload_text).unwrap_or_default();
+
+        let priv_visibility: Option<String> = row
+            .try_get::<Option<String>, _>("priv_visibility")
+            .ok()
+            .flatten();
+        let priv_suppress: Option<bool> = row
+            .try_get::<Option<bool>, _>("priv_suppress_public_pos")
+            .ok()
+            .flatten();
+        let priv_ron_flag: Option<bool> = row
+            .try_get::<Option<bool>, _>("priv_ron_flag")
+            .ok()
+            .flatten();
+
+        // Privacy contract: public_pos is suppressed when either
+        // visibility == "private" OR suppress_public_pos == true. We
+        // materialize that as a synthetic "visibility" = "private" so
+        // map_json_to_public_account's existing branch fires identically
+        // to the JSONL path, and the suppress_public_pos privacy intent
+        // is honored even when the legacy visibility key is missing.
+        let effective_visibility: Option<&str> = if priv_suppress.unwrap_or(false) {
+            Some("private")
+        } else {
+            priv_visibility.as_deref()
+        };
 
         let mut record = serde_json::Map::new();
         record.insert("id".into(), serde_json::Value::String(id.clone()));
@@ -345,17 +382,23 @@ pub async fn load_accounts_from_postgres(
             );
         }
 
-        // Surface legacy fields from private_payload to the public mapper
-        // so the visibility / suppress_public_pos branch is reachable.
-        if let Some(vis) = private_payload.get("visibility").and_then(|v| v.as_str()) {
+        // Surface legacy fields to the public mapper so the visibility
+        // and Ron branches are reachable.
+        if let Some(vis) = effective_visibility {
             record.insert(
                 "visibility".into(),
                 serde_json::Value::String(vis.to_string()),
             );
         }
+        if priv_ron_flag.unwrap_or(false) {
+            record.insert("ron_flag".into(), serde_json::Value::Bool(true));
+        }
+        // Also surface any ron_flag written into the JSON text (Phase C
+        // writes it; some test fixtures may have it only in JSON).
         if let Some(ron_flag) = private_payload.get("ron_flag").and_then(|v| v.as_bool()) {
             record.insert("ron_flag".into(), serde_json::Value::Bool(ron_flag));
         }
+
 
         // public_payload (summary, tags) is already what the JSONL loader
         // produced, so we can splice those keys through transparently.
