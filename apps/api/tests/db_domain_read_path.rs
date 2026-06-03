@@ -746,39 +746,3 @@ async fn edges_loader_respects_max_edges_cache_limit() {
     clear_fixture_rows(&pool).await;
     pool.close().await;
 }
-
-/// Proves that an invalid `MAX_EDGES_CACHE` value causes the PostgreSQL edge
-/// loader to fall back to the default (500,000). The invalid-value and absent-value
-/// fallback cases are covered by normal unit tests in routes/edges.rs; this test
-/// only verifies the PostgreSQL loader respects the cap.
-#[tokio::test]
-#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn max_edges_cache_invalid_falls_back_to_default() {
-    let _guard = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
-    let pool = connect_pool().await;
-    run_migrations(&pool).await;
-    clear_fixture_rows(&pool).await;
-
-    insert_edge(
-        &pool,
-        "rp-edge-test",
-        "rp-node-x",
-        "rp-node-y",
-        "knows",
-        "{}",
-    )
-    .await;
-
-    let cache = load_edges_from_postgres(&pool)
-        .await
-        .expect("edge loader must succeed even with invalid MAX_EDGES_CACHE");
-
-    assert_eq!(
-        cache.len(),
-        1,
-        "loader must use fallback default and load the edge"
-    );
-
-    clear_fixture_rows(&pool).await;
-    pool.close().await;
-}

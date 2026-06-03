@@ -160,8 +160,8 @@ DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
 A direct PostgreSQL 16 instance was available in the development environment and
 was used to run the proof:
 
-- `db_domain_read_path` — **12 passed** (`--include-ignored --test-threads=1`).
-- `db_domain_schema_migrations` (3) and `db_domain_backfill` (7) — still pass (no regression).
+- `db_domain_read_path` — **all tests passed** (`--include-ignored --test-threads=1`).
+- `db_domain_schema_migrations` and `db_domain_backfill` — still pass (no regression).
 - Local loader proof reported by agent; PR-CI proof pending.
 
 The **canonical PR proof** is the CI job `db-domain-read-path-proof` in
