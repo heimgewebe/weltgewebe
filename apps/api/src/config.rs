@@ -45,12 +45,56 @@ macro_rules! apply_env_override_option {
     };
 }
 
+/// Selects where domain data (nodes, edges, accounts) is read from at startup.
+///
+/// **Invariant:** JSONL is and remains the default runtime read source
+/// (OPT-ARC-001). The PostgreSQL option is opt-in only and gated explicitly via
+/// `WELTGEWEBE_DOMAIN_READ_SOURCE` (or the `domain_read_source` config-file key).
+/// This enum performs configuration parsing only; it does not by itself switch
+/// any runtime behaviour.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DomainReadSource {
+    /// Read domain data from the JSONL files (default).
+    #[default]
+    #[serde(alias = "file", alias = "files")]
+    Jsonl,
+    /// Read domain data from PostgreSQL (opt-in).
+    #[serde(alias = "pg", alias = "db")]
+    Postgres,
+}
+
+impl DomainReadSource {
+    /// Parse a non-empty environment value into a `DomainReadSource`.
+    ///
+    /// Accepts (case-insensitively): `jsonl`/`file`/`files` => `Jsonl`,
+    /// `postgres`/`pg`/`db` => `Postgres`. Any other non-empty value is a hard
+    /// configuration error naming `WELTGEWEBE_DOMAIN_READ_SOURCE`.
+    fn parse_env_value(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "jsonl" | "file" | "files" => Ok(Self::Jsonl),
+            "postgres" | "pg" | "db" => Ok(Self::Postgres),
+            other => anyhow::bail!(
+                "invalid WELTGEWEBE_DOMAIN_READ_SOURCE value '{other}'; \
+                 expected one of: jsonl, file, files, postgres, pg, db"
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
     pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
+
+    /// Domain data read source (JSONL default, PostgreSQL opt-in). See
+    /// [`DomainReadSource`]. Parsed from config and/or
+    /// `WELTGEWEBE_DOMAIN_READ_SOURCE`; does not switch runtime behaviour on its
+    /// own.
+    #[serde(default)]
+    pub domain_read_source: DomainReadSource,
 
     // Public Login Configuration
     #[serde(default)]
@@ -159,6 +203,15 @@ impl AppConfig {
         apply_env_override!(self, ron_days, "HA_RON_DAYS");
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
+
+        // Domain read-source gate (OPT-ARC-001 Phase D).
+        // Absent or empty => keep the configured value (defaults to Jsonl).
+        // A non-empty value must parse; an invalid value is a hard config error.
+        if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
+            if !val.trim().is_empty() {
+                self.domain_read_source = DomainReadSource::parse_env_value(&val)?;
+            }
+        }
 
         // Auth Overrides
         if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
@@ -426,7 +479,7 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{AppConfig, DomainReadSource};
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
@@ -987,6 +1040,104 @@ delegation_expire_days: 28
 
         let res = AppConfig::load_from_path(file.path());
         assert!(res.is_err(), "origin with a fragment must be rejected");
+        Ok(())
+    }
+
+    // ── Domain read-source gate (OPT-ARC-001 Phase D, Stage 1) ──────────────
+    //
+    // EnvGuard discipline: each guard is bound to a named `let _env = ...` so it
+    // stays alive for the whole test body (and for each loop iteration). It must
+    // NOT be created in a helper that drops it before the config is loaded.
+
+    #[test]
+    #[serial]
+    fn domain_read_source_defaults_to_jsonl_without_env() -> Result<()> {
+        let _env = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_jsonl_variants_parse_to_jsonl() -> Result<()> {
+        for value in ["jsonl", "file", "files", "JSONL", "  Files  "] {
+            let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", value);
+            let cfg = AppConfig::load_from_str(YAML)?;
+            assert_eq!(
+                cfg.domain_read_source,
+                DomainReadSource::Jsonl,
+                "value {value:?} must parse to Jsonl"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_postgres_variants_parse_to_postgres() -> Result<()> {
+        for value in ["postgres", "pg", "db", "POSTGRES", " Db "] {
+            let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", value);
+            let cfg = AppConfig::load_from_str(YAML)?;
+            assert_eq!(
+                cfg.domain_read_source,
+                DomainReadSource::Postgres,
+                "value {value:?} must parse to Postgres"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_invalid_value_errors_naming_env_var() {
+        let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "mysql");
+        let res = AppConfig::load_from_str(YAML);
+        assert!(res.is_err(), "invalid value must be rejected");
+        let msg = res.unwrap_err().to_string();
+        assert!(
+            msg.contains("WELTGEWEBE_DOMAIN_READ_SOURCE"),
+            "error must name the env var, got: {msg}"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_empty_value_keeps_jsonl_default() -> Result<()> {
+        let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "");
+        let cfg = AppConfig::load_from_str(YAML)?;
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_yaml_jsonl_is_respected() -> Result<()> {
+        let _env = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let yaml = format!("{YAML}domain_read_source: jsonl\n");
+        let cfg = AppConfig::load_from_str(&yaml)?;
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_yaml_postgres_is_respected() -> Result<()> {
+        let _env = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let yaml = format!("{YAML}domain_read_source: postgres\n");
+        let cfg = AppConfig::load_from_str(&yaml)?;
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_env_overrides_yaml() -> Result<()> {
+        // YAML requests postgres, but the env var forces jsonl: env override wins.
+        let _env = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "jsonl");
+        let yaml = format!("{YAML}domain_read_source: postgres\n");
+        let cfg = AppConfig::load_from_str(&yaml)?;
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
         Ok(())
     }
 }

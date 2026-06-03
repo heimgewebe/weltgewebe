@@ -37,6 +37,7 @@ mod tests {
             ron_days: 84,
             anonymize_opt_in: true,
             delegation_expire_days: 28,
+            domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
             auth_public_login: true, // Enabled
             app_base_url: Some("http://localhost".to_string()),
             auth_trusted_proxies: None,
