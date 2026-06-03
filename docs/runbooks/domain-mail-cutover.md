@@ -91,7 +91,7 @@ APP_BASE_URL=https://weltgewebe.net
 SMTP_HOST=<Brevo SMTP Host>
 SMTP_PORT=587
 SMTP_USER=<Brevo SMTP User>
-SMTP_FROM=noreply@login.weltgewebe.net
+SMTP_FROM=login@weltgewebe.net
 AUTH_PUBLIC_LOGIN=1
 AUTH_LOG_MAGIC_TOKEN=0
 ```
@@ -100,7 +100,7 @@ AUTH_LOG_MAGIC_TOKEN=0
 
 - Mail an `kontakt@weltgewebe.net` kommt bei mailbox.org an.
 - Antwort von `kontakt@weltgewebe.net` kommt extern an.
-- Brevo-Testmail von `noreply@login.weltgewebe.net` kommt an.
+- Brevo-Testmail von `login@weltgewebe.net` kommt an.
 - Headerprüfung: SPF pass, DKIM pass, DMARC nicht fail.
 - Weltgewebe Magic-Link kommt an.
 - Magic-Link zeigt auf `https://weltgewebe.net`.

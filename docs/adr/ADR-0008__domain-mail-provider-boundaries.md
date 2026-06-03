@@ -33,13 +33,13 @@ accepted
 
 - INWX für Registrar/DNS.
 - mailbox.org für menschliche Mailbox `kontakt@weltgewebe.net`.
-- Brevo für technische Magic-Link-Mail `noreply@login.weltgewebe.net`.
+- Brevo für technische Magic-Link-Mail `login@weltgewebe.net`.
 - App-/Produktionshosting bleibt entkoppelt.
 
 Explizite Rollentrennung:
 
 - `kontakt@weltgewebe.net` = menschliche Kontakt-/Adminadresse bei mailbox.org.
-- `noreply@login.weltgewebe.net` = technischer Magic-Link-Absender über Brevo.
+- `login@weltgewebe.net` = technischer Magic-Link-Absender über Brevo.
 
 ## Nicht-Ziele
 
