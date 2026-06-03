@@ -357,6 +357,33 @@
       "updated_at": "2026-05-29"
     },
     {
+      "id": "TASK-CTL-005",
+      "title": "Bestehende Planning-Registration-Findings triagieren und Ratchet vorbereiten",
+      "area": "docs",
+      "status": "open",
+      "priority": "high",
+      "effort": "S",
+      "risk": "low",
+      "evidence": [],
+      "missing_evidence": [
+        "Die 8 bestehenden pre-existing Findings aus Check_planning_registration klaeren",
+        "Ratchet vorbereiten (--mode strict fuer CI)"
+      ],
+      "acceptance": [
+        "Alle 8 Findings (u.a. in docs/blueprints/) sind als gueltige Task-Evidenz, Roadmap-Einordnung oder als false positive klassifiziert",
+        "Der Guard laeuft blockierend (--mode strict)"
+      ],
+      "links": {
+        "docs": [
+          "docs/tasks/board.md"
+        ],
+        "issues": [],
+        "prs": []
+      },
+      "owner": "jules",
+      "updated_at": "2026-06-02"
+    },
+    {
       "id": "OPT-DOC-001",
       "title": "Incident-/DB-Recovery-Runbooks",
       "area": "docs",
