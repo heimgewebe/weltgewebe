@@ -75,17 +75,43 @@ pub async fn run() -> anyhow::Result<()> {
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
-    let accounts = Arc::new(tokio::sync::RwLock::new(
-        routes::accounts::load_all_accounts().await,
-    ));
+    // Domain read source (OPT-ARC-001 Phase D). JSONL is the default; PostgreSQL
+    // is opt-in via WELTGEWEBE_DOMAIN_READ_SOURCE / domain_read_source. This
+    // switches the *read* path at startup only — the write path (JSONL) is
+    // unchanged. There is no silent fallback: selecting postgres without a
+    // configured DATABASE_URL pool is a hard startup error.
+    let (accounts_store, nodes_cache, edges_cache) = match app_config.domain_read_source {
+        config::DomainReadSource::Jsonl => {
+            tracing::info!("Domain read source: JSONL files (default)");
+            (
+                routes::accounts::load_all_accounts().await,
+                routes::nodes::load_nodes().await,
+                routes::edges::load_edges().await,
+            )
+        }
+        config::DomainReadSource::Postgres => {
+            let pool = db_pool.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "WELTGEWEBE_DOMAIN_READ_SOURCE=postgres requires a PostgreSQL pool, \
+                     but DATABASE_URL is not configured; refusing to fall back to JSONL"
+                )
+            })?;
+            tracing::info!("Domain read source: PostgreSQL (opt-in, read-only)");
+            (
+                domain_db::load_accounts_from_postgres(pool).await?,
+                domain_db::load_nodes_from_postgres(pool).await?,
+                domain_db::load_edges_from_postgres(pool).await?,
+            )
+        }
+    };
 
-    let nodes_cache = routes::nodes::load_nodes().await;
+    let accounts = Arc::new(tokio::sync::RwLock::new(accounts_store));
+
     metrics.set_nodes_cache_count(nodes_cache.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_cache));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
     let accounts_persist = Arc::new(tokio::sync::Mutex::new(()));
 
-    let edges_cache = routes::edges::load_edges().await;
     metrics.set_edges_cache_count(edges_cache.len() as i64);
     let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
 
