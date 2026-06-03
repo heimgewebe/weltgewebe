@@ -47,6 +47,28 @@ pub struct EdgeWithDetails {
     pub target_details: Option<EdgeParticipantDetails>,
 }
 
+/// Default maximum number of edges loaded into memory at startup.
+pub const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
+
+/// Parse the `MAX_EDGES_CACHE` environment variable into a `usize` limit.
+/// Falls back to [`DEFAULT_MAX_EDGES_CACHE`] when the variable is absent or
+/// contains an invalid value.
+pub fn max_edges_cache_limit() -> usize {
+    match std::env::var("MAX_EDGES_CACHE") {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    value = %val,
+                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
+                );
+                DEFAULT_MAX_EDGES_CACHE
+            }
+        },
+        Err(_) => DEFAULT_MAX_EDGES_CACHE,
+    }
+}
+
 pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
@@ -66,7 +88,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let mut records_read = 0;
     let mut duplicates_count = 0;
 
-    let max_edges = crate::domain_db::max_edges_cache_limit();
+    let max_edges = max_edges_cache_limit();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if records_read >= max_edges {
