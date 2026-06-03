@@ -33,6 +33,7 @@ Phase C only: deterministic JSONL→PostgreSQL import proof for domain data (nod
 ## Phase Boundary Confirmation
 
 Runtime startup still calls:
+
 - `routes::accounts::load_all_accounts().await`
 - `routes::nodes::load_nodes().await`
 - `routes::edges::load_edges().await`
@@ -117,6 +118,7 @@ No silent continuation: all quarantined lines are counted in `BackfillReport`.
 
 Phase B intentionally allows duplicate emails in `domain_accounts`.
 The import audits duplicates:
+
 - Before inserting each account, a `COUNT` query checks for existing rows with
   the same `lower(email)` and a different `id`.
 - If found, the email is added to `report.duplicate_emails`.
