@@ -240,6 +240,7 @@ pub async fn get_edge(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     /// Simple RAII guard that restores an env var to its previous value on drop.
     struct EnvGuard {
@@ -268,6 +269,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn max_edges_cache_invalid_falls_back_to_default() {
         let _guard = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
         assert_eq!(
@@ -278,6 +280,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn max_edges_cache_absent_returns_default() {
         let _guard = EnvGuard::set("MAX_EDGES_CACHE", "");
         std::env::remove_var("MAX_EDGES_CACHE");

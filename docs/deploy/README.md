@@ -164,6 +164,9 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 
 ### Performance & Limits
 
+- **WELTGEWEBE_DOMAIN_READ_SOURCE**: Phase-D Read-Path Startup-Modus (Default `jsonl`).
+  `postgres` aktiviert den optionalen PostgreSQL-Lesepfad beim Startup. **Wichtig:** Bis Phase E schreiben mutierende API-Endpunkte weiterhin nach JSONL. In mutablen Deployments kann dadurch Divergenz entstehen, wenn JSONL-Änderungen nicht vor dem Neustart nach `domain_*` backfilled werden. Verwende diesen Modus nur für read-only Deployments oder mit expliziter Backfill-Disziplin.
+
 - **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
   Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
 

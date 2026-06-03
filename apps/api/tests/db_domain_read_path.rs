@@ -748,24 +748,37 @@ async fn edges_loader_respects_max_edges_cache_limit() {
 }
 
 /// Proves that an invalid `MAX_EDGES_CACHE` value falls back to the default
-/// (500,000).
+/// (500,000). The invalid-value fallback is now covered by normal unit tests
+/// in routes/edges.rs; this test only verifies the PostgreSQL edge loader
+/// respects the cap.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn max_edges_cache_invalid_falls_back_to_default() {
-    use weltgewebe_api::routes::edges::DEFAULT_MAX_EDGES_CACHE;
-
     let _guard = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
-    let limit = weltgewebe_api::routes::edges::max_edges_cache_limit();
-    assert_eq!(
-        limit, DEFAULT_MAX_EDGES_CACHE,
-        "invalid MAX_EDGES_CACHE must fall back to default"
-    );
-    drop(_guard);
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clear_fixture_rows(&pool).await;
 
-    // Absent env also returns default.
-    let limit = weltgewebe_api::routes::edges::max_edges_cache_limit();
+    insert_edge(
+        &pool,
+        "rp-edge-test",
+        "rp-node-x",
+        "rp-node-y",
+        "knows",
+        "{}",
+    )
+    .await;
+
+    let cache = load_edges_from_postgres(&pool)
+        .await
+        .expect("edge loader must succeed even with invalid MAX_EDGES_CACHE");
+
     assert_eq!(
-        limit, DEFAULT_MAX_EDGES_CACHE,
-        "absent MAX_EDGES_CACHE must return default"
+        cache.len(),
+        1,
+        "loader must use fallback default and load the edge"
     );
+
+    clear_fixture_rows(&pool).await;
+    pool.close().await;
 }
