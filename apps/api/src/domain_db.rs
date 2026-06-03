@@ -274,8 +274,16 @@ pub async fn load_accounts_from_postgres(
                 public_payload::text AS public_payload_text,
                 private_payload::text AS private_payload_text,
                 private_payload->>'visibility' AS priv_visibility,
-                (private_payload->>'suppress_public_pos')::bool AS priv_suppress_public_pos,
-                (private_payload->>'ron_flag')::bool AS priv_ron_flag
+                CASE
+                  WHEN lower(private_payload->>'suppress_public_pos') = 'true' THEN true
+                  WHEN lower(private_payload->>'suppress_public_pos') = 'false' THEN false
+                  ELSE NULL
+                END AS priv_suppress_public_pos,
+                CASE
+                  WHEN lower(private_payload->>'ron_flag') = 'true' THEN true
+                  WHEN lower(private_payload->>'ron_flag') = 'false' THEN false
+                  ELSE NULL
+                END AS priv_ron_flag
          FROM domain_accounts
          ORDER BY id ASC",
     )
