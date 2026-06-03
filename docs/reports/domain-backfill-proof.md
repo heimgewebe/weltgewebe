@@ -34,9 +34,11 @@ Phase C only: deterministic JSONL→PostgreSQL import proof for domain data (nod
 
 Runtime startup still calls:
 
+
 - `routes::accounts::load_all_accounts().await`
 - `routes::nodes::load_nodes().await`
 - `routes::edges::load_edges().await`
+
 
 These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 
@@ -119,12 +121,26 @@ No silent continuation: all quarantined lines are counted in `BackfillReport`.
 Phase B intentionally allows duplicate emails in `domain_accounts`.
 The import audits duplicates:
 
+
 - Before inserting each account, a `COUNT` query checks for existing rows with
   the same `lower(email)` and a different `id`.
 - If found, the email is added to `report.duplicate_emails`.
 - Import continues regardless.
 
+
 This audit is a Phase C diagnostic; enforcement policy is deferred to Phase D/E.
+
+
+## Legacy Account Semantics
+
+Phase C import mapping mirrors legacy JSONL loader rules to ensure Phase D reconstructions maintain visibility and mode correctly:
+
+- Missing `type` defaults to `"garnrolle"`.
+- `ron_flag` and `type == "ron"` map to `"ron"` mode.
+- Accounts with `visibility` explicitly set or with valid coordinates are mapped to `"verortet"`.
+- `visibility: "private"` stores `suppress_public_pos: true` in `private_payload` to avoid public coordinate disclosure.
+- `visibility: "approximate"` with missing/zero radius defaults `radius_m` to `250`.
+- All operational legacy fields (`visibility`, `ron_flag`, explicit `mode`) are preserved in `private_payload`.
 
 ## Validation
 

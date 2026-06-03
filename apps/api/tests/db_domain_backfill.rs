@@ -326,19 +326,18 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         let kind = v
             .get("type")
             .and_then(|v| v.as_str())
-            .unwrap_or("ron")
+            .unwrap_or("garnrolle")
             .to_string();
         let title = v
             .get("title")
             .and_then(|v| v.as_str())
             .unwrap_or("Untitled")
             .to_string();
-        let mode = v
-            .get("mode")
-            .and_then(|v| v.as_str())
-            .unwrap_or("ron")
-            .to_string();
-        let radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+
+        let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+        let visibility = v.get("visibility").and_then(|v| v.as_str());
+        let explicit_mode = v.get("mode").and_then(|v| v.as_str());
+
         let disabled: bool = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
         let location_lat = v
@@ -373,8 +372,56 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         let created_at = v.get("created_at").map(parse_ts).unwrap_or(None);
         let updated_at = v.get("updated_at").map(parse_ts).unwrap_or(None);
 
+        // Legacy mapping for mode
+        let mode = if let Some(m) = explicit_mode {
+            m.to_string()
+        } else if kind == "ron" || ron_flag {
+            "ron".to_string()
+        } else if visibility.is_some() {
+            "verortet".to_string()
+        } else if location_lat.is_some() && location_lon.is_some() {
+            "verortet".to_string()
+        } else {
+            "ron".to_string()
+        };
+
+        let mut radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+
+        if visibility == Some("approximate") && radius_m == 0 {
+            radius_m = 250;
+        }
+
         let public_payload = payload_str(&["summary", "tags"], &v);
-        let private_payload = "{}".to_string();
+
+        // Construct private_payload preserving legacy fields
+        let mut priv_map = serde_json::Map::new();
+        if let Some(vis) = visibility {
+            priv_map.insert(
+                "visibility".to_string(),
+                serde_json::Value::String(vis.to_string()),
+            );
+            if vis == "private" {
+                priv_map.insert(
+                    "suppress_public_pos".to_string(),
+                    serde_json::Value::Bool(true),
+                );
+            }
+        }
+        if ron_flag {
+            priv_map.insert("ron_flag".to_string(), serde_json::Value::Bool(ron_flag));
+        }
+        if let Some(em) = explicit_mode {
+            priv_map.insert(
+                "mode".to_string(),
+                serde_json::Value::String(em.to_string()),
+            );
+        }
+
+        let private_payload = if priv_map.is_empty() {
+            "{}".to_string()
+        } else {
+            serde_json::to_string(&serde_json::Value::Object(priv_map)).unwrap()
+        };
 
         // Audit duplicate emails (does not block import — Phase B policy)
         if let Some(ref em) = email {
@@ -489,6 +536,13 @@ const DUPLICATE_ID_NODE_FIXTURE: &str = r#"
 const DUPLICATE_EMAIL_ACCOUNT_FIXTURE: &str = r#"
 {"id":"backfill-proof-account-dup-email-a","type":"garnrolle","title":"Dup Email A","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
 {"id":"backfill-proof-account-dup-email-b","type":"garnrolle","title":"Dup Email B","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
+"#;
+
+const LEGACY_ACCOUNT_FIXTURE: &str = r#"
+{"id":"legacy-private","location":{"lat":50.0,"lon":10.0},"visibility":"private"}
+{"id":"legacy-missing-type","location":{"lat":51.0,"lon":11.0}}
+{"id":"legacy-missing-mode-ron-flag","ron_flag":true}
+{"id":"legacy-approximate","location":{"lat":52.0,"lon":12.0},"visibility":"approximate","radius_m":0}
 "#;
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -907,6 +961,76 @@ async fn domain_backfill_duplicate_account_emails_audited() {
     .execute(&pool)
     .await
     .expect("post-test cleanup failed");
+
+    pool.close().await;
+}
+
+/// Proves that legacy accounts import correctly preserving semantics.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn domain_backfill_legacy_account_semantics() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'legacy-%'")
+        .execute(&pool)
+        .await
+        .expect("pre-test cleanup failed");
+
+    let r = import_accounts(&pool, LEGACY_ACCOUNT_FIXTURE).await;
+    assert_eq!(r.records_read, 4);
+    assert_eq!(r.records_inserted, 4);
+
+    // legacy-private: visibility: "private" + location
+    let (kind, mode, priv_payload): (String, String, serde_json::Value) = sqlx::query_as(
+        "SELECT kind, mode, private_payload FROM domain_accounts WHERE id = 'legacy-private'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy-private must exist");
+    assert_eq!(kind, "garnrolle", "missing type defaults to garnrolle");
+    assert_eq!(mode, "verortet", "location presence infers verortet");
+    assert_eq!(
+        priv_payload.get("visibility").and_then(|v| v.as_str()),
+        Some("private")
+    );
+    assert_eq!(
+        priv_payload
+            .get("suppress_public_pos")
+            .and_then(|v| v.as_bool()),
+        Some(true)
+    );
+
+    // legacy-missing-type: missing type + location
+    let (kind, mode): (String, String) =
+        sqlx::query_as("SELECT kind, mode FROM domain_accounts WHERE id = 'legacy-missing-type'")
+            .fetch_one(&pool)
+            .await
+            .expect("legacy-missing-type must exist");
+    assert_eq!(kind, "garnrolle");
+    assert_eq!(mode, "verortet");
+
+    // legacy-missing-mode-ron-flag: missing mode + ron_flag: true
+    let (mode,): (String,) = sqlx::query_as(
+        "SELECT mode FROM domain_accounts WHERE id = 'legacy-missing-mode-ron-flag'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("legacy-missing-mode-ron-flag must exist");
+    assert_eq!(mode, "ron");
+
+    // legacy-approximate: visibility: "approximate" + zero radius
+    let (radius_m,): (i64,) =
+        sqlx::query_as("SELECT radius_m FROM domain_accounts WHERE id = 'legacy-approximate'")
+            .fetch_one(&pool)
+            .await
+            .expect("legacy-approximate must exist");
+    assert_eq!(radius_m, 250);
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id LIKE 'legacy-%'")
+        .execute(&pool)
+        .await
+        .expect("post-test cleanup failed");
 
     pool.close().await;
 }
