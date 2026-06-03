@@ -248,10 +248,18 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Guard against unregistered blueprints and planning artifacts."
     )
-    parser.add_argument("--strict", action="store_true", help="Exit 1 if findings exist.")
+    parser.add_argument("--strict", action="store_true", help="Alias for --mode strict")
+    parser.add_argument("--mode", choices=["report", "warn", "strict"], default="report", help="Execution mode")
+    parser.add_argument("--format", choices=["text", "json"], default="text", help="Output format")
     args = parser.parse_args(argv)
 
     findings = run_checks()
+
+    if args.format == "json":
+        print(json.dumps({"findings": findings}, indent=2))
+        if findings and (args.strict or args.mode == "strict"):
+            return 1
+        return 0
 
     if not findings:
         print("Agent-planning registration check passed (0 issues).")
@@ -265,7 +273,7 @@ def main(argv=None):
 
     print(f"Check finished with {len(findings)} issue(s).", file=sys.stderr)
 
-    if args.strict:
+    if args.strict or args.mode == "strict":
         return 1
     return 0
 

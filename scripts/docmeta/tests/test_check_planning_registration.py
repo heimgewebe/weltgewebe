@@ -165,6 +165,7 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         unreg = [f for f in findings if f["code"] == "UNREGISTERED_PLANNING_ARTIFACT" and "quoted-spec" in f["path"]]
         self.assertEqual(unreg, [])
 
+
     @patch("sys.stderr", new_callable=StringIO)
     def test_strict_exits_non_zero_when_findings_exist(self, mock_stderr):
         self.write_file("docs/blueprints/unregistered.md", "---\nstatus: active\n---\nBody")
@@ -172,7 +173,13 @@ class TestCheckPlanningRegistration(unittest.TestCase):
         exit_code = check_plan.main([])
         self.assertEqual(exit_code, 0)
 
+        exit_code = check_plan.main(["--mode", "warn"])
+        self.assertEqual(exit_code, 0)
+
         exit_code = check_plan.main(["--strict"])
+        self.assertEqual(exit_code, 1)
+
+        exit_code = check_plan.main(["--mode", "strict"])
         self.assertEqual(exit_code, 1)
 
 if __name__ == "__main__":
