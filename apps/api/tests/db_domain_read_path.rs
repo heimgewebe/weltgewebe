@@ -747,10 +747,10 @@ async fn edges_loader_respects_max_edges_cache_limit() {
     pool.close().await;
 }
 
-/// Proves that an invalid `MAX_EDGES_CACHE` value falls back to the default
-/// (500,000). The invalid-value fallback is now covered by normal unit tests
-/// in routes/edges.rs; this test only verifies the PostgreSQL edge loader
-/// respects the cap.
+/// Proves that an invalid `MAX_EDGES_CACHE` value causes the PostgreSQL edge
+/// loader to fall back to the default (500,000). The invalid-value and absent-value
+/// fallback cases are covered by normal unit tests in routes/edges.rs; this test
+/// only verifies the PostgreSQL loader respects the cap.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn max_edges_cache_invalid_falls_back_to_default() {
