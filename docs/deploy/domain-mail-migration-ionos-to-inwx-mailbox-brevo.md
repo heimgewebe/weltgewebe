@@ -75,6 +75,13 @@ WEB_UPSTREAM_HOST=weltgewebe.home.arpa
 WEB_UPSTREAM_URL=https://weltgewebe.home.arpa
 ```
 
+## 3a. Bestätigte Preflight-Belege
+
+- `AUTH_LOG_MAGIC_TOKEN=0` wurde lokal am laufenden Heimserver-Container bestätigt.
+- Der laufende API-Container nutzt aktuell IONOS-SMTP für Magic-Link-Mail.
+- `kontakt@weltgewebe.net` hat im IONOS-Bestand nur vernachlässigbaren lokalen Mailbestand. Die Migration des Mailarchivs ist daher niedriges Risiko.
+- Kritisch ist nicht die IMAP-Menge, sondern die bisherige Weiterleitung von `kontakt@weltgewebe.net`; sie muss im Zielzustand bewusst neu entschieden, nachgebaut oder entfernt werden.
+
 ## 4. Providerrollen
 
 - INWX: DNS-Verwaltung.
@@ -210,7 +217,7 @@ Sollte ein Migrationsschritt scheitern, müssen DNS und Einstellungen auf die le
 - mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` getestet.
 - Brevo Sending-Domain/Subdomain verifiziert.
 - Brevo SPF/DKIM/DMARC im Test geprüft.
-- AUTH_LOG_MAGIC_TOKEN lokal als 0 bestätigt.
+- Entscheidung zur bisherigen Weiterleitung von `kontakt@weltgewebe.net` getroffen.
 - Runtime nach Recreate zeigt Brevo-SMTP-Werte.
 - Weltgewebe Magic-Link wird über Brevo verschickt.
 - Magic-Link zeigt auf `https://weltgewebe.net`.
