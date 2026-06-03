@@ -86,7 +86,7 @@ These paths are unchanged. JSONL is the active runtime truth until Phase D/E.
 | `created_at` | `created_at` (TIMESTAMPTZ) | Optional |
 | `updated_at` | `updated_at` (TIMESTAMPTZ) | Optional |
 | `summary`, `tags` | `public_payload` (JSONB) | Public fields not in explicit columns |
-| — | `private_payload` (JSONB) | Stored as `{}` in Phase C; extended in later phases |
+| — | `private_payload` (JSONB) | Preserves legacy operational fields such as visibility, ron_flag, explicit mode and suppress_public_pos for Phase-D reconstruction |
 
 ## Idempotency Contract
 
@@ -171,7 +171,7 @@ python3 -m scripts.docmeta.check_planning_registration --mode strict
 
 ### Local PostgreSQL status
 
-Direct PostgreSQL not available in this remote execution environment. Full integration proof via CI job `db-domain-backfill-proof` in `.github/workflows/api.yml` (PostgreSQL 16 service on direct port 5432, runs all 6 tests with `--include-ignored --test-threads=1`). **PR-CI-Laufbeleg ausstehend.**
+Direct PostgreSQL not available in this remote execution environment. Full integration proof via CI job `db-domain-backfill-proof` in `.github/workflows/api.yml` (PostgreSQL 16 service on direct port 5432, runs all 7 tests with `--include-ignored --test-threads=1`). **PR-CI-Laufbeleg ausstehend.**
 
 ## Remaining OPT-ARC-001 Phases
 

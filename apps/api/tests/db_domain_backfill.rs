@@ -979,24 +979,38 @@ async fn domain_backfill_legacy_account_semantics() {
     assert_eq!(r.records_read, 4);
     assert_eq!(r.records_inserted, 4);
 
-    // legacy-private: visibility: "private" + location
-    let (kind, mode, priv_payload): (String, String, serde_json::Value) = sqlx::query_as(
-        "SELECT kind, mode, private_payload FROM domain_accounts WHERE id = 'legacy-private'",
+    // legacy-private: visibility: "private" + location.
+    // Compile-safety: use SQL scalar extraction (private_payload->>'key')
+    // to read JSONB as TEXT, avoiding the sqlx/json feature dependency.
+    let (kind, mode, visibility, suppress_public_pos): (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+    ) = sqlx::query_as(
+        "SELECT
+             kind,
+             mode,
+             private_payload->>'visibility',
+             private_payload->>'suppress_public_pos'
+         FROM domain_accounts
+         WHERE id = $1",
     )
+    .bind("legacy-private")
     .fetch_one(&pool)
     .await
     .expect("legacy-private must exist");
     assert_eq!(kind, "garnrolle", "missing type defaults to garnrolle");
     assert_eq!(mode, "verortet", "location presence infers verortet");
     assert_eq!(
-        priv_payload.get("visibility").and_then(|v| v.as_str()),
-        Some("private")
+        visibility.as_deref(),
+        Some("private"),
+        "private_payload.visibility must be preserved"
     );
     assert_eq!(
-        priv_payload
-            .get("suppress_public_pos")
-            .and_then(|v| v.as_bool()),
-        Some(true)
+        suppress_public_pos.as_deref(),
+        Some("true"),
+        "private visibility must set suppress_public_pos=true"
     );
 
     // legacy-missing-type: missing type + location
