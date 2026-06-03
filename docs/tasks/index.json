@@ -108,7 +108,7 @@
       "id": "TASK-CTL-004",
       "title": "Guard gegen uneingeordnete Blueprints und Pläne einführen",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "effort": "M",
       "risk": "medium",
@@ -119,14 +119,11 @@
         "docs/tasks/board.md",
         "docs/tasks/index.json",
         "scripts/docmeta/check_planning_registration.py",
+        "scripts/docmeta/planning_registration.yml",
         "scripts/docmeta/tests/test_check_planning_registration.py",
         ".github/workflows/task-index.yml"
       ],
-      "missing_evidence": [
-        "Warn-/Ratchet-Modus ist noch nicht separat von report-only und strict modelliert",
-        "Expliziter Ausnahmefluss für registrierungsbefreite Planungsdokumente ist noch nicht schema-/frontmatter-stabil belegt",
-        "CI ist report-only angebunden; blocking/ratchet bleibt bewusst ausstehend"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "neuer Blueprint oder Plan ohne Index-/Roadmap-/Task-Control-Einordnung wird im Check-Modus gemeldet",
         "eingeordnete neue Blueprint-/Roadmap-Dateien bestehen den Guard",
@@ -142,7 +139,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-01"
+      "updated_at": "2026-06-02"
     },
     {
       "id": "AGENT-SAFE-001",
@@ -358,6 +355,33 @@
         ]
       },
       "updated_at": "2026-05-29"
+    },
+    {
+      "id": "TASK-CTL-005",
+      "title": "Bestehende Planning-Registration-Findings triagieren und Ratchet vorbereiten",
+      "area": "docs",
+      "status": "open",
+      "priority": "high",
+      "effort": "S",
+      "risk": "low",
+      "evidence": [],
+      "missing_evidence": [
+        "Die 8 bestehenden pre-existing Findings aus Check_planning_registration klaeren",
+        "Ratchet vorbereiten (--mode strict fuer CI)"
+      ],
+      "acceptance": [
+        "Alle 8 Findings (u.a. in docs/blueprints/) sind als gueltige Task-Evidenz, Roadmap-Einordnung oder als false positive klassifiziert",
+        "Der Guard laeuft blockierend (--mode strict)"
+      ],
+      "links": {
+        "docs": [
+          "docs/tasks/board.md"
+        ],
+        "issues": [],
+        "prs": []
+      },
+      "owner": "jules",
+      "updated_at": "2026-06-02"
     },
     {
       "id": "OPT-DOC-001",
