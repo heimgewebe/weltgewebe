@@ -34,9 +34,7 @@ for (const edge of demoEdges) {
  */
 export function resolveAccountNodes(accountId: string) {
   const relatedEdges = (edgesBySource.get(accountId) || []).filter(
-    (e) =>
-      e.source_type === "account" &&
-      e.target_type === "node",
+    (e) => e.source_type === "account" && e.target_type === "node",
   );
 
   return relatedEdges
