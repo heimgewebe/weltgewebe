@@ -81,7 +81,7 @@ implementations:
       - scripts/guard-compose-no-relative-volumes.sh
 
   - id: impl.contracts
-    path: contracts/
+    path: contracts/domain/
     impl_type: schema
     status: active
     criticality: high

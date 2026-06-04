@@ -20,7 +20,7 @@ for path in "${CRITICAL_PATHS[@]}"; do
     if [ -d "$path" ] || [ -f "$path" ]; then
         found=0
         for reg in $REGISTERED_PATHS; do
-            if [[ "$reg" == "$path" ]]; then
+            if [[ "$reg" == "$path" ]] || [[ "$reg" == "$path/"* ]]; then
                 found=1
                 break
             fi
