@@ -194,10 +194,29 @@ describe("mapView presentation helpers", () => {
   });
 
   it("getFilterTypeKey distinguishes nodes from garnrollen", () => {
-    expect(getFilterTypeKey({ type: "node", kind: "Werkstatt" } as never)).toBe(
-      "Werkstatt",
-    );
-    expect(getFilterTypeKey({ type: "garnrolle" } as never)).toBe("Garnrolle");
+    const nodeEntity: MapEntityViewModel = {
+      type: "node",
+      id: "node-1",
+      title: "Test Node",
+      lat: 53.5,
+      lon: 10.0,
+      kind: "Werkstatt",
+      tags: [],
+      created_at: "2025-01-01T00:00:00Z",
+    };
+
+    const garnrolleEntity: MapEntityViewModel = {
+      type: "garnrolle",
+      id: "acc-1",
+      title: "Test Garnrolle",
+      lat: 53.56,
+      lon: 10.06,
+      tags: [],
+      created_at: "2025-01-01T00:00:00Z",
+    };
+
+    expect(getFilterTypeKey(nodeEntity)).toBe("Werkstatt");
+    expect(getFilterTypeKey(garnrolleEntity)).toBe("Garnrolle");
   });
 
   it("toMapSelection carries panel data and normalizes the type", () => {
