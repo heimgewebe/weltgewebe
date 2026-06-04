@@ -161,12 +161,14 @@ Testfälle:
 
 ### Lokaler PostgreSQL-Status
 
-In dieser Remote-Execution-Umgebung wurde ein temporärer PostgreSQL-16-Cluster
-gestartet; die vier DB-Suiten liefen lokal grün
-(`db_domain_schema_migrations` 3, `db_domain_backfill` 7,
-`db_domain_read_path` 8, `db_domain_account_write_path` 3). Dieser lokale Lauf
-ersetzt nicht den PR-CI-Beleg. **PR-CI-Laufbeleg für
-`db-domain-account-write-path-proof` ausstehend; PR-CI ist maßgeblich.**
+DB-Suiten für lokalen PostgreSQL-Proof sind vorbereitet (`db_domain_schema_migrations`,
+`db_domain_backfill`, `db_domain_read_path`, `db_domain_account_write_path`).
+Lokaler PostgreSQL-Proof berichtet; **PR-CI-Beleg ausstehend; PR-CI ist maßgeblich**
+(Job `db-domain-account-write-path-proof` in `.github/workflows/api.yml`).
+
+`suppress_public_pos` wird von `POST /accounts` nicht akzeptiert; Phase E-A
+erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
+(siehe `NewDomainAccountRow::from_jsonl_record` in `apps/api/src/domain_db.rs`).
 
 ## Verbleibende OPT-ARC-001-Phasen
 

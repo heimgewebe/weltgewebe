@@ -369,7 +369,9 @@ impl NewDomainAccountRow {
     ///   (idempotent with the loader, which only adjusts when the stored radius
     ///   is still 0)
     /// - `private_payload` preserves `visibility`, `suppress_public_pos` (for
-    ///   private visibility), `ron_flag`, and the explicit `mode`
+    ///   private visibility), `ron_flag`, and the explicit `mode`. Phase E-A
+    ///   `POST /accounts` does not accept `suppress_public_pos` in the request
+    ///   payload; privacy on create uses `visibility=private` (or loader defaults).
     /// - `created_at` / `updated_at` are taken from the record if present, else
     ///   NULL. The current create path never sets them, so account-create rows
     ///   store NULL — identical to JSONL-create followed by Phase C backfill.
