@@ -41,6 +41,12 @@ Explizite Rollentrennung:
 - `kontakt@weltgewebe.net` = menschliche Kontakt-/Adminadresse bei mailbox.org.
 - `noreply@login.weltgewebe.net` = technischer Magic-Link-Absender über Brevo.
 
+## Operativer Zwischenstand
+
+- Mail ist von IONOS entkoppelt (via mailbox.org und Brevo).
+- IONOS bleibt aktuell Registrar und DNS-Provider.
+- IONOS kann nicht durch Mail-Gates allein gekündigt werden.
+
 ## Nicht-Ziele
 
 - keine Secrets im Repo.
@@ -49,7 +55,9 @@ Explizite Rollentrennung:
 
 ## Konsequenzen
 
-- IONOS-Kündigung ist erst nach erfolgreichem mailbox.org-, Brevo-, Runtime- und Magic-Link-Gate erlaubt.
+- IONOS-Kündigung ist erst nach INWX-Registrar/DNS-Cutover und Webhosting-/Redirect-Entscheidung zulässig.
+- `weltweb.net` und `weltweberei.org` sind No-Mail-Domains, sofern nicht neu entschieden.
+- `weltweberei.org`-Web/WordPress ist separat zu behandeln.
 - `kontakt@` und `login@` dürfen nicht vermischt werden.
 - `APP_BASE_URL` muss im öffentlichen Betrieb `https://weltgewebe.net` sein.
 - `home.arpa` ist nur Heim-/Entwicklungsziel.

@@ -56,6 +56,46 @@ relations:
 - Runtime auf Brevo-SMTP ändern
 - Dienste kontrolliert neu erzeugen / deployen
 
+## INWX Registrar/DNS Cutover
+
+- **Preflight:**
+  - IONOS-Zone vollständig exportiert.
+  - INWX-Zone vorbereitet.
+  - keine Secrets in Logs.
+  - aktuelle Provider-Rollen dokumentiert.
+  - Web-Rollen geklärt, mindestens als Risiko markiert.
+  - IONOS noch aktiv.
+  - Rollback-Zeitfenster offen.
+
+- **Operator-Schritte:**
+  1. INWX-Zone anlegen.
+  2. Records aus IONOS-Zone übernehmen.
+  3. mailbox.org/Brevo/No-Mail-Records prüfen.
+  4. Zonenvergleich als Tabelle.
+  5. Nameserver umstellen.
+  6. dig-Gates gegen:
+     - autoritative INWX-Nameserver
+     - 1.1.1.1
+     - 8.8.8.8
+     - lokaler Resolver, aber lokale Staleness nicht als autoritative Wahrheit behandeln.
+  7. HTTP/Web-Smokes.
+  8. Mail-Smokes.
+  9. Dokumentationsartefakt schreiben.
+
+- **Rollback:**
+  - Nameserver zurück zu IONOS, solange Registrar/DNS dort verfügbar.
+  - Keine IONOS-Kündigung im selben Arbeitsgang.
+  - Kein Löschen von IONOS-Zonen vor Stabilitätsfenster.
+
+- **Gates:**
+  - INWX authoritative DNS pass.
+  - mailbox.org mail pass.
+  - Brevo login mail pass.
+  - Magic-Link pass.
+  - Secondary domains No-Mail pass.
+  - Web/redirect pass or explicitly accepted open risk.
+  - No secrets in artifacts.
+
 ## Verification
 
 ### DNS-Gates

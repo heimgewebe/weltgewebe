@@ -75,6 +75,24 @@ WEB_UPSTREAM_HOST=weltgewebe.home.arpa
 WEB_UPSTREAM_URL=https://weltgewebe.home.arpa
 ```
 
+### Ist-Zustand nach Mailmigration
+
+- **weltgewebe.net**:
+  - Human Mail: mailbox.org, pass.
+  - Technical Login Mail: Brevo, pass.
+  - Registrar/DNS: IONOS SE / UI-DNS, noch offen für INWX.
+  - Web A record: 149.233.190.131, Providerrolle noch prüfen.
+
+- **weltweb.net**:
+  - Registrar/DNS: IONOS SE / UI-DNS.
+  - Mail: No-Mail public/authoritative pass.
+  - Web: IONOS-nahe Webfläche, gesondert zu entscheiden.
+
+- **weltweberei.org**:
+  - Registrar/DNS: IONOS SE / UI-DNS.
+  - Mail: No-Mail public/authoritative pass.
+  - Web: aktive WordPress-/Apache-/PHP-Fläche; nicht ohne Web-Migrationsentscheidung anfassen.
+
 ## 3a. Bestätigte Preflight-Belege
 
 - `AUTH_LOG_MAGIC_TOKEN=0` wurde lokal am laufenden Heimserver-Container bestätigt.
@@ -155,12 +173,54 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 - **Gate**: Brevo-Verifikationsdaten liegen vor.
 - **Rollback-Hinweis**: Keine Live-Auswirkung auf bisherigen Versand.
 
-### Phase 5 — INWX/DNS-Cutover
+### Phase 5a — INWX DNS-Zone vorbereiten
+
+- **Ziel**: Blaupause der neuen DNS-Zone.
+- **Aktionen**:
+  - vollständige IONOS-Zonen exportieren/sichern.
+  - INWX-Zone mit allen aktuellen Records vorbereiten.
+  - Mailrecords exakt übernehmen:
+    - weltgewebe.net MX/SPF/DKIM/DMARC für mailbox.org.
+    - login.weltgewebe.net Brevo TXT/DMARC/DKIM/CNAME.
+    - weltweb.net und weltweberei.org No-Mail.
+  - Webrecords exakt übernehmen:
+    - A/AAAA/CNAME für apex/www/api.
+    - keine Web-Interpretation ohne Beweis.
+  - Zonenvergleich dokumentieren.
+- **Gate**: Ziel-DNS-Tabelle fertig und geprüft.
+- **Rollback-Hinweis**: Einträge können im Dashboard wieder verworfen werden.
+
+### Phase 5b — INWX Nameserver-Cutover
 
 - **Ziel**: INWX übernimmt die aktive DNS-Auflösung.
-- **Aktionen**: Nameserver/DNS-Autorität auf INWX umstellen; in der INWX-Zone MX für mailbox.org sowie Brevo-Verifikations-/DKIM-/SPF-Records aktivieren.
-- **Gate**: DNS-Propagation abgeschlossen. `dig`-Checks erfolgreich.
+- **Aktionen**:
+  - Nameserver-Cutover zu INWX.
+- **Gate**:
+  - DNS-Propagation abgeschlossen. `dig` gegen autoritative INWX-Nameserver und öffentliche Resolver erfolgreich.
+  - Test: weltgewebe.net A / www / api, MX/TXT/DMARC, login.weltgewebe.net Brevo records, secondary domains No-Mail.
+  - HTTP checks für Website/WordPress/Redirects.
+  - Magic-Link-Smoke.
+  - kontakt@ inbound/outbound optional erneut prüfen.
 - **Rollback-Hinweis**: Nameserver zurück auf IONOS stellen.
+
+### Phase 5c — Registrar-Transfer zu INWX
+
+- **Ziel**: Domain bei INWX registrieren.
+- **Aktionen**: Registrar-Transfer erst nach stabiler INWX-DNS-Auflösung. Transfer-Lock/Auth-Code nur manuell, nicht im Repo.
+- **Gate**: Ablaufdaten beachtet (weltgewebe.net und weltweb.net bis 2026-06-19, weltweberei.org bis 2027-05-26). Keine Domain kurz vor Ablauf ohne expliziten Transferplan riskieren.
+- **Rollback-Hinweis**: Transfer abbrechen, falls unvorhergesehene Probleme auftreten.
+
+### Phase 5d — IONOS Retention/Kündigungsentscheidung
+
+- **Ziel**: Alten Provider geordnet abschalten.
+- **Aktionen**: IONOS erst kündigen/reduzieren, wenn bestimmte Bedingungen erfüllt sind.
+- **Gate**:
+  - Registrar bei INWX bestätigt.
+  - DNS bei INWX autoritativ bestätigt.
+  - Webhosting/Redirects entweder migriert oder bewusst anderweitig gesichert.
+  - Mailgates nach INWX-DNS weiter grün.
+  - Rollback-/Notfallpfad dokumentiert.
+- **Rollback-Hinweis**: Nach Kündigung kein Rollback mehr möglich.
 
 ### Phase 6 — Runtime-Cutover auf Brevo
 
@@ -194,11 +254,12 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 
 - IONOS darf erst gekündigt werden, wenn:
   - INWX-DNS-Zone vollständig gesetzt und geprüft ist
-  - mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` funktionieren
-  - Brevo-Domain/Subdomain verifiziert ist
-  - Brevo-Testmail SPF/DKIM/DMARC besteht oder mindestens nicht fehlschlägt
-  - Weltgewebe Magic-Link-Mail über Brevo funktioniert
-  - live-env nach Recreate Brevo-Werte zeigt
+  - mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` funktionieren (proved)
+  - Brevo-Domain/Subdomain verifiziert ist (proved)
+  - Brevo-Testmail SPF/DKIM/DMARC besteht oder mindestens nicht fehlschlägt (proved)
+  - Weltgewebe Magic-Link-Mail über Brevo funktioniert (proved)
+  - live-env nach Recreate Brevo-Werte zeigt (proved)
+  - Secondary domains No-Mail public/authoritative (proved)
   - Rollback-Pfad noch offen ist
 
 ## 9. Rollback-Prinzip
@@ -214,11 +275,12 @@ Sollte ein Migrationsschritt scheitern, müssen DNS und Einstellungen auf die le
 
 - Vollständige IONOS-DNS-Zone für weltgewebe.net, weltweb.net, weltweberei.org.
 - MX-Prioritäten und TTLs gesichert.
-- mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` getestet.
-- Brevo Sending-Domain/Subdomain verifiziert.
-- Brevo SPF/DKIM/DMARC im Test geprüft.
+- mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` getestet. (erledigt/proved)
+- Brevo Sending-Domain/Subdomain verifiziert. (erledigt/proved)
+- Brevo SPF/DKIM/DMARC im Test geprüft. (erledigt/proved)
 - Entscheidung zur bisherigen Weiterleitung von `kontakt@weltgewebe.net` getroffen.
-- Runtime nach Recreate zeigt Brevo-SMTP-Werte.
-- Weltgewebe Magic-Link wird über Brevo verschickt.
-- Magic-Link zeigt auf `https://weltgewebe.net`.
-- Login erzeugt Session.
+- Runtime nach Recreate zeigt Brevo-SMTP-Werte. (erledigt/proved)
+- Weltgewebe Magic-Link wird über Brevo verschickt. (erledigt/proved)
+- Magic-Link zeigt auf `https://weltgewebe.net`. (erledigt/proved)
+- Login erzeugt Session. (erledigt/proved)
+- AUTH_LOG_MAGIC_TOKEN=0. (erledigt/proved)
