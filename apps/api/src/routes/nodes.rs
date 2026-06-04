@@ -493,7 +493,7 @@ pub async fn patch_node(
 
                 // Map to Node and fail hard if mapping fails.
                 // Ensures we never persist changes without a valid Node response.
-                let node = map_json_to_node(&v).ok_or_else(|| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                let node = map_json_to_node(&v).ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 // Security/Consistency: Ensure the ID hasn't been changed via the update.
                 if node.id != id {
@@ -588,7 +588,7 @@ pub async fn patch_node(
 
     found_node
         .map(Json)
-        .ok_or_else(|| PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))
+        .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 pub async fn list_nodes(
