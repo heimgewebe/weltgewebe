@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import { demoAccounts } from "$lib/demo/demoData";
-import { resolveAccountNodes } from "$lib/demo/resolvers";
+import { resolveAccount, resolveAccountNodes } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
@@ -13,7 +13,7 @@ export function GET({ params }: RequestEvent) {
     throw error(400, "ID is required");
   }
 
-  const account = demoAccounts.find((a) => a.id === id);
+  const account = resolveAccount(id);
 
   if (!account) {
     throw error(404, "Account not found");

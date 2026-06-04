@@ -2,6 +2,7 @@ import { demoAccounts, demoEdges, demoNodes } from "./demoData";
 
 type DemoNode = (typeof demoNodes)[number];
 type DemoAccount = (typeof demoAccounts)[number];
+type DemoEdge = (typeof demoEdges)[number];
 type DemoEntity = DemoNode | DemoAccount;
 
 // Module-level caches for static demo data lookups
@@ -9,6 +10,28 @@ const nodeMap = new Map<string, DemoNode>(demoNodes.map((n) => [n.id, n]));
 const accountMap = new Map<string, DemoAccount>(
   demoAccounts.map((a) => [a.id, a]),
 );
+const edgeMap = new Map<string, DemoEdge>(demoEdges.map((e) => [e.id, e]));
+
+/**
+ * Resolves a single node by ID.
+ */
+export function resolveNode(id: string) {
+  return nodeMap.get(id);
+}
+
+/**
+ * Resolves a single account by ID.
+ */
+export function resolveAccount(id: string) {
+  return accountMap.get(id);
+}
+
+/**
+ * Resolves a single edge by ID.
+ */
+export function resolveEdge(id: string) {
+  return edgeMap.get(id);
+}
 
 /**
  * Resolves nodes associated with an account.
@@ -68,7 +91,7 @@ export function resolveNodeParticipants(nodeId: string) {
  * Resolves source and target details for an edge.
  */
 export function resolveEdgeParticipants(edgeId: string) {
-  const edge = demoEdges.find((e) => e.id === edgeId);
+  const edge = edgeMap.get(edgeId);
   if (!edge) {
     return {
       source_details: null,

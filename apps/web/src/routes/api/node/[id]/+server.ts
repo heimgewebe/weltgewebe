@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import { demoNodes } from "$lib/demo/demoData";
-import { resolveNodeParticipants } from "$lib/demo/resolvers";
+import { resolveNode, resolveNodeParticipants } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
@@ -13,7 +13,7 @@ export function GET({ params }: RequestEvent) {
     throw error(400, "ID is required");
   }
 
-  const node = demoNodes.find((n) => n.id === id);
+  const node = resolveNode(id);
 
   if (!node) {
     throw error(404, "Node not found");

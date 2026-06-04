@@ -1,6 +1,6 @@
 import { json, error } from "@sveltejs/kit";
 import { demoEdges } from "$lib/demo/demoData";
-import { resolveEdgeParticipants } from "$lib/demo/resolvers";
+import { resolveEdge, resolveEdgeParticipants } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
@@ -13,7 +13,7 @@ export function GET({ params }: RequestEvent) {
     throw error(400, "ID is required");
   }
 
-  const edge = demoEdges.find((e) => e.id === id);
+  const edge = resolveEdge(id);
 
   if (!edge) {
     throw error(404, "Edge not found");
