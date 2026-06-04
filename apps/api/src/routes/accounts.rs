@@ -1,11 +1,13 @@
 use super::{
-    domain_write_guard::reject_if_postgres_read_source,
+    domain_write_guard::reject_account_create_unless_writable,
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
     },
 };
 use crate::auth::{accounts::AccountStore, role::Role};
+use crate::config::DomainAccountWriteSource;
+use crate::domain_db::{insert_account_from_jsonl_record, AccountWriteError};
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 use axum::{
@@ -434,7 +436,7 @@ pub async fn create_account(
     Extension(ctx): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<AccountPublic>), (StatusCode, String)> {
-    reject_if_postgres_read_source(&state)?;
+    reject_account_create_unless_writable(&state)?;
 
     let bad = |msg: &str| (StatusCode::BAD_REQUEST, msg.to_string());
 
@@ -575,12 +577,47 @@ pub async fn create_account(
         }
     }
 
-    if let Err(e) = append_account_line(&record).await {
-        tracing::error!(error = %e, "failed to append account to JSONL");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "failed to persist account".to_string(),
-        ));
+    // Persist to the configured account-create write source. Only after a
+    // successful durable write is the in-memory store mutated. A failed write
+    // must never leave a phantom account in memory, and the two write sources
+    // are mutually exclusive (no dual-write): JSONL mode never touches
+    // PostgreSQL, PostgreSQL mode never appends JSONL.
+    match state.config.domain_account_write_source {
+        DomainAccountWriteSource::Jsonl => {
+            if let Err(e) = append_account_line(&record).await {
+                tracing::error!(error = %e, "failed to append account to JSONL");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to persist account".to_string(),
+                ));
+            }
+        }
+        DomainAccountWriteSource::Postgres => {
+            // Startup validation guarantees a pool exists in this mode; treat a
+            // missing pool as an internal error rather than silently degrading.
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "PostgreSQL pool unavailable for account write".to_string(),
+                )
+            })?;
+            match insert_account_from_jsonl_record(pool, &record).await {
+                Ok(()) => {}
+                Err(AccountWriteError::DuplicateId) => {
+                    return Err((
+                        StatusCode::CONFLICT,
+                        "account id already exists".to_string(),
+                    ));
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to insert account into domain_accounts");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to persist account".to_string(),
+                    ));
+                }
+            }
+        }
     }
 
     {
@@ -597,6 +634,7 @@ pub async fn create_account(
         event = "account.created",
         account_id = %id,
         created_by = ctx.account_id.as_deref().unwrap_or("?"),
+        write_source = ?state.config.domain_account_write_source,
         "Account created by operator"
     );
 

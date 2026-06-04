@@ -297,3 +297,368 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
     );
     Ok(store)
 }
+
+// ── OPT-ARC-001 Phase E-A: account-create write path ────────────────────────
+//
+// Narrow PostgreSQL write helper for `POST /accounts` only. It maps the same
+// validated, JSONL-shaped account record that `create_account` would otherwise
+// append to JSONL, using the same semantic mapping as the Phase C backfill
+// (`tests/db_domain_backfill.rs::import_accounts`) so that a row written here is
+// indistinguishable from "JSONL create + Phase C backfill". It does NOT touch
+// in-memory caches and does NOT write JSONL — the caller owns cache updates.
+//
+// Out of scope (unchanged): node writes, edge writes, step-up email persistence,
+// WebAuthn user-id writeback persistence.
+
+fn json_f64(v: &Value) -> Option<f64> {
+    v.as_f64()
+        .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+}
+
+fn parse_ts(v: &Value) -> Option<DateTime<Utc>> {
+    v.as_str().and_then(|s| s.parse().ok())
+}
+
+/// Serialise the listed keys of `source` into a compact JSON object string,
+/// skipping absent or null keys (mirrors the Phase C backfill payload helper).
+fn payload_from_keys(keys: &[&str], source: &Value) -> String {
+    let mut m = Map::new();
+    for &k in keys {
+        if let Some(val) = source.get(k) {
+            if !val.is_null() {
+                m.insert(k.to_string(), val.clone());
+            }
+        }
+    }
+    serde_json::to_string(&Value::Object(m)).unwrap_or_else(|_| "{}".to_string())
+}
+
+/// A single row destined for `domain_accounts`, built from a validated,
+/// JSONL-shaped account record. UUID and JSON columns are carried as text so
+/// they can be bound with explicit `::uuid` / `::jsonb` casts (the sqlx build
+/// has no `uuid` feature), exactly as the Phase C backfill binds them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewDomainAccountRow {
+    pub id: String,
+    pub kind: String,
+    pub title: String,
+    pub mode: String,
+    pub radius_m: i64,
+    pub disabled: bool,
+    pub location_lat: Option<f64>,
+    pub location_lon: Option<f64>,
+    pub role: String,
+    pub email: Option<String>,
+    /// UUID as text (validated), bound with `$n::uuid`; `None` stores NULL.
+    pub webauthn_user_id: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub public_payload: String,
+    pub private_payload: String,
+}
+
+impl NewDomainAccountRow {
+    /// Map a validated, JSONL-shaped account record to a `domain_accounts` row.
+    ///
+    /// This mirrors the Phase C backfill mapping exactly so the Phase D loader
+    /// reconstructs the same public projection. In particular:
+    /// - `kind` ← `type` (default `garnrolle`)
+    /// - `mode` ← explicit `mode`, else `ron` when `type == "ron"` or `ron_flag`,
+    ///   else `verortet` when visibility or coordinates are present, else `ron`
+    /// - `radius_m` is bumped to 250 when `visibility == "approximate"` and 0
+    ///   (idempotent with the loader, which only adjusts when the stored radius
+    ///   is still 0)
+    /// - `private_payload` preserves `visibility`, `suppress_public_pos` (for
+    ///   private visibility), `ron_flag`, and the explicit `mode`
+    /// - `created_at` / `updated_at` are taken from the record if present, else
+    ///   NULL. The current create path never sets them, so account-create rows
+    ///   store NULL — identical to JSONL-create followed by Phase C backfill.
+    ///   These columns are not part of the public projection and are not read by
+    ///   the loader, so the choice is non-observable via the API.
+    pub fn from_jsonl_record(v: &Value) -> Result<Self> {
+        let id = v
+            .get("id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .context("account record is missing a non-empty id")?;
+
+        let kind = v
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("garnrolle")
+            .to_string();
+        let title = v
+            .get("title")
+            .and_then(|v| v.as_str())
+            .unwrap_or("Untitled")
+            .to_string();
+
+        let ron_flag = v.get("ron_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+        let visibility = v.get("visibility").and_then(|v| v.as_str());
+        let explicit_mode = v.get("mode").and_then(|v| v.as_str());
+        let disabled = v.get("disabled").and_then(|v| v.as_bool()).unwrap_or(false);
+
+        let location_lat = v
+            .get("location")
+            .and_then(|l| l.get("lat"))
+            .and_then(json_f64);
+        let location_lon = v
+            .get("location")
+            .and_then(|l| l.get("lon"))
+            .and_then(json_f64);
+
+        let role = v
+            .get("role")
+            .and_then(|v| v.as_str())
+            .unwrap_or("gast")
+            .to_string();
+
+        let email = v
+            .get("email")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        // Only persist a UUID we can actually parse; otherwise store NULL.
+        let webauthn_user_id = v
+            .get("webauthn_user_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .filter(|s| Uuid::parse_str(s).is_ok())
+            .map(|s| s.to_string());
+
+        let created_at = v.get("created_at").and_then(parse_ts);
+        let updated_at = v.get("updated_at").and_then(parse_ts);
+
+        let mode = if let Some(m) = explicit_mode {
+            m.to_string()
+        } else if kind == "ron" || ron_flag {
+            "ron".to_string()
+        } else if visibility.is_some() || (location_lat.is_some() && location_lon.is_some()) {
+            "verortet".to_string()
+        } else {
+            "ron".to_string()
+        };
+
+        let mut radius_m: i64 = v.get("radius_m").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+        if visibility == Some("approximate") && radius_m == 0 {
+            radius_m = 250;
+        }
+
+        let public_payload = payload_from_keys(&["summary", "tags"], v);
+
+        let mut priv_map = Map::new();
+        if let Some(vis) = visibility {
+            priv_map.insert("visibility".to_string(), Value::String(vis.to_string()));
+            if vis == "private" {
+                priv_map.insert("suppress_public_pos".to_string(), Value::Bool(true));
+            }
+        }
+        if ron_flag {
+            priv_map.insert("ron_flag".to_string(), Value::Bool(true));
+        }
+        if let Some(em) = explicit_mode {
+            priv_map.insert("mode".to_string(), Value::String(em.to_string()));
+        }
+        let private_payload = if priv_map.is_empty() {
+            "{}".to_string()
+        } else {
+            serde_json::to_string(&Value::Object(priv_map))
+                .context("failed to serialise account private_payload")?
+        };
+
+        Ok(Self {
+            id,
+            kind,
+            title,
+            mode,
+            radius_m,
+            disabled,
+            location_lat,
+            location_lon,
+            role,
+            email,
+            webauthn_user_id,
+            created_at,
+            updated_at,
+            public_payload,
+            private_payload,
+        })
+    }
+}
+
+/// Error from the account-create write path.
+#[derive(Debug, thiserror::Error)]
+pub enum AccountWriteError {
+    /// The account `id` (primary key) already exists in `domain_accounts`.
+    #[error("account id already exists")]
+    DuplicateId,
+    /// The JSONL-shaped record could not be mapped to a row.
+    #[error("failed to map account record: {0}")]
+    Mapping(#[source] anyhow::Error),
+    /// Any other database failure.
+    #[error("failed to persist account to domain_accounts: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+/// Insert exactly one account row into `domain_accounts` (Phase E-A).
+///
+/// A plain `INSERT` (no `ON CONFLICT`) is used on purpose: account creation must
+/// never silently overwrite an existing account. A primary-key collision surfaces
+/// as [`AccountWriteError::DuplicateId`] so the route can return `409 CONFLICT`.
+/// This function performs no in-memory mutation and writes no JSONL.
+pub async fn insert_account_from_jsonl_record(
+    pool: &PgPool,
+    record: &Value,
+) -> Result<(), AccountWriteError> {
+    let row = NewDomainAccountRow::from_jsonl_record(record).map_err(AccountWriteError::Mapping)?;
+
+    let result = sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, mode, radius_m, disabled, \
+             location_lat, location_lon, \
+             role, email, webauthn_user_id, \
+             created_at, updated_at, \
+             public_payload, private_payload) \
+         VALUES \
+            ($1, $2, $3, $4, $5, $6, \
+             $7, $8, \
+             $9, $10, $11::uuid, \
+             $12, $13, \
+             $14::jsonb, $15::jsonb)",
+    )
+    .bind(&row.id)
+    .bind(&row.kind)
+    .bind(&row.title)
+    .bind(&row.mode)
+    .bind(row.radius_m)
+    .bind(row.disabled)
+    .bind(row.location_lat)
+    .bind(row.location_lon)
+    .bind(&row.role)
+    .bind(row.email.as_deref())
+    .bind(row.webauthn_user_id.as_deref())
+    .bind(row.created_at)
+    .bind(row.updated_at)
+    .bind(&row.public_payload)
+    .bind(&row.private_payload)
+    .execute(pool)
+    .await;
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            Err(AccountWriteError::DuplicateId)
+        }
+        Err(e) => Err(AccountWriteError::Database(e)),
+    }
+}
+
+#[cfg(test)]
+mod write_path_tests {
+    use super::*;
+    use serde_json::json;
+
+    /// The create route builds exactly this record shape before persistence.
+    fn create_record() -> Value {
+        json!({
+            "id": "writepath-unit-1",
+            "type": "garnrolle",
+            "mode": "verortet",
+            "title": "Unit",
+            "summary": "A summary",
+            "tags": ["x", "y"],
+            "role": "weber",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "radius_m": 250,
+            "email": "unit@example.test"
+        })
+    }
+
+    #[test]
+    fn maps_create_record_like_backfill() {
+        let row = NewDomainAccountRow::from_jsonl_record(&create_record()).expect("map");
+        assert_eq!(row.id, "writepath-unit-1");
+        assert_eq!(row.kind, "garnrolle");
+        assert_eq!(row.title, "Unit");
+        assert_eq!(row.mode, "verortet");
+        assert_eq!(row.radius_m, 250);
+        assert!(!row.disabled);
+        assert_eq!(row.location_lat, Some(53.5));
+        assert_eq!(row.location_lon, Some(10.0));
+        assert_eq!(row.role, "weber");
+        assert_eq!(row.email.as_deref(), Some("unit@example.test"));
+        // create records carry no webauthn_user_id / timestamps
+        assert_eq!(row.webauthn_user_id, None);
+        assert_eq!(row.created_at, None);
+        assert_eq!(row.updated_at, None);
+        // public_payload carries summary + tags
+        let public: Value = serde_json::from_str(&row.public_payload).expect("public json");
+        assert_eq!(
+            public.get("summary").and_then(|v| v.as_str()),
+            Some("A summary")
+        );
+        assert!(public.get("tags").and_then(|v| v.as_array()).is_some());
+        // private_payload preserves the explicit mode (mirrors backfill)
+        let private: Value = serde_json::from_str(&row.private_payload).expect("private json");
+        assert_eq!(
+            private.get("mode").and_then(|v| v.as_str()),
+            Some("verortet")
+        );
+        assert!(private.get("visibility").is_none());
+        assert!(private.get("ron_flag").is_none());
+    }
+
+    #[test]
+    fn private_visibility_sets_suppress_public_pos() {
+        let record = json!({
+            "id": "writepath-unit-private",
+            "type": "garnrolle",
+            "title": "Private",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "private"
+        });
+        let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
+        let private: Value = serde_json::from_str(&row.private_payload).expect("private json");
+        assert_eq!(
+            private.get("visibility").and_then(|v| v.as_str()),
+            Some("private")
+        );
+        assert_eq!(
+            private.get("suppress_public_pos").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn approximate_zero_radius_becomes_250() {
+        let record = json!({
+            "id": "writepath-unit-approx",
+            "type": "garnrolle",
+            "title": "Approx",
+            "location": { "lat": 53.5, "lon": 10.0 },
+            "visibility": "approximate",
+            "radius_m": 0
+        });
+        let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
+        assert_eq!(row.radius_m, 250);
+    }
+
+    #[test]
+    fn ron_flag_forces_ron_mode() {
+        let record = json!({
+            "id": "writepath-unit-ron",
+            "type": "garnrolle",
+            "title": "Ron",
+            "ron_flag": true
+        });
+        let row = NewDomainAccountRow::from_jsonl_record(&record).expect("map");
+        assert_eq!(row.mode, "ron");
+        let private: Value = serde_json::from_str(&row.private_payload).expect("private json");
+        assert_eq!(
+            private.get("ron_flag").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+}
