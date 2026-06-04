@@ -163,7 +163,7 @@ Testfälle:
 
 DB-Suiten für lokalen PostgreSQL-Proof sind vorbereitet (`db_domain_schema_migrations`,
 `db_domain_backfill`, `db_domain_read_path`, `db_domain_account_write_path`).
-Lokaler PostgreSQL-Proof in dieser Umgebung nicht ausgeführt; PR-CI ist maßgeblich; **PR-CI-Beleg ausstehend; PR-CI ist maßgeblich**
+Lokaler PostgreSQL-Proof in dieser Umgebung nicht ausgeführt. PR-CI ist maßgeblich; der PR-CI-Beleg steht aus
 (Job `db-domain-account-write-path-proof` in `.github/workflows/api.yml`).
 
 `suppress_public_pos` wird von `POST /accounts` nicht akzeptiert; Phase E-A
