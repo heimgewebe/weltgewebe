@@ -26,14 +26,16 @@ SLICE_STATUS = "active"
 VALID_REVIEW_POLICIES = {"manual", "ci", "generated"}
 SLICE_REVIEW_POLICY = "manual"
 SLICE_MAX_AGE_DAYS = 90
+# This slice mirrors the existing claim registry. It does not invent a new
+# evidence taxonomy, so the allowed kinds are exactly those used by
+# docs/claims/registry.yml.
 VALID_EVIDENCE_KINDS = {
     "documentation",
     "implementation",
     "test",
     "ci",
-    "guard",
-    "contract",
-    "report",
+    "generated-report",
+    "registry",
 }
 IN_SCOPE_CLAIMS = {
     "CLAIM-AGENT-SAFE-001",
@@ -78,19 +80,32 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
         return None, f"Registry parse error: {exc.msg}"
 
 
-def _load_claim_ids(claims_path: Path) -> tuple[set[str], str | None]:
+def _load_claim_evidence(claims_path: Path) -> tuple[dict[str, set[tuple[str, str]]], str | None]:
+    """Load the declared ``(path, kind)`` evidence pairs per claim id.
+
+    The freshness registry must mirror these pairs exactly; it may not invent
+    new claim -> evidence bindings.
+    """
     data, _findings, exit_code = validate_claim_registry.load_registry(claims_path)
     if exit_code != 0 or not isinstance(data, dict):
-        return set(), f"Claim registry could not be loaded: {claims_path}"
+        return {}, f"Claim registry could not be loaded: {claims_path}"
     claims = data.get("claims")
     if not isinstance(claims, list):
-        return set(), "Claim registry has no 'claims' list"
-    ids = {
-        claim["id"]
-        for claim in claims
-        if isinstance(claim, dict) and isinstance(claim.get("id"), str)
-    }
-    return ids, None
+        return {}, "Claim registry has no 'claims' list"
+    claim_evidence: dict[str, set[tuple[str, str]]] = {}
+    for claim in claims:
+        if not isinstance(claim, dict) or not isinstance(claim.get("id"), str):
+            continue
+        evidence_pairs: set[tuple[str, str]] = set()
+        for ev in claim.get("evidence", []):
+            if not isinstance(ev, dict):
+                continue
+            path = ev.get("path")
+            kind = ev.get("kind")
+            if isinstance(path, str) and isinstance(kind, str):
+                evidence_pairs.add((path, kind))
+        claim_evidence[claim["id"]] = evidence_pairs
+    return claim_evidence, None
 
 
 def _is_positive_int(value: object) -> bool:
@@ -176,7 +191,55 @@ def _validate_freshness(entry_id: str | None, freshness: object) -> list[dict[st
     return findings
 
 
-def validate_registry_data(data: object, claim_ids: set[str], repo_root: Path) -> list[dict[str, str]]:
+def _cross_check_evidence(
+    entry_id: str | None,
+    claim_ref: str,
+    evidence: object,
+    claim_pairs: set[tuple[str, str]],
+) -> list[dict[str, str]]:
+    """Require exact ``(path, kind)`` set equality with the referenced claim.
+
+    The freshness registry may neither add evidence pairs that the claim does
+    not declare nor drop pairs the claim does declare. A wrong ``kind`` on a
+    matching ``path`` therefore fails on both sides.
+    """
+    findings: list[dict[str, str]] = []
+    freshness_pairs: set[tuple[str, str]] = set()
+    if isinstance(evidence, list):
+        for item in evidence:
+            if not isinstance(item, dict):
+                continue
+            path = item.get("path")
+            kind = item.get("kind")
+            if isinstance(path, str) and isinstance(kind, str):
+                freshness_pairs.add((path, kind))
+
+    for path, kind in sorted(freshness_pairs - claim_pairs):
+        findings.append(
+            _finding(
+                "EVIDENCE_NOT_IN_CLAIM_REGISTRY",
+                entry_id,
+                f"Evidence pair (kind={kind}) is not declared on claim {claim_ref}",
+                path=path,
+            )
+        )
+    for path, kind in sorted(claim_pairs - freshness_pairs):
+        findings.append(
+            _finding(
+                "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY",
+                entry_id,
+                f"Claim evidence pair (kind={kind}) is missing from freshness registry for {claim_ref}",
+                path=path,
+            )
+        )
+    return findings
+
+
+def validate_registry_data(
+    data: object,
+    claim_evidence: dict[str, set[tuple[str, str]]],
+    repo_root: Path,
+) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
     if not isinstance(data, dict):
@@ -246,7 +309,7 @@ def validate_registry_data(data: object, claim_ids: set[str], repo_root: Path) -
                         "'claim_ref' must be one of CLAIM-AGENT-SAFE-001..003",
                     )
                 )
-            if claim_ref not in claim_ids:
+            if claim_ref not in claim_evidence:
                 findings.append(
                     _finding("CLAIM_REF_UNKNOWN", entry_id, f"'claim_ref' {claim_ref} not found in claim registry")
                 )
@@ -268,6 +331,11 @@ def validate_registry_data(data: object, claim_ids: set[str], repo_root: Path) -
         findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
         findings.extend(_validate_freshness(entry_id, entry.get("freshness")))
 
+        if isinstance(claim_ref, str) and claim_ref in claim_evidence:
+            findings.extend(
+                _cross_check_evidence(entry_id, claim_ref, entry.get("evidence"), claim_evidence[claim_ref])
+            )
+
     return findings
 
 
@@ -285,12 +353,12 @@ def run_validation(
         finding = _finding("REGISTRY_LOAD_ERROR", None, load_error)
         return {"registry": registry, "entries_count": 0, "findings_count": 1, "findings": [finding]}, 1
 
-    claim_ids, claim_error = _load_claim_ids(claims_path)
+    claim_evidence, claim_error = _load_claim_evidence(claims_path)
     findings: list[dict[str, str]] = []
     if claim_error is not None:
         findings.append(_finding("CLAIM_REGISTRY_LOAD_ERROR", None, claim_error))
 
-    findings.extend(validate_registry_data(data, claim_ids, root))
+    findings.extend(validate_registry_data(data, claim_evidence, root))
 
     entries = data.get("entries") if isinstance(data, dict) else []
     entries_count = len(entries) if isinstance(entries, list) else 0

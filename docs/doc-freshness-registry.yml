@@ -52,7 +52,7 @@
         },
         {
           "path": "docs/_generated/agent-readiness.md",
-          "kind": "documentation"
+          "kind": "generated-report"
         }
       ],
       "freshness": {
@@ -72,7 +72,7 @@
       "evidence": [
         {
           "path": "docs/claims/registry.yml",
-          "kind": "documentation"
+          "kind": "registry"
         },
         {
           "path": "docs/claims/README.md",

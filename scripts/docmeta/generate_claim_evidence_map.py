@@ -213,7 +213,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        md_path, json_path = generate()
+        generate()
     except ValueError as exc:
         print(f"Error generating claim evidence map: {exc}", file=sys.stderr)
         return 1

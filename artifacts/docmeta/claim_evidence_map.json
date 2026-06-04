@@ -45,7 +45,7 @@
       "evidence_kinds": [
         "implementation",
         "test",
-        "documentation"
+        "generated-report"
       ],
       "freshness": {
         "review_policy": "manual",
@@ -69,7 +69,7 @@
         "scripts/docmeta/tests/test_validate_claim_registry.py"
       ],
       "evidence_kinds": [
-        "documentation",
+        "registry",
         "documentation",
         "implementation",
         "test"

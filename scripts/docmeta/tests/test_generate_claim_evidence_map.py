@@ -91,6 +91,29 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         self.assertEqual(entry["evidence_paths"], ["scripts/agent/impl_001.py", "scripts/agent/tests/test_001.py"])
         self.assertEqual(entry["evidence_kinds"], ["implementation", "test"])
 
+    def test_generated_json_preserves_generated_report_kind(self):
+        entry = self._entry(2)
+        entry["evidence"] = [
+            {"path": "scripts/docmeta/generate_agent_readiness.py", "kind": "implementation"},
+            {"path": "scripts/docmeta/tests/test_generate_agent_readiness.py", "kind": "test"},
+            {"path": "docs/_generated/agent-readiness.md", "kind": "generated-report"},
+        ]
+        self._write_registry([entry])
+        gen.generate(self.root, today=self.today)
+        kinds = self._read_json()["entries"][0]["evidence_kinds"]
+        self.assertIn("generated-report", kinds)
+
+    def test_generated_json_preserves_registry_kind(self):
+        entry = self._entry(3)
+        entry["evidence"] = [
+            {"path": "docs/claims/registry.yml", "kind": "registry"},
+            {"path": "docs/claims/README.md", "kind": "documentation"},
+        ]
+        self._write_registry([entry])
+        gen.generate(self.root, today=self.today)
+        kinds = self._read_json()["entries"][0]["evidence_kinds"]
+        self.assertIn("registry", kinds)
+
     def test_entries_are_deterministic(self):
         # Registry order is reversed; output must be sorted by id.
         self._write_registry([self._entry(3), self._entry(1), self._entry(2)])
