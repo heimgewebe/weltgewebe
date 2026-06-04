@@ -46,23 +46,23 @@ try:
         if line.startswith('  - id:'):
             if current_impl:
                 implementations.append(current_impl)
-            current_impl = {'id': line_stripped.split('id:')[1].strip()}
+            current_impl = {'id': line_stripped.split(':', 1)[1].strip()}
             current_list_field = None
         elif current_impl is not None:
             if line_stripped.startswith('path:'):
-                current_impl['path'] = line_stripped.split('path:')[1].strip()
+                current_impl['path'] = line_stripped.split(':', 1)[1].strip()
                 current_list_field = None
             elif line_stripped.startswith('impl_type:'):
-                current_impl['impl_type'] = line_stripped.split('impl_type:')[1].strip()
+                current_impl['impl_type'] = line_stripped.split(':', 1)[1].strip()
                 current_list_field = None
             elif line_stripped.startswith('status:'):
-                current_impl['status'] = line_stripped.split('status:')[1].strip()
+                current_impl['status'] = line_stripped.split(':', 1)[1].strip()
                 current_list_field = None
             elif line_stripped.startswith('criticality:'):
-                current_impl['criticality'] = line_stripped.split('criticality:')[1].strip()
+                current_impl['criticality'] = line_stripped.split(':', 1)[1].strip()
                 current_list_field = None
             elif line_stripped.startswith('evidence_level:'):
-                current_impl['evidence_level'] = line_stripped.split('evidence_level:')[1].strip()
+                current_impl['evidence_level'] = line_stripped.split(':', 1)[1].strip()
                 current_list_field = None
             elif line_stripped.startswith('documented_by:'):
                 current_list_field = 'documented_by'
@@ -91,7 +91,7 @@ try:
         for impl in implementations:
             impl_id = impl.get('id', '')
             path = impl.get('path', '—')
-            impl_type = impl.get('impl_type', 'unknown')
+            impl_type = impl.get('impl_type', '—')
             criticality = impl.get('criticality', '—')
             docs = impl.get('documented_by', [])
             docs_str = ', '.join(docs) if docs else '⚠ undocumented'
