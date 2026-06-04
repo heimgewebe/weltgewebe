@@ -16,7 +16,7 @@ use weltgewebe_api::{
     auth::{
         accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
     },
-    config::AppConfig,
+    config::{AppConfig, DomainReadSource},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -54,6 +54,7 @@ async fn test_state() -> Result<ApiState> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        domain_read_source: DomainReadSource::Jsonl,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,
@@ -307,6 +308,73 @@ async fn nodes_patch_info_lifecycle() -> anyhow::Result<()> {
     let body = body::to_bytes(res.into_body(), usize::MAX).await?;
     let v: serde_json::Value = serde_json::from_slice(&body)?;
     assert!(v.get("info").is_none() || v["info"].is_null());
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn postgres_read_source_blocks_node_patch_without_persisting() -> anyhow::Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let original_line =
+        r#"{"id":"n1","location":{"lon":10.0,"lat":53.5},"title":"A","info":"Old Info"}"#;
+    write_lines(&nodes_path, &[original_line]);
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let mut account_map = AccountStore::new();
+    let account = AccountPublic {
+        id: "weber1".to_string(),
+        kind: "garnrolle".to_string(),
+        title: "Weber".to_string(),
+        summary: None,
+        public_pos: None,
+        mode: weltgewebe_api::routes::accounts::AccountMode::Verortet,
+        radius_m: 0,
+        disabled: false,
+        tags: vec![],
+    };
+    account_map.insert(AccountInternal {
+        public: account,
+        role: Role::Weber,
+        email: Some("weber1@example.com".to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    });
+
+    let mut state = test_state().await?;
+    state.config.domain_read_source = DomainReadSource::Postgres;
+    state.accounts = Arc::new(RwLock::new(account_map));
+
+    let session = create_session(&state, "weber1", None).await;
+    let cookie_val = format!("gewebe_session={}", session.id);
+
+    let app = Router::new()
+        .merge(api_router())
+        .layer(from_fn_with_state(state.clone(), auth_middleware))
+        .layer(axum::middleware::from_fn(require_csrf))
+        .with_state(state.clone());
+
+    let req = Request::patch("/nodes/n1")
+        .header("Content-Type", "application/json")
+        .header("Cookie", &cookie_val)
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .body(body::Body::from(r#"{"info":"New Info"}"#))?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let response = String::from_utf8(bytes.to_vec())?;
+    assert!(response.contains("DOMAIN_READ_SOURCE_READ_ONLY"));
+
+    let cached_info = state
+        .nodes
+        .read()
+        .await
+        .get("n1")
+        .and_then(|node| node.info.as_deref().map(str::to_string));
+    assert_eq!(cached_info.as_deref(), Some("Old Info"));
+    assert_eq!(fs::read_to_string(&nodes_path)?, original_line);
 
     Ok(())
 }

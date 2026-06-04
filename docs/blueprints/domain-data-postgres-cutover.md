@@ -224,6 +224,18 @@ vorzusehen:
 Diese Gates sind hier als Zielvorgabe dokumentiert; sie werden erst in den
 Implementierungsphasen relevant, wenn die jeweilige Infrastruktur existiert.
 
+## Phase-D-Status (2026-06-03)
+
+Phase D ist als optionaler, read-only PostgreSQL-Read-Path hinter explizitem
+Config-Gate implementiert. Die `db_domain_read_path`-Suite ist als lokaler
+PostgreSQL-Proof vorbereitet; der PR-CI-Beleg für
+`db-domain-read-path-proof` steht aus. Mutierende Domänen-Endpunkte werden bei
+`WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` mit `409 CONFLICT` und
+`DOMAIN_READ_SOURCE_READ_ONLY` blockiert, damit keine JSONL-only Writes nach
+einem Neustart durch den PostgreSQL-Read-Path verschwinden. Das ist kein
+Produktions-Cutover: JSONL bleibt im Default-/JSONL-Modus Default-Lesequelle
+und Write-Truth, und Phase E bleibt offen.
+
 ## Akzeptanzkriterien für OPT-ARC-001
 
 OPT-ARC-001 darf erst dann als erledigt gelten, wenn alles Folgende nachweisbar
@@ -240,16 +252,21 @@ ist:
 
 ## Nicht-Ziele
 
-- Keine Implementierung in dieser PR.
-- Keine Produktionscode-Änderungen.
-- Keine Datenbank-Migrationen in dieser PR.
+- Keine Phase E in dieser PR.
+- Kein Write-Path-Cutover.
+- Kein PostgreSQL-Write-Path und kein Dual-Write.
+- Keine Entfernung von JSONL.
+- Kein Produktions-Cutover.
+- Kein Startup-Backfill.
 - Keine Endpoint-Contract-Änderungen.
+- Kein Claim, dass OPT-ARC-001 erledigt ist.
 - Kein Auth-Redesign.
 - Kein UI-Redesign.
-- Kein Performance-Benchmark-Claim jenseits dieses Plans.
+- Kein Performance-Benchmark-Claim jenseits dieses Phase-D-Proofs.
 
 ## Einordnung
 
-Diese Blaupause verändert keine Runtime und markiert OPT-ARC-001 bewusst noch
-nicht als erledigt. Sie schafft nur den belastbaren Plan für die folgenden
-Implementierungs-PRs.
+Diese Phase-D-Slice ergänzt nur den optionalen read-only PostgreSQL-Read-Path
+hinter explizitem Config-Gate und markiert OPT-ARC-001 bewusst noch nicht als
+erledigt. Phase E bleibt offen; JSONL bleibt im Default-/JSONL-Modus
+Default-Lesequelle und Write-Truth bis Phase E/Cutover.

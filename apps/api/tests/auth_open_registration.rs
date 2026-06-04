@@ -35,6 +35,7 @@ fn test_state_open_reg() -> Result<ApiState> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
+        domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
 
         auth_public_login: true,
         app_base_url: Some("http://localhost".to_string()),

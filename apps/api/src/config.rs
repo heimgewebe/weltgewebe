@@ -45,12 +45,43 @@ macro_rules! apply_env_override_option {
     };
 }
 
+/// Selects where domain data is read from at startup.
+///
+/// JSONL remains the default read source and write truth. PostgreSQL is
+/// explicitly opt-in via `WELTGEWEBE_DOMAIN_READ_SOURCE` or the
+/// `domain_read_source` config-file key.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DomainReadSource {
+    #[default]
+    #[serde(alias = "file", alias = "files")]
+    Jsonl,
+    #[serde(alias = "pg", alias = "db")]
+    Postgres,
+}
+
+impl DomainReadSource {
+    fn parse_env_value(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "jsonl" | "file" | "files" => Ok(Self::Jsonl),
+            "postgres" | "pg" | "db" => Ok(Self::Postgres),
+            other => anyhow::bail!(
+                "invalid WELTGEWEBE_DOMAIN_READ_SOURCE value '{other}'; expected one of: jsonl, file, files, postgres, pg, db"
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
     pub ron_days: u32,
     pub anonymize_opt_in: bool,
     pub delegation_expire_days: u32,
+
+    /// Domain data read source (JSONL default, PostgreSQL opt-in).
+    #[serde(default)]
+    pub domain_read_source: DomainReadSource,
 
     // Public Login Configuration
     #[serde(default)]
@@ -159,6 +190,12 @@ impl AppConfig {
         apply_env_override!(self, ron_days, "HA_RON_DAYS");
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
         apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
+
+        if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
+            if !val.trim().is_empty() {
+                self.domain_read_source = DomainReadSource::parse_env_value(&val)?;
+            }
+        }
 
         // Auth Overrides
         if let Ok(val) = env::var("AUTH_PUBLIC_LOGIN") {
@@ -426,7 +463,7 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{AppConfig, DomainReadSource};
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
@@ -987,6 +1024,46 @@ delegation_expire_days: 28
 
         let res = AppConfig::load_from_path(file.path());
         assert!(res.is_err(), "origin with a fragment must be rejected");
+        Ok(())
+    }
+    #[test]
+    #[serial]
+    fn domain_read_source_defaults_to_jsonl() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _source = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_env_accepts_aliases() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _source = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "pg");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_read_source_invalid_env_is_hard_error() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _source = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "sqlite");
+
+        let err = AppConfig::load_from_path(file.path()).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("invalid WELTGEWEBE_DOMAIN_READ_SOURCE"));
         Ok(())
     }
 }

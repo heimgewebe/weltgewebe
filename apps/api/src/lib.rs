@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod config;
+pub mod domain_db;
 pub mod mailer;
 pub mod middleware;
 pub mod routes;
@@ -15,7 +16,7 @@ use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
-use config::AppConfig;
+use config::{AppConfig, DomainReadSource};
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
@@ -74,17 +75,32 @@ pub async fn run() -> anyhow::Result<()> {
     let challenges = crate::auth::challenges::ChallengeStore::new();
     let tokens = crate::auth::tokens::TokenStore::new();
     let step_up_tokens = crate::auth::step_up_tokens::StepUpTokenStore::new();
-    let accounts = Arc::new(tokio::sync::RwLock::new(
-        routes::accounts::load_all_accounts().await,
-    ));
+    let (accounts_store, nodes_cache, edges_cache) = match app_config.domain_read_source {
+        DomainReadSource::Jsonl => (
+            routes::accounts::load_all_accounts().await,
+            routes::nodes::load_nodes().await,
+            routes::edges::load_edges().await,
+        ),
+        DomainReadSource::Postgres => {
+            let pool = db_pool.as_ref().ok_or_else(|| {
+                anyhow!(
+                    "domain_read_source=postgres requires DATABASE_URL and an available PostgreSQL pool"
+                )
+            })?;
+            (
+                crate::domain_db::load_accounts_from_postgres(pool).await?,
+                crate::domain_db::load_nodes_from_postgres(pool).await?,
+                crate::domain_db::load_edges_from_postgres(pool).await?,
+            )
+        }
+    };
+    let accounts = Arc::new(tokio::sync::RwLock::new(accounts_store));
 
-    let nodes_cache = routes::nodes::load_nodes().await;
     metrics.set_nodes_cache_count(nodes_cache.len() as i64);
     let nodes = Arc::new(tokio::sync::RwLock::new(nodes_cache));
     let nodes_persist = Arc::new(tokio::sync::Mutex::new(()));
     let accounts_persist = Arc::new(tokio::sync::Mutex::new(()));
 
-    let edges_cache = routes::edges::load_edges().await;
     metrics.set_edges_cache_count(edges_cache.len() as i64);
     let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
 
