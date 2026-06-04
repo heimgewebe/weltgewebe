@@ -409,7 +409,9 @@
       "effort": "low",
       "evidence_status": "ci",
       "evidence": [
-        ".github/workflows/"
+        ".github/workflows/",
+        "scripts/ci/check_actions_node24_readiness.py",
+        "scripts/ci/tests/test_check_actions_node24_readiness.py"
       ],
       "missing_evidence": [
         "CI-Lauf dokumentiert verbleibende Node-20-Metadatenwarnungen für Stage B"

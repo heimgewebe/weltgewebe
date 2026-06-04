@@ -19,10 +19,16 @@
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
-        ".github/workflows/"
+        ".github/workflows/",
+        "scripts/ci/check_actions_node24_readiness.py",
+        "scripts/ci/tests/test_check_actions_node24_readiness.py",
+        "docs/tasks/board.md",
+        "docs/reports/optimierungsstatus.md"
       ],
       "missing_evidence": [
-        "CI-Lauf dokumentiert verbleibende Node-20-Metadatenwarnungen für Stage B"
+        "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
+        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
+        "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
       ],
       "acceptance": [
         "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
