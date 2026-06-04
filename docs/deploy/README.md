@@ -174,6 +174,21 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
   zu verhindern. Bis Phase E existiert kein PostgreSQL-Write-Path und kein
   Dual-Write; im Default-/JSONL-Modus bleibt JSONL die Write-Truth. Nicht als
   Produktions-Cutover verstehen; OPT-ARC-001 bleibt dadurch nicht erledigt.
+- **WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE**: Default `jsonl` (OPT-ARC-001
+  Phase E-A). `postgres` aktiviert einen **engen** PostgreSQL-Schreibpfad
+  **ausschließlich** für die Account-Erzeugung (`POST /accounts`); der Account
+  wird dann in `domain_accounts` geschrieben und das In-Memory-`AccountStore`
+  erst nach erfolgreichem DB-Write aktualisiert (kein Dual-Write, kein
+  JSONL-Append).
+  - **Erfordert** `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` und eine
+    konfigurierte `DATABASE_URL`/Pool. `postgres` mit JSONL-Read-Source oder
+    ohne Pool ist ein **harter Config-/Startfehler** (kein stiller Fallback) —
+    sonst entstünden nach einem Neustart unsichtbare, persistierte Writes.
+  - **Nur Account-Create** ist implementiert. Andere Domänen-Mutationen
+    (`PATCH /nodes`, Edge-Writes, Step-up-E-Mail-Persistenz,
+    WebAuthn-User-ID-Writeback) bleiben blockiert bzw. JSONL-only.
+  - Nur einsetzen, wenn die DB-Proof-Jobs grün sind. Nicht als Produktions-
+    Cutover verstehen; OPT-ARC-001 bleibt `partial`.
 
 ---
 

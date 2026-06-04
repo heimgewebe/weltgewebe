@@ -1,18 +1,185 @@
 use axum::http::StatusCode;
 
-use crate::{config::DomainReadSource, state::ApiState};
+use crate::{
+    config::{DomainAccountWriteSource, DomainReadSource},
+    state::ApiState,
+};
 
 pub(super) const DOMAIN_READ_SOURCE_READ_ONLY: &str = "DOMAIN_READ_SOURCE_READ_ONLY";
 pub(super) const DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE: &str =
-    "Domain mutations are disabled while WELTGEWEBE_DOMAIN_READ_SOURCE=postgres is active; Phase E write-path cutover is not implemented.";
+    "Domain mutations are disabled while WELTGEWEBE_DOMAIN_READ_SOURCE=postgres is active; Phase E write-path cutover is not implemented for this endpoint.";
 
+pub(super) const INVALID_DOMAIN_WRITE_CONFIG: &str = "INVALID_DOMAIN_WRITE_CONFIG";
+const INVALID_DOMAIN_WRITE_CONFIG_MESSAGE: &str =
+    "domain_account_write_source=postgres requires domain_read_source=postgres";
+
+fn read_only_conflict() -> (StatusCode, String) {
+    (
+        StatusCode::CONFLICT,
+        format!("{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}"),
+    )
+}
+
+fn invalid_write_config() -> (StatusCode, String) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        format!("{INVALID_DOMAIN_WRITE_CONFIG}: {INVALID_DOMAIN_WRITE_CONFIG_MESSAGE}"),
+    )
+}
+
+/// Reject domain mutations that have no PostgreSQL write path implemented while
+/// the PostgreSQL read source is active.
+///
+/// Used by node writes (and future edge writes). These remain blocked in
+/// PostgreSQL read mode because writing them to JSONL would be invisible after a
+/// restart, and no PostgreSQL write path exists for them yet (Phase E-A only
+/// implements account-create). Account creation has its own, narrower gate —
+/// see [`reject_account_create_unless_writable`].
 pub(super) fn reject_if_postgres_read_source(state: &ApiState) -> Result<(), (StatusCode, String)> {
     if state.config.domain_read_source == DomainReadSource::Postgres {
-        return Err((
-            StatusCode::CONFLICT,
-            format!("{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}"),
-        ));
+        return Err(read_only_conflict());
     }
 
     Ok(())
+}
+
+/// Account-create write gate (OPT-ARC-001 Phase E-A).
+///
+/// Behaviour matrix:
+/// - JSONL read + JSONL account write: allow (JSONL append path).
+/// - Postgres read + Postgres account write: allow (PostgreSQL insert path).
+/// - Postgres read + JSONL account write: reject — appending to JSONL under a
+///   PostgreSQL read source would persist writes that vanish after a restart.
+/// - JSONL read + Postgres account write: reject defensively (config load also
+///   forbids this); tests and internal code may construct `ApiState` manually.
+pub(super) fn reject_account_create_unless_writable(
+    state: &ApiState,
+) -> Result<(), (StatusCode, String)> {
+    if state.config.domain_account_write_source == DomainAccountWriteSource::Postgres
+        && state.config.domain_read_source != DomainReadSource::Postgres
+    {
+        return Err(invalid_write_config());
+    }
+
+    if state.config.domain_read_source == DomainReadSource::Postgres
+        && state.config.domain_account_write_source != DomainAccountWriteSource::Postgres
+    {
+        return Err(read_only_conflict());
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        auth::{
+            accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionBackend,
+            tokens::TokenStore,
+        },
+        config::{AppConfig, DomainAccountWriteSource, DomainReadSource},
+        state::ApiState,
+        telemetry::{BuildInfo, Metrics},
+    };
+    use std::sync::Arc;
+    use tokio::sync::{Mutex, RwLock};
+
+    fn test_state(
+        domain_read_source: DomainReadSource,
+        domain_account_write_source: DomainAccountWriteSource,
+    ) -> ApiState {
+        let metrics = Metrics::try_new(BuildInfo {
+            version: "test",
+            commit: "test",
+            build_timestamp: "test",
+        })
+        .expect("metrics");
+
+        let config = AppConfig {
+            fade_days: 7,
+            ron_days: 84,
+            anonymize_opt_in: true,
+            delegation_expire_days: 28,
+            domain_read_source,
+            domain_account_write_source,
+            auth_public_login: false,
+            app_base_url: None,
+            auth_trusted_proxies: None,
+            auth_allow_emails: None,
+            auth_allow_email_domains: None,
+            auth_auto_provision: false,
+            auth_rl_ip_per_min: None,
+            auth_rl_ip_per_hour: None,
+            auth_rl_email_per_min: None,
+            auth_rl_email_per_hour: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_pass: None,
+            smtp_from: None,
+            auth_log_magic_token: false,
+            webauthn_rp_id: None,
+            webauthn_rp_origin: None,
+            webauthn_rp_name: None,
+        };
+
+        let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
+        ApiState {
+            db_pool: None,
+            db_pool_configured: false,
+            nats_client: None,
+            nats_configured: false,
+            config,
+            metrics,
+            sessions: SessionBackend::new_in_memory(),
+            challenges: Default::default(),
+            tokens: TokenStore::new(),
+            step_up_tokens: crate::auth::step_up_tokens::StepUpTokenStore::new(),
+            accounts: Arc::new(RwLock::new(AccountStore::new())),
+            nodes: Arc::new(RwLock::new(crate::state::OrderedCache::new())),
+            nodes_persist: Arc::new(Mutex::new(())),
+            accounts_persist: Arc::new(Mutex::new(())),
+            edges: Arc::new(RwLock::new(crate::state::OrderedCache::new())),
+            rate_limiter,
+            mailer: None,
+            webauthn: None,
+            passkey_registrations: Default::default(),
+            passkey_registration_grants: Default::default(),
+            passkeys: Default::default(),
+        }
+    }
+
+    #[test]
+    fn jsonl_read_jsonl_write_allows_account_create() {
+        let state = test_state(DomainReadSource::Jsonl, DomainAccountWriteSource::Jsonl);
+        assert!(reject_account_create_unless_writable(&state).is_ok());
+    }
+
+    #[test]
+    fn postgres_read_postgres_write_allows_account_create() {
+        let state = test_state(
+            DomainReadSource::Postgres,
+            DomainAccountWriteSource::Postgres,
+        );
+        assert!(reject_account_create_unless_writable(&state).is_ok());
+    }
+
+    #[test]
+    fn postgres_read_jsonl_write_rejects_read_only() {
+        let state = test_state(DomainReadSource::Postgres, DomainAccountWriteSource::Jsonl);
+        let err = reject_account_create_unless_writable(&state).unwrap_err();
+        assert_eq!(err.0, StatusCode::CONFLICT);
+        assert!(err.1.contains(DOMAIN_READ_SOURCE_READ_ONLY));
+    }
+
+    #[test]
+    fn jsonl_read_postgres_write_rejects_invalid_config() {
+        let state = test_state(DomainReadSource::Jsonl, DomainAccountWriteSource::Postgres);
+        let err = reject_account_create_unless_writable(&state).unwrap_err();
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG));
+        assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG_MESSAGE));
+    }
 }

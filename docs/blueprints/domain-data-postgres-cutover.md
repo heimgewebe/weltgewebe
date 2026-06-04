@@ -17,6 +17,8 @@ relations:
   - type: relates_to
     target: docs/reports/optimierungsstatus.md
   - type: relates_to
+    target: docs/reports/domain-account-write-path-proof.md
+  - type: relates_to
     target: docs/reports/optimierungsbericht.md
   - type: relates_to
     target: docs/specs/contract.md
@@ -236,6 +238,29 @@ einem Neustart durch den PostgreSQL-Read-Path verschwinden. Das ist kein
 Produktions-Cutover: JSONL bleibt im Default-/JSONL-Modus Default-Lesequelle
 und Write-Truth, und Phase E bleibt offen.
 
+## Phase-E-A-Status (2026-06-04)
+
+Phase E-A implementiert einen bewusst engen, opt-in PostgreSQL-Schreibpfad
+**ausschließlich** für die Account-Erzeugung (`POST /accounts`) hinter einem
+eigenen Write-Gate `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE`
+(`domain_account_write_source`, Default `jsonl`). Der Write-Gate ist getrennt
+vom Read-Gate; `postgres` erfordert hart `domain_read_source=postgres` plus
+einen Pool (Config-Load- bzw. Startup-Fehler statt stillem Fallback). Es gibt
+kein Dual-Write: JSONL-Modus schreibt nie PostgreSQL, PostgreSQL-Modus hängt
+nie JSONL an. Der DB-Insert nutzt dasselbe semantische Mapping wie der
+Phase-C-Backfill, sodass eine erzeugte Zeile mit „JSONL-Create + Backfill“
+identisch ist; das In-Memory-`AccountStore` wird erst nach erfolgreichem
+DB-Write aktualisiert, ein fehlgeschlagener Insert mutiert weder Cache noch
+JSONL und liefert bei Primärschlüsselkollision `409 CONFLICT`.
+
+Bewusst **nicht** Teil dieser Slice: `PATCH /nodes`-Write (im Postgres-Read-Modus
+weiterhin blockiert), Edge-Writes, Step-up-E-Mail-Persistenz und
+WebAuthn-User-ID-Writeback. JSONL bleibt Default und wird nicht entfernt. Belege
+und Testmatrix siehe `docs/reports/domain-account-write-path-proof.md`. Der
+PR-CI-Job `db-domain-account-write-path-proof` ist vorbereitet; der
+PR-CI-Beleg steht aus. Das ist kein Produktions-Cutover; OPT-ARC-001 bleibt
+`partial` und Phase E (Rest) bleibt offen.
+
 ## Akzeptanzkriterien für OPT-ARC-001
 
 OPT-ARC-001 darf erst dann als erledigt gelten, wenn alles Folgende nachweisbar
@@ -250,11 +275,16 @@ ist:
 - Dokumentation und Statusartefakte werden erst nach diesem Beweis auf `done`
   gesetzt.
 
-## Nicht-Ziele
+## Nicht-Ziele (Phase D / Read-Path-Slice)
 
-- Keine Phase E in dieser PR.
-- Kein Write-Path-Cutover.
-- Kein PostgreSQL-Write-Path und kein Dual-Write.
+Diese Liste beschreibt die Read-Path-Slice (Phase D). Der enge Account-Create-
+Schreibpfad ist seit Phase E-A die einzige Ausnahme; alle übrigen Punkte gelten
+weiter (siehe „Phase-E-A-Status“ und `docs/reports/domain-account-write-path-proof.md`).
+
+- Kein vollständiger Write-Path-Cutover (nur `POST /accounts` ist als Phase E-A
+  implementiert).
+- Kein PostgreSQL-Write-Path für Nodes, Edges, Step-up-E-Mail oder
+  WebAuthn-User-ID-Writeback; kein Dual-Write.
 - Keine Entfernung von JSONL.
 - Kein Produktions-Cutover.
 - Kein Startup-Backfill.
@@ -266,7 +296,9 @@ ist:
 
 ## Einordnung
 
-Diese Phase-D-Slice ergänzt nur den optionalen read-only PostgreSQL-Read-Path
-hinter explizitem Config-Gate und markiert OPT-ARC-001 bewusst noch nicht als
-erledigt. Phase E bleibt offen; JSONL bleibt im Default-/JSONL-Modus
+Die Phase-D-Slice ergänzte den optionalen read-only PostgreSQL-Read-Path hinter
+explizitem Config-Gate. Phase E-A ergänzt darauf aufbauend genau einen engen
+PostgreSQL-Schreibpfad für `POST /accounts` hinter einem getrennten Write-Gate.
+Beide markieren OPT-ARC-001 bewusst noch nicht als erledigt. Phase E (Rest)
+bleibt offen; JSONL bleibt im Default-/JSONL-Modus
 Default-Lesequelle und Write-Truth bis Phase E/Cutover.

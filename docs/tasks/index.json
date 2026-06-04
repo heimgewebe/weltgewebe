@@ -456,17 +456,23 @@
         "apps/api/src/config.rs",
         "apps/api/src/domain_db.rs",
         "apps/api/src/lib.rs",
+        "apps/api/src/routes/domain_write_guard.rs",
+        "apps/api/src/routes/accounts.rs",
         "apps/api/tests/db_domain_read_path.rs",
+        "apps/api/tests/db_domain_account_write_path.rs",
         "docs/reports/domain-read-path-proof.md",
-        "CI-Job: db-domain-read-path-proof"
+        "docs/reports/domain-account-write-path-proof.md",
+        "CI-Job: db-domain-read-path-proof",
+        "CI-Job: db-domain-account-write-path-proof"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
-        "Phase E (Write-Path-Switch) für Domänendaten fehlt",
-        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover",
         "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend",
-        "Phase D ist nur opt-in/read-only belegt; PostgreSQL-Read-Modus blockiert Domänenmutationen; kein Produktions-Cutover"
+        "Grüner PR-CI-Laufbeleg für db_domain_account_write_path ausstehend",
+        "Phase E-A (Account-Create-Write hinter WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE, nur POST /accounts) implementiert; Phase E Rest (PATCH /nodes, Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback) fehlt",
+        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
+        "Phase D (read-only) und Phase E-A (enger Account-Create-Write) sind opt-in belegt; kein Produktions-Cutover"
       ],
       "acceptance": [
         "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
@@ -480,10 +486,11 @@
           "docs/blueprints/domain-data-postgres-cutover.md",
           "docs/reports/optimierungsstatus.md",
           "docs/reports/domain-backfill-proof.md",
-          "docs/reports/domain-read-path-proof.md"
+          "docs/reports/domain-read-path-proof.md",
+          "docs/reports/domain-account-write-path-proof.md"
         ]
       },
-      "updated_at": "2026-06-03"
+      "updated_at": "2026-06-04"
     }
   ]
 }

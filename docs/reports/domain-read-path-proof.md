@@ -15,6 +15,8 @@ relations:
   - type: relates_to
     target: docs/reports/domain-backfill-proof.md
   - type: relates_to
+    target: docs/reports/domain-account-write-path-proof.md
+  - type: relates_to
     target: docs/reports/optimierungsstatus.md
   - type: relates_to
     target: docs/tasks/board.md
@@ -34,9 +36,18 @@ Geltende Grenzen:
 - PostgreSQL wird nur über `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` bzw.
   `domain_read_source: postgres` aktiviert.
 - Phase E bleibt offen.
-- Write-Paths werden nicht auf PostgreSQL umgestellt.
+- Write-Paths werden in Phase D nicht auf PostgreSQL umgestellt.
 - Mutierende Domänen-Endpunkte werden bei `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres`
   mit `409 CONFLICT` / `DOMAIN_READ_SOURCE_READ_ONLY` blockiert.
+
+> **Folge-Slice Phase E-A:** Aufbauend auf diesem Read-Path implementiert
+> Phase E-A einen engen, opt-in PostgreSQL-Schreibpfad **nur** für
+> `POST /accounts` hinter dem getrennten Gate
+> `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE`. Im Postgres-Read-Modus ist
+> Account-Create damit nicht mehr pauschal blockiert, sondern nur dann, wenn der
+> Account-Write-Source weiterhin `jsonl` ist. Knoten-, Kanten-, Step-up-E-Mail-
+> und WebAuthn-Writeback-Mutationen bleiben blockiert bzw. unverändert. Details:
+> `docs/reports/domain-account-write-path-proof.md`.
 
 ## Implementierte Belege
 
