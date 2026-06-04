@@ -1,11 +1,11 @@
 import yaml
 import glob
-import os
 import sys
 
 def check_workflows():
     workflows = glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml')
     issues = []
+    reusable_calls = []
 
     js_actions = [
         'actions/checkout',
@@ -45,6 +45,12 @@ def check_workflows():
             for job_name, job in jobs.items():
                 if not isinstance(job, dict): continue
 
+                # Check for reusable workflow calls
+                if 'uses' in job:
+                    uses_ref = job['uses']
+                    reusable_calls.append(f"{wf_file} {job_name} -> {uses_ref}")
+                    continue
+
                 job_env = job.get('env', {})
                 has_job_node24 = str(job_env.get('FORCE_JAVASCRIPT_ACTIONS_TO_NODE24', '')).lower() == 'true'
                 has_node24 = has_wf_node24 or has_job_node24
@@ -58,11 +64,15 @@ def check_workflows():
                         action_base = uses.split('@')[0]
                         is_js = any(action_base.startswith(js) for js in js_actions)
                         if is_js:
-                            uses_js = True
                             is_sha = len(uses.split('@')[1]) == 40
                             print(f"| {wf_file} | {job_name} | {uses} | {'SHA' if is_sha else 'Tag'} | Yes | {'Yes' if has_node24 else 'No'} |")
                             if not has_node24:
                                 issues.append(f"{wf_file} - {job_name}: Missing FORCE_JAVASCRIPT_ACTIONS_TO_NODE24")
+
+    if reusable_calls:
+        print("\nReusable workflow calls detected; caller env does not prove called workflow Node-24 readiness:")
+        for call in reusable_calls:
+            print(f"- {call}")
 
     return issues
 

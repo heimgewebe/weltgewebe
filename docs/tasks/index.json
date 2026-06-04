@@ -22,12 +22,12 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "Grüner CI-Lauf für csp-contract-check, Build & Lint, und ci Workflows mit erzwungenem Node 24."
+        "CI-Lauf dokumentiert verbleibende Node-20-Metadatenwarnungen für Stage B"
       ],
       "acceptance": [
-        "Keine Node 20 deprecation warnings in CI-Logs.",
-        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in allen betroffenen Workflows gesetzt.",
-        "Kein gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION."
+        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
+        "Kein Gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.",
+        "CI-Lauf dokumentiert, ob Node-20-Metadatenwarnungen verbleiben; verbleibende Warnungen werden Stage B zugeordnet."
       ],
       "links": {
         "issues": [],

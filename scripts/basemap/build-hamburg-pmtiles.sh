@@ -102,7 +102,9 @@ if ! docker run --rm \
   "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
   --output="/data/$OUTPUT_PMTILES" \
-  --download=true; then
+  --download=true \
+  --http-retries=3 \
+  --http-timeout=60s; then
 
   echo "Error: Docker execution failed." >&2
   exit 1

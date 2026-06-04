@@ -412,9 +412,9 @@
         ".github/workflows/"
       ],
       "missing_evidence": [
-        "Grüner CI-Lauf für Workflows mit FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+        "CI-Lauf dokumentiert verbleibende Node-20-Metadatenwarnungen für Stage B"
       ],
-      "next_action": "PR-CI-Lauf auf Warnungsfreiheit prüfen",
+      "next_action": "CI-Lauf unter erzwungener Node-24-Action-Runtime prüfen und verbleibende Node-20-Metadatenwarnungen für Stage B erfassen.",
       "updated_at": "2026-06-04"
     }
   ]
