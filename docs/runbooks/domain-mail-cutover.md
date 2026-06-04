@@ -56,6 +56,59 @@ relations:
 - Runtime auf Brevo-SMTP ändern
 - Dienste kontrolliert neu erzeugen / deployen
 
+## INWX Registrar/DNS Cutover
+
+- **Preflight:**
+  - IONOS-Zone je Domain vollständig exportiert.
+  - INWX-Zielzone je Domain vorbereitet.
+  - Zonenvergleichstabelle (Quelle/Ziel) erstellt.
+  - Keine Secrets in Logs.
+  - Aktuelle Provider-Rollen dokumentiert.
+  - Web-Rollen geklärt, mindestens als Risiko markiert.
+  - IONOS noch aktiv.
+  - Rollback-Zeitfenster offen.
+
+- **Zone Comparison Gate (Beispiele):**
+  - `@`: A/AAAA/CNAME stimmen überein oder neues Ziel ist bestätigt.
+  - `www`: CNAME/A stimmen überein.
+  - `api`: CNAME/A für Backend stimmen überein.
+  - `login`: TXT/CNAME für Brevo Verification/DKIM/SPF stimmen überein.
+  - `_dmarc`: TXT-Record stimmt überein.
+  - `MX`: Mailbox.org Prioritäten und Ziele stimmen überein.
+  - `DKIM`: DKIM-Records für Mailbox.org stimmen überein.
+
+- **Operator-Schritte:**
+  1. INWX-Zone anlegen.
+  2. Records aus IONOS-Zone übernehmen.
+  3. mailbox.org/Brevo/No-Mail-Records prüfen.
+  4. Zonenvergleich als Tabelle abhaken.
+  5. Nameserver umstellen.
+  6. dig-Gates gegen:
+     - autoritative INWX-Nameserver
+     - 1.1.1.1
+     - 8.8.8.8
+     - lokaler Resolver, aber lokale Staleness nicht als autoritative Wahrheit behandeln.
+  7. HTTP/Web-Smokes:
+     - `weltweberei.org`: WordPress/HTTP-Smoke vor und nach Cutover.
+     - `weltweb.net`: Web-/Redirect-Smoke.
+     - `weltgewebe.net`: Webrolle für `149.233.190.131` und `api` klären und prüfen.
+  8. Mail-Smokes.
+  9. Dokumentationsartefakt schreiben.
+
+- **Rollback:**
+  - Nameserver zurück zu IONOS, solange Registrar/DNS dort verfügbar.
+  - Keine IONOS-Kündigung im selben Arbeitsgang.
+  - Kein Löschen von IONOS-Zonen vor Stabilitätsfenster.
+
+- **Gates:**
+  - INWX authoritative DNS pass.
+  - mailbox.org mail pass.
+  - Brevo login mail pass.
+  - Magic-Link pass.
+  - Secondary domains No-Mail pass.
+  - Web/redirect pass or explicitly accepted open risk.
+  - No secrets in artifacts.
+
 ## Verification
 
 ### DNS-Gates
