@@ -236,7 +236,7 @@ async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> R
     // radius_m=0 => public_pos equals the submitted location exactly.
     assert_eq!(created["public_pos"]["lat"], 53.55);
     assert_eq!(created["public_pos"]["lon"], 9.99);
-    // location is private and must never be exposed publicly.
+    // The private `location` field itself is never serialized; `public_pos` is the public projection.
     assert!(created.get("location").is_none());
 
     // domain_accounts row: explicit columns.

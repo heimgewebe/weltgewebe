@@ -562,6 +562,10 @@ mod write_path_tests {
     use super::*;
     use serde_json::json;
 
+    // The tests below exercise the row-mapper/backfill-parity surface for
+    // JSONL-shaped records. Not every legacy/privacy field covered here is
+    // currently route-reachable through `POST /accounts`.
+
     /// The create route builds exactly this record shape before persistence.
     fn create_record() -> Value {
         json!({

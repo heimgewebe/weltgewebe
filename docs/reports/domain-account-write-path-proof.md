@@ -80,7 +80,7 @@ Geltende Grenzen:
 | JSONL | JSONL | Append nach `demo.accounts.jsonl` (unverändert), dann Cache-Update |
 | Postgres | JSONL | `409 CONFLICT` + `DOMAIN_READ_SOURCE_READ_ONLY` (kein Write, kein Cache-Update) |
 | Postgres | Postgres | Insert nach `domain_accounts`, dann Cache-Update; **kein** JSONL-Append |
-| JSONL | Postgres | nicht konstruierbar — Config-Load bricht hart ab |
+| JSONL | Postgres | Config-Load bricht hart ab; manuell konstruierte `ApiState`-Zustände werden defensiv mit `500` / `INVALID_DOMAIN_WRITE_CONFIG` blockiert |
 
 `PATCH /nodes` bleibt im Postgres-Read-Modus unverändert blockiert
 (`reject_if_postgres_read_source`).
