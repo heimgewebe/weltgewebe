@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "source": "docs/doc-freshness-registry.yml",
+  "generated_by": "scripts/docmeta/generate_claim_evidence_map.py",
+  "entries": [
+    {
+      "id": "freshness.claim.agent_safe_001",
+      "claim_ref": "CLAIM-AGENT-SAFE-001",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-001"
+      },
+      "evidence_paths": [
+        "scripts/agent/check_agent_preflight.py",
+        "scripts/agent/tests/test_check_agent_preflight.py",
+        ".github/workflows/agent-safety-preflight.yml",
+        "docs/security/agent-write-scope-baseline.md"
+      ],
+      "evidence_kinds": [
+        "implementation",
+        "test",
+        "ci",
+        "documentation"
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null,
+        "freshness_status": "unknown"
+      },
+      "status": "active"
+    },
+    {
+      "id": "freshness.claim.agent_safe_002",
+      "claim_ref": "CLAIM-AGENT-SAFE-002",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-002"
+      },
+      "evidence_paths": [
+        "scripts/docmeta/generate_agent_readiness.py",
+        "scripts/docmeta/tests/test_generate_agent_readiness.py",
+        "docs/_generated/agent-readiness.md"
+      ],
+      "evidence_kinds": [
+        "implementation",
+        "test",
+        "documentation"
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null,
+        "freshness_status": "unknown"
+      },
+      "status": "active"
+    },
+    {
+      "id": "freshness.claim.agent_safe_003",
+      "claim_ref": "CLAIM-AGENT-SAFE-003",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-003"
+      },
+      "evidence_paths": [
+        "docs/claims/registry.yml",
+        "docs/claims/README.md",
+        "scripts/docmeta/validate_claim_registry.py",
+        "scripts/docmeta/tests/test_validate_claim_registry.py"
+      ],
+      "evidence_kinds": [
+        "documentation",
+        "documentation",
+        "implementation",
+        "test"
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null,
+        "freshness_status": "unknown"
+      },
+      "status": "active"
+    }
+  ]
+}

@@ -81,3 +81,19 @@ Dieser Slice fuehrt nicht ein:
 - Vollstaendige Proof-Engine
 
 AGENT-SAFE-004 bleibt offen.
+
+## Freshness Registry
+
+`docs/doc-freshness-registry.yml` verbindet die bestehenden Claims mit ihren
+repo-lokalen Evidence-Pfaden und konservativen Freshness-Metadaten.
+
+Die Freshness-Registry entscheidet nicht, ob ein Claim wahr ist. Sie macht nur
+die Belegbindung und die Review-Frische fuer Agents und Reviews sichtbar.
+
+- Validierung: `python3 scripts/docmeta/validate_doc_freshness_registry.py`
+- Generierte Uebersicht (report-only):
+  - `docs/_generated/claim-evidence-map.md`
+  - `artifacts/docmeta/claim_evidence_map.json`
+
+In diesem Slice bleibt `last_reviewed` immer `null`, `review_policy` ist
+`manual` und der abgeleitete `freshness_status` ist daher `unknown`.
