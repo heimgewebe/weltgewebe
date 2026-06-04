@@ -2,6 +2,7 @@ import { demoAccounts, demoEdges, demoNodes } from "./demoData";
 
 type DemoNode = (typeof demoNodes)[number];
 type DemoAccount = (typeof demoAccounts)[number];
+type DemoEdge = (typeof demoEdges)[number];
 type DemoEntity = DemoNode | DemoAccount;
 
 // Module-level caches for static demo data lookups
@@ -10,16 +11,30 @@ const accountMap = new Map<string, DemoAccount>(
   demoAccounts.map((a) => [a.id, a]),
 );
 
+const edgeMap = new Map<string, DemoEdge>(demoEdges.map((e) => [e.id, e]));
+
+const edgesBySource = new Map<string, DemoEdge[]>();
+const edgesByTarget = new Map<string, DemoEdge[]>();
+
+for (const edge of demoEdges) {
+  // Index by source_id
+  const sourceList = edgesBySource.get(edge.source_id) || [];
+  sourceList.push(edge);
+  edgesBySource.set(edge.source_id, sourceList);
+
+  // Index by target_id
+  const targetList = edgesByTarget.get(edge.target_id) || [];
+  targetList.push(edge);
+  edgesByTarget.set(edge.target_id, targetList);
+}
+
 /**
  * Resolves nodes associated with an account.
  * Replaces N+1 query pattern with a Map-based lookup.
  */
 export function resolveAccountNodes(accountId: string) {
-  const relatedEdges = demoEdges.filter(
-    (e) =>
-      e.source_id === accountId &&
-      e.source_type === "account" &&
-      e.target_type === "node",
+  const relatedEdges = (edgesBySource.get(accountId) || []).filter(
+    (e) => e.source_type === "account" && e.target_type === "node",
   );
 
   return relatedEdges
@@ -41,8 +56,8 @@ export function resolveAccountNodes(accountId: string) {
  * Resolves accounts associated with a node.
  */
 export function resolveNodeParticipants(nodeId: string) {
-  const relatedEdges = demoEdges.filter(
-    (e) => e.target_id === nodeId && e.target_type === "node",
+  const relatedEdges = (edgesByTarget.get(nodeId) || []).filter(
+    (e) => e.target_type === "node",
   );
 
   return relatedEdges
@@ -68,7 +83,7 @@ export function resolveNodeParticipants(nodeId: string) {
  * Resolves source and target details for an edge.
  */
 export function resolveEdgeParticipants(edgeId: string) {
-  const edge = demoEdges.find((e) => e.id === edgeId);
+  const edge = edgeMap.get(edgeId);
   if (!edge) {
     return {
       source_details: null,
