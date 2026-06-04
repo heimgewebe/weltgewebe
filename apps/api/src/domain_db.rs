@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use futures_util::TryStreamExt;
 use serde_json::{json, Map, Value};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -137,20 +138,26 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let fetch_limit = max_edges.saturating_add(1).min(i64::MAX as usize) as i64;
-    let rows: Vec<EdgeRow> = sqlx::query_as(
+    let mut rows = sqlx::query_as::<_, EdgeRow>(
         "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
          FROM domain_edges ORDER BY id ASC LIMIT $1",
     )
     .bind(fetch_limit)
-    .fetch_all(pool)
-    .await
-    .context("failed to load edges from domain_edges")?;
+    .fetch(pool);
 
-    let truncated = rows.len() > max_edges;
     let mut cache = OrderedCache::new();
-    for (id, source_id, target_id, edge_kind, created_at, payload_text) in
-        rows.into_iter().take(max_edges)
+    let mut seen = 0usize;
+    let mut truncated = false;
+    while let Some((id, source_id, target_id, edge_kind, created_at, payload_text)) = rows
+        .try_next()
+        .await
+        .context("failed to load edges from domain_edges")?
     {
+        if seen >= max_edges {
+            truncated = true;
+            break;
+        }
+
         let payload = parse_payload(&payload_text);
         let edge = Edge {
             id: id.clone(),
@@ -163,6 +170,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             created_at: created_at.map(|t| t.to_rfc3339()),
         };
         cache.insert(id, edge);
+        seen += 1;
     }
     if truncated {
         tracing::warn!(
