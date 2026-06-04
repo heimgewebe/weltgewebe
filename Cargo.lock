@@ -3111,6 +3111,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "dotenvy",
+ "futures-util",
  "governor",
  "ipnet",
  "lettre",
