@@ -17,6 +17,9 @@ concurrency:
   group: claim-registry-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   validate-claim-registry:
     runs-on: ubuntu-latest

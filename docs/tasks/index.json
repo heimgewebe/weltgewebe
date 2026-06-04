@@ -10,6 +10,36 @@
   ],
   "tasks": [
     {
+      "id": "OPT-CI-005",
+      "title": "GitHub Actions Node-24 Runtime Readiness",
+      "area": "ci",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        ".github/workflows/"
+      ],
+      "missing_evidence": [
+        "Grüner CI-Lauf für csp-contract-check, Build & Lint, und ci Workflows mit erzwungenem Node 24."
+      ],
+      "acceptance": [
+        "Keine Node 20 deprecation warnings in CI-Logs.",
+        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in allen betroffenen Workflows gesetzt.",
+        "Kein gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION."
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/tasks/board.md",
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-06-04"
+    },
+    {
       "id": "TASK-CTL-001",
       "title": "Task-Control Phase 2 etablieren",
       "area": "docs",

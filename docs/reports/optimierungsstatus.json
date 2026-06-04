@@ -398,6 +398,24 @@
       "missing_evidence": [],
       "next_action": "keine",
       "updated_at": "2026-05-26"
+    },
+    {
+      "id": "OPT-CI-005",
+      "area": "CI/CD",
+      "title": "GitHub Actions Node-24 Runtime Readiness",
+      "status": "partial",
+      "priority": "high",
+      "risk": "medium",
+      "effort": "low",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/"
+      ],
+      "missing_evidence": [
+        "Grüner CI-Lauf für Workflows mit FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true"
+      ],
+      "next_action": "PR-CI-Lauf auf Warnungsfreiheit prüfen",
+      "updated_at": "2026-06-04"
     }
   ]
 }

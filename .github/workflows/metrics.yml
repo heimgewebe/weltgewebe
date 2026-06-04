@@ -14,6 +14,9 @@ permissions:
   schedule:
     - cron: "0 * * * *"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   metrics:
     uses: heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@77b9fc21be6a9eaf2126931ede60232e53e74bcc
