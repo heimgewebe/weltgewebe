@@ -206,7 +206,11 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 ### Phase 5c — Registrar-Transfer zu INWX
 
 - **Ziel**: Domain bei INWX registrieren.
-- **Aktionen**: Registrar-Transfer erst nach stabiler INWX-DNS-Auflösung. Transfer-Lock/Auth-Code nur manuell, nicht im Repo.
+- **Aktionen**:
+  - Registrar-Transfer einleiten. Der genaue Ablauf hängt von den Provider-Restriktionen ab:
+    - **Pfad A**: IONOS erlaubt Nameserver-Wechsel zu INWX vor dem Registrar-Transfer (bevorzugt). In diesem Fall ist Phase 5b vor Phase 5c abzuschließen.
+    - **Pfad B**: Registrar-Transfer zu INWX muss zuerst erfolgen, die DNS-Zone ist bei INWX vorbereitet, Nameserver werden danach aktiviert.
+  - Transfer-Lock/Auth-Code nur manuell handhaben, nicht im Repo speichern.
 - **Gate**: Ablaufdaten beachtet (weltgewebe.net und weltweb.net bis 2026-06-19, weltweberei.org bis 2027-05-26). Keine Domain kurz vor Ablauf ohne expliziten Transferplan riskieren.
 - **Rollback-Hinweis**: Transfer abbrechen, falls unvorhergesehene Probleme auftreten.
 

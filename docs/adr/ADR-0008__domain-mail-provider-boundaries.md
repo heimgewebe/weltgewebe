@@ -58,7 +58,7 @@ Explizite Rollentrennung:
 - IONOS-Kündigung ist erst nach INWX-Registrar/DNS-Cutover und Webhosting-/Redirect-Entscheidung zulässig.
 - `weltweb.net` und `weltweberei.org` sind No-Mail-Domains, sofern nicht neu entschieden.
 - `weltweberei.org`-Web/WordPress ist separat zu behandeln.
-- `kontakt@` und `login@` dürfen nicht vermischt werden.
+- `kontakt@weltgewebe.net` und `noreply@login.weltgewebe.net` dürfen nicht vermischt werden.
 - `APP_BASE_URL` muss im öffentlichen Betrieb `https://weltgewebe.net` sein.
 - `home.arpa` ist nur Heim-/Entwicklungsziel.
 
