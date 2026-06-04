@@ -18,8 +18,8 @@ summary: Automatisch generierter Index kritischer Implementierungen.
 
 Generated automatically. Do not edit.
 
-| implementation | documented_by | criticality | verification |
-| --- | --- | --- | --- |
+| implementation | path | impl_type | criticality | documented_by | verification | evidence_level |
+| --- | --- | --- | --- | --- | --- | --- |
 HEADER
 
 python3 -c "
@@ -58,6 +58,12 @@ try:
             elif line_stripped.startswith('status:'):
                 current_impl['status'] = line_stripped.split('status:')[1].strip()
                 current_list_field = None
+            elif line_stripped.startswith('criticality:'):
+                current_impl['criticality'] = line_stripped.split('criticality:')[1].strip()
+                current_list_field = None
+            elif line_stripped.startswith('evidence_level:'):
+                current_impl['evidence_level'] = line_stripped.split('evidence_level:')[1].strip()
+                current_list_field = None
             elif line_stripped.startswith('documented_by:'):
                 current_list_field = 'documented_by'
                 current_impl[current_list_field] = []
@@ -84,13 +90,16 @@ try:
     with open(out_file, 'a', encoding='utf-8') as f:
         for impl in implementations:
             impl_id = impl.get('id', '')
+            path = impl.get('path', '—')
+            impl_type = impl.get('impl_type', 'unknown')
+            criticality = impl.get('criticality', '—')
             docs = impl.get('documented_by', [])
             docs_str = ', '.join(docs) if docs else '⚠ undocumented'
-            criticality = impl.get('impl_type', 'unknown')
             verification = impl.get('verified_by', [])
             verif_str = ', '.join(verification) if verification else 'none'
+            evidence_level = impl.get('evidence_level', '—')
 
-            f.write(f'| {impl_id} | {docs_str} | {criticality} | {verif_str} |\n')
+            f.write(f'| {impl_id} | {path} | {impl_type} | {criticality} | {docs_str} | {verif_str} | {evidence_level} |\n')
 
     print(f'Generated {out_file}')
 except Exception as e:
