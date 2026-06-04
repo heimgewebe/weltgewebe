@@ -342,7 +342,7 @@ async fn postgres_read_source_blocks_account_create_without_persisting() -> Resu
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let response = String::from_utf8(bytes.to_vec())?;
     assert!(response.contains("DOMAIN_READ_SOURCE_READ_ONLY"));
-
+ 
     assert!(state.accounts.read().await.get(id).is_none());
     let accounts_path = in_dir.join("demo.accounts.jsonl");
     assert!(
