@@ -226,16 +226,23 @@
         "docs/reports/domain-backfill-proof.md",
         ".github/workflows/api.yml",
         "CI-Job: db-domain-schema-migrations-proof",
-        "CI-Job: db-domain-backfill-proof"
+        "CI-Job: db-domain-backfill-proof",
+        "apps/api/src/config.rs",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/lib.rs",
+        "apps/api/tests/db_domain_read_path.rs",
+        "docs/reports/domain-read-path-proof.md",
+        "CI-Job: db-domain-read-path-proof"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
-        "Phase D (Read-Path-Switch) für Domänendaten fehlt",
         "Phase E (Write-Path-Switch) für Domänendaten fehlt",
-        "JSONL bleibt aktive Runtime-Wahrheit bis zum Cutover"
+        "JSONL bleibt Default-Lesequelle und Write-Truth bis Cutover",
+        "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend",
+        "Phase D ist nur opt-in/read-only belegt; kein Produktions-Cutover"
       ],
-      "next_action": "PR-CI-Lauf beider DB-Jobs belegen; danach Phase D (Read-Path-Switch hinter explizitem Config-Gate) angehen",
+      "next_action": "PR-CI-Beleg für db-domain-read-path-proof abwarten; Phase E bleibt offen; JSONL bleibt Default-Lesequelle und Write-Truth.",
       "updated_at": "2026-06-03"
     },
     {

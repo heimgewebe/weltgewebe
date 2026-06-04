@@ -166,6 +166,13 @@ Das ist **keine Validierung**, sondern eine **sichtbare Beobachtung**.
 
 - **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
   Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
+- **WELTGEWEBE_DOMAIN_READ_SOURCE**: Default `jsonl`.
+  `postgres` aktiviert den OPT-ARC-001 Phase-D PostgreSQL-Read-Path beim API-Startup.
+  Dieser Pfad ist read-only und opt-in. Bis Phase E schreiben mutierende Endpunkte
+  weiter nach JSONL. In mutablen Deployments kann dadurch Read/Write-Divergenz
+  entstehen, wenn JSONL-Änderungen nicht vor Neustart nach `domain_*` backfilled
+  werden. Nicht als Produktions-Cutover verstehen; OPT-ARC-001 bleibt dadurch
+  nicht erledigt.
 
 ---
 

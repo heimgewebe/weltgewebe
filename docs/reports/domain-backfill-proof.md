@@ -4,6 +4,9 @@ title: Domain Backfill Proof
 doc_type: report
 status: active
 canonicality: evidence
+summary: >
+  Proof-Bericht für OPT-ARC-001 Phase C: deterministischer JSONL→PostgreSQL-Backfill
+  für Domänendaten ohne Runtime- oder Write-Path-Cutover.
 relations:
   - type: relates_to
     target: docs/tasks/index.json

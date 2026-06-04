@@ -47,6 +47,24 @@ pub struct EdgeWithDetails {
     pub target_details: Option<EdgeParticipantDetails>,
 }
 
+pub(crate) const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
+
+pub(crate) fn max_edges_cache_limit() -> usize {
+    match std::env::var("MAX_EDGES_CACHE") {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    value = %val,
+                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
+                );
+                DEFAULT_MAX_EDGES_CACHE
+            }
+        },
+        Err(_) => DEFAULT_MAX_EDGES_CACHE,
+    }
+}
+
 pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
@@ -66,19 +84,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let mut records_read = 0;
     let mut duplicates_count = 0;
 
-    let max_edges = match std::env::var("MAX_EDGES_CACHE") {
-        Ok(val) => match val.parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!(
-                    value = %val,
-                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
-                );
-                500_000
-            }
-        },
-        Err(_) => 500_000,
-    };
+    let max_edges = max_edges_cache_limit();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if records_read >= max_edges {
@@ -225,4 +231,27 @@ pub async fn get_edge(
         source_details,
         target_details,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{max_edges_cache_limit, DEFAULT_MAX_EDGES_CACHE};
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
+
+    #[test]
+    #[serial]
+    fn max_edges_cache_invalid_falls_back_to_default() {
+        let _env = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
+
+        assert_eq!(max_edges_cache_limit(), DEFAULT_MAX_EDGES_CACHE);
+    }
+
+    #[test]
+    #[serial]
+    fn max_edges_cache_absent_returns_default() {
+        let _env = EnvGuard::unset("MAX_EDGES_CACHE");
+
+        assert_eq!(max_edges_cache_limit(), DEFAULT_MAX_EDGES_CACHE);
+    }
 }
