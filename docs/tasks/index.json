@@ -11,7 +11,6 @@
   "tasks": [
     {
       "id": "DEPLOY-DNS-001",
-      "category": "deploy",
       "title": "INWX Registrar/DNS Cutover vorbereiten und durchf\u00fchren",
       "status": "open",
       "priority": "high",
@@ -20,11 +19,24 @@
         "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
         "docs/runbooks/domain-mail-cutover.md"
       ],
-      "next_action": "INWX-Zone aus aktueller IONOS-Zone vorbereiten; Zonenvergleich, Web-Rollenentscheidung und Nameserver-Cutover-Gates dokumentieren; keine IONOS-K\u00fcndigung vor Registrar/DNS/Web-Proof",
-      "blocker": null,
       "acceptance": [
         "INWX is authoritative for DNS, mail gates pass, no secrets in repo"
-      ]
+      ],
+      "area": "infra",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "missing_evidence": [],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/adr/ADR-0008__domain-mail-provider-boundaries.md",
+          "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md",
+          "docs/runbooks/domain-mail-cutover.md"
+        ]
+      },
+      "updated_at": "2026-06-04"
     },
     {
       "id": "TASK-CTL-001",
