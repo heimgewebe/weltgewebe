@@ -1,5 +1,8 @@
 use super::{
-    domain_write_guard::{reject_if_postgres_read_source, DOMAIN_READ_SOURCE_READ_ONLY, DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE},
+    domain_write_guard::{
+        reject_if_postgres_read_source, DOMAIN_READ_SOURCE_READ_ONLY,
+        DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
+    },
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
@@ -32,7 +35,9 @@ impl IntoResponse for PatchNodeError {
         match self {
             PatchNodeError::Status(status) => status.into_response(),
             PatchNodeError::DomainReadSourceReadOnly => {
-                let body = format!("{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}");
+                let body = format!(
+                    "{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}"
+                );
                 (StatusCode::CONFLICT, body).into_response()
             }
         }
@@ -407,8 +412,7 @@ pub async fn patch_node(
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, PatchNodeError> {
-    reject_if_postgres_read_source(&state)
-        .map_err(|_| PatchNodeError::DomainReadSourceReadOnly)?;
+    reject_if_postgres_read_source(&state).map_err(|_| PatchNodeError::DomainReadSourceReadOnly)?;
 
     // Serialize PATCH persistence (per-process): allow concurrent node reads during file I/O;
     // only the brief in-memory cache write-lock blocks readers to guarantee read-your-writes in this instance.
