@@ -8,31 +8,49 @@ import { demoEdges } from "./demoData";
 
 describe("Demo Resolvers", () => {
   describe("Invariant Checks (Edge Index Safety)", () => {
-    it("resolveAccountNodes returns ONLY edges matching account-to-node contract", () => {
-      const accountId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
-      const results = resolveAccountNodes(accountId);
-
-      // Verify each result corresponds to a valid edge in demoEdges that meets the contract
-      for (const res of results) {
-        const originalEdge = demoEdges.find((e) => e.id === res.edge_id);
-        expect(originalEdge).toBeDefined();
-        expect(originalEdge?.source_id).toBe(accountId);
-        expect(originalEdge?.source_type).toBe("account");
-        expect(originalEdge?.target_type).toBe("node");
-      }
+    it("demo edge IDs are unique", () => {
+      const edgeIds = demoEdges.map((e) => e.id);
+      expect(new Set(edgeIds).size).toBe(edgeIds.length);
     });
 
-    it("resolveNodeParticipants returns ONLY source accounts matching node contract", () => {
-      const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
-      const results = resolveNodeParticipants(nodeId);
+    it("resolveAccountNodes matches the old linear account-to-node edge semantics", () => {
+      const accountId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
 
-      for (const res of results) {
-        const originalEdge = demoEdges.find((e) => e.id === res.edge_id);
-        expect(originalEdge).toBeDefined();
-        expect(originalEdge?.target_id).toBe(nodeId);
-        expect(originalEdge?.target_type).toBe("node");
-        expect(originalEdge?.source_type).toBe("account");
-      }
+      const expectedEdgeIds = demoEdges
+        .filter(
+          (e) =>
+            e.source_id === accountId &&
+            e.source_type === "account" &&
+            e.target_type === "node",
+        )
+        .map((e) => e.id)
+        .sort();
+
+      const actualEdgeIds = resolveAccountNodes(accountId)
+        .map((r) => r.edge_id)
+        .sort();
+
+      expect(actualEdgeIds).toEqual(expectedEdgeIds);
+    });
+
+    it("resolveNodeParticipants matches the old linear node participant edge semantics", () => {
+      const nodeId = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+
+      const expectedEdgeIds = demoEdges
+        .filter(
+          (e) =>
+            e.target_id === nodeId &&
+            e.target_type === "node" &&
+            e.source_type === "account",
+        )
+        .map((e) => e.id)
+        .sort();
+
+      const actualEdgeIds = resolveNodeParticipants(nodeId)
+        .map((r) => r.edge_id)
+        .sort();
+
+      expect(actualEdgeIds).toEqual(expectedEdgeIds);
     });
 
     it("resolveEdgeParticipants remains consistent for existing and missing IDs", () => {
