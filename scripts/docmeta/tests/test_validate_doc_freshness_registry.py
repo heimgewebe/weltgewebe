@@ -354,6 +354,19 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
             {(p, k) for p, k in self.EVIDENCE_SPEC[3]},
         )
 
+    def test_entry_id_must_match_claim_ref_suffix(self):
+        self._write_claims()
+        entries = self._entries()
+        # entry id 001 paired with claim_ref 002 — coupling violated
+        entries[0]["id"] = "freshness.claim.agent_safe_001"
+        entries[0]["claim_ref"] = "CLAIM-AGENT-SAFE-002"
+        entries[0]["subject"]["ref"] = "CLAIM-AGENT-SAFE-002"
+        entries[0]["evidence"] = self._copy_evidence(2)
+        self._write_registry(entries)
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "ENTRY_ID_CLAIM_REF_MISMATCH"))
+
     def test_guard_contract_report_kinds_rejected_in_this_slice(self):
         # Even a faithfully mirrored pair is rejected when its kind is outside
         # the slice taxonomy: the cross-check is clean but the kind is invalid.

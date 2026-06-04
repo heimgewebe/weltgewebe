@@ -47,6 +47,14 @@ ENTRY_ID_PATTERN = re.compile(r"^freshness\.claim\.agent_safe_00[1-3]$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
+def _expected_entry_id_for_claim(claim_ref: str) -> str | None:
+    """Return the canonical entry id for a given in-scope claim_ref, or None if out of scope."""
+    if claim_ref not in IN_SCOPE_CLAIMS:
+        return None
+    suffix = claim_ref.rsplit("-", 1)[-1].lower()
+    return f"freshness.claim.agent_safe_{suffix}"
+
+
 def _finding(code: str, entry_id: str | None, message: str, path: str | None = None) -> dict[str, str]:
     finding: dict[str, str] = {
         "code": code,
@@ -316,6 +324,17 @@ def validate_registry_data(
             if claim_ref in seen_claim_refs:
                 findings.append(_finding("CLAIM_REF_DUPLICATE", entry_id, f"Duplicate claim_ref {claim_ref}"))
             seen_claim_refs.add(claim_ref)
+
+            if isinstance(entry_id, str):
+                expected_id = _expected_entry_id_for_claim(claim_ref)
+                if expected_id is not None and entry_id != expected_id:
+                    findings.append(
+                        _finding(
+                            "ENTRY_ID_CLAIM_REF_MISMATCH",
+                            entry_id,
+                            f"Entry id must be {expected_id} for claim_ref {claim_ref}",
+                        )
+                    )
 
         subject = entry.get("subject")
         if not isinstance(subject, dict):
