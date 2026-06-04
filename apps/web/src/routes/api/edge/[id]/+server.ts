@@ -1,10 +1,9 @@
 import { json, error } from "@sveltejs/kit";
-import { demoEdges } from "$lib/demo/demoData";
-import { resolveEdge, resolveEdgeParticipants } from "$lib/demo/resolvers";
+import { resolveEdge, resolveEdgeParticipants, getEdgeEntries } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-export const entries = () => demoEdges.map((e) => ({ id: e.id }));
+export const entries = () => getEdgeEntries();
 
 export function GET({ params }: RequestEvent) {
   const { id } = params;

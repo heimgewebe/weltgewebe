@@ -13,6 +13,27 @@ const accountMap = new Map<string, DemoAccount>(
 const edgeMap = new Map<string, DemoEdge>(demoEdges.map((e) => [e.id, e]));
 
 /**
+ * Returns entries for prerendering nodes.
+ */
+export function getNodeEntries() {
+  return demoNodes.map((n) => ({ id: n.id }));
+}
+
+/**
+ * Returns entries for prerendering accounts.
+ */
+export function getAccountEntries() {
+  return demoAccounts.map((a) => ({ id: a.id }));
+}
+
+/**
+ * Returns entries for prerendering edges.
+ */
+export function getEdgeEntries() {
+  return demoEdges.map((e) => ({ id: e.id }));
+}
+
+/**
  * Resolves a single node by ID.
  */
 export function resolveNode(id: string) {

@@ -1,10 +1,9 @@
 import { json, error } from "@sveltejs/kit";
-import { demoAccounts } from "$lib/demo/demoData";
-import { resolveAccount, resolveAccountNodes } from "$lib/demo/resolvers";
+import { resolveAccount, resolveAccountNodes, getAccountEntries } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-export const entries = () => demoAccounts.map((a) => ({ id: a.id }));
+export const entries = () => getAccountEntries();
 
 export function GET({ params }: RequestEvent) {
   const { id } = params;

@@ -1,10 +1,9 @@
 import { json, error } from "@sveltejs/kit";
-import { demoNodes } from "$lib/demo/demoData";
-import { resolveNode, resolveNodeParticipants } from "$lib/demo/resolvers";
+import { resolveNode, resolveNodeParticipants, getNodeEntries } from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-export const entries = () => demoNodes.map((n) => ({ id: n.id }));
+export const entries = () => getNodeEntries();
 
 export function GET({ params }: RequestEvent) {
   const { id } = params;
