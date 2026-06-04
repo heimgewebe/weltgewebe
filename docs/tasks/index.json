@@ -464,9 +464,9 @@
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
         "Phase E (Write-Path-Switch) für Domänendaten fehlt",
-        "JSONL bleibt Default-Lesequelle und Write-Truth bis Cutover",
+        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover",
         "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend",
-        "Phase D ist nur opt-in/read-only belegt; kein Produktions-Cutover"
+        "Phase D ist nur opt-in/read-only belegt; PostgreSQL-Read-Modus blockiert Domänenmutationen; kein Produktions-Cutover"
       ],
       "acceptance": [
         "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",

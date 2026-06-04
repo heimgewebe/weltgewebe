@@ -1,6 +1,9 @@
-use super::query::{
-    cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
-    MAX_PAGE_SIZE,
+use super::{
+    domain_write_guard::{reject_if_postgres_read_source, status_error},
+    query::{
+        cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
+        MAX_PAGE_SIZE,
+    },
 };
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
@@ -385,7 +388,9 @@ pub async fn patch_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
-) -> Result<Json<Node>, StatusCode> {
+) -> Result<Json<Node>, (StatusCode, String)> {
+    reject_if_postgres_read_source(&state)?;
+
     // Serialize PATCH persistence (per-process): allow concurrent node reads during file I/O;
     // only the brief in-memory cache write-lock blocks readers to guarantee read-your-writes in this instance.
     let start_persist_wait = std::time::Instant::now();
@@ -396,7 +401,7 @@ pub async fn patch_node(
     // Open source file for reading
     let file = File::open(&path)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
     let mut lines = BufReader::new(file).lines();
 
     // Use a unique temporary file + rename for atomic writes to prevent data corruption and race conditions
@@ -406,7 +411,7 @@ pub async fn patch_node(
         new_filename.push(format!(".tmp.{}", Uuid::new_v4()));
         tmp_path.set_file_name(new_filename);
     } else {
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        return Err(status_error(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     let start_persist = std::time::Instant::now();
@@ -419,7 +424,7 @@ pub async fn patch_node(
             .truncate(true)
             .open(&tmp_path)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         let mut writer = BufWriter::new(tmp_file);
         let mut found_node: Option<Node> = None;
@@ -429,12 +434,12 @@ pub async fn patch_node(
             // Optimization: check ID without parsing full Value
             let should_update = match serde_json::from_str::<IdOnly>(&line) {
                 Ok(obj) => obj.id.as_deref() == Some(id.as_str()),
-                Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+                Err(_) => return Err(status_error(StatusCode::INTERNAL_SERVER_ERROR)),
             };
 
             if should_update {
                 let mut v: Value =
-                    serde_json::from_str(&line).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    serde_json::from_str(&line).map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 // Update the field
                 let mut has_changes = false;
@@ -465,48 +470,48 @@ pub async fn patch_node(
 
                 // Map to Node and fail hard if mapping fails.
                 // Ensures we never persist changes without a valid Node response.
-                let node = map_json_to_node(&v).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+                let node = map_json_to_node(&v).ok_or_else(|| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
 
                 // Security/Consistency: Ensure the ID hasn't been changed via the update.
                 if node.id != id {
                     tracing::error!(path_id = %id, payload_id = %node.id, "Node ID mismatch in PATCH");
-                    return Err(StatusCode::BAD_REQUEST);
+                    return Err(status_error(StatusCode::BAD_REQUEST));
                 }
                 found_node = Some(node);
 
-                let s = serde_json::to_string(&v).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                let s = serde_json::to_string(&v).map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
                 writer
                     .write_all(s.as_bytes())
                     .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
                 updated = true;
             } else {
                 writer
                     .write_all(line.as_bytes())
                     .await
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                    .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
             }
 
             writer
                 .write_all(b"\n")
                 .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
         }
 
         if !updated {
-            return Err(StatusCode::NOT_FOUND);
+            return Err(status_error(StatusCode::NOT_FOUND));
         }
 
         writer
             .flush()
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         // Ensure durability
         let file = writer.into_inner();
         file.sync_all()
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|_| status_error(StatusCode::INTERNAL_SERVER_ERROR))?;
 
         Ok(found_node)
     }
@@ -524,7 +529,7 @@ pub async fn patch_node(
     if let Err(_e) = tokio::fs::rename(&tmp_path, &path).await {
         // Cleanup temp file if rename fails
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        return Err(status_error(StatusCode::INTERNAL_SERVER_ERROR));
     }
 
     let persist_ms = start_persist.elapsed().as_millis();
@@ -560,7 +565,7 @@ pub async fn patch_node(
 
     found_node
         .map(Json)
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
+        .ok_or_else(|| status_error(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
 pub async fn list_nodes(

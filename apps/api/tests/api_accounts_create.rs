@@ -16,7 +16,7 @@ use weltgewebe_api::{
     auth::{
         accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
     },
-    config::AppConfig,
+    config::{AppConfig, DomainReadSource},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountMode, AccountPublic},
@@ -38,7 +38,7 @@ async fn test_state() -> Result<ApiState> {
         ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
-        domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
+        domain_read_source: DomainReadSource::Jsonl,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,
@@ -117,10 +117,20 @@ async fn app_with_operator(
     operator_id: &str,
     role: Role,
 ) -> Result<(Router, String, ApiState)> {
+    app_with_operator_read_source(in_dir, operator_id, role, DomainReadSource::Jsonl).await
+}
+
+async fn app_with_operator_read_source(
+    in_dir: &std::path::Path,
+    operator_id: &str,
+    role: Role,
+    domain_read_source: DomainReadSource,
+) -> Result<(Router, String, ApiState)> {
     let mut accounts = AccountStore::new();
     accounts.insert(operator(operator_id, role));
 
     let mut state = test_state().await?;
+    state.config.domain_read_source = domain_read_source;
     state.accounts = Arc::new(RwLock::new(accounts));
 
     let session = state
@@ -304,6 +314,41 @@ async fn invalid_input_returns_400() -> Result<()> {
         ))
         .await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn postgres_read_source_blocks_account_create_without_persisting() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) =
+        app_with_operator_read_source(&in_dir, "admin1", Role::Admin, DomainReadSource::Postgres)
+            .await?;
+
+    let id = "33333333-3333-4333-8333-333333333333";
+    let body =
+        format!(r#"{{"id":"{id}","title":"Blocked","location":{{"lat":53.55,"lon":9.99}}}}"#);
+
+    let res = app
+        .clone()
+        .oneshot(post_accounts(Some(&cookie), &body))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let response = String::from_utf8(bytes.to_vec())?;
+    assert!(response.contains("DOMAIN_READ_SOURCE_READ_ONLY"));
+
+    assert!(state.accounts.read().await.get(id).is_none());
+    let accounts_path = in_dir.join("demo.accounts.jsonl");
+    assert!(
+        !accounts_path.exists(),
+        "blocked create must not append the account JSONL file"
+    );
 
     Ok(())
 }

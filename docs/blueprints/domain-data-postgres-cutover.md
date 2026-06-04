@@ -229,8 +229,12 @@ Implementierungsphasen relevant, wenn die jeweilige Infrastruktur existiert.
 Phase D ist als optionaler, read-only PostgreSQL-Read-Path hinter explizitem
 Config-Gate implementiert. Die `db_domain_read_path`-Suite ist als lokaler
 PostgreSQL-Proof vorbereitet; der PR-CI-Beleg für
-`db-domain-read-path-proof` steht aus. Das ist kein Produktions-Cutover:
-JSONL bleibt Default-Lesequelle und Write-Truth, und Phase E bleibt offen.
+`db-domain-read-path-proof` steht aus. Mutierende Domänen-Endpunkte werden bei
+`WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` mit `409 CONFLICT` und
+`DOMAIN_READ_SOURCE_READ_ONLY` blockiert, damit keine JSONL-only Writes nach
+einem Neustart durch den PostgreSQL-Read-Path verschwinden. Das ist kein
+Produktions-Cutover: JSONL bleibt im Default-/JSONL-Modus Default-Lesequelle
+und Write-Truth, und Phase E bleibt offen.
 
 ## Akzeptanzkriterien für OPT-ARC-001
 
@@ -250,6 +254,7 @@ ist:
 
 - Keine Phase E in dieser PR.
 - Kein Write-Path-Cutover.
+- Kein PostgreSQL-Write-Path und kein Dual-Write.
 - Keine Entfernung von JSONL.
 - Kein Produktions-Cutover.
 - Kein Startup-Backfill.
@@ -263,5 +268,5 @@ ist:
 
 Diese Phase-D-Slice ergänzt nur den optionalen read-only PostgreSQL-Read-Path
 hinter explizitem Config-Gate und markiert OPT-ARC-001 bewusst noch nicht als
-erledigt. Phase E bleibt offen; JSONL bleibt Default-Lesequelle und Write-Truth
-bis Phase E/Cutover.
+erledigt. Phase E bleibt offen; JSONL bleibt im Default-/JSONL-Modus
+Default-Lesequelle und Write-Truth bis Phase E/Cutover.

@@ -1,6 +1,9 @@
-use super::query::{
-    cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
-    MAX_PAGE_SIZE,
+use super::{
+    domain_write_guard::reject_if_postgres_read_source,
+    query::{
+        cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
+        MAX_PAGE_SIZE,
+    },
 };
 use crate::auth::{accounts::AccountStore, role::Role};
 use crate::middleware::auth::AuthContext;
@@ -431,6 +434,8 @@ pub async fn create_account(
     Extension(ctx): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<AccountPublic>), (StatusCode, String)> {
+    reject_if_postgres_read_source(&state)?;
+
     let bad = |msg: &str| (StatusCode::BAD_REQUEST, msg.to_string());
 
     // --- title (required, non-empty) ---

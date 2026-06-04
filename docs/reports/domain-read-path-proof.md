@@ -34,7 +34,9 @@ Geltende Grenzen:
 - PostgreSQL wird nur über `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` bzw.
   `domain_read_source: postgres` aktiviert.
 - Phase E bleibt offen.
-- Write-Paths werden nicht geändert.
+- Write-Paths werden nicht auf PostgreSQL umgestellt.
+- Mutierende Domänen-Endpunkte werden bei `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres`
+  mit `409 CONFLICT` / `DOMAIN_READ_SOURCE_READ_ONLY` blockiert.
 
 ## Implementierte Belege
 
@@ -44,6 +46,8 @@ Geltende Grenzen:
   `domain_edges` und `domain_accounts`.
 - `apps/api/src/lib.rs`: Start-up-Wiring, das bei `Postgres` einen
   konfigurierten PostgreSQL-Pool verlangt.
+- `apps/api/src/routes/domain_write_guard.rs`: Guard gegen JSONL-only
+  Domänenmutationen im PostgreSQL-Read-Modus.
 - `.github/workflows/api.yml`: PR-CI-Job `db-domain-read-path-proof`
   vorbereitet.
 - `apps/api/tests/db_domain_read_path.rs`: lokale PostgreSQL-Proof-Suite;
@@ -59,6 +63,8 @@ Geltende Grenzen:
 ## Nicht bewiesen
 
 - Kein Write-Path-Cutover.
+- Kein PostgreSQL-Write-Path und kein Dual-Write; Domänenmutationen sind im
+  PostgreSQL-Read-Modus bewusst blockiert.
 - Kein Abschalten oder Entfernen von JSONL.
 - Kein Produktions-Cutover.
 - Kein grüner PR-CI-Laufbeleg für den neuen Read-Path-Job in diesem Dokument.

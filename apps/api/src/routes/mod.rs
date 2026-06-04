@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod auth;
+mod domain_write_guard;
 pub mod edges;
 pub mod health;
 pub mod meta;
