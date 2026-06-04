@@ -124,7 +124,10 @@ Backfill: explizites `mode`; bei Legacy-Eingaben zusätzlich `visibility`,
 
 `public_pos` ist **keine** gespeicherte Spalte: Sie wird beim Lesen
 deterministisch aus `location_lat`/`location_lon`/`radius_m`/`id` berechnet.
-Die reale Residenz verlässt die öffentliche Projektion nie.
+Das private Feld `location` wird nie serialisiert. `public_pos` ist die
+öffentliche Projektion; bei `radius_m = 0` kann sie exakt den eingereichten
+Koordinaten entsprechen, bei `radius_m > 0` wird sie deterministisch
+gejittert.
 
 ## Validierung
 
