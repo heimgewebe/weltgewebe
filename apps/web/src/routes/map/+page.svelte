@@ -10,13 +10,23 @@
   import ActionBar from '$lib/components/ActionBar.svelte';
   import SearchOverlay from '$lib/components/SearchOverlay.svelte';
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
-  import type { Edge, MapEntityViewModel } from '$lib/map/types';
+  import type { MapEntityViewModel } from '$lib/map/types';
 
-  import { view, selection, systemState, enterFokus } from '$lib/stores/uiView';
-  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import { view, selection, systemState } from '$lib/stores/uiView';
   import { activeFilters } from '$lib/stores/filterStore';
+  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import {
+    deriveFailedResourceLabels,
+    deriveMarkerCounts,
+    deriveAvailableFilterTypes,
+    deriveFilteredMarkers,
+    deriveSearchResults,
+    deriveSearchMatchIds,
+    deriveVisibleEdges,
+    getFilterTypeKey,
+    selectMapEntity,
+  } from '$lib/stores/mapView';
   import { authStore } from '$lib/auth/store';
-  import { isRecord } from '$lib/utils/guards';
 
   import { get } from 'svelte/store';
 
@@ -31,7 +41,11 @@
 
   export let data: PageData;
 
-  // Phase 2: Build scene from route data – single transformation point
+  // Phase 2: Build the scene from request-scoped route data. The scene stays
+  // local to this component instance (never a module-level store), so no
+  // request-specific data is shared across module state. The presentation
+  // derivations live as pure functions in `$lib/stores/mapView` and are fed the
+  // scene together with the ephemeral UI state (filters, search).
   $: scene = buildMapScene({
     nodes: data.nodes || [],
     accounts: data.accounts || [],
@@ -42,53 +56,20 @@
     basemapMode: currentBasemap.mode,
   });
 
-  // Derived from scene for backward-compatible access
+  // Presentation state derived via pure functions from the local scene + UI state.
   $: loadState = scene.loadState;
-  $: failedResources = scene.resourceStatus.filter(r => r.status === 'failed').map(r => r.resource);
-
-  const resourceLabel: Record<string, string> = { nodes: 'Knoten', accounts: 'Garnrollen', edges: 'Fäden' };
-  $: failedResourceLabels = failedResources.map(r => resourceLabel[r] ?? r);
+  $: diagnostics = scene.diagnostics;
+  $: failedLabels = deriveFailedResourceLabels(scene);
   $: markersData = scene.entities;
-
-  // Diagnostic counts for debug badge
-  $: nodeCount = scene.entities.filter(e => e.type === 'node').length;
-  $: accountCount = scene.entities.filter(e => e.type !== 'node').length;
-
-  // Robust type guards
-  function isEdge(e: unknown): e is Edge {
-    if (!isRecord(e)) return false;
-    return (
-      typeof e.id === 'string' &&
-      typeof e.source_id === 'string' &&
-      typeof e.target_id === 'string' &&
-      typeof e.edge_kind === 'string'
-    );
-  }
-
-  $: validEdges = scene.edges.filter(isEdge);
-
-  $: filteredPointIds = new Set(filteredMarkersData.map(p => p.id));
-  $: edgesData = validEdges.filter(e => filteredPointIds.has(e.source_id) && filteredPointIds.has(e.target_id));
-
-  // Search logic moved from SearchOverlay to orchestrator
-  let filteredResults: MapEntityViewModel[] = [];
-  let searchMatchIds = new Set<string>();
-
-  $: {
-    if ($isSearchOpen && $searchQuery.trim().length > 0) {
-      const q = $searchQuery.toLowerCase();
-      // Search operates strictly on currently visible/filtered markers
-      filteredResults = searchBaseData.filter(m => {
-        const titleMatch = m.title?.toLowerCase().includes(q);
-        const summaryMatch = m.summary?.toLowerCase().includes(q);
-        return titleMatch || summaryMatch;
-      }).slice(0, 10);
-      searchMatchIds = new Set(filteredResults.map(r => r.id));
-    } else {
-      filteredResults = [];
-      searchMatchIds = new Set();
-    }
-  }
+  $: markerCounts = deriveMarkerCounts(markersData);
+  $: availableTypes = deriveAvailableFilterTypes(markersData);
+  $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
+  // Search is scoped to the currently visible markers (filtered set when a
+  // filter is active, otherwise the full set) so it never reaches hidden ones.
+  $: searchBaseMarkers = $activeFilters.size === 0 ? markersData : filteredMarkersData;
+  $: filteredResults = deriveSearchResults(searchBaseMarkers, $searchQuery, $isSearchOpen);
+  $: searchMatchIds = deriveSearchMatchIds(filteredResults);
+  $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -99,33 +80,6 @@
   let filterTooltipTimeout: number | null = null;
 
   let nodesOverlay: NodesOverlay | null = null;
-
-  function getFilterTypeKey(m: MapEntityViewModel): string {
-    return m.type === 'node' ? (m.kind || 'Knoten') : 'Garnrolle';
-  }
-
-  let availableFilterTypes: { id: string, label: string, count: number }[] = [];
-  let filteredMarkersData: MapEntityViewModel[] = [];
-
-  // Derivation of filterable types
-  $: availableFilterTypes = (() => {
-    const counts = new Map<string, number>();
-    for (const m of markersData) {
-      const typeKey = getFilterTypeKey(m);
-      counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
-    }
-    return Array.from(counts.entries()).map(([id, count]) => ({
-      id,
-      label: id.charAt(0).toUpperCase() + id.slice(1),
-      count
-    })).sort((a, b) => a.label.localeCompare(b.label));
-  })();
-
-  $: filteredMarkersData = $activeFilters.size === 0
-    ? markersData
-    : markersData.filter(m => $activeFilters.has(getFilterTypeKey(m)));
-
-  $: searchBaseData = $activeFilters.size === 0 ? markersData : filteredMarkersData;
 
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {
@@ -139,19 +93,10 @@
      updateEdges(map, edgesData, filteredMarkersData, $view.showEdges);
   }
 
-
-
-  function normalizeSelectionType(type: MapEntityViewModel['type']): 'node' | 'garnrolle' {
-    if (type === 'garnrolle') {
-      return type;
-    }
-    return 'node';
-  }
-
   function focusAndFlyToPoint(item: MapEntityViewModel) {
-    const itemType = normalizeSelectionType(item.type);
-
-    enterFokus({ type: itemType, id: item.id, data: item });
+    // Selection state is owned by the map-view store (delegating to uiView);
+    // the route only keeps the map-side concern (flyTo).
+    selectMapEntity(item);
 
     const lat = item.lat;
     const lon = item.lon;
@@ -538,7 +483,7 @@
 
   {#if loadState === 'partial'}
     <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      Einige Kartendaten konnten nicht geladen werden ({failedResourceLabels.join(', ')}).
+      Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(', ')}).
     </div>
   {/if}
   {#if loadState === 'failed'}
@@ -549,14 +494,14 @@
 
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
-  <FilterOverlay availableTypes={availableFilterTypes} />
+  <FilterOverlay availableTypes={availableTypes} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {nodeCount} / Accounts: {accountCount} / Edges: {edgesData.length}
+      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
       <br>
-      API: {scene.diagnostics.apiMode} / Basemap: {scene.diagnostics.basemapMode}
-      {#if scene.diagnostics.degraded}
+      API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
+      {#if diagnostics.degraded}
         <br>⚠ Load: {loadState}
       {/if}
       <br>

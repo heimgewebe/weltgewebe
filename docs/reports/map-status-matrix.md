@@ -24,10 +24,10 @@ Repo-Stand tatsaechlich vorhanden sind.
 
 ## 2. Interaktion und Panel
 
-- **Soll**: Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich.
-- **Ist**: Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen.
+- **Soll**: Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich; Auswahl-, Marker- und Paneldaten liegen nicht alle in der Routendatei.
+- **Ist**: Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen. Kartenklarheit Phase 2 hat Auswahlzustand, Markerbeschreibung und Paneldaten aus der Route entkoppelt: `selectMapEntity(...)` (in `mapView.ts`) delegiert die Selektion ueber `toMapSelection(...)` an `enterFokus(...)` (in `uiView.ts`); die Presentation-Ableitungen (`deriveMarkerCounts`, `deriveFilteredMarkers`, `deriveAvailableFilterTypes`, `deriveSearchResults`, `deriveSearchMatchIds`, `deriveVisibleEdges`) sind reine Funktionen in `mapView.ts`. Die Route baut die request-bezogene Szene lokal (`buildMapScene`) und speist sie zusammen mit dem fluechtigen UI-Zustand (Filter, Suche) in diese reinen Funktionen; sie haelt nur noch den imperativen MapLibre-/Overlay-Lebenszyklus und die `flyTo`-Verdrahtung. Bewusst ohne modulglobalen Szenen-Store: request-spezifische Kartendaten bleiben in der Komponenten-Instanz und werden nicht in geteilten Modulzustand geschrieben (SSR-sicher; die App liefert ueberdies als statische SPA via `adapter-static` ohne Laufzeit-SSR-Server aus).
 - **Status**: Erledigt
-- **Nachweis**: `apps/web/tests/map-interaction.spec.ts`
+- **Nachweis**: `apps/web/src/lib/stores/mapView.ts`, `apps/web/src/lib/stores/uiView.ts`, `apps/web/src/lib/stores/mapView.test.ts`, `apps/web/tests/map-interaction.spec.ts`
 
 ## 3. Basemap-Abhaengigkeit
 
@@ -48,9 +48,9 @@ Repo-Stand tatsaechlich vorhanden sind.
 ## 5. Testabdeckung
 
 - **Soll**: Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt.
-- **Ist**: `map-interaction.spec.ts` deckt Kerninteraktion und Panel-Verhalten ab; `map-load-fallback.spec.ts` deckt partielle und komplette API-Fehler ab; `basemap.spec.ts`, `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` decken Basemap-Modi und den clientseitigen lokalen Pfad ab.
+- **Ist**: `map-interaction.spec.ts` deckt Kerninteraktion und Panel-Verhalten ab; `map-load-fallback.spec.ts` deckt partielle und komplette API-Fehler ab; `basemap.spec.ts`, `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` decken Basemap-Modi und den clientseitigen lokalen Pfad ab. `mapView.test.ts` deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab.
 - **Status**: Teil
-- **Nachweis**: `apps/web/tests/map-interaction.spec.ts`, `apps/web/tests/map-load-fallback.spec.ts`, `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`
+- **Nachweis**: `apps/web/src/lib/stores/mapView.test.ts`, `apps/web/tests/map-interaction.spec.ts`, `apps/web/tests/map-load-fallback.spec.ts`, `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`
 - **Fehlend**: Gezielte Query-Parameter-Navigation, visuelle Abnahme und echter Live-Runtime-Beweis gegen Caddy plus Artefakt.
 
 ## 6. Runtime-Integration
@@ -72,6 +72,49 @@ Repo-Stand tatsaechlich vorhanden sind.
   Job-URL: `https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606`
   Event: `pull_request`
   Branch: `chore/api-dockerfile-cargo-build-jobs`
+
+## 7. Query-Parameter-Zustand vs. Kartenzustand
+
+Kartenklarheit Phase 2 trennt zwei Zustandsschichten bewusst und dokumentiert,
+damit Laufzeit- und Deep-Link-Zustand nicht ineinander verschwimmen.
+
+### Kartenzustand (fluechtig, NICHT in der URL)
+
+Laufzeitzustand der Karte. Lebt in Stores bzw. in der MapLibre-Instanz und wird
+absichtlich nicht in die URL gespiegelt:
+
+- Kartenausschnitt: `center`, `zoom`, `bearing`, `pitch` (MapLibre-Instanz).
+- Systemzustand und Selektion: `systemState`, `selection`, `kompositionDraft`
+  (`apps/web/src/lib/stores/uiView.ts`).
+- Presentation-Ableitungen: aus der request-bezogenen Szene und dem UI-Zustand
+  per reiner Funktionen abgeleitet (`deriveFilteredMarkers`,
+  `deriveAvailableFilterTypes`, `deriveSearchResults`, `deriveSearchMatchIds`,
+  `deriveVisibleEdges` in `apps/web/src/lib/stores/mapView.ts`); die Szene selbst
+  bleibt request-lokal in der Route, nicht in einem Modul-Store.
+- Filter- und Suchzustand: `activeFilters`, `isSearchOpen`, `searchQuery`
+  (`apps/web/src/lib/stores/filterStore.ts`, `searchStore.ts`).
+
+### Query-Parameter-Zustand (`l`, `r`, `t`) (URL-eigen, Deep-Link-Contract)
+
+Eigene, URL-besessene Schicht fuer die Drawer-/Tab-Deep-Link-Adressierung,
+getrennt vom fluechtigen Kartenzustand:
+
+- `l` — linker Drawer (Filter-Overlay): offen/zu.
+- `r` — rechter Drawer (Kontextbereich / aktive Selektion): offen/zu bzw. adressiertes Objekt.
+- `t` — aktiver Tab innerhalb des Kontextpanels.
+
+- **Soll**: URL-Parameter und Kartenzustand sind klar getrennt dokumentiert; die
+  URL-Schicht beschreibt Drawer/Tab-Adressierung, nicht den fluechtigen
+  Kartenausschnitt.
+- **Ist**: Die Trennung ist dokumentiert (dieser Abschnitt sowie der
+  Modul-Header in `apps/web/src/lib/stores/mapView.ts`). Der Contract `l`/`r`/`t`
+  ist als URL-eigene Schicht definiert und bewusst aus den
+  Presentation-Ableitungen herausgehalten.
+- **Status**: Teil
+- **Nachweis**: `apps/web/src/lib/stores/mapView.ts`, `apps/web/src/lib/stores/uiView.ts`
+- **Fehlend**: Verdrahtung der `l`/`r`/`t`-Navigation in die Route und gezielte
+  Query-Parameter-Tests bleiben als Arbeitspaket der Phase 4 offen
+  (siehe `docs/blueprints/kartenklarheit-roadmap.md`).
 
 ## Essenz
 

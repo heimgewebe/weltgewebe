@@ -33,17 +33,39 @@
       ]
     },
     "interaktion_und_panel": {
-      "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich",
-      "ist": "Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt.",
+      "soll": "Marker-Auswahl oeffnet nachvollziehbar den Informationsbereich; Auswahl-, Marker- und Paneldaten liegen nicht alle in der Routendatei",
+      "ist": "Marker-Klick setzt die Auswahl, oeffnet den Kontextbereich und laesst sich per Escape bzw. Karteninteraktion wieder schliessen; dieses Verhalten ist per Browser-Test belegt. Kartenklarheit Phase 2 hat Auswahlzustand, Markerbeschreibung und Paneldaten aus der Route entkoppelt: selectMapEntity (mapView.ts) delegiert ueber toMapSelection an enterFokus (uiView.ts); deriveMarkerCounts/deriveFilteredMarkers/deriveAvailableFilterTypes/deriveSearchResults/deriveSearchMatchIds/deriveVisibleEdges sind reine Funktionen in mapView.ts. Die Route baut die request-bezogene Szene lokal (buildMapScene) und speist sie samt UI-Zustand (Filter, Suche) in diese reinen Funktionen; kein modulglobaler Szenen-Store haelt request-spezifische Kartendaten (SSR-sicher; Auslieferung als statische SPA via adapter-static ohne Laufzeit-SSR-Server). Die Route haelt nur noch den imperativen MapLibre-/Overlay-Lebenszyklus und die flyTo-Verdrahtung.",
       "status": "Erledigt",
       "documentation_evidence": [
-        "docs/reports/map-architekturkritik.md"
+        "docs/reports/map-architekturkritik.md",
+        "docs/blueprints/kartenklarheit-roadmap.md"
       ],
       "missing_evidence": [],
       "risk": "gering",
       "code_runtime_evidence": [
         "apps/web/src/routes/map/+page.svelte",
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/lib/stores/uiView.ts",
+        "apps/web/src/lib/stores/mapView.test.ts",
         "apps/web/tests/map-interaction.spec.ts"
+      ]
+    },
+    "query_parameter_vs_kartenzustand": {
+      "soll": "URL-Parameter (l, r, t) und Kartenzustand sind klar getrennt dokumentiert",
+      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, per reiner Funktionen abgeleitete Presentation) ist fluechtig und wird nicht in die URL gespiegelt; die request-bezogene Szene bleibt route-lokal, nicht in einem Modul-Store. Der Deep-Link-Contract l (linker Drawer/Filter), r (rechter Drawer/Selektion), t (aktiver Tab) ist als eigene, URL-besessene Schicht definiert und bewusst aus den Presentation-Ableitungen herausgehalten. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts dokumentiert.",
+      "status": "Teil",
+      "documentation_evidence": [
+        "docs/reports/map-status-matrix.md",
+        "docs/blueprints/kartenklarheit-roadmap.md"
+      ],
+      "missing_evidence": [
+        "Verdrahtung der l/r/t-Navigation in die Route",
+        "Gezielte Query-Parameter-Tests (Phase 4)"
+      ],
+      "risk": "gering",
+      "code_runtime_evidence": [
+        "apps/web/src/lib/stores/mapView.ts",
+        "apps/web/src/lib/stores/uiView.ts"
       ]
     },
     "basemap_abhaengigkeit": {
@@ -85,7 +107,7 @@
     },
     "testabdeckung": {
       "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
-      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab.",
+      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
@@ -98,6 +120,7 @@
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
+        "apps/web/src/lib/stores/mapView.test.ts",
         "apps/web/tests/map-interaction.spec.ts",
         "apps/web/tests/map-load-fallback.spec.ts",
         "apps/web/tests/basemap.spec.ts",
