@@ -66,8 +66,9 @@ Zusatzbefund:
 - `apps/api/src/state.rs` enthält weiterhin In-Memory-Caches für `accounts`,
   `nodes` und `edges` sowie einen optionalen `db_pool`, der für die
   Domänendaten noch nicht als primäre Persistenzschicht verwendet wird.
-- `apps/api/migrations/` enthält derzeit nur die Session-Migrationen; es gibt
-  dort noch keine PostgreSQL-Tabellen für `nodes`, `edges` oder `accounts`.
+- Zum Zeitpunkt von Phase A enthielt `apps/api/migrations/` nur die
+  Session-Migrationen; Phase B hat inzwischen die Domänentabellen
+  `domain_nodes`, `domain_edges` und `domain_accounts` ergänzt.
 - Account-Schreibpfade sind breiter als der JSONL-Append-Pfad: Neben dem
   Anlegen von Accounts müssen spätere Auth-Mutationen wie E-Mail-Änderung
   und WebAuthn-User-ID-Writeback im Cutover explizit erfasst werden.
@@ -168,7 +169,7 @@ Migration.
 | A | Blueprint und Statusabgleich | Diese PR: Cutover-Plan, Ist-Befund und Statuspflege; kein Produktionscode, keine Migrationen |
 | B | SQL-Schema-Entwurf und Migrationstests | Tabellen für Nodes, Edges und Accounts; Down-Migrationen wo sinnvoll; kein Runtime-Switch |
 | C | Backfill-/Import-Pfad | Deterministischer JSONL→PostgreSQL-Import mit ID-Erhalt, Zähl- und Checksum-Prüfung, idempotent |
-| D | Read-Path hinter Feature-Flag/Config | PostgreSQL-Lesepfad für alle drei Domänen; JSONL nur noch als explizite Fallback-Option |
+| D | Read-Path hinter Feature-Flag/Config | PostgreSQL-Lesepfad für alle drei Domänen hinter `WELTGEWEBE_DOMAIN_READ_SOURCE`; Config-Gate, read-only PostgreSQL-Loader und Startup-Wiring implementiert; db_domain_read_path kompiliert per --no-run; direkter PostgreSQL-Runtime-Proof bleibt dem PR-CI-Job vorbehalten; vollständiger API-Runtime-Smoke bleibt Phase F; JSONL bleibt Default-Lesequelle und Schreibwahrheit; kein stiller Fallback (Postgres ohne `DATABASE_URL` bricht den Start hart ab); PR-CI-Beleg `db-domain-read-path-proof` ausstehend (siehe `docs/reports/domain-read-path-proof.md`). **Operator-Warnung:** `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` ist ein read-only Startup-Modus bis Phase E; API-Schreibvorgänge gehen weiterhin nach JSONL. Divergenzrisiko bei mutablen Deployments. |
 | E | Write-Path-Cutover | Schreibpfade wechseln auf PostgreSQL; Dual-Write nur falls bewusst entschieden und reconciliation-fähig |
 | F | Runtime-Smoke und CI-Beweis | API-Smoke gegen PostgreSQL-Domänendaten; Cursor- und Legacy-Listenverhalten geprüft |
 | G | JSONL-Demontage | JSONL verlässt den primären Runtime-Pfad; Seed-/Export-Artefakte bleiben nur dokumentiert erhalten |

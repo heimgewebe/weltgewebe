@@ -4,6 +4,10 @@ title: Domain Backfill Proof
 doc_type: report
 status: active
 canonicality: evidence
+summary: >
+  Phase-C-Beleg für OPT-ARC-001: deterministischer, idempotenter
+  JSONL→PostgreSQL-Import für nodes, edges und accounts. Kein Runtime-Cutover;
+  JSONL bleibt Default-Lesequelle und Schreibwahrheit bis Phase E.
 relations:
   - type: relates_to
     target: docs/tasks/index.json

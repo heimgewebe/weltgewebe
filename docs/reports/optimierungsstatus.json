@@ -226,16 +226,22 @@
         "docs/reports/domain-backfill-proof.md",
         ".github/workflows/api.yml",
         "CI-Job: db-domain-schema-migrations-proof",
-        "CI-Job: db-domain-backfill-proof"
+        "CI-Job: db-domain-backfill-proof",
+        "docs/reports/domain-read-path-proof.md",
+        "apps/api/src/config.rs",
+        "apps/api/src/domain_db.rs",
+        "apps/api/src/lib.rs",
+        "apps/api/tests/db_domain_read_path.rs",
+        "CI-Job: db-domain-read-path-proof"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
-        "Phase D (Read-Path-Switch) für Domänendaten fehlt",
         "Phase E (Write-Path-Switch) für Domänendaten fehlt",
-        "JSONL bleibt aktive Runtime-Wahrheit bis zum Cutover"
+        "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend (db-domain-read-path-proof)",
+        "JSONL bleibt Default-Lesequelle und Schreibwahrheit bis Phase E"
       ],
-      "next_action": "PR-CI-Lauf beider DB-Jobs belegen; danach Phase D (Read-Path-Switch hinter explizitem Config-Gate) angehen",
+      "next_action": "Phase D implementiert: Config-Gate, read-only PostgreSQL-Loader und Startup-Wiring. db_domain_read_path kompiliert per --no-run; der direkte PostgreSQL-Runtime-Proof bleibt dem PR-CI-Job vorbehalten. Ein vollständiger API-Runtime-Smoke bleibt Phase F; danach Phase E (Write-Path-Switch) angehen",
       "updated_at": "2026-06-03"
     },
     {

@@ -47,6 +47,28 @@ pub struct EdgeWithDetails {
     pub target_details: Option<EdgeParticipantDetails>,
 }
 
+/// Default maximum number of edges loaded into memory at startup.
+pub const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
+
+/// Parse the `MAX_EDGES_CACHE` environment variable into a `usize` limit.
+/// Falls back to [`DEFAULT_MAX_EDGES_CACHE`] when the variable is absent or
+/// contains an invalid value.
+pub fn max_edges_cache_limit() -> usize {
+    match std::env::var("MAX_EDGES_CACHE") {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    value = %val,
+                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
+                );
+                DEFAULT_MAX_EDGES_CACHE
+            }
+        },
+        Err(_) => DEFAULT_MAX_EDGES_CACHE,
+    }
+}
+
 pub async fn load_edges() -> OrderedCache<Edge> {
     let start = std::time::Instant::now();
     let path = edges_path();
@@ -66,19 +88,7 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let mut records_read = 0;
     let mut duplicates_count = 0;
 
-    let max_edges = match std::env::var("MAX_EDGES_CACHE") {
-        Ok(val) => match val.parse::<usize>() {
-            Ok(v) => v,
-            Err(_) => {
-                tracing::warn!(
-                    value = %val,
-                    "Invalid MAX_EDGES_CACHE, falling back to default 500,000"
-                );
-                500_000
-            }
-        },
-        Err(_) => 500_000,
-    };
+    let max_edges = max_edges_cache_limit();
 
     while let Ok(Some(line)) = lines.next_line().await {
         if records_read >= max_edges {
@@ -225,4 +235,59 @@ pub async fn get_edge(
         source_details,
         target_details,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    /// Simple RAII guard that restores an env var to its previous value on drop.
+    struct EnvGuard {
+        key: String,
+        old_value: Option<String>,
+    }
+
+    impl EnvGuard {
+        fn set(key: &str, value: &str) -> Self {
+            let old_value = std::env::var(key).ok();
+            std::env::set_var(key, value);
+            Self {
+                key: key.to_string(),
+                old_value,
+            }
+        }
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            match &self.old_value {
+                Some(v) => std::env::set_var(&self.key, v),
+                None => std::env::remove_var(&self.key),
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn max_edges_cache_invalid_falls_back_to_default() {
+        let _guard = EnvGuard::set("MAX_EDGES_CACHE", "not-a-number");
+        assert_eq!(
+            max_edges_cache_limit(),
+            DEFAULT_MAX_EDGES_CACHE,
+            "invalid MAX_EDGES_CACHE must fall back to default"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn max_edges_cache_absent_returns_default() {
+        let _guard = EnvGuard::set("MAX_EDGES_CACHE", "");
+        std::env::remove_var("MAX_EDGES_CACHE");
+        assert_eq!(
+            max_edges_cache_limit(),
+            DEFAULT_MAX_EDGES_CACHE,
+            "absent MAX_EDGES_CACHE must return default"
+        );
+    }
 }

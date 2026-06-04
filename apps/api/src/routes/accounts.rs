@@ -136,7 +136,7 @@ fn calculate_jittered_pos(lat: f64, lon: f64, radius_m: u32, id: &str) -> Locati
     }
 }
 
-fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
+pub(crate) fn map_json_to_public_account(v: &Value) -> Option<AccountPublic> {
     let id = match v.get("id").and_then(|v| v.as_str()) {
         Some(s) => s.to_string(),
         None => {
