@@ -1,24 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import { buildMapScene, type MapSceneModel } from "$lib/map/scene";
-import type { Account, Node } from "$lib/map/types";
+import type { Account, Edge, MapEntityViewModel, Node } from "$lib/map/types";
 import {
-  setMapScene,
-  mapScene,
-  mapLoadState,
-  failedResourceLabels,
-  markers,
-  markerCounts,
-  availableFilterTypes,
-  filteredMarkers,
-  searchResults,
-  searchMatchIds,
-  visibleEdges,
+  deriveFailedResourceLabels,
+  deriveMarkerCounts,
+  deriveAvailableFilterTypes,
+  deriveFilteredMarkers,
+  deriveSearchResults,
+  deriveSearchMatchIds,
+  deriveVisibleEdges,
   getFilterTypeKey,
+  toMapSelection,
   selectMapEntity,
 } from "./mapView";
-import { activeFilters } from "./filterStore";
-import { isSearchOpen, searchQuery } from "./searchStore";
 import { selection, systemState, leaveToNavigation } from "./uiView";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -48,7 +43,7 @@ const makeAccount = (overrides: Partial<Account> = {}): Account =>
 function sceneFrom(
   nodes: Node[],
   accounts: Account[],
-  edges = [],
+  edges: Edge[] = [],
 ): MapSceneModel {
   return buildMapScene({
     nodes,
@@ -61,112 +56,116 @@ function sceneFrom(
   });
 }
 
-describe("mapView store", () => {
+describe("mapView presentation helpers", () => {
   beforeEach(() => {
-    // Reset all shared store state between tests.
-    setMapScene(sceneFrom([], []));
-    activeFilters.set(new Set());
-    isSearchOpen.set(false);
-    searchQuery.set("");
+    // Only uiView carries effectful state (via selectMapEntity); reset it.
     leaveToNavigation();
   });
 
-  it("mirrors load state and failed resource labels from the scene", () => {
-    setMapScene(
-      buildMapScene({
-        nodes: [],
-        accounts: [],
-        edges: [],
-        loadState: "partial",
-        resourceStatus: [
-          { resource: "nodes", status: "ok" },
-          { resource: "edges", status: "failed", error: "HTTP 500" },
-        ],
-        apiBase: undefined,
-        basemapMode: "local-sovereign",
-      }),
-    );
+  it("can build an empty, non-degraded scene as the starting point", () => {
+    const scene = sceneFrom([], []);
+    expect(scene.entities).toHaveLength(0);
+    expect(scene.diagnostics.degraded).toBe(false);
+    expect(deriveFailedResourceLabels(scene)).toEqual([]);
+  });
 
-    expect(get(mapLoadState)).toBe("partial");
-    expect(get(failedResourceLabels)).toEqual(["Fäden"]);
+  it("derives failed resource labels from the scene", () => {
+    const scene = buildMapScene({
+      nodes: [],
+      accounts: [],
+      edges: [],
+      loadState: "partial",
+      resourceStatus: [
+        { resource: "nodes", status: "ok" },
+        { resource: "edges", status: "failed", error: "HTTP 500" },
+      ],
+      apiBase: undefined,
+      basemapMode: "local-sovereign",
+    });
+
+    expect(scene.loadState).toBe("partial");
+    expect(deriveFailedResourceLabels(scene)).toEqual(["Fäden"]);
   });
 
   it("exposes markers and diagnostic counts", () => {
-    setMapScene(sceneFrom([makeNode()], [makeAccount()]));
+    const scene = sceneFrom([makeNode()], [makeAccount()]);
 
-    expect(get(markers)).toHaveLength(2);
-    expect(get(markerCounts)).toEqual({ nodes: 1, accounts: 1 });
+    expect(scene.entities).toHaveLength(2);
+    expect(deriveMarkerCounts(scene.entities)).toEqual({
+      nodes: 1,
+      accounts: 1,
+    });
   });
 
   it("derives filterable types with counts and labels", () => {
-    setMapScene(
-      sceneFrom(
-        [
-          makeNode({ id: "n1", kind: "werkstatt" }),
-          makeNode({ id: "n2", kind: "werkstatt" }),
-        ],
-        [makeAccount()],
-      ),
+    const scene = sceneFrom(
+      [
+        makeNode({ id: "n1", kind: "werkstatt" }),
+        makeNode({ id: "n2", kind: "werkstatt" }),
+      ],
+      [makeAccount()],
     );
 
-    const types = get(availableFilterTypes);
-    expect(types).toEqual([
+    expect(deriveAvailableFilterTypes(scene.entities)).toEqual([
       { id: "Garnrolle", label: "Garnrolle", count: 1 },
       { id: "werkstatt", label: "Werkstatt", count: 2 },
     ]);
   });
 
   it("filters markers by the active filter set", () => {
-    setMapScene(sceneFrom([makeNode({ kind: "Werkstatt" })], [makeAccount()]));
+    const scene = sceneFrom([makeNode({ kind: "Werkstatt" })], [makeAccount()]);
 
-    expect(get(filteredMarkers)).toHaveLength(2);
+    expect(deriveFilteredMarkers(scene.entities, new Set())).toHaveLength(2);
 
-    activeFilters.set(new Set(["Garnrolle"]));
-    const filtered = get(filteredMarkers);
+    const filtered = deriveFilteredMarkers(
+      scene.entities,
+      new Set(["Garnrolle"]),
+    );
     expect(filtered).toHaveLength(1);
     expect(filtered[0].type).toBe("garnrolle");
   });
 
   it("returns search matches only when search is open with a query", () => {
-    setMapScene(
-      sceneFrom(
-        [makeNode({ title: "Hammer Park" })],
-        [makeAccount({ title: "Garn" })],
-      ),
+    const scene = sceneFrom(
+      [makeNode({ title: "Hammer Park" })],
+      [makeAccount({ title: "Garn" })],
     );
 
-    expect(get(searchResults)).toHaveLength(0);
+    expect(deriveSearchResults(scene.entities, "hammer", false)).toHaveLength(
+      0,
+    );
+    expect(deriveSearchResults(scene.entities, "", true)).toHaveLength(0);
 
-    isSearchOpen.set(true);
-    searchQuery.set("hammer");
-
-    const results = get(searchResults);
+    const results = deriveSearchResults(scene.entities, "hammer", true);
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe("node-1");
-    expect(get(searchMatchIds).has("node-1")).toBe(true);
+    expect(deriveSearchMatchIds(results).has("node-1")).toBe(true);
   });
 
-  it("scopes search to visible markers when a filter is active", () => {
-    setMapScene(
-      sceneFrom(
-        [makeNode({ title: "Findbar", kind: "Werkstatt" })],
-        [makeAccount({ title: "Findbar" })],
-      ),
+  it("scopes search to the visible markers it is handed", () => {
+    const scene = sceneFrom(
+      [makeNode({ title: "Findbar", kind: "Werkstatt" })],
+      [makeAccount({ title: "Findbar" })],
     );
 
-    isSearchOpen.set(true);
-    searchQuery.set("findbar");
-    expect(get(searchResults)).toHaveLength(2);
+    // No filter: search sees the full marker set.
+    expect(deriveSearchResults(scene.entities, "findbar", true)).toHaveLength(
+      2,
+    );
 
-    // Hide nodes via filter: only the garnrolle remains searchable.
-    activeFilters.set(new Set(["Garnrolle"]));
-    const results = get(searchResults);
+    // With a filter active, the caller hands search only the visible markers.
+    const visible = deriveFilteredMarkers(
+      scene.entities,
+      new Set(["Garnrolle"]),
+    );
+    const results = deriveSearchResults(visible, "findbar", true);
     expect(results).toHaveLength(1);
     expect(results[0].type).toBe("garnrolle");
   });
 
   it("keeps only edges whose endpoints are both visible", () => {
-    const edges = [
+    const scene = sceneFrom([makeNode()], [makeAccount()]);
+    const edges: Edge[] = [
       {
         id: "e1",
         source_id: "node-1",
@@ -180,13 +179,18 @@ describe("mapView store", () => {
         edge_kind: "reference",
       },
     ];
-    setMapScene(sceneFrom([makeNode()], [makeAccount()], edges as never));
 
-    expect(get(visibleEdges).map((e) => e.id)).toEqual(["e1"]);
+    const allVisible = deriveFilteredMarkers(scene.entities, new Set());
+    expect(deriveVisibleEdges(edges, allVisible).map((e) => e.id)).toEqual([
+      "e1",
+    ]);
 
     // Filtering out the garnrolle removes the edge that needs it.
-    activeFilters.set(new Set(["Werkstatt"]));
-    expect(get(visibleEdges)).toHaveLength(0);
+    const onlyNodes = deriveFilteredMarkers(
+      scene.entities,
+      new Set(["Werkstatt"]),
+    );
+    expect(deriveVisibleEdges(edges, onlyNodes)).toHaveLength(0);
   });
 
   it("getFilterTypeKey distinguishes nodes from garnrollen", () => {
@@ -196,9 +200,25 @@ describe("mapView store", () => {
     expect(getFilterTypeKey({ type: "garnrolle" } as never)).toBe("Garnrolle");
   });
 
+  it("toMapSelection carries panel data and normalizes the type", () => {
+    const node: MapEntityViewModel = {
+      type: "node",
+      id: "node-1",
+      title: "Hammer Park",
+      lat: 53.5,
+      lon: 10.0,
+      kind: "Werkstatt",
+      tags: [],
+      created_at: "2025-01-01T00:00:00Z",
+    };
+
+    const sel = toMapSelection(node);
+    expect(sel).toEqual({ type: "node", id: "node-1", data: node });
+  });
+
   it("selectMapEntity moves selection into fokus with panel data", () => {
-    const node = {
-      type: "node" as const,
+    const node: MapEntityViewModel = {
+      type: "node",
       id: "node-1",
       title: "Hammer Park",
       lat: 53.5,
@@ -215,12 +235,5 @@ describe("mapView store", () => {
     expect(sel?.type).toBe("node");
     expect(sel?.id).toBe("node-1");
     expect(sel?.data).toBe(node);
-  });
-
-  it("mapScene starts from an empty, non-degraded scene", () => {
-    setMapScene(sceneFrom([], []));
-    const s = get(mapScene);
-    expect(s.entities).toHaveLength(0);
-    expect(s.diagnostics.degraded).toBe(false);
   });
 });

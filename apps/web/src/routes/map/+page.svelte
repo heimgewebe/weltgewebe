@@ -14,18 +14,15 @@
 
   import { view, selection, systemState } from '$lib/stores/uiView';
   import { activeFilters } from '$lib/stores/filterStore';
+  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
   import {
-    setMapScene,
-    mapLoadState,
-    mapDiagnostics,
-    failedResourceLabels,
-    markers,
-    markerCounts,
-    availableFilterTypes,
-    filteredMarkers,
-    searchResults,
-    searchMatchIds,
-    visibleEdges,
+    deriveFailedResourceLabels,
+    deriveMarkerCounts,
+    deriveAvailableFilterTypes,
+    deriveFilteredMarkers,
+    deriveSearchResults,
+    deriveSearchMatchIds,
+    deriveVisibleEdges,
     getFilterTypeKey,
     selectMapEntity,
   } from '$lib/stores/mapView';
@@ -44,11 +41,12 @@
 
   export let data: PageData;
 
-  // Phase 2: Build scene from route data and push it into the dedicated map-view
-  // store. The store owns all presentation derivations (filtered markers,
-  // filter types, search matches, visible edges) so this route no longer is the
-  // sole owner of marker description and panel-feeding state.
-  $: setMapScene(buildMapScene({
+  // Phase 2: Build the scene from request-scoped route data. The scene stays
+  // local to this component instance (never a module-level store), so no
+  // request-specific data is shared across module state. The presentation
+  // derivations live as pure functions in `$lib/stores/mapView` and are fed the
+  // scene together with the ephemeral UI state (filters, search).
+  $: scene = buildMapScene({
     nodes: data.nodes || [],
     accounts: data.accounts || [],
     edges: data.edges || [],
@@ -56,14 +54,22 @@
     resourceStatus: data.resourceStatus ?? [],
     apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
     basemapMode: currentBasemap.mode,
-  }));
+  });
 
-  // Presentation state consumed from the dedicated store.
-  $: loadState = $mapLoadState;
-  $: markersData = $markers;
-  $: filteredMarkersData = $filteredMarkers;
-  $: edgesData = $visibleEdges;
-  $: filteredResults = $searchResults;
+  // Presentation state derived via pure functions from the local scene + UI state.
+  $: loadState = scene.loadState;
+  $: diagnostics = scene.diagnostics;
+  $: failedLabels = deriveFailedResourceLabels(scene);
+  $: markersData = scene.entities;
+  $: markerCounts = deriveMarkerCounts(markersData);
+  $: availableTypes = deriveAvailableFilterTypes(markersData);
+  $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
+  // Search is scoped to the currently visible markers (filtered set when a
+  // filter is active, otherwise the full set) so it never reaches hidden ones.
+  $: searchBaseMarkers = $activeFilters.size === 0 ? markersData : filteredMarkersData;
+  $: filteredResults = deriveSearchResults(searchBaseMarkers, $searchQuery, $isSearchOpen);
+  $: searchMatchIds = deriveSearchMatchIds(filteredResults);
+  $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -78,7 +84,7 @@
   // Reactive update for markers and search highlight strictly handled in overlay update
   $: if (nodesOverlay && filteredMarkersData && $view) {
     (async () => {
-      await nodesOverlay.update(filteredMarkersData, $view.showNodes, $searchMatchIds);
+      await nodesOverlay.update(filteredMarkersData, $view.showNodes, searchMatchIds);
     })();
   }
 
@@ -477,7 +483,7 @@
 
   {#if loadState === 'partial'}
     <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      Einige Kartendaten konnten nicht geladen werden ({$failedResourceLabels.join(', ')}).
+      Einige Kartendaten konnten nicht geladen werden ({failedLabels.join(', ')}).
     </div>
   {/if}
   {#if loadState === 'failed'}
@@ -488,14 +494,14 @@
 
   <ContextPanel />
   <SearchOverlay {filteredResults} on:select={handleSearchSelect} />
-  <FilterOverlay availableTypes={$availableFilterTypes} />
+  <FilterOverlay availableTypes={availableTypes} />
   <ActionBar />
   {#if import.meta.env.DEV || import.meta.env.MODE === 'test'}
     <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {$markerCounts.nodes} / Accounts: {$markerCounts.accounts} / Edges: {edgesData.length}
+      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
       <br>
-      API: {$mapDiagnostics.apiMode} / Basemap: {$mapDiagnostics.basemapMode}
-      {#if $mapDiagnostics.degraded}
+      API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
+      {#if diagnostics.degraded}
         <br>⚠ Load: {loadState}
       {/if}
       <br>

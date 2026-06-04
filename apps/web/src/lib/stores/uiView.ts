@@ -12,10 +12,12 @@ import { setupUiInvariantWatcher } from "./uiInvariants";
  * filterStore          | isFilterOpen, activeFilters     | —
  * scene.ts             | MapSceneModel (entities, edges, | route data
  *                      | loadState, diagnostics)         |
- * mapView              | mapScene + presentation derived | scene, filters,
- *                      | (filteredMarkers, search, edges,| search; uiView
- *                      | filter types); selectMapEntity()|
- * +page.svelte         | map instance, overlay lifecycle | all stores + scene
+ * mapView              | pure presentation derivations   | (args only:
+ *                      | (deriveFilteredMarkers, search, | scene, markers,
+ *                      | edges, filter types) +          | filters, query);
+ *                      | selectMapEntity() -> enterFokus | uiView (effect)
+ * +page.svelte         | request-scoped scene, map       | all stores +
+ *                      | instance, overlay lifecycle,    | local scene
  *                      | flyTo wiring                    |
  * NodesOverlay         | DOM markers, activeMarkers map  | MapEntityViewModel[]
  * edges.ts             | GeoJSON edge source/layers      | Edge[], MapEntityViewModel[]

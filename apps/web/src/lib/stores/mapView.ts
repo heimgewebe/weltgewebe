@@ -1,5 +1,5 @@
 /**
- * Map View Store (Kartenklarheit Phase 2)
+ * Map View presentation helpers (Kartenklarheit Phase 2)
  *
  * Owns the *presentation* derivations of the map: which entities are shown,
  * how they are filtered, which markers match the current search, and which
@@ -9,15 +9,28 @@
  *
  * This module decouples three concerns out of the route:
  *  - Auswahlzustand (selection)   -> `selectMapEntity()` delegates to uiView.
- *  - Markerbeschreibung (markers) -> `filteredMarkers`, `availableFilterTypes`,
- *                                    `searchMatchIds`, `visibleEdges`.
+ *  - Markerbeschreibung (markers) -> `deriveFilteredMarkers`,
+ *                                    `deriveAvailableFilterTypes`,
+ *                                    `deriveSearchMatchIds`, `deriveVisibleEdges`.
  *  - Paneldaten (panel feed)      -> the selected entity travels via uiView's
- *                                    `selection.data`; this store only feeds it.
+ *                                    `selection.data`; this module only feeds it
+ *                                    through `toMapSelection` / `selectMapEntity`.
+ *
+ * Why pure functions instead of a module-level scene store:
+ *  - The scene is *request-specific* data (it is built from the route's
+ *    `load`-provided `data`). Holding it in a module-level `writable` would put
+ *    request data into shared module state. Even though this app ships as a
+ *    static SPA (adapter-static, no runtime SSR server), keeping the scene
+ *    request-scoped in the component instance avoids that coupling entirely and
+ *    keeps these derivations trivially unit-testable as pure transformations.
+ *  - The route computes the scene locally (via `buildMapScene`) and feeds it,
+ *    together with the ephemeral UI state (active filters, search query), into
+ *    these pure functions. This module therefore owns no scene state of its own.
  *
  * Ownership boundary:
- *  - This store owns *derived presentation* of the scene. It does NOT own the
- *    raw scene transformation (that is `lib/map/scene.ts`) nor the imperative
- *    map/overlay lifecycle (that stays in the route).
+ *  - This module owns *derived presentation* of the scene as pure functions. It
+ *    does NOT own the raw scene transformation (that is `lib/map/scene.ts`) nor
+ *    the imperative map/overlay lifecycle (that stays in the route).
  *
  * URL query-parameter state vs. map state:
  *  - Map runtime state (center, zoom, bearing, pitch, selection, systemState,
@@ -25,45 +38,14 @@
  *    It is intentionally NOT mirrored into the URL.
  *  - The deep-link contract `l` / `r` / `t` (left drawer, right drawer, active
  *    tab) is a *separate*, URL-owned layer. It is documented in
- *    `docs/reports/map-status-matrix.md` and is deliberately kept out of this
- *    store so map runtime state and URL state never blur into each other.
+ *    `docs/reports/map-status-matrix.md`. Its actual wiring remains Phase 4 and
+ *    is deliberately kept out of this module so map runtime state and URL state
+ *    never blur into each other.
  */
-import { derived, writable } from "svelte/store";
 import type { MapSceneModel } from "$lib/map/scene";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { isRecord } from "$lib/utils/guards";
-import { activeFilters } from "./filterStore";
-import { isSearchOpen, searchQuery } from "./searchStore";
 import { enterFokus, type Selection } from "./uiView";
-
-const EMPTY_SCENE: MapSceneModel = {
-  entities: [],
-  edges: [],
-  loadState: "ok",
-  resourceStatus: [],
-  diagnostics: {
-    apiMode: "local",
-    basemapMode: "local-sovereign",
-    degraded: false,
-  },
-};
-
-/**
- * The current scene. The route is the single writer (it builds the scene from
- * route data via `buildMapScene`) and pushes it here so the presentation
- * derivations can react without the route re-implementing them.
- */
-export const mapScene = writable<MapSceneModel>(EMPTY_SCENE);
-
-export function setMapScene(scene: MapSceneModel): void {
-  mapScene.set(scene);
-}
-
-/** Explicit load state, mirrored from the scene. */
-export const mapLoadState = derived(mapScene, ($scene) => $scene.loadState);
-
-/** Diagnostics (api mode, basemap mode, degraded), mirrored from the scene. */
-export const mapDiagnostics = derived(mapScene, ($scene) => $scene.diagnostics);
 
 const RESOURCE_LABELS: Record<string, string> = {
   nodes: "Knoten",
@@ -72,30 +54,36 @@ const RESOURCE_LABELS: Record<string, string> = {
 };
 
 /** Human-readable labels for resources that failed to load. */
-export const failedResourceLabels = derived(mapScene, ($scene) =>
-  $scene.resourceStatus
+export function deriveFailedResourceLabels(scene: MapSceneModel): string[] {
+  return scene.resourceStatus
     .filter((r) => r.status === "failed")
-    .map((r) => RESOURCE_LABELS[r.resource] ?? r.resource),
-);
-
-/** All renderable entities of the current scene. */
-export const markers = derived(mapScene, ($scene) => $scene.entities);
+    .map((r) => RESOURCE_LABELS[r.resource] ?? r.resource);
+}
 
 /** Diagnostic counts for the debug badge (nodes vs. accounts). */
-export const markerCounts = derived(markers, ($markers) => ({
-  nodes: $markers.filter((e) => e.type === "node").length,
-  accounts: $markers.filter((e) => e.type !== "node").length,
-}));
+export function deriveMarkerCounts(markers: MapEntityViewModel[]): {
+  nodes: number;
+  accounts: number;
+} {
+  return {
+    nodes: markers.filter((e) => e.type === "node").length,
+    accounts: markers.filter((e) => e.type !== "node").length,
+  };
+}
 
 /** The filter bucket an entity belongs to (node kind, or "Garnrolle"). */
 export function getFilterTypeKey(m: MapEntityViewModel): string {
   return m.type === "node" ? m.kind || "Knoten" : "Garnrolle";
 }
 
+export type FilterType = { id: string; label: string; count: number };
+
 /** Filterable type buckets with counts, sorted by label. */
-export const availableFilterTypes = derived(markers, ($markers) => {
+export function deriveAvailableFilterTypes(
+  markers: MapEntityViewModel[],
+): FilterType[] {
   const counts = new Map<string, number>();
-  for (const m of $markers) {
+  for (const m of markers) {
     const typeKey = getFilterTypeKey(m);
     counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
   }
@@ -106,50 +94,49 @@ export const availableFilterTypes = derived(markers, ($markers) => {
       count,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
-});
+}
 
 /** Markers visible under the active filter set. */
-export const filteredMarkers = derived(
-  [markers, activeFilters],
-  ([$markers, $activeFilters]) =>
-    $activeFilters.size === 0
-      ? $markers
-      : $markers.filter((m) => $activeFilters.has(getFilterTypeKey(m))),
-);
+export function deriveFilteredMarkers(
+  markers: MapEntityViewModel[],
+  activeFilters: Set<string>,
+): MapEntityViewModel[] {
+  return activeFilters.size === 0
+    ? markers
+    : markers.filter((m) => activeFilters.has(getFilterTypeKey(m)));
+}
 
 /**
- * Search operates strictly on currently visible markers: the full set when no
- * filter is active, otherwise the filtered set.
+ * Up to 10 search matches for the current query.
+ *
+ * Search operates strictly on the markers it is handed: callers pass the
+ * currently *visible* markers (the full set when no filter is active, otherwise
+ * the filtered set) so search never reaches hidden entities.
  */
-const searchBaseData = derived(
-  [markers, filteredMarkers, activeFilters],
-  ([$markers, $filteredMarkers, $activeFilters]) =>
-    $activeFilters.size === 0 ? $markers : $filteredMarkers,
-);
-
-/** Up to 10 search matches for the current query, scoped to visible markers. */
-export const searchResults = derived(
-  [isSearchOpen, searchQuery, searchBaseData],
-  ([$isSearchOpen, $searchQuery, $searchBaseData]) => {
-    if ($isSearchOpen && $searchQuery.trim().length > 0) {
-      const q = $searchQuery.toLowerCase();
-      return $searchBaseData
-        .filter((m) => {
-          const titleMatch = m.title?.toLowerCase().includes(q);
-          const summaryMatch = m.summary?.toLowerCase().includes(q);
-          return titleMatch || summaryMatch;
-        })
-        .slice(0, 10);
-    }
-    return [] as MapEntityViewModel[];
-  },
-);
+export function deriveSearchResults(
+  visibleMarkers: MapEntityViewModel[],
+  query: string,
+  isOpen: boolean,
+): MapEntityViewModel[] {
+  if (!isOpen || query.trim().length === 0) {
+    return [];
+  }
+  const q = query.toLowerCase();
+  return visibleMarkers
+    .filter((m) => {
+      const titleMatch = m.title?.toLowerCase().includes(q);
+      const summaryMatch = m.summary?.toLowerCase().includes(q);
+      return titleMatch || summaryMatch;
+    })
+    .slice(0, 10);
+}
 
 /** Ids of the current search matches, for marker highlighting. */
-export const searchMatchIds = derived(
-  searchResults,
-  ($searchResults) => new Set($searchResults.map((r) => r.id)),
-);
+export function deriveSearchMatchIds(
+  results: MapEntityViewModel[],
+): Set<string> {
+  return new Set(results.map((r) => r.id));
+}
 
 function isEdge(e: unknown): e is Edge {
   if (!isRecord(e)) return false;
@@ -162,16 +149,16 @@ function isEdge(e: unknown): e is Edge {
 }
 
 /** Edges whose endpoints are both currently visible markers. */
-export const visibleEdges = derived(
-  [mapScene, filteredMarkers],
-  ([$scene, $filteredMarkers]) => {
-    const validEdges = $scene.edges.filter(isEdge);
-    const visibleIds = new Set($filteredMarkers.map((p) => p.id));
-    return validEdges.filter(
-      (e) => visibleIds.has(e.source_id) && visibleIds.has(e.target_id),
-    );
-  },
-);
+export function deriveVisibleEdges(
+  edges: Edge[],
+  filteredMarkers: MapEntityViewModel[],
+): Edge[] {
+  const validEdges = edges.filter(isEdge);
+  const visibleIds = new Set(filteredMarkers.map((p) => p.id));
+  return validEdges.filter(
+    (e) => visibleIds.has(e.source_id) && visibleIds.has(e.target_id),
+  );
+}
 
 function normalizeSelectionType(
   type: MapEntityViewModel["type"],
@@ -180,15 +167,24 @@ function normalizeSelectionType(
 }
 
 /**
- * Selection-state decoupling: turn a map entity into a focus selection.
- * This carries the panel data (`data: item`) into uiView's `selection`, which
- * the ContextPanel reads. The map-side concern (flyTo) stays in the route.
+ * Pure selection adapter: turn a map entity into a uiView focus selection.
+ * Carries the panel data (`data: item`) that the ContextPanel reads.
  */
-export function selectMapEntity(item: MapEntityViewModel): void {
-  const selection: NonNullable<Selection> = {
+export function toMapSelection(
+  item: MapEntityViewModel,
+): NonNullable<Selection> {
+  return {
     type: normalizeSelectionType(item.type),
     id: item.id,
     data: item,
   };
-  enterFokus(selection);
+}
+
+/**
+ * Selection-state decoupling: focus a map entity by delegating to uiView.
+ * The map-side concern (flyTo) stays in the route. This is the one effectful
+ * helper here; it mutates only ephemeral UI state (uiView), never scene data.
+ */
+export function selectMapEntity(item: MapEntityViewModel): void {
+  enterFokus(toMapSelection(item));
 }

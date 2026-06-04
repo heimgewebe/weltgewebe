@@ -450,8 +450,6 @@
         "apps/api/tests/db_domain_schema_migrations.rs",
         "apps/api/tests/db_domain_backfill.rs",
         "docs/reports/domain-backfill-proof.md",
-        "apps/api/tests/db_domain_read_path.rs",
-        "docs/reports/domain-read-path-proof.md",
         ".github/workflows/api.yml",
         "CI-Job: db-domain-schema-migrations-proof",
         "CI-Job: db-domain-backfill-proof"
@@ -459,7 +457,7 @@
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
-        "PR-CI-Laufbeleg für db_domain_read_path ausstehend (Tests sind #[ignore]; lokale Kompilierung grün)",
+        "Phase D (Read-Path-Switch) fehlt",
         "Phase E (Write-Path-Switch) fehlt",
         "JSONL bleibt aktive Runtime-Wahrheit bis Cutover"
       ],
@@ -474,11 +472,10 @@
         "docs": [
           "docs/blueprints/domain-data-postgres-cutover.md",
           "docs/reports/optimierungsstatus.md",
-          "docs/reports/domain-backfill-proof.md",
-          "docs/reports/domain-read-path-proof.md"
+          "docs/reports/domain-backfill-proof.md"
         ]
       },
-      "updated_at": "2026-06-04"
+      "updated_at": "2026-06-03"
     }
   ]
 }

@@ -98,11 +98,18 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
 
 - [x] Auswahlzustand, Markerbeschreibung und Paneldaten aus `+page.svelte` entkoppeln.
   - Auswahlzustand: `selectMapEntity(...)` in `apps/web/src/lib/stores/mapView.ts`
-    delegiert an `enterFokus(...)` in `apps/web/src/lib/stores/uiView.ts`; die Route
-    behaelt nur noch die kartenseitige `flyTo`-Verdrahtung.
-  - Markerbeschreibung: `markers`, `filteredMarkers`, `availableFilterTypes`,
-    `searchResults`, `searchMatchIds` und `visibleEdges` sind dedizierte
-    Derived-Stores in `apps/web/src/lib/stores/mapView.ts`.
+    delegiert ueber `toMapSelection(...)` an `enterFokus(...)` in
+    `apps/web/src/lib/stores/uiView.ts`; die Route behaelt nur noch die
+    kartenseitige `flyTo`-Verdrahtung.
+  - Markerbeschreibung: `deriveMarkerCounts`, `deriveFilteredMarkers`,
+    `deriveAvailableFilterTypes`, `deriveSearchResults`, `deriveSearchMatchIds`
+    und `deriveVisibleEdges` sind reine Funktionen in
+    `apps/web/src/lib/stores/mapView.ts`. Die Route baut die request-bezogene
+    Szene lokal (`buildMapScene`) und speist sie samt UI-Zustand (Filter, Suche)
+    in diese Funktionen; ein modulglobaler Szenen-Store wurde bewusst vermieden,
+    damit request-spezifische Kartendaten nicht in geteilten Modulzustand
+    geschrieben werden (SSR-sicher; zusaetzlich statische SPA via
+    `adapter-static` ohne Laufzeit-SSR-Server).
   - Paneldaten: Das selektierte Entity reist als `selection.data` ueber `uiView`;
     der `ContextPanel` liest es direkt aus dem Store statt aus der Route.
 - [x] Ein kleines Karten-View-Model oder Szenenmodell definieren.
@@ -114,15 +121,18 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
 
 - [x] `apps/web/src/lib/map/scene.test.ts` prueft das Szenenmodell als reine Transformation.
 - [x] `apps/web/src/lib/stores/mapView.test.ts` prueft die entkoppelten
-  Presentation-Stores (Filter, Suche, Kantenfilter, Selektion) als Unit-Tests.
+  Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter,
+  Selektion) als Unit-Tests.
 
 ### Stop-Kriterium der Phase 2
 
-- [x] Auswahlzustand, Markerbeschreibung und Paneldaten leben in dedizierten Stores
-  (`uiView`, `mapView`); die Route haelt nur noch die imperative MapLibre-/Overlay-
-  Lebenszyklus-Orchestrierung. Die URL-Parameter-Schicht (`l`, `r`, `t`) ist
-  dokumentarisch vom Kartenzustand getrennt; die tatsaechliche Query-Parameter-
-  Navigation bleibt als Arbeitspaket in Phase 4 offen.
+- [x] Auswahlzustand (uiView), Markerbeschreibung (reine Ableitungsfunktionen in
+  `mapView`) und Paneldaten (`selection.data`) sind aus der Route entkoppelt; die
+  Route haelt nur noch die request-lokale Szene plus die imperative
+  MapLibre-/Overlay-Lebenszyklus-Orchestrierung. Die URL-Parameter-Schicht
+  (`l`, `r`, `t`) ist dokumentarisch vom Kartenzustand getrennt; die
+  tatsaechliche Query-Parameter-Navigation bleibt als Arbeitspaket in Phase 4
+  offen.
 
 ---
 
