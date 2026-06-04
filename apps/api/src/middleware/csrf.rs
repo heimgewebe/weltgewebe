@@ -24,7 +24,18 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     }
 
     // 2. Explicit exemptions
-    if req.uri().path().ends_with("/auth/login") || req.uri().path().ends_with("/auth/logout") {
+    let path = req.uri().path();
+    if is_magic_link_consume_post(req.method(), path) {
+        // Magic-link consume is a one-time login confirmation POST that may be
+        // submitted from an email-opened document with `Origin: null`. It must
+        // remain narrowly exempt from the session-cookie Origin/Referer guard
+        // because the handler is authoritative: it validates the submitted
+        // token, verifies the token-bound nonce cookie, and only then creates a
+        // session. Invalid token/nonce cases must continue to fail there.
+        return next.run(req).await;
+    }
+
+    if path.ends_with("/auth/login") || path.ends_with("/auth/logout") {
         return next.run(req).await;
     }
 
@@ -206,6 +217,10 @@ fn parse_host_header(input: &str) -> (String, Option<u16>) {
     (input.to_string(), None)
 }
 
+fn is_magic_link_consume_post(method: &Method, path: &str) -> bool {
+    *method == Method::POST
+        && (path == "/auth/magic-link/consume" || path == "/api/auth/magic-link/consume")
+}
 #[cfg(test)]
 mod tests {
     use super::*;
