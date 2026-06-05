@@ -127,6 +127,25 @@ jobs:
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn("Missing FORCE_JAVASCRIPT_ACTIONS_TO_NODE24", result.stdout)
 
+    def test_known_repo_action_prefix_is_checked(self) -> None:
+        result = self.run_checker(
+            """
+name: repo-known
+on: workflow_dispatch
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anchore/sbom-action@v0
+"""
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("anchore/sbom-action@v0", result.stdout)
+        self.assertIn("All good!", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

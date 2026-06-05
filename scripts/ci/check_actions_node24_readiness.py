@@ -23,6 +23,8 @@ KNOWN_JAVASCRIPT_ACTION_PREFIXES = (
     "actions/setup-python",
     "pnpm/action-setup",
     "astral-sh/setup-uv",
+    "DavidAnson/markdownlint-cli2-action",
+    "anchore/sbom-action",
     "dorny/paths-filter",
     "docker/setup-buildx-action",
     "extractions/setup-just",
