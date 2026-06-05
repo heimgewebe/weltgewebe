@@ -139,6 +139,80 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
         self.assertEqual(output["findings_count"], 0)
         self.assertEqual(output["entries_count"], 3)
 
+    def test_block_yaml_registry_passes_without_pyyaml(self):
+        self._write_claims()
+        path = self.root / "docs" / "doc-freshness-registry.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            """---
+kind: lenskit.doc_freshness_registry
+version: "1.0"
+entries:
+  - id: claim-agent-safe-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-001]
+    claim: >-
+      Statement for claim 1.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: scripts/agent/impl_001.py
+      - kind: test
+        target: scripts/agent/tests/test_001.py
+      - kind: file
+        target: .github/workflows/wf_001.yml
+      - kind: file
+        target: docs/security/doc_001.md
+
+  - id: claim-agent-safe-002
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-002]
+    claim: >-
+      Statement for claim 2.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: scripts/docmeta/impl_002.py
+      - kind: test
+        target: scripts/docmeta/tests/test_002.py
+      - kind: file
+        target: docs/_generated/report_002.md
+
+  - id: claim-agent-safe-003
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-003]
+    claim: >-
+      Statement for claim 3.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: docs/claims/reg_003.yml
+      - kind: file
+        target: docs/claims/readme_003.md
+      - kind: file
+        target: scripts/docmeta/impl_003.py
+      - kind: test
+        target: scripts/docmeta/tests/test_003.py
+""",
+            encoding="utf-8",
+        )
+
+        original_yaml = validator.yaml
+        try:
+            validator.yaml = None
+            output, exit_code = self._run()
+        finally:
+            validator.yaml = original_yaml
+
+        self.assertEqual(exit_code, 0, output["findings"])
+        self.assertEqual(output["entries_count"], 3)
+
     # --- top-level schema checks -------------------------------------------
 
     def test_missing_top_level_kind_fails(self):

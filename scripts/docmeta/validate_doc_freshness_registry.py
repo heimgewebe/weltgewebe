@@ -64,6 +64,173 @@ def _finding(code: str, entry_id: str | None, message: str, path: str | None = N
     return finding
 
 
+def _strip_yaml_scalar(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
+
+
+def _read_folded_block(lines: list[str], start: int, base_indent: int) -> tuple[str, int]:
+    parts: list[str] = []
+    index = start
+    while index < len(lines):
+        line = lines[index]
+        if not line.strip():
+            parts.append("")
+            index += 1
+            continue
+        indent = len(line) - len(line.lstrip(" "))
+        if indent <= base_indent:
+            break
+        parts.append(line.strip())
+        index += 1
+    return " ".join(part for part in parts if part).strip(), index
+
+
+def _load_lenskit_bridge_yaml_subset(normalized: str) -> dict[str, object]:
+    """Parse the repo-local Lenskit bridge YAML without requiring PyYAML.
+
+    This is intentionally narrow. It supports exactly the block-YAML shape used by
+    docs/doc-freshness-registry.yml: top-level scalar fields, a does_not_prove
+    list, and entries with scalar fields plus evidence items.
+    """
+    lines = normalized.splitlines()
+    data: dict[str, object] = {}
+    entries: list[dict[str, object]] = []
+    index = 0
+
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+
+        if not stripped or stripped.startswith("#"):
+            index += 1
+            continue
+
+        if line.startswith("does_not_prove:"):
+            items: list[str] = []
+            index += 1
+            while index < len(lines):
+                current = lines[index]
+                current_stripped = current.strip()
+                if not current_stripped:
+                    index += 1
+                    continue
+                if not current.startswith("  - "):
+                    break
+                item = current_stripped[2:].strip()
+                if item == ">-":
+                    value, index = _read_folded_block(lines, index + 1, 2)
+                    items.append(value)
+                else:
+                    items.append(_strip_yaml_scalar(item))
+                    index += 1
+            data["does_not_prove"] = items
+            continue
+
+        if line.startswith("entries:"):
+            index += 1
+            while index < len(lines):
+                current = lines[index]
+                current_stripped = current.strip()
+
+                if not current_stripped:
+                    index += 1
+                    continue
+                if not current.startswith("  - "):
+                    break
+
+                entry: dict[str, object] = {}
+                first = current_stripped[2:].strip()
+                if first:
+                    if ":" not in first:
+                        raise ValueError(f"Invalid entry line: {current!r}")
+                    key, value = first.split(":", 1)
+                    entry[key.strip()] = _strip_yaml_scalar(value)
+                index += 1
+
+                while index < len(lines):
+                    current = lines[index]
+                    current_stripped = current.strip()
+
+                    if not current_stripped:
+                        index += 1
+                        continue
+                    if current.startswith("  - ") or not current.startswith("    "):
+                        break
+
+                    if current_stripped == "evidence:":
+                        evidence: list[dict[str, str]] = []
+                        index += 1
+                        while index < len(lines):
+                            item_line = lines[index]
+                            item_stripped = item_line.strip()
+
+                            if not item_stripped:
+                                index += 1
+                                continue
+                            if item_line.startswith("  - ") or not item_line.startswith("      - "):
+                                break
+
+                            item: dict[str, str] = {}
+                            first_item = item_stripped[2:].strip()
+                            if first_item:
+                                if ":" not in first_item:
+                                    raise ValueError(f"Invalid evidence line: {item_line!r}")
+                                key, value = first_item.split(":", 1)
+                                item[key.strip()] = _strip_yaml_scalar(value)
+                            index += 1
+
+                            while index < len(lines):
+                                field_line = lines[index]
+                                field_stripped = field_line.strip()
+
+                                if not field_stripped:
+                                    index += 1
+                                    continue
+                                if not field_line.startswith("        "):
+                                    break
+                                if ":" not in field_stripped:
+                                    raise ValueError(f"Invalid evidence field: {field_line!r}")
+                                key, value = field_stripped.split(":", 1)
+                                item[key.strip()] = _strip_yaml_scalar(value)
+                                index += 1
+
+                            evidence.append(item)
+
+                        entry["evidence"] = evidence
+                        continue
+
+                    if ":" not in current_stripped:
+                        raise ValueError(f"Invalid entry field: {current!r}")
+
+                    key, value = current_stripped.split(":", 1)
+                    value = value.strip()
+                    if value == ">-":
+                        folded, index = _read_folded_block(lines, index + 1, 4)
+                        entry[key.strip()] = folded
+                    else:
+                        entry[key.strip()] = _strip_yaml_scalar(value)
+                        index += 1
+
+                entries.append(entry)
+
+            data["entries"] = entries
+            continue
+
+        if not line.startswith(" ") and ":" in stripped:
+            key, value = stripped.split(":", 1)
+            data[key.strip()] = _strip_yaml_scalar(value)
+            index += 1
+            continue
+
+        raise ValueError(f"Unsupported YAML subset line: {line!r}")
+
+    return data
+
+
+
 def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
     """Load a JSON-compatible YAML subset (optional leading ``---``)."""
     if not path.exists():
@@ -83,12 +250,18 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
     try:
         return json.loads(normalized), None
     except json.JSONDecodeError as json_exc:
-        if yaml is None:
-            return None, f"Registry parse error: {json_exc.msg}; PyYAML is not available"
+        if yaml is not None:
+            try:
+                return yaml.safe_load(normalized), None
+            except Exception as yaml_exc:
+                yaml_error = f"; YAML parse error: {yaml_exc}"
+        else:
+            yaml_error = "; PyYAML is not available"
+
         try:
-            return yaml.safe_load(normalized), None
-        except Exception as yaml_exc:
-            return None, f"Registry parse error: {json_exc.msg}; YAML parse error: {yaml_exc}"
+            return _load_lenskit_bridge_yaml_subset(normalized), None
+        except ValueError as subset_exc:
+            return None, f"Registry parse error: {json_exc.msg}{yaml_error}; YAML subset parse error: {subset_exc}"
 
 
 def _load_claim_evidence(
