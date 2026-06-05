@@ -1,0 +1,126 @@
+---
+id: reports.inwx-zone-reconciliation-plan
+title: "INWX Zone Reconciliation Plan"
+doc_type: report
+status: active
+summary: >
+  Redigierter Plan zur Vorbereitung des INWX-DNS-/Registrar-Cutovers
+  nach abgeschlossener Mailmigration.
+relations:
+  - type: relates_to
+    target: docs/tasks/board.md
+  - type: relates_to
+    target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+  - type: relates_to
+    target: docs/runbooks/domain-mail-cutover.md
+  - type: relates_to
+    target: docs/reports/domain-provider-role-finding.md
+---
+
+# INWX Zone Reconciliation Plan
+
+## Status
+
+Prepared plan only. No live provider changes performed.
+
+## Scope
+
+- `weltgewebe.net`
+- `weltweb.net`
+- `weltweberei.org`
+
+## Source Priority
+
+1. Fresh public DNS checks from the local migration audit
+2. Final mail migration audit summaries
+3. Provider role finding
+4. Older stored DNS snapshots only as historical evidence
+
+## Current Target Model
+
+- `weltgewebe.net` human mail: mailbox.org
+- `login.weltgewebe.net` technical login mail: Brevo
+- `weltweb.net`: no-mail
+- `weltweberei.org`: no-mail
+- INWX target: registrar/DNS
+- IONOS remains active until DNS/registrar/web cutover is proven
+
+## Reconciled Target Records Summary
+
+### weltgewebe.net
+
+- A @ -> 149.233.190.131
+- A www -> 149.233.190.131
+- A api -> 149.233.190.131
+- MX 10 mxext1.mailbox.org.
+- MX 10 mxext2.mailbox.org.
+- MX 20 mxext3.mailbox.org.
+- SPF -> v=spf1 include:mailbox.org ~all
+- DMARC -> p=none, rua=mailto:kontakt@weltgewebe.net
+- mailbox.org DKIM:
+  - `MBO0001._domainkey` CNAME -> `mbo0001._domainkey.mailbox.org.`
+  - `MBO0002._domainkey` CNAME -> `mbo0002._domainkey.mailbox.org.`
+  - `MBO0003._domainkey` CNAME -> `mbo0003._domainkey.mailbox.org.`
+  - `MBO0004._domainkey` CNAME -> `mbo0004._domainkey.mailbox.org.`
+- Brevo login subdomain:
+  - `login` TXT -> `brevo-code:d9e7825df780e9cce6c9fbe8d1ea5abd`
+  - `_dmarc.login` TXT -> `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`
+  - `brevo1._domainkey.login` CNAME -> `b1.login-weltgewebe-net.dkim.brevo.com.`
+  - `brevo2._domainkey.login` CNAME -> `b2.login-weltgewebe-net.dkim.brevo.com.`
+
+No Brevo SPF/Return-Path record is included here unless Brevo later issues a separate target value; the cutover runbook treats that as a separate follow-up.
+
+### weltweb.net
+
+- A @ -> 217.160.0.145
+- AAAA @ -> 2001:8d8:100f:f000::200
+- MX 0 .
+- SPF -> v=spf1 -all
+- DMARC -> p=reject; sp=reject; adkim=s; aspf=s
+- No www record unless separately decided
+
+### weltweberei.org
+
+- A @ -> 217.160.0.5
+- AAAA @ -> 2001:8d8:100f:f000::200
+- A www -> 217.160.0.5
+- AAAA www -> 2001:8d8:100f:f000::200
+- MX 0 .
+- SPF -> v=spf1 -all
+- DMARC -> p=reject; sp=reject; adkim=s; aspf=s
+- WordPress/web behavior must be smoke-tested after cutover.
+
+## Records Not To Copy
+
+- IONOS MX:
+  - mx00.ionos.de
+  - mx01.ionos.de
+- IONOS SPF:
+  - include:_spf-eu.ionos.com
+- IONOS DKIM:
+  - s1-ionos._domainkey
+  - s2-ionos._domainkey
+  - s42582890._domainkey, if present
+- IONOS autodiscover:
+  - autodiscover CNAME adsredir.ionos.info
+- IONOS DomainConnect:
+  - `_domainconnect` CNAME `_domainconnect.ionos.com`
+- IONOS DMARC indirection:
+  - `_dmarc` CNAME `dmarc.ionos.de`
+- `_dep_ws_mutex`:
+  - do not copy unless current website-builder dependency is confirmed
+
+## Resolver Note
+
+Cloudflare DNS completed the required lookups. Some Google DNS queries timed out during local audit and are treated as resolver instability, not target value drift. Fresh authoritative/public DNS must be checked again immediately before any live INWX nameserver cutover.
+
+## Operator Guardrails
+
+- Do not change nameservers before INWX zone review.
+- Do not perform registrar transfer in the same step as nameserver cutover unless explicitly decided.
+- Do not cancel IONOS during this operation.
+- Keep rollback path via IONOS open.
+
+## Secret Policy
+
+No secrets, auth codes, transfer codes, raw headers, tokens, nonces, session cookies, SMTP passwords, or private provider data are stored in this report.
