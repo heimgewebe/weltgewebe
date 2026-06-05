@@ -92,6 +92,41 @@ jobs:
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("ref=no-ref", result.stdout)
 
+    def test_known_third_party_javascript_action_is_checked(self) -> None:
+        result = self.run_checker(
+            """
+name: third-party
+on: workflow_dispatch
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/paths-filter@v3
+"""
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("dorny/paths-filter@v3", result.stdout)
+        self.assertIn("All good!", result.stdout)
+
+    def test_known_third_party_javascript_action_requires_force_env(self) -> None:
+        result = self.run_checker(
+            """
+name: third-party-missing
+on: workflow_dispatch
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dorny/paths-filter@v3
+"""
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Missing FORCE_JAVASCRIPT_ACTIONS_TO_NODE24", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

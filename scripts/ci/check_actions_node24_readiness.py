@@ -23,7 +23,11 @@ KNOWN_JAVASCRIPT_ACTION_PREFIXES = (
     "actions/setup-python",
     "pnpm/action-setup",
     "astral-sh/setup-uv",
+    "dorny/paths-filter",
+    "docker/setup-buildx-action",
     "extractions/setup-just",
+    "lycheeverse/lychee-action",
+    "softprops/action-gh-release",
 )
 USES_RE = re.compile(r"^\s*-?\s*uses\s*:\s*(?P<uses>[^#\s]+)")
 ENV_RE = re.compile(r"^(?P<indent>\s*)env\s*:\s*(?:#.*)?$")
