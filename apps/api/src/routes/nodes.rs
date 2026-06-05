@@ -440,6 +440,11 @@ async fn patch_node_postgres(
         info: payload.info.clone(),
     };
 
+    // Serialize DB patch + cache update in-process so a later committed patch cannot
+    // be overwritten in the cache by an earlier request that resumes late after commit.
+    // This is an in-process coherence guard, not a multi-instance cache invalidation mechanism.
+    let _persist_guard = state.nodes_persist.lock().await;
+
     let node = patch_node_in_postgres(pool, id, patch)
         .await
         .map_err(|e| match e {

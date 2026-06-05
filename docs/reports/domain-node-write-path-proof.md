@@ -84,6 +84,7 @@ DB-Payload-Shape. Dies ist dokumentiert und akzeptiert.
 Phase E-B ist implementiert. OPT-ARC-001 bleibt `partial`.
 
 Offen bleiben:
+
 - Edge-Writes
 - Step-up-E-Mail-Persistenz
 - WebAuthn-User-ID-Writeback
