@@ -1,0 +1,98 @@
+---
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "freshness.claim.agent_safe_001",
+      "claim_ref": "CLAIM-AGENT-SAFE-001",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-001"
+      },
+      "evidence": [
+        {
+          "path": "scripts/agent/check_agent_preflight.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/agent/tests/test_check_agent_preflight.py",
+          "kind": "test"
+        },
+        {
+          "path": ".github/workflows/agent-safety-preflight.yml",
+          "kind": "ci"
+        },
+        {
+          "path": "docs/security/agent-write-scope-baseline.md",
+          "kind": "documentation"
+        }
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null
+      },
+      "status": "active"
+    },
+    {
+      "id": "freshness.claim.agent_safe_002",
+      "claim_ref": "CLAIM-AGENT-SAFE-002",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-002"
+      },
+      "evidence": [
+        {
+          "path": "scripts/docmeta/generate_agent_readiness.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_generate_agent_readiness.py",
+          "kind": "test"
+        },
+        {
+          "path": "docs/_generated/agent-readiness.md",
+          "kind": "generated-report"
+        }
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null
+      },
+      "status": "active"
+    },
+    {
+      "id": "freshness.claim.agent_safe_003",
+      "claim_ref": "CLAIM-AGENT-SAFE-003",
+      "subject": {
+        "kind": "claim",
+        "ref": "CLAIM-AGENT-SAFE-003"
+      },
+      "evidence": [
+        {
+          "path": "docs/claims/registry.yml",
+          "kind": "registry"
+        },
+        {
+          "path": "docs/claims/README.md",
+          "kind": "documentation"
+        },
+        {
+          "path": "scripts/docmeta/validate_claim_registry.py",
+          "kind": "implementation"
+        },
+        {
+          "path": "scripts/docmeta/tests/test_validate_claim_registry.py",
+          "kind": "test"
+        }
+      ],
+      "freshness": {
+        "review_policy": "manual",
+        "max_age_days": 90,
+        "last_reviewed": null
+      },
+      "status": "active"
+    }
+  ]
+}
