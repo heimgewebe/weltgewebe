@@ -60,6 +60,9 @@ OPT-ARC-001 Phase E-B implementiert einen engen PostgreSQL-Write-Path nur für
   erzwingt dies hart; kein stiller Fallback).
 - Kein Dual-Write.
 - Cache-Update erfolgt erst nach erfolgreichem durable Write.
+- Timestamp-Semantik folgt bewusst dem aktuellen JSONL-Pfad: Enthält der Patch
+  `info`, wird `updated_at` gebumpt, auch wenn die öffentliche Projektion
+  unverändert bleibt; `steckbrief`-Cleanup löst ebenfalls einen Timestamp-Bump aus.
 - Finale `Node`-Projektion wird **vor** `tx.commit()` validiert: Ein Mapping-
   oder Serialisierungsfehler kann keine persistierte DB-Mutation hinterlassen.
 - Serialisierungsfehler werden nicht auf `{}` geglättet; sie propagieren als

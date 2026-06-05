@@ -300,11 +300,13 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
 
 // ── OPT-ARC-001 Phase E-B: node-patch write path ────────────────────────────
 //
-// Narrow PostgreSQL write helper for `PATCH /nodes` only. Applies the same
-// patch semantics as the JSONL handler (info set/null/no-op, steckbrief cleanup,
-// updated_at only on real change) using a SELECT FOR UPDATE + conditional UPDATE
-// transaction. It does NOT touch in-memory caches and does NOT write JSONL —
-// the caller owns cache updates.
+// Narrow PostgreSQL write helper for `PATCH /nodes` only. Applies the current
+// JSONL patch semantics (info set/null/no-op, steckbrief cleanup) using a
+// SELECT FOR UPDATE + conditional UPDATE transaction. Timestamp semantics are
+// intentionally JSONL-parity: supplied `info` patches bump `updated_at` even
+// when the projected value is unchanged; `steckbrief` cleanup also bumps it. It
+// does NOT touch in-memory caches and does NOT write JSONL — the caller owns
+// cache updates.
 //
 // Out of scope (unchanged): account writes, edge writes, step-up email
 // persistence, WebAuthn user-id writeback.
@@ -360,7 +362,9 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
 ///   `node.info == None` — but the DB payload shape differs: the JSONL handler
 ///   stores `{"info": null}`, this path stores a payload without the `info` key.
 /// - `steckbrief` is removed from the payload if present.
-/// - `updated_at` is bumped only when the payload actually changed.
+/// - `updated_at` follows the current JSONL patch semantics: supplied `info`
+///   patches bump the timestamp even when the public projection is unchanged;
+///   `steckbrief` cleanup also bumps it.
 ///
 /// The final `Node` projection is built **before** `tx.commit()` so a mapping or
 /// serialization failure cannot produce a DB mutation that returns 500 to the
