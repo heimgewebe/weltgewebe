@@ -1,3 +1,22 @@
+---
+id: reports.inwx-zone-reconciliation-plan
+title: "INWX Zone Reconciliation Plan"
+doc_type: report
+status: active
+summary: >
+  Redigierter Plan zur Vorbereitung des INWX-DNS-/Registrar-Cutovers
+  nach abgeschlossener Mailmigration.
+relations:
+  - type: relates_to
+    target: docs/tasks/board.md
+  - type: relates_to
+    target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+  - type: relates_to
+    target: docs/runbooks/domain-mail-cutover.md
+  - type: relates_to
+    target: docs/reports/domain-provider-role-finding.md
+---
+
 # INWX Zone Reconciliation Plan
 
 ## Status
@@ -6,9 +25,9 @@ Prepared plan only. No live provider changes performed.
 
 ## Scope
 
-- weltgewebe.net
-- weltweb.net
-- weltweberei.org
+- `weltgewebe.net`
+- `weltweb.net`
+- `weltweberei.org`
 
 ## Source Priority
 
@@ -19,10 +38,10 @@ Prepared plan only. No live provider changes performed.
 
 ## Current Target Model
 
-- weltgewebe.net human mail: mailbox.org
-- login.weltgewebe.net technical login mail: Brevo
-- weltweb.net: no-mail
-- weltweberei.org: no-mail
+- `weltgewebe.net` human mail: mailbox.org
+- `login.weltgewebe.net` technical login mail: Brevo
+- `weltweb.net`: no-mail
+- `weltweberei.org`: no-mail
 - INWX target: registrar/DNS
 - IONOS remains active until DNS/registrar/web cutover is proven
 
@@ -33,14 +52,17 @@ Prepared plan only. No live provider changes performed.
 - A @ -> 149.233.190.131
 - A www -> 149.233.190.131
 - A api -> 149.233.190.131
-- MX -> mailbox.org mxext1/mxext2/mxext3
+- MX 10 mxext1.mailbox.org.
+- MX 10 mxext2.mailbox.org.
+- MX 20 mxext3.mailbox.org.
 - SPF -> v=spf1 include:mailbox.org ~all
-- DMARC -> p=none, rua=mailto:`kontakt@weltgewebe.net`
+- DMARC -> p=none, rua=mailto:kontakt@weltgewebe.net
 - mailbox.org DKIM: MBO0001–MBO0004 CNAMEs
 - Brevo login subdomain:
-  - login TXT brevo-code
-  - _dmarc.login TXT
-  - brevo1/brevo2 DKIM CNAMEs
+  - login TXT Brevo verification TXT
+  - `_dmarc.login` TXT Brevo login-subdomain DMARC
+  - brevo1._domainkey.login CNAME Brevo DKIM target
+  - brevo2._domainkey.login CNAME Brevo DKIM target
 
 ### weltweb.net
 
@@ -53,26 +75,38 @@ Prepared plan only. No live provider changes performed.
 
 ### weltweberei.org
 
-- A/AAAA @ -> current web host
-- A/AAAA www -> current web host
+- A @ -> 217.160.0.5
+- AAAA @ -> 2001:8d8:100f:f000::200
+- A www -> 217.160.0.5
+- AAAA www -> 2001:8d8:100f:f000::200
 - MX 0 .
 - SPF -> v=spf1 -all
 - DMARC -> p=reject; sp=reject; adkim=s; aspf=s
-- WordPress/web behavior must be smoke-tested after cutover
+- WordPress/web behavior must be smoke-tested after cutover.
 
 ## Records Not To Copy
 
-- IONOS MX
-- IONOS SPF
-- IONOS DKIM
-- IONOS autodiscover
-- IONOS DomainConnect
-- IONOS DMARC CNAME
-- _dep_ws_mutex unless current website-builder dependency is confirmed
+- IONOS MX:
+  - mx00.ionos.de
+  - mx01.ionos.de
+- IONOS SPF:
+  - include:_spf-eu.ionos.com
+- IONOS DKIM:
+  - s1-ionos._domainkey
+  - s2-ionos._domainkey
+  - s42582890._domainkey, if present
+- IONOS autodiscover:
+  - autodiscover CNAME adsredir.ionos.info
+- IONOS DomainConnect:
+  - `_domainconnect` CNAME `_domainconnect.ionos.com`
+- IONOS DMARC indirection:
+  - `_dmarc` CNAME `dmarc.ionos.de`
+- `_dep_ws_mutex`:
+  - do not copy unless current website-builder dependency is confirmed
 
 ## Resolver Note
 
-Cloudflare DNS completed the required lookups. Some Google DNS queries timed out during local audit and are treated as resolver instability, not target value drift.
+Cloudflare DNS completed the required lookups. Some Google DNS queries timed out during local audit and are treated as resolver instability, not target value drift. Fresh authoritative/public DNS must be checked again immediately before any live INWX nameserver cutover.
 
 ## Operator Guardrails
 
