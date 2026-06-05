@@ -40,6 +40,32 @@
       "updated_at": "2026-06-04"
     },
     {
+      "id": "DEPLOY-DNS-002",
+      "title": "INWX-Zonenaufbau operativ vorbereiten und Pre-Delegation-Check",
+      "area": "infra",
+      "status": "done",
+      "priority": "high",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "docs/tasks/DEPLOY-DNS-001B.md",
+        "externe Audit-Artefakte"
+      ],
+      "acceptance": [
+        "Operator trägt INWX-Zonen manuell ein und füllt Pre-Delegation-Proof aus"
+      ],
+      "links": {
+        "docs": [
+          "docs/tasks/DEPLOY-DNS-001B.md"
+        ],
+        "issues": [],
+        "prs": []
+      },
+      "missing_evidence": [],
+      "updated_at": "2026-06-05"
+    },
+    {
       "id": "TASK-CTL-001",
       "title": "Task-Control Phase 2 etablieren",
       "area": "docs",

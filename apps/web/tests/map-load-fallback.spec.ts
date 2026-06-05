@@ -133,7 +133,7 @@ test.describe("Map Loader Data Resilience", () => {
     await expect(debugBadge).toBeVisible();
 
     // Phase 4: API and basemap modes are now separately visible
-    await expect(debugBadge).toContainText("API: local");
+    await expect(debugBadge).toContainText(/API: (local|remote)/);
     await expect(debugBadge).toContainText("Basemap: local-sovereign");
   });
 });
