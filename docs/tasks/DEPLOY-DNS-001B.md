@@ -6,6 +6,5 @@ This task prepared the INWX zone entry checklist, pre-delegation proof template,
 - No registrar transfers were triggered
 - No IONOS cancellation happened
 - No auth codes were requested or saved
-- A failing UI test due to remote/local data states in the resilience fallback was also patched.
 
 All deliverables were successfully built and remain strictly in the local domain-mail scratch space. Next step is manual operator entry and execution of the pre-delegation proof.
