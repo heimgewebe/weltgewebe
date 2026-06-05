@@ -16,6 +16,7 @@ import argparse
 import json
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 if __package__ in {None, ""}:
@@ -348,6 +349,13 @@ def validate_registry_data(
             findings.append(
                 _finding("LAST_VERIFIED_INVALID", entry_id, "'last_verified' must be a YYYY-MM-DD date string")
             )
+        else:
+            try:
+                date.fromisoformat(last_verified)
+            except ValueError:
+                findings.append(
+                    _finding("LAST_VERIFIED_INVALID", entry_id, "'last_verified' must be a valid calendar date")
+                )
 
         findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
 

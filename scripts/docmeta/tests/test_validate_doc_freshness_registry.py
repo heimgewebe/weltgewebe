@@ -365,6 +365,15 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "LAST_VERIFIED_INVALID"))
 
+    def test_nonexistent_last_verified_calendar_date_fails(self):
+        self._write_claims()
+        entries = self._entries()
+        entries[0]["last_verified"] = "2026-99-99"
+        self._write_registry(entries)
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "LAST_VERIFIED_INVALID"))
+
     def test_missing_last_verified_fails(self):
         self._write_claims()
         entries = self._entries()

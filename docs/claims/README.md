@@ -96,6 +96,7 @@ Lenskit sichtbar.
 und repo-lokale Evidence-Pfade. Es beweist nicht, dass ein Claim wahr ist.
 
 Evidence-Kinds werden explizit gemappt:
+
 - `implementation`, `documentation`, `ci`, `generated-report`, `registry` -> Lenskit `file`
 - `test` -> Lenskit `test`
 
