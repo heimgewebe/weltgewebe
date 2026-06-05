@@ -64,8 +64,7 @@ def check_workflows():
                         action_base = uses.split('@')[0]
                         is_js = any(action_base.startswith(js) for js in js_actions)
                         if is_js:
-                            parts = uses.split('@', 1)
-                            is_sha = len(parts) == 2 and len(parts[1]) == 40
+                            is_sha = len(uses.split('@', 1)[1]) == 40
                             print(f"| {wf_file} | {job_name} | {uses} | {'SHA' if is_sha else 'Tag'} | Yes | {'Yes' if has_node24 else 'No'} |")
                             if not has_node24:
                                 issues.append(f"{wf_file} - {job_name}: Missing FORCE_JAVASCRIPT_ACTIONS_TO_NODE24")

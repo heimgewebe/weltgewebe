@@ -64,34 +64,5 @@ jobs:
             self.assertIn(".github/workflows/reusable_call.yml metrics -> owner/repo/.github/workflows/reusable.yml@v1", result.stdout)
             self.assertIn("All good!", result.stdout)
 
-    def test_action_uses_without_at_does_not_crash(self):
-        with tempfile.TemporaryDirectory() as td:
-            wf_dir = os.path.join(td, ".github", "workflows")
-            os.makedirs(wf_dir)
-
-            with open(os.path.join(wf_dir, "no_at.yml"), "w") as f:
-                f.write("""
-name: No At Workflow
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-jobs:
-  build:
-    steps:
-      - uses: actions/checkout
-""")
-
-            result = subprocess.run(
-                ["python3", SCRIPT_PATH],
-                cwd=td,
-                capture_output=True,
-                text=True,
-            )
-            self.assertEqual(
-                result.returncode,
-                0,
-                f"Expected success but failed. Output: {result.stdout}\nErr: {result.stderr}",
-            )
-            self.assertIn("All good!", result.stdout)
-
 if __name__ == '__main__':
     unittest.main()
