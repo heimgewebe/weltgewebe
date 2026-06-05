@@ -9,7 +9,7 @@ CRITICAL_PATHS=(
     "apps/web"
     "infra/compose"
     ".github/workflows"
-    "contracts/domain"
+    "contracts"
 )
 
 FAIL=0
