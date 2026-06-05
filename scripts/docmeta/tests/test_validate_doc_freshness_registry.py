@@ -683,8 +683,31 @@ entries:
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "CLAIM_REGISTRY_LOAD_ERROR"))
+
+        for code in (
+            "CLAIM_ID_UNKNOWN",
+            "CLAIM_STATEMENT_MISMATCH",
+            "EVIDENCE_NOT_IN_CLAIM_REGISTRY",
+            "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY",
+            "EVIDENCE_KIND_MAPPING_INVALID",
+        ):
+            self.assertFalse(self._has(output, code), code)
+
+    def test_duplicate_claim_id_is_detected_when_claim_registry_missing(self):
+        entries = self._entries()
+        entries[1]["id"] = entries[0]["id"]
+        entries[1]["locator"] = entries[0]["locator"]
+        entries[1]["claim"] = entries[0]["claim"]
+
+        self._write_registry(entries)
+        # Do not write docs/claims/registry.yml
+
+        output, exit_code = self._run()
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "CLAIM_REGISTRY_LOAD_ERROR"))
+        self.assertTrue(self._has(output, "DUPLICATE_CLAIM_ID"))
         self.assertFalse(self._has(output, "CLAIM_ID_UNKNOWN"))
-        self.assertFalse(self._has(output, "CLAIM_STATEMENT_MISMATCH"))
 
 
 if __name__ == "__main__":

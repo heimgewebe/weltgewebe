@@ -23,7 +23,7 @@ try:
     import yaml
 except (
     ModuleNotFoundError
-):  # pragma: no cover - dependency is already used by doc validators in CI
+):  # PyYAML is optional; stdlib fallback handles this registry.
     yaml = None
 
 if __package__ in {None, ""}:
@@ -670,7 +670,7 @@ def validate_registry_data(
 
         findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
 
-        if claim_id and claim_data is not None and claim_id in claim_data:
+        if claim_id:
             if claim_id in seen_claim_ids:
                 findings.append(
                     _finding(
@@ -678,19 +678,25 @@ def validate_registry_data(
                     )
                 )
             seen_claim_ids.add(claim_id)
-            findings.extend(
-                _cross_check_evidence(
-                    entry_id, claim_id, entry.get("evidence"), claim_data[claim_id]
-                )
-            )
-        elif claim_id and claim_data is not None:
-            findings.append(
-                _finding(
-                    "CLAIM_ID_UNKNOWN",
-                    entry_id,
-                    f"Claim {claim_id} not found in docs/claims/registry.yml",
-                )
-            )
+
+            if claim_data is not None:
+                if claim_id in claim_data:
+                    findings.extend(
+                        _cross_check_evidence(
+                            entry_id,
+                            claim_id,
+                            entry.get("evidence"),
+                            claim_data[claim_id],
+                        )
+                    )
+                else:
+                    findings.append(
+                        _finding(
+                            "CLAIM_ID_UNKNOWN",
+                            entry_id,
+                            f"Claim {claim_id} not found in docs/claims/registry.yml",
+                        )
+                    )
 
     return findings
 
