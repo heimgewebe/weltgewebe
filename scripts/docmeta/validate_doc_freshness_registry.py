@@ -344,8 +344,8 @@ def _validate_evidence(
         else:
             kind = item.get("kind")
             if isinstance(kind, str) and kind in EVIDENCE_KINDS_CHECK_PATH:
-                if not (repo_root / target).exists():
-                    findings.append(_finding("EVIDENCE_TARGET_MISSING", entry_id, "Evidence target does not exist", path=target))
+                if not (repo_root / target).is_file():
+                    findings.append(_finding("EVIDENCE_TARGET_MISSING", entry_id, "Evidence target does not exist or is not a file", path=target))
 
         kind = item.get("kind")
         if not isinstance(kind, str) or kind not in VALID_LENSKIT_EVIDENCE_KINDS:

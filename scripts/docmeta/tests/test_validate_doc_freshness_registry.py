@@ -507,6 +507,26 @@ entries:
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "EVIDENCE_TARGET_MISSING"))
 
+    def test_directory_target_fails_for_file_like_evidence_kind(self):
+        directory_rel = "docs/evidence-directory"
+        (self.root / directory_rel).mkdir(parents=True, exist_ok=True)
+
+        claim_evidence = {
+            1: [{"path": directory_rel, "kind": "documentation"}],
+            2: self.claim_evidence[2],
+            3: self.claim_evidence[3],
+        }
+        self._write_claims(evidence=claim_evidence)
+
+        entries = self._entries()
+        entries[0]["evidence"] = [{"kind": "file", "target": directory_rel}]
+        self._write_registry(entries)
+
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "EVIDENCE_TARGET_MISSING"))
+        self.assertFalse(self._has(output, "EVIDENCE_NOT_IN_CLAIM_REGISTRY"))
+
     def test_empty_evidence_list_fails(self):
         self._write_claims()
         entries = self._entries()
