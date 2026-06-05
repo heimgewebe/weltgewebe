@@ -4,6 +4,8 @@ validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m unittest discover scripts/agent/tests/
 	python3 scripts/docmeta/validate_claim_registry.py
+	python3 scripts/docmeta/validate_doc_freshness_registry.py
+	python3 -m scripts.docmeta.generate_claim_evidence_map --check
 
 validate-core:
 	python3 -m scripts.docmeta.validate_schema
@@ -46,6 +48,7 @@ generate:
 	python3 -m scripts.docmeta.generate_change_resonance
 	python3 -m scripts.docmeta.generate_staleness_report
 	python3 -m scripts.docmeta.generate_agent_readiness
+	python3 -m scripts.docmeta.generate_claim_evidence_map
 	python3 -m scripts.docmeta.generate_relations_analysis
 	python3 -m scripts.docmeta.generate_relates_to_audit
 
