@@ -298,6 +298,147 @@ pub async fn load_accounts_from_postgres(pool: &PgPool) -> Result<AccountStore> 
     Ok(store)
 }
 
+// ── OPT-ARC-001 Phase E-B: node-patch write path ────────────────────────────
+//
+// Narrow PostgreSQL write helper for `PATCH /nodes` only. Applies the same
+// patch semantics as the JSONL handler (info set/null/no-op, steckbrief cleanup,
+// updated_at only on real change) using a SELECT FOR UPDATE + conditional UPDATE
+// transaction. It does NOT touch in-memory caches and does NOT write JSONL —
+// the caller owns cache updates.
+//
+// Out of scope (unchanged): account writes, edge writes, step-up email
+// persistence, WebAuthn user-id writeback.
+
+/// Subset of node payload fields modified by `PATCH /nodes`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodePatchInput {
+    /// `None` = no-op; `Some(Some(s))` = set; `Some(None)` = clear.
+    pub info: Option<Option<String>>,
+}
+
+/// Error from the node-patch write path.
+#[derive(Debug, thiserror::Error)]
+pub enum NodeWriteError {
+    #[error("node not found")]
+    NotFound,
+    #[error("failed to map node row: {0}")]
+    Mapping(#[source] anyhow::Error),
+    #[error("failed to persist node to domain_nodes: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
+    let (id, kind, title, lat, lon, created_at, updated_at, payload_text) = row;
+    let (lat, lon) = match (lat, lon) {
+        (Some(lat), Some(lon)) => (lat, lon),
+        _ => anyhow::bail!("domain node {} has NULL location", id),
+    };
+    let payload = parse_payload(&payload_text);
+    let (created_at, updated_at) = node_timestamps(created_at, updated_at);
+    Ok(Node {
+        id,
+        kind,
+        title,
+        created_at,
+        updated_at,
+        summary: payload_string(&payload, "summary"),
+        info: payload_string(&payload, "info"),
+        tags: payload_string_array(&payload, "tags"),
+        location: Location { lat, lon },
+    })
+}
+
+/// Apply a patch to one `domain_nodes` row inside a transaction.
+///
+/// Semantics match the JSONL handler exactly:
+/// - `info: None` is a no-op (no DB write, `updated_at` unchanged).
+/// - `info: Some(Some(s))` sets `info` to `s`.
+/// - `info: Some(None)` clears `info` (sets it to JSON null, then drops the key).
+/// - `steckbrief` is removed from the payload if present.
+/// - `updated_at` is bumped only when the payload actually changed.
+///
+/// Returns the full `Node` reflecting the post-patch state (identical to what
+/// `load_nodes_from_postgres` would reconstruct on the next restart).
+pub async fn patch_node_in_postgres(
+    pool: &PgPool,
+    id: &str,
+    patch: NodePatchInput,
+) -> Result<Node, NodeWriteError> {
+    let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
+
+    let row: Option<NodeRow> = sqlx::query_as(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text \
+         FROM domain_nodes WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(NodeWriteError::Database)?;
+
+    let (row_id, kind, title, lat, lon, created_at, updated_at, payload_text) = match row {
+        Some(r) => r,
+        None => {
+            tx.rollback().await.ok();
+            return Err(NodeWriteError::NotFound);
+        }
+    };
+
+    let mut payload: serde_json::Value = parse_payload(&payload_text);
+
+    let mut has_changes = false;
+
+    if let Some(obj) = payload.as_object_mut() {
+        match &patch.info {
+            Some(Some(s)) => {
+                obj.insert("info".to_string(), serde_json::Value::String(s.clone()));
+                has_changes = true;
+            }
+            Some(None) => {
+                obj.remove("info");
+                has_changes = true;
+            }
+            None => {}
+        }
+        if obj.remove("steckbrief").is_some() {
+            has_changes = true;
+        }
+    }
+
+    let new_updated_at = if has_changes {
+        let now = chrono::Utc::now();
+        let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+        sqlx::query(
+            "UPDATE domain_nodes \
+             SET payload = $2::jsonb, updated_at = $3 \
+             WHERE id = $1",
+        )
+        .bind(id)
+        .bind(&payload_str)
+        .bind(now)
+        .execute(&mut *tx)
+        .await
+        .map_err(NodeWriteError::Database)?;
+        Some(now)
+    } else {
+        updated_at
+    };
+
+    tx.commit().await.map_err(NodeWriteError::Database)?;
+
+    let final_payload_text = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+    node_from_row((
+        row_id,
+        kind,
+        title,
+        lat,
+        lon,
+        created_at,
+        new_updated_at,
+        final_payload_text,
+    ))
+    .map_err(NodeWriteError::Mapping)
+}
+
 // ── OPT-ARC-001 Phase E-A: account-create write path ────────────────────────
 //
 // Narrow PostgreSQL write helper for `POST /accounts` only. It maps the same

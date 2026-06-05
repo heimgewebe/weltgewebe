@@ -16,7 +16,7 @@ use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
-use config::{AppConfig, DomainAccountWriteSource, DomainReadSource};
+use config::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource};
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
@@ -76,6 +76,32 @@ pub async fn run() -> anyhow::Result<()> {
         }
         DomainAccountWriteSource::Jsonl => {
             tracing::info!("Account-create write source: JSONL (default).");
+        }
+    }
+
+    // OPT-ARC-001 Phase E-B: node-patch write-path gate.
+    //
+    // The read/write-source coupling (PostgreSQL node-write requires the
+    // PostgreSQL read source) is already enforced at config load. Here we
+    // additionally require a live pool when the node-patch write source is
+    // PostgreSQL, and refuse to start otherwise — no silent downgrade to JSONL.
+    // This gate is intentionally narrow: it implements `PATCH /nodes` only;
+    // account writes, edge writes, step-up email persistence and WebAuthn
+    // user-id writeback persistence remain unchanged.
+    match app_config.domain_node_write_source {
+        DomainNodeWriteSource::Postgres => {
+            if db_pool.is_none() {
+                return Err(anyhow!(
+                    "domain_node_write_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing to start"
+                ));
+            }
+            tracing::info!(
+                "Node patch write source: PostgreSQL (OPT-ARC-001 Phase E-B opt-in). \
+                 Only PATCH /nodes writes to domain_nodes; account/edge/auth writes are unchanged."
+            );
+        }
+        DomainNodeWriteSource::Jsonl => {
+            tracing::info!("Node patch write source: JSONL (default).");
         }
     }
 

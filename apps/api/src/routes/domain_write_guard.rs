@@ -1,7 +1,7 @@
 use axum::http::StatusCode;
 
 use crate::{
-    config::{DomainAccountWriteSource, DomainReadSource},
+    config::{DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource},
     state::ApiState,
 };
 
@@ -12,6 +12,9 @@ pub(super) const DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE: &str =
 pub(super) const INVALID_DOMAIN_WRITE_CONFIG: &str = "INVALID_DOMAIN_WRITE_CONFIG";
 const INVALID_DOMAIN_WRITE_CONFIG_MESSAGE: &str =
     "domain_account_write_source=postgres requires domain_read_source=postgres";
+
+const INVALID_NODE_WRITE_CONFIG_MESSAGE: &str =
+    "domain_node_write_source=postgres requires domain_read_source=postgres";
 
 fn read_only_conflict() -> (StatusCode, String) {
     (
@@ -30,14 +33,48 @@ fn invalid_write_config() -> (StatusCode, String) {
 /// Reject domain mutations that have no PostgreSQL write path implemented while
 /// the PostgreSQL read source is active.
 ///
-/// Used by node writes (and future edge writes). These remain blocked in
-/// PostgreSQL read mode because writing them to JSONL would be invisible after a
-/// restart, and no PostgreSQL write path exists for them yet (Phase E-A only
-/// implements account-create). Account creation has its own, narrower gate —
-/// see [`reject_account_create_unless_writable`].
+/// Used by future endpoint write paths (e.g. edge writes) that have no
+/// PostgreSQL write path yet. Writing to JSONL under a PostgreSQL read source
+/// would create restart-invisible writes. Account creation uses its own narrower
+/// gate ([`reject_account_create_unless_writable`]); node patches use
+/// [`reject_node_patch_unless_writable`].
+#[allow(dead_code)]
 pub(super) fn reject_if_postgres_read_source(state: &ApiState) -> Result<(), (StatusCode, String)> {
     if state.config.domain_read_source == DomainReadSource::Postgres {
         return Err(read_only_conflict());
+    }
+
+    Ok(())
+}
+
+/// Node-patch write gate (OPT-ARC-001 Phase E-B).
+///
+/// Behaviour matrix:
+/// - JSONL read + JSONL node write: allow (JSONL rewrite path).
+/// - Postgres read + Postgres node write: allow (PostgreSQL update path).
+/// - Postgres read + JSONL node write: reject — rewriting JSONL under a
+///   PostgreSQL read source would persist writes that vanish after a restart.
+/// - JSONL read + Postgres node write: reject defensively (config load also
+///   forbids this); tests and internal code may construct `ApiState` manually.
+pub(super) fn reject_node_patch_unless_writable(
+    state: &ApiState,
+) -> Result<(), (StatusCode, String)> {
+    if state.config.domain_node_write_source == DomainNodeWriteSource::Postgres
+        && state.config.domain_read_source != DomainReadSource::Postgres
+    {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{INVALID_DOMAIN_WRITE_CONFIG}: {INVALID_NODE_WRITE_CONFIG_MESSAGE}"),
+        ));
+    }
+
+    if state.config.domain_read_source == DomainReadSource::Postgres
+        && state.config.domain_node_write_source != DomainNodeWriteSource::Postgres
+    {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("{DOMAIN_READ_SOURCE_READ_ONLY}: {DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE}"),
+        ));
     }
 
     Ok(())
@@ -78,7 +115,7 @@ mod tests {
             accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionBackend,
             tokens::TokenStore,
         },
-        config::{AppConfig, DomainAccountWriteSource, DomainReadSource},
+        config::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource},
         state::ApiState,
         telemetry::{BuildInfo, Metrics},
     };
@@ -88,6 +125,18 @@ mod tests {
     fn test_state(
         domain_read_source: DomainReadSource,
         domain_account_write_source: DomainAccountWriteSource,
+    ) -> ApiState {
+        test_state_with_node_write(
+            domain_read_source,
+            domain_account_write_source,
+            DomainNodeWriteSource::Jsonl,
+        )
+    }
+
+    fn test_state_with_node_write(
+        domain_read_source: DomainReadSource,
+        domain_account_write_source: DomainAccountWriteSource,
+        domain_node_write_source: DomainNodeWriteSource,
     ) -> ApiState {
         let metrics = Metrics::try_new(BuildInfo {
             version: "test",
@@ -103,6 +152,7 @@ mod tests {
             delegation_expire_days: 28,
             domain_read_source,
             domain_account_write_source,
+            domain_node_write_source,
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,
@@ -181,5 +231,50 @@ mod tests {
         assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
         assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG));
         assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG_MESSAGE));
+    }
+
+    #[test]
+    fn jsonl_read_jsonl_node_write_allows_patch() {
+        let state = test_state_with_node_write(
+            DomainReadSource::Jsonl,
+            DomainAccountWriteSource::Jsonl,
+            DomainNodeWriteSource::Jsonl,
+        );
+        assert!(reject_node_patch_unless_writable(&state).is_ok());
+    }
+
+    #[test]
+    fn postgres_read_postgres_node_write_allows_patch() {
+        let state = test_state_with_node_write(
+            DomainReadSource::Postgres,
+            DomainAccountWriteSource::Postgres,
+            DomainNodeWriteSource::Postgres,
+        );
+        assert!(reject_node_patch_unless_writable(&state).is_ok());
+    }
+
+    #[test]
+    fn postgres_read_jsonl_node_write_rejects_read_only() {
+        let state = test_state_with_node_write(
+            DomainReadSource::Postgres,
+            DomainAccountWriteSource::Postgres,
+            DomainNodeWriteSource::Jsonl,
+        );
+        let err = reject_node_patch_unless_writable(&state).unwrap_err();
+        assert_eq!(err.0, StatusCode::CONFLICT);
+        assert!(err.1.contains(DOMAIN_READ_SOURCE_READ_ONLY));
+    }
+
+    #[test]
+    fn jsonl_read_postgres_node_write_rejects_invalid_config() {
+        let state = test_state_with_node_write(
+            DomainReadSource::Jsonl,
+            DomainAccountWriteSource::Jsonl,
+            DomainNodeWriteSource::Postgres,
+        );
+        let err = reject_node_patch_unless_writable(&state).unwrap_err();
+        assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(err.1.contains(INVALID_DOMAIN_WRITE_CONFIG));
+        assert!(err.1.contains(INVALID_NODE_WRITE_CONFIG_MESSAGE));
     }
 }
