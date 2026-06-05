@@ -21,7 +21,9 @@ from pathlib import Path
 
 try:
     import yaml
-except ModuleNotFoundError:  # pragma: no cover - dependency is already used by doc validators in CI
+except (
+    ModuleNotFoundError
+):  # PyYAML is optional; stdlib fallback handles this registry.
     yaml = None
 
 if __package__ in {None, ""}:
@@ -39,21 +41,34 @@ CLAIM_EVIDENCE_KIND_TO_LENSKIT: dict[str, str] = {
     "test": "test",
 }
 
-VALID_LENSKIT_EVIDENCE_KINDS = {"symbol", "file", "text", "absent_text", "proof", "test"}
+VALID_LENSKIT_EVIDENCE_KINDS = {
+    "symbol",
+    "file",
+    "text",
+    "absent_text",
+    "proof",
+    "test",
+}
 EVIDENCE_KINDS_CHECK_PATH = {"file", "test", "proof"}
 
 VALID_STATUSES = {"none", "partial", "done", "stale", "historical"}
 SLICE_STATUS = "partial"
 
 EXPECTED_ENTRY_COUNT = 3
-VALID_ENTRY_IDS = {"claim-agent-safe-001", "claim-agent-safe-002", "claim-agent-safe-003"}
+VALID_ENTRY_IDS = {
+    "claim-agent-safe-001",
+    "claim-agent-safe-002",
+    "claim-agent-safe-003",
+}
 ENTRY_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 LOCATOR_PATTERN = re.compile(r"^claims\[id=([A-Z0-9-]+)\]$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EXPECTED_DOC = "docs/claims/registry.yml"
 
 
-def _finding(code: str, entry_id: str | None, message: str, path: str | None = None) -> dict[str, str]:
+def _finding(
+    code: str, entry_id: str | None, message: str, path: str | None = None
+) -> dict[str, str]:
     finding: dict[str, str] = {
         "code": code,
         "entry_id": entry_id or "-",
@@ -71,7 +86,9 @@ def _strip_yaml_scalar(value: str) -> str:
     return value
 
 
-def _read_folded_block(lines: list[str], start: int, base_indent: int) -> tuple[str, int]:
+def _read_folded_block(
+    lines: list[str], start: int, base_indent: int
+) -> tuple[str, int]:
     parts: list[str] = []
     index = start
     while index < len(lines):
@@ -170,14 +187,18 @@ def _load_lenskit_bridge_yaml_subset(normalized: str) -> dict[str, object]:
                             if not item_stripped:
                                 index += 1
                                 continue
-                            if item_line.startswith("  - ") or not item_line.startswith("      - "):
+                            if item_line.startswith("  - ") or not item_line.startswith(
+                                "      - "
+                            ):
                                 break
 
                             item: dict[str, str] = {}
                             first_item = item_stripped[2:].strip()
                             if first_item:
                                 if ":" not in first_item:
-                                    raise ValueError(f"Invalid evidence line: {item_line!r}")
+                                    raise ValueError(
+                                        f"Invalid evidence line: {item_line!r}"
+                                    )
                                 key, value = first_item.split(":", 1)
                                 item[key.strip()] = _strip_yaml_scalar(value)
                             index += 1
@@ -192,7 +213,9 @@ def _load_lenskit_bridge_yaml_subset(normalized: str) -> dict[str, object]:
                                 if not field_line.startswith("        "):
                                     break
                                 if ":" not in field_stripped:
-                                    raise ValueError(f"Invalid evidence field: {field_line!r}")
+                                    raise ValueError(
+                                        f"Invalid evidence field: {field_line!r}"
+                                    )
                                 key, value = field_stripped.split(":", 1)
                                 item[key.strip()] = _strip_yaml_scalar(value)
                                 index += 1
@@ -230,7 +253,6 @@ def _load_lenskit_bridge_yaml_subset(normalized: str) -> dict[str, object]:
     return data
 
 
-
 def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
     """Load a JSON-compatible YAML subset (optional leading ``---``)."""
     if not path.exists():
@@ -261,7 +283,10 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
         try:
             return _load_lenskit_bridge_yaml_subset(normalized), None
         except ValueError as subset_exc:
-            return None, f"Registry parse error: {json_exc.msg}{yaml_error}; YAML subset parse error: {subset_exc}"
+            return (
+                None,
+                f"Registry parse error: {json_exc.msg}{yaml_error}; YAML subset parse error: {subset_exc}",
+            )
 
 
 def _load_claim_evidence(
@@ -326,26 +351,61 @@ def _validate_evidence(
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     if not isinstance(evidence, list) or not evidence:
-        findings.append(_finding("EVIDENCE_EMPTY", entry_id, "Evidence must be a non-empty list"))
+        findings.append(
+            _finding("EVIDENCE_EMPTY", entry_id, "Evidence must be a non-empty list")
+        )
         return findings
 
     for item in evidence:
         if not isinstance(item, dict):
-            findings.append(_finding("EVIDENCE_NOT_OBJECT", entry_id, "Each evidence item must be an object"))
+            findings.append(
+                _finding(
+                    "EVIDENCE_NOT_OBJECT",
+                    entry_id,
+                    "Each evidence item must be an object",
+                )
+            )
             continue
 
         target = item.get("target")
         if not isinstance(target, str) or not target.strip():
-            findings.append(_finding("EVIDENCE_TARGET_NOT_STRING", entry_id, "Evidence 'target' must be a non-empty string"))
+            findings.append(
+                _finding(
+                    "EVIDENCE_TARGET_NOT_STRING",
+                    entry_id,
+                    "Evidence 'target' must be a non-empty string",
+                )
+            )
         elif target.startswith("/") or Path(target).is_absolute():
-            findings.append(_finding("EVIDENCE_TARGET_ABSOLUTE", entry_id, "Evidence target must be repo-relative", path=target))
+            findings.append(
+                _finding(
+                    "EVIDENCE_TARGET_ABSOLUTE",
+                    entry_id,
+                    "Evidence target must be repo-relative",
+                    path=target,
+                )
+            )
         elif ".." in Path(target).parts:
-            findings.append(_finding("EVIDENCE_TARGET_TRAVERSAL", entry_id, "Evidence target must not contain '..'", path=target))
+            findings.append(
+                _finding(
+                    "EVIDENCE_TARGET_TRAVERSAL",
+                    entry_id,
+                    "Evidence target must not contain '..'",
+                    path=target,
+                )
+            )
         else:
             kind = item.get("kind")
             if isinstance(kind, str) and kind in EVIDENCE_KINDS_CHECK_PATH:
                 if not (repo_root / target).is_file():
-                    findings.append(_finding("EVIDENCE_TARGET_MISSING", entry_id, "Evidence target does not exist or is not a file", path=target))
+                    findings.append(
+                        _finding(
+                            "EVIDENCE_TARGET_MISSING",
+                            entry_id,
+                            "Evidence target does not exist or is not a file",
+                            path=target,
+                        )
+                    )
 
         kind = item.get("kind")
         if not isinstance(kind, str) or kind not in VALID_LENSKIT_EVIDENCE_KINDS:
@@ -370,15 +430,17 @@ def _cross_check_evidence(
     """Verify bridge evidence == mapped claim evidence, (target, lenskit_kind) set equality."""
     findings: list[dict[str, str]] = []
 
-    for path, kind in claim_info.get("unmappable", []):  # type: ignore[union-attr]
-        findings.append(
-            _finding(
-                "EVIDENCE_KIND_MAPPING_INVALID",
-                entry_id,
-                f"Claim evidence kind '{kind}' has no Lenskit mapping for {claim_id}",
-                path=path,
+    unmappable = claim_info.get("unmappable", [])
+    if isinstance(unmappable, list):
+        for path, kind in unmappable:
+            findings.append(
+                _finding(
+                    "EVIDENCE_KIND_MAPPING_INVALID",
+                    entry_id,
+                    f"Claim evidence kind '{kind}' has no Lenskit mapping for {claim_id}",
+                    path=path,
+                )
             )
-        )
 
     expected_pairs: set[tuple[str, str]] = claim_info.get("mapped_pairs", set())  # type: ignore[assignment]
     actual_pairs: set[tuple[str, str]] = set()
@@ -414,23 +476,39 @@ def _cross_check_evidence(
 
 def validate_registry_data(
     data: object,
-    claim_data: dict[str, dict[str, object]],
+    claim_data: dict[str, dict[str, object]] | None,
     repo_root: Path,
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
     if not isinstance(data, dict):
-        return [_finding("INVALID_TOP_LEVEL", None, "Top-level registry must be an object")]
+        return [
+            _finding("INVALID_TOP_LEVEL", None, "Top-level registry must be an object")
+        ]
 
     if data.get("kind") != "lenskit.doc_freshness_registry":
-        findings.append(_finding("INVALID_KIND", None, "Top-level 'kind' must be 'lenskit.doc_freshness_registry'"))
+        findings.append(
+            _finding(
+                "INVALID_KIND",
+                None,
+                "Top-level 'kind' must be 'lenskit.doc_freshness_registry'",
+            )
+        )
 
     if data.get("version") != "1.0":
-        findings.append(_finding("INVALID_VERSION", None, "Top-level 'version' must be the string \"1.0\""))
+        findings.append(
+            _finding(
+                "INVALID_VERSION",
+                None,
+                "Top-level 'version' must be the string \"1.0\"",
+            )
+        )
 
     entries = data.get("entries")
     if not isinstance(entries, list):
-        findings.append(_finding("INVALID_ENTRIES", None, "Top-level 'entries' must be a list"))
+        findings.append(
+            _finding("INVALID_ENTRIES", None, "Top-level 'entries' must be a list")
+        )
         return findings
 
     if len(entries) != EXPECTED_ENTRY_COUNT:
@@ -447,7 +525,9 @@ def validate_registry_data(
 
     for entry in entries:
         if not isinstance(entry, dict):
-            findings.append(_finding("ENTRY_NOT_OBJECT", None, "Each entry must be an object"))
+            findings.append(
+                _finding("ENTRY_NOT_OBJECT", None, "Each entry must be an object")
+            )
             continue
 
         entry_id = entry.get("id") if isinstance(entry.get("id"), str) else None
@@ -456,35 +536,63 @@ def validate_registry_data(
             findings.append(_finding("INVALID_ID", None, "Entry 'id' must be a string"))
         else:
             if not ENTRY_ID_PATTERN.match(entry_id):
-                findings.append(_finding("INVALID_ID", entry_id, "Entry 'id' must match ^[a-z0-9][a-z0-9-]*$"))
+                findings.append(
+                    _finding(
+                        "INVALID_ID",
+                        entry_id,
+                        "Entry 'id' must match ^[a-z0-9][a-z0-9-]*$",
+                    )
+                )
             if entry_id not in VALID_ENTRY_IDS:
                 findings.append(
-                    _finding("INVALID_ID", entry_id, f"Entry 'id' must be one of: {', '.join(sorted(VALID_ENTRY_IDS))}")
+                    _finding(
+                        "INVALID_ID",
+                        entry_id,
+                        f"Entry 'id' must be one of: {', '.join(sorted(VALID_ENTRY_IDS))}",
+                    )
                 )
             if entry_id in seen_ids:
-                findings.append(_finding("DUPLICATE_ID", entry_id, "Duplicate entry id"))
+                findings.append(
+                    _finding("DUPLICATE_ID", entry_id, "Duplicate entry id")
+                )
             seen_ids.add(entry_id)
 
         doc = entry.get("doc")
         if doc != EXPECTED_DOC:
             findings.append(
-                _finding("DOC_MISMATCH", entry_id, f"'doc' must be '{EXPECTED_DOC}', got: {doc!r}")
+                _finding(
+                    "DOC_MISMATCH",
+                    entry_id,
+                    f"'doc' must be '{EXPECTED_DOC}', got: {doc!r}",
+                )
             )
 
         locator = entry.get("locator")
         claim_id_from_locator: str | None = None
         if not isinstance(locator, str) or not locator.strip():
-            findings.append(_finding("LOCATOR_MISSING", entry_id, "'locator' must be a non-empty string"))
+            findings.append(
+                _finding(
+                    "LOCATOR_MISSING", entry_id, "'locator' must be a non-empty string"
+                )
+            )
         else:
             claim_id_from_locator = _claim_id_from_locator(locator)
             if claim_id_from_locator is None:
                 findings.append(
-                    _finding("LOCATOR_MISMATCH", entry_id, f"'locator' must match claims[id=CLAIM-ID], got: {locator!r}")
+                    _finding(
+                        "LOCATOR_MISMATCH",
+                        entry_id,
+                        f"'locator' must match claims[id=CLAIM-ID], got: {locator!r}",
+                    )
                 )
 
         claim_id_from_id = _claim_id_from_entry_id(entry_id) if entry_id else None
 
-        if claim_id_from_id and claim_id_from_locator and claim_id_from_id != claim_id_from_locator:
+        if (
+            claim_id_from_id
+            and claim_id_from_locator
+            and claim_id_from_id != claim_id_from_locator
+        ):
             findings.append(
                 _finding(
                     "ENTRY_ID_CLAIM_MISMATCH",
@@ -497,8 +605,12 @@ def validate_registry_data(
 
         claim_text = entry.get("claim")
         if not isinstance(claim_text, str) or not claim_text.strip():
-            findings.append(_finding("CLAIM_MISSING", entry_id, "'claim' must be a non-empty string"))
-        elif claim_id and claim_id in claim_data:
+            findings.append(
+                _finding(
+                    "CLAIM_MISSING", entry_id, "'claim' must be a non-empty string"
+                )
+            )
+        elif claim_id and claim_data is not None and claim_id in claim_data:
             expected_statement = claim_data[claim_id].get("statement", "")
             if claim_text != expected_statement:
                 findings.append(
@@ -520,39 +632,71 @@ def validate_registry_data(
             )
         elif status != SLICE_STATUS:
             findings.append(
-                _finding("STATUS_NOT_PARTIAL", entry_id, f"'status' must be '{SLICE_STATUS}' in this slice")
+                _finding(
+                    "STATUS_NOT_PARTIAL",
+                    entry_id,
+                    f"'status' must be '{SLICE_STATUS}' in this slice",
+                )
             )
 
         owner = entry.get("owner")
         if not isinstance(owner, str) or not owner.strip():
-            findings.append(_finding("OWNER_MISSING", entry_id, "'owner' must be a non-empty string"))
+            findings.append(
+                _finding(
+                    "OWNER_MISSING", entry_id, "'owner' must be a non-empty string"
+                )
+            )
 
         last_verified = entry.get("last_verified")
         if not isinstance(last_verified, str) or not DATE_PATTERN.match(last_verified):
             findings.append(
-                _finding("LAST_VERIFIED_INVALID", entry_id, "'last_verified' must be a YYYY-MM-DD date string")
+                _finding(
+                    "LAST_VERIFIED_INVALID",
+                    entry_id,
+                    "'last_verified' must be a YYYY-MM-DD date string",
+                )
             )
         else:
             try:
                 date.fromisoformat(last_verified)
             except ValueError:
                 findings.append(
-                    _finding("LAST_VERIFIED_INVALID", entry_id, "'last_verified' must be a valid calendar date")
+                    _finding(
+                        "LAST_VERIFIED_INVALID",
+                        entry_id,
+                        "'last_verified' must be a valid calendar date",
+                    )
                 )
 
         findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
 
-        if claim_id and claim_id in claim_data:
+        if claim_id:
             if claim_id in seen_claim_ids:
-                findings.append(_finding("DUPLICATE_CLAIM_ID", entry_id, f"Duplicate claim id {claim_id}"))
+                findings.append(
+                    _finding(
+                        "DUPLICATE_CLAIM_ID", entry_id, f"Duplicate claim id {claim_id}"
+                    )
+                )
             seen_claim_ids.add(claim_id)
-            findings.extend(
-                _cross_check_evidence(entry_id, claim_id, entry.get("evidence"), claim_data[claim_id])
-            )
-        elif claim_id:
-            findings.append(
-                _finding("CLAIM_ID_UNKNOWN", entry_id, f"Claim {claim_id} not found in docs/claims/registry.yml")
-            )
+
+            if claim_data is not None:
+                if claim_id in claim_data:
+                    findings.extend(
+                        _cross_check_evidence(
+                            entry_id,
+                            claim_id,
+                            entry.get("evidence"),
+                            claim_data[claim_id],
+                        )
+                    )
+                else:
+                    findings.append(
+                        _finding(
+                            "CLAIM_ID_UNKNOWN",
+                            entry_id,
+                            f"Claim {claim_id} not found in docs/claims/registry.yml",
+                        )
+                    )
 
     return findings
 
@@ -569,9 +713,14 @@ def run_validation(
     data, load_error = load_yaml_json(registry_path)
     if load_error is not None:
         finding = _finding("REGISTRY_LOAD_ERROR", None, load_error)
-        return {"registry": registry, "entries_count": 0, "findings_count": 1, "findings": [finding]}, 1
+        return {
+            "registry": registry,
+            "entries_count": 0,
+            "findings_count": 1,
+            "findings": [finding],
+        }, 1
 
-    claim_data: dict[str, dict[str, object]] = {}
+    claim_data: dict[str, dict[str, object]] | None = None
     findings: list[dict[str, str]] = []
     claim_data_raw, claim_error = _load_claim_evidence(claims_path)
     if claim_error is not None:
@@ -593,7 +742,9 @@ def run_validation(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate doc freshness registry (Lenskit bridge form)")
+    parser = argparse.ArgumentParser(
+        description="Validate doc freshness registry (Lenskit bridge form)"
+    )
     parser.add_argument(
         "--registry",
         default="docs/doc-freshness-registry.yml",

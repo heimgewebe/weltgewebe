@@ -64,7 +64,11 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
     def _write_claims(
         self,
         evidence: dict[int, list[dict]] | None = None,
-        claim_ids=("CLAIM-AGENT-SAFE-001", "CLAIM-AGENT-SAFE-002", "CLAIM-AGENT-SAFE-003"),
+        claim_ids=(
+            "CLAIM-AGENT-SAFE-001",
+            "CLAIM-AGENT-SAFE-002",
+            "CLAIM-AGENT-SAFE-003",
+        ),
         statements: dict[str, str] | None = None,
     ) -> None:
         ev_map = evidence if evidence is not None else self.claim_evidence
@@ -87,7 +91,9 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
         payload = {"version": 1, "claims": claims}
         path = self.root / "docs" / "claims" / "registry.yml"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        path.write_text(
+            "---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
 
     def _copy_bridge_evidence(self, n: int) -> list[dict]:
         return [dict(item) for item in self.bridge_evidence[n]]
@@ -117,7 +123,9 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
         payload: dict = {"kind": kind, "version": version, "entries": entries}
         path = self.root / "docs" / "doc-freshness-registry.yml"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        path.write_text(
+            "---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
 
     def _run(self):
         return validator.run_validation(
@@ -252,8 +260,14 @@ entries:
             "id": "freshness.claim.agent_safe_001",
             "claim_ref": "CLAIM-AGENT-SAFE-001",
             "subject": {"kind": "claim", "ref": "CLAIM-AGENT-SAFE-001"},
-            "evidence": [{"path": "scripts/agent/impl_001.py", "kind": "implementation"}],
-            "freshness": {"review_policy": "manual", "max_age_days": 90, "last_reviewed": None},
+            "evidence": [
+                {"path": "scripts/agent/impl_001.py", "kind": "implementation"}
+            ],
+            "freshness": {
+                "review_policy": "manual",
+                "max_age_days": 90,
+                "last_reviewed": None,
+            },
             "status": "active",
         }
         payload = {"version": 1, "entries": [old_entry]}
@@ -263,7 +277,9 @@ entries:
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
         # Must fail on kind and version at minimum
-        self.assertTrue(self._has(output, "INVALID_KIND") or self._has(output, "INVALID_VERSION"))
+        self.assertTrue(
+            self._has(output, "INVALID_KIND") or self._has(output, "INVALID_VERSION")
+        )
 
     # --- entry id checks ---------------------------------------------------
 
@@ -330,7 +346,10 @@ entries:
         self._write_registry(entries)
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
-        self.assertTrue(self._has(output, "INVALID_STATUS") or self._has(output, "STATUS_NOT_PARTIAL"))
+        self.assertTrue(
+            self._has(output, "INVALID_STATUS")
+            or self._has(output, "STATUS_NOT_PARTIAL")
+        )
 
     def test_status_done_fails_for_this_slice(self):
         self._write_claims()
@@ -601,7 +620,9 @@ entries:
         self._write_registry(self._entries())
         output, exit_code = self._run()
         self.assertEqual(exit_code, 0, output["findings"])
-        generated_report_triples = [t for t in self.EVIDENCE_SPEC[2] if t[1] == "generated-report"]
+        generated_report_triples = [
+            t for t in self.EVIDENCE_SPEC[2] if t[1] == "generated-report"
+        ]
         self.assertTrue(generated_report_triples)
         for _path, _wg_kind, lenskit_kind in generated_report_triples:
             self.assertEqual(lenskit_kind, "file")
@@ -654,6 +675,39 @@ entries:
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "REGISTRY_LOAD_ERROR"))
+
+    def test_missing_claim_registry_skips_claim_dependent_checks(self):
+        self._write_registry([self._valid_entry(1)])
+        # Do not write claims registry so it fails to load
+
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "CLAIM_REGISTRY_LOAD_ERROR"))
+
+        for code in (
+            "CLAIM_ID_UNKNOWN",
+            "CLAIM_STATEMENT_MISMATCH",
+            "EVIDENCE_NOT_IN_CLAIM_REGISTRY",
+            "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY",
+            "EVIDENCE_KIND_MAPPING_INVALID",
+        ):
+            self.assertFalse(self._has(output, code), code)
+
+    def test_duplicate_claim_id_is_detected_when_claim_registry_missing(self):
+        entries = self._entries()
+        entries[1]["id"] = entries[0]["id"]
+        entries[1]["locator"] = entries[0]["locator"]
+        entries[1]["claim"] = entries[0]["claim"]
+
+        self._write_registry(entries)
+        # Do not write docs/claims/registry.yml
+
+        output, exit_code = self._run()
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "CLAIM_REGISTRY_LOAD_ERROR"))
+        self.assertTrue(self._has(output, "DUPLICATE_CLAIM_ID"))
+        self.assertFalse(self._has(output, "CLAIM_ID_UNKNOWN"))
 
 
 if __name__ == "__main__":
