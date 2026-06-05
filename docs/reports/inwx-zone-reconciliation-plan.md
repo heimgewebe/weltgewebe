@@ -57,12 +57,18 @@ Prepared plan only. No live provider changes performed.
 - MX 20 mxext3.mailbox.org.
 - SPF -> v=spf1 include:mailbox.org ~all
 - DMARC -> p=none, rua=mailto:kontakt@weltgewebe.net
-- mailbox.org DKIM: MBO0001–MBO0004 CNAMEs
+- mailbox.org DKIM:
+  - `MBO0001._domainkey` CNAME -> `mbo0001._domainkey.mailbox.org.`
+  - `MBO0002._domainkey` CNAME -> `mbo0002._domainkey.mailbox.org.`
+  - `MBO0003._domainkey` CNAME -> `mbo0003._domainkey.mailbox.org.`
+  - `MBO0004._domainkey` CNAME -> `mbo0004._domainkey.mailbox.org.`
 - Brevo login subdomain:
-  - login TXT Brevo verification TXT
-  - `_dmarc.login` TXT Brevo login-subdomain DMARC
-  - brevo1._domainkey.login CNAME Brevo DKIM target
-  - brevo2._domainkey.login CNAME Brevo DKIM target
+  - `login` TXT -> `brevo-code:d9e7825df780e9cce6c9fbe8d1ea5abd`
+  - `_dmarc.login` TXT -> `v=DMARC1; p=none; rua=mailto:rua@dmarc.brevo.com`
+  - `brevo1._domainkey.login` CNAME -> `b1.login-weltgewebe-net.dkim.brevo.com.`
+  - `brevo2._domainkey.login` CNAME -> `b2.login-weltgewebe-net.dkim.brevo.com.`
+
+No Brevo SPF/Return-Path record is included here unless Brevo later issues a separate target value; the cutover runbook treats that as a separate follow-up.
 
 ### weltweb.net
 
