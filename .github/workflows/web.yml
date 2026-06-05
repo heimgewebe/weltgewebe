@@ -4,6 +4,9 @@
 # This split avoids double vitest execution when both workflows trigger on the same PR.
 name: Web Check (Gate A)
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 

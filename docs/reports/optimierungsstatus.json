@@ -365,6 +365,28 @@
       "updated_at": "2026-05-25"
     },
     {
+      "id": "OPT-CI-005",
+      "area": "CI/CD",
+      "title": "GitHub Actions Node-24 Runtime Readiness",
+      "status": "partial",
+      "priority": "high",
+      "risk": "medium",
+      "effort": "medium",
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/workflows/",
+        "scripts/ci/check_actions_node24_readiness.py",
+        "scripts/ci/tests/test_check_actions_node24_readiness.py"
+      ],
+      "missing_evidence": [
+        "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
+        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
+        "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
+      ],
+      "next_action": "CI-Lauf unter erzwungener Node-24-Action-Runtime prüfen und verbleibende Node-20-Metadatenwarnungen für Stage B erfassen.",
+      "updated_at": "2026-06-05"
+    },
+    {
       "id": "OPT-INF-002",
       "area": "Infrastruktur",
       "title": "Third-Party-Actions per Commit-SHA pinnen",

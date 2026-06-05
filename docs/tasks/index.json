@@ -521,6 +521,40 @@
         ]
       },
       "updated_at": "2026-06-04"
+    },
+    {
+      "id": "OPT-CI-005",
+      "title": "GitHub Actions Node-24 Runtime Readiness",
+      "area": "ci",
+      "status": "partial",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        ".github/workflows/",
+        "scripts/ci/check_actions_node24_readiness.py",
+        "scripts/ci/tests/test_check_actions_node24_readiness.py"
+      ],
+      "missing_evidence": [
+        "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
+        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
+        "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
+      ],
+      "acceptance": [
+        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
+        "Kein Gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.",
+        "CI-Lauf dokumentiert, ob Node-20-Metadatenwarnungen verbleiben; verbleibende Warnungen werden Stage B zugeordnet."
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/tasks/board.md",
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-06-05"
     }
   ]
 }

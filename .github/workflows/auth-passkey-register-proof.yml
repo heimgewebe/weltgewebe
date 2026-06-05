@@ -64,6 +64,9 @@ name: Auth Passkey Register Proof
       - ".github/workflows/auth-passkey-register-proof.yml"
   workflow_dispatch: {}
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 
