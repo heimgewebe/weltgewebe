@@ -3,15 +3,15 @@ id: docs.generated.claim-evidence-map
 title: Claim Evidence Map
 doc_type: generated
 status: active
-summary: Automatisch generierte Claim-Evidence-Freshness-Map.
+summary: Automatisch generierte Claim-Evidence-Map (Lenskit Bridge).
 ---
 
 # Claim Evidence Map
 
 Generated automatically. Do not edit.
 
-| id | claim_ref | subject | evidence | freshness | status |
-| --- | --- | --- | --- | --- | --- |
-| freshness.claim.agent_safe_001 | CLAIM-AGENT-SAFE-001 | claim:CLAIM-AGENT-SAFE-001 | 4 paths | unknown | active |
-| freshness.claim.agent_safe_002 | CLAIM-AGENT-SAFE-002 | claim:CLAIM-AGENT-SAFE-002 | 3 paths | unknown | active |
-| freshness.claim.agent_safe_003 | CLAIM-AGENT-SAFE-003 | claim:CLAIM-AGENT-SAFE-003 | 4 paths | unknown | active |
+| id | doc | locator | status | owner | last_verified | evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| claim-agent-safe-001 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-001] | partial | docs-mechanik | 2026-06-05 | 4 items |
+| claim-agent-safe-002 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-002] | partial | docs-mechanik | 2026-06-05 | 3 items |
+| claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |

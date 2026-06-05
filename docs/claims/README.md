@@ -82,18 +82,24 @@ Dieser Slice fuehrt nicht ein:
 
 AGENT-SAFE-004 bleibt offen.
 
-## Freshness Registry
+## Freshness Registry (Lenskit Bridge)
 
-`docs/doc-freshness-registry.yml` verbindet die bestehenden Claims mit ihren
-repo-lokalen Evidence-Pfaden und konservativen Freshness-Metadaten.
+`docs/doc-freshness-registry.yml` ist der Lenskit-kompatible Bridge-Contract.
+Er exponiert die Claim-Evidence-Bindung aus `docs/claims/registry.yml` im
+Format `lenskit.doc_freshness_registry` v1.0.
 
-Die Freshness-Registry entscheidet nicht, ob ein Claim wahr ist. Sie macht nur
-die Belegbindung und die Review-Frische fuer Agents und Reviews sichtbar.
+`docs/claims/registry.yml` bleibt die kanonische Claim-Quelle.
+Die Bridge beweist keine Claims; sie macht die Claim-Evidence-Bindung fuer
+Lenskit sichtbar.
+
+`last_verified` belegt nur die Bridge-Validierung gegen die Claim-Registry
+und repo-lokale Evidence-Pfade. Es beweist nicht, dass ein Claim wahr ist.
+
+Evidence-Kinds werden explizit gemappt:
+
+- `implementation`, `documentation`, `ci`, `generated-report`, `registry` -> Lenskit `file`
+- `test` -> Lenskit `test`
 
 - Validierung: `python3 scripts/docmeta/validate_doc_freshness_registry.py`
 - Generierte Uebersicht (report-only):
   - `docs/_generated/claim-evidence-map.md`
-  - `artifacts/docmeta/claim_evidence_map.json`
-
-In diesem Slice bleibt `last_reviewed` immer `null`, `review_policy` ist
-`manual` und der abgeleitete `freshness_status` ist daher `unknown`.
