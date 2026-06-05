@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Validate docs/doc-freshness-registry.yml (JSON-compatible YAML subset).
+"""Validate docs/doc-freshness-registry.yml as a Lenskit doc_freshness_registry bridge.
 
-This validator is a gatekeeper, not a priest. It checks the structural and
-slice-scoped integrity of the freshness registry. It does NOT decide whether a
-claim is true, whether evidence proves a claim, whether CI ran, or whether a
-review happened.
+This validator checks:
+1. The bridge file conforms to the lenskit.doc_freshness_registry v1.0 contract.
+2. Each entry's evidence set exactly mirrors the mapped evidence from docs/claims/registry.yml.
+
+Evidence kind mapping (Weltgewebe claim-registry -> Lenskit bridge):
+    implementation, documentation, ci, generated-report, registry  ->  file
+    test                                                            ->  test
 """
 
 from __future__ import annotations
@@ -21,38 +24,27 @@ if __package__ in {None, ""}:
 from scripts.docmeta import validate_claim_registry
 from scripts.docmeta.docmeta import REPO_ROOT
 
-VALID_STATUSES = {"active", "draft", "superseded"}
-SLICE_STATUS = "active"
-VALID_REVIEW_POLICIES = {"manual", "ci", "generated"}
-SLICE_REVIEW_POLICY = "manual"
-SLICE_MAX_AGE_DAYS = 90
-# This slice mirrors the existing claim registry. It does not invent a new
-# evidence taxonomy, so the allowed kinds are exactly those used by
-# docs/claims/registry.yml.
-VALID_EVIDENCE_KINDS = {
-    "documentation",
-    "implementation",
-    "test",
-    "ci",
-    "generated-report",
-    "registry",
+CLAIM_EVIDENCE_KIND_TO_LENSKIT: dict[str, str] = {
+    "implementation": "file",
+    "documentation": "file",
+    "ci": "file",
+    "generated-report": "file",
+    "registry": "file",
+    "test": "test",
 }
-IN_SCOPE_CLAIMS = {
-    "CLAIM-AGENT-SAFE-001",
-    "CLAIM-AGENT-SAFE-002",
-    "CLAIM-AGENT-SAFE-003",
-}
+
+VALID_LENSKIT_EVIDENCE_KINDS = {"symbol", "file", "text", "absent_text", "proof", "test"}
+EVIDENCE_KINDS_CHECK_PATH = {"file", "test", "proof"}
+
+VALID_STATUSES = {"none", "partial", "done", "stale", "historical"}
+SLICE_STATUS = "partial"
+
 EXPECTED_ENTRY_COUNT = 3
-ENTRY_ID_PATTERN = re.compile(r"^freshness\.claim\.agent_safe_00[1-3]$")
+VALID_ENTRY_IDS = {"claim-agent-safe-001", "claim-agent-safe-002", "claim-agent-safe-003"}
+ENTRY_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+LOCATOR_PATTERN = re.compile(r"^claims\[id=([A-Z0-9-]+)\]$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
-def _expected_entry_id_for_claim(claim_ref: str) -> str | None:
-    """Return the canonical entry id for a given in-scope claim_ref, or None if out of scope."""
-    if claim_ref not in IN_SCOPE_CLAIMS:
-        return None
-    suffix = claim_ref.rsplit("-", 1)[-1].lower()
-    return f"freshness.claim.agent_safe_{suffix}"
+EXPECTED_DOC = "docs/claims/registry.yml"
 
 
 def _finding(code: str, entry_id: str | None, message: str, path: str | None = None) -> dict[str, str]:
@@ -75,7 +67,7 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
     except OSError as exc:
         return None, f"Registry is not readable: {exc}"
 
-    normalized = raw.lstrip("\ufeff").strip()
+    normalized = raw.lstrip("﻿").strip()
     if normalized.startswith("---"):
         lines = normalized.splitlines()
         normalized = "\n".join(lines[1:]).strip()
@@ -88,11 +80,15 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
         return None, f"Registry parse error: {exc.msg}"
 
 
-def _load_claim_evidence(claims_path: Path) -> tuple[dict[str, set[tuple[str, str]]], str | None]:
-    """Load the declared ``(path, kind)`` evidence pairs per claim id.
+def _load_claim_evidence(
+    claims_path: Path,
+) -> tuple[dict[str, dict[str, object]], str | None]:
+    """Load claims from docs/claims/registry.yml.
 
-    The freshness registry must mirror these pairs exactly; it may not invent
-    new claim -> evidence bindings.
+    Returns a dict keyed by claim id, each value containing:
+        - statement: str
+        - mapped_pairs: set of (target, lenskit_kind)
+        - unmappable: list of (path, kind) that have no lenskit mapping
     """
     data, _findings, exit_code = validate_claim_registry.load_registry(claims_path)
     if exit_code != 0 or not isinstance(data, dict):
@@ -100,27 +96,50 @@ def _load_claim_evidence(claims_path: Path) -> tuple[dict[str, set[tuple[str, st
     claims = data.get("claims")
     if not isinstance(claims, list):
         return {}, "Claim registry has no 'claims' list"
-    claim_evidence: dict[str, set[tuple[str, str]]] = {}
+
+    result: dict[str, dict[str, object]] = {}
     for claim in claims:
         if not isinstance(claim, dict) or not isinstance(claim.get("id"), str):
             continue
-        evidence_pairs: set[tuple[str, str]] = set()
+        cid = claim["id"]
+        statement = claim.get("statement", "")
+        mapped_pairs: set[tuple[str, str]] = set()
+        unmappable: list[tuple[str, str]] = []
         for ev in claim.get("evidence", []):
             if not isinstance(ev, dict):
                 continue
             path = ev.get("path")
             kind = ev.get("kind")
-            if isinstance(path, str) and isinstance(kind, str):
-                evidence_pairs.add((path, kind))
-        claim_evidence[claim["id"]] = evidence_pairs
-    return claim_evidence, None
+            if not isinstance(path, str) or not isinstance(kind, str):
+                continue
+            lenskit_kind = CLAIM_EVIDENCE_KIND_TO_LENSKIT.get(kind)
+            if lenskit_kind is None:
+                unmappable.append((path, kind))
+            else:
+                mapped_pairs.add((path, lenskit_kind))
+        result[cid] = {
+            "statement": statement,
+            "mapped_pairs": mapped_pairs,
+            "unmappable": unmappable,
+        }
+    return result, None
 
 
-def _is_positive_int(value: object) -> bool:
-    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+def _claim_id_from_entry_id(entry_id: str) -> str:
+    """Derive CLAIM-AGENT-SAFE-00N from claim-agent-safe-00n."""
+    return entry_id.upper()
 
 
-def _validate_evidence(entry_id: str | None, evidence: object, repo_root: Path) -> list[dict[str, str]]:
+def _claim_id_from_locator(locator: str) -> str | None:
+    m = LOCATOR_PATTERN.match(locator)
+    return m.group(1) if m else None
+
+
+def _validate_evidence(
+    entry_id: str | None,
+    evidence: object,
+    repo_root: Path,
+) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     if not isinstance(evidence, list) or not evidence:
         findings.append(_finding("EVIDENCE_EMPTY", entry_id, "Evidence must be a non-empty list"))
@@ -131,113 +150,79 @@ def _validate_evidence(entry_id: str | None, evidence: object, repo_root: Path) 
             findings.append(_finding("EVIDENCE_NOT_OBJECT", entry_id, "Each evidence item must be an object"))
             continue
 
-        path = item.get("path")
-        if not isinstance(path, str) or not path.strip():
-            findings.append(_finding("EVIDENCE_PATH_NOT_STRING", entry_id, "Evidence 'path' must be a non-empty string"))
-        elif path.startswith("/") or Path(path).is_absolute():
-            findings.append(_finding("EVIDENCE_PATH_ABSOLUTE", entry_id, "Evidence path must be repo-relative", path=path))
-        elif ".." in Path(path).parts:
-            findings.append(_finding("EVIDENCE_PATH_TRAVERSAL", entry_id, "Evidence path must not contain '..'", path=path))
-        elif not (repo_root / path).exists():
-            findings.append(_finding("EVIDENCE_PATH_MISSING", entry_id, "Evidence path does not exist", path=path))
+        target = item.get("target")
+        if not isinstance(target, str) or not target.strip():
+            findings.append(_finding("EVIDENCE_TARGET_NOT_STRING", entry_id, "Evidence 'target' must be a non-empty string"))
+        elif target.startswith("/") or Path(target).is_absolute():
+            findings.append(_finding("EVIDENCE_TARGET_ABSOLUTE", entry_id, "Evidence target must be repo-relative", path=target))
+        elif ".." in Path(target).parts:
+            findings.append(_finding("EVIDENCE_TARGET_TRAVERSAL", entry_id, "Evidence target must not contain '..'", path=target))
+        else:
+            kind = item.get("kind")
+            if isinstance(kind, str) and kind in EVIDENCE_KINDS_CHECK_PATH:
+                if not (repo_root / target).exists():
+                    findings.append(_finding("EVIDENCE_TARGET_MISSING", entry_id, "Evidence target does not exist", path=target))
 
         kind = item.get("kind")
-        if not isinstance(kind, str) or kind not in VALID_EVIDENCE_KINDS:
+        if not isinstance(kind, str) or kind not in VALID_LENSKIT_EVIDENCE_KINDS:
             findings.append(
                 _finding(
                     "EVIDENCE_KIND_INVALID",
                     entry_id,
-                    f"Evidence 'kind' must be one of: {', '.join(sorted(VALID_EVIDENCE_KINDS))}",
-                    path=path if isinstance(path, str) else None,
+                    f"Evidence 'kind' must be one of: {', '.join(sorted(VALID_LENSKIT_EVIDENCE_KINDS))}",
+                    path=target if isinstance(target, str) else None,
                 )
             )
 
     return findings
 
 
-def _validate_freshness(entry_id: str | None, freshness: object) -> list[dict[str, str]]:
-    findings: list[dict[str, str]] = []
-    if not isinstance(freshness, dict):
-        findings.append(_finding("FRESHNESS_NOT_OBJECT", entry_id, "'freshness' must be an object"))
-        return findings
-
-    review_policy = freshness.get("review_policy")
-    if not isinstance(review_policy, str) or review_policy not in VALID_REVIEW_POLICIES:
-        findings.append(
-            _finding(
-                "REVIEW_POLICY_INVALID",
-                entry_id,
-                f"'review_policy' must be one of: {', '.join(sorted(VALID_REVIEW_POLICIES))}",
-            )
-        )
-    elif review_policy != SLICE_REVIEW_POLICY:
-        findings.append(
-            _finding("REVIEW_POLICY_NOT_MANUAL", entry_id, "'review_policy' must be 'manual' in this slice")
-        )
-
-    max_age_days = freshness.get("max_age_days")
-    if max_age_days is None or _is_positive_int(max_age_days):
-        if max_age_days != SLICE_MAX_AGE_DAYS:
-            findings.append(
-                _finding("MAX_AGE_DAYS_NOT_90", entry_id, "'max_age_days' must be 90 in this slice")
-            )
-    else:
-        findings.append(
-            _finding("MAX_AGE_DAYS_INVALID", entry_id, "'max_age_days' must be a positive integer or null")
-        )
-
-    last_reviewed = freshness.get("last_reviewed", "__missing__")
-    if last_reviewed == "__missing__":
-        findings.append(_finding("LAST_REVIEWED_INVALID", entry_id, "'last_reviewed' is required (null in this slice)"))
-    elif last_reviewed is None:
-        pass
-    elif isinstance(last_reviewed, str) and DATE_PATTERN.match(last_reviewed):
-        findings.append(_finding("LAST_REVIEWED_NOT_NULL", entry_id, "'last_reviewed' must be null in this slice"))
-    else:
-        findings.append(_finding("LAST_REVIEWED_INVALID", entry_id, "'last_reviewed' must be null or a YYYY-MM-DD string"))
-
-    return findings
-
-
 def _cross_check_evidence(
     entry_id: str | None,
-    claim_ref: str,
+    claim_id: str,
     evidence: object,
-    claim_pairs: set[tuple[str, str]],
+    claim_info: dict[str, object],
 ) -> list[dict[str, str]]:
-    """Require exact ``(path, kind)`` set equality with the referenced claim.
-
-    The freshness registry may neither add evidence pairs that the claim does
-    not declare nor drop pairs the claim does declare. A wrong ``kind`` on a
-    matching ``path`` therefore fails on both sides.
-    """
+    """Verify bridge evidence == mapped claim evidence, (target, lenskit_kind) set equality."""
     findings: list[dict[str, str]] = []
-    freshness_pairs: set[tuple[str, str]] = set()
+
+    for path, kind in claim_info.get("unmappable", []):  # type: ignore[union-attr]
+        findings.append(
+            _finding(
+                "EVIDENCE_KIND_MAPPING_INVALID",
+                entry_id,
+                f"Claim evidence kind '{kind}' has no Lenskit mapping for {claim_id}",
+                path=path,
+            )
+        )
+
+    expected_pairs: set[tuple[str, str]] = claim_info.get("mapped_pairs", set())  # type: ignore[assignment]
+    actual_pairs: set[tuple[str, str]] = set()
     if isinstance(evidence, list):
         for item in evidence:
             if not isinstance(item, dict):
                 continue
-            path = item.get("path")
+            target = item.get("target")
             kind = item.get("kind")
-            if isinstance(path, str) and isinstance(kind, str):
-                freshness_pairs.add((path, kind))
+            if isinstance(target, str) and isinstance(kind, str):
+                actual_pairs.add((target, kind))
 
-    for path, kind in sorted(freshness_pairs - claim_pairs):
+    for target, kind in sorted(actual_pairs - expected_pairs):
         findings.append(
             _finding(
                 "EVIDENCE_NOT_IN_CLAIM_REGISTRY",
                 entry_id,
-                f"Evidence pair (kind={kind}) is not declared on claim {claim_ref}",
-                path=path,
+                f"Evidence pair (kind={kind}) is not in the mapped claim evidence for {claim_id}",
+                path=target,
             )
         )
-    for path, kind in sorted(claim_pairs - freshness_pairs):
+    for target, kind in sorted(expected_pairs - actual_pairs):
         findings.append(
             _finding(
                 "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY",
                 entry_id,
-                f"Claim evidence pair (kind={kind}) is missing from freshness registry for {claim_ref}",
-                path=path,
+                f"Mapped claim evidence pair (kind={kind}) is missing from bridge for {claim_id}",
+                path=target,
             )
         )
     return findings
@@ -245,7 +230,7 @@ def _cross_check_evidence(
 
 def validate_registry_data(
     data: object,
-    claim_evidence: dict[str, set[tuple[str, str]]],
+    claim_data: dict[str, dict[str, object]],
     repo_root: Path,
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
@@ -253,12 +238,15 @@ def validate_registry_data(
     if not isinstance(data, dict):
         return [_finding("INVALID_TOP_LEVEL", None, "Top-level registry must be an object")]
 
-    if data.get("version") != 1:
-        findings.append(_finding("INVALID_VERSION", None, "Top-level field 'version' must equal 1"))
+    if data.get("kind") != "lenskit.doc_freshness_registry":
+        findings.append(_finding("INVALID_KIND", None, "Top-level 'kind' must be 'lenskit.doc_freshness_registry'"))
+
+    if data.get("version") != "1.0":
+        findings.append(_finding("INVALID_VERSION", None, "Top-level 'version' must be the string \"1.0\""))
 
     entries = data.get("entries")
     if not isinstance(entries, list):
-        findings.append(_finding("INVALID_ENTRIES", None, "Top-level field 'entries' must be a list"))
+        findings.append(_finding("INVALID_ENTRIES", None, "Top-level 'entries' must be a list"))
         return findings
 
     if len(entries) != EXPECTED_ENTRY_COUNT:
@@ -271,7 +259,7 @@ def validate_registry_data(
         )
 
     seen_ids: set[str] = set()
-    seen_claim_refs: set[str] = set()
+    seen_claim_ids: set[str] = set()
 
     for entry in entries:
         if not isinstance(entry, dict):
@@ -284,12 +272,58 @@ def validate_registry_data(
             findings.append(_finding("INVALID_ID", None, "Entry 'id' must be a string"))
         else:
             if not ENTRY_ID_PATTERN.match(entry_id):
+                findings.append(_finding("INVALID_ID", entry_id, "Entry 'id' must match ^[a-z0-9][a-z0-9-]*$"))
+            if entry_id not in VALID_ENTRY_IDS:
                 findings.append(
-                    _finding("INVALID_ID", entry_id, "Entry 'id' must match freshness.claim.agent_safe_00[1-3]")
+                    _finding("INVALID_ID", entry_id, f"Entry 'id' must be one of: {', '.join(sorted(VALID_ENTRY_IDS))}")
                 )
             if entry_id in seen_ids:
                 findings.append(_finding("DUPLICATE_ID", entry_id, "Duplicate entry id"))
             seen_ids.add(entry_id)
+
+        doc = entry.get("doc")
+        if doc != EXPECTED_DOC:
+            findings.append(
+                _finding("DOC_MISMATCH", entry_id, f"'doc' must be '{EXPECTED_DOC}', got: {doc!r}")
+            )
+
+        locator = entry.get("locator")
+        claim_id_from_locator: str | None = None
+        if not isinstance(locator, str) or not locator.strip():
+            findings.append(_finding("LOCATOR_MISSING", entry_id, "'locator' must be a non-empty string"))
+        else:
+            claim_id_from_locator = _claim_id_from_locator(locator)
+            if claim_id_from_locator is None:
+                findings.append(
+                    _finding("LOCATOR_MISMATCH", entry_id, f"'locator' must match claims[id=CLAIM-ID], got: {locator!r}")
+                )
+
+        claim_id_from_id = _claim_id_from_entry_id(entry_id) if entry_id else None
+
+        if claim_id_from_id and claim_id_from_locator and claim_id_from_id != claim_id_from_locator:
+            findings.append(
+                _finding(
+                    "ENTRY_ID_CLAIM_MISMATCH",
+                    entry_id,
+                    f"Entry id implies {claim_id_from_id} but locator implies {claim_id_from_locator}",
+                )
+            )
+
+        claim_id = claim_id_from_id or claim_id_from_locator
+
+        claim_text = entry.get("claim")
+        if not isinstance(claim_text, str) or not claim_text.strip():
+            findings.append(_finding("CLAIM_MISSING", entry_id, "'claim' must be a non-empty string"))
+        elif claim_id and claim_id in claim_data:
+            expected_statement = claim_data[claim_id].get("statement", "")
+            if claim_text != expected_statement:
+                findings.append(
+                    _finding(
+                        "CLAIM_STATEMENT_MISMATCH",
+                        entry_id,
+                        f"'claim' does not match statement in docs/claims/registry.yml for {claim_id}",
+                    )
+                )
 
         status = entry.get("status")
         if not isinstance(status, str) or status not in VALID_STATUSES:
@@ -301,58 +335,32 @@ def validate_registry_data(
                 )
             )
         elif status != SLICE_STATUS:
-            findings.append(_finding("STATUS_NOT_ACTIVE", entry_id, "'status' must be 'active' in this slice"))
+            findings.append(
+                _finding("STATUS_NOT_PARTIAL", entry_id, f"'status' must be '{SLICE_STATUS}' in this slice")
+            )
 
-        claim_ref = entry.get("claim_ref")
-        if claim_ref is None:
-            findings.append(_finding("CLAIM_REF_NULL", entry_id, "'claim_ref' must not be null"))
-        elif not isinstance(claim_ref, str):
-            findings.append(_finding("CLAIM_REF_INVALID", entry_id, "'claim_ref' must be a string"))
-        else:
-            if claim_ref not in IN_SCOPE_CLAIMS:
-                findings.append(
-                    _finding(
-                        "CLAIM_REF_OUT_OF_SCOPE",
-                        entry_id,
-                        "'claim_ref' must be one of CLAIM-AGENT-SAFE-001..003",
-                    )
-                )
-            if claim_ref not in claim_evidence:
-                findings.append(
-                    _finding("CLAIM_REF_UNKNOWN", entry_id, f"'claim_ref' {claim_ref} not found in claim registry")
-                )
-            if claim_ref in seen_claim_refs:
-                findings.append(_finding("CLAIM_REF_DUPLICATE", entry_id, f"Duplicate claim_ref {claim_ref}"))
-            seen_claim_refs.add(claim_ref)
+        owner = entry.get("owner")
+        if not isinstance(owner, str) or not owner.strip():
+            findings.append(_finding("OWNER_MISSING", entry_id, "'owner' must be a non-empty string"))
 
-            if isinstance(entry_id, str):
-                expected_id = _expected_entry_id_for_claim(claim_ref)
-                if expected_id is not None and entry_id != expected_id:
-                    findings.append(
-                        _finding(
-                            "ENTRY_ID_CLAIM_REF_MISMATCH",
-                            entry_id,
-                            f"Entry id must be {expected_id} for claim_ref {claim_ref}",
-                        )
-                    )
-
-        subject = entry.get("subject")
-        if not isinstance(subject, dict):
-            findings.append(_finding("SUBJECT_INVALID", entry_id, "'subject' must be an object"))
-        else:
-            if subject.get("kind") != "claim":
-                findings.append(_finding("SUBJECT_KIND_INVALID", entry_id, "'subject.kind' must be 'claim'"))
-            if subject.get("ref") != claim_ref:
-                findings.append(
-                    _finding("SUBJECT_REF_MISMATCH", entry_id, "'subject.ref' must equal 'claim_ref'")
-                )
+        last_verified = entry.get("last_verified")
+        if not isinstance(last_verified, str) or not DATE_PATTERN.match(last_verified):
+            findings.append(
+                _finding("LAST_VERIFIED_INVALID", entry_id, "'last_verified' must be a YYYY-MM-DD date string")
+            )
 
         findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
-        findings.extend(_validate_freshness(entry_id, entry.get("freshness")))
 
-        if isinstance(claim_ref, str) and claim_ref in claim_evidence:
+        if claim_id and claim_id in claim_data:
+            if claim_id in seen_claim_ids:
+                findings.append(_finding("DUPLICATE_CLAIM_ID", entry_id, f"Duplicate claim id {claim_id}"))
+            seen_claim_ids.add(claim_id)
             findings.extend(
-                _cross_check_evidence(entry_id, claim_ref, entry.get("evidence"), claim_evidence[claim_ref])
+                _cross_check_evidence(entry_id, claim_id, entry.get("evidence"), claim_data[claim_id])
+            )
+        elif claim_id:
+            findings.append(
+                _finding("CLAIM_ID_UNKNOWN", entry_id, f"Claim {claim_id} not found in docs/claims/registry.yml")
             )
 
     return findings
@@ -372,12 +380,15 @@ def run_validation(
         finding = _finding("REGISTRY_LOAD_ERROR", None, load_error)
         return {"registry": registry, "entries_count": 0, "findings_count": 1, "findings": [finding]}, 1
 
-    claim_evidence, claim_error = _load_claim_evidence(claims_path)
+    claim_data: dict[str, dict[str, object]] = {}
     findings: list[dict[str, str]] = []
+    claim_data_raw, claim_error = _load_claim_evidence(claims_path)
     if claim_error is not None:
         findings.append(_finding("CLAIM_REGISTRY_LOAD_ERROR", None, claim_error))
+    else:
+        claim_data = claim_data_raw
 
-    findings.extend(validate_registry_data(data, claim_evidence, root))
+    findings.extend(validate_registry_data(data, claim_data, root))
 
     entries = data.get("entries") if isinstance(data, dict) else []
     entries_count = len(entries) if isinstance(entries, list) else 0
@@ -391,7 +402,7 @@ def run_validation(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate doc freshness registry")
+    parser = argparse.ArgumentParser(description="Validate doc freshness registry (Lenskit bridge form)")
     parser.add_argument(
         "--registry",
         default="docs/doc-freshness-registry.yml",
