@@ -23,7 +23,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.docmeta.docmeta import REPO_ROOT
-from scripts.docmeta.validate_doc_freshness_registry import load_yaml_json
+from scripts.docmeta.validate_doc_freshness_registry import load_yaml_json, run_validation
 
 REGISTRY_REL = "docs/doc-freshness-registry.yml"
 MARKDOWN_REL = "docs/_generated/claim-evidence-map.md"
@@ -152,6 +152,26 @@ def _load_registry(root: Path) -> object:
     return data
 
 
+def _validate_freshness_registry_or_raise(root: Path) -> None:
+    """Refuse to generate reports from a structurally invalid freshness registry."""
+    output, exit_code = run_validation(repo_root=root)
+    if exit_code == 0:
+        return
+
+    findings = output.get("findings", []) if isinstance(output, dict) else []
+    preview_parts: list[str] = []
+    if isinstance(findings, list):
+        for finding in findings[:5]:
+            if isinstance(finding, dict):
+                code = finding.get("code", "?")
+                entry_id = finding.get("entry_id", "-")
+                preview_parts.append(f"{code}:{entry_id}")
+
+    preview = ", ".join(preview_parts) or "see validator output"
+    count = output.get("findings_count", len(preview_parts)) if isinstance(output, dict) else "unknown"
+    raise ValueError(f"Freshness registry validation failed ({count} findings): {preview}")
+
+
 def generate(repo_root: str | Path | None = None, today: object = None) -> tuple[Path, Path]:
     root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
     data = _load_registry(root)
@@ -201,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         try:
+            _validate_freshness_registry_or_raise(Path(REPO_ROOT))
             drift = check()
         except ValueError as exc:
             print(f"Error reading freshness registry: {exc}", file=sys.stderr)
@@ -213,6 +234,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
+        _validate_freshness_registry_or_raise(Path(REPO_ROOT))
         generate()
     except ValueError as exc:
         print(f"Error generating claim evidence map: {exc}", file=sys.stderr)

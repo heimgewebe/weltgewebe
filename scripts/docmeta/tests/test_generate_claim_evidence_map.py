@@ -159,12 +159,19 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         drift = gen.check(self.root, today=self.today)
         self.assertIn(gen.JSON_REL, drift)
 
-    def test_check_main_exit_codes(self):
+    def test_check_helper_returns_empty_list_when_files_match(self):
         self._write_registry([self._entry(1)])
         gen.generate(self.root, today=self.today)
         # No drift in the temp root, but main() targets REPO_ROOT; assert the
         # in-memory check helper drives the exit decision deterministically.
         self.assertEqual(gen.check(self.root, today=self.today), [])
+
+    def test_validation_guard_rejects_invalid_registry_shape(self):
+        self._write_registry([self._entry(1)])
+        with self.assertRaises(ValueError) as ctx:
+            gen._validate_freshness_registry_or_raise(self.root)
+        self.assertIn("Freshness registry validation failed", str(ctx.exception))
+
 
     # --- freshness status surfaces in the output ---------------------------
 
