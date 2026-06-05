@@ -1,11 +1,38 @@
 ---
+# audit/impl-registry.yaml
+# Evidence index that maps critical implementation surfaces to their
+# documentation ("documented_by": intent / description) and proof artifacts
+# ("verified_by": tests, guards, or CI workflows that exercise the surface).
+#
+# Field conventions:
+#   criticality: high | medium | low   (human judgment of blast radius)
+#   evidence_level: ci | test | guard | none
+#     - ci    -> at least one CI workflow in verified_by exercises the surface
+#     - test  -> verified only by direct unit / integration tests
+#     - guard -> verified only by a guard script
+#     - none  -> no proof artifact yet
+#
+# This file is an evidence INDEX, not a status source: an entry with a
+# verified_by artifact only means "at least one proof exists", never "done".
+# docs/_generated/impl-index.md and docs/_generated/doc-coverage.md are derived
+# from this file and must be regenerated, never hand-edited.
 implementations:
   - id: impl.service.api
     path: apps/api/
     impl_type: service
     status: active
-    documented_by: []
-    verified_by: []
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - apps/api/README.md
+      - docs/specs/auth-api.md
+      - docs/blueprints/domain-data-postgres-cutover.md
+    verified_by:
+      - .github/workflows/api.yml
+      - apps/api/tests/api_nodes.rs
+      - apps/api/tests/api_edges.rs
+      - apps/api/tests/db_domain_read_path.rs
+      - apps/api/tests/db_domain_account_write_path.rs
     supersedes: []
     deprecated_by: []
 
@@ -13,34 +40,81 @@ implementations:
     path: .github/workflows/
     impl_type: workflow
     status: active
-    documented_by: []
-    verified_by: []
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - ci/README.md
+      - docs/process/README.md
+    verified_by:
+      - .github/workflows/ci.yml
+      - .github/workflows/docs-guard.yml
+      - .github/workflows/task-index.yml
 
   - id: impl.service.web
     path: apps/web/
     impl_type: service
     status: active
-    documented_by: []
-    verified_by: []
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - apps/web/README.md
+      - docs/blueprints/ui-blaupause.md
+      - docs/blueprints/ui-roadmap.md
+    verified_by:
+      - .github/workflows/web.yml
+      - apps/web/tests/smoke.home.spec.ts
+      - apps/web/src/lib/stores/uiInvariants.test.ts
 
   - id: impl.infra.compose
     path: infra/compose/
     impl_type: config
     status: active
-    documented_by: []
-    verified_by: []
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/README.md
+      - docs/deploy/heimserver.deployment.md
+      - docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
+    verified_by:
+      - .github/workflows/compose-smoke.yml
+      - scripts/tests/test_compose_volumes_guard.sh
+      - scripts/guard-compose-no-relative-volumes.sh
 
   - id: impl.contracts
-    path: contracts/
+    path: contracts/domain/
     impl_type: schema
     status: active
-    documented_by: []
-    verified_by: []
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - contracts/README.md
+      - docs/specs/contract.md
+      - docs/datenmodell.md
+    verified_by:
+      - .github/workflows/contracts-domain.yml
+      - scripts/contracts-domain-check.sh
+
+  - id: impl.agent.safety-preflight
+    path: scripts/agent/
+    impl_type: guard
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/blueprints/blueprint-agent-safety-control-layer.md
+      - docs/security/agent-write-scope-baseline.md
+      - AGENTS.md
+    verified_by:
+      - .github/workflows/agent-safety-preflight.yml
+      - scripts/agent/tests/test_check_agent_preflight.py
+      - scripts/agent/tests/test_check_non_ideal_task.py
 
   - id: impl.pipeline.basemap
     path: scripts/basemap/
     impl_type: workflow
     status: active
+    criticality: medium
+    evidence_level: guard
     documented_by:
       - docs/blueprints/map-blaupause.md
       - docs/blueprints/map-roadmap.md
@@ -51,6 +125,8 @@ implementations:
     path: map-style/
     impl_type: config
     status: active
+    criticality: low
+    evidence_level: none
     documented_by:
       - docs/blueprints/map-blaupause.md
       - map-style/ASSETS.md
@@ -60,6 +136,8 @@ implementations:
     path: infra/caddy/
     impl_type: config
     status: active
+    criticality: medium
+    evidence_level: guard
     documented_by:
       - docs/blueprints/map-blaupause.md
     verified_by:
@@ -69,6 +147,8 @@ implementations:
     path: scripts/guard/basemap-runtime-proof.sh
     impl_type: guard
     status: active
+    criticality: medium
+    evidence_level: ci
     documented_by:
       - docs/blueprints/kartenklarheit-roadmap.md
       - docs/blueprints/kartenklarheit-phase6.md
@@ -81,6 +161,8 @@ implementations:
     path: apps/api/src/auth/session_db.rs
     impl_type: service
     status: active
+    criticality: high
+    evidence_level: test
     documented_by:
       - docs/blueprints/auth-roadmap.md
     verified_by:
