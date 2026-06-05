@@ -19,6 +19,11 @@ import sys
 from datetime import date
 from pathlib import Path
 
+try:
+    import yaml
+except ModuleNotFoundError:  # pragma: no cover - dependency is already used by doc validators in CI
+    yaml = None
+
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -77,8 +82,13 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
 
     try:
         return json.loads(normalized), None
-    except json.JSONDecodeError as exc:
-        return None, f"Registry parse error: {exc.msg}"
+    except json.JSONDecodeError as json_exc:
+        if yaml is None:
+            return None, f"Registry parse error: {json_exc.msg}; PyYAML is not available"
+        try:
+            return yaml.safe_load(normalized), None
+        except Exception as yaml_exc:
+            return None, f"Registry parse error: {json_exc.msg}; YAML parse error: {yaml_exc}"
 
 
 def _load_claim_evidence(

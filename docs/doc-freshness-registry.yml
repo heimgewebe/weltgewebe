@@ -1,56 +1,64 @@
 ---
-{
-  "kind": "lenskit.doc_freshness_registry",
-  "version": "1.0",
-  "authority": "diagnostic_signal",
-  "risk_class": "diagnostic",
-  "does_not_prove": [
-    "a green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence"
-  ],
-  "entries": [
-    {
-      "id": "claim-agent-safe-001",
-      "doc": "docs/claims/registry.yml",
-      "locator": "claims[id=CLAIM-AGENT-SAFE-001]",
-      "claim": "Der report-only Safety-Preflight Guard ist implementiert und testseitig angebunden.",
-      "status": "partial",
-      "owner": "docs-mechanik",
-      "last_verified": "2026-06-05",
-      "evidence": [
-        {"kind": "file", "target": "scripts/agent/check_agent_preflight.py"},
-        {"kind": "test", "target": "scripts/agent/tests/test_check_agent_preflight.py"},
-        {"kind": "file", "target": ".github/workflows/agent-safety-preflight.yml"},
-        {"kind": "file", "target": "docs/security/agent-write-scope-baseline.md"}
-      ]
-    },
-    {
-      "id": "claim-agent-safe-002",
-      "doc": "docs/claims/registry.yml",
-      "locator": "claims[id=CLAIM-AGENT-SAFE-002]",
-      "claim": "Die Agent-Readiness-Matrix verhindert einen Overall-Pass, solange harte Agent-Faehigkeiten fehlen.",
-      "status": "partial",
-      "owner": "docs-mechanik",
-      "last_verified": "2026-06-05",
-      "evidence": [
-        {"kind": "file", "target": "scripts/docmeta/generate_agent_readiness.py"},
-        {"kind": "test", "target": "scripts/docmeta/tests/test_generate_agent_readiness.py"},
-        {"kind": "file", "target": "docs/_generated/agent-readiness.md"}
-      ]
-    },
-    {
-      "id": "claim-agent-safe-003",
-      "doc": "docs/claims/registry.yml",
-      "locator": "claims[id=CLAIM-AGENT-SAFE-003]",
-      "claim": "Eine minimale Claim-Evidence-Spine ist vorhanden und deterministisch validierbar.",
-      "status": "partial",
-      "owner": "docs-mechanik",
-      "last_verified": "2026-06-05",
-      "evidence": [
-        {"kind": "file", "target": "docs/claims/registry.yml"},
-        {"kind": "file", "target": "docs/claims/README.md"},
-        {"kind": "file", "target": "scripts/docmeta/validate_claim_registry.py"},
-        {"kind": "test", "target": "scripts/docmeta/tests/test_validate_claim_registry.py"}
-      ]
-    }
-  ]
-}
+kind: lenskit.doc_freshness_registry
+version: "1.0"
+authority: diagnostic_signal
+risk_class: diagnostic
+does_not_prove:
+  - >-
+    A green verify does not prove the claims are true or complete, only that no
+    declared claim contradicts its declared evidence.
+entries:
+  - id: claim-agent-safe-001
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-001]
+    claim: >-
+      Der report-only Safety-Preflight Guard ist implementiert und testseitig
+      angebunden.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: scripts/agent/check_agent_preflight.py
+      - kind: test
+        target: scripts/agent/tests/test_check_agent_preflight.py
+      - kind: file
+        target: .github/workflows/agent-safety-preflight.yml
+      - kind: file
+        target: docs/security/agent-write-scope-baseline.md
+
+  - id: claim-agent-safe-002
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-002]
+    claim: >-
+      Die Agent-Readiness-Matrix verhindert einen Overall-Pass, solange harte
+      Agent-Faehigkeiten fehlen.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: scripts/docmeta/generate_agent_readiness.py
+      - kind: test
+        target: scripts/docmeta/tests/test_generate_agent_readiness.py
+      - kind: file
+        target: docs/_generated/agent-readiness.md
+
+  - id: claim-agent-safe-003
+    doc: docs/claims/registry.yml
+    locator: claims[id=CLAIM-AGENT-SAFE-003]
+    claim: >-
+      Eine minimale Claim-Evidence-Spine ist vorhanden und deterministisch
+      validierbar.
+    status: partial
+    owner: docs-mechanik
+    last_verified: "2026-06-05"
+    evidence:
+      - kind: file
+        target: docs/claims/registry.yml
+      - kind: file
+        target: docs/claims/README.md
+      - kind: file
+        target: scripts/docmeta/validate_claim_registry.py
+      - kind: test
+        target: scripts/docmeta/tests/test_validate_claim_registry.py
