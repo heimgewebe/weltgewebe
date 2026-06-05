@@ -87,38 +87,36 @@ def clean_uses(raw_uses: str) -> str:
     return raw_uses.strip().strip('"\'')
 
 
-def detect_force_env(lines: list[str]) -> bool:
-    """Return true when the force key appears as true inside any env block."""
-    env_indent: int | None = None
-    for line in lines:
-        env_match = ENV_RE.match(line)
-        if env_match:
-            env_indent = len(env_match.group("indent"))
-            continue
-
-        if env_indent is not None:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            current_indent = len(line) - len(line.lstrip(" "))
-            if current_indent <= env_indent:
-                env_indent = None
-            else:
-                force_match = FORCE_ENV_RE.match(line)
-                if force_match and truthy_env_value(force_match.group("value")):
-                    return True
-    return False
+def line_indent(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
 
 
 def scan_workflow(path: Path) -> tuple[list[DirectActionUse], list[ReusableWorkflowCall]]:
     lines = path.read_text(encoding="utf-8").splitlines()
-    env_status = "present" if detect_force_env(lines) else "missing"
+    workflow_force_env = False
+    job_force_env: dict[str, bool] = {}
     direct_actions: list[DirectActionUse] = []
     reusable_workflows: list[ReusableWorkflowCall] = []
     current_job = "unknown"
     in_jobs = False
+    active_env_scope: tuple[str, str | None, int] | None = None
 
     for line in lines:
+        stripped = line.strip()
+
+        if active_env_scope is not None and stripped and not stripped.startswith("#"):
+            scope, job_name, env_indent = active_env_scope
+            if line_indent(line) <= env_indent:
+                active_env_scope = None
+            else:
+                force_match = FORCE_ENV_RE.match(line)
+                if force_match and truthy_env_value(force_match.group("value")):
+                    if scope == "workflow":
+                        workflow_force_env = True
+                    elif scope == "job" and job_name is not None:
+                        job_force_env[job_name] = True
+                continue
+
         if line.startswith("jobs:"):
             in_jobs = True
             current_job = "unknown"
@@ -131,6 +129,19 @@ def scan_workflow(path: Path) -> tuple[list[DirectActionUse], list[ReusableWorkf
             job_match = JOB_RE.match(line)
             if job_match:
                 current_job = job_match.group("job")
+                job_force_env.setdefault(current_job, False)
+
+        env_match = ENV_RE.match(line)
+        if env_match:
+            env_indent = len(env_match.group("indent"))
+            if env_indent == 0:
+                active_env_scope = ("workflow", None, env_indent)
+            elif in_jobs and current_job != "unknown" and env_indent == 4:
+                active_env_scope = ("job", current_job, env_indent)
+            else:
+                # Step-level env does not prove the JavaScript Action runtime for the step.
+                active_env_scope = None
+            continue
 
         uses_match = USES_RE.match(line)
         if not uses_match:
@@ -144,6 +155,11 @@ def scan_workflow(path: Path) -> tuple[list[DirectActionUse], list[ReusableWorkf
             continue
         if not is_known_javascript_action(uses):
             continue
+        env_status = (
+            "present"
+            if workflow_force_env or job_force_env.get(current_job, False)
+            else "missing"
+        )
         direct_actions.append(
             DirectActionUse(
                 workflow=path,

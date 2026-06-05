@@ -92,6 +92,65 @@ jobs:
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("ref=no-ref", result.stdout)
 
+    def test_false_force_env_fails_direct_javascript_action(self) -> None:
+        result = self.run_checker(
+            """
+name: false-env
+on: workflow_dispatch
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "false"
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+"""
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("Missing FORCE_JAVASCRIPT_ACTIONS_TO_NODE24", result.stdout)
+
+    def test_job_level_force_env_does_not_cover_other_jobs(self) -> None:
+        result = self.run_checker(
+            """
+name: job-scope
+on: workflow_dispatch
+jobs:
+  covered:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@v4
+  uncovered:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+"""
+        )
+
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("uncovered", result.stdout)
+        self.assertIn("actions/setup-node@v4", result.stdout)
+
+    def test_job_level_force_env_covers_own_job(self) -> None:
+        result = self.run_checker(
+            """
+name: job-scope-covered
+on: workflow_dispatch
+jobs:
+  covered:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@v4
+"""
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("All good!", result.stdout)
+
     def test_known_third_party_javascript_action_is_checked(self) -> None:
         result = self.run_checker(
             """
