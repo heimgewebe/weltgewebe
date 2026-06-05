@@ -108,6 +108,7 @@ def _validate_freshness_registry_or_raise(root: Path) -> None:
 
 def generate(repo_root: str | Path | None = None) -> Path:
     root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
+    _validate_freshness_registry_or_raise(root)
     data = _load_registry(root)
 
     md_content = render_markdown(data)
@@ -121,6 +122,7 @@ def generate(repo_root: str | Path | None = None) -> Path:
 def check(repo_root: str | Path | None = None) -> list[str]:
     """Return the list of output paths that drift from the registry (empty = ok)."""
     root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
+    _validate_freshness_registry_or_raise(root)
     data = _load_registry(root)
 
     expected_md = render_markdown(data)

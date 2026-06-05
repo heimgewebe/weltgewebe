@@ -10,8 +10,13 @@ import scripts.docmeta.generate_claim_evidence_map as gen
 class TestGenerateClaimEvidenceMap(unittest.TestCase):
     def setUp(self) -> None:
         self.root = Path(tempfile.mkdtemp(prefix="claim-evidence-map-test-"))
+        import unittest.mock
+        self.patcher = unittest.mock.patch('scripts.docmeta.generate_claim_evidence_map.run_validation', return_value=({"findings_count": 0, "findings": []}, 0))
+        self.patcher.start()
 
     def tearDown(self) -> None:
+        if hasattr(self, 'patcher'):
+            self.patcher.stop()
         shutil.rmtree(self.root, ignore_errors=True)
 
     # --- fixtures -----------------------------------------------------------
@@ -141,16 +146,52 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
 
     # --- generator refuses invalid bridge registry -------------------------
 
-    def test_generator_refuses_invalid_bridge_registry(self):
-        # Write old-form registry (invalid for new validator)
-        old_payload = {"version": 1, "entries": []}
-        path = self.root / gen.REGISTRY_REL
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("---\n" + json.dumps(old_payload) + "\n", encoding="utf-8")
-        with self.assertRaises(ValueError) as ctx:
-            gen._validate_freshness_registry_or_raise(self.root)
-        self.assertIn("Freshness registry validation failed", str(ctx.exception))
 
+
+
+    def test_generator_refuses_invalid_bridge_registry(self):
+        self.patcher.stop()
+        import unittest.mock
+        with unittest.mock.patch('scripts.docmeta.generate_claim_evidence_map.run_validation', return_value=({"findings_count": 1, "findings": [{"code": "ERR", "entry_id": "-"}]}, 1)):
+            old_payload = {"version": 1, "entries": []}
+            path = self.root / gen.REGISTRY_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("---\n" + json.dumps(old_payload) + "\n", encoding="utf-8")
+            with self.assertRaises(ValueError) as ctx:
+                gen._validate_freshness_registry_or_raise(self.root)
+            self.assertIn("Freshness registry validation failed", str(ctx.exception))
+        self.patcher.start()
+
+    def test_generate_rejects_invalid_bridge_registry(self):
+        self.patcher.stop()
+        import unittest.mock
+        with unittest.mock.patch('scripts.docmeta.generate_claim_evidence_map.run_validation', return_value=({"findings_count": 1, "findings": [{"code": "ERR", "entry_id": "-"}]}, 1)):
+            old_payload = {"version": 1, "entries": []}
+            path = self.root / gen.REGISTRY_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("---\n" + json.dumps(old_payload) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as ctx:
+                gen.generate(self.root)
+
+            self.assertIn("Freshness registry validation failed", str(ctx.exception))
+            self.assertFalse((self.root / gen.MARKDOWN_REL).exists())
+        self.patcher.start()
+
+    def test_check_rejects_invalid_bridge_registry(self):
+        self.patcher.stop()
+        import unittest.mock
+        with unittest.mock.patch('scripts.docmeta.generate_claim_evidence_map.run_validation', return_value=({"findings_count": 1, "findings": [{"code": "ERR", "entry_id": "-"}]}, 1)):
+            old_payload = {"version": 1, "entries": []}
+            path = self.root / gen.REGISTRY_REL
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("---\n" + json.dumps(old_payload) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as ctx:
+                gen.check(self.root)
+
+            self.assertIn("Freshness registry validation failed", str(ctx.exception))
+        self.patcher.start()
 
 if __name__ == "__main__":
     unittest.main()
