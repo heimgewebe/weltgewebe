@@ -323,6 +323,8 @@ pub enum NodeWriteError {
     NotFound,
     #[error("failed to map node row: {0}")]
     Mapping(#[source] anyhow::Error),
+    #[error("failed to serialize node payload: {0}")]
+    Serialization(#[source] serde_json::Error),
     #[error("failed to persist node to domain_nodes: {0}")]
     Database(#[source] sqlx::Error),
 }
@@ -350,15 +352,19 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
 
 /// Apply a patch to one `domain_nodes` row inside a transaction.
 ///
-/// Semantics match the JSONL handler exactly:
+/// Semantics:
 /// - `info: None` is a no-op (no DB write, `updated_at` unchanged).
 /// - `info: Some(Some(s))` sets `info` to `s`.
-/// - `info: Some(None)` clears `info` (sets it to JSON null, then drops the key).
+/// - `info: Some(None)` removes `info` from the payload (key absent after patch).
+///   The public `Node` projection is identical to the JSONL handler — both yield
+///   `node.info == None` — but the DB payload shape differs: the JSONL handler
+///   stores `{"info": null}`, this path stores a payload without the `info` key.
 /// - `steckbrief` is removed from the payload if present.
 /// - `updated_at` is bumped only when the payload actually changed.
 ///
-/// Returns the full `Node` reflecting the post-patch state (identical to what
-/// `load_nodes_from_postgres` would reconstruct on the next restart).
+/// The final `Node` projection is built **before** `tx.commit()` so a mapping or
+/// serialization failure cannot produce a DB mutation that returns 500 to the
+/// caller.
 pub async fn patch_node_in_postgres(
     pool: &PgPool,
     id: &str,
@@ -384,10 +390,15 @@ pub async fn patch_node_in_postgres(
     };
 
     let mut payload: serde_json::Value = parse_payload(&payload_text);
-
     let mut has_changes = false;
 
-    if let Some(obj) = payload.as_object_mut() {
+    {
+        // Reject non-object payloads before any mutation: a non-object payload is
+        // data corruption in domain_nodes.payload.
+        let obj = payload.as_object_mut().ok_or_else(|| {
+            NodeWriteError::Mapping(anyhow::anyhow!("domain node {} has non-object payload", id))
+        })?;
+
         match &patch.info {
             Some(Some(s)) => {
                 obj.insert("info".to_string(), serde_json::Value::String(s.clone()));
@@ -404,16 +415,20 @@ pub async fn patch_node_in_postgres(
         }
     }
 
+    // Serialize payload once after all mutations; propagate errors instead of
+    // silently falling back to "{}".
+    let final_payload_text =
+        serde_json::to_string(&payload).map_err(NodeWriteError::Serialization)?;
+
     let new_updated_at = if has_changes {
         let now = chrono::Utc::now();
-        let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
         sqlx::query(
             "UPDATE domain_nodes \
              SET payload = $2::jsonb, updated_at = $3 \
              WHERE id = $1",
         )
         .bind(id)
-        .bind(&payload_str)
+        .bind(&final_payload_text)
         .bind(now)
         .execute(&mut *tx)
         .await
@@ -423,10 +438,9 @@ pub async fn patch_node_in_postgres(
         updated_at
     };
 
-    tx.commit().await.map_err(NodeWriteError::Database)?;
-
-    let final_payload_text = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
-    node_from_row((
+    // Build the public projection before commit so a mapping failure cannot persist
+    // a DB mutation that returns 500 to the caller.
+    let final_node = node_from_row((
         row_id,
         kind,
         title,
@@ -436,7 +450,11 @@ pub async fn patch_node_in_postgres(
         new_updated_at,
         final_payload_text,
     ))
-    .map_err(NodeWriteError::Mapping)
+    .map_err(NodeWriteError::Mapping)?;
+
+    tx.commit().await.map_err(NodeWriteError::Database)?;
+
+    Ok(final_node)
 }
 
 // ── OPT-ARC-001 Phase E-A: account-create write path ────────────────────────

@@ -19,6 +19,8 @@ relations:
   - type: relates_to
     target: docs/reports/domain-account-write-path-proof.md
   - type: relates_to
+    target: docs/reports/domain-node-write-path-proof.md
+  - type: relates_to
     target: docs/reports/optimierungsbericht.md
   - type: relates_to
     target: docs/specs/contract.md

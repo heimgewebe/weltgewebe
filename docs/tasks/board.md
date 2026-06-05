@@ -42,7 +42,7 @@ relations:
 
 | ID | Blocker | Fehlt | Folge |
 |---|---|---|---|
-| OPT-ARC-001 | PR-CI-Laufbeleg für `db-domain-schema-migrations-proof`, `db-domain-backfill-proof`, `db-domain-read-path-proof` und `db-domain-account-write-path-proof` ausstehend; nur Account-Create-Write implementiert | Grünen CI-Lauf der DB-Jobs belegen; Phase E Rest (`PATCH /nodes`, Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback) bleibt offen | JSONL bleibt Default-Lesequelle und Write-Truth bis vollständiger Cutover; nur `POST /accounts` schreibt optional PostgreSQL |
+| OPT-ARC-001 | PR-CI-Laufbeleg für alle DB-Jobs ausstehend; Phase E-A (POST /accounts) und E-B (PATCH /nodes) implementiert | Grünen CI-Lauf der DB-Jobs belegen; Edge-Writes, Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend | JSONL bleibt Default-Lesequelle und Write-Truth bis vollständiger Cutover; POST /accounts und PATCH /nodes schreiben optional PostgreSQL |
 
 ## Nächste PR-Kandidaten
 

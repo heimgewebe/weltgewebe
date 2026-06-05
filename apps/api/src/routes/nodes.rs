@@ -448,6 +448,10 @@ async fn patch_node_postgres(
                 tracing::error!(?err, node_id = %id, "node mapping failed after postgres patch");
                 PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
             }
+            NodeWriteError::Serialization(err) => {
+                tracing::error!(?err, node_id = %id, "payload serialization failed during node patch");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
             NodeWriteError::Database(err) => {
                 tracing::error!(?err, node_id = %id, "database error during node patch");
                 PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)

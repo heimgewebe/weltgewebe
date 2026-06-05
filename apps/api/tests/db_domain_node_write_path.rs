@@ -35,7 +35,7 @@ use weltgewebe_api::{
         accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
     },
     config::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource},
-    domain_db::load_nodes_from_postgres,
+    domain_db::{load_nodes_from_postgres, patch_node_in_postgres, NodePatchInput},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountMode, AccountPublic},
@@ -75,6 +75,8 @@ async fn run_migrations(pool: &PgPool) {
 const NODE_A: &str = "writepath-node-aaaaaaaaa";
 const NODE_B: &str = "writepath-node-bbbbbbbbb";
 const NODE_404: &str = "writepath-node-not-found";
+const NODE_NULL_LOC: &str = "writepath-node-null-location";
+const NODE_BAD_PAYLOAD: &str = "writepath-node-bad-payload";
 
 async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_nodes WHERE id LIKE 'writepath-node-%'")
@@ -608,6 +610,125 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
     let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
     let patched: serde_json::Value = serde_json::from_slice(&bytes)?;
     assert_eq!(patched["info"], "via jsonl");
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// G. Mapping failure (NULL lat/lon) does not commit — payload stays unchanged.
+///
+/// Inserts a row with NULL lat and lon (schema allows it). `patch_node_in_postgres`
+/// must fail with `NodeWriteError::Mapping` before committing, leaving the payload
+/// untouched.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_patch_mapping_failure_does_not_commit() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    // Seed a row with NULL lat/lon and a known payload.
+    sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
+         VALUES ($1, 'test', 'Null Loc', NULL, NULL, '{\"info\":\"original\"}'::jsonb)",
+    )
+    .bind(NODE_NULL_LOC)
+    .execute(&pool)
+    .await
+    .expect("seed null-location node");
+
+    let result = patch_node_in_postgres(
+        &pool,
+        NODE_NULL_LOC,
+        NodePatchInput {
+            info: Some(Some("changed".to_string())),
+        },
+    )
+    .await;
+
+    // Must fail with a Mapping error — NULL location cannot be projected.
+    let err = match result {
+        Err(e) => e,
+        Ok(_) => panic!("patch must fail for a node with NULL location, but returned Ok"),
+    };
+    let err_str = err.to_string();
+    assert!(
+        err_str.contains("failed to map"),
+        "expected Mapping error, got: {err_str}"
+    );
+
+    // DB payload must be unchanged — no commit should have occurred.
+    let (payload_text,): (String,) =
+        sqlx::query_as("SELECT payload::text FROM domain_nodes WHERE id = $1")
+            .bind(NODE_NULL_LOC)
+            .fetch_one(&pool)
+            .await
+            .expect("row still present");
+    let payload: serde_json::Value = serde_json::from_str(&payload_text)?;
+    assert_eq!(
+        payload.get("info").and_then(|v| v.as_str()),
+        Some("original"),
+        "payload must not have been modified by a failed patch"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// H. Non-object payload is rejected without committing.
+///
+/// Inserts a row with an array payload `[]` (valid JSONB, but not an object).
+/// `patch_node_in_postgres` must return a Mapping error before any mutation.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_patch_non_object_payload_is_rejected_without_commit() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    // Seed a row with an array payload (non-object JSONB — data corruption scenario).
+    sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
+         VALUES ($1, 'test', 'Bad Payload', 53.5, 10.0, '[]'::jsonb)",
+    )
+    .bind(NODE_BAD_PAYLOAD)
+    .execute(&pool)
+    .await
+    .expect("seed non-object payload node");
+
+    let result = patch_node_in_postgres(
+        &pool,
+        NODE_BAD_PAYLOAD,
+        NodePatchInput {
+            info: Some(Some("inject".to_string())),
+        },
+    )
+    .await;
+
+    let err = match result {
+        Err(e) => e,
+        Ok(_) => panic!("patch must fail for a node with non-object payload, but returned Ok"),
+    };
+    let err_str = err.to_string();
+    assert!(
+        err_str.contains("failed to map"),
+        "expected Mapping error, got: {err_str}"
+    );
+
+    // DB payload must be unchanged.
+    let (payload_text,): (String,) =
+        sqlx::query_as("SELECT payload::text FROM domain_nodes WHERE id = $1")
+            .bind(NODE_BAD_PAYLOAD)
+            .fetch_one(&pool)
+            .await
+            .expect("row still present");
+    assert_eq!(
+        payload_text.trim(),
+        "[]",
+        "non-object payload must be untouched"
+    );
 
     clean(&pool).await;
     Ok(())
