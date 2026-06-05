@@ -67,7 +67,7 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
     except OSError as exc:
         return None, f"Registry is not readable: {exc}"
 
-    normalized = raw.lstrip("﻿").strip()
+    normalized = raw.lstrip("\ufeff").strip()
     if normalized.startswith("---"):
         lines = normalized.splitlines()
         normalized = "\n".join(lines[1:]).strip()
