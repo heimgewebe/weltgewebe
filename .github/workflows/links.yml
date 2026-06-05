@@ -5,6 +5,9 @@ name: links
     - cron: "0 4 * * *"
   workflow_dispatch:
   # Link checks on pull requests are handled in the central CI.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 permissions:
   contents: read
 concurrency:
