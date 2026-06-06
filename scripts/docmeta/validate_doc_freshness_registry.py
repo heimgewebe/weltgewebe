@@ -86,6 +86,39 @@ def _strip_yaml_scalar(value: str) -> str:
     return value
 
 
+def _is_relative_to(path: Path, root: Path) -> bool:
+    """Return True if *path* is under *root* (checked via relative_to).
+
+    Exists because Path.is_relative_to() was added in Python 3.9.
+    """
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _resolve_repo_target(repo_root: Path, target: str) -> tuple[Path | None, str | None]:
+    """Resolve *target* as a repo-relative path and return its real path.
+
+    Returns ``(None, "traversal")`` if the resolved path lies outside the repo
+    root, for example through a symlink that escapes the repo boundary.
+
+    Returns ``(None, "resolution_error")`` when the path cannot be resolved,
+    for example because of a cyclic symlink. The caller reports that as a
+    structured missing target instead of letting the validator crash.
+    """
+    try:
+        repo_root_resolved = repo_root.resolve()
+        resolved_target = (repo_root_resolved / target).resolve()
+    except (OSError, RuntimeError):
+        return None, "resolution_error"
+
+    if not _is_relative_to(resolved_target, repo_root_resolved):
+        return None, "traversal"
+    return resolved_target, None
+
+
 def _read_folded_block(
     lines: list[str], start: int, base_indent: int
 ) -> tuple[str, int]:
@@ -397,7 +430,26 @@ def _validate_evidence(
         else:
             kind = item.get("kind")
             if isinstance(kind, str) and kind in EVIDENCE_KINDS_CHECK_PATH:
-                if not (repo_root / target).is_file():
+                resolved_target, resolution_error = _resolve_repo_target(repo_root, target)
+                if resolution_error == "traversal":
+                    findings.append(
+                        _finding(
+                            "EVIDENCE_TARGET_TRAVERSAL",
+                            entry_id,
+                            "Evidence target resolves outside repo root",
+                            path=target,
+                        )
+                    )
+                elif resolution_error is not None:
+                    findings.append(
+                        _finding(
+                            "EVIDENCE_TARGET_MISSING",
+                            entry_id,
+                            "Evidence target does not exist, is not a file, or could not be resolved",
+                            path=target,
+                        )
+                    )
+                elif resolved_target is None or not resolved_target.is_file():
                     findings.append(
                         _finding(
                             "EVIDENCE_TARGET_MISSING",
