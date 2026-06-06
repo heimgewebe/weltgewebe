@@ -136,6 +136,21 @@ Für `weltweb.net` und `weltweberei.org`:
 
 Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Produktions-Runtime konfiguriert werden.
 
+## 6a. Kanonische Cutover-Artefakte
+
+### Offline-Zonenmanifest
+
+Das Offline-Zonenmanifest ist ein nicht-live geschaltetes, manuell geprüftes Cutover-Artefakt. Es enthält keine Secrets und umfasst für jeden Eintrag Domain, Record-Name, Record-Type, Value/Target, TTL sofern bekannt, Zweck, Primärquelle, Pflicht vor Live-Schaltung, Testkommando nach Cutover, Risiko bei Fehler und den Status `confirmed`, `needs live provider check` oder `do not copy`.
+
+```markdown
+| Domain | Name | Type | Value/Target | TTL | Zweck | Primärquelle | Pflicht vor Live-Schaltung | Testkommando nach Cutover | Risiko bei Fehler | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+```
+
+### Abruptes INWX-Aktivierungsfenster
+
+Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenster: Der Registrar-/Nameserver-/INWX-Aktivierungspfad wird manuell gestartet, die INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllt, anschließend werden autoritative INWX- und öffentliche Resolver-Gates sowie Web/API/Mail/Brevo/Magic-Link-Smokes ausgeführt. Recordfehler werden sofort bei INWX korrigiert. Eine Rückkehr zu IONOS ist nur ein begrenzter Pfad, solange IONOS noch als steuernder DNS-/Registrar-Pfad verfügbar ist. Cloudflare ist nicht Teil dieses Cutovers.
+
 ## 7. Migrationsphasen
 
 ### Phase 0 — Bestand sichern
@@ -152,12 +167,17 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 - **Gate**: Konten sind zugreifbar.
 - **Rollback-Hinweis**: Konten können wieder gelöscht werden.
 
-### Phase 2 — DNS-Zielzone entwerfen
+### Phase 2 — Offline-Zonenmanifest entwerfen
 
-- **Ziel**: Blaupause der neuen DNS-Zone.
-- **Aktionen**: INWX-Einträge im Dashboard vorbereiten (aber noch nicht als Nameserver eintragen).
-- **Gate**: Ziel-DNS-Tabelle fertig und geprüft.
-- **Rollback-Hinweis**: Einträge können im Dashboard wieder verworfen werden.
+- **Ziel**: vollständige, copy-paste-fähige Zielzone ohne Live-Wirkung.
+- **Aktionen**:
+  - aktuelle IONOS-Zonen exportieren/sichern.
+  - Provider-Dashboard-Werte von mailbox.org und Brevo als Primärquelle notieren.
+  - Zielrecords für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` als Offline-Zonenmanifest dokumentieren.
+  - Records markieren als: Web/API, mailbox.org, Brevo, No-Mail, nicht kopieren.
+  - Vier-Augen-Review durchführen.
+- **Gate**: Offline-Zonenmanifest vollständig, geprüft und ohne Secrets.
+- **Rollback-Hinweis**: Keine Live-Veränderung, daher kein technischer Rollback nötig.
 
 ### Phase 3 — mailbox.org vorbereiten und testen
 
@@ -173,46 +193,55 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 - **Gate**: Brevo-Verifikationsdaten liegen vor.
 - **Rollback-Hinweis**: Keine Live-Auswirkung auf bisherigen Versand.
 
-### Phase 5a — INWX DNS-Zone vorbereiten
+### Phase 5a — Offline-Zielzone finalisieren
 
-- **Ziel**: Blaupause der neuen DNS-Zone.
+- **Ziel**: letzte freigegebene Eingabequelle für das abrupte INWX-Aktivierungsfenster.
 - **Aktionen**:
-  - vollständige IONOS-Zonen exportieren/sichern.
-  - INWX-Zone mit allen aktuellen Records vorbereiten.
-  - Mailrecords exakt übernehmen:
-    - weltgewebe.net MX/SPF/DKIM/DMARC für mailbox.org.
-    - login.weltgewebe.net Brevo TXT/DMARC/DKIM/CNAME.
-    - weltweb.net und weltweberei.org No-Mail.
-  - Webrecords exakt übernehmen:
-    - A/AAAA/CNAME für apex/www/api.
-    - keine Web-Interpretation ohne Beweis.
-  - Zonenvergleich dokumentieren.
-- **Gate**: Ziel-DNS-Tabelle fertig und geprüft.
-- **Rollback-Hinweis**: Einträge können im Dashboard wieder verworfen werden.
+  - Last-Minute-Abgleich gegen aktuelle IONOS-Zone.
+  - mailbox.org- und Brevo-Records erneut gegen Provider-Dashboards prüfen.
+  - DNSSEC-Status prüfen; falls aktiv, manuelle Deaktivierung vor Transfer als Operator-Schritt markieren.
+  - Zielrecords als Copy-Paste-Blöcke oder Tabelle finalisieren.
+  - Stop-Kriterien prüfen.
+- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv.
+- **Rollback-Hinweis**: Bis hier keine Live-DNS-Änderung.
 
-### Phase 5b — INWX Nameserver-Cutover
+### Phase 5b — Abruptes INWX-Aktivierungsfenster
 
-- **Ziel**: INWX übernimmt die aktive DNS-Auflösung.
+- **Ziel**: INWX übernimmt DNS/Registrar-Rolle; die Zone wird unmittelbar aus dem Offline-Zonenmanifest befüllt.
 - **Aktionen**:
-  - Nameserver-Cutover zu INWX.
+  - Transfer-/Nameserver-/INWX-Aktivierungspfad manuell starten.
+  - INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllen.
+  - Web/API-Records setzen.
+  - mailbox.org MX/SPF/DKIM/DMARC setzen.
+  - Brevo `login.*` Records setzen.
+  - No-Mail-Records für Neben-Domains setzen.
+  - autoritative INWX-DNS-Gates ausführen.
+  - öffentliche Resolver-Gates ausführen.
+  - HTTP/Web/API-Smokes ausführen.
+  - mailbox.org-Smokes ausführen.
+  - Brevo/Magic-Link-Smokes ausführen.
 - **Gate**:
-  - DNS-Propagation abgeschlossen. `dig` gegen autoritative INWX-Nameserver und öffentliche Resolver erfolgreich.
-  - Test: weltgewebe.net A / www / api, MX/TXT/DMARC, login.weltgewebe.net Brevo records, secondary domains No-Mail.
-  - HTTP checks für Website/WordPress/Redirects.
-  - Magic-Link-Smoke.
-  - kontakt@ inbound/outbound optional erneut prüfen.
-- **Rollback-Hinweis**: Nameserver zurück auf IONOS stellen.
+  - autoritative INWX-DNS-Antworten korrekt.
+  - öffentliche Resolver zeigen erwartete Records oder Propagation ist nachvollziehbar dokumentiert.
+  - Web/API-Smokes laufen.
+  - mailbox.org Empfang/Versand läuft.
+  - Brevo/Magic-Link läuft.
+  - Neben-Domains erfüllen No-Mail/Web-Gates oder sind als offenes Risiko dokumentiert.
+- **Rollback-Hinweis**:
+  - Bei kleinen Recordfehlern: INWX-Zone korrigieren.
+  - Bei strukturellem Fehler und noch möglicher Rückkehr: Nameserver zurück auf IONOS.
+  - Nach abgeschlossenem Registrartransfer kann Rollback faktisch INWX-Zonenkorrektur statt Rückkehr zu IONOS bedeuten.
 
 ### Phase 5c — Registrar-Transfer zu INWX
 
 - **Ziel**: Domain bei INWX registrieren.
 - **Aktionen**:
   - Registrar-Transfer einleiten. Der genaue Ablauf hängt von den Provider-Restriktionen ab:
-    - **Pfad A**: IONOS erlaubt Nameserver-Wechsel zu INWX vor dem Registrar-Transfer (bevorzugt). In diesem Fall ist Phase 5b vor Phase 5c abzuschließen.
-    - **Pfad B**: Registrar-Transfer zu INWX muss zuerst erfolgen, die DNS-Zone ist bei INWX vorbereitet, Nameserver werden danach aktiviert.
+    - **Pfad A**: IONOS erlaubt Nameserver-Wechsel zu INWX vor dem Registrar-Transfer. Auch dann wird die INWX-Zone erst im abrupten Aktivierungsfenster aus dem Offline-Zonenmanifest befüllt; Phase 5b ist vor Abschluss von Phase 5c durchzuführen.
+    - **Pfad B**: Registrar-Transfer zu INWX muss zuerst erfolgen. In diesem Fall wird die INWX-Zone erst im abrupten Aktivierungsfenster aus dem Offline-Zonenmanifest befüllt. Zwischen Aktivierung und vollständiger Record-Eingabe besteht ein minimiertes, aber nicht eliminierbares Fehlerfenster.
   - Transfer-Lock/Auth-Code nur manuell handhaben, nicht im Repo speichern.
 - **Gate**: Ablaufdaten beachtet (weltgewebe.net und weltweb.net bis 2026-06-19, weltweberei.org bis 2027-05-26). Keine Domain kurz vor Ablauf ohne expliziten Transferplan riskieren.
-- **Rollback-Hinweis**: Transfer abbrechen, falls unvorhergesehene Probleme auftreten.
+- **Rollback-Hinweis**: Transfer nur abbrechen, solange der konkrete Provider-Flow dies technisch und vertraglich noch zulässt. Nach gestarteter oder abgeschlossener Transferphase sind primär die sofortige Korrektur der INWX-Zone und, falls erforderlich, der Provider-Support zu nutzen; eine Rückkehr zu IONOS darf nicht als sicher verfügbar angenommen werden.
 
 ### Phase 5d — IONOS Retention/Kündigungsentscheidung
 
@@ -222,9 +251,11 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
   - Registrar bei INWX bestätigt.
   - DNS bei INWX autoritativ bestätigt.
   - Webhosting/Redirects entweder migriert oder bewusst anderweitig gesichert.
-  - Mailgates nach INWX-DNS weiter grün.
+  - Mailgates und Magic-Link nach INWX-DNS weiter grün.
+  - Web/API-Smokes nach INWX-DNS grün oder offenes Risiko ausdrücklich akzeptiert.
+  - Mindestens 48 Stunden Beobachtung ohne kritische DNS-, Web-, Mail- oder Magic-Link-Fehler abgeschlossen.
   - Rollback-/Notfallpfad dokumentiert.
-- **Rollback-Hinweis**: Nach Kündigung kein Rollback mehr möglich.
+- **Rollback-Hinweis**: Nach abgeschlossenem Registrartransfer kann Wiederherstellung bereits primär INWX-Zonenkorrektur bedeuten; nach IONOS-Kündigung ist kein IONOS-Rollback mehr möglich.
 
 ### Phase 6 — Runtime-Cutover auf Brevo
 
@@ -244,15 +275,15 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 
 - **Ziel**: Stabilität gewährleisten.
 - **Aktionen**: Log-Analyse, Fehler-Monitoring, Bounce-Checks in Brevo.
-- **Gate**: Mindestens 48 Stunden ohne Versand-/Empfangsprobleme.
-- **Rollback-Hinweis**: Falls Fehler auftreten, Rollback zu IONOS prüfen.
+- **Gate**: Mindestens 48 Stunden ohne kritische Registrar-, DNS-, Web/API-, Versand-, Empfangs- oder Magic-Link-Probleme.
+- **Rollback-Hinweis**: Bei Recordfehlern die INWX-Zone korrigieren. Rückkehr zu IONOS nur prüfen, solange der steuernde IONOS-DNS-/Registrar-Pfad noch verfügbar ist.
 
 ### Phase 9 — IONOS kündigen
 
 - **Ziel**: Alten Provider abschalten.
-- **Aktionen**: IONOS-Vertrag kündigen.
-- **Gate**: Phase 8 erfolgreich absolviert.
-- **Rollback-Hinweis**: Nach Kündigung kein Rollback mehr möglich.
+- **Aktionen**: Erst nach menschlicher Entscheidung und vollständig bewiesenem Registrar-/DNS-/Web-/Mail-/Magic-Link-Proof über eine IONOS-Kündigung entscheiden.
+- **Gate**: Phase 8 mit mindestens 48 Stunden Beobachtung erfolgreich absolviert; alle Kündigungsabhängigkeiten sind ausdrücklich freigegeben.
+- **Rollback-Hinweis**: Nach IONOS-Kündigung ist kein IONOS-Rollback mehr möglich; nach Registrartransfer kann der Wiederherstellungspfad schon vorher faktisch INWX-Zonenkorrektur bedeuten.
 
 ## 8. Test-Gates
 

@@ -1,19 +1,21 @@
 ---
 id: DEPLOY-DNS-001B
-title: "Prepare INWX Zone Entries"
+title: "Historical INWX Zone Entry Checklist — Predelegation Assumption Superseded"
 doc_type: task
 status: done
 owner: operator
-summary: "This task prepared the INWX zone entry checklist."
+summary: "Historical checklist work retained as evidence; its predelegation assumption is no longer operative."
 ---
 
 # Task Record: DEPLOY-DNS-001B
 
-This task prepared the INWX zone entry checklist, pre-delegation proof template, operator UI steps, and fetched the current DNS state. All documents have been placed in the operator's local audit scratch area `~/weltgewebe-migration-audit/runs/<RUN_ID>/inwx/` and are strictly excluded from the repository.
+This completed task historically produced an INWX zone entry checklist, a predelegation proof template, operator UI steps, and a capture of the then-current DNS state. The artifacts remain in the operator's local audit scratch area `~/weltgewebe-migration-audit/runs/<RUN_ID>/inwx/` and are strictly excluded from the repository.
 
-- No nameserver changes were made
-- No registrar transfers were triggered
-- No IONOS cancellation happened
-- No auth codes were requested or saved
+The earlier assumption that the INWX zone could be entered and proved before delegation is superseded by `DEPLOY-DNS-001`: INWX pre-DNS/predelegation is unavailable for this migration. These historical artifacts may inform the offline zone manifest, but they are not an active instruction and do not prove a live prepared INWX zone. The current operator path is the reviewed offline zone manifest followed by the abrupt INWX activation window.
 
-All deliverables were successfully built and remain strictly in the local domain-mail scratch space. Next step is manual operator entry and execution of the pre-delegation proof.
+- No nameserver changes were made.
+- No registrar transfers were triggered.
+- No IONOS cancellation happened.
+- No auth codes were requested or saved.
+
+The task remains `done` to preserve history. All future operational work belongs to `DEPLOY-DNS-001`; no duplicate ownership is created here.
