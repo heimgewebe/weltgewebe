@@ -1,6 +1,6 @@
 use super::{
     domain_write_guard::{
-        reject_if_postgres_read_source, DOMAIN_READ_SOURCE_READ_ONLY,
+        reject_node_patch_unless_writable, DOMAIN_READ_SOURCE_READ_ONLY,
         DOMAIN_READ_SOURCE_READ_ONLY_MESSAGE,
     },
     query::{
@@ -8,6 +8,8 @@ use super::{
         MAX_PAGE_SIZE,
     },
 };
+use crate::config::DomainNodeWriteSource;
+use crate::domain_db::{patch_node_in_postgres, NodePatchInput, NodeWriteError};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::nodes_path;
 use axum::{
@@ -28,6 +30,7 @@ use uuid::Uuid;
 pub enum PatchNodeError {
     Status(StatusCode),
     DomainReadSourceReadOnly,
+    Message(StatusCode, String),
 }
 
 impl IntoResponse for PatchNodeError {
@@ -40,6 +43,7 @@ impl IntoResponse for PatchNodeError {
                 );
                 (StatusCode::CONFLICT, body).into_response()
             }
+            PatchNodeError::Message(status, body) => (status, body).into_response(),
         }
     }
 }
@@ -412,8 +416,70 @@ pub async fn patch_node(
     Path(id): Path<String>,
     Json(payload): Json<UpdateNode>,
 ) -> Result<Json<Node>, PatchNodeError> {
-    reject_if_postgres_read_source(&state).map_err(|_| PatchNodeError::DomainReadSourceReadOnly)?;
+    reject_node_patch_unless_writable(&state)
+        .map_err(|(status, body)| PatchNodeError::Message(status, body))?;
 
+    if state.config.domain_node_write_source == DomainNodeWriteSource::Postgres {
+        return patch_node_postgres(&state, &id, payload).await;
+    }
+
+    patch_node_jsonl(state, id, payload).await
+}
+
+async fn patch_node_postgres(
+    state: &ApiState,
+    id: &str,
+    payload: UpdateNode,
+) -> Result<Json<Node>, PatchNodeError> {
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or(PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    let patch = NodePatchInput {
+        info: payload.info.clone(),
+    };
+
+    // Serialize DB patch + cache update in-process so a later committed patch cannot
+    // be overwritten in the cache by an earlier request that resumes late after commit.
+    // This is an in-process coherence guard, not a multi-instance cache invalidation mechanism.
+    let _persist_guard = state.nodes_persist.lock().await;
+
+    let node = patch_node_in_postgres(pool, id, patch)
+        .await
+        .map_err(|e| match e {
+            NodeWriteError::NotFound => PatchNodeError::Status(StatusCode::NOT_FOUND),
+            NodeWriteError::Mapping(err) => {
+                tracing::error!(?err, node_id = %id, "node mapping failed after postgres patch");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            NodeWriteError::Serialization(err) => {
+                tracing::error!(?err, node_id = %id, "payload serialization failed during node patch");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            NodeWriteError::Database(err) => {
+                tracing::error!(?err, node_id = %id, "database error during node patch");
+                PatchNodeError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        })?;
+
+    let mut cache_guard = state.nodes.write().await;
+    cache_guard.insert(id.to_string(), node.clone());
+    state
+        .metrics
+        .set_nodes_cache_count(cache_guard.len() as i64);
+    drop(cache_guard);
+
+    tracing::info!(node_id = %id, write_source = "postgres", "Node patch finished");
+
+    Ok(Json(node))
+}
+
+async fn patch_node_jsonl(
+    state: ApiState,
+    id: String,
+    payload: UpdateNode,
+) -> Result<Json<Node>, PatchNodeError> {
     // Serialize PATCH persistence (per-process): allow concurrent node reads during file I/O;
     // only the brief in-memory cache write-lock blocks readers to guarantee read-your-writes in this instance.
     let start_persist_wait = std::time::Instant::now();

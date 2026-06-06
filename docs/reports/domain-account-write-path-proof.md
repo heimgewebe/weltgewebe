@@ -182,7 +182,8 @@ erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
 | C | Backfill-/Import-Proof | implementiert; CI-Beleg ausstehend |
 | D | Read-Path-Switch (read-only, opt-in) | implementiert; CI-Beleg ausstehend |
 | E-A | Account-Create-Write-Path (diese Slice) | implementiert; CI-Beleg ausstehend |
-| E (Rest) | `PATCH /nodes`, Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback | offen |
+| E-B | Node-Patch-Write-Path (`PATCH /nodes`) | implementiert; CI-Beleg ausstehend |
+| E (Rest) | Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback | offen |
 | F | Runtime-Smoke und CI-Beweis | offen |
 | G | JSONL-Demontage | offen |
 

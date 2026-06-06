@@ -526,9 +526,10 @@
         "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend",
         "Grüner PR-CI-Laufbeleg für db_domain_account_write_path ausstehend",
-        "Phase E-A (Account-Create-Write hinter WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE, nur POST /accounts) implementiert; Phase E Rest (PATCH /nodes, Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback) fehlt",
+        "Grüner PR-CI-Laufbeleg für db_domain_node_write_path ausstehend",
+        "Phase E-A und E-B implementiert: Account-Create (POST /accounts), Node-Patch (PATCH /nodes); Edge-Writes, Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Phase D (read-only) und Phase E-A (enger Account-Create-Write) sind opt-in belegt; kein Produktions-Cutover"
+        "Phase D (read-only), Phase E-A und Phase E-B sind opt-in belegt; kein Produktions-Cutover"
       ],
       "acceptance": [
         "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",

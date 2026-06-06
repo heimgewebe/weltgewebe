@@ -16,7 +16,7 @@ use weltgewebe_api::{
     auth::{
         accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
     },
-    config::{AppConfig, DomainAccountWriteSource, DomainReadSource},
+    config::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountPublic},
@@ -56,6 +56,7 @@ async fn test_state() -> Result<ApiState> {
         delegation_expire_days: 28,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,
+        domain_node_write_source: DomainNodeWriteSource::Jsonl,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,

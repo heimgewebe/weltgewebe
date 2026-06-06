@@ -210,6 +210,7 @@ mod tests {
             delegation_expire_days: 28,
             domain_read_source: crate::config::DomainReadSource::Jsonl,
             domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
+            domain_node_write_source: crate::config::DomainNodeWriteSource::Jsonl,
             auth_public_login: false,
             app_base_url: None,
             auth_trusted_proxies: None,
