@@ -136,6 +136,21 @@ Für `weltweb.net` und `weltweberei.org`:
 
 Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Produktions-Runtime konfiguriert werden.
 
+## 6a. Kanonische Cutover-Artefakte
+
+### Offline-Zonenmanifest
+
+Das Offline-Zonenmanifest ist ein nicht-live geschaltetes, manuell geprüftes Cutover-Artefakt. Es enthält keine Secrets und umfasst für jeden Eintrag Domain, Record-Name, Record-Type, Value/Target, TTL sofern bekannt, Zweck, Primärquelle, Pflicht vor Live-Schaltung, Testkommando nach Cutover, Risiko bei Fehler und den Status `confirmed`, `needs live provider check` oder `do not copy`.
+
+```markdown
+| Domain | Name | Type | Value/Target | TTL | Zweck | Primärquelle | Pflicht vor Live-Schaltung | Testkommando nach Cutover | Risiko bei Fehler | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+```
+
+### Abruptes INWX-Aktivierungsfenster
+
+Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenster: Der Registrar-/Nameserver-/INWX-Aktivierungspfad wird manuell gestartet, die INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllt, anschließend werden autoritative INWX- und öffentliche Resolver-Gates sowie Web/API-, mailbox.org- und Brevo-DNS/Subdomain-Smokes ausgeführt. Der finale Magic-Link-Proof folgt erst nach dem Runtime-Cutover auf Brevo in Phase 6 und wird in Phase 7 erzeugt. Recordfehler werden sofort bei INWX korrigiert. Eine Rückkehr zu IONOS ist nur ein begrenzter Pfad, solange IONOS noch als steuernder DNS-/Registrar-Pfad verfügbar ist. Cloudflare ist nicht Teil dieses Cutovers.
+
 ## 7. Migrationsphasen
 
 ### Phase 0 — Bestand sichern
@@ -152,12 +167,17 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 - **Gate**: Konten sind zugreifbar.
 - **Rollback-Hinweis**: Konten können wieder gelöscht werden.
 
-### Phase 2 — DNS-Zielzone entwerfen
+### Phase 2 — Offline-Zonenmanifest entwerfen
 
-- **Ziel**: Blaupause der neuen DNS-Zone.
-- **Aktionen**: INWX-Einträge im Dashboard vorbereiten (aber noch nicht als Nameserver eintragen).
-- **Gate**: Ziel-DNS-Tabelle fertig und geprüft.
-- **Rollback-Hinweis**: Einträge können im Dashboard wieder verworfen werden.
+- **Ziel**: vollständige, copy-paste-fähige Zielzone ohne Live-Wirkung.
+- **Aktionen**:
+  - aktuelle IONOS-Zonen exportieren/sichern.
+  - Provider-Dashboard-Werte von mailbox.org und Brevo als Primärquelle notieren.
+  - Zielrecords für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` als Offline-Zonenmanifest dokumentieren.
+  - Records markieren als: Web/API, mailbox.org, Brevo, No-Mail, nicht kopieren.
+  - Vier-Augen-Review durchführen.
+- **Gate**: Offline-Zonenmanifest vollständig, geprüft und ohne Secrets.
+- **Rollback-Hinweis**: Keine Live-Veränderung, daher kein technischer Rollback nötig.
 
 ### Phase 3 — mailbox.org vorbereiten und testen
 
@@ -173,86 +193,100 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
 - **Gate**: Brevo-Verifikationsdaten liegen vor.
 - **Rollback-Hinweis**: Keine Live-Auswirkung auf bisherigen Versand.
 
-### Phase 5a — INWX DNS-Zone vorbereiten
+### Phase 5a — Offline-Zielzone finalisieren
 
-- **Ziel**: Blaupause der neuen DNS-Zone.
+- **Ziel**: letzte freigegebene Eingabequelle für das abrupte INWX-Aktivierungsfenster.
 - **Aktionen**:
-  - vollständige IONOS-Zonen exportieren/sichern.
-  - INWX-Zone mit allen aktuellen Records vorbereiten.
-  - Mailrecords exakt übernehmen:
-    - weltgewebe.net MX/SPF/DKIM/DMARC für mailbox.org.
-    - login.weltgewebe.net Brevo TXT/DMARC/DKIM/CNAME.
-    - weltweb.net und weltweberei.org No-Mail.
-  - Webrecords exakt übernehmen:
-    - A/AAAA/CNAME für apex/www/api.
-    - keine Web-Interpretation ohne Beweis.
-  - Zonenvergleich dokumentieren.
-- **Gate**: Ziel-DNS-Tabelle fertig und geprüft.
-- **Rollback-Hinweis**: Einträge können im Dashboard wieder verworfen werden.
+  - Last-Minute-Abgleich gegen aktuelle IONOS-Zone.
+  - mailbox.org- und Brevo-Records erneut gegen Provider-Dashboards prüfen.
+  - DNSSEC-Status für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` prüfen; falls aktiv, DNSSEC bei IONOS manuell deaktivieren und die Entfernung des jeweiligen Parent-DS-Records über öffentliche Resolver verifizieren.
+  - Verbleibenden alten IONOS-DS ohne passend signierte INWX-Zone domain-spezifisch als Blocker markieren; für diese Domain dann keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
+  - Zielrecords als Copy-Paste-Blöcke oder Tabelle finalisieren.
+  - Stop-Kriterien prüfen.
+- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv und der DS-Zustand ist für jede Domain im Cutover-Scope geprüft. Bei zuvor aktivem DNSSEC ist die jeweilige Parent-DS-Entfernung verifiziert; andernfalls bleibt die betroffene Domain blockiert.
+- **Rollback-Hinweis**: Bis hier keine Live-DNS-Änderung.
 
-### Phase 5b — INWX Nameserver-Cutover
+### Phase 5b — Abruptes INWX-Aktivierungsfenster
 
-- **Ziel**: INWX übernimmt die aktive DNS-Auflösung.
+- **Ziel**: INWX übernimmt DNS/Registrar-Rolle; die Zone wird unmittelbar aus dem Offline-Zonenmanifest befüllt.
 - **Aktionen**:
-  - Nameserver-Cutover zu INWX.
+  - Transfer-/Nameserver-/INWX-Aktivierungspfad manuell starten.
+  - INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllen.
+  - Web/API-Records setzen.
+  - mailbox.org MX/SPF/DKIM/DMARC setzen.
+  - Brevo `login.*` Records setzen.
+  - No-Mail-Records für Neben-Domains setzen.
+  - autoritative INWX-DNS-Gates ausführen.
+  - öffentliche Resolver-Gates ausführen.
+  - HTTP/Web/API-Smokes ausführen.
+  - mailbox.org-Smokes ausführen.
+  - Brevo-DNS/Subdomain-Gates ausführen; noch keinen finalen Magic-Link-Proof behaupten.
 - **Gate**:
-  - DNS-Propagation abgeschlossen. `dig` gegen autoritative INWX-Nameserver und öffentliche Resolver erfolgreich.
-  - Test: weltgewebe.net A / www / api, MX/TXT/DMARC, login.weltgewebe.net Brevo records, secondary domains No-Mail.
-  - HTTP checks für Website/WordPress/Redirects.
-  - Magic-Link-Smoke.
-  - kontakt@ inbound/outbound optional erneut prüfen.
-- **Rollback-Hinweis**: Nameserver zurück auf IONOS stellen.
+  - autoritative INWX-DNS-Antworten korrekt.
+  - öffentliche Resolver zeigen erwartete Records oder Propagation ist nachvollziehbar dokumentiert.
+  - Web/API-Smokes laufen.
+  - mailbox.org Empfang/Versand läuft.
+  - Brevo-DNS/Subdomain-Records sind korrekt; dies ist noch kein Runtime- oder Magic-Link-Proof via Brevo.
+  - Neben-Domains erfüllen No-Mail/Web-Gates oder sind als offenes Risiko dokumentiert.
+- **Rollback-Hinweis**:
+  - Bei kleinen Recordfehlern: INWX-Zone korrigieren.
+  - Bei strukturellem Fehler und noch möglicher Rückkehr: Nameserver zurück auf IONOS.
+  - Nach abgeschlossenem Registrartransfer kann Rollback faktisch INWX-Zonenkorrektur statt Rückkehr zu IONOS bedeuten.
 
 ### Phase 5c — Registrar-Transfer zu INWX
 
 - **Ziel**: Domain bei INWX registrieren.
 - **Aktionen**:
   - Registrar-Transfer einleiten. Der genaue Ablauf hängt von den Provider-Restriktionen ab:
-    - **Pfad A**: IONOS erlaubt Nameserver-Wechsel zu INWX vor dem Registrar-Transfer (bevorzugt). In diesem Fall ist Phase 5b vor Phase 5c abzuschließen.
-    - **Pfad B**: Registrar-Transfer zu INWX muss zuerst erfolgen, die DNS-Zone ist bei INWX vorbereitet, Nameserver werden danach aktiviert.
+    - **Pfad A**: IONOS erlaubt Nameserver-Wechsel zu INWX vor dem Registrar-Transfer. Auch dann wird die INWX-Zone erst im abrupten Aktivierungsfenster aus dem Offline-Zonenmanifest befüllt; Phase 5b ist vor Abschluss von Phase 5c durchzuführen.
+    - **Pfad B**: Registrar-Transfer zu INWX muss zuerst erfolgen. In diesem Fall wird die INWX-Zone erst im abrupten Aktivierungsfenster aus dem Offline-Zonenmanifest befüllt. Zwischen Aktivierung und vollständiger Record-Eingabe besteht ein minimiertes, aber nicht eliminierbares Fehlerfenster.
   - Transfer-Lock/Auth-Code nur manuell handhaben, nicht im Repo speichern.
 - **Gate**: Ablaufdaten beachtet (weltgewebe.net und weltweb.net bis 2026-06-19, weltweberei.org bis 2027-05-26). Keine Domain kurz vor Ablauf ohne expliziten Transferplan riskieren.
-- **Rollback-Hinweis**: Transfer abbrechen, falls unvorhergesehene Probleme auftreten.
+- **Rollback-Hinweis**: Transfer nur abbrechen, solange der konkrete Provider-Flow dies technisch und vertraglich noch zulässt. Nach gestarteter oder abgeschlossener Transferphase sind primär die sofortige Korrektur der INWX-Zone und, falls erforderlich, der Provider-Support zu nutzen; eine Rückkehr zu IONOS darf nicht als sicher verfügbar angenommen werden.
 
-### Phase 5d — IONOS Retention/Kündigungsentscheidung
+### Phase 5d — IONOS Retention Policy — deferred decision
 
-- **Ziel**: Alten Provider geordnet abschalten.
-- **Aktionen**: IONOS erst kündigen/reduzieren, wenn bestimmte Bedingungen erfüllt sind.
+- **Ziel**: IONOS unverändert aktiv halten und die spätere Kündigungs-/Reduktionsentscheidung erst nach Phase 8 freigeben.
+- **Aktionen**: Diese Entscheidung noch nicht in Phase 5 ausführen. IONOS erst nach abgeschlossenem Phase-6-Runtime-Cutover, Phase-7-Magic-Link-Proof via Brevo und Phase-8-Beobachtungsfenster kündigen oder reduzieren.
 - **Gate**:
   - Registrar bei INWX bestätigt.
   - DNS bei INWX autoritativ bestätigt.
   - Webhosting/Redirects entweder migriert oder bewusst anderweitig gesichert.
-  - Mailgates nach INWX-DNS weiter grün.
+  - mailbox.org-Mailgates und Brevo-DNS/Subdomain-Gates nach INWX-DNS grün.
+  - Phase 6 ist abgeschlossen: Die neu gestartete Live-Runtime zeigt redigiert die erwarteten Brevo-SMTP-Werte.
+  - Phase 7 ist abgeschlossen: Ein erst nach diesem Runtime-Cutover erzeugter Magic-Link wurde über Brevo zugestellt und erzeugt erfolgreich eine Session.
+  - Web/API-Smokes nach INWX-DNS grün oder offenes Risiko ausdrücklich akzeptiert.
+  - Phase 8 ist abgeschlossen: Mindestens 48 Stunden Beobachtung ohne kritische DNS-, Web-, Mail- oder Magic-Link-Fehler.
   - Rollback-/Notfallpfad dokumentiert.
-- **Rollback-Hinweis**: Nach Kündigung kein Rollback mehr möglich.
+- **Rollback-Hinweis**: Nach abgeschlossenem Registrartransfer kann Wiederherstellung bereits primär INWX-Zonenkorrektur bedeuten; nach IONOS-Kündigung ist kein IONOS-Rollback mehr möglich.
 
 ### Phase 6 — Runtime-Cutover auf Brevo
 
 - **Ziel**: Weltgewebe API nutzt Brevo statt IONOS.
-- **Aktionen**: `.env` auf Brevo-SMTP ändern, API-Container neustarten.
-- **Gate**: Runtime-Test zeigt Brevo-Werte ohne Errors.
+- **Aktionen**: `.env` auf Brevo-SMTP ändern, API-Container neu starten und anschließend die effektive Live-Umgebung redigiert prüfen.
+- **Gate**: Der neu gestartete API-Container zeigt `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` und `SMTP_FROM` mit den erwarteten Brevo-Werten; Secret-Werte bleiben redigiert. Vor diesem Gate ist kein Magic-Link-Test ein Brevo-Runtime-Proof.
 - **Rollback-Hinweis**: SMTP-Werte zurück auf IONOS ändern.
 
-### Phase 7 — Magic-Link-Proof
+### Phase 7 — Post-Runtime-Cutover Magic-Link-Proof via Brevo
 
-- **Ziel**: Benutzer können sich einloggen.
-- **Aktionen**: Login-Prozess über `https://weltgewebe.net` initiieren, E-Mail-Empfang checken, Magic Link klicken.
-- **Gate**: Erfolgreiche Session-Erstellung.
+- **Ziel**: Nach bewiesenem Phase-6-Runtime-Cutover belegen, dass die Weltgewebe API Magic-Link-Mail tatsächlich über Brevo versendet und Benutzer sich anmelden können.
+- **Aktionen**: Erst nach dem Live-Env-Gate aus Phase 6 einen neuen Login-Prozess über `https://weltgewebe.net` initiieren, Brevo-Zustellung und Mail-Header prüfen, Magic Link klicken.
+- **Gate**: Der nach dem Runtime-Cutover erzeugte Magic-Link wurde über Brevo zugestellt, zeigt auf `https://weltgewebe.net` und erzeugt erfolgreich eine Session.
 - **Rollback-Hinweis**: Siehe Phase 5 & 6.
 
 ### Phase 8 — Beobachtungsfenster
 
 - **Ziel**: Stabilität gewährleisten.
 - **Aktionen**: Log-Analyse, Fehler-Monitoring, Bounce-Checks in Brevo.
-- **Gate**: Mindestens 48 Stunden ohne Versand-/Empfangsprobleme.
-- **Rollback-Hinweis**: Falls Fehler auftreten, Rollback zu IONOS prüfen.
+- **Gate**: Mindestens 48 Stunden ohne kritische Registrar-, DNS-, Web/API-, Versand-, Empfangs- oder Magic-Link-Probleme.
+- **Rollback-Hinweis**: Bei Recordfehlern die INWX-Zone korrigieren. Rückkehr zu IONOS nur prüfen, solange der steuernde IONOS-DNS-/Registrar-Pfad noch verfügbar ist.
 
 ### Phase 9 — IONOS kündigen
 
 - **Ziel**: Alten Provider abschalten.
-- **Aktionen**: IONOS-Vertrag kündigen.
-- **Gate**: Phase 8 erfolgreich absolviert.
-- **Rollback-Hinweis**: Nach Kündigung kein Rollback mehr möglich.
+- **Aktionen**: Erst nach menschlicher Entscheidung und vollständig bewiesenem Registrar-/DNS-/Web-/Mail-/Magic-Link-Proof über eine IONOS-Kündigung entscheiden.
+- **Gate**: Phase 8 mit mindestens 48 Stunden Beobachtung erfolgreich absolviert; alle Kündigungsabhängigkeiten sind ausdrücklich freigegeben.
+- **Rollback-Hinweis**: Nach IONOS-Kündigung ist kein IONOS-Rollback mehr möglich; nach Registrartransfer kann der Wiederherstellungspfad schon vorher faktisch INWX-Zonenkorrektur bedeuten.
 
 ## 8. Test-Gates
 
@@ -261,8 +295,8 @@ Applikation und Mail-Infrastruktur müssen konform zur Zielarchitektur in der Pr
   - mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` funktionieren (proved)
   - Brevo-Domain/Subdomain verifiziert ist (proved)
   - Brevo-Testmail SPF/DKIM/DMARC besteht oder mindestens nicht fehlschlägt (proved)
-  - Weltgewebe Magic-Link-Mail über Brevo funktioniert (proved)
-  - live-env nach Recreate Brevo-Werte zeigt (proved)
+  - live-env nach Restart/Recreate die erwarteten Brevo-SMTP-Werte redigiert zeigt (proved)
+  - erst der danach neu erzeugte Weltgewebe Magic-Link über Brevo zugestellt wird und erfolgreich eine Session erzeugt (proved)
   - Secondary domains No-Mail public/authoritative (proved)
   - Rollback-Pfad noch offen ist
 
@@ -283,8 +317,7 @@ Sollte ein Migrationsschritt scheitern, müssen DNS und Einstellungen auf die le
 - Brevo Sending-Domain/Subdomain verifiziert. (erledigt/proved)
 - Brevo SPF/DKIM/DMARC im Test geprüft. (erledigt/proved)
 - Entscheidung zur bisherigen Weiterleitung von `kontakt@weltgewebe.net` getroffen.
-- Runtime nach Recreate zeigt Brevo-SMTP-Werte. (erledigt/proved)
-- Weltgewebe Magic-Link wird über Brevo verschickt. (erledigt/proved)
-- Magic-Link zeigt auf `https://weltgewebe.net`. (erledigt/proved)
-- Login erzeugt Session. (erledigt/proved)
+- Runtime nach Restart/Recreate zeigt redigiert die erwarteten Brevo-SMTP-Werte. (im Cutover erneut zu belegen)
+- Ein erst danach erzeugter Weltgewebe Magic-Link wird über Brevo verschickt. (im Cutover erneut zu belegen)
+- Dieser Magic-Link zeigt auf `https://weltgewebe.net` und erzeugt eine Session. (im Cutover erneut zu belegen)
 - AUTH_LOG_MAGIC_TOKEN=0. (erledigt/proved)
