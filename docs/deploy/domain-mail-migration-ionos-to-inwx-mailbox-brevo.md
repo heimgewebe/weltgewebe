@@ -199,11 +199,11 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
 - **Aktionen**:
   - Last-Minute-Abgleich gegen aktuelle IONOS-Zone.
   - mailbox.org- und Brevo-Records erneut gegen Provider-Dashboards prüfen.
-  - DNSSEC-Status prüfen; falls aktiv, DNSSEC bei IONOS manuell deaktivieren und die Entfernung des Parent-DS-Records über öffentliche Resolver verifizieren.
-  - Verbleibenden alten IONOS-DS ohne passend signierte INWX-Zone als Blocker markieren; dann keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
+  - DNSSEC-Status für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` prüfen; falls aktiv, DNSSEC bei IONOS manuell deaktivieren und die Entfernung des jeweiligen Parent-DS-Records über öffentliche Resolver verifizieren.
+  - Verbleibenden alten IONOS-DS ohne passend signierte INWX-Zone domain-spezifisch als Blocker markieren; für diese Domain dann keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
   - Zielrecords als Copy-Paste-Blöcke oder Tabelle finalisieren.
   - Stop-Kriterien prüfen.
-- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv und der DS-Zustand erlaubt den Cutover. Bei zuvor aktivem DNSSEC ist die Parent-DS-Entfernung verifiziert oder der Cutover bleibt blockiert.
+- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv und der DS-Zustand ist für jede Domain im Cutover-Scope geprüft. Bei zuvor aktivem DNSSEC ist die jeweilige Parent-DS-Entfernung verifiziert; andernfalls bleibt die betroffene Domain blockiert.
 - **Rollback-Hinweis**: Bis hier keine Live-DNS-Änderung.
 
 ### Phase 5b — Abruptes INWX-Aktivierungsfenster
@@ -244,9 +244,9 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
 - **Gate**: Ablaufdaten beachtet (weltgewebe.net und weltweb.net bis 2026-06-19, weltweberei.org bis 2027-05-26). Keine Domain kurz vor Ablauf ohne expliziten Transferplan riskieren.
 - **Rollback-Hinweis**: Transfer nur abbrechen, solange der konkrete Provider-Flow dies technisch und vertraglich noch zulässt. Nach gestarteter oder abgeschlossener Transferphase sind primär die sofortige Korrektur der INWX-Zone und, falls erforderlich, der Provider-Support zu nutzen; eine Rückkehr zu IONOS darf nicht als sicher verfügbar angenommen werden.
 
-### Phase 5d — IONOS Retention/Kündigungsentscheidung
+### Phase 5d — IONOS Retention Policy — deferred decision
 
-- **Ziel**: Alten Provider geordnet abschalten.
+- **Ziel**: IONOS unverändert aktiv halten und die spätere Kündigungs-/Reduktionsentscheidung erst nach Phase 8 freigeben.
 - **Aktionen**: Diese Entscheidung noch nicht in Phase 5 ausführen. IONOS erst nach abgeschlossenem Phase-6-Runtime-Cutover, Phase-7-Magic-Link-Proof via Brevo und Phase-8-Beobachtungsfenster kündigen oder reduzieren.
 - **Gate**:
   - Registrar bei INWX bestätigt.

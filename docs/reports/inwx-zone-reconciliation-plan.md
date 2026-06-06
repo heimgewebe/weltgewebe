@@ -151,7 +151,7 @@ Earlier public-resolver audits are historical evidence only. Fresh authoritative
 - Treat all target records as offline instructions until the activation window.
 - Keep IONOS active until post-cutover observation has passed.
 - Do not perform registrar transfer and nameserver actions without the documented provider-specific manual sequence and stop criteria.
-- Check DNSSEC immediately before transfer; if active, disable DNSSEC at IONOS and verify parent DS removal through public resolvers before activation. If an old IONOS DS remains visible while the INWX zone is not compatibly signed, treat the cutover as blocked.
+- Check DNSSEC immediately before transfer for `weltgewebe.net`, `weltweb.net`, and `weltweberei.org`; if active, disable DNSSEC at IONOS and verify each parent DS removal through public resolvers before activation. If an old IONOS DS remains visible while that domain’s INWX zone is not compatibly signed, block nameserver, transfer, and INWX activation actions for that domain.
 - After completed registrar transfer, prefer immediate INWX zone correction; return to IONOS may no longer be available.
 - Do not cancel IONOS during this operation.
 

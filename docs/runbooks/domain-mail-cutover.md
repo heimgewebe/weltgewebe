@@ -25,7 +25,7 @@ relations:
 - Offline-Zonenmanifest je Domain finalisiert und reviewed.
 - INWX-Vor-DNS/Predelegation ist für diesen Ablauf nicht verfügbar.
 - Provider-Dashboard-Zugänge sind im Aktivierungsfenster verfügbar.
-- DNSSEC-Status ist geprüft; falls aktiv, muss DNSSEC bei IONOS deaktiviert und die Entfernung des Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden.
+- DNSSEC-Status ist für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` geprüft; falls aktiv, muss DNSSEC bei IONOS deaktiviert und die Entfernung des jeweiligen Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden.
 - IONOS bleibt aktiv und wird nicht im selben Arbeitsgang gekündigt.
 - Cloudflare ist nicht Teil dieses Cutovers.
 
@@ -51,7 +51,7 @@ Das Offline-Zonenmanifest ist die manuell geprüfte, nicht-live Eingabequelle f�
 - mailbox.org Account vorbereitet.
 - Brevo Account vorbereitet.
 - DNS-Zielrecords gegen Provider-Dashboards geprüft.
-- DNSSEC-Status geprüft; bei aktivem DNSSEC ist die Deaktivierung bei IONOS durchgeführt und die Parent-DS-Entfernung über öffentliche Resolver verifiziert oder ausdrücklich als Cutover-Blocker markiert.
+- DNSSEC-Status für jede Domain im Cutover-Scope geprüft; bei aktivem DNSSEC ist die Deaktivierung bei IONOS durchgeführt und die jeweilige Parent-DS-Entfernung über öffentliche Resolver verifiziert oder ausdrücklich als domain-spezifischer Cutover-Blocker markiert.
 - Rollback-Zeitfenster offen.
 - IONOS noch aktiv.
 - Web-Rollen geklärt oder ausdrücklich als offenes Risiko markiert.
@@ -82,8 +82,8 @@ Das Aktivierungsfenster ist ein kontrollierter manueller Ablauf. INWX wird nicht
 
 1. Last-Minute-Ist-Zone bei IONOS sichern.
 2. Offline-Zonenmanifest final freigeben.
-3. DNSSEC-Status prüfen; falls aktiv, DNSSEC bei IONOS deaktivieren und die Entfernung des Parent-DS-Records verifizieren.
-4. DS-Stop-Kriterium prüfen: Ist ein alter IONOS-DS noch sichtbar und die INWX-Zone nicht passend signiert, keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
+3. DNSSEC-Status für `weltgewebe.net`, `weltweb.net` und `weltweberei.org` prüfen; falls aktiv, DNSSEC bei IONOS deaktivieren und die Entfernung des jeweiligen Parent-DS-Records verifizieren.
+4. DS-Stop-Kriterium je Domain prüfen: Ist für eine Domain ein alter IONOS-DS noch sichtbar und ihre INWX-Zone nicht passend signiert, für diese Domain keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
 5. INWX-Aktivierungsfenster starten.
 6. Transfer-/Nameserver-/INWX-Aktivierungspfad je Providerlage durchführen.
 7. INWX-Zone unmittelbar aus Offline-Zonenmanifest befüllen.
@@ -113,15 +113,19 @@ Das Aktivierungsfenster ist ein kontrollierter manueller Ablauf. INWX wird nicht
 
 ### DNSSEC-/DS-Stop-Gate
 
-Wenn DNSSEC bei IONOS aktiv war, muss die Deaktivierung tatsächlich durchgeführt und die Entfernung des Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden. Ein alter IONOS-DS bei nicht passend signierter INWX-Zone führt bei validierenden Resolvern zu `SERVFAIL`.
+Für jede Domain im Cutover-Scope (`weltgewebe.net`, `weltweb.net`, `weltweberei.org`) gilt: Wenn DNSSEC bei IONOS aktiv war, muss die Deaktivierung tatsächlich durchgeführt und die Entfernung des jeweiligen Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden. Ein alter IONOS-DS bei nicht passend signierter INWX-Zone führt bei validierenden Resolvern zu `SERVFAIL`.
 
 ```bash
-dig DS weltgewebe.net +short
-dig @1.1.1.1 DS weltgewebe.net +short
-dig @8.8.8.8 DS weltgewebe.net +short
+for domain in weltgewebe.net weltweb.net weltweberei.org; do
+  printf '== DS checks for %s ==\n' "$domain"
+  dig DS "$domain" +short
+  dig @1.1.1.1 DS "$domain" +short
+  dig @8.8.8.8 DS "$domain" +short
+  dig @9.9.9.9 DS "$domain" +short
+done
 ```
 
-**Stop-Kriterium:** Wenn ein alter IONOS-DS noch sichtbar ist und die INWX-Zone nicht passend signiert ist, keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt durchführen. Die DS-Entfernung muss verifiziert oder als expliziter Blocker dokumentiert werden.
+**Stop-Kriterium:** Wenn für irgendeine Domain im Cutover-Scope ein alter IONOS-DS sichtbar bleibt und die INWX-Zone dieser Domain nicht passend signiert ist, ist diese Domain für Nameserver-, Transfer- und INWX-Aktivierungsschritte blockiert. Die jeweilige DS-Entfernung muss verifiziert oder als expliziter domain-spezifischer Blocker dokumentiert werden; der Status einer anderen Domain hebt diesen Blocker nicht auf.
 
 ### DNS-Gates über die delegierte Auflösung
 
