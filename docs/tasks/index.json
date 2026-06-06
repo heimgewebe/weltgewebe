@@ -28,8 +28,10 @@
       "acceptance": [
         "Offline-Zonenmanifest ist vollständig und reviewed",
         "Abruptes INWX-Aktivierungsfenster ist dokumentiert",
-        "INWX authoritative DNS pass",
-        "Web-, mailbox.org-, Brevo- und Magic-Link-Gates pass",
+        "DNSSEC ist bei Bedarf deaktiviert und Parent-DS-Entfernung verifiziert; alter DS ohne passende INWX-Signierung blockiert den Cutover",
+        "INWX authoritative DNS sowie Web-, mailbox.org- und Brevo-DNS/Subdomain-Gates pass",
+        "Live-Runtime zeigt nach Restart/Recreate die erwarteten Brevo-SMTP-Werte",
+        "Ein erst danach erzeugter Magic-Link wird via Brevo zugestellt und erzeugt erfolgreich eine Session",
         "Registrar at INWX confirmed",
         "Keine Secrets oder Auth-Codes im Repo"
       ],

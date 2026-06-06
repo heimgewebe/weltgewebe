@@ -149,7 +149,7 @@ Das Offline-Zonenmanifest ist ein nicht-live geschaltetes, manuell geprüftes Cu
 
 ### Abruptes INWX-Aktivierungsfenster
 
-Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenster: Der Registrar-/Nameserver-/INWX-Aktivierungspfad wird manuell gestartet, die INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllt, anschließend werden autoritative INWX- und öffentliche Resolver-Gates sowie Web/API/Mail/Brevo/Magic-Link-Smokes ausgeführt. Recordfehler werden sofort bei INWX korrigiert. Eine Rückkehr zu IONOS ist nur ein begrenzter Pfad, solange IONOS noch als steuernder DNS-/Registrar-Pfad verfügbar ist. Cloudflare ist nicht Teil dieses Cutovers.
+Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenster: Der Registrar-/Nameserver-/INWX-Aktivierungspfad wird manuell gestartet, die INWX-Zone unmittelbar aus dem Offline-Zonenmanifest befüllt, anschließend werden autoritative INWX- und öffentliche Resolver-Gates sowie Web/API-, mailbox.org- und Brevo-DNS/Subdomain-Smokes ausgeführt. Der finale Magic-Link-Proof folgt erst nach dem Runtime-Cutover auf Brevo in Phase 6 und wird in Phase 7 erzeugt. Recordfehler werden sofort bei INWX korrigiert. Eine Rückkehr zu IONOS ist nur ein begrenzter Pfad, solange IONOS noch als steuernder DNS-/Registrar-Pfad verfügbar ist. Cloudflare ist nicht Teil dieses Cutovers.
 
 ## 7. Migrationsphasen
 
@@ -199,10 +199,11 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
 - **Aktionen**:
   - Last-Minute-Abgleich gegen aktuelle IONOS-Zone.
   - mailbox.org- und Brevo-Records erneut gegen Provider-Dashboards prüfen.
-  - DNSSEC-Status prüfen; falls aktiv, manuelle Deaktivierung vor Transfer als Operator-Schritt markieren.
+  - DNSSEC-Status prüfen; falls aktiv, DNSSEC bei IONOS manuell deaktivieren und die Entfernung des Parent-DS-Records über öffentliche Resolver verifizieren.
+  - Verbleibenden alten IONOS-DS ohne passend signierte INWX-Zone als Blocker markieren; dann keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
   - Zielrecords als Copy-Paste-Blöcke oder Tabelle finalisieren.
   - Stop-Kriterien prüfen.
-- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv.
+- **Gate**: Manifest ist final, Reviewer hat freigegeben, IONOS bleibt aktiv und der DS-Zustand erlaubt den Cutover. Bei zuvor aktivem DNSSEC ist die Parent-DS-Entfernung verifiziert oder der Cutover bleibt blockiert.
 - **Rollback-Hinweis**: Bis hier keine Live-DNS-Änderung.
 
 ### Phase 5b — Abruptes INWX-Aktivierungsfenster
@@ -219,13 +220,13 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
   - öffentliche Resolver-Gates ausführen.
   - HTTP/Web/API-Smokes ausführen.
   - mailbox.org-Smokes ausführen.
-  - Brevo/Magic-Link-Smokes ausführen.
+  - Brevo-DNS/Subdomain-Gates ausführen; noch keinen finalen Magic-Link-Proof behaupten.
 - **Gate**:
   - autoritative INWX-DNS-Antworten korrekt.
   - öffentliche Resolver zeigen erwartete Records oder Propagation ist nachvollziehbar dokumentiert.
   - Web/API-Smokes laufen.
   - mailbox.org Empfang/Versand läuft.
-  - Brevo/Magic-Link läuft.
+  - Brevo-DNS/Subdomain-Records sind korrekt; dies ist noch kein Runtime- oder Magic-Link-Proof via Brevo.
   - Neben-Domains erfüllen No-Mail/Web-Gates oder sind als offenes Risiko dokumentiert.
 - **Rollback-Hinweis**:
   - Bei kleinen Recordfehlern: INWX-Zone korrigieren.
@@ -246,29 +247,31 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
 ### Phase 5d — IONOS Retention/Kündigungsentscheidung
 
 - **Ziel**: Alten Provider geordnet abschalten.
-- **Aktionen**: IONOS erst kündigen/reduzieren, wenn bestimmte Bedingungen erfüllt sind.
+- **Aktionen**: Diese Entscheidung noch nicht in Phase 5 ausführen. IONOS erst nach abgeschlossenem Phase-6-Runtime-Cutover, Phase-7-Magic-Link-Proof via Brevo und Phase-8-Beobachtungsfenster kündigen oder reduzieren.
 - **Gate**:
   - Registrar bei INWX bestätigt.
   - DNS bei INWX autoritativ bestätigt.
   - Webhosting/Redirects entweder migriert oder bewusst anderweitig gesichert.
-  - Mailgates und Magic-Link nach INWX-DNS weiter grün.
+  - mailbox.org-Mailgates und Brevo-DNS/Subdomain-Gates nach INWX-DNS grün.
+  - Phase 6 ist abgeschlossen: Die neu gestartete Live-Runtime zeigt redigiert die erwarteten Brevo-SMTP-Werte.
+  - Phase 7 ist abgeschlossen: Ein erst nach diesem Runtime-Cutover erzeugter Magic-Link wurde über Brevo zugestellt und erzeugt erfolgreich eine Session.
   - Web/API-Smokes nach INWX-DNS grün oder offenes Risiko ausdrücklich akzeptiert.
-  - Mindestens 48 Stunden Beobachtung ohne kritische DNS-, Web-, Mail- oder Magic-Link-Fehler abgeschlossen.
+  - Phase 8 ist abgeschlossen: Mindestens 48 Stunden Beobachtung ohne kritische DNS-, Web-, Mail- oder Magic-Link-Fehler.
   - Rollback-/Notfallpfad dokumentiert.
 - **Rollback-Hinweis**: Nach abgeschlossenem Registrartransfer kann Wiederherstellung bereits primär INWX-Zonenkorrektur bedeuten; nach IONOS-Kündigung ist kein IONOS-Rollback mehr möglich.
 
 ### Phase 6 — Runtime-Cutover auf Brevo
 
 - **Ziel**: Weltgewebe API nutzt Brevo statt IONOS.
-- **Aktionen**: `.env` auf Brevo-SMTP ändern, API-Container neustarten.
-- **Gate**: Runtime-Test zeigt Brevo-Werte ohne Errors.
+- **Aktionen**: `.env` auf Brevo-SMTP ändern, API-Container neu starten und anschließend die effektive Live-Umgebung redigiert prüfen.
+- **Gate**: Der neu gestartete API-Container zeigt `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` und `SMTP_FROM` mit den erwarteten Brevo-Werten; Secret-Werte bleiben redigiert. Vor diesem Gate ist kein Magic-Link-Test ein Brevo-Runtime-Proof.
 - **Rollback-Hinweis**: SMTP-Werte zurück auf IONOS ändern.
 
-### Phase 7 — Magic-Link-Proof
+### Phase 7 — Post-Runtime-Cutover Magic-Link-Proof via Brevo
 
-- **Ziel**: Benutzer können sich einloggen.
-- **Aktionen**: Login-Prozess über `https://weltgewebe.net` initiieren, E-Mail-Empfang checken, Magic Link klicken.
-- **Gate**: Erfolgreiche Session-Erstellung.
+- **Ziel**: Nach bewiesenem Phase-6-Runtime-Cutover belegen, dass die Weltgewebe API Magic-Link-Mail tatsächlich über Brevo versendet und Benutzer sich anmelden können.
+- **Aktionen**: Erst nach dem Live-Env-Gate aus Phase 6 einen neuen Login-Prozess über `https://weltgewebe.net` initiieren, Brevo-Zustellung und Mail-Header prüfen, Magic Link klicken.
+- **Gate**: Der nach dem Runtime-Cutover erzeugte Magic-Link wurde über Brevo zugestellt, zeigt auf `https://weltgewebe.net` und erzeugt erfolgreich eine Session.
 - **Rollback-Hinweis**: Siehe Phase 5 & 6.
 
 ### Phase 8 — Beobachtungsfenster
@@ -292,8 +295,8 @@ Das abrupte INWX-Aktivierungsfenster ist ein kontrolliertes manuelles Zeitfenste
   - mailbox.org Empfang und Versand für `kontakt@weltgewebe.net` funktionieren (proved)
   - Brevo-Domain/Subdomain verifiziert ist (proved)
   - Brevo-Testmail SPF/DKIM/DMARC besteht oder mindestens nicht fehlschlägt (proved)
-  - Weltgewebe Magic-Link-Mail über Brevo funktioniert (proved)
-  - live-env nach Recreate Brevo-Werte zeigt (proved)
+  - live-env nach Restart/Recreate die erwarteten Brevo-SMTP-Werte redigiert zeigt (proved)
+  - erst der danach neu erzeugte Weltgewebe Magic-Link über Brevo zugestellt wird und erfolgreich eine Session erzeugt (proved)
   - Secondary domains No-Mail public/authoritative (proved)
   - Rollback-Pfad noch offen ist
 
@@ -314,8 +317,7 @@ Sollte ein Migrationsschritt scheitern, müssen DNS und Einstellungen auf die le
 - Brevo Sending-Domain/Subdomain verifiziert. (erledigt/proved)
 - Brevo SPF/DKIM/DMARC im Test geprüft. (erledigt/proved)
 - Entscheidung zur bisherigen Weiterleitung von `kontakt@weltgewebe.net` getroffen.
-- Runtime nach Recreate zeigt Brevo-SMTP-Werte. (erledigt/proved)
-- Weltgewebe Magic-Link wird über Brevo verschickt. (erledigt/proved)
-- Magic-Link zeigt auf `https://weltgewebe.net`. (erledigt/proved)
-- Login erzeugt Session. (erledigt/proved)
+- Runtime nach Restart/Recreate zeigt redigiert die erwarteten Brevo-SMTP-Werte. (im Cutover erneut zu belegen)
+- Ein erst danach erzeugter Weltgewebe Magic-Link wird über Brevo verschickt. (im Cutover erneut zu belegen)
+- Dieser Magic-Link zeigt auf `https://weltgewebe.net` und erzeugt eine Session. (im Cutover erneut zu belegen)
 - AUTH_LOG_MAGIC_TOKEN=0. (erledigt/proved)

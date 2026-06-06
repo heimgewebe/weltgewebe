@@ -151,7 +151,7 @@ Earlier public-resolver audits are historical evidence only. Fresh authoritative
 - Treat all target records as offline instructions until the activation window.
 - Keep IONOS active until post-cutover observation has passed.
 - Do not perform registrar transfer and nameserver actions without the documented provider-specific manual sequence and stop criteria.
-- Check DNSSEC immediately before transfer; if active, record manual deactivation as a required operator step.
+- Check DNSSEC immediately before transfer; if active, disable DNSSEC at IONOS and verify parent DS removal through public resolvers before activation. If an old IONOS DS remains visible while the INWX zone is not compatibly signed, treat the cutover as blocked.
 - After completed registrar transfer, prefer immediate INWX zone correction; return to IONOS may no longer be available.
 - Do not cancel IONOS during this operation.
 

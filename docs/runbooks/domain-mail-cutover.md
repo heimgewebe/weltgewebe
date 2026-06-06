@@ -25,7 +25,7 @@ relations:
 - Offline-Zonenmanifest je Domain finalisiert und reviewed.
 - INWX-Vor-DNS/Predelegation ist für diesen Ablauf nicht verfügbar.
 - Provider-Dashboard-Zugänge sind im Aktivierungsfenster verfügbar.
-- DNSSEC-Status ist geprüft; falls aktiv, Deaktivierung vor Transfer ist als manueller Operator-Schritt eingeplant.
+- DNSSEC-Status ist geprüft; falls aktiv, muss DNSSEC bei IONOS deaktiviert und die Entfernung des Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden.
 - IONOS bleibt aktiv und wird nicht im selben Arbeitsgang gekündigt.
 - Cloudflare ist nicht Teil dieses Cutovers.
 
@@ -51,7 +51,7 @@ Das Offline-Zonenmanifest ist die manuell geprüfte, nicht-live Eingabequelle f�
 - mailbox.org Account vorbereitet.
 - Brevo Account vorbereitet.
 - DNS-Zielrecords gegen Provider-Dashboards geprüft.
-- DNSSEC-Status geprüft und ein gegebenenfalls notwendiger manueller Deaktivierungsschritt dokumentiert.
+- DNSSEC-Status geprüft; bei aktivem DNSSEC ist die Deaktivierung bei IONOS durchgeführt und die Parent-DS-Entfernung über öffentliche Resolver verifiziert oder ausdrücklich als Cutover-Blocker markiert.
 - Rollback-Zeitfenster offen.
 - IONOS noch aktiv.
 - Web-Rollen geklärt oder ausdrücklich als offenes Risiko markiert.
@@ -82,33 +82,46 @@ Das Aktivierungsfenster ist ein kontrollierter manueller Ablauf. INWX wird nicht
 
 1. Last-Minute-Ist-Zone bei IONOS sichern.
 2. Offline-Zonenmanifest final freigeben.
-3. DNSSEC-Status prüfen; falls aktiv, Deaktivierung vor Transfer als manuellen Schritt dokumentieren.
-4. INWX-Aktivierungsfenster starten.
-5. Transfer-/Nameserver-/INWX-Aktivierungspfad je Providerlage durchführen.
-6. INWX-Zone unmittelbar aus Offline-Zonenmanifest befüllen.
-7. Web/API-Records setzen.
-8. mailbox.org MX/SPF/DKIM/DMARC setzen.
-9. Brevo `login.*` Records setzen.
-10. No-Mail-Records für Neben-Domains setzen.
-11. Autoritative INWX-DNS-Gates ausführen.
-12. Öffentliche Resolver-Gates ausführen.
-13. HTTP/Web/API-Smokes ausführen.
-14. mailbox.org-Smokes ausführen.
-15. Brevo/Magic-Link-Smokes ausführen.
-16. Cutover-Artefakt ohne Secrets schreiben.
+3. DNSSEC-Status prüfen; falls aktiv, DNSSEC bei IONOS deaktivieren und die Entfernung des Parent-DS-Records verifizieren.
+4. DS-Stop-Kriterium prüfen: Ist ein alter IONOS-DS noch sichtbar und die INWX-Zone nicht passend signiert, keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt starten.
+5. INWX-Aktivierungsfenster starten.
+6. Transfer-/Nameserver-/INWX-Aktivierungspfad je Providerlage durchführen.
+7. INWX-Zone unmittelbar aus Offline-Zonenmanifest befüllen.
+8. Web/API-Records setzen.
+9. mailbox.org MX/SPF/DKIM/DMARC setzen.
+10. Brevo `login.*` Records setzen.
+11. No-Mail-Records für Neben-Domains setzen.
+12. Autoritative INWX-DNS-Gates ausführen.
+13. Öffentliche Resolver-Gates ausführen.
+14. HTTP/Web/API-Smokes ausführen.
+15. mailbox.org-Smokes ausführen.
+16. Brevo-DNS/Subdomain-Gates ausführen; keinen finalen Magic-Link-Proof vor dem Runtime-Cutover behaupten.
+17. DNS-Cutover-Artefakt ohne Secrets schreiben.
 
 ### Gates
 
 - INWX authoritative DNS pass.
 - Öffentliche Resolver zeigen die erwarteten Records oder die noch laufende Propagation ist nachvollziehbar dokumentiert.
 - mailbox.org mail pass.
-- Brevo login mail pass.
-- Magic-Link pass.
+- Brevo-DNS/Subdomain-Gates pass; dies belegt noch nicht den Runtime-Versand über Brevo.
+- Finaler Magic-Link-Proof bleibt bis nach Runtime-Cutover und Live-Env-Prüfung offen.
 - Secondary domains No-Mail pass.
 - Web/API/redirect pass oder ausdrücklich akzeptiertes offenes Risiko.
 - Keine Secrets in Artefakten.
 
 ## Verification
+
+### DNSSEC-/DS-Stop-Gate
+
+Wenn DNSSEC bei IONOS aktiv war, muss die Deaktivierung tatsächlich durchgeführt und die Entfernung des Parent-DS-Records vor dem Aktivierungsfenster verifiziert werden. Ein alter IONOS-DS bei nicht passend signierter INWX-Zone führt bei validierenden Resolvern zu `SERVFAIL`.
+
+```bash
+dig DS weltgewebe.net +short
+dig @1.1.1.1 DS weltgewebe.net +short
+dig @8.8.8.8 DS weltgewebe.net +short
+```
+
+**Stop-Kriterium:** Wenn ein alter IONOS-DS noch sichtbar ist und die INWX-Zone nicht passend signiert ist, keinen Nameserver-, Transfer- oder INWX-Aktivierungsschritt durchführen. Die DS-Entfernung muss verifiziert oder als expliziter Blocker dokumentiert werden.
 
 ### DNS-Gates über die delegierte Auflösung
 
@@ -155,50 +168,6 @@ dig @8.8.8.8 weltgewebe.net MX
 dig @9.9.9.9 weltgewebe.net MX
 ```
 
-### HTTP/Web/API-Smokes
-
-- `weltweberei.org`: WordPress/HTTP-Smoke vor und nach Cutover.
-- `weltweb.net`: Web-/Redirect-Smoke.
-- `weltgewebe.net`: Apex, `www` und `api` gegen die freigegebene Web-Rollenentscheidung prüfen.
-
-### Runtime-Prüfung
-
-```bash
-docker inspect weltgewebe-api-1 \
-  --format "{{range .Config.Env}}{{println .}}{{end}}" \
-| awk -F= '
-  $1 ~ /^(APP_BASE_URL|AUTH_|SMTP_|WEBAUTHN_|RUST_LOG|WEB_UPSTREAM_)/ {
-    if ($1 ~ /(PASS|PASSWORD|SECRET|TOKEN|PRIVATE_KEY|API_KEY)/) {
-      print $1"=<REDACTED>"
-    } else {
-      print
-    }
-  }
-'
-```
-
-### Erwartung nach Ziel-Cutover
-
-```text
-APP_BASE_URL=https://weltgewebe.net
-SMTP_HOST=<Brevo SMTP Host>
-SMTP_PORT=587
-SMTP_USER=<Brevo SMTP User>
-SMTP_FROM=noreply@login.weltgewebe.net
-AUTH_PUBLIC_LOGIN=1
-AUTH_LOG_MAGIC_TOKEN=0
-```
-
-### Mail-Gates
-
-- Mail an `kontakt@weltgewebe.net` kommt bei mailbox.org an.
-- Antwort von `kontakt@weltgewebe.net` kommt extern an.
-- Brevo-Testmail von `noreply@login.weltgewebe.net` kommt an.
-- Headerprüfung: SPF pass, DKIM pass, DMARC nicht fail.
-- Weltgewebe Magic-Link kommt an.
-- Magic-Link zeigt auf `https://weltgewebe.net`.
-- Login erzeugt Session.
-
 ### Brevo-Subdomain-DNS-Gate
 
 Da der technische Magic-Link-Absender `noreply@login.weltgewebe.net` verwendet, müssen zusätzlich zu den Apex-Mail-Records auch die Brevo-Records der Subdomain geprüft werden. Brevo-Verification-TXT-Werte sind nach ihrer Veröffentlichung öffentliche DNS-Zielwerte; sie sind keine Auth-Codes, Transfer-Codes, API-Keys oder Provider-Zugangsdaten. Die erwarteten Werte müssen trotzdem unmittelbar vor dem Aktivierungsfenster nochmals gegen das Brevo-Dashboard geprüft werden.
@@ -242,6 +211,65 @@ OK: Brevo subdomain DNS records present
 
 Hinweis: Kein SPF-/Return-Path-Record wird hier ergänzt, solange Brevo keinen separaten Zielwert dafür ausgibt.
 
+### Mail-Gates im DNS-Aktivierungsfenster
+
+- Mail an `kontakt@weltgewebe.net` kommt bei mailbox.org an.
+- Antwort von `kontakt@weltgewebe.net` kommt extern an.
+- Brevo-DNS/Subdomain-Gates stimmen mit dem Provider-Dashboard überein.
+- mailbox.org-Testmail besteht SPF/DKIM/DMARC oder schlägt mindestens nicht fehl.
+- Ein Magic-Link-Smoke in diesem DNS-Aktivierungsfenster ist noch kein Brevo-Runtime-Proof, solange Phase 6 nicht abgeschlossen ist.
+
+### HTTP/Web/API-Smokes
+
+- `weltweberei.org`: WordPress/HTTP-Smoke vor und nach Cutover.
+- `weltweb.net`: Web-/Redirect-Smoke.
+- `weltgewebe.net`: Apex, `www` und `api` gegen die freigegebene Web-Rollenentscheidung prüfen.
+
+### Phase 6 — Runtime-Cutover auf Brevo und Live-Env-Prüfung
+
+1. Runtime-Konfiguration manuell auf die freigegebenen Brevo-SMTP-Werte umstellen.
+2. API-Container kontrolliert neu starten oder neu erzeugen.
+3. Erst danach die effektive Live-Umgebung mit dem folgenden redigierenden Kommando prüfen.
+
+
+```bash
+docker inspect weltgewebe-api-1 \
+  --format "{{range .Config.Env}}{{println .}}{{end}}" \
+| awk -F= '
+  $1 ~ /^(APP_BASE_URL|AUTH_|SMTP_|WEBAUTHN_|RUST_LOG|WEB_UPSTREAM_)/ {
+    if ($1 ~ /(PASS|PASSWORD|SECRET|TOKEN|PRIVATE_KEY|API_KEY)/) {
+      print $1"=<REDACTED>"
+    } else {
+      print
+    }
+  }
+'
+```
+
+### Erwartung nach Ziel-Cutover
+
+```text
+APP_BASE_URL=https://weltgewebe.net
+SMTP_HOST=<Brevo SMTP Host>
+SMTP_PORT=587
+SMTP_USER=<Brevo SMTP User>
+SMTP_FROM=noreply@login.weltgewebe.net
+AUTH_PUBLIC_LOGIN=1
+AUTH_LOG_MAGIC_TOKEN=0
+```
+
+### Phase 7 — Post-Runtime-Cutover Magic-Link-Proof via Brevo
+
+Dieser Proof darf erst nach dem Phase-6-Live-Env-Gate beginnen:
+
+1. Einen neuen Magic-Link über `https://weltgewebe.net` anfordern.
+2. Zustellung über Brevo und die zugehörigen Mail-Header prüfen.
+3. Prüfen, dass der Link auf `https://weltgewebe.net` zeigt.
+4. Link konsumieren und erfolgreiche Session-Erstellung prüfen.
+
+Der Weltgewebe Magic-Link-Versand über Brevo ist erst `proved`, wenn die neu gestartete Live-Runtime die erwarteten Brevo-SMTP-Werte zeigt und der danach erzeugte Magic-Link über Brevo zugestellt wurde und erfolgreich eine Session erzeugt.
+
+
 ## Rollback
 
 Rollback ist nur vollständig möglich, solange IONOS als steuernder DNS-/Registrar-Pfad verfügbar bleibt. Nach abgeschlossenem Registrartransfer ist der primäre Wiederherstellungspfad in der Regel die Korrektur der INWX-Zone, nicht die Rückkehr zu IONOS.
@@ -259,6 +287,6 @@ Rollback ist nur vollständig möglich, solange IONOS als steuernder DNS-/Regist
 - Web/API/Redirects erneut prüfen.
 - Brevo Bounces/Logs prüfen.
 - mailbox.org Empfang/Versand erneut prüfen.
-- Magic-Link erneut prüfen.
-- IONOS erst nach erfolgreichem Registrar-/DNS-/Web-/Mail-/Magic-Link-Proof und Beobachtungsfenster überhaupt für eine Kündigungsentscheidung betrachten.
+- Den post-runtime-cutover Magic-Link-Proof via Brevo während des Beobachtungsfensters erneut prüfen.
+- IONOS erst nach abgeschlossenem Runtime-Cutover, danach erzeugtem Magic-Link-Proof via Brevo und erfolgreichem Registrar-/DNS-/Web-/Mail-Proof sowie Beobachtungsfenster überhaupt für eine Kündigungsentscheidung betrachten.
 - Nach IONOS-Kündigung ist Rollback über IONOS nicht mehr verfügbar.
