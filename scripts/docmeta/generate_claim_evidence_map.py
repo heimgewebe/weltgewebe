@@ -36,6 +36,15 @@ def _build_entries(data: object) -> list[dict[str, object]]:
             continue
         evidence = raw.get("evidence") or []
         evidence_count = sum(1 for item in evidence if isinstance(item, dict))
+
+        valid_evidence = []
+        for item in evidence:
+            if isinstance(item, dict):
+                valid_evidence.append({
+                    "kind": item.get("kind"),
+                    "target": item.get("target")
+                })
+
         entries.append(
             {
                 "id": raw.get("id"),
@@ -45,6 +54,7 @@ def _build_entries(data: object) -> list[dict[str, object]]:
                 "owner": raw.get("owner"),
                 "last_verified": raw.get("last_verified"),
                 "evidence_count": evidence_count,
+                "evidence": valid_evidence,
             }
         )
 
@@ -54,6 +64,10 @@ def _build_entries(data: object) -> list[dict[str, object]]:
 
 def render_markdown(data: object) -> str:
     entries = _build_entries(data)
+
+    does_not_prove = []
+    if isinstance(data, dict):
+        does_not_prove = data.get("does_not_prove", [])
     lines: list[str] = []
     lines.append("---")
     lines.append("id: docs.generated.claim-evidence-map")
@@ -75,6 +89,43 @@ def render_markdown(data: object) -> str:
             f"| {entry['status']} | {entry['owner']} | {entry['last_verified']} "
             f"| {entry['evidence_count']} items |"
         )
+    lines.append("")
+
+    if entries:
+        lines.append("## Details")
+        lines.append("")
+        for entry in entries:
+            claim_id = str(entry["id"]).upper() if entry.get("id") else "UNKNOWN"
+            lines.append(f"### {claim_id}")
+            lines.append(f"- Entry: `{entry['id']}`")
+            lines.append(f"- Locator: `{entry['locator']}`")
+            lines.append(f"- Status: `{entry['status']}`")
+            lines.append(f"- Owner: `{entry['owner']}`")
+            lines.append(f"- Last verified: `{entry['last_verified']}`")
+
+            lines.append("")
+            lines.append("Evidence:")
+            lines.append("")
+            lines.append("| Kind | Target |")
+            lines.append("| ---- | ------ |")
+
+            # Sort evidence if possible (keep original if not needed, but deterministic is good)
+            sorted_evidence = entry["evidence"] # We can sort it if needed later
+            for ev in sorted_evidence:
+                lines.append(f"| {ev.get('kind', '')} | `{ev.get('target', '')}` |")
+
+            if does_not_prove and isinstance(does_not_prove, list):
+                lines.append("")
+                lines.append("Does not prove:")
+                for item in does_not_prove:
+                    lines.append(f"- {item}")
+
+            lines.append("")
+
+    # Remove the last empty line to match the previous structure ending
+    if lines and lines[-1] == "":
+        lines.pop()
+
     lines.append("")
     return "\n".join(lines)
 
