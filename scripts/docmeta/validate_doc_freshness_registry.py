@@ -85,19 +85,6 @@ def _strip_yaml_scalar(value: str) -> str:
         return value[1:-1]
     return value
 
-
-def _is_relative_to(path: Path, root: Path) -> bool:
-    """Return True if *path* is under *root* (checked via relative_to).
-
-    Exists because Path.is_relative_to() was added in Python 3.9.
-    """
-    try:
-        path.relative_to(root)
-        return True
-    except ValueError:
-        return False
-
-
 def _resolve_repo_target(repo_root: Path, target: str) -> tuple[Path | None, str | None]:
     """Resolve *target* as a repo-relative path and return its real path.
 
@@ -114,7 +101,7 @@ def _resolve_repo_target(repo_root: Path, target: str) -> tuple[Path | None, str
     except (OSError, RuntimeError):
         return None, "resolution_error"
 
-    if not _is_relative_to(resolved_target, repo_root_resolved):
+    if not resolved_target.is_relative_to(repo_root_resolved):
         return None, "traversal"
     return resolved_target, None
 
