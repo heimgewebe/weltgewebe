@@ -85,6 +85,7 @@ def _strip_yaml_scalar(value: str) -> str:
         return value[1:-1]
     return value
 
+
 def _resolve_repo_target(repo_root: Path, target: str) -> tuple[Path | None, str | None]:
     """Resolve *target* as a repo-relative path and return its real path.
 
