@@ -381,7 +381,7 @@
       "acceptance": [
         "Eine minimale Claim-Evidence-Spine existiert mit drei CLAIM-AGENT-SAFE-* Claims",
         "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map",
-        "Claim-Evidence-Map, Doc-Freshness-Registry und Post-Emit-Health sind vorhanden und validierbar",
+        "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
         "Task-Control-Registrierung und Folgearbeiten bleiben sichtbar",
         "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis"
       ],
