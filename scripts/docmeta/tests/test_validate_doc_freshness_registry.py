@@ -1,4 +1,5 @@
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -545,6 +546,106 @@ entries:
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "EVIDENCE_TARGET_MISSING"))
         self.assertFalse(self._has(output, "EVIDENCE_NOT_IN_CLAIM_REGISTRY"))
+
+    def test_symlink_target_outside_repo_fails(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("os.symlink is not available")
+
+        outside_dir = Path(tempfile.mkdtemp(prefix="freshness-outside-"))
+        self.addCleanup(lambda: shutil.rmtree(outside_dir, ignore_errors=True))
+        outside_file = outside_dir / "outside.md"
+        outside_file.write_text("outside\n", encoding="utf-8")
+
+        link_rel = "docs/outside-link.md"
+        link_path = self.root / link_rel
+        link_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            os.symlink(outside_file, link_path)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation not supported: {exc}")
+
+        claim_evidence = {
+            1: [{"path": link_rel, "kind": "documentation"}],
+            2: self.claim_evidence[2],
+            3: self.claim_evidence[3],
+        }
+        self._write_claims(evidence=claim_evidence)
+
+        entries = self._entries()
+        entries[0]["evidence"] = [{"kind": "file", "target": link_rel}]
+        self._write_registry(entries)
+
+        output, exit_code = self._run()
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "EVIDENCE_TARGET_TRAVERSAL"))
+        self.assertFalse(self._has(output, "EVIDENCE_NOT_IN_CLAIM_REGISTRY"))
+        self.assertFalse(self._has(output, "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY"))
+
+    def test_symlink_loop_target_fails_as_missing(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("os.symlink is not available")
+
+        link_rel = "docs/self-loop.md"
+        link_path = self.root / link_rel
+        link_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            os.symlink(link_path, link_path)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation not supported: {exc}")
+
+        claim_evidence = {
+            1: [{"path": link_rel, "kind": "documentation"}],
+            2: self.claim_evidence[2],
+            3: self.claim_evidence[3],
+        }
+        self._write_claims(evidence=claim_evidence)
+
+        entries = self._entries()
+        entries[0]["evidence"] = [{"kind": "file", "target": link_rel}]
+        self._write_registry(entries)
+
+        output, exit_code = self._run()
+
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "EVIDENCE_TARGET_MISSING"))
+        self.assertFalse(self._has(output, "EVIDENCE_TARGET_TRAVERSAL"))
+        self.assertFalse(self._has(output, "EVIDENCE_NOT_IN_CLAIM_REGISTRY"))
+        self.assertFalse(self._has(output, "EVIDENCE_MISSING_FROM_FRESHNESS_REGISTRY"))
+
+    def test_symlink_target_inside_repo_passes(self):
+        if not hasattr(os, "symlink"):
+            self.skipTest("os.symlink is not available")
+
+        real_rel = "docs/real-evidence.md"
+        link_rel = "docs/internal-link.md"
+        real_path = self.root / real_rel
+        link_path = self.root / link_rel
+
+        real_path.parent.mkdir(parents=True, exist_ok=True)
+        real_path.write_text("inside\n", encoding="utf-8")
+
+        try:
+            os.symlink(real_path, link_path)
+        except (OSError, NotImplementedError) as exc:
+            self.skipTest(f"symlink creation not supported: {exc}")
+
+        claim_evidence = {
+            1: [{"path": link_rel, "kind": "documentation"}],
+            2: self.claim_evidence[2],
+            3: self.claim_evidence[3],
+        }
+        self._write_claims(evidence=claim_evidence)
+
+        entries = self._entries()
+        entries[0]["evidence"] = [{"kind": "file", "target": link_rel}]
+        self._write_registry(entries)
+
+        output, exit_code = self._run()
+
+        self.assertEqual(exit_code, 0, output["findings"])
 
     def test_empty_evidence_list_fails(self):
         self._write_claims()
