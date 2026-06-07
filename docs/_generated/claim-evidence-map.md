@@ -19,6 +19,7 @@ Generated automatically. Do not edit.
 ## Details
 
 ### CLAIM-AGENT-SAFE-001
+
 - Entry: `claim-agent-safe-001`
 - Locator: `claims[id=CLAIM-AGENT-SAFE-001]`
 - Status: `partial`
@@ -35,9 +36,11 @@ Evidence:
 | file | `docs/security/agent-write-scope-baseline.md` |
 
 Does not prove:
+
 - A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
 
 ### CLAIM-AGENT-SAFE-002
+
 - Entry: `claim-agent-safe-002`
 - Locator: `claims[id=CLAIM-AGENT-SAFE-002]`
 - Status: `partial`
@@ -53,9 +56,11 @@ Evidence:
 | file | `docs/_generated/agent-readiness.md` |
 
 Does not prove:
+
 - A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
 
 ### CLAIM-AGENT-SAFE-003
+
 - Entry: `claim-agent-safe-003`
 - Locator: `claims[id=CLAIM-AGENT-SAFE-003]`
 - Status: `partial`
@@ -72,4 +77,5 @@ Evidence:
 | test | `scripts/docmeta/tests/test_validate_claim_registry.py` |
 
 Does not prove:
+
 - A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.

@@ -97,6 +97,7 @@ def render_markdown(data: object) -> str:
         for entry in entries:
             claim_id = str(entry["id"]).upper() if entry.get("id") else "UNKNOWN"
             lines.append(f"### {claim_id}")
+            lines.append("")
             lines.append(f"- Entry: `{entry['id']}`")
             lines.append(f"- Locator: `{entry['locator']}`")
             lines.append(f"- Status: `{entry['status']}`")
@@ -117,6 +118,7 @@ def render_markdown(data: object) -> str:
             if does_not_prove and isinstance(does_not_prove, list):
                 lines.append("")
                 lines.append("Does not prove:")
+                lines.append("")
                 for item in does_not_prove:
                     lines.append(f"- {item}")
 
