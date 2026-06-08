@@ -103,3 +103,66 @@ Evidence-Kinds werden explizit gemappt:
 - Validierung: `python3 scripts/docmeta/validate_doc_freshness_registry.py`
 - Generierte Uebersicht (report-only):
   - `docs/_generated/claim-evidence-map.md`
+
+## Freshness Scope Policy
+
+Die Freshness-Registry wird nicht durch frei wachsende Eintraege erweitert,
+sondern durch `scripts/docmeta/freshness_scope_policy.yml` begrenzt.
+
+Aktuell aktive Familie:
+
+- `CLAIM-AGENT-SAFE-*` -> `claim-agent-safe-*`
+- mirror_mode: `exact`
+- require_live_check: true
+
+Das bedeutet:
+
+- Alle Claims einer aktiven Familie muessen in `docs/doc-freshness-registry.yml`
+  gespiegelt sein.
+- Eintraege ausserhalb aktiver Familien sind Findings.
+- Die Policy entscheidet den Scope, nicht der Validator-Code.
+
+`require_live_check: true` bedeutet strukturell: Jeder Eintrag der Familie
+traegt mindestens eine Evidence, die gegen das Live-Dateisystem geprueft wird
+(`file`/`test`/`proof`). Es wird keine Wall-Clock-Freshness berechnet.
+
+Hinweis zu `proof`: `proof` ist in `EVIDENCE_KINDS_CHECK_PATH` und damit
+live-geprueft. Es ist aber kein Weltgewebe-Claim-Evidence-Kind (nicht in
+`CLAIM_EVIDENCE_KIND_TO_LENSKIT`). Ein Bridge-Eintrag mit `proof` besteht
+`require_live_check`, aber wird beim Cross-Check Findings erzeugen, wenn die
+Claim-Evidence-Seite keine passende Gegenseite aufweist.
+
+### registry_doc-Semantik
+
+In diesem Slice gilt:
+
+- Der Validator unterstuetzt genau eine Claims-Registry pro Lauf.
+- Jede aktive Familie muss `registry_doc` gleich dem tatsaechlich verwendeten
+  Claims-Pfad (`--claims`, Default `docs/claims/registry.yml`) setzen; sonst
+  ist die Policy ungueltig (`FRESHNESS_SCOPE_POLICY_INVALID`).
+- In-scope Freshness-Eintraege spiegeln ihr `doc`-Feld gegen
+  `family.registry_doc`.
+- Out-of-scope Eintraege werden als Finding gemeldet und nicht zusaetzlich
+  ueber einen globalen doc-Default geprueft.
+- Kein Multi-Registry-Loading in diesem Slice.
+
+### Neue Freshness-Family hinzufuegen
+
+Operative Schritte:
+
+- Claim-Familie in `docs/claims/registry.yml` anlegen.
+- Active Family in `scripts/docmeta/freshness_scope_policy.yml` eintragen.
+- `claim_id_prefix`, `entry_id_prefix`, `registry_doc`, `mirror_mode`,
+  `require_live_check` und `status` setzen.
+- Bei `mirror_mode: exact` muss jeder aktive Claim der Familie einen passenden
+  Entry in `docs/doc-freshness-registry.yml` haben.
+- Das `doc`-Feld eines Entries muss `family.registry_doc` entsprechen.
+- Bei `require_live_check: true` muss mindestens eine live-gepruefte Evidence
+  vorhanden sein. Live-geprueft sind genau die Kinds aus
+  `EVIDENCE_KINDS_CHECK_PATH` (aktuell `file`/`test`/`proof`).
+  `proof` erfuellt diese Bedingung, ist aber kein Weltgewebe-Claim-Evidence-Kind
+  und erzeugt Cross-Check-Findings wenn die Claim-Evidence keine Gegenseite hat.
+- Danach pruefen:
+  - `python3 scripts/docmeta/validate_doc_freshness_registry.py`
+  - `python3 -m scripts.docmeta.generate_claim_evidence_map --check`
+  - `python3 -m scripts.docmeta.generate_task_index --check`

@@ -45,6 +45,9 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
             self.claim_evidence[n] = claim_items
 
         self._write_claims()
+        # The generator validates the freshness registry via run_validation,
+        # which requires the scope policy in the (temp) repo root.
+        self._write_policy()
 
     def tearDown(self) -> None:
         shutil.rmtree(self.root, ignore_errors=True)
@@ -56,6 +59,24 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return rel_path
+
+    def _write_policy(self) -> None:
+        path = self.root / "scripts" / "docmeta" / "freshness_scope_policy.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "kind: weltgewebe.docmeta.freshness_scope_policy\n"
+            'version: "1.0"\n'
+            "\n"
+            "families:\n"
+            "  - id: agent-safe\n"
+            "    claim_id_prefix: CLAIM-AGENT-SAFE-\n"
+            "    entry_id_prefix: claim-agent-safe-\n"
+            "    registry_doc: docs/claims/registry.yml\n"
+            "    mirror_mode: exact\n"
+            "    require_live_check: true\n"
+            "    status: active\n",
+            encoding="utf-8",
+        )
 
     def _write_claims(self) -> None:
         claims = []
