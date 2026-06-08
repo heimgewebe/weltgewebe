@@ -106,7 +106,7 @@ def render_markdown(data: object) -> str:
         lines.append("## Details")
         lines.append("")
         for entry in entries:
-            claim_id = str(entry["id"]).upper() if entry.get("id") else "UNKNOWN"
+            claim_id = str(entry.get("claim_id") or "UNKNOWN")
             lines.append(f"### {claim_id}")
             lines.append("")
             lines.append(f"- Entry: `{entry['id']}`")
