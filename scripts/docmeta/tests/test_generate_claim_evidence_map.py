@@ -96,6 +96,10 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         payload = {
             "kind": "lenskit.doc_freshness_registry",
             "version": "1.0",
+            "does_not_prove": [
+                "truth",
+                "completeness",
+            ],
             "entries": entries if entries is not None else self._entries(),
         }
         path = self.root / gen.REGISTRY_REL
@@ -174,6 +178,62 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         self.assertNotIn("stale", md)
         self.assertNotIn("unknown", md)
         self.assertIn("2026-06-05", md)
+
+    # --- detail section -----------------------------------------------------
+
+    def test_markdown_shows_details_sections(self):
+        self._write_registry()
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertIn("## Details", md)
+        self.assertIn("### CLAIM-AGENT-SAFE-001", md)
+        self.assertIn("- Entry: `claim-agent-safe-001`", md)
+        self.assertIn("- Locator: `claims[id=CLAIM-AGENT-SAFE-001]`", md)
+        self.assertIn("- Status: `partial`", md)
+        self.assertIn("- Owner: `docs-mechanik`", md)
+        self.assertIn("- Last verified: `2026-06-05`", md)
+
+    def test_markdown_shows_evidence_table_in_details(self):
+        self._write_registry()
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertIn("Evidence:", md)
+        self.assertIn("| Kind | Target |", md)
+        self.assertIn("| `file` | `scripts/agent/impl_001.py` |", md)
+        self.assertIn("| `test` | `scripts/agent/tests/test_001.py` |", md)
+
+    def test_markdown_shows_does_not_prove(self):
+        self._write_registry()
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertIn("Does not prove:", md)
+        self.assertIn("- truth", md)
+        self.assertIn("- completeness", md)
+
+    def test_build_entries_extracts_claim_id_from_locator(self):
+        data = {
+            "entries": [
+                {
+                    "id": "claim-custom-xyz",
+                    "locator": "claims[id=CLAIM-CUSTOM-XYZ]",
+                    "evidence": [],
+                }
+            ]
+        }
+        entries = gen._build_entries(data)
+        self.assertEqual(entries[0]["claim_id"], "CLAIM-CUSTOM-XYZ")
+
+    def test_markdown_omits_does_not_prove_if_missing(self):
+        payload = {
+            "kind": "lenskit.doc_freshness_registry",
+            "version": "1.0",
+            "entries": self._entries(),
+        }
+        path = self.root / gen.REGISTRY_REL
+        path.write_text("---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertNotIn("Does not prove:", md)
 
     # --- --check drift ------------------------------------------------------
 

@@ -373,7 +373,6 @@
         ".github/workflows/docs-guard.yml"
       ],
       "missing_evidence": [
-        "DOC-MECH-FRESHNESS-S2-MARKDOWN-DETAILS: Markdown-Details (Evidence-Markdown je Claim) nicht implementiert",
         "DOC-MECH-FRESHNESS-TYPED-CLAIMINFO: Typisierte ClaimInfo-Struktur nicht implementiert",
         "DOC-MECH-FRESHNESS-S3-SCOPE-POLICY: Scope-Policy für weitere Claim-Familien nicht entschieden",
         "Review-Age-Hygiene für ältere Architektur-/Runtime-/Runbook-Dokumente nicht durchgeführt"
@@ -395,7 +394,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-07"
+      "updated_at": "2026-06-08"
     },
     {
       "id": "OPT-API-001",

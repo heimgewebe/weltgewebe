@@ -15,3 +15,67 @@ Generated automatically. Do not edit.
 | claim-agent-safe-001 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-001] | partial | docs-mechanik | 2026-06-05 | 4 items |
 | claim-agent-safe-002 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-002] | partial | docs-mechanik | 2026-06-05 | 3 items |
 | claim-agent-safe-003 | docs/claims/registry.yml | claims[id=CLAIM-AGENT-SAFE-003] | partial | docs-mechanik | 2026-06-05 | 4 items |
+
+## Details
+
+### CLAIM-AGENT-SAFE-001
+
+- Entry: `claim-agent-safe-001`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-001]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-05`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `scripts/agent/check_agent_preflight.py` |
+| `test` | `scripts/agent/tests/test_check_agent_preflight.py` |
+| `file` | `.github/workflows/agent-safety-preflight.yml` |
+| `file` | `docs/security/agent-write-scope-baseline.md` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-002
+
+- Entry: `claim-agent-safe-002`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-002]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-05`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `scripts/docmeta/generate_agent_readiness.py` |
+| `test` | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
+| `file` | `docs/_generated/agent-readiness.md` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
+
+### CLAIM-AGENT-SAFE-003
+
+- Entry: `claim-agent-safe-003`
+- Locator: `claims[id=CLAIM-AGENT-SAFE-003]`
+- Status: `partial`
+- Owner: `docs-mechanik`
+- Last verified: `2026-06-05`
+
+Evidence:
+
+| Kind | Target |
+| ---- | ------ |
+| `file` | `docs/claims/registry.yml` |
+| `file` | `docs/claims/README.md` |
+| `file` | `scripts/docmeta/validate_claim_registry.py` |
+| `test` | `scripts/docmeta/tests/test_validate_claim_registry.py` |
+
+Does not prove:
+
+- A green verify does not prove the claims are true or complete, only that no declared claim contradicts its declared evidence.
