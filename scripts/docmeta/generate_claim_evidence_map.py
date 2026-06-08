@@ -28,6 +28,14 @@ MARKDOWN_REL = "docs/_generated/claim-evidence-map.md"
 GENERATOR_REL = "scripts/docmeta/generate_claim_evidence_map.py"
 
 
+def _claim_id_from_locator(locator: object) -> str:
+    if isinstance(locator, str):
+        prefix = "claims[id="
+        if locator.startswith(prefix) and locator.endswith("]"):
+            return locator[len(prefix):-1]
+    return "UNKNOWN"
+
+
 def _build_entries(data: object) -> list[dict[str, object]]:
     raw_entries = data.get("entries", []) if isinstance(data, dict) else []
     entries: list[dict[str, object]] = []
@@ -36,15 +44,22 @@ def _build_entries(data: object) -> list[dict[str, object]]:
             continue
         evidence = raw.get("evidence") or []
         evidence_count = sum(1 for item in evidence if isinstance(item, dict))
+        valid_evidence = [
+            {"kind": item.get("kind"), "target": item.get("target")}
+            for item in evidence
+            if isinstance(item, dict)
+        ]
         entries.append(
             {
                 "id": raw.get("id"),
+                "claim_id": _claim_id_from_locator(raw.get("locator")),
                 "doc": raw.get("doc"),
                 "locator": raw.get("locator"),
                 "status": raw.get("status"),
                 "owner": raw.get("owner"),
                 "last_verified": raw.get("last_verified"),
                 "evidence_count": evidence_count,
+                "evidence": valid_evidence,
             }
         )
 
@@ -54,6 +69,7 @@ def _build_entries(data: object) -> list[dict[str, object]]:
 
 def render_markdown(data: object) -> str:
     entries = _build_entries(data)
+    does_not_prove = data.get("does_not_prove", []) if isinstance(data, dict) else []
     lines: list[str] = []
     lines.append("---")
     lines.append("id: docs.generated.claim-evidence-map")
@@ -76,6 +92,36 @@ def render_markdown(data: object) -> str:
             f"| {entry['evidence_count']} items |"
         )
     lines.append("")
+
+    if entries:
+        lines.append("## Details")
+        lines.append("")
+        for entry in entries:
+            claim_id = str(entry.get("claim_id") or "UNKNOWN")
+            lines.append(f"### {claim_id}")
+            lines.append("")
+            lines.append(f"- Entry: `{entry['id']}`")
+            lines.append(f"- Locator: `{entry['locator']}`")
+            lines.append(f"- Status: `{entry['status']}`")
+            lines.append(f"- Owner: `{entry['owner']}`")
+            lines.append(f"- Last verified: `{entry['last_verified']}`")
+            lines.append("")
+            lines.append("Evidence:")
+            lines.append("")
+            lines.append("| Kind | Target |")
+            lines.append("| ---- | ------ |")
+            for ev in entry.get("evidence", []):
+                kind = str(ev["kind"]) if ev.get("kind") is not None else ""
+                target = str(ev["target"]) if ev.get("target") is not None else ""
+                lines.append(f"| `{kind}` | `{target}` |")
+            if does_not_prove and isinstance(does_not_prove, list):
+                lines.append("")
+                lines.append("Does not prove:")
+                lines.append("")
+                for item in does_not_prove:
+                    lines.append(f"- {item}")
+            lines.append("")
+
     return "\n".join(lines)
 
 
