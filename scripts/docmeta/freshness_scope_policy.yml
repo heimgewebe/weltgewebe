@@ -1,0 +1,21 @@
+# Freshness scope policy (declarative scope for the doc-freshness registry).
+#
+# This file decides which claim families are in scope for
+# docs/doc-freshness-registry.yml. The validator
+# (scripts/docmeta/validate_doc_freshness_registry.py) derives the expected
+# freshness entries from docs/claims/registry.yml plus the active families
+# below, instead of hard-coding a fixed set of entry ids.
+#
+# Keep the real scope conservative: only add a new active family once its
+# mirror semantics and live-check requirements are actually decided.
+kind: weltgewebe.docmeta.freshness_scope_policy
+version: "1.0"
+
+families:
+  - id: agent-safe
+    claim_id_prefix: CLAIM-AGENT-SAFE-
+    entry_id_prefix: claim-agent-safe-
+    registry_doc: docs/claims/registry.yml
+    mirror_mode: exact
+    require_live_check: true
+    status: active

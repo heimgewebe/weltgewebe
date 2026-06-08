@@ -50,6 +50,9 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
                 claim_items.append({"path": path, "kind": wg_kind})
             self.bridge_evidence[n] = bridge_items
             self.claim_evidence[n] = claim_items
+        # Every test runs against a temp repo, so the scope policy must live
+        # there too. The default policy mirrors the real conservative scope.
+        self._write_policy()
 
     def tearDown(self) -> None:
         shutil.rmtree(self.root, ignore_errors=True)
@@ -127,6 +130,110 @@ class TestValidateDocFreshnessRegistry(unittest.TestCase):
         path.write_text(
             "---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8"
         )
+
+    # --- scope policy fixtures ---------------------------------------------
+
+    def _policy_path(self) -> Path:
+        return self.root / "scripts" / "docmeta" / "freshness_scope_policy.yml"
+
+    def _default_policy_families(self) -> list[dict]:
+        return [
+            {
+                "id": "agent-safe",
+                "claim_id_prefix": "CLAIM-AGENT-SAFE-",
+                "entry_id_prefix": "claim-agent-safe-",
+                "registry_doc": "docs/claims/registry.yml",
+                "mirror_mode": "exact",
+                "require_live_check": True,
+                "status": "active",
+            }
+        ]
+
+    def _write_policy(
+        self,
+        families: list[dict] | None = None,
+        kind: str = "weltgewebe.docmeta.freshness_scope_policy",
+        version: str = "1.0",
+    ) -> None:
+        families = self._default_policy_families() if families is None else families
+        lines = [f"kind: {kind}", f'version: "{version}"', "", "families:"]
+        for fam in families:
+            first = True
+            for key, value in fam.items():
+                if isinstance(value, bool):
+                    rendered = "true" if value else "false"
+                else:
+                    rendered = str(value)
+                prefix = "  - " if first else "    "
+                lines.append(f"{prefix}{key}: {rendered}")
+                first = False
+        self._write_policy_text("\n".join(lines) + "\n")
+
+    def _write_policy_text(self, text: str) -> None:
+        path = self._policy_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+
+    def _remove_policy(self) -> None:
+        path = self._policy_path()
+        if path.exists():
+            path.unlink()
+
+    # --- arbitrary claim/entry pairs ---------------------------------------
+
+    def _write_claims_list(self, claims: list[dict]) -> None:
+        payload = {"version": 1, "claims": claims}
+        path = self.root / "docs" / "claims" / "registry.yml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+        )
+
+    def _pair(
+        self,
+        claim_id: str,
+        entry_id: str,
+        statement: str | None = None,
+        evidence: list[tuple[str, str, str]] | None = None,
+    ) -> tuple[dict, dict]:
+        """Build a mirrored (claim, entry) pair and touch its evidence files.
+
+        evidence is a list of (path, weltgewebe_kind, lenskit_kind). The default
+        carries a documentation file plus a test, so require_live_check passes.
+        """
+        if statement is None:
+            statement = f"Statement for {claim_id}."
+        if evidence is None:
+            evidence = [
+                (f"docs/pair/{entry_id}.md", "documentation", "file"),
+                (f"scripts/pair/test_{entry_id}.py", "test", "test"),
+            ]
+        claim_items = []
+        bridge_items = []
+        for path, wg_kind, lenskit_kind in evidence:
+            self._touch(path)
+            claim_items.append({"path": path, "kind": wg_kind})
+            bridge_items.append({"kind": lenskit_kind, "target": path})
+        claim = {
+            "id": claim_id,
+            "status": "established",
+            "subject": claim_id.replace("CLAIM-", ""),
+            "statement": statement,
+            "evidence": claim_items,
+            "validation": ["echo ok"],
+            "updated": "2026-06-01",
+        }
+        entry = {
+            "id": entry_id,
+            "doc": "docs/claims/registry.yml",
+            "locator": f"claims[id={claim_id}]",
+            "claim": statement,
+            "status": "partial",
+            "owner": "docs-mechanik",
+            "last_verified": "2026-06-05",
+            "evidence": bridge_items,
+        }
+        return claim, entry
 
     def _run(self):
         return validator.run_validation(
@@ -302,14 +409,18 @@ entries:
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "INVALID_ID"))
 
-    def test_entry_id_out_of_valid_set_fails(self):
+    def test_entry_id_for_unknown_claim_fails(self):
+        # Replaces the old static VALID_ENTRY_IDS membership check: an entry id
+        # inside the active family prefix but without a backing claim now fails
+        # as an unknown claim, derived from claim-registry + policy.
         self._write_claims()
         entries = self._entries()
         entries[0]["id"] = "claim-agent-safe-009"
+        entries[0]["locator"] = "claims[id=CLAIM-AGENT-SAFE-009]"
         self._write_registry(entries)
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
-        self.assertTrue(self._has(output, "INVALID_ID"))
+        self.assertTrue(self._has(output, "CLAIM_ID_UNKNOWN"))
 
     def test_duplicate_entry_id_fails(self):
         self._write_claims()
@@ -320,23 +431,27 @@ entries:
         self.assertEqual(exit_code, 1)
         self.assertTrue(self._has(output, "DUPLICATE_ID"))
 
-    # --- entry count -------------------------------------------------------
+    # --- exact mirror (count is now derived from claims + policy) ----------
 
     def test_missing_one_of_three_entries_fails(self):
+        # An in-scope claim without a mirror entry is detected by the
+        # exact-mirror reverse check, not a static count.
         self._write_claims()
         self._write_registry(self._entries()[:2])
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
-        self.assertTrue(self._has(output, "WRONG_ENTRY_COUNT"))
+        self.assertTrue(self._has(output, "FRESHNESS_ENTRY_MISSING_FOR_CLAIM"))
 
     def test_extra_fourth_entry_fails(self):
+        # A duplicate extra entry now fails on the duplicate id rather than a
+        # static count limit.
         self._write_claims()
         entries = self._entries()
         entries.append(self._valid_entry(1))
         self._write_registry(entries)
         output, exit_code = self._run()
         self.assertEqual(exit_code, 1)
-        self.assertTrue(self._has(output, "WRONG_ENTRY_COUNT"))
+        self.assertTrue(self._has(output, "DUPLICATE_ID"))
 
     # --- status checks -----------------------------------------------------
 
@@ -809,6 +924,180 @@ entries:
         self.assertTrue(self._has(output, "CLAIM_REGISTRY_LOAD_ERROR"))
         self.assertTrue(self._has(output, "DUPLICATE_CLAIM_ID"))
         self.assertFalse(self._has(output, "CLAIM_ID_UNKNOWN"))
+
+    # --- scope policy: derived scope, mirror, out-of-scope, live-check ------
+
+    def test_real_agent_safe_slice_passes_under_policy(self):
+        # A: the current conservative slice (three CLAIM-AGENT-SAFE-* mirrors)
+        # plus the default policy validates clean.
+        self._write_claims()
+        self._write_registry(self._entries())
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 0, output["findings"])
+        self.assertEqual(output["findings_count"], 0)
+        self.assertEqual(output["entries_count"], 3)
+
+    def test_policy_allows_additional_same_family_claim(self):
+        # B: scope is derived from claim-registry + policy, not a static 3-id
+        # list. A fourth CLAIM-AGENT-SAFE-* claim with a mirrored entry passes.
+        c1, e1 = self._pair("CLAIM-AGENT-SAFE-001", "claim-agent-safe-001")
+        c2, e2 = self._pair("CLAIM-AGENT-SAFE-002", "claim-agent-safe-002")
+        c3, e3 = self._pair("CLAIM-AGENT-SAFE-003", "claim-agent-safe-003")
+        c4, e4 = self._pair("CLAIM-AGENT-SAFE-004", "claim-agent-safe-004")
+        self._write_claims_list([c1, c2, c3, c4])
+        self._write_registry([e1, e2, e3, e4])
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 0, output["findings"])
+        self.assertEqual(output["findings_count"], 0)
+        self.assertEqual(output["entries_count"], 4)
+
+    def test_missing_mirror_entry_for_additional_claim_fails(self):
+        # C: an in-scope claim (here a fourth one) without a mirror entry is a
+        # finding, proving the expectation is derived, not capped at three.
+        c1, e1 = self._pair("CLAIM-AGENT-SAFE-001", "claim-agent-safe-001")
+        c2, e2 = self._pair("CLAIM-AGENT-SAFE-002", "claim-agent-safe-002")
+        c3, e3 = self._pair("CLAIM-AGENT-SAFE-003", "claim-agent-safe-003")
+        c4, _e4 = self._pair("CLAIM-AGENT-SAFE-004", "claim-agent-safe-004")
+        self._write_claims_list([c1, c2, c3, c4])
+        self._write_registry([e1, e2, e3])  # entry for claim 004 missing
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_ENTRY_MISSING_FOR_CLAIM"))
+
+    def test_out_of_scope_entry_fails(self):
+        # D: a freshness entry for a claim family with no active policy family
+        # is rejected as out of scope.
+        c1, e1 = self._pair("CLAIM-AGENT-SAFE-001", "claim-agent-safe-001")
+        c2, e2 = self._pair("CLAIM-AGENT-SAFE-002", "claim-agent-safe-002")
+        c3, e3 = self._pair("CLAIM-AGENT-SAFE-003", "claim-agent-safe-003")
+        self._write_claims_list([c1, c2, c3])
+        extra = self._touch("docs/deploy/evidence.md")
+        out_of_scope_entry = {
+            "id": "claim-deploy-001",
+            "doc": "docs/claims/registry.yml",
+            "locator": "claims[id=CLAIM-DEPLOY-001]",
+            "claim": "Out of scope claim.",
+            "status": "partial",
+            "owner": "docs-mechanik",
+            "last_verified": "2026-06-05",
+            "evidence": [{"kind": "file", "target": extra}],
+        }
+        self._write_registry([e1, e2, e3, out_of_scope_entry])
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_ENTRY_OUT_OF_SCOPE"))
+
+    def test_policy_second_active_family_in_scope_passes(self):
+        # E: a second active family added only in the temp policy is honoured;
+        # the real repo keeps only agent-safe active.
+        families = self._default_policy_families() + [
+            {
+                "id": "docmeta-test",
+                "claim_id_prefix": "CLAIM-DOCMETA-TEST-",
+                "entry_id_prefix": "claim-docmeta-test-",
+                "registry_doc": "docs/claims/registry.yml",
+                "mirror_mode": "exact",
+                "require_live_check": True,
+                "status": "active",
+            }
+        ]
+        self._write_policy(families=families)
+        c1, e1 = self._pair("CLAIM-AGENT-SAFE-001", "claim-agent-safe-001")
+        c2, e2 = self._pair("CLAIM-AGENT-SAFE-002", "claim-agent-safe-002")
+        c3, e3 = self._pair("CLAIM-AGENT-SAFE-003", "claim-agent-safe-003")
+        c_dm, e_dm = self._pair("CLAIM-DOCMETA-TEST-001", "claim-docmeta-test-001")
+        self._write_claims_list([c1, c2, c3, c_dm])
+        self._write_registry([e1, e2, e3, e_dm])
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 0, output["findings"])
+        self.assertEqual(output["findings_count"], 0)
+
+    def test_inactive_family_does_not_bring_claims_into_scope(self):
+        # An inactive family is syntactically valid but ignored: its claim must
+        # not be expected, and an entry for it is out of scope.
+        families = self._default_policy_families() + [
+            {
+                "id": "docmeta-test",
+                "claim_id_prefix": "CLAIM-DOCMETA-TEST-",
+                "entry_id_prefix": "claim-docmeta-test-",
+                "registry_doc": "docs/claims/registry.yml",
+                "mirror_mode": "exact",
+                "require_live_check": True,
+                "status": "inactive",
+            }
+        ]
+        self._write_policy(families=families)
+        c1, e1 = self._pair("CLAIM-AGENT-SAFE-001", "claim-agent-safe-001")
+        c2, e2 = self._pair("CLAIM-AGENT-SAFE-002", "claim-agent-safe-002")
+        c3, e3 = self._pair("CLAIM-AGENT-SAFE-003", "claim-agent-safe-003")
+        # An inactive-family claim exists but is not mirrored: must stay green.
+        c_dm, _e_dm = self._pair("CLAIM-DOCMETA-TEST-001", "claim-docmeta-test-001")
+        self._write_claims_list([c1, c2, c3, c_dm])
+        self._write_registry([e1, e2, e3])
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 0, output["findings"])
+        self.assertFalse(self._has(output, "FRESHNESS_ENTRY_MISSING_FOR_CLAIM"))
+
+    def test_missing_policy_file_fails(self):
+        # F: an absent policy is a hard stop, never a silent fallback.
+        self._remove_policy()
+        self._write_claims()
+        self._write_registry(self._entries())
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_SCOPE_POLICY_INVALID"))
+
+    def test_policy_missing_families_fails(self):
+        # F: a policy without a families list is structurally invalid.
+        self._write_policy_text(
+            "kind: weltgewebe.docmeta.freshness_scope_policy\nversion: \"1.0\"\n"
+        )
+        self._write_claims()
+        self._write_registry(self._entries())
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_SCOPE_POLICY_INVALID"))
+
+    def test_policy_unknown_mirror_mode_fails(self):
+        # F: only mirror_mode 'exact' is allowed in this slice.
+        families = self._default_policy_families()
+        families[0]["mirror_mode"] = "loose"
+        self._write_policy(families=families)
+        self._write_claims()
+        self._write_registry(self._entries())
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_SCOPE_POLICY_INVALID"))
+
+    def test_policy_duplicate_family_id_fails(self):
+        # F: duplicate family ids are rejected.
+        families = self._default_policy_families() + self._default_policy_families()
+        self._write_policy(families=families)
+        self._write_claims()
+        self._write_registry(self._entries())
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(self._has(output, "FRESHNESS_SCOPE_POLICY_INVALID"))
+
+    def test_require_live_check_missing_fails(self):
+        # G: require_live_check demands at least one file/test/proof evidence.
+        # An entry whose only evidence is a non-live 'text' kind violates it.
+        # (The mirror mismatch findings that accompany this are expected, since
+        # no claim evidence kind maps to a non-live kind.)
+        c1, e1 = self._pair(
+            "CLAIM-AGENT-SAFE-001",
+            "claim-agent-safe-001",
+            evidence=[("docs/pair/doc-only.md", "documentation", "file")],
+        )
+        target = e1["evidence"][0]["target"]
+        e1["evidence"] = [{"kind": "text", "target": target}]
+        self._write_claims_list([c1])
+        self._write_registry([e1])
+        output, exit_code = self._run()
+        self.assertEqual(exit_code, 1)
+        self.assertTrue(
+            self._has(output, "FRESHNESS_ENTRY_REQUIRES_LIVE_CHECK_MISSING")
+        )
 
 
 if __name__ == "__main__":

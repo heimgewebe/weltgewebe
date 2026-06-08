@@ -103,3 +103,25 @@ Evidence-Kinds werden explizit gemappt:
 - Validierung: `python3 scripts/docmeta/validate_doc_freshness_registry.py`
 - Generierte Uebersicht (report-only):
   - `docs/_generated/claim-evidence-map.md`
+
+## Freshness Scope Policy
+
+Die Freshness-Registry wird nicht durch frei wachsende Eintraege erweitert,
+sondern durch `scripts/docmeta/freshness_scope_policy.yml` begrenzt.
+
+Aktuell aktive Familie:
+
+- `CLAIM-AGENT-SAFE-*` -> `claim-agent-safe-*`
+- mirror_mode: `exact`
+- require_live_check: true
+
+Das bedeutet:
+
+- Alle Claims einer aktiven Familie muessen in `docs/doc-freshness-registry.yml`
+  gespiegelt sein.
+- Eintraege ausserhalb aktiver Familien sind Findings.
+- Die Policy entscheidet den Scope, nicht der Validator-Code.
+
+`require_live_check: true` bedeutet strukturell: Jeder Eintrag der Familie
+traegt mindestens eine Evidence, die gegen das Live-Dateisystem geprueft wird
+(`file`/`test`/`proof`). Es wird keine Wall-Clock-Freshness berechnet.

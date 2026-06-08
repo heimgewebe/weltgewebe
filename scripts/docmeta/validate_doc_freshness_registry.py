@@ -16,6 +16,7 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -54,16 +55,39 @@ EVIDENCE_KINDS_CHECK_PATH = {"file", "test", "proof"}
 VALID_STATUSES = {"none", "partial", "done", "stale", "historical"}
 SLICE_STATUS = "partial"
 
-EXPECTED_ENTRY_COUNT = 3
-VALID_ENTRY_IDS = {
-    "claim-agent-safe-001",
-    "claim-agent-safe-002",
-    "claim-agent-safe-003",
-}
+# The freshness scope is no longer hard-coded here. It is derived from the
+# claim registry plus the declarative policy in
+# scripts/docmeta/freshness_scope_policy.yml (see ScopeFamily / load_scope_policy).
+DEFAULT_SCOPE_POLICY = "scripts/docmeta/freshness_scope_policy.yml"
+SCOPE_POLICY_KIND = "weltgewebe.docmeta.freshness_scope_policy"
+SCOPE_POLICY_VERSION = "1.0"
+VALID_MIRROR_MODES = {"exact"}
+VALID_FAMILY_STATUSES = {"active", "inactive"}
+REQUIRED_ACTIVE_FAMILY_FIELDS = (
+    "id",
+    "claim_id_prefix",
+    "entry_id_prefix",
+    "registry_doc",
+    "mirror_mode",
+)
+
 ENTRY_ID_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 LOCATOR_PATTERN = re.compile(r"^claims\[id=([A-Z0-9-]+)\]$")
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EXPECTED_DOC = "docs/claims/registry.yml"
+
+
+@dataclass(frozen=True)
+class ScopeFamily:
+    """An active claim family that is in scope for the freshness registry."""
+
+    id: str
+    claim_id_prefix: str
+    entry_id_prefix: str
+    registry_doc: str
+    mirror_mode: str
+    require_live_check: bool
+    status: str
 
 
 def _finding(
@@ -84,6 +108,268 @@ def _strip_yaml_scalar(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
         return value[1:-1]
     return value
+
+
+def _coerce_policy_scalar(value: str) -> object:
+    """Coerce a policy scalar: strip quotes, map true/false to booleans."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    if value in {"true", "True"}:
+        return True
+    if value in {"false", "False"}:
+        return False
+    return value
+
+
+def _parse_freshness_scope_policy(text: str) -> dict[str, object]:
+    """Parse the freshness scope policy from a strict, stdlib-only YAML subset.
+
+    Supported shape (and nothing else):
+
+        kind: <scalar>
+        version: "<scalar>"
+        families:
+          - id: <scalar>
+            <key>: <scalar>
+            ...
+          - id: <scalar>
+            ...
+
+    Anything outside this shape raises ``ValueError`` so a malformed policy
+    fails loudly instead of being silently misread. No external YAML
+    dependency is used, matching the stdlib-only loaders elsewhere in docmeta.
+    """
+    data: dict[str, object] = {}
+    families: list[dict[str, object]] | None = None
+    current: dict[str, object] | None = None
+    in_families = False
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#") or stripped == "---":
+            continue
+
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+
+        if indent == 0:
+            in_families = False
+            current = None
+            if ":" not in stripped:
+                raise ValueError(f"Expected 'key: value', got: {raw_line!r}")
+            key, _, value = stripped.partition(":")
+            key = key.strip()
+            value = value.strip()
+            if key == "families":
+                if value:
+                    raise ValueError("'families' must be a block list, not inline")
+                families = []
+                data["families"] = families
+                in_families = True
+            elif value == "":
+                raise ValueError(f"Unsupported empty top-level key: {key!r}")
+            else:
+                data[key] = _coerce_policy_scalar(value)
+            continue
+
+        if not in_families or families is None:
+            raise ValueError(f"Unexpected indented line outside 'families': {raw_line!r}")
+
+        if stripped == "-" or stripped.startswith("- "):
+            current = {}
+            families.append(current)
+            item = stripped[1:].strip()
+            if item:
+                if ":" not in item:
+                    raise ValueError(f"Invalid family item line: {raw_line!r}")
+                key, _, value = item.partition(":")
+                current[key.strip()] = _coerce_policy_scalar(value)
+        else:
+            if current is None:
+                raise ValueError(f"Family field before any '- ' item: {raw_line!r}")
+            if ":" not in stripped:
+                raise ValueError(f"Invalid family field line: {raw_line!r}")
+            key, _, value = stripped.partition(":")
+            current[key.strip()] = _coerce_policy_scalar(value)
+
+    return data
+
+
+def _validate_scope_policy(
+    data: object,
+) -> tuple[list[ScopeFamily] | None, list[dict[str, str]]]:
+    """Validate the parsed policy and return ``(active_families, findings)``.
+
+    On any structural problem this returns ``(None, findings)`` so the caller
+    can stop instead of silently falling back to an implicit scope. Inactive
+    families are syntactically checked but excluded from the returned scope.
+    """
+    findings: list[dict[str, str]] = []
+
+    def invalid(message: str) -> tuple[None, list[dict[str, str]]]:
+        findings.append(_finding("FRESHNESS_SCOPE_POLICY_INVALID", None, message))
+        return None, findings
+
+    if not isinstance(data, dict):
+        return invalid("Policy must be a mapping")
+
+    if data.get("kind") != SCOPE_POLICY_KIND:
+        return invalid(f"Policy 'kind' must be '{SCOPE_POLICY_KIND}'")
+
+    if data.get("version") != SCOPE_POLICY_VERSION:
+        return invalid(f'Policy \'version\' must be the string "{SCOPE_POLICY_VERSION}"')
+
+    raw_families = data.get("families")
+    if not isinstance(raw_families, list) or not raw_families:
+        return invalid("Policy 'families' must be a non-empty list")
+
+    active: list[ScopeFamily] = []
+    seen_ids: set[str] = set()
+    seen_claim_prefixes: set[str] = set()
+    seen_entry_prefixes: set[str] = set()
+
+    for raw in raw_families:
+        if not isinstance(raw, dict):
+            return invalid("Each policy family must be a mapping")
+
+        fam_id = raw.get("id")
+        if not isinstance(fam_id, str) or not fam_id.strip():
+            return invalid("Each policy family needs a non-empty 'id'")
+        if fam_id in seen_ids:
+            return invalid(f"Duplicate policy family id: {fam_id}")
+        seen_ids.add(fam_id)
+
+        status = raw.get("status")
+        if not isinstance(status, str) or status not in VALID_FAMILY_STATUSES:
+            return invalid(
+                f"Policy family '{fam_id}' has invalid status; must be one of: "
+                f"{', '.join(sorted(VALID_FAMILY_STATUSES))}"
+            )
+
+        mirror_mode = raw.get("mirror_mode")
+        if mirror_mode is not None and (
+            not isinstance(mirror_mode, str) or mirror_mode not in VALID_MIRROR_MODES
+        ):
+            return invalid(
+                f"Policy family '{fam_id}' has unsupported mirror_mode {mirror_mode!r}; "
+                f"only {sorted(VALID_MIRROR_MODES)} is allowed"
+            )
+
+        require_live_check = raw.get("require_live_check", False)
+        if not isinstance(require_live_check, bool):
+            return invalid(
+                f"Policy family '{fam_id}' field 'require_live_check' must be a boolean"
+            )
+
+        # Inactive families are syntactically validated above but ignored for scope.
+        if status != "active":
+            continue
+
+        for field in REQUIRED_ACTIVE_FAMILY_FIELDS:
+            value = raw.get(field)
+            if not isinstance(value, str) or not value.strip():
+                return invalid(
+                    f"Active policy family '{fam_id}' needs a non-empty '{field}'"
+                )
+        if mirror_mode not in VALID_MIRROR_MODES:
+            return invalid(
+                f"Active policy family '{fam_id}' needs mirror_mode in {sorted(VALID_MIRROR_MODES)}"
+            )
+
+        claim_prefix = raw["claim_id_prefix"]
+        entry_prefix = raw["entry_id_prefix"]
+        if claim_prefix in seen_claim_prefixes:
+            return invalid(f"Duplicate claim_id_prefix: {claim_prefix}")
+        if entry_prefix in seen_entry_prefixes:
+            return invalid(f"Duplicate entry_id_prefix: {entry_prefix}")
+        seen_claim_prefixes.add(claim_prefix)
+        seen_entry_prefixes.add(entry_prefix)
+
+        active.append(
+            ScopeFamily(
+                id=fam_id,
+                claim_id_prefix=claim_prefix,
+                entry_id_prefix=entry_prefix,
+                registry_doc=raw["registry_doc"],
+                mirror_mode=mirror_mode,
+                require_live_check=require_live_check,
+                status=status,
+            )
+        )
+
+    return active, findings
+
+
+def load_scope_policy(
+    policy_path: Path,
+) -> tuple[list[ScopeFamily] | None, list[dict[str, str]]]:
+    """Load and validate the freshness scope policy file.
+
+    Returns ``(active_families, findings)``. A missing or invalid policy yields
+    ``(None, [FRESHNESS_SCOPE_POLICY_INVALID])`` — there is no silent fallback.
+    """
+    if not policy_path.exists():
+        return None, [
+            _finding(
+                "FRESHNESS_SCOPE_POLICY_INVALID",
+                None,
+                f"Freshness scope policy not found: {policy_path}",
+            )
+        ]
+    try:
+        raw = policy_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, [
+            _finding(
+                "FRESHNESS_SCOPE_POLICY_INVALID",
+                None,
+                f"Freshness scope policy is not readable: {exc}",
+            )
+        ]
+
+    normalized = raw.lstrip("\ufeff")
+    try:
+        data = _parse_freshness_scope_policy(normalized)
+    except ValueError as exc:
+        return None, [
+            _finding(
+                "FRESHNESS_SCOPE_POLICY_INVALID",
+                None,
+                f"Freshness scope policy parse error: {exc}",
+            )
+        ]
+
+    return _validate_scope_policy(data)
+
+
+def _entry_id_for_claim(claim_id: str, family: ScopeFamily) -> str:
+    """Derive the freshness entry id mirroring *claim_id* within *family*."""
+    suffix = claim_id[len(family.claim_id_prefix):]
+    return family.entry_id_prefix + suffix.lower()
+
+
+def _claim_id_for_entry(entry_id: str, family: ScopeFamily) -> str:
+    """Derive the claim id mirrored by *entry_id* within *family* (inverse)."""
+    suffix = entry_id[len(family.entry_id_prefix):]
+    return family.claim_id_prefix + suffix.upper()
+
+
+def _family_for_entry_id(
+    entry_id: str, families: list[ScopeFamily]
+) -> ScopeFamily | None:
+    for family in families:
+        if entry_id.startswith(family.entry_id_prefix):
+            return family
+    return None
+
+
+def _family_for_claim_id(
+    claim_id: str, families: list[ScopeFamily]
+) -> ScopeFamily | None:
+    for family in families:
+        if claim_id.startswith(family.claim_id_prefix):
+            return family
+    return None
 
 
 def _resolve_repo_target(repo_root: Path, target: str) -> tuple[Path | None, str | None]:
@@ -355,11 +641,6 @@ def _load_claim_evidence(
     return result, None
 
 
-def _claim_id_from_entry_id(entry_id: str) -> str:
-    """Derive CLAIM-AGENT-SAFE-00N from claim-agent-safe-00n."""
-    return entry_id.upper()
-
-
 def _claim_id_from_locator(locator: str) -> str | None:
     m = LOCATOR_PATTERN.match(locator)
     return m.group(1) if m else None
@@ -518,6 +799,7 @@ def validate_registry_data(
     data: object,
     claim_data: dict[str, dict[str, object]] | None,
     repo_root: Path,
+    families: list[ScopeFamily],
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
 
@@ -551,17 +833,11 @@ def validate_registry_data(
         )
         return findings
 
-    if len(entries) != EXPECTED_ENTRY_COUNT:
-        findings.append(
-            _finding(
-                "WRONG_ENTRY_COUNT",
-                None,
-                f"Registry must contain exactly {EXPECTED_ENTRY_COUNT} entries, found {len(entries)}",
-            )
-        )
-
     seen_ids: set[str] = set()
     seen_claim_ids: set[str] = set()
+    # Entry ids actually present, so the exact-mirror reverse direction can
+    # detect in-scope claims whose freshness entry is missing.
+    present_entry_ids: set[str] = set()
 
     for entry in entries:
         if not isinstance(entry, dict):
@@ -572,6 +848,7 @@ def validate_registry_data(
 
         entry_id = entry.get("id") if isinstance(entry.get("id"), str) else None
 
+        family: ScopeFamily | None = None
         if entry_id is None:
             findings.append(_finding("INVALID_ID", None, "Entry 'id' must be a string"))
         else:
@@ -583,19 +860,22 @@ def validate_registry_data(
                         "Entry 'id' must match ^[a-z0-9][a-z0-9-]*$",
                     )
                 )
-            if entry_id not in VALID_ENTRY_IDS:
-                findings.append(
-                    _finding(
-                        "INVALID_ID",
-                        entry_id,
-                        f"Entry 'id' must be one of: {', '.join(sorted(VALID_ENTRY_IDS))}",
+            else:
+                family = _family_for_entry_id(entry_id, families)
+                if family is None:
+                    findings.append(
+                        _finding(
+                            "FRESHNESS_ENTRY_OUT_OF_SCOPE",
+                            entry_id,
+                            "Entry id does not belong to any active freshness scope family",
+                        )
                     )
-                )
             if entry_id in seen_ids:
                 findings.append(
                     _finding("DUPLICATE_ID", entry_id, "Duplicate entry id")
                 )
             seen_ids.add(entry_id)
+            present_entry_ids.add(entry_id)
 
         doc = entry.get("doc")
         if doc != EXPECTED_DOC:
@@ -626,7 +906,11 @@ def validate_registry_data(
                     )
                 )
 
-        claim_id_from_id = _claim_id_from_entry_id(entry_id) if entry_id else None
+        claim_id_from_id = (
+            _claim_id_for_entry(entry_id, family)
+            if entry_id is not None and family is not None
+            else None
+        )
 
         if (
             claim_id_from_id
@@ -641,7 +925,9 @@ def validate_registry_data(
                 )
             )
 
-        claim_id = claim_id_from_id or claim_id_from_locator
+        # Claim binding is only validated for in-scope entries. Out-of-scope
+        # entries are reported above and not cross-checked against a claim.
+        claim_id = claim_id_from_id if family is not None else None
 
         claim_text = entry.get("claim")
         if not isinstance(claim_text, str) or not claim_text.strip():
@@ -708,7 +994,31 @@ def validate_registry_data(
                     )
                 )
 
-        findings.extend(_validate_evidence(entry_id, entry.get("evidence"), repo_root))
+        evidence = entry.get("evidence")
+        findings.extend(_validate_evidence(entry_id, evidence, repo_root))
+
+        # require_live_check: an in-scope entry whose family demands a live
+        # check must carry at least one evidence item whose kind is verified
+        # against the live filesystem (file/test/proof). This keeps the
+        # requirement structural and never reads the wall clock.
+        if (
+            family is not None
+            and family.require_live_check
+            and isinstance(evidence, list)
+            and evidence
+        ):
+            has_live_check = any(
+                isinstance(item, dict) and item.get("kind") in EVIDENCE_KINDS_CHECK_PATH
+                for item in evidence
+            )
+            if not has_live_check:
+                findings.append(
+                    _finding(
+                        "FRESHNESS_ENTRY_REQUIRES_LIVE_CHECK_MISSING",
+                        entry_id,
+                        "Family requires a live check but entry has no file/test/proof evidence",
+                    )
+                )
 
         if claim_id:
             if claim_id in seen_claim_ids:
@@ -725,7 +1035,7 @@ def validate_registry_data(
                         _cross_check_evidence(
                             entry_id,
                             claim_id,
-                            entry.get("evidence"),
+                            evidence,
                             claim_data[claim_id],
                         )
                     )
@@ -738,6 +1048,23 @@ def validate_registry_data(
                         )
                     )
 
+    # Exact mirror, reverse direction: every in-scope claim must have its
+    # mirror entry present. Only meaningful once the claim registry loaded.
+    if claim_data is not None:
+        for claim_id in sorted(claim_data):
+            claim_family = _family_for_claim_id(claim_id, families)
+            if claim_family is None:
+                continue
+            expected_entry_id = _entry_id_for_claim(claim_id, claim_family)
+            if expected_entry_id not in present_entry_ids:
+                findings.append(
+                    _finding(
+                        "FRESHNESS_ENTRY_MISSING_FOR_CLAIM",
+                        expected_entry_id,
+                        f"Active family '{claim_family.id}' claim {claim_id} has no freshness entry",
+                    )
+                )
+
     return findings
 
 
@@ -745,10 +1072,12 @@ def run_validation(
     registry: str = "docs/doc-freshness-registry.yml",
     claims: str = "docs/claims/registry.yml",
     repo_root: str | Path | None = None,
+    policy: str = DEFAULT_SCOPE_POLICY,
 ) -> tuple[dict[str, object], int]:
     root = Path(repo_root) if repo_root is not None else Path(REPO_ROOT)
     registry_path = root / registry
     claims_path = root / claims
+    policy_path = root / policy
 
     data, load_error = load_yaml_json(registry_path)
     if load_error is not None:
@@ -760,6 +1089,18 @@ def run_validation(
             "findings": [finding],
         }, 1
 
+    families, policy_findings = load_scope_policy(policy_path)
+    if families is None:
+        # No silent fallback: an absent or invalid policy is a hard stop.
+        entries = data.get("entries") if isinstance(data, dict) else []
+        entries_count = len(entries) if isinstance(entries, list) else 0
+        return {
+            "registry": registry,
+            "entries_count": entries_count,
+            "findings_count": len(policy_findings),
+            "findings": policy_findings,
+        }, 1
+
     claim_data: dict[str, dict[str, object]] | None = None
     findings: list[dict[str, str]] = []
     claim_data_raw, claim_error = _load_claim_evidence(claims_path)
@@ -768,7 +1109,7 @@ def run_validation(
     else:
         claim_data = claim_data_raw
 
-    findings.extend(validate_registry_data(data, claim_data, root))
+    findings.extend(validate_registry_data(data, claim_data, root, families))
 
     entries = data.get("entries") if isinstance(data, dict) else []
     entries_count = len(entries) if isinstance(entries, list) else 0
@@ -795,9 +1136,14 @@ def main(argv: list[str] | None = None) -> int:
         default="docs/claims/registry.yml",
         help="Path relative to repository root",
     )
+    parser.add_argument(
+        "--policy",
+        default=DEFAULT_SCOPE_POLICY,
+        help="Freshness scope policy path relative to repository root",
+    )
     args = parser.parse_args(argv)
 
-    output, exit_code = run_validation(args.registry, args.claims)
+    output, exit_code = run_validation(args.registry, args.claims, policy=args.policy)
     print(json.dumps(output, ensure_ascii=False, indent=2))
     return exit_code
 
