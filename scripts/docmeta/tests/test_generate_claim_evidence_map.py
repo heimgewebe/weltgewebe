@@ -199,8 +199,8 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
         md = self._read_md()
         self.assertIn("Evidence:", md)
         self.assertIn("| Kind | Target |", md)
-        self.assertIn("| file | `scripts/agent/impl_001.py` |", md)
-        self.assertIn("| test | `scripts/agent/tests/test_001.py` |", md)
+        self.assertIn("| `file` | `scripts/agent/impl_001.py` |", md)
+        self.assertIn("| `test` | `scripts/agent/tests/test_001.py` |", md)
 
     def test_markdown_shows_does_not_prove(self):
         self._write_registry()
@@ -260,3 +260,24 @@ class TestGenerateClaimEvidenceMap(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_markdown_shows_custom_locator_heading(self):
+        entries = self._entries()
+        entries[0]["locator"] = "claims[id=CLAIM-CUSTOM-XYZ]"
+        self._write_registry(entries)
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertIn("### CLAIM-CUSTOM-XYZ", md)
+
+    def test_markdown_omits_does_not_prove_if_missing(self):
+        payload = {
+            "kind": "lenskit.doc_freshness_registry",
+            "version": "1.0",
+            "entries": self._entries(),
+        }
+        path = self.root / gen.REGISTRY_REL
+        import json
+        path.write_text("---\n" + json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        gen.generate(self.root)
+        md = self._read_md()
+        self.assertNotIn("Does not prove:", md)

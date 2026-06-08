@@ -30,10 +30,10 @@ Evidence:
 
 | Kind | Target |
 | ---- | ------ |
-| file | `scripts/agent/check_agent_preflight.py` |
-| test | `scripts/agent/tests/test_check_agent_preflight.py` |
-| file | `.github/workflows/agent-safety-preflight.yml` |
-| file | `docs/security/agent-write-scope-baseline.md` |
+| `file` | `scripts/agent/check_agent_preflight.py` |
+| `test` | `scripts/agent/tests/test_check_agent_preflight.py` |
+| `file` | `.github/workflows/agent-safety-preflight.yml` |
+| `file` | `docs/security/agent-write-scope-baseline.md` |
 
 Does not prove:
 
@@ -51,9 +51,9 @@ Evidence:
 
 | Kind | Target |
 | ---- | ------ |
-| file | `scripts/docmeta/generate_agent_readiness.py` |
-| test | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
-| file | `docs/_generated/agent-readiness.md` |
+| `file` | `scripts/docmeta/generate_agent_readiness.py` |
+| `test` | `scripts/docmeta/tests/test_generate_agent_readiness.py` |
+| `file` | `docs/_generated/agent-readiness.md` |
 
 Does not prove:
 
@@ -71,10 +71,10 @@ Evidence:
 
 | Kind | Target |
 | ---- | ------ |
-| file | `docs/claims/registry.yml` |
-| file | `docs/claims/README.md` |
-| file | `scripts/docmeta/validate_claim_registry.py` |
-| test | `scripts/docmeta/tests/test_validate_claim_registry.py` |
+| `file` | `docs/claims/registry.yml` |
+| `file` | `docs/claims/README.md` |
+| `file` | `scripts/docmeta/validate_claim_registry.py` |
+| `test` | `scripts/docmeta/tests/test_validate_claim_registry.py` |
 
 Does not prove:
 

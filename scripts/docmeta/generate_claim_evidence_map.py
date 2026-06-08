@@ -28,6 +28,14 @@ MARKDOWN_REL = "docs/_generated/claim-evidence-map.md"
 GENERATOR_REL = "scripts/docmeta/generate_claim_evidence_map.py"
 
 
+def _claim_id_from_locator(locator: object) -> str:
+    if isinstance(locator, str):
+        prefix = "claims[id="
+        suffix = "]"
+        if locator.startswith(prefix) and locator.endswith(suffix):
+            return locator[len(prefix):-len(suffix)]
+    return "UNKNOWN"
+
 def _build_entries(data: object) -> list[dict[str, object]]:
     raw_entries = data.get("entries", []) if isinstance(data, dict) else []
     entries: list[dict[str, object]] = []
@@ -40,14 +48,17 @@ def _build_entries(data: object) -> list[dict[str, object]]:
         valid_evidence = []
         for item in evidence:
             if isinstance(item, dict):
-                valid_evidence.append({
-                    "kind": item.get("kind"),
-                    "target": item.get("target")
-                })
+                valid_evidence.append(
+                    {
+                        "kind": item.get("kind"),
+                        "target": item.get("target"),
+                    }
+                )
 
         entries.append(
             {
                 "id": raw.get("id"),
+                "claim_id": _claim_id_from_locator(raw.get("locator")),
                 "doc": raw.get("doc"),
                 "locator": raw.get("locator"),
                 "status": raw.get("status"),
@@ -110,10 +121,10 @@ def render_markdown(data: object) -> str:
             lines.append("| Kind | Target |")
             lines.append("| ---- | ------ |")
 
-            # Sort evidence if possible (keep original if not needed, but deterministic is good)
-            sorted_evidence = entry["evidence"] # We can sort it if needed later
-            for ev in sorted_evidence:
-                lines.append(f"| {ev.get('kind', '')} | `{ev.get('target', '')}` |")
+            for ev in entry.get("evidence", []):
+                kind = "" if ev.get("kind") is None else str(ev.get("kind"))
+                target = "" if ev.get("target") is None else str(ev.get("target"))
+                lines.append(f"| `{kind}` | `{target}` |")
 
             if does_not_prove and isinstance(does_not_prove, list):
                 lines.append("")
