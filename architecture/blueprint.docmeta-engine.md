@@ -5,7 +5,7 @@ summary: Blaupause zur schrittweisen Umsetzung einer selbsterhaltenden Dokumenta
 role: norm
 organ: governance
 status: canonical
-last_reviewed: 2026-03-03
+last_reviewed: 2026-06-09
 relations: []
 verifies_with: []
 ---
@@ -122,13 +122,13 @@ Ziel: Policy (in `manifest/review-policy.yaml`) ist verständlich und wirkt wie 
 Mode-Semantik anwenden in `check_links.py` und `review_impact.py`:
 
 - [ ] `warn` Mode: Niemals `exit 1` wegen fehlenden IDs oder broken Links, nur `stderr` Warnungen.
-- [ ] `strict` / `fail-closed` Mode: `exit 1` bei "echten Fehlern" (missing id, cycles, broken doc-links).
+- [x] `strict` / `fail-closed` Mode: `exit 1` bei "echten Fehlern" (missing id, cycles, broken doc-links).
 
 ### 4.2 Fehler vs. Unknowns definieren
 
-- [ ] Fehlend/invalid in kanonischen Docs (z.B. missing `id`) = Fehler in strict.
+- [x] Fehlend/invalid in kanonischen Docs (z.B. missing `id`) = Fehler in strict.
 - [x] Duplicate Doc-IDs in kanonischen Docs systemweit = Fehler in strict.
-- [ ] Broken internal `doc:<id>` Links = Fehler in strict.
+- [x] Broken internal `doc:<id>` Links = Fehler in strict.
 
 ## Phase 5: Repo-Information als navigierbares System
 

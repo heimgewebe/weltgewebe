@@ -5,7 +5,7 @@ summary: Aktueller Laufzeitzustand und beobachtetes Systemverhalten.
 role: reality
 organ: runtime
 status: canonical
-last_reviewed: 2026-02-28
+last_reviewed: 2026-06-09
 relations: []
 verifies_with: []
 ---

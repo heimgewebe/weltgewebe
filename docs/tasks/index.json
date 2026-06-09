@@ -373,17 +373,16 @@
         ".github/workflows/claim-registry.yml",
         ".github/workflows/docs-guard.yml"
       ],
-      "missing_evidence": [
-        "Review-Age-Hygiene für ältere Architektur-/Runtime-/Runbook-Dokumente nicht durchgeführt"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Eine minimale Claim-Evidence-Spine existiert mit drei CLAIM-AGENT-SAFE-* Claims",
         "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map",
         "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
-        "Task-Control-Registrierung und Folgearbeiten bleiben sichtbar",
+        "Task-Control-Registrierung bleibt sichtbar; epistemische Grenzen bleiben sichtbar",
         "Scope wird deklarativ durch scripts/docmeta/freshness_scope_policy.yml entschieden; aktueller realer Scope bleibt CLAIM-AGENT-SAFE-* (S3-Scope-Policy umgesetzt)",
         "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis",
-        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert"
+        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert",
+        "Review-Age-Hygiene für kanonische Architektur-/Runtime-/Runbook-Dokumente wurde durchgeführt; betroffene Dokumente sind geprüft, aktualisiert oder explizit eingeordnet"
       ],
       "links": {
         "issues": [],
@@ -395,7 +394,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-08"
+      "updated_at": "2026-06-09"
     },
     {
       "id": "OPT-API-001",
