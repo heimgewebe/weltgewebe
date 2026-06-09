@@ -80,6 +80,7 @@ def main():
 
             frontmatter = parse_frontmatter(file_path)
             if not frontmatter:
+                missing_ids.append(rel_file_path)
                 continue
 
             doc_id = frontmatter.get('id')
