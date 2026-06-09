@@ -5,7 +5,7 @@ summary: Überblick über die Systemarchitektur und zentrale Designentscheidunge
 role: norm
 organ: governance
 status: canonical
-last_reviewed: 2026-02-28
+last_reviewed: 2026-06-09
 relations: []
 verifies_with: []
 ---

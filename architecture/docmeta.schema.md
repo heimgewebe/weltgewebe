@@ -5,7 +5,7 @@ summary: Schema-Definition und Konventionen für Frontmatter-Metadaten in kanoni
 role: norm
 organ: docmeta
 status: canonical
-last_reviewed: 2026-03-02
+last_reviewed: 2026-06-09
 relations: []
 verifies_with:
   - scripts/docmeta/check_repo_index_consistency.py
@@ -176,16 +176,16 @@ relations:
 
 ### Decision: Mini-Parser vs. Migration
 
-**Decision: Mini-Parser is sufficient for now** (as of 2026-03).
+**Decision: Mini-Parser is sufficient for now** (as of 2026-06).
 
 This decision applies to the current, documented subset. It is **not** a
 claim that the parser question is resolved for all future usage patterns.
 
 Rationale:
 
-* The supported subset covers 100 % of the actual relations usage in the
-  repository (140 relations across all docs — all use `type:` + `target:`
-  block list format without quotes, comments, or inline mappings).
+* The supported subset covers 100 % of the current parser-counted relations in
+  the repository — all use `type:` + `target:` block list format without quotes,
+  comments, or inline mappings.
 * No silent misinterpretation risks for the currently used format.
 * The parser behavior is deterministic and fully tested.
 
