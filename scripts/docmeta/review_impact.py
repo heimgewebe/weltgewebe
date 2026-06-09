@@ -126,6 +126,14 @@ def main():
 
     missing_ids = sorted(list(set(missing_ids)))
 
+    if missing_ids and mode == 'warn':
+        print(
+            f"Warning: {len(missing_ids)} document(s) missing 'id' in frontmatter:",
+            file=sys.stderr,
+        )
+        for mid in missing_ids:
+            print(f"- {mid}", file=sys.stderr)
+
     if missing_ids and mode in ['strict', 'fail-closed']:
         print(f"Error: {len(missing_ids)} document(s) missing 'id' in frontmatter:", file=sys.stderr)
         for mid in missing_ids:
