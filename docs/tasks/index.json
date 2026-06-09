@@ -374,7 +374,6 @@
         ".github/workflows/docs-guard.yml"
       ],
       "missing_evidence": [
-        "DOC-MECH-FRESHNESS-TYPED-CLAIMINFO: Typisierte ClaimInfo-Struktur nicht implementiert",
         "Review-Age-Hygiene für ältere Architektur-/Runtime-/Runbook-Dokumente nicht durchgeführt"
       ],
       "acceptance": [
@@ -383,7 +382,8 @@
         "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
         "Task-Control-Registrierung und Folgearbeiten bleiben sichtbar",
         "Scope wird deklarativ durch scripts/docmeta/freshness_scope_policy.yml entschieden; aktueller realer Scope bleibt CLAIM-AGENT-SAFE-* (S3-Scope-Policy umgesetzt)",
-        "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis"
+        "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis",
+        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert"
       ],
       "links": {
         "issues": [],

@@ -1567,6 +1567,61 @@ entries:
         self.assertEqual(exit_code, 0, output["findings"])
         self.assertFalse(self._has(output, "FRESHNESS_ENTRY_MISSING_FOR_CLAIM"))
 
+    # --- ClaimInfo Tests ----------------------------------------------------
+
+    def test_load_claim_evidence_returns_claim_info(self):
+        self._write_claims()
+        claims_path = self.root / "docs" / "claims" / "registry.yml"
+        result, error = validator._load_claim_evidence(claims_path)
+        self.assertIsNone(error)
+        self.assertIn("CLAIM-AGENT-SAFE-001", result)
+        claim_info = result["CLAIM-AGENT-SAFE-001"]
+        self.assertIsInstance(claim_info, validator.ClaimInfo)
+        self.assertIsInstance(claim_info.mapped_pairs, frozenset)
+        self.assertIsInstance(claim_info.unmappable, tuple)
+        self.assertEqual((), claim_info.unmappable)
+        self.assertEqual(claim_info.statement, self.CLAIM_STATEMENTS[1])
+
+    def test_claim_info_mapped_pairs_remains_semantically_identical(self):
+        self._write_claims()
+        claims_path = self.root / "docs" / "claims" / "registry.yml"
+        result, _ = validator._load_claim_evidence(claims_path)
+        claim_info = result["CLAIM-AGENT-SAFE-001"]
+        self.assertIn(("scripts/agent/impl_001.py", "file"), claim_info.mapped_pairs)
+        self.assertIn(("scripts/agent/tests/test_001.py", "test"), claim_info.mapped_pairs)
+
+    def test_claim_info_unmappable_is_preserved(self):
+        # Add an unmappable evidence kind to CLAIM-AGENT-SAFE-001
+        ev_list = list(self.claim_evidence[1])
+        ev_list.append({"path": "docs/unknown.md", "kind": "made-up-kind"})
+        custom_ev = {1: ev_list, 2: self.claim_evidence[2], 3: self.claim_evidence[3]}
+        self._write_claims(evidence=custom_ev)
+
+        claims_path = self.root / "docs" / "claims" / "registry.yml"
+        result, _ = validator._load_claim_evidence(claims_path)
+        claim_info = result["CLAIM-AGENT-SAFE-001"]
+
+        self.assertIn(("docs/unknown.md", "made-up-kind"), claim_info.unmappable)
+
+    def test_cross_check_evidence_uses_attributes_and_reports_unmappable(self):
+        claim_info = validator.ClaimInfo(
+            statement="Test statement",
+            mapped_pairs=frozenset([("scripts/test.py", "file")]),
+            unmappable=(("docs/unknown.md", "made-up-kind"),)
+        )
+        evidence = [{"target": "scripts/test.py", "kind": "file"}]
+
+        findings = validator._cross_check_evidence(
+            entry_id="claim-agent-safe-001",
+            claim_id="CLAIM-AGENT-SAFE-001",
+            evidence=evidence,
+            claim_info=claim_info
+        )
+
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["code"], "EVIDENCE_KIND_MAPPING_INVALID")
+        self.assertEqual(findings[0]["path"], "docs/unknown.md")
+
 
 if __name__ == "__main__":
     unittest.main()
