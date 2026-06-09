@@ -87,6 +87,13 @@ DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 @dataclass(frozen=True)
+class ClaimInfo:
+    statement: str
+    mapped_pairs: frozenset[tuple[str, str]]
+    unmappable: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
 class ScopeFamily:
     """An active claim family that is in scope for the freshness registry."""
 
@@ -685,7 +692,7 @@ def load_yaml_json(path: Path) -> tuple[object | None, str | None]:
 
 def _load_claim_evidence(
     claims_path: Path,
-) -> tuple[dict[str, dict[str, object]], str | None]:
+) -> tuple[dict[str, ClaimInfo], str | None]:
     """Load claims from docs/claims/registry.yml.
 
     Returns a dict keyed by claim id, each value containing:
@@ -700,7 +707,7 @@ def _load_claim_evidence(
     if not isinstance(claims, list):
         return {}, "Claim registry has no 'claims' list"
 
-    result: dict[str, dict[str, object]] = {}
+    result: dict[str, ClaimInfo] = {}
     for claim in claims:
         if not isinstance(claim, dict) or not isinstance(claim.get("id"), str):
             continue
@@ -720,11 +727,11 @@ def _load_claim_evidence(
                 unmappable.append((path, kind))
             else:
                 mapped_pairs.add((path, lenskit_kind))
-        result[cid] = {
-            "statement": statement,
-            "mapped_pairs": mapped_pairs,
-            "unmappable": unmappable,
-        }
+        result[cid] = ClaimInfo(
+            statement=statement,
+            mapped_pairs=frozenset(mapped_pairs),
+            unmappable=tuple(unmappable),
+        )
     return result, None
 
 
@@ -833,24 +840,22 @@ def _cross_check_evidence(
     entry_id: str | None,
     claim_id: str,
     evidence: object,
-    claim_info: dict[str, object],
+    claim_info: ClaimInfo,
 ) -> list[dict[str, str]]:
     """Verify bridge evidence == mapped claim evidence, (target, lenskit_kind) set equality."""
     findings: list[dict[str, str]] = []
 
-    unmappable = claim_info.get("unmappable", [])
-    if isinstance(unmappable, list):
-        for path, kind in unmappable:
-            findings.append(
-                _finding(
-                    "EVIDENCE_KIND_MAPPING_INVALID",
-                    entry_id,
-                    f"Claim evidence kind '{kind}' has no Lenskit mapping for {claim_id}",
-                    path=path,
-                )
+    for path, kind in claim_info.unmappable:
+        findings.append(
+            _finding(
+                "EVIDENCE_KIND_MAPPING_INVALID",
+                entry_id,
+                f"Claim evidence kind '{kind}' has no Lenskit mapping for {claim_id}",
+                path=path,
             )
+        )
 
-    expected_pairs: set[tuple[str, str]] = claim_info.get("mapped_pairs", set())  # type: ignore[assignment]
+    expected_pairs: set[tuple[str, str]] = set(claim_info.mapped_pairs)
     actual_pairs: set[tuple[str, str]] = set()
     if isinstance(evidence, list):
         for item in evidence:
@@ -884,7 +889,7 @@ def _cross_check_evidence(
 
 def validate_registry_data(
     data: object,
-    claim_data: dict[str, dict[str, object]] | None,
+    claim_data: dict[str, ClaimInfo] | None,
     repo_root: Path,
     families: list[ScopeFamily],
 ) -> list[dict[str, str]]:
@@ -1024,7 +1029,7 @@ def validate_registry_data(
                 )
             )
         elif claim_id and claim_data is not None and claim_id in claim_data:
-            expected_statement = claim_data[claim_id].get("statement", "")
+            expected_statement = claim_data[claim_id].statement
             if claim_text != expected_statement:
                 findings.append(
                     _finding(
@@ -1190,7 +1195,7 @@ def run_validation(
             "findings": policy_findings,
         }, 1
 
-    claim_data: dict[str, dict[str, object]] | None = None
+    claim_data: dict[str, ClaimInfo] | None = None
     findings: list[dict[str, str]] = []
     claim_data_raw, claim_error = _load_claim_evidence(claims_path)
     if claim_error is not None:
