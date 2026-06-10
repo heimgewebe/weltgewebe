@@ -3,6 +3,7 @@ import tempfile
 import unittest
 
 from scripts.docmeta.docmeta import (
+    REPO_ROOT,
     parse_frontmatter,
     parse_repo_index,
     parse_review_policy,
@@ -292,17 +293,67 @@ class TestExtractDependsOn(unittest.TestCase):
         fm = {'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}]}
         self.assertEqual(extract_depends_on(fm), ['doc-legacy'])
 
-    def test_non_list_direct_falls_back_to_relations(self):
-        """A malformed scalar ``depends_on`` is not treated as canonical; schema validation
-        is responsible for rejecting the type. Extraction falls back to the relations source."""
+    def test_malformed_direct_depends_on_does_not_fallback_to_relations(self):
+        """A present-but-non-list ``depends_on`` key blocks the legacy fallback.
+        Extraction returns [] and schema validation is responsible for the type error."""
         fm = {
             'depends_on': 'doc-a',
             'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
         }
-        self.assertEqual(extract_depends_on(fm), ['doc-legacy'])
+        self.assertEqual(extract_depends_on(fm), [])
 
     def test_no_dependencies_at_all(self):
         self.assertEqual(extract_depends_on({}), [])
+
+
+class TestRepoWideCanonicalDocInvariant(unittest.TestCase):
+    """Every canonical doc listed in manifest/repo-index.yaml must carry
+    an ``id`` (str), a ``depends_on`` (list), and a ``verifies_with`` (list)
+    after frontmatter parsing.  This test reads the real manifest and real files."""
+
+    def test_canonical_docs_have_required_list_fields(self):
+        manifest_path = os.path.join(REPO_ROOT, "manifest", "repo-index.yaml")
+        if not os.path.exists(manifest_path):
+            self.skipTest(f"manifest/repo-index.yaml not found at {manifest_path}")
+
+        repo_index = parse_repo_index(manifest_path=manifest_path)
+        zones = repo_index.get("zones", {})
+        self.assertTrue(zones, "repo-index.yaml must define at least one zone")
+
+        failures = []
+        for zone_name, zone_data in zones.items():
+            rel_zone_path = zone_data.get("path", "")
+            for doc_file in zone_data.get("canonical_docs", []):
+                rel_path = os.path.join(rel_zone_path, doc_file)
+                full_path = os.path.join(REPO_ROOT, rel_path)
+                if not os.path.exists(full_path):
+                    failures.append(f"{rel_path}: file not found")
+                    continue
+                fm = parse_frontmatter(full_path)
+                if fm is None:
+                    failures.append(f"{rel_path}: no frontmatter")
+                    continue
+                doc_id = fm.get("id")
+                if not isinstance(doc_id, str) or not doc_id:
+                    failures.append(f"{rel_path}: 'id' missing or not a non-empty string")
+                depends_on = fm.get("depends_on")
+                if not isinstance(depends_on, list):
+                    failures.append(
+                        f"{rel_path}: 'depends_on' is {type(depends_on).__name__!r}, "
+                        "expected list (use 'depends_on: []' for empty)"
+                    )
+                verifies_with = fm.get("verifies_with")
+                if not isinstance(verifies_with, list):
+                    failures.append(
+                        f"{rel_path}: 'verifies_with' is {type(verifies_with).__name__!r}, "
+                        "expected list (use 'verifies_with: []' for empty)"
+                    )
+
+        if failures:
+            self.fail(
+                f"{len(failures)} canonical doc(s) failed invariant check:\n"
+                + "\n".join(f"  - {f}" for f in failures)
+            )
 
 
 if __name__ == '__main__':

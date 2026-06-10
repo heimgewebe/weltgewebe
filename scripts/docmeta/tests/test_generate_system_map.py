@@ -96,3 +96,27 @@ class TestSystemMapDependsOnColumn(unittest.TestCase):
         b_cells = self._row_cells(content, "doc-b")
         self.assertIsNotNone(b_cells)
         self.assertEqual(b_cells[self.DEPENDS_ON_COLUMN], "")
+
+    def test_empty_direct_depends_on_wins_over_legacy_relation(self):
+        """``depends_on: []`` plus a legacy ``relations[type=depends_on]`` entry
+        must produce an empty depends_on column — the direct key is canonical."""
+        repo_index = {
+            "zones": {"norm": {"path": "docs/", "canonical_docs": ["c.md"]}},
+            "checks": [],
+        }
+        docs = {
+            "docs/c.md": (
+                "---\n"
+                "id: doc-c\nrole: norm\nstatus: canonical\n"
+                "depends_on: []\n"
+                "verifies_with: []\n"
+                "relations:\n"
+                "  - type: depends_on\n"
+                "    target: docs/old.md\n"
+                "---\n"
+            ),
+        }
+        content = self._render_with_fixture(repo_index, docs)
+        c_cells = self._row_cells(content, "doc-c")
+        self.assertIsNotNone(c_cells)
+        self.assertEqual(c_cells[self.DEPENDS_ON_COLUMN], "")

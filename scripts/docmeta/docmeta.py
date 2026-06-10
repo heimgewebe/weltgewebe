@@ -41,19 +41,20 @@ def extract_depends_on(frontmatter):
     """
     Resolve the canonical dependency list for a document.
 
-    The direct ``depends_on`` frontmatter field is canonical: when it is present
-    as a list (including an empty list ``[]``), it wins outright and the legacy
-    ``relations`` source is ignored. Only when the direct field is absent (or is
-    not a list) does the ``relations[type=depends_on]`` fallback apply, so that
-    not-yet-migrated documents do not break.
-
-    A non-list ``depends_on`` is deliberately left for schema validation to
-    reject rather than being silently coerced here.
+    The direct ``depends_on`` frontmatter field is canonical: when the key is
+    present as a list (including ``[]``), it wins outright and the legacy
+    ``relations`` source is ignored entirely.  When the key is present but holds
+    a non-list value (malformed), ``[]`` is returned — schema validation is
+    responsible for surfacing the type error; extraction must not silently
+    fall through to the legacy source.  Only when the key is absent does the
+    ``relations[type=depends_on]`` fallback apply, so that documents that have
+    not yet migrated do not break.
     """
-    direct = frontmatter.get('depends_on')
-    if isinstance(direct, list):
-        return [str(item) for item in direct if item]
-    # Legacy fallback for documents without a direct depends_on field.
+    if "depends_on" in frontmatter:
+        direct = frontmatter["depends_on"]
+        if isinstance(direct, list):
+            return [str(item) for item in direct if item]
+        return []  # Key present but malformed — do not fall back to relations
     return extract_relations_depends_on(frontmatter)
 
 def parse_frontmatter(file_path):
