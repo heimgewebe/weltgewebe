@@ -2,7 +2,13 @@ import os
 import tempfile
 import unittest
 
-from scripts.docmeta.docmeta import parse_frontmatter, parse_repo_index, parse_review_policy
+from scripts.docmeta.docmeta import (
+    REPO_ROOT,
+    parse_frontmatter,
+    parse_repo_index,
+    parse_review_policy,
+    extract_depends_on,
+)
 
 class TestDocMetaParser(unittest.TestCase):
     def test_parse_frontmatter_crlf_eof(self):
@@ -121,6 +127,36 @@ class TestDocMetaParser(unittest.TestCase):
             self.assertEqual(data.get('audit_gaps'), ['inline gap 1', 'inline gap 2'])
         finally:
             os.remove(temp_path)
+
+    def _parse_depends_on(self, fragment):
+        content = f"---\nid: dep-doc\n{fragment}---\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            data = parse_frontmatter(temp_path)
+            self.assertIsNotNone(data)
+            return data
+        finally:
+            os.remove(temp_path)
+
+    def test_parse_frontmatter_depends_on_inline_empty(self):
+        """Real markdown ``depends_on: []`` parses to an empty list, not a string."""
+        data = self._parse_depends_on("depends_on: []\n")
+        self.assertEqual(data.get('depends_on'), [])
+        self.assertIsInstance(data.get('depends_on'), list)
+
+    def test_parse_frontmatter_depends_on_block_list(self):
+        """Real markdown block list parses to a list of IDs."""
+        data = self._parse_depends_on("depends_on:\n  - doc-a\n  - doc-b\n")
+        self.assertEqual(data.get('depends_on'), ['doc-a', 'doc-b'])
+
+    def test_parse_frontmatter_depends_on_scalar_stays_scalar(self):
+        """A bare scalar ``depends_on: doc-a`` must NOT be silently wrapped into
+        ``['doc-a']``; it stays a string so schema validation can flag the type."""
+        data = self._parse_depends_on("depends_on: doc-a\n")
+        self.assertEqual(data.get('depends_on'), 'doc-a')
+        self.assertNotIsInstance(data.get('depends_on'), list)
 
 class TestDocMetaStrictParsers(unittest.TestCase):
     def test_repo_index_typo_fail(self):
@@ -255,6 +291,113 @@ checks:
                 parse_review_policy(policy_path=temp_path, strict_manifest=True)
         finally:
             os.remove(temp_path)
+
+
+class TestExtractDependsOn(unittest.TestCase):
+    """Dependency extraction: direct ``depends_on`` is canonical, ``relations`` is fallback."""
+
+    def test_direct_depends_on_is_read(self):
+        fm = {'depends_on': ['doc-a', 'doc-b']}
+        self.assertEqual(extract_depends_on(fm), ['doc-a', 'doc-b'])
+
+    def test_empty_direct_depends_on_returns_empty_list(self):
+        fm = {'depends_on': []}
+        self.assertEqual(extract_depends_on(fm), [])
+
+    def test_direct_depends_on_wins_over_relations(self):
+        fm = {
+            'depends_on': ['doc-a'],
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), ['doc-a'])
+
+    def test_empty_direct_depends_on_wins_over_relations(self):
+        """An explicit empty list wins; it must not silently fall back to relations."""
+        fm = {
+            'depends_on': [],
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), [])
+
+    def test_legacy_relations_fallback_when_direct_absent(self):
+        fm = {'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}]}
+        self.assertEqual(extract_depends_on(fm), ['doc-legacy'])
+
+    def test_malformed_direct_depends_on_does_not_fallback_to_relations(self):
+        """A present-but-non-list ``depends_on`` key blocks the legacy fallback.
+        Extraction returns [] and schema validation is responsible for the type error."""
+        fm = {
+            'depends_on': 'doc-a',
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), [])
+
+    def test_direct_depends_on_non_string_items_are_not_stringified(self):
+        """Non-string items in a direct depends_on list are dropped, not coerced
+        via str(): a malformed value must surface through schema validation
+        (items: {type: string}), never be masked as a stringified pseudo-ID."""
+        fm = {'depends_on': ['doc-a', 123, None, {'x': 'y'}, 'doc-b']}
+        self.assertEqual(extract_depends_on(fm), ['doc-a', 'doc-b'])
+
+    def test_no_dependencies_at_all(self):
+        self.assertEqual(extract_depends_on({}), [])
+
+
+class TestRepoWideCanonicalDocInvariant(unittest.TestCase):
+    """Every canonical doc listed in manifest/repo-index.yaml must carry
+    an ``id`` (str), a ``depends_on`` (list), and a ``verifies_with`` (list)
+    after frontmatter parsing.  This reads the real manifest and real files.
+
+    Enforcement at runtime is owned by the docmeta schema guard
+    (``validate_schema.py`` + ``contracts/docmeta.schema.json``, which marks
+    these fields ``required``).  This test is independent proof on the raw
+    ``parse_frontmatter`` output — it does not rely on the validator's list
+    coercion shim, so it catches files that only pass via normalization."""
+
+    def test_canonical_docs_have_required_list_fields(self):
+        manifest_path = os.path.join(REPO_ROOT, "manifest", "repo-index.yaml")
+        if not os.path.exists(manifest_path):
+            self.skipTest(f"manifest/repo-index.yaml not found at {manifest_path}")
+
+        repo_index = parse_repo_index(manifest_path=manifest_path)
+        zones = repo_index.get("zones", {})
+        self.assertTrue(zones, "repo-index.yaml must define at least one zone")
+
+        failures = []
+        for zone_name, zone_data in zones.items():
+            rel_zone_path = zone_data.get("path", "")
+            for doc_file in zone_data.get("canonical_docs", []):
+                rel_path = os.path.join(rel_zone_path, doc_file)
+                full_path = os.path.join(REPO_ROOT, rel_path)
+                if not os.path.exists(full_path):
+                    failures.append(f"{rel_path}: file not found")
+                    continue
+                fm = parse_frontmatter(full_path)
+                if fm is None:
+                    failures.append(f"{rel_path}: no frontmatter")
+                    continue
+                doc_id = fm.get("id")
+                if not isinstance(doc_id, str) or not doc_id:
+                    failures.append(f"{rel_path}: 'id' missing or not a non-empty string")
+                depends_on = fm.get("depends_on")
+                if not isinstance(depends_on, list):
+                    failures.append(
+                        f"{rel_path}: 'depends_on' is {type(depends_on).__name__!r}, "
+                        "expected list (use 'depends_on: []' for empty)"
+                    )
+                verifies_with = fm.get("verifies_with")
+                if not isinstance(verifies_with, list):
+                    failures.append(
+                        f"{rel_path}: 'verifies_with' is {type(verifies_with).__name__!r}, "
+                        "expected list (use 'verifies_with: []' for empty)"
+                    )
+
+        if failures:
+            self.fail(
+                f"{len(failures)} canonical doc(s) failed invariant check:\n"
+                + "\n".join(f"  - {f}" for f in failures)
+            )
+
 
 if __name__ == '__main__':
     unittest.main()

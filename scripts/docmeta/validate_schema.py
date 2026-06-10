@@ -102,6 +102,12 @@ def main():
                     # let validation handle missing fields
                     pass
 
+            # `depends_on` is deliberately NOT coerced here: parse_frontmatter already
+            # yields a list for `depends_on: []`, inline, and block-list forms. A bare
+            # scalar (e.g. `depends_on: foo`) must surface as a schema type error rather
+            # than being silently wrapped into a single-item list. A missing `depends_on`
+            # is caught by the schema's `required` list.
+
             validation_errors = validate_data_against_schema(frontmatter, schema, path="root")
             for err in validation_errors:
                 errors.append(f"Schema violation in '{rel_file_path}': {err}")

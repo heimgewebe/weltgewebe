@@ -19,11 +19,11 @@ def normalize_list_field(value):
     return []
 
 
-def extract_depends_on(frontmatter):
+def extract_relations_depends_on(frontmatter):
     """
-    Extract depends_on targets from the relations array.
-    Returns a list of target strings where type == 'depends_on'.
-    For zone files with relations: [], returns [].
+    Legacy fallback: extract depends_on targets from the ``relations`` array
+    (entries with ``type: depends_on``). Returns a list of target strings.
+    For documents with ``relations: []`` (or no relations), returns [].
     """
     relations = frontmatter.get('relations', [])
     if not isinstance(relations, list):
@@ -33,8 +33,34 @@ def extract_depends_on(frontmatter):
         if isinstance(entry, dict) and entry.get('type') == 'depends_on':
             target = entry.get('target', '')
             if target:
-                deps.append(target)
+                deps.append(str(target))
     return deps
+
+
+def extract_depends_on(frontmatter):
+    """
+    Resolve the canonical dependency list for a document.
+
+    The direct ``depends_on`` frontmatter field is canonical: when the key is
+    present as a list (including ``[]``), it wins outright and the legacy
+    ``relations`` source is ignored entirely.  When the key is present but holds
+    a non-list value (malformed), ``[]`` is returned — schema validation is
+    responsible for surfacing the type error; extraction must not silently
+    fall through to the legacy source.  Only when the key is absent does the
+    ``relations[type=depends_on]`` fallback apply, so that documents that have
+    not yet migrated do not break.
+
+    Within a direct list, only non-empty strings are kept.  Non-string items
+    (ints, dicts, ``None``) are dropped rather than coerced via ``str()`` — the
+    schema's ``items: {type: string}`` check is what surfaces them as type
+    errors; the extractor must not mask a malformed value by stringifying it.
+    """
+    if "depends_on" in frontmatter:
+        direct = frontmatter["depends_on"]
+        if isinstance(direct, list):
+            return [item for item in direct if isinstance(item, str) and item]
+        return []  # Key present but malformed — do not fall back to relations
+    return extract_relations_depends_on(frontmatter)
 
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):
