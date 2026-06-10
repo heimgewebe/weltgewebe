@@ -202,6 +202,10 @@ class TestReviewImpact(unittest.TestCase):
         self.assertNotIn("warning", captured_out.getvalue().lower())
         self.assertIn("completed successfully", captured_out.getvalue())
 
+        data = self._load_impact_json()
+        self.assertIn("missing_ids", data)
+        self.assertIn("docs/no_frontmatter.md", data["missing_ids"])
+
     @patch('scripts.docmeta.review_impact.parse_review_policy')
     @patch('scripts.docmeta.review_impact.parse_repo_index')
     def test_missing_id_warn_mode_empty_frontmatter_emits_stderr_and_exits_zero(
@@ -231,6 +235,10 @@ class TestReviewImpact(unittest.TestCase):
         self.assertIn("warning", captured_err.getvalue().lower())
         self.assertIn("docs/empty_frontmatter.md", captured_err.getvalue())
         self.assertNotIn("warning", captured_out.getvalue().lower())
+
+        data = self._load_impact_json()
+        self.assertIn("missing_ids", data)
+        self.assertIn("docs/empty_frontmatter.md", data["missing_ids"])
 
     @patch('scripts.docmeta.review_impact.parse_review_policy')
     @patch('scripts.docmeta.review_impact.parse_repo_index')

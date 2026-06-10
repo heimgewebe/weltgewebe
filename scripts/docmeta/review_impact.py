@@ -125,7 +125,7 @@ def main():
 
         return cycles
 
-    missing_ids = sorted(list(set(missing_ids)))
+    missing_ids = sorted(set(missing_ids))
 
     if missing_ids and mode == 'warn':
         print(
