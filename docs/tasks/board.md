@@ -62,6 +62,7 @@ relations:
 | ID | Bereich | Titel | Evidenz |
 |---|---|---|---|
 | TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `docs/reports/optimierungsstatus.json`, `scripts/docmeta/validate_task_index.py`, `scripts/docmeta/tests/test_validate_task_index.py` |
+| DOCMETA-START-HERE-001 | docs | Start-Here Navigation und System-Map Drift Guard | `README.md`, `architecture/blueprint.docmeta-engine.md`, `scripts/docmeta/generate_system_map.py`, `Makefile` |
 | DOCMETA-WARN-MODE-001 | docs | Warn-Mode stderr semantics für Docmeta-Guards schließen | `scripts/docmeta/review_impact.py`, `scripts/docmeta/check_links.py`, `scripts/docmeta/tests/test_review_impact.py`, `scripts/docmeta/tests/test_check_links.py`, `architecture/blueprint.docmeta-engine.md` |
 | OPT-DOC-001 | docs | Incident-/DB-Recovery-Runbooks | `docs/runbooks/incident-response.md`, `docs/runbooks/db-recovery.md`; Navigation in `docs/runbooks/README.md` + `docs/index.md`; Drill-Querverweis in `docs/runbook.md` §2; Doku-Hygiene-Guards grün |
 | OPT-MAP-001 | map | Basemap Runtime Proof | CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |

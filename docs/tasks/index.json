@@ -636,6 +636,41 @@
       "updated_at": "2026-06-04"
     },
     {
+      "id": "DOCMETA-START-HERE-001",
+      "title": "Start-Here Navigation und System-Map Drift Guard",
+      "area": "docs",
+      "status": "done",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "README.md",
+        "architecture/blueprint.docmeta-engine.md",
+        "scripts/docmeta/generate_system_map.py",
+        "Makefile",
+        "docs/tasks/board.md",
+        "docs/tasks/index.json"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "README.md enthält oben einen Start-Here-Block mit expliziten Links zu Constitution, System Map, Runtime, Operations und Architecture Overview",
+        "Alle Start-Here-Zielpfade existieren im Repo",
+        "docs/_generated/system-map.md wird über Makefile blockierend drift-geprüft",
+        "System-Map-Generator läuft deterministisch genug für einen diff-guard",
+        "Docmeta-Blueprint Phase 5.1 ist nur nach Code-/Guard-Beleg abgehakt"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "README.md",
+          "architecture/blueprint.docmeta-engine.md"
+        ]
+      },
+      "updated_at": "2026-06-10"
+    },
+    {
       "id": "OPT-CI-005",
       "title": "GitHub Actions Node-24 Runtime Readiness",
       "area": "ci",

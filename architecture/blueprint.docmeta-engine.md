@@ -136,8 +136,8 @@ Ziel: Contributor versteht das System in 5 Minuten.
 
 ### 5.1 "Start Here" Links
 
-- [ ] `README.md` oben mit 5 expliziten Links versehen (Constitution, System Map, Runtime, Operations, Architecture Overview).
-- [ ] `docs/_generated/system-map.md` bleibt diff-guarded via `Makefile`.
+- [x] `README.md` oben mit 5 expliziten Links versehen (Constitution, System Map, Runtime, Operations, Architecture Overview).
+- [x] `docs/_generated/system-map.md` bleibt diff-guarded via `Makefile`.
 
 ## Definition of Done (DoD)
 
