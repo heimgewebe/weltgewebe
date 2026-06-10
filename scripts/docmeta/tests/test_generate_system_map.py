@@ -26,16 +26,16 @@ class TestGenerateSystemMap(unittest.TestCase):
         finally:
             os.unlink(tmp)
 
-    def test_no_freshness_status_in_output(self):
-        self.assertNotIn('freshness_status', self._render_system_map())
+    def test_freshness_status_in_output(self):
+        self.assertIn('freshness_status', self._render_system_map())
 
     def test_last_reviewed_present_in_output(self):
         self.assertIn('last_reviewed', self._render_system_map())
 
-    def test_column_structure_without_freshness(self):
+    def test_column_structure(self):
         content = self._render_system_map()
-        expected_header = '|id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|'
-        expected_sep = '|---|---|---|---|---|---|---|---|---|'
+        expected_header = '|id|path|role|organ|status|last_reviewed|depends_on|verifies_with|freshness_status|missing_scripts|'
+        expected_sep = '|---|---|---|---|---|---|---|---|---|---|'
         self.assertIn(expected_header, content)
         self.assertIn(expected_sep, content)
         self.assertEqual(expected_header.count('|'), expected_sep.count('|'))

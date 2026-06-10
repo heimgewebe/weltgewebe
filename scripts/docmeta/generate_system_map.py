@@ -1,5 +1,6 @@
 import os
 import sys
+import datetime
 
 from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
 
@@ -7,6 +8,8 @@ def main():
     try:
         policy = parse_review_policy()
         strict_mode = policy.get('strict_manifest', False)
+        warn_days = policy.get('warn_days', 90)
+        fail_days = policy.get('fail_days', 180)
         repo_index = parse_repo_index(strict_manifest=strict_mode)
     except ValueError as e:
         print(f"Error parsing manifest/policy: {e}", file=sys.stderr)
@@ -51,6 +54,24 @@ def main():
                 role = frontmatter.get('role', '')
                 last_reviewed_str = frontmatter.get('last_reviewed', '')
 
+                # Freshness status
+                freshness_status = "unknown"
+                if last_reviewed_str:
+                    try:
+                        last_reviewed_date = datetime.datetime.strptime(last_reviewed_str, "%Y-%m-%d").date()
+                        today = datetime.date.today()
+                        delta = today - last_reviewed_date
+                        if delta.days > fail_days:
+                            freshness_status = "fail"
+                        elif delta.days > warn_days:
+                            freshness_status = "warn"
+                        else:
+                            freshness_status = "pass"
+                    except ValueError:
+                        freshness_status = "invalid"
+                else:
+                    freshness_status = "missing"
+
                 depends_on_list = extract_depends_on(frontmatter)
                 depends_on_str = ', '.join(depends_on_list)
 
@@ -79,12 +100,13 @@ def main():
                 last_reviewed_str = "_Missing_"
                 depends_on_str = "_Missing_"
                 verifies_with_str = "_Missing_"
+                freshness_status = "_Missing_"
                 missing_scripts_str = "_Missing_"
                 file_link = rel_file_path
 
-            rows.append([doc_id, file_link, role, organ, status, last_reviewed_str, depends_on_str, verifies_with_str, missing_scripts_str])
+            rows.append([doc_id, file_link, role, organ, status, last_reviewed_str, depends_on_str, verifies_with_str, freshness_status, missing_scripts_str])
 
-        headers = ["id", "path", "role", "organ", "status", "last_reviewed", "depends_on", "verifies_with", "missing_scripts"]
+        headers = ["id", "path", "role", "organ", "status", "last_reviewed", "depends_on", "verifies_with", "freshness_status", "missing_scripts"]
 
         header_row = "|" + "|".join(headers) + "|"
         output.append(header_row)
