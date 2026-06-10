@@ -220,6 +220,14 @@ class TestCanonicalDocmetaSchema(unittest.TestCase):
         errors = validate_data_against_schema(fm, self.schema)
         self.assertTrue(any("depends_on" in e and "expected array" in e for e in errors), errors)
 
+    def test_depends_on_list_item_wrong_type_fails(self):
+        fm = self._valid_frontmatter(depends_on=["doc-a", 123])
+        errors = validate_data_against_schema(fm, self.schema)
+        self.assertTrue(
+            any("depends_on" in e and "expected string" in e for e in errors),
+            errors,
+        )
+
 
 class TestMarkdownToSchemaIntegration(unittest.TestCase):
     """End-to-end proof: real markdown frontmatter → parse_frontmatter() →

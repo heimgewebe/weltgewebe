@@ -37,9 +37,9 @@ def _get_depends_on(frontmatter, doc_id=None):
     if isinstance(direct, list) and extract_relations_depends_on(frontmatter):
         label = f"'{doc_id}'" if doc_id else '<unknown>'
         print(
-            f"Warning: document {label} defines depends_on in both "
-            "'depends_on' and 'relations'. "
-            "Using 'depends_on' as canonical source.",
+            f"Warning: document {label} defines canonical depends_on and "
+            "legacy relations[type=depends_on]. "
+            "Using canonical depends_on as source.",
             file=sys.stderr,
         )
     return extract_depends_on(frontmatter)
