@@ -397,6 +397,38 @@
       "updated_at": "2026-06-09"
     },
     {
+      "id": "DOCMETA-WARN-MODE-001",
+      "title": "Warn-Mode stderr semantics für Docmeta-Guards schließen",
+      "area": "docs",
+      "status": "done",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "scripts/docmeta/review_impact.py",
+        "scripts/docmeta/check_links.py",
+        "scripts/docmeta/tests/test_review_impact.py",
+        "scripts/docmeta/tests/test_check_links.py",
+        "architecture/blueprint.docmeta-engine.md"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "warn-Mode meldet fehlende Doc-IDs auf stderr und endet mit Exit-Code 0",
+        "warn-Mode meldet broken doc:<id>-Links auf stderr und endet mit Exit-Code 0",
+        "strict / fail-closed blockieren weiterhin bei missing IDs und broken doc links",
+        "Blueprint-Checkbox ist nur gesetzt, weil Code und Tests beide Oberflächen abdecken"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "architecture/blueprint.docmeta-engine.md"
+        ]
+      },
+      "updated_at": "2026-06-09"
+    },
+    {
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",

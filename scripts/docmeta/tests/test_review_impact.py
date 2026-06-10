@@ -142,6 +142,138 @@ class TestReviewImpact(unittest.TestCase):
 
     @patch('scripts.docmeta.review_impact.parse_review_policy')
     @patch('scripts.docmeta.review_impact.parse_repo_index')
+    def test_missing_id_warn_mode_emits_stderr_and_exits_zero(
+        self, mock_parse_repo_index, mock_parse_review_policy
+    ):
+        """Warn mode reports missing IDs on stderr without failing."""
+        mock_parse_review_policy.return_value = {
+            "mode": "warn", "strict_manifest": False,
+            "warn_days": 90, "fail_days": 180,
+        }
+        mock_parse_repo_index.return_value = {
+            "zones": {
+                "norm": {
+                    "path": "docs/",
+                    "canonical_docs": ["no_id.md"],
+                }
+            }
+        }
+        self._write_doc("docs/no_id.md", "---\ntitle: No ID\n---\n")
+
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            with patch('scripts.docmeta.review_impact.REPO_ROOT', self.temp_dir):
+                main()
+
+        self.assertIn("warning", captured_err.getvalue().lower())
+        self.assertIn("docs/no_id.md", captured_err.getvalue())
+        self.assertNotIn("warning", captured_out.getvalue().lower())
+        self.assertIn("completed successfully", captured_out.getvalue())
+
+    @patch('scripts.docmeta.review_impact.parse_review_policy')
+    @patch('scripts.docmeta.review_impact.parse_repo_index')
+    def test_missing_id_warn_mode_no_frontmatter_emits_stderr_and_exits_zero(
+        self, mock_parse_repo_index, mock_parse_review_policy
+    ):
+        """Warn mode reports canonical documents without frontmatter."""
+        mock_parse_review_policy.return_value = {
+            "mode": "warn", "strict_manifest": False,
+            "warn_days": 90, "fail_days": 180,
+        }
+        mock_parse_repo_index.return_value = {
+            "zones": {
+                "norm": {
+                    "path": "docs/",
+                    "canonical_docs": ["no_frontmatter.md"],
+                }
+            }
+        }
+        self._write_doc("docs/no_frontmatter.md", "Body without frontmatter\n")
+
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            with patch('scripts.docmeta.review_impact.REPO_ROOT', self.temp_dir):
+                main()
+
+        self.assertIn("warning", captured_err.getvalue().lower())
+        self.assertIn("docs/no_frontmatter.md", captured_err.getvalue())
+        self.assertNotIn("warning", captured_out.getvalue().lower())
+        self.assertIn("completed successfully", captured_out.getvalue())
+
+        data = self._load_impact_json()
+        self.assertIn("missing_ids", data)
+        self.assertIn("docs/no_frontmatter.md", data["missing_ids"])
+
+    @patch('scripts.docmeta.review_impact.parse_review_policy')
+    @patch('scripts.docmeta.review_impact.parse_repo_index')
+    def test_missing_id_warn_mode_empty_frontmatter_emits_stderr_and_exits_zero(
+        self, mock_parse_repo_index, mock_parse_review_policy
+    ):
+        """Warn mode reports canonical documents with empty frontmatter."""
+        mock_parse_review_policy.return_value = {
+            "mode": "warn", "strict_manifest": False,
+            "warn_days": 90, "fail_days": 180,
+        }
+        mock_parse_repo_index.return_value = {
+            "zones": {
+                "norm": {
+                    "path": "docs/",
+                    "canonical_docs": ["empty_frontmatter.md"],
+                }
+            }
+        }
+        self._write_doc("docs/empty_frontmatter.md", "---\n---\nBody\n")
+
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with redirect_stdout(captured_out), redirect_stderr(captured_err):
+            with patch('scripts.docmeta.review_impact.REPO_ROOT', self.temp_dir):
+                main()
+
+        self.assertIn("warning", captured_err.getvalue().lower())
+        self.assertIn("docs/empty_frontmatter.md", captured_err.getvalue())
+        self.assertNotIn("warning", captured_out.getvalue().lower())
+
+        data = self._load_impact_json()
+        self.assertIn("missing_ids", data)
+        self.assertIn("docs/empty_frontmatter.md", data["missing_ids"])
+
+    @patch('scripts.docmeta.review_impact.parse_review_policy')
+    @patch('scripts.docmeta.review_impact.parse_repo_index')
+    def test_missing_id_empty_frontmatter_strict_mode_exits(
+        self, mock_parse_repo_index, mock_parse_review_policy
+    ):
+        """Empty frontmatter remains blocking in strict mode."""
+        mock_parse_review_policy.return_value = {
+            "mode": "strict", "strict_manifest": False,
+            "warn_days": 90, "fail_days": 180,
+        }
+        mock_parse_repo_index.return_value = {
+            "zones": {
+                "norm": {
+                    "path": "docs/",
+                    "canonical_docs": ["empty_frontmatter.md"],
+                }
+            }
+        }
+        self._write_doc("docs/empty_frontmatter.md", "---\n---\nBody\n")
+
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with self.assertRaises(SystemExit) as ctx:
+            with redirect_stdout(captured_out), redirect_stderr(captured_err):
+                with patch('scripts.docmeta.review_impact.REPO_ROOT', self.temp_dir):
+                    main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("error", captured_err.getvalue().lower())
+        self.assertIn("missing", captured_err.getvalue().lower())
+        self.assertIn("docs/empty_frontmatter.md", captured_err.getvalue())
+
+    @patch('scripts.docmeta.review_impact.parse_review_policy')
+    @patch('scripts.docmeta.review_impact.parse_repo_index')
     def test_missing_id_strict_mode_exits(self, mock_parse_repo_index, mock_parse_review_policy):
         """Documents missing 'id' in strict mode should cause exit."""
         mock_parse_review_policy.return_value = {
@@ -158,6 +290,36 @@ class TestReviewImpact(unittest.TestCase):
         }
         mock_parse_repo_index.return_value = repo_index
 
+        self._write_doc("docs/no_id.md", "---\ntitle: No ID\n---\n")
+
+        captured_out = io.StringIO()
+        captured_err = io.StringIO()
+        with self.assertRaises(SystemExit) as ctx:
+            with redirect_stdout(captured_out), redirect_stderr(captured_err):
+                with patch('scripts.docmeta.review_impact.REPO_ROOT', self.temp_dir):
+                    main()
+
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertIn("missing", captured_err.getvalue().lower())
+
+    @patch('scripts.docmeta.review_impact.parse_review_policy')
+    @patch('scripts.docmeta.review_impact.parse_repo_index')
+    def test_missing_id_fail_closed_mode_exits(
+        self, mock_parse_repo_index, mock_parse_review_policy
+    ):
+        """Documents missing IDs remain blocking in fail-closed mode."""
+        mock_parse_review_policy.return_value = {
+            "mode": "fail-closed", "strict_manifest": False,
+            "warn_days": 90, "fail_days": 180,
+        }
+        mock_parse_repo_index.return_value = {
+            "zones": {
+                "norm": {
+                    "path": "docs/",
+                    "canonical_docs": ["no_id.md"],
+                }
+            }
+        }
         self._write_doc("docs/no_id.md", "---\ntitle: No ID\n---\n")
 
         captured_out = io.StringIO()

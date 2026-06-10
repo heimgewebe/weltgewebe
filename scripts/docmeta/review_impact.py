@@ -80,6 +80,7 @@ def main():
 
             frontmatter = parse_frontmatter(file_path)
             if not frontmatter:
+                missing_ids.append(rel_file_path)
                 continue
 
             doc_id = frontmatter.get('id')
@@ -124,7 +125,15 @@ def main():
 
         return cycles
 
-    missing_ids = sorted(list(set(missing_ids)))
+    missing_ids = sorted(set(missing_ids))
+
+    if missing_ids and mode == 'warn':
+        print(
+            f"Warning: {len(missing_ids)} document(s) missing 'id' in frontmatter:",
+            file=sys.stderr,
+        )
+        for mid in missing_ids:
+            print(f"- {mid}", file=sys.stderr)
 
     if missing_ids and mode in ['strict', 'fail-closed']:
         print(f"Error: {len(missing_ids)} document(s) missing 'id' in frontmatter:", file=sys.stderr)

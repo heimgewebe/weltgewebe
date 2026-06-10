@@ -121,7 +121,7 @@ Ziel: Policy (in `manifest/review-policy.yaml`) ist verständlich und wirkt wie 
 
 Mode-Semantik anwenden in `check_links.py` und `review_impact.py`:
 
-- [ ] `warn` Mode: Niemals `exit 1` wegen fehlenden IDs oder broken Links, nur `stderr` Warnungen.
+- [x] `warn` Mode: Niemals `exit 1` wegen fehlenden IDs oder broken Links, nur `stderr` Warnungen.
 - [x] `strict` / `fail-closed` Mode: `exit 1` bei "echten Fehlern" (missing id, cycles, broken doc-links).
 
 ### 4.2 Fehler vs. Unknowns definieren

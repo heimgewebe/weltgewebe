@@ -82,6 +82,29 @@ class TestCheckLinks(unittest.TestCase):
         self.assertIn("Broken link", err)
         self.assertIn("does not exist", err)
 
+    def test_doc_link_unknown_id_fail_closed(self):
+        """Broken doc links remain blocking in fail-closed mode."""
+        exit_code, out, err = self.run_check_links(
+            "This is a [link](doc:unknown.id)",
+            index_content={"docs": []},
+            mode='fail-closed',
+        )
+        self.assertEqual(exit_code, 1)
+        self.assertIn("Broken link", err)
+        self.assertIn("does not exist", err)
+
+    def test_broken_doc_link_warn_mode_emits_stderr_and_exits_zero(self):
+        """Broken doc links warn on stderr without failing in warn mode."""
+        exit_code, out, err = self.run_check_links(
+            "This is a [link](doc:does-not-exist)",
+            index_content={"docs": []},
+            mode='warn',
+        )
+        self.assertEqual(exit_code, 0)
+        self.assertIn("Warnings", err)
+        self.assertIn("does-not-exist", err)
+        self.assertNotIn("Warnings", out)
+
     def test_doc_link_known_id(self):
         """3. doc:known.id bei vorhandenem index -> pass"""
         index = {"docs": [{"id": "known.id"}]}
