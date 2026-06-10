@@ -6,6 +6,7 @@ role: norm
 organ: governance
 status: canonical
 last_reviewed: 2026-06-09
+depends_on: []
 relations: []
 verifies_with: []
 ---
@@ -142,7 +143,7 @@ Ziel: Contributor versteht das System in 5 Minuten.
 ## Definition of Done (DoD)
 
 - [ ] `make docs-guard` läuft fehlerfrei und deterministisch.
-- [ ] Alle kanonischen Dokumente (`manifest/repo-index.yaml`) haben verpflichtend eine `id`,
+- [x] Alle kanonischen Dokumente (`manifest/repo-index.yaml`) haben verpflichtend eine `id`,
   `depends_on` und `verifies_with`.
 - [ ] Der `doc:<id>` Resolver in `check_links.py` greift und funktioniert.
 - [ ] Bei `mode: strict` (in `manifest/review-policy.yaml`) führt ein fehlender Link oder

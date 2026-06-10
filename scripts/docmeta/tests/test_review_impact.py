@@ -415,6 +415,20 @@ class TestGetDependsOn(unittest.TestCase):
         """Empty frontmatter returns empty list."""
         self.assertEqual(_get_depends_on({}), [])
 
+    def test_empty_direct_overrides_relations(self):
+        """An explicit empty depends_on wins over a legacy relations entry.
+
+        Keeps review_impact consistent with docmeta.extract_depends_on: a present
+        (even empty) direct field is canonical and must not fall back to relations.
+        """
+        fm = {
+            'depends_on': [],
+            'relations': [
+                {'type': 'depends_on', 'target': 'doc-legacy'},
+            ],
+        }
+        self.assertEqual(_get_depends_on(fm), [])
+
 
 if __name__ == '__main__':
     unittest.main()

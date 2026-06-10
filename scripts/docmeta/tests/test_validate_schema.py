@@ -1,5 +1,8 @@
+import json
+import os
 import unittest
 
+from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.validate_schema import validate_data_against_schema
 
 
@@ -155,6 +158,66 @@ class TestValidateDataAgainstSchema(unittest.TestCase):
         }
         errors = validate_data_against_schema({}, schema)
         self.assertEqual(errors, [])
+
+
+class TestCanonicalDocmetaSchema(unittest.TestCase):
+    """Tests the real contracts/docmeta.schema.json against constructed frontmatter.
+
+    Verifies that ``depends_on`` is a first-class array property and that both
+    ``depends_on`` and ``verifies_with`` are mandatory for canonical documents.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        schema_path = os.path.join(REPO_ROOT, "contracts", "docmeta.schema.json")
+        with open(schema_path, "r", encoding="utf-8") as f:
+            cls.schema = json.load(f)
+
+    def _valid_frontmatter(self, **overrides):
+        fm = {
+            "id": "doc.test",
+            "title": "Test Document",
+            "summary": "A non-empty test summary.",
+            "status": "canonical",
+            "depends_on": [],
+            "verifies_with": [],
+        }
+        fm.update(overrides)
+        return fm
+
+    def test_depends_on_is_a_declared_property(self):
+        self.assertIn("depends_on", self.schema.get("properties", {}))
+        self.assertEqual(self.schema["properties"]["depends_on"].get("type"), "array")
+
+    def test_depends_on_and_verifies_with_are_required(self):
+        required = self.schema.get("required", [])
+        self.assertIn("depends_on", required)
+        self.assertIn("verifies_with", required)
+
+    def test_valid_with_empty_lists_passes(self):
+        fm = self._valid_frontmatter()
+        self.assertEqual(validate_data_against_schema(fm, self.schema), [])
+
+    def test_valid_with_populated_depends_on_passes(self):
+        fm = self._valid_frontmatter(depends_on=["other.doc"])
+        self.assertEqual(validate_data_against_schema(fm, self.schema), [])
+
+    def test_missing_depends_on_fails(self):
+        fm = self._valid_frontmatter()
+        del fm["depends_on"]
+        errors = validate_data_against_schema(fm, self.schema)
+        self.assertTrue(any("depends_on" in e and "missing required" in e for e in errors), errors)
+
+    def test_missing_verifies_with_fails(self):
+        fm = self._valid_frontmatter()
+        del fm["verifies_with"]
+        errors = validate_data_against_schema(fm, self.schema)
+        self.assertTrue(any("verifies_with" in e and "missing required" in e for e in errors), errors)
+
+    def test_depends_on_wrong_type_string_fails(self):
+        fm = self._valid_frontmatter(depends_on="not-a-list")
+        errors = validate_data_against_schema(fm, self.schema)
+        self.assertTrue(any("depends_on" in e and "expected array" in e for e in errors), errors)
 
 
 if __name__ == '__main__':

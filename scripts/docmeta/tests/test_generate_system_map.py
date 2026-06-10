@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,3 +42,57 @@ class TestGenerateSystemMap(unittest.TestCase):
 
     def test_generator_deterministic(self):
         self.assertEqual(self._render_system_map(), self._render_system_map())
+
+
+class TestSystemMapDependsOnColumn(unittest.TestCase):
+    """The depends_on column reflects the canonical extract_depends_on semantics."""
+
+    DEPENDS_ON_COLUMN = 6  # |id|path|role|organ|status|last_reviewed|depends_on|...
+
+    def _render_with_fixture(self, repo_index, docs):
+        temp_dir = tempfile.mkdtemp()
+        try:
+            for relpath, content in docs.items():
+                full = os.path.join(temp_dir, relpath)
+                os.makedirs(os.path.dirname(full), exist_ok=True)
+                with open(full, 'w', encoding='utf-8') as f:
+                    f.write(content)
+            os.makedirs(os.path.join(temp_dir, 'docs', '_generated'), exist_ok=True)
+            policy = {"mode": "warn", "strict_manifest": False, "warn_days": 90, "fail_days": 180}
+            with patch('scripts.docmeta.generate_system_map.parse_review_policy', return_value=policy), \
+                 patch('scripts.docmeta.generate_system_map.parse_repo_index', return_value=repo_index), \
+                 patch('scripts.docmeta.generate_system_map.REPO_ROOT', temp_dir):
+                gen_mod.main()
+            out = os.path.join(temp_dir, 'docs', '_generated', 'system-map.md')
+            return Path(out).read_text(encoding='utf-8')
+        finally:
+            shutil.rmtree(temp_dir)
+
+    def _row_cells(self, content, doc_id):
+        # Split on '|' and drop the empty leading/trailing fields produced by the
+        # outer pipes. Avoids collapsing trailing empty cells (e.g. empty depends_on).
+        for line in content.splitlines():
+            if line.startswith(f"|{doc_id}|"):
+                return [c.strip() for c in line.split("|")[1:-1]]
+        return None
+
+    def test_direct_depends_on_appears_and_empty_stays_empty(self):
+        repo_index = {
+            "zones": {"norm": {"path": "docs/", "canonical_docs": ["a.md", "b.md"]}},
+            "checks": [],
+        }
+        docs = {
+            "docs/a.md": "---\nid: doc-a\nrole: norm\nstatus: canonical\n"
+                         "depends_on:\n  - doc-b\nverifies_with: []\n---\n",
+            "docs/b.md": "---\nid: doc-b\nrole: norm\nstatus: canonical\n"
+                         "depends_on: []\nverifies_with: []\n---\n",
+        }
+        content = self._render_with_fixture(repo_index, docs)
+
+        a_cells = self._row_cells(content, "doc-a")
+        self.assertIsNotNone(a_cells)
+        self.assertEqual(a_cells[self.DEPENDS_ON_COLUMN], "doc-b")
+
+        b_cells = self._row_cells(content, "doc-b")
+        self.assertIsNotNone(b_cells)
+        self.assertEqual(b_cells[self.DEPENDS_ON_COLUMN], "")

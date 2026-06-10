@@ -2,7 +2,14 @@ import os
 import sys
 import json
 
-from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatter, parse_review_policy, normalize_list_field, extract_depends_on
+from scripts.docmeta.docmeta import (
+    REPO_ROOT,
+    parse_repo_index,
+    parse_frontmatter,
+    parse_review_policy,
+    extract_depends_on,
+    extract_relations_depends_on,
+)
 
 
 # --- Dependency resolution contract ---
@@ -19,21 +26,15 @@ from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatt
 def _get_depends_on(frontmatter, doc_id=None):
     """Get dependency IDs from frontmatter.
 
-    Supports both the direct ``depends_on`` field and the ``relations``
-    array (entries with ``type: depends_on``).  The direct field takes
-    precedence; the relations fallback ensures compatibility when
-    ``parse_frontmatter`` does not handle ``depends_on`` as a block list.
+    Resolution is delegated to :func:`extract_depends_on` so that this module
+    stays consistent with the system map and the other dependency consumers:
+    the direct ``depends_on`` field is canonical (a present list, including an
+    empty one, wins), and ``relations[type=depends_on]`` is only a legacy
+    fallback. When a document defines a direct list *and* a legacy relations
+    entry, a warning is emitted so the duplication can be cleaned up.
     """
-    deps = normalize_list_field(frontmatter.get('depends_on', []))
-    relations_deps = []
-    relations = frontmatter.get('relations', [])
-    if isinstance(relations, list):
-        for entry in relations:
-            if isinstance(entry, dict) and entry.get('type') == 'depends_on':
-                target = entry.get('target', '')
-                if target:
-                    relations_deps.append(target)
-    if deps and relations_deps:
+    direct = frontmatter.get('depends_on')
+    if isinstance(direct, list) and extract_relations_depends_on(frontmatter):
         label = f"'{doc_id}'" if doc_id else '<unknown>'
         print(
             f"Warning: document {label} defines depends_on in both "
@@ -41,9 +42,7 @@ def _get_depends_on(frontmatter, doc_id=None):
             "Using 'depends_on' as canonical source.",
             file=sys.stderr,
         )
-    if deps:
-        return deps
-    return relations_deps
+    return extract_depends_on(frontmatter)
 
 
 def main():

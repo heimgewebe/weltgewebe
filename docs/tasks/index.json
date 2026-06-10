@@ -429,6 +429,50 @@
       "updated_at": "2026-06-09"
     },
     {
+      "id": "DOCMETA-DEPENDS-ON-CANONICAL-001",
+      "title": "Direktes depends_on als kanonisches Docmeta-Feld durchsetzen",
+      "area": "docs",
+      "status": "done",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "contracts/docmeta.schema.json",
+        "architecture/docmeta.schema.md",
+        "architecture/blueprint.docmeta-engine.md",
+        "manifest/repo-index.yaml",
+        "scripts/docmeta/docmeta.py",
+        "scripts/docmeta/review_impact.py",
+        "scripts/docmeta/generate_system_map.py",
+        "scripts/docmeta/validate_schema.py",
+        "scripts/docmeta/tests/test_docmeta.py",
+        "scripts/docmeta/tests/test_validate_schema.py",
+        "scripts/docmeta/tests/test_review_impact.py",
+        "scripts/docmeta/tests/test_generate_system_map.py"
+      ],
+      "missing_evidence": [],
+      "acceptance": [
+        "depends_on ist direktes Feld im Docmeta-Schema",
+        "depends_on und verifies_with sind für kanonische Docs verpflichtend",
+        "Alle in manifest/repo-index.yaml geführten kanonischen Docs tragen depends_on",
+        "depends_on: [] ist gültig",
+        "Direkter depends_on-Wert gewinnt vor Legacy-relations[type=depends_on]",
+        "Legacy-Fallback über relations[type=depends_on] bleibt erhalten",
+        "Review-Impact und System-Map nutzen konsistente Dependency-Semantik",
+        "Docmeta-Tests und Guards sind grün"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "architecture/docmeta.schema.md",
+          "architecture/blueprint.docmeta-engine.md"
+        ]
+      },
+      "updated_at": "2026-06-10"
+    },
+    {
       "id": "OPT-API-001",
       "title": "Paginierung Listen-Endpunkte",
       "area": "api",

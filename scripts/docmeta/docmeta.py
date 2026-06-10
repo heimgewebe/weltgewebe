@@ -19,11 +19,11 @@ def normalize_list_field(value):
     return []
 
 
-def extract_depends_on(frontmatter):
+def extract_relations_depends_on(frontmatter):
     """
-    Extract depends_on targets from the relations array.
-    Returns a list of target strings where type == 'depends_on'.
-    For zone files with relations: [], returns [].
+    Legacy fallback: extract depends_on targets from the ``relations`` array
+    (entries with ``type: depends_on``). Returns a list of target strings.
+    For documents with ``relations: []`` (or no relations), returns [].
     """
     relations = frontmatter.get('relations', [])
     if not isinstance(relations, list):
@@ -33,8 +33,28 @@ def extract_depends_on(frontmatter):
         if isinstance(entry, dict) and entry.get('type') == 'depends_on':
             target = entry.get('target', '')
             if target:
-                deps.append(target)
+                deps.append(str(target))
     return deps
+
+
+def extract_depends_on(frontmatter):
+    """
+    Resolve the canonical dependency list for a document.
+
+    The direct ``depends_on`` frontmatter field is canonical: when it is present
+    as a list (including an empty list ``[]``), it wins outright and the legacy
+    ``relations`` source is ignored. Only when the direct field is absent (or is
+    not a list) does the ``relations[type=depends_on]`` fallback apply, so that
+    not-yet-migrated documents do not break.
+
+    A non-list ``depends_on`` is deliberately left for schema validation to
+    reject rather than being silently coerced here.
+    """
+    direct = frontmatter.get('depends_on')
+    if isinstance(direct, list):
+        return [str(item) for item in direct if item]
+    # Legacy fallback for documents without a direct depends_on field.
+    return extract_relations_depends_on(frontmatter)
 
 def parse_frontmatter(file_path):
     if not os.path.exists(file_path):

@@ -2,7 +2,12 @@ import os
 import tempfile
 import unittest
 
-from scripts.docmeta.docmeta import parse_frontmatter, parse_repo_index, parse_review_policy
+from scripts.docmeta.docmeta import (
+    parse_frontmatter,
+    parse_repo_index,
+    parse_review_policy,
+    extract_depends_on,
+)
 
 class TestDocMetaParser(unittest.TestCase):
     def test_parse_frontmatter_crlf_eof(self):
@@ -255,6 +260,50 @@ checks:
                 parse_review_policy(policy_path=temp_path, strict_manifest=True)
         finally:
             os.remove(temp_path)
+
+
+class TestExtractDependsOn(unittest.TestCase):
+    """Dependency extraction: direct ``depends_on`` is canonical, ``relations`` is fallback."""
+
+    def test_direct_depends_on_is_read(self):
+        fm = {'depends_on': ['doc-a', 'doc-b']}
+        self.assertEqual(extract_depends_on(fm), ['doc-a', 'doc-b'])
+
+    def test_empty_direct_depends_on_returns_empty_list(self):
+        fm = {'depends_on': []}
+        self.assertEqual(extract_depends_on(fm), [])
+
+    def test_direct_depends_on_wins_over_relations(self):
+        fm = {
+            'depends_on': ['doc-a'],
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), ['doc-a'])
+
+    def test_empty_direct_depends_on_wins_over_relations(self):
+        """An explicit empty list wins; it must not silently fall back to relations."""
+        fm = {
+            'depends_on': [],
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), [])
+
+    def test_legacy_relations_fallback_when_direct_absent(self):
+        fm = {'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}]}
+        self.assertEqual(extract_depends_on(fm), ['doc-legacy'])
+
+    def test_non_list_direct_falls_back_to_relations(self):
+        """A malformed scalar ``depends_on`` is not treated as canonical; schema validation
+        is responsible for rejecting the type. Extraction falls back to the relations source."""
+        fm = {
+            'depends_on': 'doc-a',
+            'relations': [{'type': 'depends_on', 'target': 'doc-legacy'}],
+        }
+        self.assertEqual(extract_depends_on(fm), ['doc-legacy'])
+
+    def test_no_dependencies_at_all(self):
+        self.assertEqual(extract_depends_on({}), [])
+
 
 if __name__ == '__main__':
     unittest.main()

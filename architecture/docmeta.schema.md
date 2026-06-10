@@ -6,6 +6,7 @@ role: norm
 organ: docmeta
 status: canonical
 last_reviewed: 2026-06-09
+depends_on: []
 relations: []
 verifies_with:
   - scripts/docmeta/check_repo_index_consistency.py
@@ -20,7 +21,7 @@ Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonisch
 
 > **Hinweis:** Das Frontmatter wird bewusst durch einen eingeschränkten, deterministischen
 > Mini-Parser gelesen. Strukturierte YAML-Blocklisten werden ausdrücklich nur für die
-> Felder `relations`, `verifies_with` und `audit_gaps` garantiert.
+> Felder `relations`, `depends_on`, `verifies_with` und `audit_gaps` garantiert.
 
 ## Pflichtfelder (alle Dokumente)
 
@@ -33,9 +34,30 @@ Dieses Dokument definiert das Schema für Frontmatter-Metadaten in den kanonisch
 
 * **doc_type**: Dokumenttyp (z.B. blueprint, reference, concept, runbook, generated).
 
+## Abhängigkeiten (`depends_on`)
+
+`depends_on` ist das **kanonische, direkte Frontmatter-Feld** für Dokumentabhängigkeiten.
+
+* **Typ**: Liste von Doc-IDs (z. B. `depends_on: [andere.doc.id]`).
+* **Pflicht für kanonische Dokumente**: Jedes in `manifest/repo-index.yaml` geführte Dokument muss `depends_on` tragen.
+* **Leere Liste ist gültig** und der Standard für Dokumente ohne Abhängigkeit:
+
+  ```yaml
+  depends_on: []
+  ```
+
+* **Vorrang vor `relations`**: Ist ein direktes `depends_on` vorhanden (auch `[]`), gewinnt es gegenüber `relations[type=depends_on]`.
+* **Legacy-Fallback**: Fehlt das direkte Feld, wird `relations[type=depends_on]` weiterhin als Abhängigkeitsquelle gelesen, damit noch nicht migrierte Dokumente nicht abrupt brechen.
+
+Alle Konsumenten (`scripts/docmeta/review_impact.py`, `scripts/docmeta/generate_system_map.py`,
+`scripts/docmeta/check_repo_index_consistency.py`, `scripts/docmeta/export_docs_index.py`) lösen
+Abhängigkeiten einheitlich über `extract_depends_on()` in `scripts/docmeta/docmeta.py` auf.
+
 ## Relationen (`relations`)
 
-Einziger kanonischer Relationsmechanismus. Jede Relation ist ein Objekt mit `type` und `target`.
+Kanonischer Mechanismus für typisierte Relationen (`relates_to`, `supersedes`). Für Abhängigkeiten
+ist das direkte Feld `depends_on` kanonisch (siehe oben); `relations[type=depends_on]` bleibt nur als
+Legacy-Fallback erhalten. Jede Relation ist ein Objekt mit `type` und `target`.
 
 ```yaml
 relations:
@@ -67,6 +89,9 @@ Zwei Dokumente behandeln verwandtes Thema, ohne harte Abhängigkeit.
 
 **`depends_on`** — funktionale oder logische Abhängigkeit.
 Dieses Dokument setzt das Zieldokument inhaltlich voraus.
+
+> **Hinweis:** Bevorzugt wird das direkte Feld `depends_on` (siehe oben). Der
+> Relationstyp `depends_on` bleibt nur als Legacy-Fallback dokumentiert.
 
 * ✅ Spec, die auf dem Datenmodell aufbaut:
 
@@ -132,6 +157,7 @@ Ein repo-weites `grep -r 'target: docs/alter-pfad.md'` hilft beim Auffinden.
   (z.B. governance, runtime, contracts, docmeta, deploy).
 * **last_reviewed**: Datum der letzten Überprüfung im Format YYYY-MM-DD.
 * **verifies_with**: Liste von Checks/Scripts, die dieses Dokument verifizieren.
+  Pflichtfeld für kanonische Dokumente; leere Liste (`verifies_with: []`) ist erlaubt.
 * **audit_gaps**: Liste von bekannten Lücken, offenen Fragen oder technischen Schulden (optional).
 
 ## Parser Contract (relations)
