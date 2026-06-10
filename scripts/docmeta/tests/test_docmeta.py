@@ -128,6 +128,36 @@ class TestDocMetaParser(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def _parse_depends_on(self, fragment):
+        content = f"---\nid: dep-doc\n{fragment}---\n"
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, encoding='utf-8') as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            data = parse_frontmatter(temp_path)
+            self.assertIsNotNone(data)
+            return data
+        finally:
+            os.remove(temp_path)
+
+    def test_parse_frontmatter_depends_on_inline_empty(self):
+        """Real markdown ``depends_on: []`` parses to an empty list, not a string."""
+        data = self._parse_depends_on("depends_on: []\n")
+        self.assertEqual(data.get('depends_on'), [])
+        self.assertIsInstance(data.get('depends_on'), list)
+
+    def test_parse_frontmatter_depends_on_block_list(self):
+        """Real markdown block list parses to a list of IDs."""
+        data = self._parse_depends_on("depends_on:\n  - doc-a\n  - doc-b\n")
+        self.assertEqual(data.get('depends_on'), ['doc-a', 'doc-b'])
+
+    def test_parse_frontmatter_depends_on_scalar_stays_scalar(self):
+        """A bare scalar ``depends_on: doc-a`` must NOT be silently wrapped into
+        ``['doc-a']``; it stays a string so schema validation can flag the type."""
+        data = self._parse_depends_on("depends_on: doc-a\n")
+        self.assertEqual(data.get('depends_on'), 'doc-a')
+        self.assertNotIsInstance(data.get('depends_on'), list)
+
 class TestDocMetaStrictParsers(unittest.TestCase):
     def test_repo_index_typo_fail(self):
         content = "---\nzonez:\n  norm:\n    path: architecture/\n"
@@ -309,7 +339,13 @@ class TestExtractDependsOn(unittest.TestCase):
 class TestRepoWideCanonicalDocInvariant(unittest.TestCase):
     """Every canonical doc listed in manifest/repo-index.yaml must carry
     an ``id`` (str), a ``depends_on`` (list), and a ``verifies_with`` (list)
-    after frontmatter parsing.  This test reads the real manifest and real files."""
+    after frontmatter parsing.  This reads the real manifest and real files.
+
+    Enforcement at runtime is owned by the docmeta schema guard
+    (``validate_schema.py`` + ``contracts/docmeta.schema.json``, which marks
+    these fields ``required``).  This test is independent proof on the raw
+    ``parse_frontmatter`` output — it does not rely on the validator's list
+    coercion shim, so it catches files that only pass via normalization."""
 
     def test_canonical_docs_have_required_list_fields(self):
         manifest_path = os.path.join(REPO_ROOT, "manifest", "repo-index.yaml")

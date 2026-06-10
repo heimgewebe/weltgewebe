@@ -1,8 +1,9 @@
 import json
 import os
+import tempfile
 import unittest
 
-from scripts.docmeta.docmeta import REPO_ROOT
+from scripts.docmeta.docmeta import REPO_ROOT, parse_frontmatter
 from scripts.docmeta.validate_schema import validate_data_against_schema
 
 
@@ -218,6 +219,70 @@ class TestCanonicalDocmetaSchema(unittest.TestCase):
         fm = self._valid_frontmatter(depends_on="not-a-list")
         errors = validate_data_against_schema(fm, self.schema)
         self.assertTrue(any("depends_on" in e and "expected array" in e for e in errors), errors)
+
+
+class TestMarkdownToSchemaIntegration(unittest.TestCase):
+    """End-to-end proof: real markdown frontmatter → parse_frontmatter() →
+    schema validation against the real contracts/docmeta.schema.json.
+
+    Unlike TestCanonicalDocmetaSchema (which constructs Python dicts), this
+    exercises the actual parser strecke so that parser and schema are proven to
+    share one semantics for depends_on/verifies_with."""
+
+    @classmethod
+    def setUpClass(cls):
+        schema_path = os.path.join(REPO_ROOT, "contracts", "docmeta.schema.json")
+        with open(schema_path, "r", encoding="utf-8") as f:
+            cls.schema = json.load(f)
+
+    def _validate_markdown(self, body):
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".md", encoding="utf-8"
+        ) as f:
+            f.write(body)
+            temp_path = f.name
+        try:
+            fm = parse_frontmatter(temp_path)
+            self.assertIsNotNone(fm, "parse_frontmatter returned None")
+            return validate_data_against_schema(fm, self.schema)
+        finally:
+            os.remove(temp_path)
+
+    _BASE = (
+        "id: doc.test\n"
+        "title: Test Document\n"
+        "status: canonical\n"
+        "summary: A non-empty test summary.\n"
+    )
+
+    def test_empty_lists_pass(self):
+        md = f"---\n{self._BASE}depends_on: []\nverifies_with: []\n---\n"
+        self.assertEqual(self._validate_markdown(md), [])
+
+    def test_block_list_depends_on_passes(self):
+        md = f"---\n{self._BASE}depends_on:\n  - doc-a\nverifies_with: []\n---\n"
+        self.assertEqual(self._validate_markdown(md), [])
+
+    def test_missing_depends_on_fails(self):
+        md = f"---\n{self._BASE}verifies_with: []\n---\n"
+        errors = self._validate_markdown(md)
+        self.assertTrue(
+            any("depends_on" in e and "missing required" in e for e in errors), errors
+        )
+
+    def test_missing_verifies_with_fails(self):
+        md = f"---\n{self._BASE}depends_on: []\n---\n"
+        errors = self._validate_markdown(md)
+        self.assertTrue(
+            any("verifies_with" in e and "missing required" in e for e in errors), errors
+        )
+
+    def test_scalar_depends_on_is_type_error(self):
+        md = f"---\n{self._BASE}depends_on: doc-a\nverifies_with: []\n---\n"
+        errors = self._validate_markdown(md)
+        self.assertTrue(
+            any("depends_on" in e and "expected array" in e for e in errors), errors
+        )
 
 
 if __name__ == '__main__':

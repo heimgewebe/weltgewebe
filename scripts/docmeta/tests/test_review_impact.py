@@ -420,6 +420,8 @@ class TestGetDependsOn(unittest.TestCase):
 
         Keeps review_impact consistent with docmeta.extract_depends_on: a present
         (even empty) direct field is canonical and must not fall back to relations.
+        Because the direct field is a valid list while a legacy relation still
+        exists, the dual-source warning fires so the stale entry can be cleaned up.
         """
         fm = {
             'depends_on': [],
@@ -427,7 +429,27 @@ class TestGetDependsOn(unittest.TestCase):
                 {'type': 'depends_on', 'target': 'doc-legacy'},
             ],
         }
-        self.assertEqual(_get_depends_on(fm), [])
+        captured_err = io.StringIO()
+        with redirect_stderr(captured_err):
+            result = _get_depends_on(fm, doc_id='test-doc')
+        self.assertEqual(result, [])
+        self.assertIn("Warning", captured_err.getvalue())
+
+    def test_malformed_direct_no_fallback_and_no_warning(self):
+        """A malformed (non-list) direct depends_on returns [] and emits NO
+        dual-source warning: surfacing the type error is the schema's job, not
+        review_impact's. The legacy relations entry must not be used as fallback."""
+        fm = {
+            'depends_on': 'doc-a',
+            'relations': [
+                {'type': 'depends_on', 'target': 'doc-legacy'},
+            ],
+        }
+        captured_err = io.StringIO()
+        with redirect_stderr(captured_err):
+            result = _get_depends_on(fm, doc_id='test-doc')
+        self.assertEqual(result, [])
+        self.assertEqual(captured_err.getvalue(), "")
 
 
 if __name__ == '__main__':

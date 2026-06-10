@@ -120,3 +120,55 @@ class TestSystemMapDependsOnColumn(unittest.TestCase):
         c_cells = self._row_cells(content, "doc-c")
         self.assertIsNotNone(c_cells)
         self.assertEqual(c_cells[self.DEPENDS_ON_COLUMN], "")
+
+    def test_legacy_relation_appears_when_direct_key_absent(self):
+        """No ``depends_on`` key at all: the legacy ``relations[type=depends_on]``
+        target is used as fallback and appears in the depends_on column."""
+        repo_index = {
+            "zones": {"norm": {"path": "docs/", "canonical_docs": ["a.md", "d.md"]}},
+            "checks": [],
+        }
+        docs = {
+            "docs/d.md": (
+                "---\n"
+                "id: doc-d\nrole: norm\nstatus: canonical\n"
+                "verifies_with: []\n"
+                "relations:\n"
+                "  - type: depends_on\n"
+                "    target: doc-a\n"
+                "---\n"
+            ),
+            "docs/a.md": (
+                "---\n"
+                "id: doc-a\nrole: norm\nstatus: canonical\n"
+                "depends_on: []\nverifies_with: []\n---\n"
+            ),
+        }
+        content = self._render_with_fixture(repo_index, docs)
+        d_cells = self._row_cells(content, "doc-d")
+        self.assertIsNotNone(d_cells)
+        self.assertEqual(d_cells[self.DEPENDS_ON_COLUMN], "doc-a")
+
+    def test_malformed_direct_key_stays_empty_despite_legacy_relation(self):
+        """A malformed scalar ``depends_on`` does not fall back to relations:
+        the column is empty. Schema validation is responsible for the type error."""
+        repo_index = {
+            "zones": {"norm": {"path": "docs/", "canonical_docs": ["e.md"]}},
+            "checks": [],
+        }
+        docs = {
+            "docs/e.md": (
+                "---\n"
+                "id: doc-e\nrole: norm\nstatus: canonical\n"
+                "depends_on: doc-a\n"
+                "verifies_with: []\n"
+                "relations:\n"
+                "  - type: depends_on\n"
+                "    target: doc-legacy\n"
+                "---\n"
+            ),
+        }
+        content = self._render_with_fixture(repo_index, docs)
+        e_cells = self._row_cells(content, "doc-e")
+        self.assertIsNotNone(e_cells)
+        self.assertEqual(e_cells[self.DEPENDS_ON_COLUMN], "")
