@@ -1,4 +1,4 @@
-.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests generate diagnose prepare-commit
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests generate diagnose prepare-commit generate-system-map check-system-map-drift
 
 validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
@@ -17,7 +17,13 @@ validate-core:
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links
 
-validate-guards:
+generate-system-map:
+	python3 -m scripts.docmeta.generate_system_map
+
+check-system-map-drift: generate-system-map
+	git diff --exit-code HEAD -- docs/_generated/system-map.md
+
+validate-guards: check-system-map-drift
 	bash scripts/docmeta/repo-structure-guard.sh
 	bash scripts/docmeta/docs-relations-guard.sh
 	bash scripts/docmeta/generated-files-guard.sh

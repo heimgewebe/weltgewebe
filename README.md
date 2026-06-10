@@ -12,6 +12,14 @@ Mobile-first Webprojekt mit SvelteKit (Web), Rust/Axum (API), Postgres + Outbox,
 - Code-Re-Entry erfolgt über die **Gates A–D**; siehe [`docs/process/fahrplan.md`](docs/process/fahrplan.md).
 - Wahrheit und Konfliktauflösung folgen strikt [`repo.meta.yaml`](repo.meta.yaml) und dem [Agent Reading Protocol](docs/policies/agent-reading-protocol.md). `docs/index.md` ist Navigation, keine Wahrheitsschicht. `docs/_generated/*` ist Diagnose, nicht Ursprung.
 
+## Start Here
+
+- **Constitution / Repo Truth Model:** [`repo.meta.yaml`](repo.meta.yaml)
+- **System Map:** [`docs/_generated/system-map.md`](docs/_generated/system-map.md)
+- **Runtime:** [`runtime/README.md`](runtime/README.md)
+- **Operations:** [`runbooks/README.md`](runbooks/README.md)
+- **Architecture Overview:** [`architecture/overview.md`](architecture/overview.md)
+
 ## Schnellzugriff
 
 - [Dokumentationsindex](docs/index.md)
