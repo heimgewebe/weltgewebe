@@ -49,11 +49,16 @@ def extract_depends_on(frontmatter):
     fall through to the legacy source.  Only when the key is absent does the
     ``relations[type=depends_on]`` fallback apply, so that documents that have
     not yet migrated do not break.
+
+    Within a direct list, only non-empty strings are kept.  Non-string items
+    (ints, dicts, ``None``) are dropped rather than coerced via ``str()`` — the
+    schema's ``items: {type: string}`` check is what surfaces them as type
+    errors; the extractor must not mask a malformed value by stringifying it.
     """
     if "depends_on" in frontmatter:
         direct = frontmatter["depends_on"]
         if isinstance(direct, list):
-            return [str(item) for item in direct if item]
+            return [item for item in direct if isinstance(item, str) and item]
         return []  # Key present but malformed — do not fall back to relations
     return extract_relations_depends_on(frontmatter)
 

@@ -332,6 +332,13 @@ class TestExtractDependsOn(unittest.TestCase):
         }
         self.assertEqual(extract_depends_on(fm), [])
 
+    def test_direct_depends_on_non_string_items_are_not_stringified(self):
+        """Non-string items in a direct depends_on list are dropped, not coerced
+        via str(): a malformed value must surface through schema validation
+        (items: {type: string}), never be masked as a stringified pseudo-ID."""
+        fm = {'depends_on': ['doc-a', 123, None, {'x': 'y'}, 'doc-b']}
+        self.assertEqual(extract_depends_on(fm), ['doc-a', 'doc-b'])
+
     def test_no_dependencies_at_all(self):
         self.assertEqual(extract_depends_on({}), [])
 
