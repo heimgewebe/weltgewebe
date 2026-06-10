@@ -10,7 +10,6 @@ const nodeMap = new Map<string, DemoNode>(demoNodes.map((n) => [n.id, n]));
 const accountMap = new Map<string, DemoAccount>(
   demoAccounts.map((a) => [a.id, a]),
 );
-
 const edgeMap = new Map<string, DemoEdge>(demoEdges.map((e) => [e.id, e]));
 
 const edgesBySource = new Map<string, DemoEdge[]>();
@@ -26,6 +25,48 @@ for (const edge of demoEdges) {
   const targetList = edgesByTarget.get(edge.target_id) || [];
   targetList.push(edge);
   edgesByTarget.set(edge.target_id, targetList);
+}
+
+/**
+ * Returns entries for prerendering nodes.
+ */
+export function getNodeEntries() {
+  return demoNodes.map((n) => ({ id: n.id }));
+}
+
+/**
+ * Returns entries for prerendering accounts.
+ */
+export function getAccountEntries() {
+  return demoAccounts.map((a) => ({ id: a.id }));
+}
+
+/**
+ * Returns entries for prerendering edges.
+ */
+export function getEdgeEntries() {
+  return demoEdges.map((e) => ({ id: e.id }));
+}
+
+/**
+ * Resolves a single node by ID.
+ */
+export function resolveNode(id: string) {
+  return nodeMap.get(id);
+}
+
+/**
+ * Resolves a single account by ID.
+ */
+export function resolveAccount(id: string) {
+  return accountMap.get(id);
+}
+
+/**
+ * Resolves a single edge by ID.
+ */
+export function resolveEdge(id: string) {
+  return edgeMap.get(id);
 }
 
 /**
