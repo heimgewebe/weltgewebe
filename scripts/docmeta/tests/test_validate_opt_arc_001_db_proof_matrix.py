@@ -151,6 +151,129 @@ def _workflow_text_toplevel_comment_after_target(target_id):
     return "\n".join(lines) + "\n"
 
 
+def _workflow_text_job_level_comment_with_command(target_id):
+    """Target job has the full cargo test only as an indented YAML comment; real run is echo."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    lines = ["name: API CI", "jobs:"]
+    lines.append(f"  {target_id}:")
+    lines.append("    runs-on: ubuntu-latest")
+    lines.append("    steps:")
+    lines.append(
+        f"      # cargo test --locked -p weltgewebe-api "
+        f"--test {spec['command_test_name']} -- --include-ignored --test-threads=1"
+    )
+    lines.append('      - run: echo "no proof test"')
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        if proof_id == target_id:
+            continue
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        lines.append(
+            "      - run: cargo test --locked -p weltgewebe-api "
+            f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _workflow_text_split_flags(target_id):
+    """Target job: correct --test in one step; --include-ignored and --test-threads=1 only in another echo step."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    lines = ["name: API CI", "jobs:"]
+    lines.append(f"  {target_id}:")
+    lines.append("    runs-on: ubuntu-latest")
+    lines.append("    steps:")
+    lines.append(
+        f"      - run: cargo test --locked -p weltgewebe-api "
+        f"--test {spec['command_test_name']}"
+    )
+    lines.append('      - run: echo "--include-ignored --test-threads=1"')
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        if proof_id == target_id:
+            continue
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        lines.append(
+            "      - run: cargo test --locked -p weltgewebe-api "
+            f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _workflow_text_run_block_comment_command(target_id):
+    """Target job: full cargo test only as a shell comment inside run: |; real cmd is echo."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    lines = ["name: API CI", "jobs:"]
+    lines.append(f"  {target_id}:")
+    lines.append("    runs-on: ubuntu-latest")
+    lines.append("    steps:")
+    lines.append("      - run: |")
+    lines.append(
+        f"          # cargo test --locked -p weltgewebe-api "
+        f"--test {spec['command_test_name']} -- --include-ignored --test-threads=1"
+    )
+    lines.append('          echo "no proof test"')
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        if proof_id == target_id:
+            continue
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        lines.append(
+            "      - run: cargo test --locked -p weltgewebe-api "
+            f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _workflow_text_multiline_run_block(target_id):
+    """Full workflow; target job uses a multiline run: |- block with backslash continuations."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    test_name = spec["command_test_name"]
+    lines = ["name: API CI", "jobs:"]
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        if proof_id == target_id:
+            lines.append("      - run: |-")
+            lines.append(
+                '          DATABASE_URL="postgres://welt:gewebe@localhost:5432/weltgewebe" \\'
+            )
+            lines.append("            cargo test --locked -p weltgewebe-api \\")
+            lines.append(f"              --test {test_name} \\")
+            lines.append("              -- --include-ignored --test-threads=1")
+        else:
+            lines.append(
+                "      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _workflow_text_folded_run_block(target_id):
+    """Full workflow; target job uses a folded run: >- block."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    test_name = spec["command_test_name"]
+    lines = ["name: API CI", "jobs:"]
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        if proof_id == target_id:
+            lines.append("      - run: >-")
+            lines.append(f"          cargo test --locked -p weltgewebe-api")
+            lines.append(f"          --test {test_name}")
+            lines.append("          -- --include-ignored --test-threads=1")
+        else:
+            lines.append(
+                "      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW, blocker_row=DEFAULT_BOARD_BLOCKER_ROW):
     # The done section deliberately carries legitimate CI PROVEN rows of other
     # tasks: the guard must stay scoped to OPT-ARC-001 rows only.
@@ -532,14 +655,18 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
     def test_missing_workflow_test_command_fails(self):
         self._write(guard.WORKFLOW_PATH, _workflow_text(drop_test_command=NODE_WRITE_PROOF_ID))
-        self.assert_error_containing("not found in job 'db-domain-node-write-path-proof'")
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
 
     def test_workflow_cross_job_command_not_accepted(self):
         # The node-write-path --test command appears in the backfill job's block,
         # not in the node-write-path job's block. Global search would pass; scoped fails.
         wf = _workflow_text_cross_job(NODE_WRITE_PROOF_ID, "db-domain-backfill-proof")
         self._write(guard.WORKFLOW_PATH, wf)
-        self.assert_error_containing("not found in job 'db-domain-node-write-path-proof'")
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
 
     def test_workflow_job_missing_include_ignored_fails(self):
         wf = _workflow_text().replace(
@@ -549,7 +676,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self.assertIn("--test db_domain_node_write_path -- --test-threads=1", wf)
         self._write(guard.WORKFLOW_PATH, wf)
         self.assert_error_containing(
-            f"'--include-ignored' not found in job '{NODE_WRITE_PROOF_ID}'"
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
         )
 
     def test_workflow_job_missing_test_threads_fails(self):
@@ -559,7 +686,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         )
         self._write(guard.WORKFLOW_PATH, wf)
         self.assert_error_containing(
-            f"'--test-threads=1' not found in job '{NODE_WRITE_PROOF_ID}'"
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
         )
 
     def test_workflow_job_with_comments_and_keys_passes(self):
@@ -575,9 +702,49 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         wf = _workflow_text_toplevel_comment_after_target(NODE_WRITE_PROOF_ID)
         self._write(guard.WORKFLOW_PATH, wf)
         self.assert_error_containing(
-            "'--test db_domain_node_write_path' not found in job "
-            f"'{NODE_WRITE_PROOF_ID}'"
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
         )
+
+    def test_workflow_indented_comment_command_not_accepted(self):
+        # Target job: full cargo test only as an indented YAML comment (# ...).
+        # Actual run: step is echo. Comment must not count as proof.
+        wf = _workflow_text_job_level_comment_with_command(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
+    def test_workflow_split_flags_across_steps_not_accepted(self):
+        # Target job: cargo test --test <name> in one step; --include-ignored and
+        # --test-threads=1 only in a separate echo step. Split flags must not pass.
+        wf = _workflow_text_split_flags(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
+    def test_workflow_run_block_comment_command_not_accepted(self):
+        # Target job: full cargo test as a shell comment (# ...) inside run: |.
+        # The actual command in the block is only echo. Comment must not count.
+        wf = _workflow_text_run_block_comment_command(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
+    def test_workflow_multiline_run_block_command_passes(self):
+        # Target job uses a run: |- block with DATABASE_URL and backslash
+        # line-continuations. The assembled command must still pass validation.
+        wf = _workflow_text_multiline_run_block(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_no_errors()
+
+    def test_workflow_folded_run_block_command_passes(self):
+        # Target job uses a run: >- folded block (newlines become spaces).
+        # The assembled command must pass validation.
+        wf = _workflow_text_folded_run_block(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_no_errors()
 
     # --- status wording, scoped to OPT-ARC-001 ------------------------------
 

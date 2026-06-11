@@ -340,6 +340,100 @@ def _extract_workflow_job_block(workflow_text, job_id):
 
 
 # ---------------------------------------------------------------------------
+# Workflow run-command extraction (per-step, not job-wide)
+# ---------------------------------------------------------------------------
+
+def _normalize_run_command(raw_text):
+    """Normalize a run-command body for flag checking.
+
+    Strips shell comment lines, joins backslash-line-continuations, and
+    collapses whitespace. The result is a single comparable string that can
+    be checked for the presence of specific flags without false positives
+    from commented-out commands.
+    """
+    lines = raw_text.splitlines()
+    # Drop pure comment lines so commented-out commands never count as proof.
+    lines = [l for l in lines if not l.lstrip().startswith('#')]
+    joined = '\n'.join(lines)
+    # Backslash-newline continuations (optional surrounding whitespace) → space.
+    joined = re.sub(r'\\\s*\n\s*', ' ', joined)
+    return re.sub(r'\s+', ' ', joined).strip()
+
+
+def _extract_workflow_run_commands(job_block):
+    """Return a list of normalized run-command strings from a job block.
+
+    Handles inline values (`- run: cargo test ...`) and block scalars
+    (`run: |`, `run: |-`, `run: >-`, etc.). Shell comment lines are stripped
+    from block bodies so that commented-out commands cannot satisfy checks.
+    """
+    lines = job_block.splitlines()
+    commands = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match(r'^([ \t]*)(?:-[ \t]+)?run\s*:\s*(.*)', line)
+        if not m:
+            i += 1
+            continue
+
+        run_indent = len(m.group(1))
+        value = m.group(2).strip()
+        i += 1
+
+        if re.fullmatch(r'[|>][+-]?', value) or value == '':
+            # Block scalar — collect body lines more indented than the run: key.
+            is_folded = value.startswith('>')
+            block_lines = []
+            while i < len(lines):
+                bl = lines[i]
+                if not bl.strip():
+                    block_lines.append('')
+                    i += 1
+                    continue
+                if len(bl) - len(bl.lstrip()) <= run_indent:
+                    break
+                block_lines.append(bl)
+                i += 1
+            # Strip common leading indent so comment-stripping works on bare text.
+            non_empty = [l for l in block_lines if l.strip()]
+            min_indent = min((len(l) - len(l.lstrip()) for l in non_empty), default=0)
+            stripped = [
+                l[min_indent:] if len(l) >= min_indent else l.lstrip()
+                for l in block_lines
+            ]
+            if is_folded:
+                # Folded style: newlines become spaces (simplified).
+                raw_text = ' '.join(s for s in stripped if s.strip())
+            else:
+                raw_text = '\n'.join(stripped)
+        else:
+            raw_text = value
+
+        commands.append(_normalize_run_command(raw_text))
+
+    return commands
+
+
+def _command_has_expected_test(command, test_name):
+    """Return True if command contains --test <test_name> or --test=<test_name>."""
+    return bool(re.search(
+        rf'--test(?!-)(?:[=\s]+){re.escape(test_name)}\b', command
+    ))
+
+
+def _command_has_required_cargo_flags(command):
+    """Return True if command contains all flags required for a valid proof run."""
+    return (
+        'cargo test' in command
+        and '--locked' in command
+        and '-p weltgewebe-api' in command
+        and '--include-ignored' in command
+        and bool(re.search(r'--test-threads(?:[=\s]+)1\b', command))
+    )
+
+
+# ---------------------------------------------------------------------------
 # CI evidence object check (future ci_proven rule)
 # ---------------------------------------------------------------------------
 
@@ -355,7 +449,7 @@ def _check_ci_evidence_object(value):
     for key, expected_type in CI_EVIDENCE_FIELD_TYPES.items():
         v = value.get(key)
         if expected_type is int:
-            # Use exact type equality so bool (an int subclass) cannot pass as run_id.
+            # bool is an int subclass; exact type equality prevents it from passing as run_id.
             if type(v) is not int:
                 return False
         else:  # str fields
@@ -494,6 +588,7 @@ def _validate_matrix(repo_root, errors):
             f"got '{matrix.get('ci_evidence_policy')}'"
         )
 
+    # non_goals is minimum-set checked: future explicit non-goals may be added without changing the guard.
     non_goals = matrix.get("non_goals")
     if not isinstance(non_goals, list):
         errors.append(f"{MATRIX_PATH}: non_goals must be an array")
@@ -549,17 +644,17 @@ def _validate_workflow(repo_root, errors):
             errors.append(f"{WORKFLOW_PATH}: workflow job '{proof_id}' not found")
             continue
         test_name = spec["command_test_name"]
-        if not re.search(rf'--test(?!-)(?:[=\s]+){re.escape(test_name)}\b', job_block):
+        run_commands = _extract_workflow_run_commands(job_block)
+        found = any(
+            _command_has_expected_test(cmd, test_name)
+            and _command_has_required_cargo_flags(cmd)
+            for cmd in run_commands
+        )
+        if not found:
             errors.append(
-                f"{WORKFLOW_PATH}: '--test {test_name}' not found in job '{proof_id}'"
-            )
-        if "--include-ignored" not in job_block:
-            errors.append(
-                f"{WORKFLOW_PATH}: '--include-ignored' not found in job '{proof_id}'"
-            )
-        if not re.search(r'--test-threads(?:[=\s]+)1\b', job_block):
-            errors.append(
-                f"{WORKFLOW_PATH}: '--test-threads=1' not found in job '{proof_id}'"
+                f"{WORKFLOW_PATH}: expected cargo test command for "
+                f"'--test {test_name}' with --include-ignored and --test-threads=1 "
+                f"not found in any run command of job '{proof_id}'"
             )
 
 
