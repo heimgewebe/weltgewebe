@@ -608,6 +608,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, _ci_proven_matrix())
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=True
+            ),
             unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
         ):
             self.assert_no_errors()
@@ -620,6 +623,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=True
+            ),
             unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
         ):
             self.assert_no_errors()
@@ -631,6 +637,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=True
+            ),
             unittest.mock.patch.object(
                 guard,
                 "_git_changed_paths_since",
@@ -649,6 +658,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=True
+            ),
             unittest.mock.patch.object(
                 guard,
                 "_git_changed_paths_since",
@@ -669,6 +681,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists") as exists,
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head"
+            ) as ancestor,
             unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
         ):
             errors = guard.validate(self.root)
@@ -678,6 +693,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         )
         self.assertTrue(any(expected in error for error in errors), errors)
         exists.assert_not_called()
+        ancestor.assert_not_called()
         changed.assert_not_called()
 
     def test_ci_proven_commit_head_ref_rejected_before_git_lookup(self):
@@ -694,6 +710,72 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             "B10076EE743202D3EF07AF42A464267C82F4A5C0"
         )
 
+    def test_ci_proven_evidence_commit_not_ancestor_fails(self):
+        matrix = _valid_matrix()
+        proof = matrix["proofs"][0]
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(proof["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=False
+            ),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
+        ):
+            errors = guard.validate(self.root)
+
+        self.assertTrue(any("is not an ancestor of HEAD" in error for error in errors), errors)
+        changed.assert_not_called()
+
+    def test_ci_proven_evidence_ancestor_git_error_fails(self):
+        matrix = _valid_matrix()
+        proof = matrix["proofs"][0]
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(proof["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard,
+                "_git_commit_is_ancestor_of_head",
+                side_effect=guard.GitFreshnessError("merge-base failed"),
+            ),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
+        ):
+            errors = guard.validate(self.root)
+
+        self.assertTrue(any("merge-base failed" in error for error in errors), errors)
+        changed.assert_not_called()
+
+    def test_git_commit_is_ancestor_of_head_return_codes(self):
+        with unittest.mock.patch.object(guard, "_run_git") as run_git:
+            run_git.return_value = unittest.mock.Mock(returncode=0, stderr="", stdout="")
+            self.assertTrue(
+                guard._git_commit_is_ancestor_of_head(self.root, "a" * 40)
+            )
+            run_git.assert_called_once_with(
+                self.root, ["merge-base", "--is-ancestor", "a" * 40, "HEAD"]
+            )
+
+            run_git.reset_mock()
+            run_git.return_value = unittest.mock.Mock(returncode=1, stderr="", stdout="")
+            self.assertFalse(
+                guard._git_commit_is_ancestor_of_head(self.root, "a" * 40)
+            )
+
+    def test_git_commit_is_ancestor_of_head_unexpected_error_fails(self):
+        result = unittest.mock.Mock(
+            returncode=128,
+            stderr="fatal: invalid object",
+            stdout="",
+        )
+        with unittest.mock.patch.object(guard, "_run_git", return_value=result):
+            with self.assertRaisesRegex(guard.GitFreshnessError, "fatal: invalid object"):
+                guard._git_commit_is_ancestor_of_head(self.root, "a" * 40)
+
     def test_ci_proven_missing_evidence_commit_fails(self):
         matrix = _valid_matrix()
         matrix["proofs"][0]["state"] = "ci_proven"
@@ -701,11 +783,15 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=False),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head"
+            ) as ancestor,
             unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
         ):
             errors = guard.validate(self.root)
         self.assertTrue(any("ci_evidence commit" in error for error in errors), errors)
         self.assertTrue(any("not found" in error for error in errors), errors)
+        ancestor.assert_not_called()
         changed.assert_not_called()
 
     def test_prepared_does_not_check_evidence_freshness(self):
@@ -715,11 +801,16 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             side_effect=AssertionError("prepared proof must not check Git freshness"),
         ) as commit_exists, unittest.mock.patch.object(
             guard,
+            "_git_commit_is_ancestor_of_head",
+            side_effect=AssertionError("prepared proof must not check Git ancestry"),
+        ) as ancestor, unittest.mock.patch.object(
+            guard,
             "_git_changed_paths_since",
             side_effect=AssertionError("prepared proof must not diff Git paths"),
         ) as changed:
             self.assert_no_errors()
         commit_exists.assert_not_called()
+        ancestor.assert_not_called()
         changed.assert_not_called()
 
     def test_ci_proven_freshness_diff_is_limited_to_proof_harness_paths(self):
@@ -730,6 +821,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         with (
             unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard, "_git_commit_is_ancestor_of_head", return_value=True
+            ),
             unittest.mock.patch.object(
                 guard,
                 "_git_changed_paths_since",

@@ -577,6 +577,17 @@ def _git_commit_exists(repo_root, commit):
     return result.returncode == 0
 
 
+def _git_commit_is_ancestor_of_head(repo_root, commit):
+    """Return whether commit belongs to the current HEAD history."""
+    result = _run_git(repo_root, ["merge-base", "--is-ancestor", commit, "HEAD"])
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    detail = result.stderr.strip() or result.stdout.strip() or "unknown Git error"
+    raise GitFreshnessError(detail)
+
+
 def _git_changed_paths_since(repo_root, commit, paths):
     """Return proof-harness paths changed between commit and HEAD."""
     result = _run_git(
@@ -663,6 +674,12 @@ def _validate_ci_evidence_freshness(proof_id, repo_root, ci_evidence, errors):
             errors.append(
                 f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence commit '{commit}' "
                 "was not found in the local Git history"
+            )
+            return
+        if not _git_commit_is_ancestor_of_head(repo_root, commit):
+            errors.append(
+                f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence commit '{commit}' "
+                "is not an ancestor of HEAD"
             )
             return
         paths = _ci_evidence_freshness_paths(proof_id)
