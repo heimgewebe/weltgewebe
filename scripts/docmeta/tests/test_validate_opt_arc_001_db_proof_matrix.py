@@ -77,6 +77,30 @@ def _valid_matrix():
     }
 
 
+def _evidence_for(proof_id, run_id=123456789):
+    """A structurally valid ci_evidence object for the given proof.
+
+    The job matches the proof id and run_url's trailing id matches run_id, so it
+    passes the ci_proven checks. The run id/commit are generic fixture values,
+    deliberately not wired to any real run (the real evidence lives only in the
+    repository matrix)."""
+    return {
+        "run_url": f"https://github.com/heimgewebe/weltgewebe/actions/runs/{run_id}",
+        "run_id": run_id,
+        "commit": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        "job": proof_id,
+    }
+
+
+def _ci_proven_matrix():
+    """A valid matrix where every proof is ci_proven with matching evidence."""
+    matrix = _valid_matrix()
+    for proof in matrix["proofs"]:
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(proof["id"])
+    return matrix
+
+
 def _workflow_text(drop_job_key=None, drop_test_command=None, decorated=False):
     lines = ["name: API CI", "jobs:"]
     for proof_id, spec in guard.EXPECTED_PROOFS.items():
@@ -563,7 +587,11 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         matrix["proofs"][0]["state"] = "ci_proven"
         self._write_json(guard.MATRIX_PATH, matrix)
         errors = self.assert_error_containing("requires a ci_evidence object")
-        self.assertTrue(any("state must be 'prepared'" in e for e in errors), errors)
+        # ci_proven is now a valid state, so the failure is about the missing
+        # evidence object, not about a forbidden state.
+        self.assertFalse(
+            any("state must be 'prepared' or 'ci_proven'" in e for e in errors), errors
+        )
 
     def test_prepared_with_ci_evidence_fails(self):
         matrix = _valid_matrix()
@@ -574,7 +602,51 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             "job": NODE_WRITE_PROOF_ID,
         }
         self._write_json(guard.MATRIX_PATH, matrix)
-        self.assert_error_containing("ci_evidence must be null")
+        self.assert_error_containing("state 'prepared' requires ci_evidence")
+
+    def test_all_proofs_ci_proven_with_valid_evidence_validates(self):
+        self._write_json(guard.MATRIX_PATH, _ci_proven_matrix())
+        self.assert_no_errors()
+
+    def test_ci_proven_mixed_with_prepared_validates(self):
+        # A partial harvest (one proof ci_proven, the rest still prepared) is valid.
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["state"] = "ci_proven"
+        matrix["proofs"][0]["ci_evidence"] = _evidence_for(matrix["proofs"][0]["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_no_errors()
+
+    def test_unknown_state_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["state"] = "done"
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("state must be 'prepared' or 'ci_proven'")
+
+    def test_ci_proven_wrong_job_in_evidence_fails(self):
+        matrix = _ci_proven_matrix()
+        # proofs[0] is the schema-migrations proof; point its evidence at another job.
+        matrix["proofs"][0]["ci_evidence"]["job"] = NODE_WRITE_PROOF_ID
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("ci_evidence.job must equal the proof id")
+
+    def test_ci_proven_invalid_run_url_fails(self):
+        matrix = _ci_proven_matrix()
+        matrix["proofs"][0]["ci_evidence"]["run_url"] = "https://example.com/run/1"
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("run_url must start with")
+
+    def test_ci_proven_run_id_url_mismatch_fails(self):
+        matrix = _ci_proven_matrix()
+        # run_url keeps the fixture run id; run_id is changed so they disagree.
+        matrix["proofs"][0]["ci_evidence"]["run_id"] = 999
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("must match the run id in run_url")
+
+    def test_ci_proven_run_id_as_bool_fails(self):
+        matrix = _ci_proven_matrix()
+        matrix["proofs"][0]["ci_evidence"]["run_id"] = True
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("requires a ci_evidence object")
 
     # --- ci_evidence strict typing (direct helper tests) --------------------
 
