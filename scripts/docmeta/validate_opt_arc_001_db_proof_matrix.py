@@ -6,12 +6,15 @@ OPT-ARC-001 (JSONL → PostgreSQL) has five prepared DB proof jobs in
 truth machine-readably and blocks drift toward false completion claims:
 
   - docs/reports/opt-arc-001-db-proof-matrix.json must describe exactly the
-    five expected proofs (state="prepared", ci_evidence=null), no cutover,
-    JSONL as default domain read and write truth, no dual write.
-  - A proof may only ever claim state="ci_proven" together with a concrete
-    ci_evidence object (run_url, run_id, commit, job). In the current matrix
-    version every proof must remain "prepared", so any "ci_proven" entry is
-    rejected either way.
+    five expected proofs, no cutover, JSONL as default domain read and write
+    truth, no dual write.
+  - Each proof is either state="prepared" with ci_evidence=null, or
+    state="ci_proven" with a concrete ci_evidence object (run_url, run_id,
+    commit, job). For a ci_proven proof the evidence job must equal the proof
+    id, and run_url must be a github.com/heimgewebe/weltgewebe Actions run URL
+    whose trailing run id matches run_id. ci_proven of these five proofs only
+    records that the prepared DB jobs ran green in real PR-CI; it is NOT a
+    cutover — overall_status stays "partial" and JSONL stays read/write truth.
   - Each proof job must contain a real run command that invokes the expected cargo test with --include-ignored and --test-threads=1.
   - Task-control and status artifacts (docs/tasks/board.md,
     docs/tasks/index.json, docs/reports/optimierungsstatus.md,
@@ -92,6 +95,10 @@ CI_EVIDENCE_FIELD_TYPES = {
     "job": str,
 }
 CI_EVIDENCE_REQUIRED_KEYS = tuple(CI_EVIDENCE_FIELD_TYPES)
+
+# A ci_proven proof's run_url must be a real GitHub Actions run URL for this
+# repository; the trailing path segment of the URL must equal run_id.
+GITHUB_ACTIONS_RUN_URL_PREFIX = "https://github.com/heimgewebe/weltgewebe/actions/runs/"
 
 # All spelling variants of the forbidden completion claim: CI PROVEN,
 # ci proven, CI-Proven, ci-proven, ci_proven, CI_PROVEN, ...
@@ -533,7 +540,7 @@ def _command_has_required_cargo_test_invocation(command, test_name):
 
 
 # ---------------------------------------------------------------------------
-# CI evidence object check (future ci_proven rule)
+# CI evidence object checks (ci_proven rule)
 # ---------------------------------------------------------------------------
 
 def _check_ci_evidence_object(value):
@@ -555,6 +562,46 @@ def _check_ci_evidence_object(value):
             if not isinstance(v, str) or not v.strip():
                 return False
     return True
+
+
+def _validate_ci_evidence(proof_id, ci_evidence, errors):
+    """Append errors for an invalid ci_evidence object on a ci_proven proof.
+
+    Beyond the strict type/non-empty checks in `_check_ci_evidence_object`,
+    a ci_proven proof must satisfy:
+      - ci_evidence.job equals the proof id (the evidence belongs to this proof),
+      - run_url is a github.com/heimgewebe/weltgewebe Actions run URL,
+      - the run id embedded in run_url matches run_id (URL and id are consistent).
+    """
+    if not _check_ci_evidence_object(ci_evidence):
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': state 'ci_proven' requires a ci_evidence "
+            f"object with {', '.join(CI_EVIDENCE_REQUIRED_KEYS)} "
+            f"(run_url/commit/job non-empty strings, run_id a real int)"
+        )
+        return
+
+    job = ci_evidence["job"]
+    if job != proof_id:
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.job must equal the proof id, "
+            f"got '{job}'"
+        )
+
+    run_url = ci_evidence["run_url"]
+    run_id = ci_evidence["run_id"]
+    if not run_url.startswith(GITHUB_ACTIONS_RUN_URL_PREFIX):
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_url must start with "
+            f"'{GITHUB_ACTIONS_RUN_URL_PREFIX}', got '{run_url}'"
+        )
+    else:
+        url_run_id = run_url[len(GITHUB_ACTIONS_RUN_URL_PREFIX):].split("/")[0].split("?")[0]
+        if url_run_id != str(run_id):
+            errors.append(
+                f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_id ({run_id}) "
+                f"must match the run id in run_url ('{url_run_id}')"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -584,21 +631,19 @@ def _validate_proof(proof, repo_root, errors):
 
     state = proof.get("state")
     ci_evidence = proof.get("ci_evidence")
-    if state != "prepared":
+    if state not in ("prepared", "ci_proven"):
         errors.append(
-            f"{MATRIX_PATH}: proof '{proof_id}': state must be 'prepared' "
-            f"(matrix currently maps prepared proofs only, no PR-CI evidence exists), got '{state}'"
+            f"{MATRIX_PATH}: proof '{proof_id}': state must be 'prepared' or 'ci_proven', "
+            f"got '{state}'"
         )
-    if state == "ci_proven" and not _check_ci_evidence_object(ci_evidence):
-        errors.append(
-            f"{MATRIX_PATH}: proof '{proof_id}': state 'ci_proven' requires a ci_evidence "
-            f"object with {', '.join(CI_EVIDENCE_REQUIRED_KEYS)}"
-        )
-    if ci_evidence is not None:
-        errors.append(
-            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence must be null "
-            f"(no PR-CI evidence exists yet)"
-        )
+    elif state == "prepared":
+        if ci_evidence is not None:
+            errors.append(
+                f"{MATRIX_PATH}: proof '{proof_id}': state 'prepared' requires ci_evidence "
+                f"to be null (no PR-CI evidence recorded for a prepared proof)"
+            )
+    else:  # state == "ci_proven"
+        _validate_ci_evidence(proof_id, ci_evidence, errors)
 
     workflow = proof.get("workflow")
     if workflow != WORKFLOW_PATH:

@@ -692,14 +692,10 @@
         "docs/reports/domain-node-write-path-proof.md",
         "CI-Job: db-domain-node-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
-        "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py"
+        "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün"
       ],
       "missing_evidence": [
-        "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
-        "Grüner PR-CI-Laufbeleg für db_domain_backfill ausstehend",
-        "Grüner PR-CI-Laufbeleg für db_domain_read_path ausstehend",
-        "Grüner PR-CI-Laufbeleg für db_domain_account_write_path ausstehend",
-        "Grüner PR-CI-Laufbeleg für db_domain_node_write_path ausstehend",
         "Phase E-A und E-B implementiert: Account-Create (POST /accounts), Node-Patch (PATCH /nodes); Edge-Writes, Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
         "Phase D (read-only), Phase E-A und Phase E-B sind opt-in belegt; kein Produktions-Cutover"
@@ -722,7 +718,7 @@
           "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },
-      "updated_at": "2026-06-10"
+      "updated_at": "2026-06-11"
     },
     {
       "id": "DOCMETA-START-HERE-001",
