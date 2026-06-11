@@ -12,7 +12,7 @@ import json
 import os
 import tempfile
 import unittest
-from unittest import mock
+import unittest.mock
 
 import scripts.docmeta.validate_opt_arc_001_db_proof_matrix as guard
 
@@ -468,7 +468,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
     def _run_main(self):
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.object(guard, "REPO_ROOT", self.root):
+        with unittest.mock.patch.object(guard, "REPO_ROOT", self.root):
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = guard.main([])
         return code, out.getvalue(), err.getvalue()
