@@ -1,9 +1,10 @@
 """
 validate_opt_arc_001_db_proof_matrix.py — Blocking truth guard for OPT-ARC-001.
 
-OPT-ARC-001 (JSONL → PostgreSQL) has five prepared DB proof jobs in
-.github/workflows/api.yml but no PR-CI evidence yet. This validator pins that
-truth machine-readably and blocks drift toward false completion claims:
+OPT-ARC-001 (JSONL → PostgreSQL) has five DB proof jobs in
+.github/workflows/api.yml with PR-CI evidence. This validator pins that truth
+machine-readably and blocks stale evidence or drift toward false completion
+claims:
 
   - docs/reports/opt-arc-001-db-proof-matrix.json must describe exactly the
     five expected proofs, no cutover, JSONL as default domain read and write
@@ -12,9 +13,11 @@ truth machine-readably and blocks drift toward false completion claims:
     state="ci_proven" with a concrete ci_evidence object (run_url, run_id,
     commit, job). For a ci_proven proof the evidence job must equal the proof
     id, and run_url must be a github.com/heimgewebe/weltgewebe Actions run URL
-    whose trailing run id matches run_id. ci_proven of these five proofs only
-    records that the prepared DB jobs ran green in real PR-CI; it is NOT a
-    cutover — overall_status stays "partial" and JSONL stays read/write truth.
+    whose trailing run id matches run_id. The API workflow and the proof's test
+    file must also be unchanged since the evidence commit. ci_proven of these
+    five proofs only records that the prepared DB jobs ran green in real PR-CI
+    with a fresh proof harness; it is NOT a cutover — overall_status stays
+    "partial" and JSONL stays read/write truth.
   - Each proof job must contain a real run command that invokes the expected cargo test with --include-ignored and --test-threads=1.
   - Task-control and status artifacts (docs/tasks/board.md,
     docs/tasks/index.json, docs/reports/optimierungsstatus.md,
@@ -44,6 +47,7 @@ import json
 import os
 import re
 import shlex
+import subprocess
 import sys
 
 from scripts.docmeta.docmeta import REPO_ROOT
@@ -85,9 +89,8 @@ REQUIRED_NON_GOALS = (
 )
 
 # A proof may only carry state="ci_proven" together with a ci_evidence object
-# whose fields have exactly these types. The current matrix maps prepared
-# proofs only, so "ci_proven" is rejected outright (see _validate_proof).
-# bool is an int subclass; exact type equality prevents it from passing as run_id.
+# whose fields have exactly these types. bool is an int subclass; exact type
+# equality prevents it from passing as run_id.
 CI_EVIDENCE_FIELD_TYPES = {
     "run_url": str,
     "run_id": int,
@@ -95,6 +98,7 @@ CI_EVIDENCE_FIELD_TYPES = {
     "job": str,
 }
 CI_EVIDENCE_REQUIRED_KEYS = tuple(CI_EVIDENCE_FIELD_TYPES)
+CI_EVIDENCE_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # A ci_proven proof's run_url must be a real GitHub Actions run URL for this
 # repository; the trailing path segment of the URL must equal run_id.
@@ -540,8 +544,50 @@ def _command_has_required_cargo_test_invocation(command, test_name):
 
 
 # ---------------------------------------------------------------------------
-# CI evidence object checks (ci_proven rule)
+# CI evidence object and proof-harness freshness checks (ci_proven rule)
 # ---------------------------------------------------------------------------
+
+class GitFreshnessError(RuntimeError):
+    """Raised when Git cannot complete a proof-harness freshness check."""
+
+
+def _ci_evidence_freshness_paths(proof_id):
+    """Return the narrowly scoped proof-harness paths for one proof."""
+    spec = EXPECTED_PROOFS[proof_id]
+    return (WORKFLOW_PATH, spec["test"])
+
+
+def _run_git(repo_root, args):
+    """Run a deterministic Git command without invoking a shell."""
+    try:
+        return subprocess.run(
+            ["git", "-C", os.fspath(repo_root), *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise GitFreshnessError(str(exc)) from exc
+
+
+def _git_commit_exists(repo_root, commit):
+    """Return whether commit resolves locally to a Git commit object."""
+    result = _run_git(repo_root, ["cat-file", "-e", f"{commit}^{{commit}}"])
+    return result.returncode == 0
+
+
+def _git_changed_paths_since(repo_root, commit, paths):
+    """Return proof-harness paths changed between commit and HEAD."""
+    result = _run_git(
+        repo_root,
+        ["diff", "--name-only", f"{commit}..HEAD", "--", *paths],
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown Git error"
+        raise GitFreshnessError(detail)
+    return [line for line in result.stdout.splitlines() if line]
+
 
 def _check_ci_evidence_object(value):
     """Return True when value is a complete, strictly typed ci_evidence object.
@@ -565,28 +611,23 @@ def _check_ci_evidence_object(value):
 
 
 def _validate_ci_evidence(proof_id, ci_evidence, errors):
-    """Append errors for an invalid ci_evidence object on a ci_proven proof.
-
-    Beyond the strict type/non-empty checks in `_check_ci_evidence_object`,
-    a ci_proven proof must satisfy:
-      - ci_evidence.job equals the proof id (the evidence belongs to this proof),
-      - run_url is a github.com/heimgewebe/weltgewebe Actions run URL,
-      - the run id embedded in run_url matches run_id (URL and id are consistent).
-    """
+    """Append structural evidence errors and return whether evidence is valid."""
     if not _check_ci_evidence_object(ci_evidence):
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': state 'ci_proven' requires a ci_evidence "
             f"object with {', '.join(CI_EVIDENCE_REQUIRED_KEYS)} "
             f"(run_url/commit/job non-empty strings, run_id a real int)"
         )
-        return
+        return False
 
+    valid = True
     job = ci_evidence["job"]
     if job != proof_id:
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.job must equal the proof id, "
             f"got '{job}'"
         )
+        valid = False
 
     run_url = ci_evidence["run_url"]
     run_id = ci_evidence["run_id"]
@@ -595,6 +636,7 @@ def _validate_ci_evidence(proof_id, ci_evidence, errors):
             f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_url must start with "
             f"'{GITHUB_ACTIONS_RUN_URL_PREFIX}', got '{run_url}'"
         )
+        valid = False
     else:
         url_run_id = run_url[len(GITHUB_ACTIONS_RUN_URL_PREFIX):].split("/")[0].split("?")[0]
         if url_run_id != str(run_id):
@@ -602,6 +644,41 @@ def _validate_ci_evidence(proof_id, ci_evidence, errors):
                 f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_id ({run_id}) "
                 f"must match the run id in run_url ('{url_run_id}')"
             )
+            valid = False
+    return valid
+
+
+def _validate_ci_evidence_freshness(proof_id, repo_root, ci_evidence, errors):
+    """Require a ci_proven proof's narrow harness to be unchanged since evidence."""
+    commit = ci_evidence["commit"].strip()
+    if not CI_EVIDENCE_COMMIT_RE.fullmatch(commit):
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.commit must be a full "
+            f"40-character lowercase hex Git SHA, got '{commit}'"
+        )
+        return
+
+    try:
+        if not _git_commit_exists(repo_root, commit):
+            errors.append(
+                f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence commit '{commit}' "
+                "was not found in the local Git history"
+            )
+            return
+        paths = _ci_evidence_freshness_paths(proof_id)
+        changed_paths = _git_changed_paths_since(repo_root, commit, paths)
+    except GitFreshnessError as exc:
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': unable to check ci_evidence commit "
+            f"'{commit}' freshness: {exc}"
+        )
+        return
+
+    if changed_paths:
+        errors.append(
+            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence is stale; changed proof "
+            f"harness paths since commit {commit}: {', '.join(changed_paths)}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -643,7 +720,8 @@ def _validate_proof(proof, repo_root, errors):
                 f"to be null (no PR-CI evidence recorded for a prepared proof)"
             )
     else:  # state == "ci_proven"
-        _validate_ci_evidence(proof_id, ci_evidence, errors)
+        if _validate_ci_evidence(proof_id, ci_evidence, errors):
+            _validate_ci_evidence_freshness(proof_id, repo_root, ci_evidence, errors)
 
     workflow = proof.get("workflow")
     if workflow != WORKFLOW_PATH:

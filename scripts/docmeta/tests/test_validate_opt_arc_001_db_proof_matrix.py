@@ -598,15 +598,19 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         matrix["proofs"][0]["ci_evidence"] = {
             "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/1",
             "run_id": 1,
-            "commit": "deadbeef",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "job": NODE_WRITE_PROOF_ID,
         }
         self._write_json(guard.MATRIX_PATH, matrix)
         self.assert_error_containing("state 'prepared' requires ci_evidence")
 
-    def test_all_proofs_ci_proven_with_valid_evidence_validates(self):
+    def test_all_proofs_ci_proven_with_valid_fresh_evidence_validates(self):
         self._write_json(guard.MATRIX_PATH, _ci_proven_matrix())
-        self.assert_no_errors()
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
+        ):
+            self.assert_no_errors()
 
     def test_ci_proven_mixed_with_prepared_validates(self):
         # A partial harvest (one proof ci_proven, the rest still prepared) is valid.
@@ -614,7 +618,130 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         matrix["proofs"][0]["state"] = "ci_proven"
         matrix["proofs"][0]["ci_evidence"] = _evidence_for(matrix["proofs"][0]["id"])
         self._write_json(guard.MATRIX_PATH, matrix)
-        self.assert_no_errors()
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
+        ):
+            self.assert_no_errors()
+
+    def test_ci_proven_stale_api_workflow_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["state"] = "ci_proven"
+        matrix["proofs"][0]["ci_evidence"] = _evidence_for(matrix["proofs"][0]["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard,
+                "_git_changed_paths_since",
+                return_value=[guard.WORKFLOW_PATH],
+            ),
+        ):
+            errors = guard.validate(self.root)
+        self.assertTrue(any("ci_evidence is stale" in error for error in errors), errors)
+        self.assertTrue(any(guard.WORKFLOW_PATH in error for error in errors), errors)
+
+    def test_ci_proven_stale_proof_test_file_fails(self):
+        matrix = _valid_matrix()
+        proof = next(item for item in matrix["proofs"] if item["id"] == NODE_WRITE_PROOF_ID)
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(NODE_WRITE_PROOF_ID)
+        self._write_json(guard.MATRIX_PATH, matrix)
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard,
+                "_git_changed_paths_since",
+                return_value=[NODE_WRITE_TEST],
+            ),
+        ):
+            errors = guard.validate(self.root)
+        self.assertTrue(any("ci_evidence is stale" in error for error in errors), errors)
+        self.assertTrue(any("db_domain_node_write_path.rs" in error for error in errors), errors)
+
+    def _assert_invalid_ci_evidence_commit_rejected_before_git_lookup(self, commit):
+        matrix = _valid_matrix()
+        proof = matrix["proofs"][0]
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(proof["id"])
+        proof["ci_evidence"]["commit"] = commit
+        self._write_json(guard.MATRIX_PATH, matrix)
+
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists") as exists,
+            unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
+        ):
+            errors = guard.validate(self.root)
+
+        expected = (
+            "ci_evidence.commit must be a full 40-character lowercase hex Git SHA"
+        )
+        self.assertTrue(any(expected in error for error in errors), errors)
+        exists.assert_not_called()
+        changed.assert_not_called()
+
+    def test_ci_proven_commit_head_ref_rejected_before_git_lookup(self):
+        self._assert_invalid_ci_evidence_commit_rejected_before_git_lookup("HEAD")
+
+    def test_ci_proven_commit_main_ref_rejected_before_git_lookup(self):
+        self._assert_invalid_ci_evidence_commit_rejected_before_git_lookup("main")
+
+    def test_ci_proven_short_sha_rejected_before_git_lookup(self):
+        self._assert_invalid_ci_evidence_commit_rejected_before_git_lookup("b10076e")
+
+    def test_ci_proven_uppercase_sha_rejected_before_git_lookup(self):
+        self._assert_invalid_ci_evidence_commit_rejected_before_git_lookup(
+            "B10076EE743202D3EF07AF42A464267C82F4A5C0"
+        )
+
+    def test_ci_proven_missing_evidence_commit_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["state"] = "ci_proven"
+        matrix["proofs"][0]["ci_evidence"] = _evidence_for(matrix["proofs"][0]["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=False),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since") as changed,
+        ):
+            errors = guard.validate(self.root)
+        self.assertTrue(any("ci_evidence commit" in error for error in errors), errors)
+        self.assertTrue(any("not found" in error for error in errors), errors)
+        changed.assert_not_called()
+
+    def test_prepared_does_not_check_evidence_freshness(self):
+        with unittest.mock.patch.object(
+            guard,
+            "_git_commit_exists",
+            side_effect=AssertionError("prepared proof must not check Git freshness"),
+        ) as commit_exists, unittest.mock.patch.object(
+            guard,
+            "_git_changed_paths_since",
+            side_effect=AssertionError("prepared proof must not diff Git paths"),
+        ) as changed:
+            self.assert_no_errors()
+        commit_exists.assert_not_called()
+        changed.assert_not_called()
+
+    def test_ci_proven_freshness_diff_is_limited_to_proof_harness_paths(self):
+        matrix = _valid_matrix()
+        proof = matrix["proofs"][0]
+        proof["state"] = "ci_proven"
+        proof["ci_evidence"] = _evidence_for(proof["id"])
+        self._write_json(guard.MATRIX_PATH, matrix)
+        with (
+            unittest.mock.patch.object(guard, "_git_commit_exists", return_value=True),
+            unittest.mock.patch.object(
+                guard,
+                "_git_changed_paths_since",
+                return_value=[],
+            ) as changed,
+        ):
+            self.assert_no_errors()
+        changed.assert_called_once_with(
+            self.root,
+            proof["ci_evidence"]["commit"],
+            (guard.WORKFLOW_PATH, guard.EXPECTED_PROOFS[proof["id"]]["test"]),
+        )
 
     def test_unknown_state_fails(self):
         matrix = _valid_matrix()
@@ -655,7 +782,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         obj = {
             "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/1",
             "run_id": 1,
-            "commit": "deadbeef",
+            "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "job": NODE_WRITE_PROOF_ID,
         }
         obj.update(overrides)
