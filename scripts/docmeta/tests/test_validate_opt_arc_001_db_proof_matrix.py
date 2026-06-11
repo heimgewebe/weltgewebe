@@ -121,6 +121,36 @@ def _workflow_text_cross_job(proof_id_to_steal, steal_to_job_id):
     return "\n".join(lines) + "\n"
 
 
+def _workflow_text_toplevel_comment_after_target(target_id):
+    """Target job lacks its proof command; a top-level (indent 0) comment right
+    after it carries the full command. A correct sibling job follows. A naive
+    block extractor would attribute the comment to the target job."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    lines = ["name: API CI", "jobs:"]
+    # Target job first, WITHOUT its proof test command.
+    lines.append(f"  {target_id}:")
+    lines.append("    runs-on: ubuntu-latest")
+    lines.append("    steps:")
+    lines.append('      - run: echo "placeholder, no proof test here"')
+    # Top-level comment (indent 0) carrying the full required command.
+    lines.append(
+        "# - run: cargo test --locked -p weltgewebe-api "
+        f"--test {spec['command_test_name']} -- --include-ignored --test-threads=1"
+    )
+    # All other jobs, correct, so only the target is in question.
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        if proof_id == target_id:
+            continue
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        lines.append(
+            "      - run: cargo test --locked -p weltgewebe-api "
+            f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW, blocker_row=DEFAULT_BOARD_BLOCKER_ROW):
     # The done section deliberately carries legitimate CI PROVEN rows of other
     # tasks: the guard must stay scoped to OPT-ARC-001 rows only.
@@ -391,6 +421,44 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         self.assert_error_containing("ci_evidence must be null")
 
+    # --- ci_evidence strict typing (direct helper tests) --------------------
+
+    @staticmethod
+    def _ci_evidence(**overrides):
+        obj = {
+            "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/1",
+            "run_id": 1,
+            "commit": "deadbeef",
+            "job": NODE_WRITE_PROOF_ID,
+        }
+        obj.update(overrides)
+        return obj
+
+    def test_ci_evidence_object_valid(self):
+        self.assertTrue(guard._check_ci_evidence_object(self._ci_evidence()))
+
+    def test_ci_evidence_object_not_a_dict(self):
+        self.assertFalse(guard._check_ci_evidence_object("nope"))
+
+    def test_ci_evidence_run_id_as_string_invalid(self):
+        self.assertFalse(guard._check_ci_evidence_object(self._ci_evidence(run_id="1")))
+
+    def test_ci_evidence_commit_as_int_invalid(self):
+        self.assertFalse(guard._check_ci_evidence_object(self._ci_evidence(commit=123)))
+
+    def test_ci_evidence_run_id_as_bool_invalid(self):
+        self.assertFalse(guard._check_ci_evidence_object(self._ci_evidence(run_id=True)))
+
+    def test_ci_evidence_empty_string_field_invalid(self):
+        self.assertFalse(guard._check_ci_evidence_object(self._ci_evidence(commit="   ")))
+
+    def test_ci_evidence_run_url_as_int_invalid(self):
+        self.assertFalse(guard._check_ci_evidence_object(self._ci_evidence(run_url=42)))
+
+    def test_ci_evidence_extra_key_tolerated(self):
+        # Extra keys remain allowed (prior policy preserved).
+        self.assertTrue(guard._check_ci_evidence_object(self._ci_evidence(branch="main")))
+
     def test_matrix_cutover_status_cutover_fails(self):
         matrix = _valid_matrix()
         matrix["cutover_status"] = "cutover"
@@ -512,6 +580,17 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write(guard.WORKFLOW_PATH, _workflow_text(decorated=True))
         self.assert_no_errors()
 
+    def test_workflow_toplevel_comment_does_not_rescue_target_job(self):
+        # The target job has no proof command; a top-level comment directly
+        # after it carries the full command. The comment must not be attributed
+        # to the job, so the job-scoped search must fail.
+        wf = _workflow_text_toplevel_comment_after_target(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            "'--test db_domain_node_write_path' not found in job "
+            f"'{NODE_WRITE_PROOF_ID}'"
+        )
+
     # --- status wording, scoped to OPT-ARC-001 ------------------------------
 
     def test_opt_arc_ci_proven_wording_fails_when_prepared(self):
@@ -546,6 +625,40 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self.assertIn("CI PROVEN", _board_text())
         self.assertIn("CI PROVEN", _status_md_text())
         self.assert_no_errors()
+
+    def test_forbidden_wording_regex_punctuation_embedding(self):
+        # Direct helper test: markdown/punctuation wrappers must be caught,
+        # alphanumeric embedding must not.
+        must_block = [
+            "_CI_PROVEN_",
+            "_ci proven_",
+            "`CI_PROVEN`",
+            "(CI-PROVEN)",
+            "CI_PROVEN",
+            "ci proven",
+            "ci-proven",
+        ]
+        must_not_block = [
+            "XCI_PROVEN",
+            "CI_PROVENX",
+            "musician proven nothing",
+        ]
+        for text in must_block:
+            with self.subTest(block=text):
+                self.assertEqual(guard._contains_forbidden_wording(text), ["CI PROVEN"])
+        for text in must_not_block:
+            with self.subTest(allow=text):
+                self.assertEqual(guard._contains_forbidden_wording(text), [])
+
+    def test_forbidden_wording_markdown_embedded_in_arc_row_fails(self):
+        # An end-to-end variant: `_CI_PROVEN_` embedded with underscores in the
+        # active OPT-ARC-001 board row must block.
+        row = DEFAULT_BOARD_ARC_ROW.replace(
+            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "Status _CI_PROVEN_ vermerkt",
+        )
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing("must not contain 'CI PROVEN'")
 
     # --- status MD (header-aware, unique row, date sync) ----------------------
 

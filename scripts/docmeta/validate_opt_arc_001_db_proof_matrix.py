@@ -82,13 +82,26 @@ REQUIRED_NON_GOALS = (
 )
 
 # A proof may only carry state="ci_proven" together with a ci_evidence object
-# holding all of these keys. The current matrix maps prepared proofs only,
-# so "ci_proven" is rejected outright (see _validate_proof).
-CI_EVIDENCE_REQUIRED_KEYS = ("run_url", "run_id", "commit", "job")
+# whose fields have exactly these types. The current matrix maps prepared
+# proofs only, so "ci_proven" is rejected outright (see _validate_proof).
+# bool is a subclass of int and is rejected explicitly for run_id.
+CI_EVIDENCE_FIELD_TYPES = {
+    "run_url": str,
+    "run_id": int,
+    "commit": str,
+    "job": str,
+}
+CI_EVIDENCE_REQUIRED_KEYS = tuple(CI_EVIDENCE_FIELD_TYPES)
 
 # All spelling variants of the forbidden completion claim: CI PROVEN,
 # ci proven, CI-Proven, ci-proven, ci_proven, CI_PROVEN, ...
-FORBIDDEN_WORDING_RE = re.compile(r"\bci[\s_-]proven\b", re.IGNORECASE)
+# Word boundaries (\b) treat '_' as a word char, so '_CI_PROVEN_' would slip
+# through. Lookarounds reject alphanumeric embedding (XCI_PROVEN, CI_PROVENX)
+# while allowing markdown/punctuation wrappers (backticks, '_', '(', ')').
+FORBIDDEN_WORDING_RE = re.compile(
+    r"(?<![A-Za-z0-9])ci[\s_-]proven(?![A-Za-z0-9])",
+    re.IGNORECASE,
+)
 
 EXPECTED_PROOFS = {
     "db-domain-schema-migrations-proof": {
@@ -130,6 +143,17 @@ REQUIRED_REPORT_EVIDENCE = tuple(
 REQUIRED_CI_JOB_EVIDENCE = tuple(f"CI-Job: {proof_id}" for proof_id in EXPECTED_PROOFS)
 REQUIRED_SOURCE_EVIDENCE = ("apps/api/src/routes/nodes.rs",)
 REQUIRED_GUARD_EVIDENCE = (MATRIX_PATH, VALIDATOR_PATH)
+
+# Single source of truth for the evidence every OPT-ARC-001 task-control entry
+# (index.json task, optimierungsstatus.json item) must carry. Additional
+# legitimate evidence stays allowed; no exact-set equality is enforced.
+ALL_REQUIRED_EVIDENCE = (
+    REQUIRED_TEST_EVIDENCE
+    + REQUIRED_REPORT_EVIDENCE
+    + REQUIRED_CI_JOB_EVIDENCE
+    + REQUIRED_SOURCE_EVIDENCE
+    + REQUIRED_GUARD_EVIDENCE
+)
 
 BOARD_REQUIRED_MENTIONS = (
     "apps/api/src/routes/nodes.rs",
@@ -277,10 +301,13 @@ def _extract_workflow_job_block(workflow_text, job_id):
     """Return the text block for the named workflow job, or None if not found.
 
     Collects the job key line and all subsequent lines that are strictly more
-    indented, stopping at the first non-comment line whose indentation is <=
-    the job key's. Empty lines and comment lines are tolerated inside the
-    block; job-internal keys (if:, continue-on-error:, services:, steps:, ...)
-    are more indented than the job key and therefore never terminate it.
+    indented, stopping at the first content line whose indentation is <= the
+    job key's. Blank lines are tolerated inside the block. Comments are only
+    kept while indented deeper than the job key; a comment at or below the job
+    key's indentation (e.g. a top-level comment between two jobs) terminates
+    the block, so it cannot lend its text to the preceding job. Job-internal
+    keys (if:, continue-on-error:, services:, steps:, ...) are more indented
+    than the job key and therefore never terminate it.
     """
     lines = workflow_text.splitlines()
     start_idx = None
@@ -299,11 +326,13 @@ def _extract_workflow_job_block(workflow_text, job_id):
     block = [lines[start_idx]]
     for line in lines[start_idx + 1:]:
         stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not stripped:
             block.append(line)
             continue
         current_indent = len(line) - len(line.lstrip())
         if current_indent <= job_indent:
+            # A sibling job key or a top-level/sibling-level comment ends the
+            # block. Comments at this depth must not be attributed to the job.
             break
         block.append(line)
 
@@ -315,16 +344,23 @@ def _extract_workflow_job_block(workflow_text, job_id):
 # ---------------------------------------------------------------------------
 
 def _check_ci_evidence_object(value):
-    """Return True when value is a complete ci_evidence object."""
+    """Return True when value is a complete, strictly typed ci_evidence object.
+
+    Each required field must match its declared type exactly (no swapped
+    types): run_url/commit/job non-empty strings, run_id a real int (bool
+    rejected). Extra keys remain tolerated, matching the prior policy.
+    """
     if not isinstance(value, dict):
         return False
-    for key in CI_EVIDENCE_REQUIRED_KEYS:
+    for key, expected_type in CI_EVIDENCE_FIELD_TYPES.items():
         v = value.get(key)
-        if isinstance(v, str):
-            if not v.strip():
+        if expected_type is int:
+            # bool is a subclass of int; reject it explicitly.
+            if not isinstance(v, int) or isinstance(v, bool):
                 return False
-        elif not isinstance(v, int) or isinstance(v, bool):
-            return False
+        else:  # str fields
+            if not isinstance(v, str) or not v.strip():
+                return False
     return True
 
 
@@ -689,14 +725,7 @@ def _validate_task_control_entry(entry, rel_path, errors, *, require_links_docs=
 
     evidence = entry.get("evidence")
     evidence = evidence if isinstance(evidence, list) else []
-    required_evidence = (
-        REQUIRED_TEST_EVIDENCE
-        + REQUIRED_REPORT_EVIDENCE
-        + REQUIRED_CI_JOB_EVIDENCE
-        + REQUIRED_SOURCE_EVIDENCE
-        + REQUIRED_GUARD_EVIDENCE
-    )
-    for required in required_evidence:
+    for required in ALL_REQUIRED_EVIDENCE:
         if required not in evidence:
             errors.append(f"{rel_path}: {TASK_ID} evidence must contain '{required}'")
 
