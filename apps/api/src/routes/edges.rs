@@ -259,6 +259,9 @@ pub async fn get_edge(
 /// read-side `Edge` model, so existing JSONL/read semantics stay untouched.
 #[allow(dead_code)] // used by upcoming POST /edges PR (OPT-ARC-001 Phase E-C)
 mod edge_create {
+    use serde::de::{self, Deserialize, Deserializer, Visitor};
+    use std::fmt;
+
     /// Allowed `edge_kind` values, mirroring `contracts/domain/edge.schema.json`.
     const EDGE_KIND_VALUES: [&str; 4] = ["delegation", "membership", "ownership", "reference"];
 
@@ -269,20 +272,74 @@ mod edge_create {
     /// (`maxLength: 1000`). JSON Schema counts characters, not bytes.
     const EDGE_NOTE_MAX_LEN: usize = 1000;
 
+    /// Deserialize an optional string field with hardened null-semantics: the
+    /// field may be **absent** (`#[serde(default)]` yields `None`) but an
+    /// explicit JSON `null` is **rejected** instead of being coerced to `None`.
+    /// A present value must be a string; numbers, objects, and arrays fail.
+    ///
+    /// This keeps "optional" meaning "may be omitted" rather than "may be
+    /// nulled", so a client cannot erase an edge field by sending `null` — no
+    /// silent meaning-loss in JSON costume.
+    fn deserialize_optional_non_null_string<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OptionalNonNullStringVisitor;
+
+        impl<'de> Visitor<'de> for OptionalNonNullStringVisitor {
+            type Value = Option<String>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a string or an absent field, not null")
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                String::deserialize(deserializer).map(Some)
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom("null is not allowed; omit the field instead"))
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom("null is not allowed; omit the field instead"))
+            }
+        }
+
+        deserializer.deserialize_option(OptionalNonNullStringVisitor)
+    }
+
     /// Accepted shape of a future `POST /edges` create request.
     ///
     /// `created_at`, `expires_at`, `payload`, and `metadata` are intentionally
     /// absent; together with `deny_unknown_fields` they are rejected rather than
-    /// silently dropped.
+    /// silently dropped. The optional string fields (`id`, `source_type`,
+    /// `target_type`, `note`) may be omitted but reject an explicit `null`, so
+    /// "optional" never quietly collapses into "nullable".
     #[derive(Debug, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
     struct CreateEdgeRequest {
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         id: Option<String>,
         source_id: String,
         target_id: String,
         edge_kind: String,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         source_type: Option<String>,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         target_type: Option<String>,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         note: Option<String>,
     }
 
@@ -526,6 +583,66 @@ mod edge_create {
             assert!(
                 serde_json::from_str::<CreateEdgeRequest>(json).is_err(),
                 "unknown fields must be rejected, never silently ignored"
+            );
+        }
+
+        // ---- negative: explicit null on optional fields (serde level) ----
+        //
+        // "optional" means "may be omitted", never "may be null": an explicit
+        // null must fail rather than silently collapse to None. (Absent optional
+        // fields are already proven valid by edge_create_request_accepts_minimal_payload.)
+
+        #[test]
+        fn edge_create_request_rejects_null_id() {
+            let json = r#"{"id":null,"source_id":"n1","target_id":"n2","edge_kind":"reference"}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(json).is_err(),
+                "id=null must be rejected; omit id instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_source_type() {
+            let json =
+                r#"{"source_id":"n1","target_id":"n2","edge_kind":"reference","source_type":null}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(json).is_err(),
+                "source_type=null must be rejected; omit source_type instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_target_type() {
+            let json =
+                r#"{"source_id":"n1","target_id":"n2","edge_kind":"reference","target_type":null}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(json).is_err(),
+                "target_type=null must be rejected; omit target_type instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_note() {
+            let json = r#"{"source_id":"n1","target_id":"n2","edge_kind":"reference","note":null}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(json).is_err(),
+                "note=null must be rejected; omit note instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_non_string_optional_fields() {
+            // A present optional field must be a string; other JSON types fail.
+            let numeric =
+                r#"{"source_id":"n1","target_id":"n2","edge_kind":"reference","source_type":123}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(numeric).is_err(),
+                "numeric source_type must be rejected"
+            );
+            let object = r#"{"source_id":"n1","target_id":"n2","edge_kind":"reference","note":{}}"#;
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(object).is_err(),
+                "object note must be rejected"
             );
         }
 
