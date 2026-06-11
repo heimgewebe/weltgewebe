@@ -1,6 +1,7 @@
+---
 name: OPT-ARC-001 DB proof matrix guard
 
-on:
+"on":
   pull_request:
     paths:
       - "Makefile"
