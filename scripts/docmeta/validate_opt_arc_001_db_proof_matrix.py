@@ -40,6 +40,7 @@ No files are written. Violations are printed to stderr.
 import json
 import os
 import re
+import shlex
 import sys
 
 from scripts.docmeta.docmeta import REPO_ROOT
@@ -421,28 +422,78 @@ def _extract_workflow_run_commands(job_block):
     return commands
 
 
-def _command_has_expected_test(command, test_name):
-    """Return True if command contains --test <test_name> or --test=<test_name>."""
-    return bool(re.search(
-        rf'--test(?!-)(?:[=\s]+){re.escape(test_name)}\b', command
-    ))
+SHELL_COMMAND_SEPARATORS = {";", "&&", "||", "|", "&"}
+_ENV_ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=.*$")
 
 
-def _command_has_cargo_test_invocation(command):
-    """Return True if 'cargo test' is invoked as a shell command (not just echoed text)."""
-    pattern = r'(?:^|[;&|()]\s*)(?:(?:time|env)\s+)?(?:[a-zA-Z_][a-zA-Z0-9_]*=(?:\S+|"[^"]*"|\'[^\']*\')\s+)*cargo\s+test\b'
-    return bool(re.search(pattern, command))
+def _shell_tokens(command):
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        return list(lexer)
+    except ValueError:
+        return []
 
 
-def _command_has_required_cargo_flags(command):
-    """Return True if command contains all flags required for a valid proof run."""
-    return (
-        _command_has_cargo_test_invocation(command)
-        and '--locked' in command
-        and '-p weltgewebe-api' in command
-        and '--include-ignored' in command
-        and bool(re.search(r'--test-threads(?:[=\s]+)1\b', command))
-    )
+def _split_shell_segments(tokens):
+    segments = []
+    current_segment = []
+    for token in tokens:
+        if token in SHELL_COMMAND_SEPARATORS or all(c in ';&|' for c in token):
+            segments.append(current_segment)
+            current_segment = []
+        else:
+            current_segment.append(token)
+    segments.append(current_segment)
+    return segments
+
+
+def _command_has_required_cargo_test_invocation(command, test_name):
+    tokens = _shell_tokens(command)
+    segments = _split_shell_segments(tokens)
+    for segment in segments:
+        idx = 0
+        while idx < len(segment):
+            t = segment[idx]
+            if _ENV_ASSIGNMENT_RE.match(t) or t in ("time", "env"):
+                idx += 1
+            else:
+                break
+        if idx + 1 < len(segment) and segment[idx] == "cargo" and segment[idx+1] == "test":
+            has_locked = "--locked" in segment
+            has_include_ignored = "--include-ignored" in segment
+            
+            has_package = False
+            for i, t in enumerate(segment):
+                if t in ("-p", "--package") and i + 1 < len(segment) and segment[i+1] == "weltgewebe-api":
+                    has_package = True
+                    break
+                if t in ("-pweltgewebe-api", "--package=weltgewebe-api"):
+                    has_package = True
+                    break
+                    
+            has_test = False
+            for i, t in enumerate(segment):
+                if t == "--test" and i + 1 < len(segment) and segment[i+1] == test_name:
+                    has_test = True
+                    break
+                if t == f"--test={test_name}":
+                    has_test = True
+                    break
+                    
+            has_threads = False
+            for i, t in enumerate(segment):
+                if t == "--test-threads" and i + 1 < len(segment) and segment[i+1] == "1":
+                    has_threads = True
+                    break
+                if t == "--test-threads=1":
+                    has_threads = True
+                    break
+                    
+            if has_locked and has_include_ignored and has_package and has_test and has_threads:
+                return True
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -658,8 +709,7 @@ def _validate_workflow(repo_root, errors):
         test_name = spec["command_test_name"]
         run_commands = _extract_workflow_run_commands(job_block)
         found = any(
-            _command_has_expected_test(cmd, test_name)
-            and _command_has_required_cargo_flags(cmd)
+            _command_has_required_cargo_test_invocation(cmd, test_name)
             for cmd in run_commands
         )
         if not found:

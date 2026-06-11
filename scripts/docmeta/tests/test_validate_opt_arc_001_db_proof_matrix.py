@@ -691,6 +691,50 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_json(guard.MATRIX_PATH, matrix)
         self.assert_error_containing("--test-threads=1")
 
+    def test_cargo_invocation_long_env_assignment_like_string_is_fast_and_false(self):
+        command = " ".join(["A=" + '""' for _ in range(200)]) + " echo done"
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_echoed_full_command_false(self):
+        command = 'echo "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1"'
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_valid_prefixes_true(self):
+        valid_commands = [
+            'DATABASE_URL="postgres://..." cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
+            'time cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
+            'env FOO=bar cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
+            'echo prepare && cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
+        ]
+        for cmd in valid_commands:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(
+                    guard._command_has_required_cargo_test_invocation(
+                        cmd,
+                        "db_domain_node_write_path",
+                    )
+                )
+
+    def test_workflow_flags_across_segments_not_accepted(self):
+        wf = _workflow_text().replace(
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1",
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path ; echo \"--include-ignored --test-threads=1\"",
+        )
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
     # --- workflow (job-scoped) ----------------------------------------------
 
     def test_missing_workflow_job_fails(self):
