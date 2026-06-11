@@ -274,6 +274,50 @@ def _workflow_text_folded_run_block(target_id):
     return "\n".join(lines) + "\n"
 
 
+def _workflow_text_echoed_full_command(target_id):
+    """Target job: run command only echoes the cargo test command."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    test_name = spec["command_test_name"]
+    lines = ["name: API CI", "jobs:"]
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        if proof_id == target_id:
+            lines.append(
+                f"      - run: echo \"cargo test --locked -p weltgewebe-api "
+                f"--test {test_name} -- --include-ignored --test-threads=1\""
+            )
+        else:
+            lines.append(
+                "      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _workflow_text_run_block_absorbs_env_flags(target_id):
+    """Target job: run block misses flags, env sibling has them."""
+    spec = guard.EXPECTED_PROOFS[target_id]
+    test_name = spec["command_test_name"]
+    lines = ["name: API CI", "jobs:"]
+    for proof_id, s in guard.EXPECTED_PROOFS.items():
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        if proof_id == target_id:
+            lines.append("      - run: |")
+            lines.append(f"          cargo test --locked -p weltgewebe-api --test {test_name}")
+            lines.append("        env:")
+            lines.append("          FAKE_FLAGS: \"--include-ignored --test-threads=1\"")
+        else:
+            lines.append(
+                "      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {s['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+    return "\n".join(lines) + "\n"
+
+
 def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW, blocker_row=DEFAULT_BOARD_BLOCKER_ROW):
     # The done section deliberately carries legitimate CI PROVEN rows of other
     # tasks: the guard must stay scoped to OPT-ARC-001 rows only.
@@ -745,6 +789,20 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         wf = _workflow_text_folded_run_block(NODE_WRITE_PROOF_ID)
         self._write(guard.WORKFLOW_PATH, wf)
         self.assert_no_errors()
+
+    def test_workflow_echoed_full_command_not_accepted(self):
+        wf = _workflow_text_echoed_full_command(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
+    def test_workflow_run_block_does_not_absorb_env_flags(self):
+        wf = _workflow_text_run_block_absorbs_env_flags(NODE_WRITE_PROOF_ID)
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
 
     # --- status wording, scoped to OPT-ARC-001 ------------------------------
 

@@ -12,8 +12,7 @@ truth machine-readably and blocks drift toward false completion claims:
     ci_evidence object (run_url, run_id, commit, job). In the current matrix
     version every proof must remain "prepared", so any "ci_proven" entry is
     rejected either way.
-  - Each proof job block in .github/workflows/api.yml must run the expected
-    test with --include-ignored and --test-threads=1 (job-scoped search).
+  - Each proof job must contain a real run command that invokes the expected cargo test with --include-ignored and --test-threads=1.
   - Task-control and status artifacts (docs/tasks/board.md,
     docs/tasks/index.json, docs/reports/optimierungsstatus.md,
     docs/reports/optimierungsstatus.json) must keep OPT-ARC-001 at status
@@ -84,7 +83,7 @@ REQUIRED_NON_GOALS = (
 # A proof may only carry state="ci_proven" together with a ci_evidence object
 # whose fields have exactly these types. The current matrix maps prepared
 # proofs only, so "ci_proven" is rejected outright (see _validate_proof).
-# bool is a subclass of int and is rejected explicitly for run_id.
+# bool is an int subclass; exact type equality prevents it from passing as run_id.
 CI_EVIDENCE_FIELD_TYPES = {
     "run_url": str,
     "run_id": int,
@@ -382,16 +381,23 @@ def _extract_workflow_run_commands(job_block):
         i += 1
 
         if re.fullmatch(r'[|>][+-]?', value) or value == '':
-            # Block scalar — collect body lines more indented than the run: key.
+            # Block scalar — collect body lines.
             is_folded = value.startswith('>')
             block_lines = []
+            body_indent = None
             while i < len(lines):
                 bl = lines[i]
                 if not bl.strip():
                     block_lines.append('')
                     i += 1
                     continue
-                if len(bl) - len(bl.lstrip()) <= run_indent:
+                current_indent = len(bl) - len(bl.lstrip())
+                if body_indent is None:
+                    if current_indent <= run_indent:
+                        break
+                    body_indent = current_indent
+                
+                if current_indent < body_indent:
                     break
                 block_lines.append(bl)
                 i += 1
@@ -422,10 +428,16 @@ def _command_has_expected_test(command, test_name):
     ))
 
 
+def _command_has_cargo_test_invocation(command):
+    """Return True if 'cargo test' is invoked as a shell command (not just echoed text)."""
+    pattern = r'(?:^|[;&|()]\s*)(?:(?:time|env)\s+)?(?:[a-zA-Z_][a-zA-Z0-9_]*=(?:\S+|"[^"]*"|\'[^\']*\')\s+)*cargo\s+test\b'
+    return bool(re.search(pattern, command))
+
+
 def _command_has_required_cargo_flags(command):
     """Return True if command contains all flags required for a valid proof run."""
     return (
-        'cargo test' in command
+        _command_has_cargo_test_invocation(command)
         and '--locked' in command
         and '-p weltgewebe-api' in command
         and '--include-ignored' in command
