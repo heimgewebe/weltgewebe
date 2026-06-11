@@ -710,11 +710,11 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         )
 
     def test_cargo_invocation_valid_prefixes_true(self):
+        # Compound commands (like echo prepare && cargo test) are intentionally rejected for proof jobs.
         valid_commands = [
             'DATABASE_URL="postgres://..." cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
             'time cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
             'env FOO=bar cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
-            'echo prepare && cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1',
         ]
         for cmd in valid_commands:
             with self.subTest(cmd=cmd):
@@ -724,6 +724,81 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                         "db_domain_node_write_path",
                     )
                 )
+
+    def test_cargo_invocation_or_true_not_accepted(self):
+        command = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1 || true"
+        )
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_after_false_and_not_accepted(self):
+        command = (
+            "false && cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1"
+        )
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_after_exit_semicolon_not_accepted(self):
+        command = (
+            "exit 0; cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1"
+        )
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_piped_not_accepted(self):
+        command = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1 | tee proof.log"
+        )
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_backgrounded_not_accepted(self):
+        command = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1 &"
+        )
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                command,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_workflow_or_true_command_not_accepted(self):
+        wf = _workflow_text().replace(
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1",
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1 || true",
+        )
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
 
     def test_cargo_invocation_inline_comment_flags_not_accepted(self):
         command = (

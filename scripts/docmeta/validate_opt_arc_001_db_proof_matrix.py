@@ -480,47 +480,55 @@ def _split_shell_segments(tokens):
 def _command_has_required_cargo_test_invocation(command, test_name):
     tokens = _shell_tokens(command)
     segments = _split_shell_segments(tokens)
-    for segment in segments:
-        idx = 0
-        while idx < len(segment):
-            t = segment[idx]
-            if _ENV_ASSIGNMENT_RE.match(t) or t in ("time", "env"):
-                idx += 1
-            else:
+    
+    if len(segments) != 1:
+        return False
+        
+    segment = segments[0]
+    
+    if not segment:
+        return False
+    
+    idx = 0
+    while idx < len(segment):
+        t = segment[idx]
+        if _ENV_ASSIGNMENT_RE.match(t) or t in ("time", "env"):
+            idx += 1
+        else:
+            break
+    if idx + 1 < len(segment) and segment[idx] == "cargo" and segment[idx+1] == "test":
+        has_locked = "--locked" in segment
+        has_include_ignored = "--include-ignored" in segment
+        
+        has_package = False
+        for i, t in enumerate(segment):
+            if t in ("-p", "--package") and i + 1 < len(segment) and segment[i+1] == "weltgewebe-api":
+                has_package = True
                 break
-        if idx + 1 < len(segment) and segment[idx] == "cargo" and segment[idx+1] == "test":
-            has_locked = "--locked" in segment
-            has_include_ignored = "--include-ignored" in segment
-            
-            has_package = False
-            for i, t in enumerate(segment):
-                if t in ("-p", "--package") and i + 1 < len(segment) and segment[i+1] == "weltgewebe-api":
-                    has_package = True
-                    break
-                if t in ("-pweltgewebe-api", "--package=weltgewebe-api"):
-                    has_package = True
-                    break
-                    
-            has_test = False
-            for i, t in enumerate(segment):
-                if t == "--test" and i + 1 < len(segment) and segment[i+1] == test_name:
-                    has_test = True
-                    break
-                if t == f"--test={test_name}":
-                    has_test = True
-                    break
-                    
-            has_threads = False
-            for i, t in enumerate(segment):
-                if t == "--test-threads" and i + 1 < len(segment) and segment[i+1] == "1":
-                    has_threads = True
-                    break
-                if t == "--test-threads=1":
-                    has_threads = True
-                    break
-                    
-            if has_locked and has_include_ignored and has_package and has_test and has_threads:
-                return True
+            if t in ("-pweltgewebe-api", "--package=weltgewebe-api"):
+                has_package = True
+                break
+                
+        has_test = False
+        for i, t in enumerate(segment):
+            if t == "--test" and i + 1 < len(segment) and segment[i+1] == test_name:
+                has_test = True
+                break
+            if t == f"--test={test_name}":
+                has_test = True
+                break
+                
+        has_threads = False
+        for i, t in enumerate(segment):
+            if t == "--test-threads" and i + 1 < len(segment) and segment[i+1] == "1":
+                has_threads = True
+                break
+            if t == "--test-threads=1":
+                has_threads = True
+                break
+                
+        if has_locked and has_include_ignored and has_package and has_test and has_threads:
+            return True
     return False
 
 

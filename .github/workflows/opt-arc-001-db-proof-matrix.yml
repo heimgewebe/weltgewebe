@@ -1,0 +1,40 @@
+name: OPT-ARC-001 DB proof matrix guard
+
+on:
+  pull_request:
+    paths:
+      - "Makefile"
+      - "docs/reports/opt-arc-001-db-proof-matrix.json"
+      - "docs/reports/optimierungsstatus.md"
+      - "docs/reports/optimierungsstatus.json"
+      - "docs/tasks/board.md"
+      - "docs/tasks/index.json"
+      - "docs/reports/domain-backfill-proof.md"
+      - "docs/reports/domain-read-path-proof.md"
+      - "docs/reports/domain-account-write-path-proof.md"
+      - "docs/reports/domain-node-write-path-proof.md"
+      - ".github/workflows/api.yml"
+      - ".github/workflows/opt-arc-001-db-proof-matrix.yml"
+      - "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py"
+      - "scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opt-arc-001-db-proof-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+      - name: Validate OPT-ARC-001 DB proof matrix
+        run: python3 -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix
+      - name: Run OPT-ARC-001 DB proof matrix validator tests
+        run: python3 -m unittest scripts.docmeta.tests.test_validate_opt_arc_001_db_proof_matrix
