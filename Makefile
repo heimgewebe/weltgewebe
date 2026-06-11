@@ -13,6 +13,7 @@ validate-core:
 	python3 -m scripts.docmeta.check_repo_index_consistency
 	python3 -m scripts.docmeta.check_doc_review_age
 	python3 -m scripts.docmeta.review_impact
+	python3 -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix
 	python3 -m scripts.docmeta.export_docs_index
 	python3 -m scripts.docmeta.generate_audit_gaps
 	python3 -m scripts.docmeta.check_links

@@ -241,7 +241,9 @@
         "docs/reports/domain-node-write-path-proof.md",
         "CI-Job: db-domain-read-path-proof",
         "CI-Job: db-domain-account-write-path-proof",
-        "CI-Job: db-domain-node-write-path-proof"
+        "CI-Job: db-domain-node-write-path-proof",
+        "docs/reports/opt-arc-001-db-proof-matrix.json",
+        "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",

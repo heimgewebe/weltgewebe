@@ -649,7 +649,13 @@
         "docs/reports/domain-read-path-proof.md",
         "docs/reports/domain-account-write-path-proof.md",
         "CI-Job: db-domain-read-path-proof",
-        "CI-Job: db-domain-account-write-path-proof"
+        "CI-Job: db-domain-account-write-path-proof",
+        "apps/api/src/routes/nodes.rs",
+        "apps/api/tests/db_domain_node_write_path.rs",
+        "docs/reports/domain-node-write-path-proof.md",
+        "CI-Job: db-domain-node-write-path-proof",
+        "docs/reports/opt-arc-001-db-proof-matrix.json",
+        "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py"
       ],
       "missing_evidence": [
         "Grüner PR-CI-Laufbeleg für db_domain_schema_migrations ausstehend",
@@ -674,10 +680,12 @@
           "docs/reports/optimierungsstatus.md",
           "docs/reports/domain-backfill-proof.md",
           "docs/reports/domain-read-path-proof.md",
-          "docs/reports/domain-account-write-path-proof.md"
+          "docs/reports/domain-account-write-path-proof.md",
+          "docs/reports/domain-node-write-path-proof.md",
+          "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },
-      "updated_at": "2026-06-04"
+      "updated_at": "2026-06-10"
     },
     {
       "id": "DOCMETA-START-HERE-001",
