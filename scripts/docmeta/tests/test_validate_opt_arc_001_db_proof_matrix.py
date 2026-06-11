@@ -145,10 +145,14 @@ def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW, blocker_row=DEFAULT_BOARD_BLOCKER
                 "",
                 "| ID | Bereich | Titel | Evidenz |",
                 "|---|---|---|---|",
-                "| OPT-API-002 | api | Session-Persistenz PostgreSQL | "
-                "`apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |",
-                "| OPT-MAP-001 | map | Basemap Runtime Proof | "
-                "CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |",
+                (
+                    "| OPT-API-002 | api | Session-Persistenz PostgreSQL | "
+                    + "`apps/api/src/auth/session_db.rs`, CI PROVEN, Commit `00a43a00` |"
+                ),
+                (
+                    "| OPT-MAP-001 | map | Basemap Runtime Proof | "
+                    + "CI-Job `basemap-range-delivery-proof` PROVEN, Commit `14feefd6` |"
+                ),
                 "",
             ]
         )
@@ -167,11 +171,15 @@ def _status_md_text(arc_status="partial", arc_extra="", arc_date=UPDATED_AT, ext
     lines = [
         "# Optimierungsstatus",
         "",
-        "| id | bereich | maßnahme | status | befund | risiko | aufwand "
-        "| priorität | nachweis | test | restlücke | stand |",
+        (
+            "| id | bereich | maßnahme | status | befund | risiko | aufwand "
+            + "| priorität | nachweis | test | restlücke | stand |"
+        ),
         "|---|---|---|---|---|---|---|---|---|---|---|---|",
-        "| OPT-API-002 | API | Session-Persistenz | done | ci | hoch | mittel | hoch | "
-        "`apps/api/src/auth/session_db.rs` | CI PROVEN (Run 26394569642) | keine | 2026-05-27 |",
+        (
+            "| OPT-API-002 | API | Session-Persistenz | done | ci | hoch | mittel | hoch | "
+            + "`apps/api/src/auth/session_db.rs` | CI PROVEN (Run 26394569642) | keine | 2026-05-27 |"
+        ),
         arc_row,
     ]
     if extra_arc_row is not None:
