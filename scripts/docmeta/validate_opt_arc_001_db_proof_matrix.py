@@ -283,7 +283,7 @@ def _check_command(command, proof_id, expected_test_name, errors):
             f"'--test {expected_test_name}' (one occurrence, correct name); "
             f"found {test_targets}"
         )
-    if not re.search(r'--include-ignored', command):
+    if "--include-ignored" not in command:
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': command must contain '--include-ignored'"
         )
@@ -355,8 +355,8 @@ def _check_ci_evidence_object(value):
     for key, expected_type in CI_EVIDENCE_FIELD_TYPES.items():
         v = value.get(key)
         if expected_type is int:
-            # bool is a subclass of int; reject it explicitly.
-            if not isinstance(v, int) or isinstance(v, bool):
+            # Use exact type equality so bool (an int subclass) cannot pass as run_id.
+            if type(v) is not int:
                 return False
         else:  # str fields
             if not isinstance(v, str) or not v.strip():

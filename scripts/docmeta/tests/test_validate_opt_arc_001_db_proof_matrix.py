@@ -219,13 +219,7 @@ def _status_md_text(arc_status="partial", arc_extra="", arc_date=UPDATED_AT, ext
 
 
 def _index_data():
-    evidence = (
-        list(guard.REQUIRED_TEST_EVIDENCE)
-        + list(guard.REQUIRED_REPORT_EVIDENCE)
-        + list(guard.REQUIRED_CI_JOB_EVIDENCE)
-        + list(guard.REQUIRED_SOURCE_EVIDENCE)
-        + list(guard.REQUIRED_GUARD_EVIDENCE)
-    )
+    evidence = list(guard.ALL_REQUIRED_EVIDENCE)
     return {
         "tasks": [
             {
@@ -244,13 +238,7 @@ def _index_data():
 
 
 def _status_json_data():
-    evidence = (
-        list(guard.REQUIRED_TEST_EVIDENCE)
-        + list(guard.REQUIRED_REPORT_EVIDENCE)
-        + list(guard.REQUIRED_CI_JOB_EVIDENCE)
-        + list(guard.REQUIRED_SOURCE_EVIDENCE)
-        + list(guard.REQUIRED_GUARD_EVIDENCE)
-    )
+    evidence = list(guard.ALL_REQUIRED_EVIDENCE)
     return {
         "items": [
             {
