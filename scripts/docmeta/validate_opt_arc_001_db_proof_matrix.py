@@ -343,6 +343,34 @@ def _extract_workflow_job_block(workflow_text, job_id):
 # Workflow run-command extraction (per-step, not job-wide)
 # ---------------------------------------------------------------------------
 
+def _strip_unquoted_shell_comment(line):
+    in_single = False
+    in_double = False
+    escaped = False
+
+    for i, ch in enumerate(line):
+        if escaped:
+            escaped = False
+            continue
+
+        if ch == "\\" and not in_single:
+            escaped = True
+            continue
+
+        if ch == "'" and not in_double:
+            in_single = not in_single
+            continue
+
+        if ch == '"' and not in_single:
+            in_double = not in_double
+            continue
+
+        if ch == "#" and not in_single and not in_double:
+            return line[:i]
+
+    return line
+
+
 def _normalize_run_command(raw_text):
     """Normalize a run-command body for flag checking.
 
@@ -352,8 +380,8 @@ def _normalize_run_command(raw_text):
     from commented-out commands.
     """
     lines = raw_text.splitlines()
-    # Drop pure comment lines so commented-out commands never count as proof.
-    lines = [l for l in lines if not l.lstrip().startswith('#')]
+    lines = [_strip_unquoted_shell_comment(l) for l in lines]
+    lines = [l for l in lines if l.strip()]
     joined = '\n'.join(lines)
     # Backslash-newline continuations (optional surrounding whitespace) → space.
     joined = re.sub(r'\\\s*\n\s*', ' ', joined)

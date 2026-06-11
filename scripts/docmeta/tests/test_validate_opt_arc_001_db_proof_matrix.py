@@ -725,6 +725,74 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                     )
                 )
 
+    def test_cargo_invocation_inline_comment_flags_not_accepted(self):
+        command = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "# --include-ignored --test-threads=1"
+        )
+        normalized = guard._normalize_run_command(command)
+        self.assertFalse(
+            guard._command_has_required_cargo_test_invocation(
+                normalized,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_hash_inside_double_quotes_does_not_start_comment(self):
+        command = (
+            'DATABASE_URL="postgres://user:pa#ss@localhost/db" '
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1"
+        )
+        normalized = guard._normalize_run_command(command)
+        self.assertTrue(
+            guard._command_has_required_cargo_test_invocation(
+                normalized,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_hash_inside_single_quotes_does_not_start_comment(self):
+        command = (
+            "DATABASE_URL='postgres://user:pa#ss@localhost/db' "
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1"
+        )
+        normalized = guard._normalize_run_command(command)
+        self.assertTrue(
+            guard._command_has_required_cargo_test_invocation(
+                normalized,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_cargo_invocation_trailing_comment_ignored_if_valid(self):
+        command = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_node_write_path "
+            "-- --include-ignored --test-threads=1 # trailing note"
+        )
+        normalized = guard._normalize_run_command(command)
+        self.assertTrue(
+            guard._command_has_required_cargo_test_invocation(
+                normalized,
+                "db_domain_node_write_path",
+            )
+        )
+
+    def test_workflow_inline_comment_flags_not_accepted(self):
+        wf = _workflow_text().replace(
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1",
+            "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path # --include-ignored --test-threads=1",
+        )
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing(
+            f"not found in any run command of job '{NODE_WRITE_PROOF_ID}'"
+        )
+
     def test_workflow_flags_across_segments_not_accepted(self):
         wf = _workflow_text().replace(
             "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1",
