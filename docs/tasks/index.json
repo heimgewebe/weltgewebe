@@ -397,6 +397,43 @@
       "updated_at": "2026-06-09"
     },
     {
+      "id": "DOCMETA-PROOF-001",
+      "title": "Proof-Matrix-Validator-Schema vormerken",
+      "area": "docs",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "docs/reports/opt-arc-001-db-proof-matrix.json",
+        "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
+        "scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py",
+        ".github/workflows/opt-arc-001-db-proof-matrix.yml"
+      ],
+      "missing_evidence": [
+        "Zweiter echter Proof-Matrix-Anwendungsfall fehlt; Generalisierung darf nicht aus nur einem OPT-ARC-001-Spezialfall abgeleitet werden",
+        "Entscheidung fehlt, welche Teile generisch werden sollen: Matrix-Schema, Status-Sync, Evidence-Regeln, Workflow-Trigger-Regeln, Shell-Command-Prüfung",
+        "Nachweis fehlt, dass ein gemeinsames Schema mehr Nutzen als projektspezifische Validatoren stiftet"
+      ],
+      "acceptance": [
+        "OPT-ARC-001-Validator ist nach Abschluss oder spätestens beim zweiten ähnlichen Proof-Guard retrospektiv ausgewertet",
+        "Gemeinsame und spezifische Bestandteile des Proof-Matrix-Patterns sind dokumentiert",
+        "Ein generisches Validator-Schema wird nur gebaut, wenn mindestens ein zweiter echter Anwendungsfall dieselbe Struktur benötigt",
+        "Falls kein zweiter Anwendungsfall entsteht, bleibt der Task als bewusst nicht umgesetzte Generalisierung dokumentiert"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/tasks/board.md",
+          "docs/tasks/README.md",
+          "docs/reports/opt-arc-001-db-proof-matrix.json"
+        ]
+      },
+      "updated_at": "2026-06-11"
+    },
+    {
       "id": "DOCMETA-WARN-MODE-001",
       "title": "Warn-Mode stderr semantics für Docmeta-Guards schließen",
       "area": "docs",
