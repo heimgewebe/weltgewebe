@@ -20,6 +20,9 @@ NODE_WRITE_PROOF_ID = "db-domain-node-write-path-proof"
 NODE_WRITE_TEST = "apps/api/tests/db_domain_node_write_path.rs"
 NODE_WRITE_REPORT = "docs/reports/domain-node-write-path-proof.md"
 NODE_WRITE_JOB_EVIDENCE = f"CI-Job: {NODE_WRITE_PROOF_ID}"
+FIRST_PROOF_ID = "db-domain-schema-migrations-proof"
+
+UPDATED_AT = "2026-06-10"
 
 DEFAULT_BOARD_ARC_ROW = (
     "| OPT-ARC-001 | api | JSONL → PostgreSQL | partial | high | "
@@ -30,6 +33,12 @@ DEFAULT_BOARD_ARC_ROW = (
     "`docs/reports/opt-arc-001-db-proof-matrix.json`, "
     "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` | "
     "PR-CI-Belege für alle fünf DB-Jobs stehen aus; kein Cutover; kein Dual-Write |"
+)
+
+DEFAULT_BOARD_BLOCKER_ROW = (
+    "| OPT-ARC-001 | PR-CI-Laufbeleg für alle DB-Jobs ausstehend | "
+    "Grünen CI-Lauf der DB-Jobs belegen | "
+    "JSONL bleibt Default-Lesequelle und Write-Truth bis vollständiger Cutover |"
 )
 
 
@@ -83,7 +92,30 @@ def _workflow_text(drop_job_key=None, drop_test_command=None):
     return "\n".join(lines) + "\n"
 
 
-def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW):
+def _workflow_text_cross_job(proof_id_to_steal, steal_to_job_id):
+    """Workflow where proof_id_to_steal's --test command appears in steal_to_job_id, not its own job."""
+    stolen_spec = guard.EXPECTED_PROOFS[proof_id_to_steal]
+    lines = ["name: API CI", "jobs:"]
+    for proof_id, spec in guard.EXPECTED_PROOFS.items():
+        lines.append(f"  {proof_id}:")
+        lines.append("    runs-on: ubuntu-latest")
+        lines.append("    steps:")
+        if proof_id == steal_to_job_id:
+            # Add the stolen test command into this job's block
+            lines.append(
+                f"      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {stolen_spec['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+        if proof_id != proof_id_to_steal:
+            lines.append(
+                "      - run: cargo test --locked -p weltgewebe-api "
+                f"--test {spec['command_test_name']} -- --include-ignored --test-threads=1"
+            )
+        # proof_id_to_steal gets no test command in its own block
+    return "\n".join(lines) + "\n"
+
+
+def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW, blocker_row=DEFAULT_BOARD_BLOCKER_ROW):
     # The done section deliberately carries legitimate CI PROVEN rows of other
     # tasks: the guard must stay scoped to OPT-ARC-001 rows only.
     return (
@@ -96,6 +128,12 @@ def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW):
                 "| ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |",
                 "|---|---|---|---|---|---|---|",
                 arc_row,
+                "",
+                "## Blocker",
+                "",
+                "| ID | Blocker | Fehlt | Folge |",
+                "|---|---|---|---|",
+                blocker_row,
                 "",
                 "## Erledigte Tasks",
                 "",
@@ -112,13 +150,13 @@ def _board_text(arc_row=DEFAULT_BOARD_ARC_ROW):
     )
 
 
-def _status_md_text(arc_status="partial", arc_extra=""):
+def _status_md_text(arc_status="partial", arc_extra="", arc_date=UPDATED_AT):
     arc_row = (
         f"| OPT-ARC-001 | Architektur | JSONL → PostgreSQL | {arc_status} | code+test "
         "| hoch | hoch | hoch | "
         "`docs/reports/opt-arc-001-db-proof-matrix.json`, "
         "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` | "
-        f"PR-CI-Belege ausstehend{arc_extra} | offen | 2026-06-10 |"
+        f"PR-CI-Belege ausstehend{arc_extra} | offen | {arc_date} |"
     )
     return (
         "\n".join(
@@ -143,7 +181,8 @@ def _index_data():
         list(guard.REQUIRED_TEST_EVIDENCE)
         + list(guard.REQUIRED_REPORT_EVIDENCE)
         + list(guard.REQUIRED_CI_JOB_EVIDENCE)
-        + ["apps/api/src/routes/nodes.rs", guard.MATRIX_PATH, guard.VALIDATOR_PATH]
+        + list(guard.REQUIRED_SOURCE_EVIDENCE)
+        + list(guard.REQUIRED_GUARD_EVIDENCE)
     )
     return {
         "tasks": [
@@ -151,6 +190,7 @@ def _index_data():
                 "id": guard.TASK_ID,
                 "title": "JSONL-Datenquelle zu PostgreSQL migrieren",
                 "status": "partial",
+                "updated_at": UPDATED_AT,
                 "evidence": evidence,
                 "missing_evidence": [
                     "Grüner PR-CI-Laufbeleg für alle fünf DB-Jobs ausstehend",
@@ -162,13 +202,20 @@ def _index_data():
 
 
 def _status_json_data():
+    evidence = (
+        list(guard.REQUIRED_TEST_EVIDENCE)
+        + list(guard.REQUIRED_REPORT_EVIDENCE)
+        + list(guard.REQUIRED_CI_JOB_EVIDENCE)
+        + list(guard.REQUIRED_SOURCE_EVIDENCE)
+        + list(guard.REQUIRED_GUARD_EVIDENCE)
+    )
     return {
         "items": [
             {
                 "id": guard.TASK_ID,
                 "title": "JSONL → PostgreSQL",
                 "status": "partial",
-                "evidence": [guard.MATRIX_PATH, guard.VALIDATOR_PATH],
+                "evidence": evidence,
                 "missing_evidence": [
                     "Grüner PR-CI-Laufbeleg für alle fünf DB-Jobs ausstehend",
                 ],
@@ -218,6 +265,10 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         )
         return errors
 
+    def assert_no_errors(self):
+        errors = guard.validate(self.root)
+        self.assertEqual(errors, [], f"expected no errors, got: {errors}")
+
     def _run_main(self):
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(guard, "REPO_ROOT", self.root):
@@ -231,13 +282,64 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self.assertEqual(guard.validate(guard.REPO_ROOT), [])
 
     def test_fixture_repo_validates(self):
-        self.assertEqual(guard.validate(self.root), [])
+        self.assert_no_errors()
 
-    # --- matrix -------------------------------------------------------------
+    # --- matrix: field set --------------------------------------------------
 
-    def test_missing_matrix_file_fails(self):
+    def test_matrix_unexpected_top_level_field_fails(self):
+        matrix = _valid_matrix()
+        matrix["extra_field"] = "surprise"
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("unexpected top-level field 'extra_field'")
+
+    def test_matrix_missing_top_level_field_fails(self):
+        matrix = _valid_matrix()
+        del matrix["status_source"]
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("missing required top-level field 'status_source'")
+
+    def test_matrix_wrong_status_source_fails(self):
+        matrix = _valid_matrix()
+        matrix["status_source"] = "docs/reports/other.md"
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("status_source must be")
+
+    def test_matrix_unexpected_proof_field_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["extra"] = "x"
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("unexpected field 'extra'")
+
+    def test_matrix_missing_proof_field_fails(self):
+        matrix = _valid_matrix()
+        del matrix["proofs"][0]["claim"]
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("missing required field 'claim'")
+
+    def test_matrix_empty_claim_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["claim"] = "   "
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("claim must be a non-empty string")
+
+    def test_matrix_wrong_proof_order_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"] = list(reversed(matrix["proofs"]))
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("canonical order")
+
+    # --- matrix: existing checks -------------------------------------------
+
+    def test_missing_matrix_raises_broken_input(self):
         os.remove(self._path(guard.MATRIX_PATH))
-        self.assert_error_containing("matrix file does not exist")
+        with self.assertRaises(guard.BrokenInputError):
+            guard.validate(self.root)
+
+    def test_missing_matrix_main_exit_2(self):
+        os.remove(self._path(guard.MATRIX_PATH))
+        code, _out, err = self._run_main()
+        self.assertEqual(code, 2)
+        self.assertIn("broken input", err)
 
     def test_missing_expected_proof_id_fails(self):
         matrix = _valid_matrix()
@@ -308,7 +410,53 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         os.remove(self._path(NODE_WRITE_REPORT))
         self.assert_error_containing(f"report file '{NODE_WRITE_REPORT}' does not exist")
 
-    # --- workflow -----------------------------------------------------------
+    # --- command check (regex) ----------------------------------------------
+
+    def test_command_equals_form_passes(self):
+        matrix = _valid_matrix()
+        spec = guard.EXPECTED_PROOFS[FIRST_PROOF_ID]
+        matrix["proofs"][0]["command"] = (
+            f"cargo test --locked -p weltgewebe-api "
+            f"--test={spec['command_test_name']} "
+            "-- --include-ignored --test-threads=1"
+        )
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_no_errors()
+
+    def test_command_wrong_test_name_fails(self):
+        matrix = _valid_matrix()
+        matrix["proofs"][0]["command"] = (
+            "cargo test --locked -p weltgewebe-api "
+            "--test db_domain_backfill "
+            "-- --include-ignored --test-threads=1"
+        )
+        self._write_json(guard.MATRIX_PATH, matrix)
+        spec = guard.EXPECTED_PROOFS[FIRST_PROOF_ID]
+        self.assert_error_containing(f"--test {spec['command_test_name']}")
+
+    def test_command_missing_include_ignored_fails(self):
+        matrix = _valid_matrix()
+        spec = guard.EXPECTED_PROOFS[FIRST_PROOF_ID]
+        matrix["proofs"][0]["command"] = (
+            f"cargo test --locked -p weltgewebe-api "
+            f"--test {spec['command_test_name']} "
+            "-- --test-threads=1"
+        )
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("--include-ignored")
+
+    def test_command_missing_test_threads_fails(self):
+        matrix = _valid_matrix()
+        spec = guard.EXPECTED_PROOFS[FIRST_PROOF_ID]
+        matrix["proofs"][0]["command"] = (
+            f"cargo test --locked -p weltgewebe-api "
+            f"--test {spec['command_test_name']} "
+            "-- --include-ignored"
+        )
+        self._write_json(guard.MATRIX_PATH, matrix)
+        self.assert_error_containing("--test-threads=1")
+
+    # --- workflow (job-scoped) ----------------------------------------------
 
     def test_missing_workflow_job_fails(self):
         self._write(guard.WORKFLOW_PATH, _workflow_text(drop_job_key=NODE_WRITE_PROOF_ID))
@@ -316,21 +464,116 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
     def test_missing_workflow_test_command_fails(self):
         self._write(guard.WORKFLOW_PATH, _workflow_text(drop_test_command=NODE_WRITE_PROOF_ID))
-        self.assert_error_containing("'--test db_domain_node_write_path' not found")
+        self.assert_error_containing("not found in job 'db-domain-node-write-path-proof'")
 
-    # --- status wording, scoped to OPT-ARC-001 ------------------------------
+    def test_workflow_cross_job_command_not_accepted(self):
+        # The node-write-path --test command appears in the backfill job's block,
+        # not in the node-write-path job's block. Global search would pass; scoped fails.
+        wf = _workflow_text_cross_job(NODE_WRITE_PROOF_ID, "db-domain-backfill-proof")
+        self._write(guard.WORKFLOW_PATH, wf)
+        self.assert_error_containing("not found in job 'db-domain-node-write-path-proof'")
+
+    # --- status MD (cell-based, date sync) ----------------------------------
+
+    def test_status_md_done_fails(self):
+        self._write(guard.STATUS_MD_PATH, _status_md_text(arc_status="done"))
+        self.assert_error_containing("must be 'partial'")
+
+    def test_status_md_status_cell_done_with_partial_text_fails(self):
+        # cells[3] == "done"; the word "partial" appears only in another cell.
+        text = _status_md_text(arc_status="done", arc_extra=" partial workflows pending")
+        self._write(guard.STATUS_MD_PATH, text)
+        errors = self.assert_error_containing("must be 'partial'")
+        # Ensure at least one error is specifically about column 4
+        self.assertTrue(any("column 4" in e for e in errors), errors)
+
+    def test_status_md_date_mismatch_fails(self):
+        self._write(guard.STATUS_MD_PATH, _status_md_text(arc_date="2026-06-05"))
+        self.assert_error_containing("zuletzt_geprüft cell must match")
+
+    def test_status_md_date_correct_passes(self):
+        # The default fixture has the correct date; baseline already checks this,
+        # but this test makes the intent explicit.
+        self._write(guard.STATUS_MD_PATH, _status_md_text(arc_date=UPDATED_AT))
+        self.assert_no_errors()
+
+    def test_status_md_missing_updated_at_in_index_fails(self):
+        index = _index_data()
+        del index["tasks"][0]["updated_at"]
+        self._write_json(guard.TASK_INDEX_PATH, index)
+        self.assert_error_containing("updated_at is missing")
 
     def test_opt_arc_ci_proven_wording_fails_when_prepared(self):
         self._write(guard.STATUS_MD_PATH, _status_md_text(arc_extra="; CI PROVEN"))
         self.assert_error_containing("must not contain 'CI PROVEN'")
 
+    def test_opt_arc_ci_proven_case_insensitive_fails(self):
+        self._write(guard.STATUS_MD_PATH, _status_md_text(arc_extra="; ci proven run xyz"))
+        self.assert_error_containing("must not contain 'CI PROVEN'")
+
     def test_other_proven_rows_do_not_fail(self):
-        # The default fixture carries CI PROVEN rows for OPT-API-002 and a
-        # PROVEN row for OPT-MAP-001 in board.md and optimierungsstatus.md.
+        # The default fixture carries CI PROVEN rows for OPT-API-002 and OPT-MAP-001.
         # Only OPT-ARC-001 rows are guarded, so validation must stay clean.
         self.assertIn("CI PROVEN", _board_text())
         self.assertIn("CI PROVEN", _status_md_text())
-        self.assertEqual(guard.validate(self.root), [])
+        self.assert_no_errors()
+
+    # --- board (cell-based) -------------------------------------------------
+
+    def test_board_status_cell_done_with_partial_in_text_fails(self):
+        # cells[3] = "done"; "partial" appears only in another cell.
+        row = (
+            "| OPT-ARC-001 | api | JSONL → PostgreSQL | done | high | "
+            "`apps/api/src/routes/nodes.rs` partial, "
+            "`apps/api/tests/db_domain_node_write_path.rs`, "
+            "`docs/reports/domain-node-write-path-proof.md`, "
+            "`db-domain-node-write-path-proof`, "
+            "`docs/reports/opt-arc-001-db-proof-matrix.json`, "
+            "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` | "
+            "partial actions pending |"
+        )
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing("status cell")
+
+    def test_board_ci_proven_in_arc_row_fails(self):
+        row = DEFAULT_BOARD_ARC_ROW.replace(
+            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "CI PROVEN, Commit abc123",
+        )
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing("must not contain 'CI PROVEN'")
+
+    def test_board_ci_proven_case_insensitive_fails(self):
+        row = DEFAULT_BOARD_ARC_ROW.replace(
+            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "ci proven run 99999",
+        )
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing("must not contain 'CI PROVEN'")
+
+    def test_board_missing_node_write_evidence_fails(self):
+        row = DEFAULT_BOARD_ARC_ROW.replace(
+            "`apps/api/tests/db_domain_node_write_path.rs`, ", ""
+        )
+        self.assertNotIn(NODE_WRITE_TEST, row)
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing(f"must reference '{NODE_WRITE_TEST}'")
+
+    def test_compact_table_row_recognised(self):
+        # Cells without spaces around pipes should still be detected.
+        compact = (
+            "|OPT-ARC-001|api|JSONL → PostgreSQL|partial|high|"
+            "`apps/api/src/routes/nodes.rs`,"
+            "`apps/api/tests/db_domain_node_write_path.rs`,"
+            "`docs/reports/domain-node-write-path-proof.md`,"
+            "`db-domain-node-write-path-proof`,"
+            "`docs/reports/opt-arc-001-db-proof-matrix.json`,"
+            "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py`|"
+            "PR-CI pending|"
+        )
+        self._write(guard.BOARD_PATH, _board_text(arc_row=compact))
+        # cells[0] == "OPT-ARC-001", cells[3] == "partial" → valid
+        self.assert_no_errors()
 
     # --- task index ---------------------------------------------------------
 
@@ -351,27 +594,54 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_index_without_evidence(NODE_WRITE_JOB_EVIDENCE)
         self.assert_error_containing(f"evidence must contain '{NODE_WRITE_JOB_EVIDENCE}'")
 
-    # --- board --------------------------------------------------------------
+    def test_task_index_missing_nodes_source_evidence_fails(self):
+        self._write_index_without_evidence("apps/api/src/routes/nodes.rs")
+        self.assert_error_containing("evidence must contain 'apps/api/src/routes/nodes.rs'")
 
-    def test_board_missing_node_write_evidence_fails(self):
-        row = DEFAULT_BOARD_ARC_ROW.replace(
-            "`apps/api/tests/db_domain_node_write_path.rs`, ", ""
-        )
-        self.assertNotIn(NODE_WRITE_TEST, row)
-        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
-        self.assert_error_containing(f"must reference '{NODE_WRITE_TEST}'")
+    def test_task_index_missing_matrix_evidence_fails(self):
+        self._write_index_without_evidence(guard.MATRIX_PATH)
+        self.assert_error_containing(f"evidence must contain '{guard.MATRIX_PATH}'")
 
-    # --- status twins -------------------------------------------------------
+    # --- status JSON --------------------------------------------------------
+
+    def _write_status_json_without_evidence(self, entry):
+        status = _status_json_data()
+        status["items"][0]["evidence"].remove(entry)
+        self._write_json(guard.STATUS_JSON_PATH, status)
 
     def test_status_json_done_fails(self):
         status = _status_json_data()
         status["items"][0]["status"] = "done"
         self._write_json(guard.STATUS_JSON_PATH, status)
-        self.assert_error_containing(f"{guard.STATUS_JSON_PATH}: OPT-ARC-001 status must be 'partial'")
+        self.assert_error_containing(
+            f"{guard.STATUS_JSON_PATH}: OPT-ARC-001 status must be 'partial'"
+        )
 
-    def test_status_md_done_fails(self):
-        self._write(guard.STATUS_MD_PATH, _status_md_text(arc_status="done"))
-        self.assert_error_containing("must keep status cell 'partial'")
+    def test_status_json_missing_node_test_evidence_fails(self):
+        self._write_status_json_without_evidence(NODE_WRITE_TEST)
+        self.assert_error_containing(f"evidence must contain '{NODE_WRITE_TEST}'")
+
+    def test_status_json_missing_node_ci_job_evidence_fails(self):
+        self._write_status_json_without_evidence(NODE_WRITE_JOB_EVIDENCE)
+        self.assert_error_containing(f"evidence must contain '{NODE_WRITE_JOB_EVIDENCE}'")
+
+    def test_status_json_missing_matrix_evidence_fails(self):
+        self._write_status_json_without_evidence(guard.MATRIX_PATH)
+        self.assert_error_containing(f"evidence must contain '{guard.MATRIX_PATH}'")
+
+    # --- missing_evidence ---------------------------------------------------
+
+    def test_missing_evidence_empty_fails_in_index(self):
+        index = _index_data()
+        index["tasks"][0]["missing_evidence"] = []
+        self._write_json(guard.TASK_INDEX_PATH, index)
+        self.assert_error_containing("missing_evidence must not become empty")
+
+    def test_missing_evidence_empty_fails_in_status_json(self):
+        status = _status_json_data()
+        status["items"][0]["missing_evidence"] = []
+        self._write_json(guard.STATUS_JSON_PATH, status)
+        self.assert_error_containing("missing_evidence must not become empty")
 
     # --- CLI ----------------------------------------------------------------
 

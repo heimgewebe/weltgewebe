@@ -53,6 +53,18 @@ EXPECTED_CUTOVER_STATUS = "not_cutover"
 EXPECTED_DEFAULT_TRUTH = "jsonl"
 EXPECTED_CI_POLICY = "github_pr_ci_required"
 
+# Exact field sets — unknown or missing fields are rejected.
+MATRIX_REQUIRED_FIELDS = frozenset({
+    "schema", "task", "status_source", "overall_status", "cutover_status",
+    "default_domain_read_truth", "default_domain_write_truth",
+    "ci_evidence_policy", "non_goals", "proofs",
+})
+
+PROOF_REQUIRED_FIELDS = frozenset({
+    "id", "phase", "claim", "state", "workflow", "workflow_job",
+    "test", "report", "ci_evidence", "command",
+})
+
 REQUIRED_NON_GOALS = (
     "edge_writes",
     "step_up_email_persistence",
@@ -62,12 +74,10 @@ REQUIRED_NON_GOALS = (
     "dual_write",
 )
 
-# A proof may only ever carry state="ci_proven" together with a ci_evidence
-# object holding all of these keys. The current matrix version maps prepared
-# proofs only, so "ci_proven" is additionally rejected outright (see below).
+# A proof may only carry state="ci_proven" together with a ci_evidence object
+# holding all of these keys. The current matrix maps prepared proofs only,
+# so "ci_proven" is rejected outright (see _validate_proof).
 CI_EVIDENCE_REQUIRED_KEYS = ("run_url", "run_id", "commit", "job")
-
-FORBIDDEN_WORDINGS = ("CI PROVEN", "ci_proven")
 
 EXPECTED_PROOFS = {
     "db-domain-schema-migrations-proof": {
@@ -107,6 +117,8 @@ REQUIRED_REPORT_EVIDENCE = tuple(
     spec["report"] for spec in EXPECTED_PROOFS.values() if spec["report"] is not None
 )
 REQUIRED_CI_JOB_EVIDENCE = tuple(f"CI-Job: {proof_id}" for proof_id in EXPECTED_PROOFS)
+REQUIRED_SOURCE_EVIDENCE = ("apps/api/src/routes/nodes.rs",)
+REQUIRED_GUARD_EVIDENCE = (MATRIX_PATH, VALIDATOR_PATH)
 
 BOARD_REQUIRED_MENTIONS = (
     "apps/api/src/routes/nodes.rs",
@@ -121,6 +133,10 @@ BOARD_REQUIRED_MENTIONS = (
 class BrokenInputError(Exception):
     """Raised for unreadable mandatory files, invalid JSON, or broken top-level structure (exit 2)."""
 
+
+# ---------------------------------------------------------------------------
+# I/O helpers
+# ---------------------------------------------------------------------------
 
 def _read_text(repo_root, rel_path):
     path = os.path.join(repo_root, rel_path)
@@ -151,37 +167,111 @@ def _file_exists(repo_root, rel_path):
     return os.path.isfile(os.path.join(repo_root, rel_path))
 
 
-def _contains_forbidden_wording(text):
-    return [w for w in FORBIDDEN_WORDINGS if w in text]
+# ---------------------------------------------------------------------------
+# Markdown table helpers
+# ---------------------------------------------------------------------------
 
+def _table_cells(line):
+    """Parse a Markdown table line into a list of stripped cell strings."""
+    if "|" not in line:
+        return []
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _task_rows(text):
+    """Return (line, cells) tuples for all OPT-ARC-001 rows (cells[0] == TASK_ID)."""
+    rows = []
+    for line in text.splitlines():
+        cells = _table_cells(line)
+        if cells and cells[0] == TASK_ID:
+            rows.append((line, cells))
+    return rows
+
+
+# ---------------------------------------------------------------------------
+# Forbidden wording (scoped to OPT-ARC-001 rows/entries)
+# ---------------------------------------------------------------------------
+
+def _contains_forbidden_wording(text):
+    """Return list of forbidden wordings found in text (CI PROVEN case-insensitive)."""
+    result = []
+    if "ci proven" in text.lower():
+        result.append("CI PROVEN")
+    if "ci_proven" in text:
+        result.append("ci_proven")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Command check (regex-based)
+# ---------------------------------------------------------------------------
 
 def _check_command(command, proof_id, expected_test_name, errors):
     if not isinstance(command, str):
         errors.append(f"{MATRIX_PATH}: proof '{proof_id}': command must be a string")
         return
-    tokens = command.split()
-    test_positions = [i for i, tok in enumerate(tokens) if tok == "--test"]
-    if (
-        len(test_positions) != 1
-        or test_positions[0] + 1 >= len(tokens)
-        or tokens[test_positions[0] + 1] != expected_test_name
-    ):
+    # Accept --test <name> or --test=<name>; exclude --test-threads via (?!-)
+    test_targets = re.findall(r'--test(?!-)(?:[=\s]+)(\S+)', command)
+    if len(test_targets) != 1 or test_targets[0] != expected_test_name:
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': command must contain exactly "
-            f"'--test {expected_test_name}'"
+            f"'--test {expected_test_name}' (one occurrence, correct name); "
+            f"found {test_targets}"
         )
-    if "--include-ignored" not in tokens:
+    if not re.search(r'--include-ignored', command):
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': command must contain '--include-ignored'"
         )
-    if "--test-threads=1" not in tokens:
+    if not re.search(r'--test-threads(?:[=\s]+)1\b', command):
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': command must contain '--test-threads=1'"
         )
 
 
+# ---------------------------------------------------------------------------
+# Workflow job-block extractor
+# ---------------------------------------------------------------------------
+
+def _extract_workflow_job_block(workflow_text, job_id):
+    """Return the text block for the named workflow job, or None if not found.
+
+    Collects the job key line and all subsequent lines that are strictly more
+    indented, stopping at the first line whose indentation is <= the job key's.
+    Empty lines are kept within the block.
+    """
+    lines = workflow_text.splitlines()
+    start_idx = None
+    job_indent = None
+
+    for i, line in enumerate(lines):
+        m = re.match(rf'^([ \t]*){re.escape(job_id)}\s*:', line)
+        if m:
+            start_idx = i
+            job_indent = len(m.group(1))
+            break
+
+    if start_idx is None:
+        return None
+
+    block = [lines[start_idx]]
+    for line in lines[start_idx + 1:]:
+        if not line.strip():
+            block.append(line)
+            continue
+        current_indent = len(line) - len(line.lstrip())
+        if current_indent <= job_indent:
+            break
+        block.append(line)
+
+    return "\n".join(block)
+
+
+# ---------------------------------------------------------------------------
+# CI evidence object check (future ci_proven rule)
+# ---------------------------------------------------------------------------
+
 def _check_ci_evidence_object(value):
-    """Return True when value is a complete ci_evidence object (future ci_proven rule)."""
+    """Return True when value is a complete ci_evidence object."""
     if not isinstance(value, dict):
         return False
     for key in CI_EVIDENCE_REQUIRED_KEYS:
@@ -194,9 +284,24 @@ def _check_ci_evidence_object(value):
     return True
 
 
-def _validate_proof(proof, expected, repo_root, errors):
+# ---------------------------------------------------------------------------
+# Proof validation
+# ---------------------------------------------------------------------------
+
+def _validate_proof(proof, repo_root, errors):
     proof_id = proof["id"]
-    spec = expected[proof_id]
+    spec = EXPECTED_PROOFS[proof_id]
+
+    extra_fields = set(proof.keys()) - PROOF_REQUIRED_FIELDS
+    missing_fields = PROOF_REQUIRED_FIELDS - set(proof.keys())
+    for f in sorted(extra_fields):
+        errors.append(f"{MATRIX_PATH}: proof '{proof_id}': unexpected field '{f}'")
+    for f in sorted(missing_fields):
+        errors.append(f"{MATRIX_PATH}: proof '{proof_id}': missing required field '{f}'")
+
+    claim = proof.get("claim")
+    if not isinstance(claim, str) or not claim.strip():
+        errors.append(f"{MATRIX_PATH}: proof '{proof_id}': claim must be a non-empty string")
 
     phase = proof.get("phase")
     if phase != spec["phase"]:
@@ -255,12 +360,22 @@ def _validate_proof(proof, expected, repo_root, errors):
     _check_command(proof.get("command"), proof_id, spec["command_test_name"], errors)
 
 
+# ---------------------------------------------------------------------------
+# Matrix validation
+# ---------------------------------------------------------------------------
+
 def _validate_matrix(repo_root, errors):
     if not _file_exists(repo_root, MATRIX_PATH):
-        errors.append(f"{MATRIX_PATH}: matrix file does not exist")
-        return
+        raise BrokenInputError(f"mandatory file missing: {MATRIX_PATH}")
 
     matrix = _load_json_object(repo_root, MATRIX_PATH)
+
+    extra_fields = set(matrix.keys()) - MATRIX_REQUIRED_FIELDS
+    missing_fields = MATRIX_REQUIRED_FIELDS - set(matrix.keys())
+    for f in sorted(extra_fields):
+        errors.append(f"{MATRIX_PATH}: unexpected top-level field '{f}'")
+    for f in sorted(missing_fields):
+        errors.append(f"{MATRIX_PATH}: missing required top-level field '{f}'")
 
     if matrix.get("schema") != EXPECTED_SCHEMA:
         errors.append(
@@ -268,6 +383,11 @@ def _validate_matrix(repo_root, errors):
         )
     if matrix.get("task") != TASK_ID:
         errors.append(f"{MATRIX_PATH}: task must be '{TASK_ID}', got '{matrix.get('task')}'")
+    if matrix.get("status_source") != STATUS_MD_PATH:
+        errors.append(
+            f"{MATRIX_PATH}: status_source must be '{STATUS_MD_PATH}', "
+            f"got '{matrix.get('status_source')}'"
+        )
     if matrix.get("overall_status") != EXPECTED_OVERALL_STATUS:
         errors.append(
             f"{MATRIX_PATH}: overall_status must be '{EXPECTED_OVERALL_STATUS}', "
@@ -323,50 +443,105 @@ def _validate_matrix(repo_root, errors):
             errors.append(f"{MATRIX_PATH}: duplicate proof id '{proof_id}'")
             continue
         seen_ids.append(proof_id)
-        _validate_proof(proof, EXPECTED_PROOFS, repo_root, errors)
+        _validate_proof(proof, repo_root, errors)
 
     for proof_id in EXPECTED_PROOFS:
         if proof_id not in seen_ids:
             errors.append(f"{MATRIX_PATH}: missing expected proof id '{proof_id}'")
 
+    expected_order = list(EXPECTED_PROOFS.keys())
+    expected_subset = [e for e in expected_order if e in seen_ids]
+    if seen_ids != expected_subset:
+        errors.append(
+            f"{MATRIX_PATH}: proofs must appear in the canonical order: {expected_order}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Workflow validation (job-scoped)
+# ---------------------------------------------------------------------------
 
 def _validate_workflow(repo_root, errors):
     workflow_text = _read_text(repo_root, WORKFLOW_PATH)
     for proof_id, spec in EXPECTED_PROOFS.items():
-        if not re.search(rf"^[ \t]*{re.escape(proof_id)}\s*:", workflow_text, re.MULTILINE):
+        job_block = _extract_workflow_job_block(workflow_text, proof_id)
+        if job_block is None:
             errors.append(f"{WORKFLOW_PATH}: workflow job '{proof_id}' not found")
+            continue
         test_name = spec["command_test_name"]
-        if not re.search(rf"--test\s+{re.escape(test_name)}\b", workflow_text):
+        if not re.search(rf'--test(?!-)(?:[=\s]+){re.escape(test_name)}\b', job_block):
             errors.append(
-                f"{WORKFLOW_PATH}: '--test {test_name}' not found for job '{proof_id}'"
+                f"{WORKFLOW_PATH}: '--test {test_name}' not found in job '{proof_id}'"
             )
 
 
-def _task_rows(text):
-    """Return all table rows of the OPT-ARC-001 task (scoped; other tasks' rows are ignored)."""
-    return [
-        line
-        for line in text.splitlines()
-        if line.strip().startswith(f"| {TASK_ID} |")
-    ]
+# ---------------------------------------------------------------------------
+# Task index: read updated_at for date-sync check
+# ---------------------------------------------------------------------------
 
+def _find_entry(entries):
+    """Return the OPT-ARC-001 dict from a list of task/item dicts, or None."""
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("id") == TASK_ID:
+            return entry
+    return None
+
+
+def _get_task_updated_at(repo_root):
+    """Return updated_at string for OPT-ARC-001 from task index, or None."""
+    try:
+        index = _load_json_object(repo_root, TASK_INDEX_PATH)
+    except BrokenInputError:
+        return None
+    tasks = index.get("tasks", [])
+    task = _find_entry(tasks)
+    if task is None:
+        return None
+    val = task.get("updated_at")
+    return val if isinstance(val, str) and val.strip() else None
+
+
+# ---------------------------------------------------------------------------
+# Status MD validation (cell-based, date sync)
+# ---------------------------------------------------------------------------
 
 def _validate_status_md(repo_root, errors):
     text = _read_text(repo_root, STATUS_MD_PATH)
     rows = _task_rows(text)
     if not rows:
-        errors.append(f"{STATUS_MD_PATH}: no '| {TASK_ID} |' table row found")
+        errors.append(f"{STATUS_MD_PATH}: no OPT-ARC-001 table row found")
         return
-    combined = "\n".join(rows)
 
-    has_partial_cell = any(
-        any(cell.strip() == EXPECTED_OVERALL_STATUS for cell in row.strip().strip("|").split("|"))
-        for row in rows
-    )
-    if not has_partial_cell:
+    combined = "\n".join(line for line, _ in rows)
+
+    # Status cell (index 3): every OPT-ARC-001 row must have cells[3] == "partial".
+    for line, cells in rows:
+        if len(cells) < 4:
+            errors.append(
+                f"{STATUS_MD_PATH}: OPT-ARC-001 row has fewer than 4 cells: {line[:80]!r}"
+            )
+            continue
+        if cells[3] != EXPECTED_OVERALL_STATUS:
+            errors.append(
+                f"{STATUS_MD_PATH}: {TASK_ID} status cell (column 4) must be "
+                f"'{EXPECTED_OVERALL_STATUS}', got '{cells[3]}'"
+            )
+
+    # Date sync: last cell of the status matrix row must match index.json updated_at.
+    task_updated_at = _get_task_updated_at(repo_root)
+    if task_updated_at is None:
         errors.append(
-            f"{STATUS_MD_PATH}: {TASK_ID} row must keep status cell '{EXPECTED_OVERALL_STATUS}'"
+            f"{STATUS_MD_PATH}: {TASK_ID} updated_at is missing, empty, or not a string "
+            f"in {TASK_INDEX_PATH}"
         )
+    else:
+        date_found = any(cells[-1] == task_updated_at for _, cells in rows if len(cells) >= 4)
+        if not date_found:
+            errors.append(
+                f"{STATUS_MD_PATH}: {TASK_ID} zuletzt_geprüft cell must match "
+                f"{TASK_INDEX_PATH} updated_at '{task_updated_at}'"
+            )
+
     for wording in _contains_forbidden_wording(combined):
         errors.append(f"{STATUS_MD_PATH}: {TASK_ID} row must not contain '{wording}'")
     for required in (MATRIX_PATH, VALIDATOR_PATH):
@@ -374,18 +549,33 @@ def _validate_status_md(repo_root, errors):
             errors.append(f"{STATUS_MD_PATH}: {TASK_ID} row must reference '{required}'")
 
 
+# ---------------------------------------------------------------------------
+# Board validation (cell-based)
+# ---------------------------------------------------------------------------
+
 def _validate_board(repo_root, errors):
     text = _read_text(repo_root, BOARD_PATH)
     rows = _task_rows(text)
     if not rows:
-        errors.append(f"{BOARD_PATH}: no '| {TASK_ID} |' table row found")
+        errors.append(f"{BOARD_PATH}: no OPT-ARC-001 table row found")
         return
-    combined = "\n".join(rows)
 
-    if EXPECTED_OVERALL_STATUS not in combined:
+    combined = "\n".join(line for line, _ in rows)
+
+    for line, cells in rows:
+        if len(cells) < 4:
+            errors.append(
+                f"{BOARD_PATH}: OPT-ARC-001 row has fewer than 4 cells: {line[:80]!r}"
+            )
+
+    # At least one row (the active section row) must carry cells[3] == "partial".
+    # Blocker-section rows use column 4 for a different purpose and are not status cells.
+    if not any(cells[3] == EXPECTED_OVERALL_STATUS for _, cells in rows if len(cells) >= 4):
         errors.append(
-            f"{BOARD_PATH}: {TASK_ID} row(s) must keep status '{EXPECTED_OVERALL_STATUS}'"
+            f"{BOARD_PATH}: {TASK_ID} must have at least one row with status cell "
+            f"'{EXPECTED_OVERALL_STATUS}' at column 4"
         )
+
     for wording in _contains_forbidden_wording(combined):
         errors.append(f"{BOARD_PATH}: {TASK_ID} row(s) must not contain '{wording}'")
     for required in BOARD_REQUIRED_MENTIONS:
@@ -393,12 +583,9 @@ def _validate_board(repo_root, errors):
             errors.append(f"{BOARD_PATH}: {TASK_ID} row(s) must reference '{required}'")
 
 
-def _find_entry(entries, rel_path):
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("id") == TASK_ID:
-            return entry
-    return None
-
+# ---------------------------------------------------------------------------
+# Common checks for task-control entries
+# ---------------------------------------------------------------------------
 
 def _check_missing_evidence_kept(missing_evidence, rel_path, errors):
     is_kept = (
@@ -418,6 +605,10 @@ def _check_no_forbidden_wording_in_entry(entry, rel_path, errors):
         errors.append(f"{rel_path}: {TASK_ID} entry must not contain '{wording}'")
 
 
+# ---------------------------------------------------------------------------
+# Task index validation
+# ---------------------------------------------------------------------------
+
 def _validate_task_index(repo_root, errors):
     index = _load_json_object(repo_root, TASK_INDEX_PATH)
     tasks = index.get("tasks")
@@ -426,7 +617,7 @@ def _validate_task_index(repo_root, errors):
             f"unexpected structure in {TASK_INDEX_PATH}: 'tasks' must be an array"
         )
 
-    task = _find_entry(tasks, TASK_INDEX_PATH)
+    task = _find_entry(tasks)
     if task is None:
         errors.append(f"{TASK_INDEX_PATH}: task '{TASK_ID}' not found")
         return
@@ -445,7 +636,8 @@ def _validate_task_index(repo_root, errors):
         REQUIRED_TEST_EVIDENCE
         + REQUIRED_REPORT_EVIDENCE
         + REQUIRED_CI_JOB_EVIDENCE
-        + (MATRIX_PATH, VALIDATOR_PATH)
+        + REQUIRED_SOURCE_EVIDENCE
+        + REQUIRED_GUARD_EVIDENCE
     )
     for required in required_evidence:
         if required not in evidence:
@@ -457,6 +649,10 @@ def _validate_task_index(repo_root, errors):
         errors.append(f"{TASK_INDEX_PATH}: {TASK_ID} links.docs must contain '{MATRIX_PATH}'")
 
 
+# ---------------------------------------------------------------------------
+# Status JSON validation
+# ---------------------------------------------------------------------------
+
 def _validate_status_json(repo_root, errors):
     status = _load_json_object(repo_root, STATUS_JSON_PATH)
     items = status.get("items")
@@ -465,7 +661,7 @@ def _validate_status_json(repo_root, errors):
             f"unexpected structure in {STATUS_JSON_PATH}: 'items' must be an array"
         )
 
-    item = _find_entry(items, STATUS_JSON_PATH)
+    item = _find_entry(items)
     if item is None:
         errors.append(f"{STATUS_JSON_PATH}: item '{TASK_ID}' not found")
         return
@@ -480,10 +676,21 @@ def _validate_status_json(repo_root, errors):
 
     evidence = item.get("evidence")
     evidence = evidence if isinstance(evidence, list) else []
-    for required in (MATRIX_PATH, VALIDATOR_PATH):
+    required_evidence = (
+        REQUIRED_TEST_EVIDENCE
+        + REQUIRED_REPORT_EVIDENCE
+        + REQUIRED_CI_JOB_EVIDENCE
+        + REQUIRED_SOURCE_EVIDENCE
+        + REQUIRED_GUARD_EVIDENCE
+    )
+    for required in required_evidence:
         if required not in evidence:
             errors.append(f"{STATUS_JSON_PATH}: {TASK_ID} evidence must contain '{required}'")
 
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 def validate(repo_root=REPO_ROOT):
     """
