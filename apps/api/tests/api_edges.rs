@@ -24,6 +24,7 @@ use weltgewebe_api::{
     },
     state::ApiState,
     telemetry::{BuildInfo, Metrics},
+    test_helpers::EnvGuard,
 };
 
 async fn test_state() -> Result<ApiState> {
@@ -814,6 +815,147 @@ async fn post_edges_does_not_update_cache_when_append_fails() -> Result<()> {
 
     // Failed persistence must never leave a phantom edge in memory.
     assert_eq!(state.edges.read().await.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_preserves_jsonl_boundary_after_unterminated_existing_record() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Exactly one valid record WITHOUT a trailing newline (write_lines joins
+    // lines without a final newline, so this fixture is truly unterminated).
+    const OLD_ID: &str = "00000000-0000-0000-0000-0000000000aa";
+    let old_line = format!(
+        r#"{{"id":"{OLD_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference"}}"#
+    );
+    write_lines(&edges_path, &[old_line.as_str()]);
+    let contents_before = fs::read_to_string(&edges_path)?;
+    assert!(
+        !contents_before.ends_with('\n'),
+        "fixture must be unterminated for this test"
+    );
+
+    let (app, cookie, _state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+
+    let res = app
+        .clone()
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    let v = read_json_body(res).await?;
+    let new_id = v["id"].as_str().context("id must be string")?.to_string();
+
+    // A separator newline keeps the old and the new record on separate,
+    // individually parseable lines — no glued JSON objects.
+    let contents = fs::read_to_string(&edges_path)?;
+    assert!(
+        !contents.contains("}{"),
+        "records must not be glued: {contents}"
+    );
+    let lines = jsonl_lines(&edges_path);
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[0]["id"], OLD_ID);
+    assert_eq!(lines[1]["id"], new_id.as_str());
+
+    // Both edges are served.
+    for id in [OLD_ID, new_id.as_str()] {
+        let uri = format!("/edges/{id}");
+        let res = app
+            .clone()
+            .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)
+            .await?;
+        assert_eq!(res.status(), StatusCode::OK, "GET /edges/{id}");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_rejects_create_when_edge_cache_limit_reached() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
+
+    const OLD_ID: &str = "00000000-0000-0000-0000-0000000000ab";
+    let old_line = format!(
+        r#"{{"id":"{OLD_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference"}}"#
+    );
+    write_lines(&edges_path, &[old_line.as_str()]);
+
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    assert_eq!(state.edges.read().await.len(), 1);
+
+    // A new edge would land on a line index the loader never materializes
+    // after a restart; the write must be rejected instead of going dark.
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let text = read_text_body(res).await?;
+    assert!(text.contains("edge cache limit reached"), "body: {text}");
+
+    // No append, cache unchanged.
+    assert_eq!(jsonl_lines(&edges_path).len(), 1);
+    {
+        let cache = state.edges.read().await;
+        assert_eq!(cache.len(), 1);
+        assert!(cache.get(OLD_ID).is_some());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_rejects_duplicate_id_in_unloaded_edge_suffix() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
+
+    // Two valid records; the second carries the id the POST will reuse.
+    const LOADED_ID: &str = "00000000-0000-0000-0000-0000000000ac";
+    let loaded_line = format!(
+        r#"{{"id":"{LOADED_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference"}}"#
+    );
+    let suffix_line = format!(
+        r#"{{"id":"{CREATE_EDGE_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference"}}"#
+    );
+    write_lines(&edges_path, &[loaded_line.as_str(), suffix_line.as_str()]);
+
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+
+    // The loader truncated at the limit: the suffix edge is NOT in the cache,
+    // so only the file-level inspection can see it.
+    {
+        let cache = state.edges.read().await;
+        assert_eq!(cache.len(), 1);
+        assert!(cache.get(LOADED_ID).is_some());
+        assert!(cache.get(CREATE_EDGE_ID).is_none());
+    }
+
+    let body_json = format!(
+        r#"{{"id":"{CREATE_EDGE_ID}","source_id":"{CREATE_SOURCE_ID}","source_type":"node","target_id":"{CREATE_TARGET_ID}","target_type":"node","edge_kind":"reference"}}"#
+    );
+    let res = app.oneshot(post_edges(Some(&cookie), &body_json)).await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let text = read_text_body(res).await?;
+    assert!(text.contains("edge id already exists"), "body: {text}");
+
+    // No append: the file still holds exactly the two fixture records.
+    let lines = jsonl_lines(&edges_path);
+    assert_eq!(lines.len(), 2);
+    assert_eq!(lines[1]["id"], CREATE_EDGE_ID);
+    assert_eq!(state.edges.read().await.len(), 1);
 
     Ok(())
 }

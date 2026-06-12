@@ -17,7 +17,7 @@ use std::sync::OnceLock;
 use tokio::sync::Mutex;
 use tokio::{
     fs::{File, OpenOptions},
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
 };
 use uuid::Uuid;
 
@@ -252,6 +252,10 @@ pub async fn get_edge(
 
 /// Append a single edge record as a JSONL line. Durability via fsync.
 /// Callers MUST hold the `edge_create_persist_lock` to serialize writes.
+///
+/// If the existing file does not end with a newline (e.g. a hand-written or
+/// truncated fixture), a separator newline is written first so the previous
+/// record and the new record are never glued into one unparseable line.
 async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     let path = edges_path();
     if let Some(parent) = path.parent() {
@@ -263,13 +267,85 @@ async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
+        .read(true)
         .open(&path)
         .await?;
+
+    // Preserve the JSONL record boundary: only the last byte is read for the
+    // check (no full-file scan, no rewrite). With O_APPEND the seek moves the
+    // read position only; writes still always land at the end of the file.
+    let len = file.metadata().await?.len();
+    if len > 0 {
+        file.seek(SeekFrom::Start(len - 1)).await?;
+        let mut last = [0_u8; 1];
+        file.read_exact(&mut last).await?;
+        if last[0] != b'\n' {
+            file.write_all(b"\n").await?;
+        }
+    }
+
     file.write_all(line.as_bytes()).await?;
     file.write_all(b"\n").await?;
     file.flush().await?;
     file.sync_all().await?;
     Ok(())
+}
+
+/// Outcome of inspecting the persisted edges file before a create.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EdgePersistenceStatus {
+    /// The file already holds at least `max_edges_cache_limit()` lines, so an
+    /// appended record would land on a line index [`load_edges`] never
+    /// materializes after a restart (the loader truncates by *lines read*,
+    /// not by parsed edges — blank or corrupt lines consume slots too).
+    cache_limit_reached: bool,
+    /// The id already exists somewhere in the persistence source, even when
+    /// it is not in the in-memory cache (e.g. in a suffix the loader
+    /// truncated away).
+    duplicate_id: bool,
+}
+
+/// Scan the persisted edges file before an append, mirroring [`load_edges`]
+/// semantics: every line counts toward the cache limit, unparseable lines are
+/// skipped, and a final unterminated line is still read. The whole file is
+/// scanned — also beyond the limit — so a duplicate id in the unmaterialized
+/// suffix is detected. A missing file means an empty persistence source.
+/// Callers MUST hold the `edge_create_persist_lock`.
+async fn inspect_edge_persistence_for_create(id: &str) -> std::io::Result<EdgePersistenceStatus> {
+    let path = edges_path();
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(EdgePersistenceStatus {
+                cache_limit_reached: false,
+                duplicate_id: false,
+            });
+        }
+        Err(e) => return Err(e),
+    };
+
+    let max_edges = max_edges_cache_limit();
+    let mut lines = BufReader::new(file).lines();
+    let mut lines_read: usize = 0;
+    let mut duplicate_id = false;
+
+    while let Some(line) = lines.next_line().await? {
+        lines_read += 1;
+        let edge: Edge = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            // The loader skips unparseable lines; mirror that instead of
+            // introducing a harder failure mode here.
+            Err(_) => continue,
+        };
+        if edge.id == id {
+            duplicate_id = true;
+        }
+    }
+
+    Ok(EdgePersistenceStatus {
+        cache_limit_reached: lines_read >= max_edges,
+        duplicate_id,
+    })
 }
 
 /// Build the in-memory `Edge` and its canonical JSONL record from a validated
@@ -326,9 +402,11 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
 /// Create an edge in the JSONL default mode (OPT-ARC-001 Phase E-C, PR-2).
 ///
 /// Write path: postgres-read guard -> contract validation (PR-1 semantics) ->
-/// server-generated `id` / `created_at` -> durable JSONL append (fsync) ->
-/// cache insert -> 201. The cache is only mutated after a successful durable
-/// append, so a failed write never leaves a phantom edge in memory.
+/// server-generated `id` / `created_at` -> persistence safety checks
+/// (file-level duplicate id, cache-limit materializability) -> durable JSONL
+/// append (fsync) -> cache insert -> 201. The cache is only mutated after a
+/// successful durable append, so a failed write never leaves a phantom edge
+/// in memory.
 ///
 /// There is no PostgreSQL edge write path yet; under
 /// `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` creation is rejected with 409
@@ -373,6 +451,31 @@ pub async fn create_edge(
     // --- Persist (serialize creates so check-then-write is atomic) ---
     let _persist_guard = edge_create_persist_lock().lock().await;
 
+    // Inspect the persistence source itself, not only the cache: when
+    // `max_edges_cache_limit()` truncated the load, the cache holds only a
+    // prefix of the file. A duplicate id hiding in the unmaterialized suffix
+    // and a write that could never be materialized after a restart must both
+    // be rejected here. Duplicate wins over the limit so the client gets the
+    // more precise cause.
+    let persistence = inspect_edge_persistence_for_create(&edge.id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to inspect edges JSONL before create");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to persist edge".to_string(),
+            )
+        })?;
+    if persistence.duplicate_id {
+        return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+    }
+    if persistence.cache_limit_reached {
+        return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
+    }
+
+    // The cache-level duplicate check stays: tests may seed the cache
+    // directly, and it guards the exceptional case of cache/persistence
+    // divergence.
     {
         let edges = state.edges.read().await;
         if edges.get(&edge.id).is_some() {
