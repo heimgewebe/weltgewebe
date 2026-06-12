@@ -256,7 +256,7 @@
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
         "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
       ],
-      "next_action": "PR-CI-Lauf 27429628985 (pull_request, PR #1188, Commit 7f5f2fbdcf891a468cbcf874b499f2032d1de077): Account-, Node- und Edge-Write-Proof-Jobs grün belegt ( Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt); Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback und Runtime-Smoke/Cutover bleiben offen; JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus.",
+      "next_action": "PR-CI-Lauf 27429628985 (pull_request, PR #1188, Commit 7f5f2fbdcf891a468cbcf874b499f2032d1de077): Account-, Node- und Edge-Write-Proof-Jobs grün belegt (Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt); Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback und Runtime-Smoke/Cutover bleiben offen; JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus.",
       "updated_at": "2026-06-12"
     },
     {

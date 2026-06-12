@@ -131,14 +131,9 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 - DB-Integrationstest: `apps/api/tests/db_domain_edge_write_path.rs` —
   drei Persistenz-Ebenen: direkte `domain_edges`-Zeile, Cache/GET im selben
   Prozess, `load_edges_from_postgres`-Roundtrip; zusätzlich Duplicate-409,
-  Blockierfälle, kein JSONL-Side-Effect. Lokal gegen PostgreSQL 16
-  ausgeführt (grün).
+  Blockierfälle, kein JSONL-Side-Effect. Der vollständige Runtime-Proof ist durch den PR-CI-Job `db-domain-edge-write-path-proof` in Run 27429628985 belegt.
 - CI-Job: `db-domain-edge-write-path-proof` in `.github/workflows/api.yml`
   (PostgreSQL 16, `--include-ignored --test-threads=1`).
-
-## Risiken
-
-- Der vollständige Runtime-Proof ist durch den PR-CI-Job belegt; lokal ist in dieser Umgebung kein separater PostgreSQL-Runtime-Proof nachgewiesen.
 
 ## CI-Evidence
 
@@ -152,9 +147,9 @@ Der Proof ist durch einen echten GitHub-Actions-PR-CI-Lauf belegt:
 Die Evidence ist jobbezogen: Unrelated rote Workflows wie `contracts-validate.yml`
 oder `metrics.yml` ändern nicht die Proof-Aussage dieses Jobs; sie betreffen
 allenfalls die allgemeine Mergefähigkeit.
-- FK-/Orphan-Semantik bleibt offen (Migrationskommentar in
-  `20260531000002_create_domain_edges.up.sql`).
+
+## Risiken
+
+- FK-/Orphan-Semantik bleibt offen (Migrationskommentar in `20260531000002_create_domain_edges.up.sql`).
 - JSONL bleibt Default-Lesequelle und Write-Truth bis zum Cutover.
-- Im JSONL-Modus scannt ein erfolgreicher Create die JSONL-Datei weiterhin
-  O(N) (Duplicate-/Limit-Inspection); der PostgreSQL-Modus ersetzt das durch
-  den Unique-Index.
+- Im JSONL-Modus scannt ein erfolgreicher Create die JSONL-Datei weiterhin O(N) (Duplicate-/Limit-Inspection); der PostgreSQL-Modus ersetzt das durch den Unique-Index.

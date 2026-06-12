@@ -510,6 +510,11 @@ pub async fn create_edge(
                     "failed to persist edge".to_string(),
                 ));
             }
+
+            {
+                let mut edges = state.edges.write().await;
+                edges.insert(edge.id.clone(), edge.clone());
+            }
         }
         DomainEdgeWriteSource::Postgres => {
             // No JSONL inspection and no JSONL append in this mode: the plain
@@ -547,12 +552,12 @@ pub async fn create_edge(
                     ));
                 }
             }
-        }
-    }
 
-    {
-        let mut edges = state.edges.write().await;
-        edges.insert(edge.id.clone(), edge.clone());
+            {
+                let mut edges = state.edges.write().await;
+                edges.insert(edge.id.clone(), edge.clone());
+            }
+        }
     }
 
     tracing::info!(
