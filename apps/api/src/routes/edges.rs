@@ -233,6 +233,743 @@ pub async fn get_edge(
     }))
 }
 
+/// Edge-create request contract — OPT-ARC-001 Phase E-C, PR-1 (Semantik-Lock).
+///
+/// This module locks the *accepted* shape and validation rules of a future
+/// `POST /edges` create request **without** wiring a route, handler, extractor,
+/// or persistence. The upcoming POST /edges PR consumes `CreateEdgeRequest` /
+/// `CreateEdgeRequest::validate`; until then nothing outside the unit tests
+/// references these items, so the whole not-yet-wired contract carries a single
+/// `#[allow(dead_code)]` to keep the strict `-D warnings` lib build green.
+///
+/// Locked semantics (see
+/// `docs/reports/domain-edge-create-semantics-preflight.md`):
+/// - `created_at` is not accepted from clients — the server owns the timestamp.
+/// - `expires_at` is not accepted — it must never be silently dropped, so it is
+///   rejected via `deny_unknown_fields` rather than ignored.
+/// - `payload` / `metadata` are not accepted (the edge contract forbids them).
+/// - any other unknown field is rejected instead of silently ignored.
+/// - `source_type` / `target_type` are required and enum-checked.
+/// - `edge_kind` is required and enum-checked.
+/// - `source_id` / `target_id` are required, non-blank, and UUID-formatted.
+/// - `id` is optional but, when present, must be non-blank and UUID-formatted.
+/// - `note` is optional but, when present, must be non-blank and ≤ 1000 chars.
+///
+/// `deny_unknown_fields` is applied **only** to `CreateEdgeRequest`, never to the
+/// read-side `Edge` model, so existing JSONL/read semantics stay untouched.
+#[allow(dead_code)] // used by upcoming POST /edges PR (OPT-ARC-001 Phase E-C)
+mod edge_create {
+    use serde::de::{self, Deserialize, Deserializer, Visitor};
+    use std::fmt;
+    use uuid::Uuid;
+
+    /// Allowed `edge_kind` values, mirroring `contracts/domain/edge.schema.json`.
+    const EDGE_KIND_VALUES: [&str; 4] = ["delegation", "membership", "ownership", "reference"];
+
+    /// Allowed `source_type` / `target_type` values, mirroring the edge contract.
+    const EDGE_PARTICIPANT_TYPE_VALUES: [&str; 3] = ["role", "node", "account"];
+
+    /// Maximum `note` length in characters, mirroring the edge contract
+    /// (`maxLength: 1000`). JSON Schema counts characters, not bytes.
+    const EDGE_NOTE_MAX_LEN: usize = 1000;
+
+    /// Deserialize an optional string field with hardened null-semantics: the
+    /// field may be **absent** (`#[serde(default)]` yields `None`) but an
+    /// explicit JSON `null` is **rejected** instead of being coerced to `None`.
+    /// A present value must be a string; numbers, objects, and arrays fail.
+    ///
+    /// This keeps "optional" meaning "may be omitted" rather than "may be
+    /// nulled", so a client cannot erase an edge field by sending `null` — no
+    /// silent meaning-loss in JSON costume.
+    fn deserialize_optional_non_null_string<'de, D>(
+        deserializer: D,
+    ) -> Result<Option<String>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OptionalNonNullStringVisitor;
+
+        impl<'de> Visitor<'de> for OptionalNonNullStringVisitor {
+            type Value = Option<String>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a string or an absent field, not null")
+            }
+
+            fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                String::deserialize(deserializer).map(Some)
+            }
+
+            fn visit_none<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom("null is not allowed; omit the field instead"))
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Err(E::custom("null is not allowed; omit the field instead"))
+            }
+        }
+
+        deserializer.deserialize_option(OptionalNonNullStringVisitor)
+    }
+
+    /// Accepted shape of a future `POST /edges` create request.
+    ///
+    /// `created_at`, `expires_at`, `payload`, and `metadata` are intentionally
+    /// absent; together with `deny_unknown_fields` they are rejected rather than
+    /// silently dropped. `source_type` and `target_type` are **required**,
+    /// matching the domain contract. The remaining optional fields `id` and
+    /// `note` may be omitted but reject an explicit `null`, so "optional" never
+    /// quietly collapses into "nullable".
+    ///
+    /// `pub(super)` exposes the type to the parent `edges` module so the upcoming
+    /// POST /edges handler can consume it without a later visibility rework.
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub(super) struct CreateEdgeRequest {
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
+        id: Option<String>,
+        source_id: String,
+        target_id: String,
+        edge_kind: String,
+        source_type: String,
+        target_type: String,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
+        note: Option<String>,
+    }
+
+    /// Validated form of a `CreateEdgeRequest`.
+    ///
+    /// Values are preserved verbatim — no lowercasing, no trimming into storage.
+    /// Whitespace is only inspected to reject blank required/optional fields.
+    /// Fields are `pub(super)` so the upcoming POST /edges handler in the parent
+    /// `edges` module can read the validated values directly.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(super) struct ValidatedCreateEdge {
+        pub(super) id: Option<String>,
+        pub(super) source_id: String,
+        pub(super) target_id: String,
+        pub(super) edge_kind: String,
+        pub(super) source_type: String,
+        pub(super) target_type: String,
+        pub(super) note: Option<String>,
+    }
+
+    /// Why a `CreateEdgeRequest` failed validation.
+    ///
+    /// Intentionally HTTP-agnostic: this PR fixes the create contract and its
+    /// validation only. Status-code mapping belongs to the POST /edges PR.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub(super) enum EdgeCreateValidationError {
+        /// A required field was missing/blank, or an optional field that, when
+        /// present, must be non-blank (`id`, `note`) was blank.
+        MissingOrEmptyField(&'static str),
+        /// An enum-constrained field held a value outside its allowed set.
+        InvalidEnumValue { field: &'static str, value: String },
+        /// An id-like field (`id`, `source_id`, `target_id`) was not a valid UUID.
+        InvalidUuid { field: &'static str, value: String },
+        /// `note` exceeded the contract maximum of 1000 characters.
+        NoteTooLong,
+    }
+
+    /// Reject a field that is empty or whitespace-only.
+    fn require_non_blank(
+        field: &'static str,
+        value: &str,
+    ) -> Result<(), EdgeCreateValidationError> {
+        if value.trim().is_empty() {
+            return Err(EdgeCreateValidationError::MissingOrEmptyField(field));
+        }
+        Ok(())
+    }
+
+    /// Reject a value outside its allowed enum set. Matching is exact: wrong
+    /// casing fails (no case-folding, no normalization).
+    fn require_enum(
+        field: &'static str,
+        value: &str,
+        allowed: &[&str],
+    ) -> Result<(), EdgeCreateValidationError> {
+        if allowed.contains(&value) {
+            Ok(())
+        } else {
+            Err(EdgeCreateValidationError::InvalidEnumValue {
+                field,
+                value: value.to_string(),
+            })
+        }
+    }
+
+    /// Reject a value that is not a valid UUID (any form `uuid::Uuid` accepts).
+    fn require_uuid(field: &'static str, value: &str) -> Result<(), EdgeCreateValidationError> {
+        Uuid::parse_str(value)
+            .map(|_| ())
+            .map_err(|_| EdgeCreateValidationError::InvalidUuid {
+                field,
+                value: value.to_string(),
+            })
+    }
+
+    impl CreateEdgeRequest {
+        /// Validate into a `ValidatedCreateEdge` without mutating values.
+        ///
+        /// Pure: no persistence, no UUID generation, no timestamping. Order:
+        /// (1) required fields non-blank, (2) `id`/`source_id`/`target_id` UUID
+        /// format, (3) `edge_kind`/`source_type`/`target_type` exact enum
+        /// members, (4) `note` non-blank and ≤ 1000 characters when present.
+        /// `id` stays optional so the server can generate it; when present it
+        /// must be a UUID.
+        pub(super) fn validate(self) -> Result<ValidatedCreateEdge, EdgeCreateValidationError> {
+            // (1) non-blank required fields.
+            require_non_blank("source_id", &self.source_id)?;
+            require_non_blank("target_id", &self.target_id)?;
+            require_non_blank("edge_kind", &self.edge_kind)?;
+            require_non_blank("source_type", &self.source_type)?;
+            require_non_blank("target_type", &self.target_type)?;
+            if let Some(id) = &self.id {
+                require_non_blank("id", id)?;
+            }
+
+            // (2) UUID format for id-like fields.
+            require_uuid("source_id", &self.source_id)?;
+            require_uuid("target_id", &self.target_id)?;
+            if let Some(id) = &self.id {
+                require_uuid("id", id)?;
+            }
+
+            // (3) enum-constrained fields (exact match, no case-folding).
+            require_enum("edge_kind", &self.edge_kind, &EDGE_KIND_VALUES)?;
+            require_enum(
+                "source_type",
+                &self.source_type,
+                &EDGE_PARTICIPANT_TYPE_VALUES,
+            )?;
+            require_enum(
+                "target_type",
+                &self.target_type,
+                &EDGE_PARTICIPANT_TYPE_VALUES,
+            )?;
+
+            // (4) note: optional, non-blank and within length when present.
+            if let Some(note) = &self.note {
+                require_non_blank("note", note)?;
+                if note.chars().count() > EDGE_NOTE_MAX_LEN {
+                    return Err(EdgeCreateValidationError::NoteTooLong);
+                }
+            }
+
+            Ok(ValidatedCreateEdge {
+                id: self.id,
+                source_id: self.source_id,
+                target_id: self.target_id,
+                edge_kind: self.edge_kind,
+                source_type: self.source_type,
+                target_type: self.target_type,
+                note: self.note,
+            })
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        // Valid UUIDs for contract-near fixtures: `id`, `source_id`, and
+        // `target_id` are UUID-formatted per the domain contract.
+        const EDGE_ID: &str = "00000000-0000-0000-0000-000000000001";
+        const SOURCE_ID: &str = "00000000-0000-0000-0000-000000000002";
+        const TARGET_ID: &str = "00000000-0000-0000-0000-000000000003";
+
+        fn valid_request() -> CreateEdgeRequest {
+            CreateEdgeRequest {
+                id: None,
+                source_id: SOURCE_ID.to_string(),
+                target_id: TARGET_ID.to_string(),
+                edge_kind: "reference".to_string(),
+                source_type: "node".to_string(),
+                target_type: "account".to_string(),
+                note: None,
+            }
+        }
+
+        // ---- positive: accepted shapes ----
+
+        #[test]
+        fn edge_create_request_accepts_minimal_payload() {
+            // "Minimal" now carries the required participant types.
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            let req = serde_json::from_str::<CreateEdgeRequest>(&json)
+                .expect("minimal request must deserialize");
+            assert_eq!(
+                req.validate(),
+                Ok(ValidatedCreateEdge {
+                    id: None,
+                    source_id: SOURCE_ID.to_string(),
+                    target_id: TARGET_ID.to_string(),
+                    edge_kind: "reference".to_string(),
+                    source_type: "node".to_string(),
+                    target_type: "account".to_string(),
+                    note: None,
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_accepts_full_payload() {
+            let json = format!(
+                r#"{{"id":"{EDGE_ID}","source_id":"{SOURCE_ID}","target_id":"{TARGET_ID}","edge_kind":"ownership","source_type":"node","target_type":"account","note":"a note"}}"#
+            );
+            let req = serde_json::from_str::<CreateEdgeRequest>(&json)
+                .expect("full request must deserialize");
+            assert_eq!(
+                req.validate(),
+                Ok(ValidatedCreateEdge {
+                    id: Some(EDGE_ID.to_string()),
+                    source_id: SOURCE_ID.to_string(),
+                    target_id: TARGET_ID.to_string(),
+                    edge_kind: "ownership".to_string(),
+                    source_type: "node".to_string(),
+                    target_type: "account".to_string(),
+                    note: Some("a note".to_string()),
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_validates_edge_kind_enum() {
+            for kind in EDGE_KIND_VALUES {
+                let mut req = valid_request();
+                req.edge_kind = kind.to_string();
+                assert!(
+                    req.validate().is_ok(),
+                    "edge_kind `{kind}` must be accepted"
+                );
+            }
+
+            let mut req = valid_request();
+            req.edge_kind = "frobnicate".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "edge_kind",
+                    value: "frobnicate".to_string(),
+                })
+            );
+        }
+
+        // ---- source_type / target_type: required + enum (contract parity) ----
+
+        #[test]
+        fn edge_create_request_validates_source_and_target_type_enum() {
+            for ty in EDGE_PARTICIPANT_TYPE_VALUES {
+                let mut req = valid_request();
+                req.source_type = ty.to_string();
+                req.target_type = ty.to_string();
+                let validated = req.validate().expect("participant type must be accepted");
+                assert_eq!(validated.source_type, ty);
+                assert_eq!(validated.target_type, ty);
+            }
+        }
+
+        #[test]
+        fn edge_create_request_rejects_missing_source_type() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "source_type is required and must not be omitted"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_missing_target_type() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "target_type is required and must not be omitted"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_source_type() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":null,"target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "source_type=null must be rejected"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_target_type() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":null,"edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "target_type=null must be rejected"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_source_type() {
+            let mut req = valid_request();
+            req.source_type = "  ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField(
+                    "source_type"
+                ))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_target_type() {
+            let mut req = valid_request();
+            req.target_type = "   ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField(
+                    "target_type"
+                ))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_invalid_source_type() {
+            let mut req = valid_request();
+            req.source_type = "group".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "source_type",
+                    value: "group".to_string(),
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_invalid_target_type() {
+            let mut req = valid_request();
+            req.target_type = "group".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "target_type",
+                    value: "group".to_string(),
+                })
+            );
+        }
+
+        // ---- id / source_id / target_id: UUID format ----
+
+        #[test]
+        fn edge_create_request_rejects_invalid_source_id_uuid() {
+            let mut req = valid_request();
+            req.source_id = "not-a-uuid".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidUuid {
+                    field: "source_id",
+                    value: "not-a-uuid".to_string(),
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_invalid_target_id_uuid() {
+            let mut req = valid_request();
+            req.target_id = "not-a-uuid".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidUuid {
+                    field: "target_id",
+                    value: "not-a-uuid".to_string(),
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_invalid_id_uuid_when_present() {
+            let mut req = valid_request();
+            req.id = Some("not-a-uuid".to_string());
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidUuid {
+                    field: "id",
+                    value: "not-a-uuid".to_string(),
+                })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_allows_absent_id_for_server_generation() {
+            let req = valid_request();
+            assert_eq!(req.id, None);
+            let validated = req.validate().expect("absent id must be accepted");
+            assert_eq!(validated.id, None);
+        }
+
+        #[test]
+        fn edge_create_request_accepts_valid_uuid_id_when_present() {
+            let mut req = valid_request();
+            req.id = Some(EDGE_ID.to_string());
+            let validated = req.validate().expect("valid uuid id must be accepted");
+            assert_eq!(validated.id.as_deref(), Some(EDGE_ID));
+        }
+
+        // ---- negative: deny_unknown_fields / silent-drop protection ----
+
+        #[test]
+        fn edge_create_request_rejects_expires_at_to_prevent_silent_drop() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","expires_at":"2026-01-01T00:00:00Z"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "expires_at must be rejected, never silently dropped"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_created_at_because_server_owns_timestamp() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","created_at":"2026-01-01T00:00:00Z"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "created_at must be rejected; the server owns the create timestamp"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_payload_and_metadata() {
+            let payload = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","payload":{{}}}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&payload).is_err(),
+                "payload must be rejected"
+            );
+            let metadata = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","metadata":{{}}}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&metadata).is_err(),
+                "metadata must be rejected"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_unknown_fields() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","wat":true}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "unknown fields must be rejected, never silently ignored"
+            );
+        }
+
+        // ---- negative: explicit null / non-string on optional fields ----
+        //
+        // `id` and `note` stay optional: absent is valid (proven by
+        // edge_create_request_accepts_minimal_payload), but an explicit null or
+        // a non-string value must fail rather than collapse to None.
+
+        #[test]
+        fn edge_create_request_rejects_null_id() {
+            let json = format!(
+                r#"{{"id":null,"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "id=null must be rejected; omit id instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_note() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":null}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&json).is_err(),
+                "note=null must be rejected; omit note instead"
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_non_string_optional_fields() {
+            // Present optional fields must be strings; other JSON types fail.
+            let numeric_id = format!(
+                r#"{{"id":123,"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&numeric_id).is_err(),
+                "numeric id must be rejected"
+            );
+            let object_note = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","note":{{}}}}"#
+            );
+            assert!(
+                serde_json::from_str::<CreateEdgeRequest>(&object_note).is_err(),
+                "object note must be rejected"
+            );
+        }
+
+        // ---- negative: required fields missing (serde level) ----
+
+        #[test]
+        fn edge_create_request_rejects_missing_source_id() {
+            let json = format!(
+                r#"{{"source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(serde_json::from_str::<CreateEdgeRequest>(&json).is_err());
+        }
+
+        #[test]
+        fn edge_create_request_rejects_missing_target_id() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_type":"account","edge_kind":"reference"}}"#
+            );
+            assert!(serde_json::from_str::<CreateEdgeRequest>(&json).is_err());
+        }
+
+        #[test]
+        fn edge_create_request_rejects_missing_edge_kind() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account"}}"#
+            );
+            assert!(serde_json::from_str::<CreateEdgeRequest>(&json).is_err());
+        }
+
+        // ---- negative: blank required / optional fields (validate level) ----
+
+        #[test]
+        fn edge_create_request_rejects_blank_source_id() {
+            let mut req = valid_request();
+            req.source_id = "   ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField("source_id"))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_target_id() {
+            let mut req = valid_request();
+            req.target_id = String::new();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField("target_id"))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_edge_kind() {
+            let mut req = valid_request();
+            req.edge_kind = "  ".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField("edge_kind"))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_id_when_present() {
+            let mut req = valid_request();
+            req.id = Some("   ".to_string());
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField("id"))
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_blank_note_when_present() {
+            let mut req = valid_request();
+            req.note = Some("   ".to_string());
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::MissingOrEmptyField("note"))
+            );
+        }
+
+        // ---- negative: wrong casing on enums (validate level) ----
+
+        #[test]
+        fn edge_create_request_rejects_uppercase_enum_values() {
+            // Wrong casing must fail — no automatic lowercasing / normalization.
+            let mut req = valid_request();
+            req.edge_kind = "Reference".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "edge_kind",
+                    value: "Reference".to_string(),
+                })
+            );
+
+            let mut req = valid_request();
+            req.source_type = "Node".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "source_type",
+                    value: "Node".to_string(),
+                })
+            );
+
+            let mut req = valid_request();
+            req.target_type = "Account".to_string();
+            assert_eq!(
+                req.validate(),
+                Err(EdgeCreateValidationError::InvalidEnumValue {
+                    field: "target_type",
+                    value: "Account".to_string(),
+                })
+            );
+        }
+
+        // ---- negative / boundary: note length ----
+
+        #[test]
+        fn edge_create_request_accepts_note_at_max_length() {
+            let mut req = valid_request();
+            req.note = Some("a".repeat(EDGE_NOTE_MAX_LEN));
+            let validated = req
+                .validate()
+                .expect("note of exactly the max length must be accepted");
+            assert_eq!(
+                validated.note.map(|n| n.chars().count()),
+                Some(EDGE_NOTE_MAX_LEN)
+            );
+        }
+
+        #[test]
+        fn edge_create_request_rejects_note_over_max_length() {
+            let mut req = valid_request();
+            req.note = Some("a".repeat(EDGE_NOTE_MAX_LEN + 1));
+            assert_eq!(req.validate(), Err(EdgeCreateValidationError::NoteTooLong));
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{max_edges_cache_limit, DEFAULT_MAX_EDGES_CACHE};
