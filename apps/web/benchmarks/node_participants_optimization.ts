@@ -45,17 +45,11 @@ function generateData(count: number) {
 }
 
 function originalApproach(accounts: Account[], relatedEdges: Edge[]) {
-  const accountMap = new Map<string, Account>();
-  for (let i = 0; i < accounts.length; i++) {
-    accountMap.set(accounts[i].id, accounts[i]);
-  }
-
   return relatedEdges
     .map((edge) => {
-      const account =
-        edge.source_type === "account"
-          ? accountMap.get(edge.source_id)
-          : undefined;
+      const account = accounts.find(
+        (a) => a.id === edge.source_id && edge.source_type === "account",
+      );
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
@@ -105,9 +99,13 @@ function runBenchmark() {
     const { accounts, edges } = generateData(count);
     const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
-    // Warmup
-    originalApproach(accounts, edges);
-    resolverApproach(accountMap, edges);
+    // Warmup and Equivalency Check
+    const original = originalApproach(accounts, edges);
+    const optimized = resolverApproach(accountMap, edges);
+
+    if (JSON.stringify(original) !== JSON.stringify(optimized)) {
+      throw new Error("Benchmark approaches returned different results");
+    }
 
     const startOrig = performance.now();
     for (let i = 0; i < 10; i++) originalApproach(accounts, edges);
