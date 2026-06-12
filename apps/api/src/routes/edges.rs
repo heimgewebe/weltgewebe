@@ -459,15 +459,16 @@ pub async fn create_edge(
     let created_at = chrono::Utc::now().to_rfc3339();
     let (edge, record) = build_edge_record(validated, id, created_at);
 
-    // --- Persist (serialize creates so check-then-write is atomic) ---
-    let _persist_guard = edge_create_persist_lock().lock().await;
-
+    // --- Persist ---
     // Persist to the configured edge-create write source. Only after a
     // successful durable write is the cache mutated, and the two write sources
     // are mutually exclusive (no dual-write): JSONL mode never touches
     // PostgreSQL, PostgreSQL mode never appends JSONL.
     match state.config.domain_edge_write_source {
         DomainEdgeWriteSource::Jsonl => {
+            // Serialize JSONL creates so check-then-write is atomic
+            let _persist_guard = edge_create_persist_lock().lock().await;
+
             // Inspect the persistence source itself, not only the cache: when
             // `max_edges_cache_limit()` truncated the load, the cache holds only a
             // prefix of the file. A duplicate id hiding in the unmaterialized suffix
