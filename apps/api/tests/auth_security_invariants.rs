@@ -130,6 +130,7 @@ fn build_state() -> Result<ApiState> {
         edges: Arc::new(tokio::sync::RwLock::new(
             weltgewebe_api::state::OrderedCache::new(),
         )),
+        edges_persist: Arc::new(tokio::sync::Mutex::new(())),
         rate_limiter,
         mailer: None,
         webauthn: None,
@@ -382,6 +383,7 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/auth/passkeys/register/options"),
     ("POST", "/auth/passkeys/register/verify"),
     ("PATCH", "/nodes/:id"),
+    ("POST", "/edges"),
     ("POST", "/accounts"),
 ];
 

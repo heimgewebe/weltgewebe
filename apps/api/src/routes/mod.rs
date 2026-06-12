@@ -23,7 +23,7 @@ use self::{
         list_devices, logout, logout_all, me, passkey_register_options, passkey_register_verify,
         remove_device, request_login, request_step_up, session, session_refresh, update_email,
     },
-    edges::{get_edge, list_edges},
+    edges::{create_edge, get_edge, list_edges},
     nodes::{get_node, list_nodes, patch_node},
 };
 
@@ -36,7 +36,12 @@ pub fn api_router() -> Router<ApiState> {
                 .patch(patch_node)
                 .route_layer(from_fn(require_write)),
         )
-        .route("/edges", get(list_edges))
+        .route(
+            "/edges",
+            get(list_edges)
+                .post(create_edge)
+                .route_layer(from_fn(require_write)),
+        )
         .route("/edges/:id", get(get_edge))
         .route(
             "/accounts",

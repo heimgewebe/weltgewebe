@@ -103,6 +103,7 @@ mod tests {
             edges: Arc::new(tokio::sync::RwLock::new(
                 weltgewebe_api::state::OrderedCache::new(),
             )),
+            edges_persist: Arc::new(tokio::sync::Mutex::new(())),
             rate_limiter,
             mailer: None, // No Mailer instance
             webauthn: None,
