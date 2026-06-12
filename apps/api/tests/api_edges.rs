@@ -959,3 +959,35 @@ async fn post_edges_rejects_duplicate_id_in_unloaded_edge_suffix() -> Result<()>
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn post_edges_rejects_create_when_edge_cache_limit_zero_and_file_missing() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "0");
+
+    // No JSONL file: the missing-file branch must consult the limit, not
+    // hardcode cache_limit_reached=false.
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    assert_eq!(state.edges.read().await.len(), 0);
+
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let text = read_text_body(res).await?;
+    assert!(text.contains("edge cache limit reached"), "body: {text}");
+
+    // No JSONL written, cache still empty.
+    assert!(
+        !edges_path.exists(),
+        "no JSONL must be written when limit=0"
+    );
+    assert_eq!(state.edges.read().await.len(), 0);
+
+    Ok(())
+}

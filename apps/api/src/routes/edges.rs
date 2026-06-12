@@ -313,21 +313,22 @@ struct EdgePersistenceStatus {
 /// Callers MUST hold the `edge_create_persist_lock`.
 async fn inspect_edge_persistence_for_create(id: &str) -> std::io::Result<EdgePersistenceStatus> {
     let path = edges_path();
+    let max_edges = max_edges_cache_limit();
     let file = match File::open(&path).await {
         Ok(f) => f,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // A missing file is only writable when the loader would materialize
+            // at least one appended line after restart.
             return Ok(EdgePersistenceStatus {
-                cache_limit_reached: false,
+                cache_limit_reached: max_edges == 0,
                 duplicate_id: false,
             });
         }
         Err(e) => return Err(e),
     };
 
-    let max_edges = max_edges_cache_limit();
     let mut lines = BufReader::new(file).lines();
     let mut lines_read: usize = 0;
-    let mut duplicate_id = false;
 
     while let Some(line) = lines.next_line().await? {
         lines_read += 1;
@@ -338,13 +339,19 @@ async fn inspect_edge_persistence_for_create(id: &str) -> std::io::Result<EdgePe
             Err(_) => continue,
         };
         if edge.id == id {
-            duplicate_id = true;
+            // Duplicate is terminal: create_edge returns 409 before consulting
+            // the limit, so scanning the remaining file would only extend the
+            // exclusive persist lock.
+            return Ok(EdgePersistenceStatus {
+                cache_limit_reached: false,
+                duplicate_id: true,
+            });
         }
     }
 
     Ok(EdgePersistenceStatus {
         cache_limit_reached: lines_read >= max_edges,
-        duplicate_id,
+        duplicate_id: false,
     })
 }
 
