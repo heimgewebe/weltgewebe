@@ -155,7 +155,6 @@ pub async fn run() -> anyhow::Result<()> {
 
     metrics.set_edges_cache_count(edges_cache.len() as i64);
     let edges = Arc::new(tokio::sync::RwLock::new(edges_cache));
-    let edges_persist = Arc::new(tokio::sync::Mutex::new(()));
 
     let rate_limiter = Arc::new(crate::auth::rate_limit::AuthRateLimiter::new(&app_config));
 
@@ -213,7 +212,6 @@ pub async fn run() -> anyhow::Result<()> {
         nodes_persist,
         accounts_persist,
         edges,
-        edges_persist,
         rate_limiter,
         mailer,
         webauthn,

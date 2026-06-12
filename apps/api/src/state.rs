@@ -78,9 +78,6 @@ pub struct ApiState {
     /// creates cannot interleave the duplicate-check and the write.
     pub accounts_persist: Arc<Mutex<()>>,
     pub edges: Arc<RwLock<OrderedCache<Edge>>>,
-    /// Serializes edge-create persistence (append to JSONL) so concurrent
-    /// creates cannot interleave the duplicate-check and the write.
-    pub edges_persist: Arc<Mutex<()>>,
     pub rate_limiter: Arc<AuthRateLimiter>,
     pub mailer: Option<Arc<Mailer>>,
     /// WebAuthn instance, present only when passkey support is configured.

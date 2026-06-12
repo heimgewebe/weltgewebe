@@ -335,7 +335,6 @@ mod tests {
             nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
             accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
             edges: Arc::new(RwLock::new(OrderedCache::new())),
-            edges_persist: Arc::new(tokio::sync::Mutex::new(())),
             rate_limiter,
             mailer: None,
             webauthn: None,

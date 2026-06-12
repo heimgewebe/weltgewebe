@@ -13,11 +13,25 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
 use tokio::{
     fs::{File, OpenOptions},
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
 };
 use uuid::Uuid;
+
+/// Process-local lock serializing edge-create persistence (duplicate check +
+/// JSONL append + cache insert) so concurrent creates cannot interleave the
+/// check and the write. Kept module-local instead of on `ApiState` so the
+/// edge-create feature does not ripple through every manual `ApiState` literal
+/// (notably the DB-proof harness states). The lock is per process, matching the
+/// existing JSONL-API process model; cross-process file locking is out of scope.
+static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn edge_create_persist_lock() -> &'static Mutex<()> {
+    EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
@@ -237,7 +251,7 @@ pub async fn get_edge(
 }
 
 /// Append a single edge record as a JSONL line. Durability via fsync.
-/// Callers MUST hold `state.edges_persist` to serialize writes.
+/// Callers MUST hold the `edge_create_persist_lock` to serialize writes.
 async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     let path = edges_path();
     if let Some(parent) = path.parent() {
@@ -357,7 +371,7 @@ pub async fn create_edge(
     let (edge, record) = build_edge_record(validated, id, created_at);
 
     // --- Persist (serialize creates so check-then-write is atomic) ---
-    let _persist_guard = state.edges_persist.lock().await;
+    let _persist_guard = edge_create_persist_lock().lock().await;
 
     {
         let edges = state.edges.read().await;

@@ -191,7 +191,6 @@ mod tests {
             nodes_persist: Arc::new(Mutex::new(())),
             accounts_persist: Arc::new(Mutex::new(())),
             edges: Arc::new(RwLock::new(crate::state::OrderedCache::new())),
-            edges_persist: Arc::new(Mutex::new(())),
             rate_limiter,
             mailer: None,
             webauthn: None,
