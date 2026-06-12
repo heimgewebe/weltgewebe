@@ -40,6 +40,7 @@ mod tests {
             domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
             domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,
             domain_node_write_source: weltgewebe_api::config::DomainNodeWriteSource::Jsonl,
+            domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
             auth_public_login: true, // Enabled
             app_base_url: Some("http://localhost".to_string()),
             auth_trusted_proxies: None,

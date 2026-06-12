@@ -134,6 +134,37 @@ impl DomainAccountWriteSource {
     }
 }
 
+/// Selects where `POST /edges` (edge-create only) writes to.
+///
+/// OPT-ARC-001 Phase E-C: this is a deliberately narrow gate. It governs the
+/// edge-create write path **only** — account writes, node writes, step-up email
+/// persistence and WebAuthn user-id writeback are out of scope and remain
+/// unchanged. JSONL remains the default. PostgreSQL is opt-in via
+/// `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE` or the `domain_edge_write_source`
+/// config-file key, and additionally requires `domain_read_source=postgres`
+/// (validated at config load) plus a live pool (validated at startup).
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DomainEdgeWriteSource {
+    #[default]
+    #[serde(alias = "file", alias = "files")]
+    Jsonl,
+    #[serde(alias = "pg", alias = "db")]
+    Postgres,
+}
+
+impl DomainEdgeWriteSource {
+    fn parse_env_value(value: &str) -> Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "jsonl" | "file" | "files" => Ok(Self::Jsonl),
+            "postgres" | "pg" | "db" => Ok(Self::Postgres),
+            other => anyhow::bail!(
+                "invalid WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE value '{other}'; expected one of: jsonl, file, files, postgres, pg, db"
+            ),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub fade_days: u32,
@@ -154,6 +185,11 @@ pub struct AppConfig {
     /// OPT-ARC-001 Phase E-B: governs `PATCH /nodes` only.
     #[serde(default)]
     pub domain_node_write_source: DomainNodeWriteSource,
+
+    /// Edge-create write source (JSONL default, PostgreSQL opt-in).
+    /// OPT-ARC-001 Phase E-C: governs `POST /edges` only.
+    #[serde(default)]
+    pub domain_edge_write_source: DomainEdgeWriteSource,
 
     // Public Login Configuration
     #[serde(default)]
@@ -278,6 +314,12 @@ impl AppConfig {
         if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE") {
             if !val.trim().is_empty() {
                 self.domain_node_write_source = DomainNodeWriteSource::parse_env_value(&val)?;
+            }
+        }
+
+        if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE") {
+            if !val.trim().is_empty() {
+                self.domain_edge_write_source = DomainEdgeWriteSource::parse_env_value(&val)?;
             }
         }
 
@@ -456,6 +498,20 @@ impl AppConfig {
             );
         }
 
+        // OPT-ARC-001 Phase E-C: PostgreSQL edge-create writes require the
+        // PostgreSQL read source. Writing edge creates to PostgreSQL while
+        // reading edges from JSONL would persist writes that are invisible
+        // after a restart. This is a hard config error, not a silent fallback.
+        if self.domain_edge_write_source == DomainEdgeWriteSource::Postgres
+            && self.domain_read_source != DomainReadSource::Postgres
+        {
+            anyhow::bail!(
+                "domain_edge_write_source=postgres requires domain_read_source=postgres \
+                 (set WELTGEWEBE_DOMAIN_READ_SOURCE=postgres). Writing edge creates to \
+                 PostgreSQL while reading from JSONL would create restart-invisible writes."
+            );
+        }
+
         if self.auth_public_login && self.app_base_url.is_none() {
             anyhow::bail!("AUTH_PUBLIC_LOGIN is enabled but APP_BASE_URL is not set. Please set APP_BASE_URL (e.g. https://mein-weltgewebe.de)");
         }
@@ -576,7 +632,10 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource};
+    use super::{
+        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+        DomainReadSource,
+    };
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
@@ -1373,6 +1432,132 @@ delegation_expire_days: 28
         assert_eq!(
             cfg.domain_node_write_source,
             DomainNodeWriteSource::Postgres
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_source_defaults_to_jsonl() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_edge_write_source, DomainEdgeWriteSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_source_empty_env_keeps_default() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "   ");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_edge_write_source, DomainEdgeWriteSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_source_jsonl_env_is_accepted() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "jsonl");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_edge_write_source, DomainEdgeWriteSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_source_env_accepts_aliases() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "postgres");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "db");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(
+            cfg.domain_edge_write_source,
+            DomainEdgeWriteSource::Postgres
+        );
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_source_invalid_env_is_hard_error() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "sqlite");
+
+        let err = AppConfig::load_from_path(file.path()).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("invalid WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_postgres_with_jsonl_read_is_rejected() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "jsonl");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "postgres");
+
+        let err = AppConfig::load_from_path(file.path()).unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("domain_edge_write_source=postgres requires domain_read_source=postgres"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_jsonl_with_postgres_read_is_accepted() -> Result<()> {
+        // Config-level: postgres read + jsonl edge write loads fine; the
+        // route-level guard (not the config) blocks the actual create with 409.
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "postgres");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "jsonl");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        assert_eq!(cfg.domain_edge_write_source, DomainEdgeWriteSource::Jsonl);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn domain_edge_write_postgres_with_postgres_read_is_accepted() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _read = EnvGuard::set("WELTGEWEBE_DOMAIN_READ_SOURCE", "postgres");
+        let _write = EnvGuard::set("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE", "postgres");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Postgres);
+        assert_eq!(
+            cfg.domain_edge_write_source,
+            DomainEdgeWriteSource::Postgres
         );
         Ok(())
     }

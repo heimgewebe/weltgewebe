@@ -14,6 +14,7 @@ name: OPT-ARC-001 DB proof matrix guard
       - "docs/reports/domain-read-path-proof.md"
       - "docs/reports/domain-account-write-path-proof.md"
       - "docs/reports/domain-node-write-path-proof.md"
+      - "docs/reports/domain-edge-write-path-proof.md"
       - ".github/workflows/api.yml"
       - ".github/workflows/opt-arc-001-db-proof-matrix.yml"
       - "apps/api/tests/db_domain_schema_migrations.rs"
@@ -21,6 +22,7 @@ name: OPT-ARC-001 DB proof matrix guard
       - "apps/api/tests/db_domain_read_path.rs"
       - "apps/api/tests/db_domain_account_write_path.rs"
       - "apps/api/tests/db_domain_node_write_path.rs"
+      - "apps/api/tests/db_domain_edge_write_path.rs"
       - "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py"
       - "scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py"
   workflow_dispatch: {}

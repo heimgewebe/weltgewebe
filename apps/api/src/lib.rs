@@ -16,7 +16,10 @@ use std::{env, io::ErrorKind, net::SocketAddr, sync::Arc};
 use anyhow::{anyhow, Context};
 use async_nats::Client as NatsClient;
 use axum::{middleware::from_fn_with_state, routing::get, Router};
-use config::{AppConfig, DomainAccountWriteSource, DomainNodeWriteSource, DomainReadSource};
+use config::{
+    AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+    DomainReadSource,
+};
 use middleware::auth::auth_middleware;
 use middleware::csrf::require_csrf;
 use routes::{api_router, health::health_routes, meta::meta_routes};
@@ -102,6 +105,32 @@ pub async fn run() -> anyhow::Result<()> {
         }
         DomainNodeWriteSource::Jsonl => {
             tracing::info!("Node patch write source: JSONL (default).");
+        }
+    }
+
+    // OPT-ARC-001 Phase E-C: edge-create write-path gate.
+    //
+    // The read/write-source coupling (PostgreSQL edge-write requires the
+    // PostgreSQL read source) is already enforced at config load. Here we
+    // additionally require a live pool when the edge-create write source is
+    // PostgreSQL, and refuse to start otherwise — no silent downgrade to JSONL.
+    // This gate is intentionally narrow: it implements `POST /edges` only;
+    // account writes, node writes, step-up email persistence and WebAuthn
+    // user-id writeback persistence remain unchanged.
+    match app_config.domain_edge_write_source {
+        DomainEdgeWriteSource::Postgres => {
+            if db_pool.is_none() {
+                return Err(anyhow!(
+                    "domain_edge_write_source=postgres requires DATABASE_URL and an available PostgreSQL pool; refusing to start"
+                ));
+            }
+            tracing::info!(
+                "Edge-create write source: PostgreSQL (OPT-ARC-001 Phase E-C opt-in). \
+                 Only POST /edges writes to domain_edges; account/node/auth writes are unchanged."
+            );
+        }
+        DomainEdgeWriteSource::Jsonl => {
+            tracing::info!("Edge-create write source: JSONL (default).");
         }
     }
 

@@ -20,6 +20,10 @@ NODE_WRITE_PROOF_ID = "db-domain-node-write-path-proof"
 NODE_WRITE_TEST = "apps/api/tests/db_domain_node_write_path.rs"
 NODE_WRITE_REPORT = "docs/reports/domain-node-write-path-proof.md"
 NODE_WRITE_JOB_EVIDENCE = f"CI-Job: {NODE_WRITE_PROOF_ID}"
+EDGE_WRITE_PROOF_ID = "db-domain-edge-write-path-proof"
+EDGE_WRITE_TEST = "apps/api/tests/db_domain_edge_write_path.rs"
+EDGE_WRITE_REPORT = "docs/reports/domain-edge-write-path-proof.md"
+EDGE_WRITE_JOB_EVIDENCE = f"CI-Job: {EDGE_WRITE_PROOF_ID}"
 FIRST_PROOF_ID = "db-domain-schema-migrations-proof"
 
 UPDATED_AT = "2026-06-10"
@@ -27,12 +31,16 @@ UPDATED_AT = "2026-06-10"
 DEFAULT_BOARD_ARC_ROW = (
     "| OPT-ARC-001 | api | JSONL → PostgreSQL | partial | high | "
     "`apps/api/src/routes/nodes.rs`, "
+    "`apps/api/src/routes/edges.rs`, "
     "`apps/api/tests/db_domain_node_write_path.rs`, "
+    "`apps/api/tests/db_domain_edge_write_path.rs`, "
     "`docs/reports/domain-node-write-path-proof.md`, "
-    "`.github/workflows/api.yml` (`db-domain-node-write-path-proof`), "
+    "`docs/reports/domain-edge-write-path-proof.md`, "
+    "`.github/workflows/api.yml` (`db-domain-node-write-path-proof`, "
+    "`db-domain-edge-write-path-proof`), "
     "`docs/reports/opt-arc-001-db-proof-matrix.json`, "
     "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` | "
-    "PR-CI-Belege für alle fünf DB-Jobs stehen aus; kein Cutover; kein Dual-Write |"
+    "PR-CI-Belege für DB-Jobs stehen aus; kein Cutover; kein Dual-Write |"
 )
 
 DEFAULT_BOARD_BLOCKER_ROW = (
@@ -571,10 +579,12 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
     def test_extra_proof_id_fails(self):
         matrix = _valid_matrix()
         extra = copy.deepcopy(matrix["proofs"][0])
-        extra["id"] = "db-domain-edge-write-path-proof"
+        extra["id"] = "db-domain-message-write-path-proof"
         matrix["proofs"].append(extra)
         self._write_json(guard.MATRIX_PATH, matrix)
-        self.assert_error_containing("unexpected proof id 'db-domain-edge-write-path-proof'")
+        self.assert_error_containing(
+            "unexpected proof id 'db-domain-message-write-path-proof'"
+        )
 
     def test_duplicate_proof_id_fails(self):
         matrix = _valid_matrix()
@@ -612,6 +622,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                 guard, "_git_commit_is_ancestor_of_head", return_value=True
             ),
             unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
+            unittest.mock.patch.object(
+                guard, "_workflow_job_changed_since", return_value=False
+            ),
         ):
             self.assert_no_errors()
 
@@ -627,10 +640,15 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                 guard, "_git_commit_is_ancestor_of_head", return_value=True
             ),
             unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
+            unittest.mock.patch.object(
+                guard, "_workflow_job_changed_since", return_value=False
+            ),
         ):
             self.assert_no_errors()
 
-    def test_ci_proven_stale_api_workflow_fails(self):
+    def test_ci_proven_stale_own_workflow_job_fails(self):
+        # The proof's own workflow job block changed since the evidence commit:
+        # the evidence is stale even when the test file is untouched.
         matrix = _valid_matrix()
         matrix["proofs"][0]["state"] = "ci_proven"
         matrix["proofs"][0]["ci_evidence"] = _evidence_for(matrix["proofs"][0]["id"])
@@ -640,10 +658,9 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             unittest.mock.patch.object(
                 guard, "_git_commit_is_ancestor_of_head", return_value=True
             ),
+            unittest.mock.patch.object(guard, "_git_changed_paths_since", return_value=[]),
             unittest.mock.patch.object(
-                guard,
-                "_git_changed_paths_since",
-                return_value=[guard.WORKFLOW_PATH],
+                guard, "_workflow_job_changed_since", return_value=True
             ),
         ):
             errors = guard.validate(self.root)
@@ -666,10 +683,55 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                 "_git_changed_paths_since",
                 return_value=[NODE_WRITE_TEST],
             ),
+            unittest.mock.patch.object(
+                guard, "_workflow_job_changed_since", return_value=False
+            ),
         ):
             errors = guard.validate(self.root)
         self.assertTrue(any("ci_evidence is stale" in error for error in errors), errors)
         self.assertTrue(any("db_domain_node_write_path.rs" in error for error in errors), errors)
+
+    def test_workflow_job_freshness_ignores_added_unrelated_job(self):
+        # Job-scoped freshness: a new (edge) job appended to the shared
+        # workflow file must not stale the node proof's evidence; a change to
+        # the node job's own block must.
+        old_workflow = _workflow_text()
+        added_job = (
+            "  some-new-unrelated-proof:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            '      - run: echo "new job"\n'
+        )
+        new_workflow = old_workflow + added_job
+
+        def show(repo_root, rev, rel_path):
+            del repo_root, rel_path
+            return old_workflow if rev != "HEAD" else new_workflow
+
+        with unittest.mock.patch.object(guard, "_git_show_file", side_effect=show):
+            self.assertFalse(
+                guard._workflow_job_changed_since(
+                    self.root, "a" * 40, NODE_WRITE_PROOF_ID
+                ),
+                "adding an unrelated job must not stale an existing proof",
+            )
+
+        changed_workflow = old_workflow.replace(
+            "--test db_domain_node_write_path -- --include-ignored --test-threads=1",
+            "--test db_domain_node_write_path -- --include-ignored",
+        )
+
+        def show_changed(repo_root, rev, rel_path):
+            del repo_root, rel_path
+            return old_workflow if rev != "HEAD" else changed_workflow
+
+        with unittest.mock.patch.object(guard, "_git_show_file", side_effect=show_changed):
+            self.assertTrue(
+                guard._workflow_job_changed_since(
+                    self.root, "a" * 40, NODE_WRITE_PROOF_ID
+                ),
+                "changing the proof's own job block must stale its evidence",
+            )
 
     def _assert_invalid_ci_evidence_commit_rejected_before_git_lookup(self, commit):
         matrix = _valid_matrix()
@@ -807,11 +869,16 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
             guard,
             "_git_changed_paths_since",
             side_effect=AssertionError("prepared proof must not diff Git paths"),
-        ) as changed:
+        ) as changed, unittest.mock.patch.object(
+            guard,
+            "_workflow_job_changed_since",
+            side_effect=AssertionError("prepared proof must not compare workflow jobs"),
+        ) as job_changed:
             self.assert_no_errors()
         commit_exists.assert_not_called()
         ancestor.assert_not_called()
         changed.assert_not_called()
+        job_changed.assert_not_called()
 
     def test_ci_proven_freshness_diff_is_limited_to_proof_harness_paths(self):
         matrix = _valid_matrix()
@@ -829,12 +896,22 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
                 "_git_changed_paths_since",
                 return_value=[],
             ) as changed,
+            unittest.mock.patch.object(
+                guard, "_workflow_job_changed_since", return_value=False
+            ) as job_changed,
         ):
             self.assert_no_errors()
+        # The path diff covers only the proof's test file; the shared workflow
+        # file is checked job-scoped via _workflow_job_changed_since.
         changed.assert_called_once_with(
             self.root,
             proof["ci_evidence"]["commit"],
-            (guard.WORKFLOW_PATH, guard.EXPECTED_PROOFS[proof["id"]]["test"]),
+            (guard.EXPECTED_PROOFS[proof["id"]]["test"],),
+        )
+        job_changed.assert_called_once_with(
+            self.root,
+            proof["ci_evidence"]["commit"],
+            proof["id"],
         )
 
     def test_unknown_state_fails(self):
@@ -1298,7 +1375,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         for variant in ("CI-Proven", "ci-proven", "ci proven", "CI_PROVEN"):
             with self.subTest(variant=variant):
                 row = DEFAULT_BOARD_ARC_ROW.replace(
-                    "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+                    "PR-CI-Belege für DB-Jobs stehen aus",
                     f"Statusmeldung {variant} eingetragen",
                 )
                 self._write(guard.BOARD_PATH, _board_text(arc_row=row))
@@ -1347,7 +1424,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         # An end-to-end variant: `_CI_PROVEN_` embedded with underscores in the
         # active OPT-ARC-001 board row must block.
         row = DEFAULT_BOARD_ARC_ROW.replace(
-            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "PR-CI-Belege für DB-Jobs stehen aus",
             "Status _CI_PROVEN_ vermerkt",
         )
         self._write(guard.BOARD_PATH, _board_text(arc_row=row))
@@ -1454,7 +1531,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
     def test_board_ci_proven_in_arc_row_fails(self):
         row = DEFAULT_BOARD_ARC_ROW.replace(
-            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "PR-CI-Belege für DB-Jobs stehen aus",
             "CI PROVEN, Commit abc123",
         )
         self._write(guard.BOARD_PATH, _board_text(arc_row=row))
@@ -1462,7 +1539,7 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
 
     def test_board_ci_proven_case_insensitive_fails(self):
         row = DEFAULT_BOARD_ARC_ROW.replace(
-            "PR-CI-Belege für alle fünf DB-Jobs stehen aus",
+            "PR-CI-Belege für DB-Jobs stehen aus",
             "ci proven run 99999",
         )
         self._write(guard.BOARD_PATH, _board_text(arc_row=row))
@@ -1476,14 +1553,26 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write(guard.BOARD_PATH, _board_text(arc_row=row))
         self.assert_error_containing(f"must reference '{NODE_WRITE_TEST}'")
 
+    def test_board_missing_edge_write_evidence_fails(self):
+        row = DEFAULT_BOARD_ARC_ROW.replace(
+            "`apps/api/tests/db_domain_edge_write_path.rs`, ", ""
+        )
+        self.assertNotIn(EDGE_WRITE_TEST, row)
+        self._write(guard.BOARD_PATH, _board_text(arc_row=row))
+        self.assert_error_containing(f"must reference '{EDGE_WRITE_TEST}'")
+
     def test_compact_table_row_recognised(self):
         # Cells without spaces around pipes should still be detected.
         compact = (
             "|OPT-ARC-001|api|JSONL → PostgreSQL|partial|high|"
             "`apps/api/src/routes/nodes.rs`,"
+            "`apps/api/src/routes/edges.rs`,"
             "`apps/api/tests/db_domain_node_write_path.rs`,"
+            "`apps/api/tests/db_domain_edge_write_path.rs`,"
             "`docs/reports/domain-node-write-path-proof.md`,"
+            "`docs/reports/domain-edge-write-path-proof.md`,"
             "`db-domain-node-write-path-proof`,"
+            "`db-domain-edge-write-path-proof`,"
             "`docs/reports/opt-arc-001-db-proof-matrix.json`,"
             "`scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py`|"
             "PR-CI pending|"
@@ -1511,9 +1600,25 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         self._write_index_without_evidence(NODE_WRITE_JOB_EVIDENCE)
         self.assert_error_containing(f"evidence must contain '{NODE_WRITE_JOB_EVIDENCE}'")
 
+    def test_task_index_missing_edge_write_test_evidence_fails(self):
+        self._write_index_without_evidence(EDGE_WRITE_TEST)
+        self.assert_error_containing(f"evidence must contain '{EDGE_WRITE_TEST}'")
+
+    def test_task_index_missing_edge_write_report_evidence_fails(self):
+        self._write_index_without_evidence(EDGE_WRITE_REPORT)
+        self.assert_error_containing(f"evidence must contain '{EDGE_WRITE_REPORT}'")
+
+    def test_task_index_missing_edge_write_job_evidence_fails(self):
+        self._write_index_without_evidence(EDGE_WRITE_JOB_EVIDENCE)
+        self.assert_error_containing(f"evidence must contain '{EDGE_WRITE_JOB_EVIDENCE}'")
+
     def test_task_index_missing_nodes_source_evidence_fails(self):
         self._write_index_without_evidence("apps/api/src/routes/nodes.rs")
         self.assert_error_containing("evidence must contain 'apps/api/src/routes/nodes.rs'")
+
+    def test_task_index_missing_edges_source_evidence_fails(self):
+        self._write_index_without_evidence("apps/api/src/routes/edges.rs")
+        self.assert_error_containing("evidence must contain 'apps/api/src/routes/edges.rs'")
 
     def test_task_index_missing_matrix_evidence_fails(self):
         self._write_index_without_evidence(guard.MATRIX_PATH)
@@ -1547,6 +1652,14 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
     def test_status_json_missing_node_ci_job_evidence_fails(self):
         self._write_status_json_without_evidence(NODE_WRITE_JOB_EVIDENCE)
         self.assert_error_containing(f"evidence must contain '{NODE_WRITE_JOB_EVIDENCE}'")
+
+    def test_status_json_missing_edge_test_evidence_fails(self):
+        self._write_status_json_without_evidence(EDGE_WRITE_TEST)
+        self.assert_error_containing(f"evidence must contain '{EDGE_WRITE_TEST}'")
+
+    def test_status_json_missing_edge_ci_job_evidence_fails(self):
+        self._write_status_json_without_evidence(EDGE_WRITE_JOB_EVIDENCE)
+        self.assert_error_containing(f"evidence must contain '{EDGE_WRITE_JOB_EVIDENCE}'")
 
     def test_status_json_missing_matrix_evidence_fails(self):
         self._write_status_json_without_evidence(guard.MATRIX_PATH)

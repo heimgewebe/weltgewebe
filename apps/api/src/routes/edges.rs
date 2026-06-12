@@ -1,8 +1,10 @@
-use super::domain_write_guard::reject_if_postgres_read_source;
+use super::domain_write_guard::reject_edge_create_unless_writable;
 use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
 };
+use crate::config::DomainEdgeWriteSource;
+use crate::domain_db::{insert_domain_edge, EdgeWriteError};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::edges_path;
 use axum::{
@@ -406,24 +408,26 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
     }
 }
 
-/// Create an edge in the JSONL default mode (OPT-ARC-001 Phase E-C, PR-2).
+/// Create an edge (OPT-ARC-001 Phase E-C).
 ///
-/// Write path: postgres-read guard -> contract validation (PR-1 semantics) ->
-/// server-generated `id` / `created_at` -> persistence safety checks
-/// (file-level duplicate id, cache-limit materializability) -> durable JSONL
-/// append (fsync) -> cache insert -> 201. The cache is only mutated after a
-/// successful durable append, so a failed write never leaves a phantom edge
-/// in memory.
+/// Write path: write gate ([`reject_edge_create_unless_writable`]) -> contract
+/// validation (PR-1 semantics) -> server-generated `id` / `created_at` ->
+/// persistence via the configured edge-create write source -> cache insert ->
+/// 201. The cache is only mutated after a successful durable persistence step,
+/// so a failed write never leaves a phantom edge in memory.
 ///
-/// There is no PostgreSQL edge write path yet; under
-/// `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` creation is rejected with 409
-/// ([`reject_if_postgres_read_source`]) instead of producing restart-invisible
-/// JSONL writes. No dual-write: this path never touches PostgreSQL.
+/// JSONL (default): persistence safety checks (file-level duplicate id,
+/// cache-limit materializability) followed by a durable JSONL append (fsync).
+/// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE=postgres`,
+/// requires the PostgreSQL read source): a plain INSERT into `domain_edges`;
+/// a duplicate id surfaces as 409 via the unique violation. No dual-write:
+/// JSONL mode never touches PostgreSQL, PostgreSQL mode never appends JSONL
+/// and never falls back to JSONL.
 pub async fn create_edge(
     State(state): State<ApiState>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
-    reject_if_postgres_read_source(&state)?;
+    reject_edge_create_unless_writable(&state)?;
 
     // Deserialize manually (instead of extracting Json<CreateEdgeRequest>) so
     // contract violations — unknown fields like `expires_at`, missing required
@@ -458,46 +462,91 @@ pub async fn create_edge(
     // --- Persist (serialize creates so check-then-write is atomic) ---
     let _persist_guard = edge_create_persist_lock().lock().await;
 
-    // Inspect the persistence source itself, not only the cache: when
-    // `max_edges_cache_limit()` truncated the load, the cache holds only a
-    // prefix of the file. A duplicate id hiding in the unmaterialized suffix
-    // and a write that could never be materialized after a restart must both
-    // be rejected here. Duplicate wins over the limit so the client gets the
-    // more precise cause.
-    let persistence = inspect_edge_persistence_for_create(&edge.id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "failed to inspect edges JSONL before create");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to persist edge".to_string(),
-            )
-        })?;
-    if persistence.duplicate_id {
-        return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
-    }
-    if persistence.cache_limit_reached {
-        return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
-    }
+    // Persist to the configured edge-create write source. Only after a
+    // successful durable write is the cache mutated, and the two write sources
+    // are mutually exclusive (no dual-write): JSONL mode never touches
+    // PostgreSQL, PostgreSQL mode never appends JSONL.
+    match state.config.domain_edge_write_source {
+        DomainEdgeWriteSource::Jsonl => {
+            // Inspect the persistence source itself, not only the cache: when
+            // `max_edges_cache_limit()` truncated the load, the cache holds only a
+            // prefix of the file. A duplicate id hiding in the unmaterialized suffix
+            // and a write that could never be materialized after a restart must both
+            // be rejected here. Duplicate wins over the limit so the client gets the
+            // more precise cause.
+            let persistence = inspect_edge_persistence_for_create(&edge.id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, "failed to inspect edges JSONL before create");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to persist edge".to_string(),
+                    )
+                })?;
+            if persistence.duplicate_id {
+                return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+            }
+            if persistence.cache_limit_reached {
+                return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
+            }
 
-    // The cache-level duplicate check stays: tests may seed the cache
-    // directly, and it guards the exceptional case of cache/persistence
-    // divergence.
-    {
-        let edges = state.edges.read().await;
-        if edges.get(&edge.id).is_some() {
-            return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+            // The cache-level duplicate check stays: tests may seed the cache
+            // directly, and it guards the exceptional case of cache/persistence
+            // divergence.
+            {
+                let edges = state.edges.read().await;
+                if edges.get(&edge.id).is_some() {
+                    return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+                }
+            }
+
+            // Only after a successful durable append is the cache mutated. A failed
+            // write must never leave a phantom edge in memory.
+            if let Err(e) = append_edge_line(&record).await {
+                tracing::error!(error = %e, "failed to append edge to JSONL");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "failed to persist edge".to_string(),
+                ));
+            }
         }
-    }
+        DomainEdgeWriteSource::Postgres => {
+            // No JSONL inspection and no JSONL append in this mode: the plain
+            // INSERT's primary key makes a duplicate id surface as 409, and a
+            // restart reloads edges from domain_edges.
+            //
+            // The cache-level duplicate check stays for parity with the JSONL
+            // arm: tests may seed the cache directly.
+            {
+                let edges = state.edges.read().await;
+                if edges.get(&edge.id).is_some() {
+                    return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+                }
+            }
 
-    // Only after a successful durable append is the cache mutated. A failed
-    // write must never leave a phantom edge in memory.
-    if let Err(e) = append_edge_line(&record).await {
-        tracing::error!(error = %e, "failed to append edge to JSONL");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "failed to persist edge".to_string(),
-        ));
+            // Startup validation guarantees a pool exists in this mode; treat a
+            // missing pool as an internal error rather than silently degrading
+            // to JSONL.
+            let pool = state.db_pool.as_ref().ok_or_else(|| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "PostgreSQL pool unavailable for edge write".to_string(),
+                )
+            })?;
+            match insert_domain_edge(pool, &edge).await {
+                Ok(()) => {}
+                Err(EdgeWriteError::DuplicateId) => {
+                    return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "failed to insert edge into domain_edges");
+                    return Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to persist edge".to_string(),
+                    ));
+                }
+            }
+        }
     }
 
     {
@@ -505,7 +554,12 @@ pub async fn create_edge(
         edges.insert(edge.id.clone(), edge.clone());
     }
 
-    tracing::info!(event = "edge.created", edge_id = %edge.id, "Edge created");
+    tracing::info!(
+        event = "edge.created",
+        edge_id = %edge.id,
+        write_source = ?state.config.domain_edge_write_source,
+        "Edge created"
+    );
 
     Ok((StatusCode::CREATED, Json(edge)))
 }

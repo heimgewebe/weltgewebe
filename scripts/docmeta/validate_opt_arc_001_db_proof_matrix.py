@@ -1,23 +1,24 @@
 """
 validate_opt_arc_001_db_proof_matrix.py — Blocking truth guard for OPT-ARC-001.
 
-OPT-ARC-001 (JSONL → PostgreSQL) has five DB proof jobs in
-.github/workflows/api.yml with PR-CI evidence. This validator pins that truth
-machine-readably and blocks stale evidence or drift toward false completion
-claims:
+OPT-ARC-001 (JSONL → PostgreSQL) has six DB proof jobs in
+.github/workflows/api.yml. This validator pins that truth machine-readably and
+blocks stale evidence or drift toward false completion claims:
 
   - docs/reports/opt-arc-001-db-proof-matrix.json must describe exactly the
-    five expected proofs, no cutover, JSONL as default domain read and write
+    six expected proofs, no cutover, JSONL as default domain read and write
     truth, no dual write.
   - Each proof is either state="prepared" with ci_evidence=null, or
     state="ci_proven" with a concrete ci_evidence object (run_url, run_id,
     commit, job). For a ci_proven proof the evidence job must equal the proof
     id, and run_url must be a github.com/heimgewebe/weltgewebe Actions run URL
-    whose trailing run id matches run_id. The API workflow and the proof's test
-    file must also be unchanged since the evidence commit. ci_proven of these
-    five proofs only records that the prepared DB jobs ran green in real PR-CI
-    with a fresh proof harness; it is NOT a cutover — overall_status stays
-    "partial" and JSONL stays read/write truth.
+    whose trailing run id matches run_id. The proof's own workflow job block in
+    the API workflow and the proof's test file must also be unchanged since the
+    evidence commit (job-scoped: adding an unrelated job to the shared workflow
+    file does not stale other proofs' evidence; changing a proof's own job
+    does). ci_proven only records that the prepared DB jobs ran green in real
+    PR-CI with a fresh proof harness; it is NOT a cutover — overall_status
+    stays "partial" and JSONL stays read/write truth.
   - Each proof job must contain a real run command that invokes the expected cargo test with --include-ignored and --test-threads=1.
   - Task-control and status artifacts (docs/tasks/board.md,
     docs/tasks/index.json, docs/reports/optimierungsstatus.md,
@@ -79,8 +80,9 @@ PROOF_REQUIRED_FIELDS = frozenset({
     "test", "report", "ci_evidence", "command",
 })
 
+# edge_writes left this list with OPT-ARC-001 Phase E-C (opt-in PostgreSQL
+# write path for POST /edges); the remaining non-goals stay binding.
 REQUIRED_NON_GOALS = (
-    "edge_writes",
     "step_up_email_persistence",
     "webauthn_user_id_writeback",
     "jsonl_removal",
@@ -145,6 +147,12 @@ EXPECTED_PROOFS = {
         "report": "docs/reports/domain-node-write-path-proof.md",
         "command_test_name": "db_domain_node_write_path",
     },
+    "db-domain-edge-write-path-proof": {
+        "phase": "E-C",
+        "test": "apps/api/tests/db_domain_edge_write_path.rs",
+        "report": "docs/reports/domain-edge-write-path-proof.md",
+        "command_test_name": "db_domain_edge_write_path",
+    },
 }
 
 REQUIRED_TEST_EVIDENCE = tuple(spec["test"] for spec in EXPECTED_PROOFS.values())
@@ -152,7 +160,10 @@ REQUIRED_REPORT_EVIDENCE = tuple(
     spec["report"] for spec in EXPECTED_PROOFS.values() if spec["report"] is not None
 )
 REQUIRED_CI_JOB_EVIDENCE = tuple(f"CI-Job: {proof_id}" for proof_id in EXPECTED_PROOFS)
-REQUIRED_SOURCE_EVIDENCE = ("apps/api/src/routes/nodes.rs",)
+REQUIRED_SOURCE_EVIDENCE = (
+    "apps/api/src/routes/nodes.rs",
+    "apps/api/src/routes/edges.rs",
+)
 REQUIRED_GUARD_EVIDENCE = (MATRIX_PATH, VALIDATOR_PATH)
 
 # Single source of truth for the evidence every OPT-ARC-001 task-control entry
@@ -171,6 +182,10 @@ BOARD_REQUIRED_MENTIONS = (
     "apps/api/tests/db_domain_node_write_path.rs",
     "docs/reports/domain-node-write-path-proof.md",
     "db-domain-node-write-path-proof",
+    "apps/api/src/routes/edges.rs",
+    "apps/api/tests/db_domain_edge_write_path.rs",
+    "docs/reports/domain-edge-write-path-proof.md",
+    "db-domain-edge-write-path-proof",
     MATRIX_PATH,
     VALIDATOR_PATH,
 )
@@ -552,9 +567,15 @@ class GitFreshnessError(RuntimeError):
 
 
 def _ci_evidence_freshness_paths(proof_id):
-    """Return the narrowly scoped proof-harness paths for one proof."""
+    """Return the narrowly scoped non-workflow proof-harness paths for one proof.
+
+    The shared API workflow file is checked separately and job-scoped (see
+    _workflow_job_changed_since): adding an unrelated proof job to the file
+    must not stale the evidence of the other proofs, while any change to the
+    proof's own job block still does.
+    """
     spec = EXPECTED_PROOFS[proof_id]
-    return (WORKFLOW_PATH, spec["test"])
+    return (spec["test"],)
 
 
 def _run_git(repo_root, args):
@@ -598,6 +619,30 @@ def _git_changed_paths_since(repo_root, commit, paths):
         detail = result.stderr.strip() or result.stdout.strip() or "unknown Git error"
         raise GitFreshnessError(detail)
     return [line for line in result.stdout.splitlines() if line]
+
+
+def _git_show_file(repo_root, rev, rel_path):
+    """Return the file content at the given revision via `git show`."""
+    result = _run_git(repo_root, ["show", f"{rev}:{rel_path}"])
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "unknown Git error"
+        raise GitFreshnessError(detail)
+    return result.stdout
+
+
+def _workflow_job_changed_since(repo_root, commit, proof_id):
+    """Return whether the proof's own workflow job block changed since commit.
+
+    Job-scoped on purpose: the six proofs share one workflow file, so adding a
+    later phase's job must not invalidate the recorded PR-CI evidence of the
+    earlier proofs. Any textual change to the proof's own job block (or its
+    removal) still counts as a harness change and stales the evidence.
+    """
+    old_text = _git_show_file(repo_root, commit, WORKFLOW_PATH)
+    new_text = _git_show_file(repo_root, "HEAD", WORKFLOW_PATH)
+    old_block = _extract_workflow_job_block(old_text, proof_id)
+    new_block = _extract_workflow_job_block(new_text, proof_id)
+    return old_block != new_block
 
 
 def _check_ci_evidence_object(value):
@@ -684,6 +729,8 @@ def _validate_ci_evidence_freshness(proof_id, repo_root, ci_evidence, errors):
             return
         paths = _ci_evidence_freshness_paths(proof_id)
         changed_paths = _git_changed_paths_since(repo_root, commit, paths)
+        if _workflow_job_changed_since(repo_root, commit, proof_id):
+            changed_paths.append(f"{WORKFLOW_PATH} (job '{proof_id}')")
     except GitFreshnessError as exc:
         errors.append(
             f"{MATRIX_PATH}: proof '{proof_id}': unable to check ci_evidence commit "
