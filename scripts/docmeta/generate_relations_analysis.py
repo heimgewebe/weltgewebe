@@ -13,7 +13,7 @@ Output: docs/_generated/relations-analysis.md
 
 import os
 import sys
-from collections import defaultdict, Counter
+from collections import defaultdict
 
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.relations_parser import extract_relations_from_content
@@ -134,8 +134,8 @@ def compute_degree_stats(edges, all_docs):
         doc: {
             "outbound": 0,
             "inbound": 0,
-            "outbound_by_type": Counter(),
-            "inbound_by_type": Counter(),
+            "outbound_by_type": defaultdict(int),
+            "inbound_by_type": defaultdict(int),
         }
         for doc in all_docs
     }

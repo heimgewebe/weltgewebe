@@ -91,6 +91,35 @@ class TestDegreeStats(unittest.TestCase):
         self.assertEqual(stats["c.md"]["outbound"], 0)
         self.assertEqual(stats["c.md"]["inbound"], 2)
 
+    def test_compute_degree_stats_counts_known_docs_and_ignores_unknown_edges(self):
+        all_docs = ["docs/a.md", "docs/b.md", "docs/c.md"]
+        edges = [
+            ("docs/a.md", "relates_to", "docs/b.md"),
+            ("docs/a.md", "depends_on", "docs/c.md"),
+            ("docs/missing-source.md", "relates_to", "docs/b.md"),
+            ("docs/c.md", "relates_to", "docs/missing-target.md"),
+        ]
+
+        stats = compute_degree_stats(edges, all_docs)
+
+        self.assertEqual(stats["docs/a.md"]["outbound"], 2)
+        self.assertEqual(stats["docs/a.md"]["inbound"], 0)
+        self.assertEqual(stats["docs/a.md"]["outbound_by_type"]["relates_to"], 1)
+        self.assertEqual(stats["docs/a.md"]["outbound_by_type"]["depends_on"], 1)
+
+        self.assertEqual(stats["docs/b.md"]["inbound"], 2)
+        self.assertEqual(stats["docs/b.md"]["outbound"], 0)
+        self.assertEqual(stats["docs/b.md"]["inbound_by_type"]["relates_to"], 2)
+        self.assertEqual(stats["docs/b.md"]["inbound_by_type"]["depends_on"], 0)
+
+        self.assertEqual(stats["docs/c.md"]["outbound"], 1)
+        self.assertEqual(stats["docs/c.md"]["inbound"], 1)
+        self.assertEqual(stats["docs/c.md"]["outbound_by_type"]["relates_to"], 1)
+        self.assertEqual(stats["docs/c.md"]["inbound_by_type"]["depends_on"], 1)
+
+        self.assertNotIn("docs/missing-source.md", stats)
+        self.assertNotIn("docs/missing-target.md", stats)
+
 
 class TestFindIsolated(unittest.TestCase):
     """Tests for isolated document detection."""
@@ -220,5 +249,6 @@ class TestGenerateWarnings(unittest.TestCase):
         self.assertTrue(any("outbound" in w.lower() or "over-linking" in w for w in warnings))
 
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     unittest.main()
