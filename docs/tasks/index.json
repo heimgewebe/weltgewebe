@@ -697,7 +697,7 @@
         "CI-Job: db-domain-edge-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
-        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig, Account-/Node-Write-Proof nach Phase-E-C-Harness-Anpassung erneut zu belegen)"
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)"
       ],
       "missing_evidence": [
         "Edge-Write-Proof nach Cache-Limit-Fix ausstehend",
