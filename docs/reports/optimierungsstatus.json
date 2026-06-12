@@ -242,17 +242,21 @@
         "CI-Job: db-domain-read-path-proof",
         "CI-Job: db-domain-account-write-path-proof",
         "CI-Job: db-domain-node-write-path-proof",
+        "apps/api/src/routes/edges.rs",
+        "apps/api/tests/db_domain_edge_write_path.rs",
+        "docs/reports/domain-edge-write-path-proof.md",
+        "CI-Job: db-domain-edge-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
-        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün"
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)",
+        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
       ],
       "missing_evidence": [
-        "Phase E-A und E-B implementiert: Account-Create (POST /accounts), Node-Patch (PATCH /nodes); Edge-Writes, Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
+        "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Phase D (read-only), Phase E-A und Phase E-B sind opt-in belegt; kein Produktions-Cutover"
+        "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
       ],
-      "next_action": "Fünf DB-Proof-Jobs sind in PR-CI grün (PR #1165, pull_request-Run 27041187630); Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback und Runtime-Smoke/Cutover bleiben offen; JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus.",
-      "updated_at": "2026-06-11"
+      "updated_at": "2026-06-12"
     },
     {
       "id": "OPT-API-004",

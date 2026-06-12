@@ -720,6 +720,245 @@ pub async fn insert_account_from_jsonl_record(
     }
 }
 
+// ── OPT-ARC-001 Phase E-C: edge-create write path ───────────────────────────
+//
+// Narrow PostgreSQL write helper for `POST /edges` only. It maps the same
+// validated `Edge` value that `create_edge` puts into the cache and the
+// response (built via the canonical `build_edge_record` semantics), so the
+// PostgreSQL branch accepts exactly the same create semantics as JSONL. The
+// payload keys mirror `load_edges_from_postgres` (source_type, target_type,
+// note) — no new key names. It does NOT touch in-memory caches and does NOT
+// write JSONL — the caller owns cache updates.
+//
+// Out of scope (unchanged): account writes, node writes, step-up email
+// persistence, WebAuthn user-id writeback persistence.
+
+/// A single row destined for `domain_edges`, built from the validated `Edge`
+/// the create route already uses for cache and response. `payload` is carried
+/// as text and bound with an explicit `::jsonb` cast, exactly as the account
+/// write path binds its payloads.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewDomainEdgeRow {
+    pub id: String,
+    pub source_id: String,
+    pub target_id: String,
+    pub edge_kind: String,
+    /// Server-owned create timestamp. Required for new creates: the column is
+    /// nullable for legacy/import contexts, but a create must never drop it.
+    pub created_at: DateTime<Utc>,
+    pub payload: String,
+}
+
+impl NewDomainEdgeRow {
+    /// Map a validated `Edge` (cache/response value of `create_edge`) to a
+    /// `domain_edges` row.
+    ///
+    /// - `created_at` must be present and RFC3339-parseable; otherwise mapping
+    ///   fails and the route returns 500 without any DB or cache mutation.
+    /// - `payload` carries `source_type` / `target_type` (when present) and
+    ///   `note` only when `Some` — absent means omitted, never `null` —
+    ///   matching what `load_edges_from_postgres` reads back.
+    /// - `expires_at`, `payload`, `metadata` create fields do not exist here:
+    ///   `CreateEdgeRequest` rejects them via `deny_unknown_fields`.
+    pub fn from_edge(edge: &crate::routes::edges::Edge) -> Result<Self> {
+        let created_at_text = edge
+            .created_at
+            .as_deref()
+            .context("edge record is missing created_at")?;
+        let created_at = DateTime::parse_from_rfc3339(created_at_text)
+            .with_context(|| format!("edge created_at is not RFC3339: {created_at_text}"))?
+            .with_timezone(&Utc);
+
+        let mut payload_map = Map::new();
+        if let Some(source_type) = &edge.source_type {
+            payload_map.insert(
+                "source_type".to_string(),
+                Value::String(source_type.clone()),
+            );
+        }
+        if let Some(target_type) = &edge.target_type {
+            payload_map.insert(
+                "target_type".to_string(),
+                Value::String(target_type.clone()),
+            );
+        }
+        if let Some(note) = &edge.note {
+            payload_map.insert("note".to_string(), Value::String(note.clone()));
+        }
+        let payload = serde_json::to_string(&Value::Object(payload_map))
+            .context("failed to serialise edge payload")?;
+
+        Ok(Self {
+            id: edge.id.clone(),
+            source_id: edge.source_id.clone(),
+            target_id: edge.target_id.clone(),
+            edge_kind: edge.edge_kind.clone(),
+            created_at,
+            payload,
+        })
+    }
+}
+
+/// Error from the edge-create write path.
+#[derive(Debug, thiserror::Error)]
+pub enum EdgeWriteError {
+    /// The edge `id` (primary key) already exists in `domain_edges`.
+    #[error("edge id already exists")]
+    DuplicateId,
+    /// The edge cache limit has been reached, preventing insert.
+    #[error("edge cache limit reached")]
+    CacheLimitReached,
+    /// The validated edge could not be mapped to a row.
+    #[error("failed to map edge record: {0}")]
+    Mapping(#[source] anyhow::Error),
+    /// Any other database failure.
+    #[error("failed to persist edge to domain_edges: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+/// Insert exactly one edge row into `domain_edges` (Phase E-C).
+///
+/// A primary-key collision surfaces as [`EdgeWriteError::DuplicateId`].
+/// A limit condition surfaces as [`EdgeWriteError::CacheLimitReached`].
+/// This function performs no in-memory mutation and writes no JSONL.
+pub async fn insert_domain_edge(
+    pool: &PgPool,
+    edge: &crate::routes::edges::Edge,
+) -> Result<(), EdgeWriteError> {
+    let row = NewDomainEdgeRow::from_edge(edge).map_err(EdgeWriteError::Mapping)?;
+
+    let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
+
+    sqlx::query("LOCK TABLE domain_edges IN EXCLUSIVE MODE")
+        .execute(&mut *tx)
+        .await
+        .map_err(EdgeWriteError::Database)?;
+
+    let (exists,): (bool,) =
+        sqlx::query_as("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind(&row.id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(EdgeWriteError::Database)?;
+
+    if exists {
+        tx.rollback().await.ok();
+        return Err(EdgeWriteError::DuplicateId);
+    }
+
+    let max_edges = crate::routes::edges::max_edges_cache_limit();
+    let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
+
+    let (limit_reached,): (bool,) = sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
+        .bind(max_edges_i64)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(EdgeWriteError::Database)?;
+
+    if limit_reached {
+        tx.rollback().await.ok();
+        return Err(EdgeWriteError::CacheLimitReached);
+    }
+
+    let result = sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES \
+            ($1, $2, $3, $4, $5, $6::jsonb)",
+    )
+    .bind(&row.id)
+    .bind(&row.source_id)
+    .bind(&row.target_id)
+    .bind(&row.edge_kind)
+    .bind(row.created_at)
+    .bind(&row.payload)
+    .execute(&mut *tx)
+    .await;
+
+    match result {
+        Ok(_) => {
+            tx.commit().await.map_err(EdgeWriteError::Database)?;
+            Ok(())
+        }
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            tx.rollback().await.ok();
+            Err(EdgeWriteError::DuplicateId)
+        }
+        Err(e) => {
+            tx.rollback().await.ok();
+            Err(EdgeWriteError::Database(e))
+        }
+    }
+}
+
+#[cfg(test)]
+mod edge_write_path_tests {
+    use super::*;
+    use crate::routes::edges::Edge;
+
+    fn create_edge_value() -> Edge {
+        Edge {
+            id: "00000000-0000-0000-0000-0000000000e1".to_string(),
+            source_id: "00000000-0000-0000-0000-0000000000a1".to_string(),
+            source_type: Some("node".to_string()),
+            target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
+            target_type: Some("account".to_string()),
+            edge_kind: "reference".to_string(),
+            note: None,
+            created_at: Some("2026-06-12T10:00:00+00:00".to_string()),
+        }
+    }
+
+    #[test]
+    fn maps_create_edge_with_loader_compatible_payload_keys() {
+        let mut edge = create_edge_value();
+        edge.note = Some("a note".to_string());
+        let row = NewDomainEdgeRow::from_edge(&edge).expect("map");
+        assert_eq!(row.id, edge.id);
+        assert_eq!(row.source_id, edge.source_id);
+        assert_eq!(row.target_id, edge.target_id);
+        assert_eq!(row.edge_kind, "reference");
+        assert_eq!(row.created_at.to_rfc3339(), "2026-06-12T10:00:00+00:00");
+        // Payload keys must match what load_edges_from_postgres reads back.
+        let payload: Value = serde_json::from_str(&row.payload).expect("payload json");
+        assert_eq!(
+            payload.get("source_type").and_then(|v| v.as_str()),
+            Some("node")
+        );
+        assert_eq!(
+            payload.get("target_type").and_then(|v| v.as_str()),
+            Some("account")
+        );
+        assert_eq!(payload.get("note").and_then(|v| v.as_str()), Some("a note"));
+    }
+
+    #[test]
+    fn omits_note_key_when_note_is_absent() {
+        let row = NewDomainEdgeRow::from_edge(&create_edge_value()).expect("map");
+        let payload: Value = serde_json::from_str(&row.payload).expect("payload json");
+        assert!(
+            payload.get("note").is_none(),
+            "absent note must be omitted, never null"
+        );
+    }
+
+    #[test]
+    fn rejects_missing_created_at() {
+        let mut edge = create_edge_value();
+        edge.created_at = None;
+        let err = NewDomainEdgeRow::from_edge(&edge).unwrap_err();
+        assert!(err.to_string().contains("missing created_at"));
+    }
+
+    #[test]
+    fn rejects_unparseable_created_at() {
+        let mut edge = create_edge_value();
+        edge.created_at = Some("yesterday".to_string());
+        let err = NewDomainEdgeRow::from_edge(&edge).unwrap_err();
+        assert!(err.to_string().contains("not RFC3339"));
+    }
+}
+
 #[cfg(test)]
 mod write_path_tests {
     use super::*;

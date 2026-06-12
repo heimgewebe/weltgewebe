@@ -42,6 +42,7 @@ async fn test_state() -> Result<ApiState> {
         domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
         domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,
         domain_node_write_source: weltgewebe_api::config::DomainNodeWriteSource::Jsonl,
+        domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
         auth_public_login: false,
         app_base_url: None,
         auth_trusted_proxies: None,
@@ -422,11 +423,28 @@ async fn app_with_session(
     role: Role,
     domain_read_source: DomainReadSource,
 ) -> Result<(Router, String, ApiState)> {
+    app_with_session_and_edge_write(
+        role,
+        domain_read_source,
+        weltgewebe_api::config::DomainEdgeWriteSource::Jsonl,
+    )
+    .await
+}
+
+/// Like [`app_with_session`], but with an explicit edge-create write source so
+/// tests can construct write-source combinations the config loader forbids
+/// (defensive route-guard coverage).
+async fn app_with_session_and_edge_write(
+    role: Role,
+    domain_read_source: DomainReadSource,
+    domain_edge_write_source: weltgewebe_api::config::DomainEdgeWriteSource,
+) -> Result<(Router, String, ApiState)> {
     let mut accounts = AccountStore::new();
     accounts.insert(writer_account("writer1", role));
 
     let mut state = test_state().await?;
     state.config.domain_read_source = domain_read_source;
+    state.config.domain_edge_write_source = domain_edge_write_source;
     state.accounts = Arc::new(RwLock::new(accounts));
 
     let session = state
@@ -785,6 +803,38 @@ async fn post_edges_blocks_postgres_read_source() -> Result<()> {
     );
 
     // No restart-invisible JSONL write, no phantom cache entry.
+    assert!(!edges_path.exists(), "blocked create must not write JSONL");
+    assert_eq!(state.edges.read().await.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn post_edges_rejects_invalid_jsonl_read_postgres_write_config() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    // Config load forbids jsonl-read + postgres-edge-write; a manually
+    // constructed state must still be rejected defensively with 500.
+    let (app, cookie, state) = app_with_session_and_edge_write(
+        Role::Weber,
+        DomainReadSource::Jsonl,
+        weltgewebe_api::config::DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let text = read_text_body(res).await?;
+    assert!(text.contains("INVALID_DOMAIN_WRITE_CONFIG"), "body: {text}");
+
+    // No JSONL write, no phantom cache entry, no JSONL fallback.
     assert!(!edges_path.exists(), "blocked create must not write JSONL");
     assert_eq!(state.edges.read().await.len(), 0);
 
