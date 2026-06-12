@@ -99,9 +99,13 @@ function runBenchmark() {
     const { accounts, edges } = generateData(count);
     const accountMap = new Map(accounts.map((a) => [a.id, a]));
 
-    // Warmup
-    originalApproach(accounts, edges);
-    resolverApproach(accountMap, edges);
+    // Warmup and Equivalency Check
+    const original = originalApproach(accounts, edges);
+    const optimized = resolverApproach(accountMap, edges);
+
+    if (JSON.stringify(original) !== JSON.stringify(optimized)) {
+      throw new Error("Benchmark approaches returned different results");
+    }
 
     const startOrig = performance.now();
     for (let i = 0; i < 10; i++) originalApproach(accounts, edges);
