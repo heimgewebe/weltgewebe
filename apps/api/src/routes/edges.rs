@@ -544,6 +544,9 @@ pub async fn create_edge(
                 Err(EdgeWriteError::DuplicateId) => {
                     return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
                 }
+                Err(EdgeWriteError::CacheLimitReached) => {
+                    return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "failed to insert edge into domain_edges");
                     return Err((

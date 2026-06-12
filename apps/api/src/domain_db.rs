@@ -805,6 +805,9 @@ pub enum EdgeWriteError {
     /// The edge `id` (primary key) already exists in `domain_edges`.
     #[error("edge id already exists")]
     DuplicateId,
+    /// The edge cache limit has been reached, preventing insert.
+    #[error("edge cache limit reached")]
+    CacheLimitReached,
     /// The validated edge could not be mapped to a row.
     #[error("failed to map edge record: {0}")]
     Mapping(#[source] anyhow::Error),
@@ -815,17 +818,48 @@ pub enum EdgeWriteError {
 
 /// Insert exactly one edge row into `domain_edges` (Phase E-C).
 ///
-/// A plain `INSERT` (no `ON CONFLICT`) is used on purpose: runtime edge
-/// creation must never silently overwrite an existing edge (the Phase C
-/// backfill upsert is a different, non-runtime path). A primary-key collision
-/// surfaces as [`EdgeWriteError::DuplicateId`] via the driver's unique-violation
-/// classification (SQLSTATE 23505), so the route can return `409 CONFLICT`.
+/// A primary-key collision surfaces as [`EdgeWriteError::DuplicateId`].
+/// A limit condition surfaces as [`EdgeWriteError::CacheLimitReached`].
 /// This function performs no in-memory mutation and writes no JSONL.
 pub async fn insert_domain_edge(
     pool: &PgPool,
     edge: &crate::routes::edges::Edge,
 ) -> Result<(), EdgeWriteError> {
     let row = NewDomainEdgeRow::from_edge(edge).map_err(EdgeWriteError::Mapping)?;
+
+    let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
+
+    sqlx::query("LOCK TABLE domain_edges IN EXCLUSIVE MODE")
+        .execute(&mut *tx)
+        .await
+        .map_err(EdgeWriteError::Database)?;
+
+    let (exists,): (bool,) =
+        sqlx::query_as("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
+            .bind(&row.id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(EdgeWriteError::Database)?;
+
+    if exists {
+        tx.rollback().await.ok();
+        return Err(EdgeWriteError::DuplicateId);
+    }
+
+    let max_edges = crate::routes::edges::max_edges_cache_limit();
+    let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
+
+    let (limit_reached,): (bool,) =
+        sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
+            .bind(max_edges_i64)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(EdgeWriteError::Database)?;
+
+    if limit_reached {
+        tx.rollback().await.ok();
+        return Err(EdgeWriteError::CacheLimitReached);
+    }
 
     let result = sqlx::query(
         "INSERT INTO domain_edges \
@@ -839,15 +873,22 @@ pub async fn insert_domain_edge(
     .bind(&row.edge_kind)
     .bind(row.created_at)
     .bind(&row.payload)
-    .execute(pool)
+    .execute(&mut *tx)
     .await;
 
     match result {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            tx.commit().await.map_err(EdgeWriteError::Database)?;
+            Ok(())
+        }
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            tx.rollback().await.ok();
             Err(EdgeWriteError::DuplicateId)
         }
-        Err(e) => Err(EdgeWriteError::Database(e)),
+        Err(e) => {
+            tx.rollback().await.ok();
+            Err(EdgeWriteError::Database(e))
+        }
     }
 }
 
