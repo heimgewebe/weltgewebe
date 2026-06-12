@@ -139,7 +139,7 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 
 Der Proof ist durch einen echten GitHub-Actions-PR-CI-Lauf belegt:
 
-- Run: https://github.com/heimgewebe/weltgewebe/actions/runs/27429628985
+- Run: [27429628985](https://github.com/heimgewebe/weltgewebe/actions/runs/27429628985)
 - Commit: `7f5f2fbdcf891a468cbcf874b499f2032d1de077`
 - Job: `db-domain-edge-write-path-proof`
 - Status: grün
