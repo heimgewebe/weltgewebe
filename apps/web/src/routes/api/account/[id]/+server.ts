@@ -12,7 +12,7 @@ export const entries = () => getAccountEntries();
 export function GET({ params }: RequestEvent) {
   const { id } = params;
 
-  if (!id) {
+  if (!id || id.trim() === "") {
     throw error(400, "ID is required");
   }
 
