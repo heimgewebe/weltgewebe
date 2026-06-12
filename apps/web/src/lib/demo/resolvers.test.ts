@@ -10,74 +10,13 @@ import {
   getAccountEntries,
   getEdgeEntries,
 } from "./resolvers";
-import { demoEdges, demoNodes, demoAccounts } from "./demoData";
+import { demoAccounts, demoEdges, demoNodes } from "./demoData";
 
 describe("Demo Resolvers", () => {
   describe("Invariant Checks (Edge Index Safety)", () => {
     it("demo edge IDs are unique", () => {
       const edgeIds = demoEdges.map((e) => e.id);
       expect(new Set(edgeIds).size).toBe(edgeIds.length);
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
     });
 
     it("resolveAccountNodes matches the old linear account-to-node edge semantics", () => {
@@ -98,67 +37,6 @@ describe("Demo Resolvers", () => {
         .sort();
 
       expect(actualEdgeIds).toEqual(expectedEdgeIds);
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
     });
 
     it("resolveNodeParticipants matches the old linear node participant edge semantics", () => {
@@ -179,67 +57,6 @@ describe("Demo Resolvers", () => {
         .sort();
 
       expect(actualEdgeIds).toEqual(expectedEdgeIds);
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
     });
 
     it("resolveEdgeParticipants remains consistent for existing and missing IDs", () => {
@@ -253,122 +70,6 @@ describe("Demo Resolvers", () => {
       const missingDetails = resolveEdgeParticipants("non-existent-uuid");
       expect(missingDetails.source_details).toBeNull();
       expect(missingDetails.target_details).toBeNull();
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
-    });
-
-    describe("resolveNode", () => {
-      it("should find an existing node", () => {
-        expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-          demoNodes.find(
-            (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-          ),
-        );
-      });
-      it("should return undefined for an unknown node ID", () => {
-        expect(resolveNode("unknown-node")).toBeUndefined();
-      });
-    });
-
-    describe("resolveAccount", () => {
-      it("should find an existing account", () => {
-        expect(resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8")).toEqual(
-          demoAccounts.find(
-            (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-          ),
-        );
-      });
-      it("should return undefined for an unknown account ID", () => {
-        expect(resolveAccount("unknown-acc")).toBeUndefined();
-      });
-    });
-
-    describe("resolveEdge", () => {
-      it("should find an existing edge", () => {
-        expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-          demoEdges.find(
-            (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-          ),
-        );
-      });
-      it("should return undefined for an unknown edge ID", () => {
-        expect(resolveEdge("unknown-edge")).toBeUndefined();
-      });
-    });
-
-    describe("Entry functions", () => {
-      it("should match getNodeEntries output", () => {
-        expect(getNodeEntries()).toEqual(demoNodes.map((n) => ({ id: n.id })));
-      });
-
-      it("should match getAccountEntries output", () => {
-        expect(getAccountEntries()).toEqual(
-          demoAccounts.map((a) => ({ id: a.id })),
-        );
-      });
-
-      it("should match getEdgeEntries output", () => {
-        expect(getEdgeEntries()).toEqual(demoEdges.map((e) => ({ id: e.id })));
-      });
     });
   });
 
@@ -382,67 +83,6 @@ describe("Demo Resolvers", () => {
           node_title: "fairschenkbox",
         }),
       );
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
     });
 
     it("resolveNodeParticipants returns correct data", () => {
@@ -454,67 +94,6 @@ describe("Demo Resolvers", () => {
           account_title: "weltgewebeknoten1",
         }),
       );
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
     });
 
     it("resolveEdgeParticipants returns correct data", () => {
@@ -522,173 +101,48 @@ describe("Demo Resolvers", () => {
       const details = resolveEdgeParticipants(edgeId);
       expect(details.source_details?.title).toBe("weltgewebeknoten1");
       expect(details.target_details?.title).toBe("fairschenkbox");
-
-      describe("resolveNode", () => {
-        it("should find an existing node", () => {
-          expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-            demoNodes.find(
-              (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-            ),
-          );
-        });
-        it("should return undefined for an unknown node ID", () => {
-          expect(resolveNode("unknown-node")).toBeUndefined();
-        });
-      });
-
-      describe("resolveAccount", () => {
-        it("should find an existing account", () => {
-          expect(
-            resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8"),
-          ).toEqual(
-            demoAccounts.find(
-              (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-            ),
-          );
-        });
-        it("should return undefined for an unknown account ID", () => {
-          expect(resolveAccount("unknown-acc")).toBeUndefined();
-        });
-      });
-
-      describe("resolveEdge", () => {
-        it("should find an existing edge", () => {
-          expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-            demoEdges.find(
-              (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-            ),
-          );
-        });
-        it("should return undefined for an unknown edge ID", () => {
-          expect(resolveEdge("unknown-edge")).toBeUndefined();
-        });
-      });
-
-      describe("Entry functions", () => {
-        it("should match getNodeEntries output", () => {
-          expect(getNodeEntries()).toEqual(
-            demoNodes.map((n) => ({ id: n.id })),
-          );
-        });
-
-        it("should match getAccountEntries output", () => {
-          expect(getAccountEntries()).toEqual(
-            demoAccounts.map((a) => ({ id: a.id })),
-          );
-        });
-
-        it("should match getEdgeEntries output", () => {
-          expect(getEdgeEntries()).toEqual(
-            demoEdges.map((e) => ({ id: e.id })),
-          );
-        });
-      });
-    });
-
-    describe("resolveNode", () => {
-      it("should find an existing node", () => {
-        expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-          demoNodes.find(
-            (n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0",
-          ),
-        );
-      });
-      it("should return undefined for an unknown node ID", () => {
-        expect(resolveNode("unknown-node")).toBeUndefined();
-      });
-    });
-
-    describe("resolveAccount", () => {
-      it("should find an existing account", () => {
-        expect(resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8")).toEqual(
-          demoAccounts.find(
-            (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-          ),
-        );
-      });
-      it("should return undefined for an unknown account ID", () => {
-        expect(resolveAccount("unknown-acc")).toBeUndefined();
-      });
-    });
-
-    describe("resolveEdge", () => {
-      it("should find an existing edge", () => {
-        expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-          demoEdges.find(
-            (e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc",
-          ),
-        );
-      });
-      it("should return undefined for an unknown edge ID", () => {
-        expect(resolveEdge("unknown-edge")).toBeUndefined();
-      });
-    });
-
-    describe("Entry functions", () => {
-      it("should match getNodeEntries output", () => {
-        expect(getNodeEntries()).toEqual(demoNodes.map((n) => ({ id: n.id })));
-      });
-
-      it("should match getAccountEntries output", () => {
-        expect(getAccountEntries()).toEqual(
-          demoAccounts.map((a) => ({ id: a.id })),
-        );
-      });
-
-      it("should match getEdgeEntries output", () => {
-        expect(getEdgeEntries()).toEqual(demoEdges.map((e) => ({ id: e.id })));
-      });
     });
   });
 
-  describe("resolveNode", () => {
-    it("should find an existing node", () => {
-      expect(resolveNode("b52be17c-4ab7-4434-98ce-520f86290cf0")).toEqual(
-        demoNodes.find((n) => n.id === "b52be17c-4ab7-4434-98ce-520f86290cf0"),
-      );
+  describe("ID resolvers", () => {
+    it("resolveNode returns an existing node by ID", () => {
+      const node = demoNodes[0];
+      expect(resolveNode(node.id)).toBe(node);
     });
-    it("should return undefined for an unknown node ID", () => {
+    it("resolveNode returns undefined for an unknown node ID", () => {
       expect(resolveNode("unknown-node")).toBeUndefined();
     });
-  });
-
-  describe("resolveAccount", () => {
-    it("should find an existing account", () => {
-      expect(resolveAccount("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8")).toEqual(
-        demoAccounts.find(
-          (a) => a.id === "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
-        ),
-      );
+    it("resolveAccount returns an existing account by ID", () => {
+      const account = demoAccounts[0];
+      expect(resolveAccount(account.id)).toBe(account);
     });
-    it("should return undefined for an unknown account ID", () => {
-      expect(resolveAccount("unknown-acc")).toBeUndefined();
+    it("resolveAccount returns undefined for an unknown account ID", () => {
+      expect(resolveAccount("unknown-account")).toBeUndefined();
     });
-  });
-
-  describe("resolveEdge", () => {
-    it("should find an existing edge", () => {
-      expect(resolveEdge("eb5f41ff-3e64-417e-ae7e-eecd9c886ecc")).toEqual(
-        demoEdges.find((e) => e.id === "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc"),
-      );
+    it("resolveEdge returns an existing edge by ID", () => {
+      const edge = demoEdges[0];
+      expect(resolveEdge(edge.id)).toBe(edge);
     });
-    it("should return undefined for an unknown edge ID", () => {
+    it("resolveEdge returns undefined for an unknown edge ID", () => {
       expect(resolveEdge("unknown-edge")).toBeUndefined();
     });
   });
 
-  describe("Entry functions", () => {
-    it("should match getNodeEntries output", () => {
-      expect(getNodeEntries()).toEqual(demoNodes.map((n) => ({ id: n.id })));
-    });
-
-    it("should match getAccountEntries output", () => {
-      expect(getAccountEntries()).toEqual(
-        demoAccounts.map((a) => ({ id: a.id })),
+  describe("Prerender entries", () => {
+    it("getNodeEntries returns node ID entries", () => {
+      expect(getNodeEntries()).toEqual(
+        demoNodes.map((node) => ({ id: node.id })),
       );
     });
-
-    it("should match getEdgeEntries output", () => {
-      expect(getEdgeEntries()).toEqual(demoEdges.map((e) => ({ id: e.id })));
+    it("getAccountEntries returns account ID entries", () => {
+      expect(getAccountEntries()).toEqual(
+        demoAccounts.map((account) => ({ id: account.id })),
+      );
+    });
+    it("getEdgeEntries returns edge ID entries", () => {
+      expect(getEdgeEntries()).toEqual(
+        demoEdges.map((edge) => ({ id: edge.id })),
+      );
     });
   });
 });
