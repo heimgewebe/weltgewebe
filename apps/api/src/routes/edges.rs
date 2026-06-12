@@ -1,3 +1,4 @@
+use super::domain_write_guard::reject_if_postgres_read_source;
 use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
@@ -10,11 +11,27 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::OnceLock;
+use tokio::sync::Mutex;
 use tokio::{
-    fs::File,
-    io::{AsyncBufReadExt, BufReader},
+    fs::{File, OpenOptions},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, SeekFrom},
 };
+use uuid::Uuid;
+
+/// Process-local lock serializing edge-create persistence (duplicate check +
+/// JSONL append + cache insert) so concurrent creates cannot interleave the
+/// check and the write. Kept module-local instead of on `ApiState` so the
+/// edge-create feature does not ripple through every manual `ApiState` literal
+/// (notably the DB-proof harness states). The lock is per process, matching the
+/// existing JSONL-API process model; cross-process file locking is out of scope.
+static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
+
+fn edge_create_persist_lock() -> &'static Mutex<()> {
+    EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
@@ -233,14 +250,273 @@ pub async fn get_edge(
     }))
 }
 
+/// Append a single edge record as a JSONL line. Durability via fsync.
+/// Callers MUST hold the `edge_create_persist_lock` to serialize writes.
+///
+/// If the existing file does not end with a newline (e.g. a hand-written or
+/// truncated fixture), a separator newline is written first so the previous
+/// record and the new record are never glued into one unparseable line.
+async fn append_edge_line(record: &Value) -> std::io::Result<()> {
+    let path = edges_path();
+    if let Some(parent) = path.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    let line = serde_json::to_string(record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .read(true)
+        .open(&path)
+        .await?;
+
+    // Preserve the JSONL record boundary: only the last byte is read for the
+    // check (no full-file scan, no rewrite). With O_APPEND the seek moves the
+    // read position only; writes still always land at the end of the file.
+    let len = file.metadata().await?.len();
+    if len > 0 {
+        file.seek(SeekFrom::Start(len - 1)).await?;
+        let mut last = [0_u8; 1];
+        file.read_exact(&mut last).await?;
+        if last[0] != b'\n' {
+            file.write_all(b"\n").await?;
+        }
+    }
+
+    file.write_all(line.as_bytes()).await?;
+    file.write_all(b"\n").await?;
+    file.flush().await?;
+    file.sync_all().await?;
+    Ok(())
+}
+
+/// Outcome of inspecting the persisted edges file before a create.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct EdgePersistenceStatus {
+    /// The file already holds at least `max_edges_cache_limit()` lines, so an
+    /// appended record would land on a line index [`load_edges`] never
+    /// materializes after a restart (the loader truncates by *lines read*,
+    /// not by parsed edges — blank or corrupt lines consume slots too).
+    cache_limit_reached: bool,
+    /// The id already exists somewhere in the persistence source, even when
+    /// it is not in the in-memory cache (e.g. in a suffix the loader
+    /// truncated away).
+    duplicate_id: bool,
+}
+
+/// Scan the persisted edges file before an append, mirroring [`load_edges`]
+/// semantics: every line counts toward the cache limit, unparseable lines are
+/// skipped, and a final unterminated line is still read. The whole file is
+/// scanned — also beyond the limit — so a duplicate id in the unmaterialized
+/// suffix is detected. A missing file means an empty persistence source.
+/// Callers MUST hold the `edge_create_persist_lock`.
+async fn inspect_edge_persistence_for_create(id: &str) -> std::io::Result<EdgePersistenceStatus> {
+    let path = edges_path();
+    let max_edges = max_edges_cache_limit();
+    let file = match File::open(&path).await {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            // A missing file is only writable when the loader would materialize
+            // at least one appended line after restart.
+            return Ok(EdgePersistenceStatus {
+                cache_limit_reached: max_edges == 0,
+                duplicate_id: false,
+            });
+        }
+        Err(e) => return Err(e),
+    };
+
+    let mut lines = BufReader::new(file).lines();
+    let mut lines_read: usize = 0;
+
+    while let Some(line) = lines.next_line().await? {
+        lines_read += 1;
+        let edge: Edge = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            // The loader skips unparseable lines; mirror that instead of
+            // introducing a harder failure mode here.
+            Err(_) => continue,
+        };
+        if edge.id == id {
+            // Duplicate is terminal: create_edge returns 409 before consulting
+            // the limit, so scanning the remaining file would only extend the
+            // exclusive persist lock.
+            return Ok(EdgePersistenceStatus {
+                cache_limit_reached: false,
+                duplicate_id: true,
+            });
+        }
+    }
+
+    Ok(EdgePersistenceStatus {
+        cache_limit_reached: lines_read >= max_edges,
+        duplicate_id: false,
+    })
+}
+
+/// Build the in-memory `Edge` and its canonical JSONL record from a validated
+/// create request plus the server-owned `id` and `created_at`.
+///
+/// The returned `Edge` carries exactly the values that land in the cache and
+/// the JSONL line. `note` is only written to the record when present (absent
+/// means omitted, never `null`); `expires_at`, `payload`, and `metadata` are
+/// never written.
+fn build_edge_record(
+    validated: edge_create::ValidatedCreateEdge,
+    id: String,
+    created_at: String,
+) -> (Edge, Value) {
+    let edge = Edge {
+        id,
+        source_id: validated.source_id,
+        source_type: Some(validated.source_type),
+        target_id: validated.target_id,
+        target_type: Some(validated.target_type),
+        edge_kind: validated.edge_kind,
+        note: validated.note,
+        created_at: Some(created_at),
+    };
+
+    let mut record = serde_json::Map::new();
+    record.insert("id".into(), json!(edge.id));
+    record.insert("source_id".into(), json!(edge.source_id));
+    record.insert("source_type".into(), json!(edge.source_type));
+    record.insert("target_id".into(), json!(edge.target_id));
+    record.insert("target_type".into(), json!(edge.target_type));
+    record.insert("edge_kind".into(), json!(edge.edge_kind));
+    record.insert("created_at".into(), json!(edge.created_at));
+    if let Some(note) = &edge.note {
+        record.insert("note".into(), json!(note));
+    }
+
+    (edge, Value::Object(record))
+}
+
+/// Map an `EdgeCreateValidationError` onto a stable message for the 400 body.
+fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> String {
+    use edge_create::EdgeCreateValidationError as E;
+    match err {
+        E::MissingOrEmptyField(field) => format!("missing or empty field: {field}"),
+        E::InvalidEnumValue { field, value } => {
+            format!("invalid enum value for {field}: {value}")
+        }
+        E::InvalidUuid { field, value } => format!("invalid UUID for {field}: {value}"),
+        E::NoteTooLong => "note exceeds the maximum length of 1000 characters".to_string(),
+    }
+}
+
+/// Create an edge in the JSONL default mode (OPT-ARC-001 Phase E-C, PR-2).
+///
+/// Write path: postgres-read guard -> contract validation (PR-1 semantics) ->
+/// server-generated `id` / `created_at` -> persistence safety checks
+/// (file-level duplicate id, cache-limit materializability) -> durable JSONL
+/// append (fsync) -> cache insert -> 201. The cache is only mutated after a
+/// successful durable append, so a failed write never leaves a phantom edge
+/// in memory.
+///
+/// There is no PostgreSQL edge write path yet; under
+/// `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` creation is rejected with 409
+/// ([`reject_if_postgres_read_source`]) instead of producing restart-invisible
+/// JSONL writes. No dual-write: this path never touches PostgreSQL.
+pub async fn create_edge(
+    State(state): State<ApiState>,
+    Json(payload): Json<Value>,
+) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
+    reject_if_postgres_read_source(&state)?;
+
+    // Deserialize manually (instead of extracting Json<CreateEdgeRequest>) so
+    // contract violations — unknown fields like `expires_at`, missing required
+    // fields, explicit nulls — map to a deterministic 400 rather than an
+    // extractor-shaped 422.
+    let request: edge_create::CreateEdgeRequest = serde_json::from_value(payload).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("invalid edge create request: {e}"),
+        )
+    })?;
+
+    let validated = request.validate().map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!(
+                "invalid edge create request: {}",
+                edge_create_error_message(&e)
+            ),
+        )
+    })?;
+
+    // Server-owned values: generate `id` when the client omitted it and stamp
+    // `created_at` (clients can never supply it — see CreateEdgeRequest).
+    let id = validated
+        .id
+        .clone()
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let created_at = chrono::Utc::now().to_rfc3339();
+    let (edge, record) = build_edge_record(validated, id, created_at);
+
+    // --- Persist (serialize creates so check-then-write is atomic) ---
+    let _persist_guard = edge_create_persist_lock().lock().await;
+
+    // Inspect the persistence source itself, not only the cache: when
+    // `max_edges_cache_limit()` truncated the load, the cache holds only a
+    // prefix of the file. A duplicate id hiding in the unmaterialized suffix
+    // and a write that could never be materialized after a restart must both
+    // be rejected here. Duplicate wins over the limit so the client gets the
+    // more precise cause.
+    let persistence = inspect_edge_persistence_for_create(&edge.id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "failed to inspect edges JSONL before create");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to persist edge".to_string(),
+            )
+        })?;
+    if persistence.duplicate_id {
+        return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+    }
+    if persistence.cache_limit_reached {
+        return Err((StatusCode::CONFLICT, "edge cache limit reached".to_string()));
+    }
+
+    // The cache-level duplicate check stays: tests may seed the cache
+    // directly, and it guards the exceptional case of cache/persistence
+    // divergence.
+    {
+        let edges = state.edges.read().await;
+        if edges.get(&edge.id).is_some() {
+            return Err((StatusCode::CONFLICT, "edge id already exists".to_string()));
+        }
+    }
+
+    // Only after a successful durable append is the cache mutated. A failed
+    // write must never leave a phantom edge in memory.
+    if let Err(e) = append_edge_line(&record).await {
+        tracing::error!(error = %e, "failed to append edge to JSONL");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to persist edge".to_string(),
+        ));
+    }
+
+    {
+        let mut edges = state.edges.write().await;
+        edges.insert(edge.id.clone(), edge.clone());
+    }
+
+    tracing::info!(event = "edge.created", edge_id = %edge.id, "Edge created");
+
+    Ok((StatusCode::CREATED, Json(edge)))
+}
+
 /// Edge-create request contract — OPT-ARC-001 Phase E-C, PR-1 (Semantik-Lock).
 ///
-/// This module locks the *accepted* shape and validation rules of a future
-/// `POST /edges` create request **without** wiring a route, handler, extractor,
-/// or persistence. The upcoming POST /edges PR consumes `CreateEdgeRequest` /
-/// `CreateEdgeRequest::validate`; until then nothing outside the unit tests
-/// references these items, so the whole not-yet-wired contract carries a single
-/// `#[allow(dead_code)]` to keep the strict `-D warnings` lib build green.
+/// This module locks the *accepted* shape and validation rules of a
+/// `POST /edges` create request without taking on routing, persistence, or
+/// status-code concerns. The [`create_edge`] handler (PR-2, JSONL edge create)
+/// consumes `CreateEdgeRequest` / `CreateEdgeRequest::validate` and owns the
+/// HTTP mapping.
 ///
 /// Locked semantics (see
 /// `docs/reports/domain-edge-create-semantics-preflight.md`):
@@ -257,7 +533,6 @@ pub async fn get_edge(
 ///
 /// `deny_unknown_fields` is applied **only** to `CreateEdgeRequest`, never to the
 /// read-side `Edge` model, so existing JSONL/read semantics stay untouched.
-#[allow(dead_code)] // used by upcoming POST /edges PR (OPT-ARC-001 Phase E-C)
 mod edge_create {
     use serde::de::{self, Deserialize, Deserializer, Visitor};
     use std::fmt;

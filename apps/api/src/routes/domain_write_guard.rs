@@ -33,12 +33,11 @@ fn invalid_write_config() -> (StatusCode, String) {
 /// Reject domain mutations that have no PostgreSQL write path implemented while
 /// the PostgreSQL read source is active.
 ///
-/// Used by future endpoint write paths (e.g. edge writes) that have no
-/// PostgreSQL write path yet. Writing to JSONL under a PostgreSQL read source
-/// would create restart-invisible writes. Account creation uses its own narrower
-/// gate ([`reject_account_create_unless_writable`]); node patches use
-/// [`reject_node_patch_unless_writable`].
-#[allow(dead_code)]
+/// Used by endpoint write paths that have no PostgreSQL write path yet
+/// (currently edge create, `POST /edges`). Writing to JSONL under a PostgreSQL
+/// read source would create restart-invisible writes. Account creation uses its
+/// own narrower gate ([`reject_account_create_unless_writable`]); node patches
+/// use [`reject_node_patch_unless_writable`].
 pub(super) fn reject_if_postgres_read_source(state: &ApiState) -> Result<(), (StatusCode, String)> {
     if state.config.domain_read_source == DomainReadSource::Postgres {
         return Err(read_only_conflict());
