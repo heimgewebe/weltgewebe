@@ -249,6 +249,5 @@ class TestGenerateWarnings(unittest.TestCase):
         self.assertTrue(any("outbound" in w.lower() or "over-linking" in w for w in warnings))
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
