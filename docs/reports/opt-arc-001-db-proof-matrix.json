@@ -104,17 +104,12 @@
       "id": "db-domain-edge-write-path-proof",
       "phase": "E-C",
       "claim": "Optional PostgreSQL write path for POST /edges is implemented behind explicit write gate.",
-      "state": "ci_proven",
+      "state": "prepared",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-edge-write-path-proof",
       "test": "apps/api/tests/db_domain_edge_write_path.rs",
       "report": "docs/reports/domain-edge-write-path-proof.md",
-      "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27429628985",
-        "run_id": 27429628985,
-        "commit": "7f5f2fbdcf891a468cbcf874b499f2032d1de077",
-        "job": "db-domain-edge-write-path-proof"
-      },
+      "ci_evidence": null,
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_edge_write_path -- --include-ignored --test-threads=1"
     }
   ]

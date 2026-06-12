@@ -137,16 +137,8 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 
 ## CI-Evidence
 
-Der Proof ist durch einen echten GitHub-Actions-PR-CI-Lauf belegt:
-
-- Run: [27429628985](https://github.com/heimgewebe/weltgewebe/actions/runs/27429628985)
-- Commit: `7f5f2fbdcf891a468cbcf874b499f2032d1de077`
-- Job: `db-domain-edge-write-path-proof`
-- Status: grün
-
-Die Evidence ist jobbezogen: Unrelated rote Workflows wie `contracts-validate.yml`
-oder `metrics.yml` ändern nicht die Proof-Aussage dieses Jobs; sie betreffen
-allenfalls die allgemeine Mergefähigkeit.
+- Edge-Write-Proof nach Cache-Limit-Fix erneut in PR-CI zu belegen.
+- Phase E-C implementiert.
 
 ## Risiken
 

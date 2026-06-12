@@ -700,6 +700,7 @@
         "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig, Account-/Node-Write-Proof nach Phase-E-C-Harness-Anpassung erneut zu belegen)"
       ],
       "missing_evidence": [
+        "Edge-Write-Proof nach Cache-Limit-Fix ausstehend",
         "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
         "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
@@ -723,7 +724,8 @@
           "docs/reports/domain-edge-write-path-proof.md"
         ]
       },
-      "updated_at": "2026-06-12"
+      "updated_at": "2026-06-12",
+      "next_action": "Edge-Write-Proof nach Cache-Limit-Fix erneut in PR-CI belegen. Account-/Node-Write-Proof nach Phase-E-C-Harness-Anpassung erneut zu belegen. Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt. JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus."
     },
     {
       "id": "DOCMETA-START-HERE-001",
