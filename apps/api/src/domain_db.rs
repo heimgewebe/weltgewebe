@@ -815,6 +815,39 @@ mod write_path_tests {
     }
 
     #[test]
+    fn payload_from_keys_preserves_selected_non_null_fields() {
+        let source = serde_json::json!({
+            "summary": "hello",
+            "tags": ["a", "b"],
+            "private_note": "secret",
+            "empty": null
+        });
+
+        let payload = payload_from_keys(&["summary", "tags", "empty", "missing"], &source);
+        let parsed: serde_json::Value = serde_json::from_str(&payload).unwrap();
+
+        assert_eq!(
+            parsed,
+            serde_json::json!({
+                "summary": "hello",
+                "tags": ["a", "b"]
+            })
+        );
+    }
+
+    #[test]
+    fn payload_from_keys_returns_empty_object_for_missing_or_null_fields() {
+        let source = serde_json::json!({
+            "summary": null,
+            "private_note": "secret"
+        });
+
+        let payload = payload_from_keys(&["summary", "tags"], &source);
+
+        assert_eq!(payload, "{}");
+    }
+
+    #[test]
     fn ron_flag_forces_ron_mode() {
         let record = json!({
             "id": "writepath-unit-ron",
