@@ -138,9 +138,20 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 
 ## Risiken
 
-- Der PR-CI-Laufbeleg kann lokal nicht ersetzt werden; der Proof bleibt
-  `prepared`, bis ein echter GitHub-Actions-Run für
-  `db-domain-edge-write-path-proof` vorliegt.
+- Der vollständige Runtime-Proof ist durch den PR-CI-Job belegt; lokal ist in dieser Umgebung kein separater PostgreSQL-Runtime-Proof nachgewiesen.
+
+## CI-Evidence
+
+Der Proof ist durch einen echten GitHub-Actions-PR-CI-Lauf belegt:
+
+- Run: https://github.com/heimgewebe/weltgewebe/actions/runs/27429628985
+- Commit: `7f5f2fbdcf891a468cbcf874b499f2032d1de077`
+- Job: `db-domain-edge-write-path-proof`
+- Status: grün
+
+Die Evidence ist jobbezogen: Unrelated rote Workflows wie `contracts-validate.yml`
+oder `metrics.yml` ändern nicht die Proof-Aussage dieses Jobs; sie betreffen
+allenfalls die allgemeine Mergefähigkeit.
 - FK-/Orphan-Semantik bleibt offen (Migrationskommentar in
   `20260531000002_create_domain_edges.up.sql`).
 - JSONL bleibt Default-Lesequelle und Write-Truth bis zum Cutover.

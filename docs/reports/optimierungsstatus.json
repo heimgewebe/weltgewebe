@@ -251,12 +251,12 @@
         "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig, Account-/Node-Write-Proof nach Phase-E-C-Harness-Anpassung erneut zu belegen)"
       ],
       "missing_evidence": [
-        "PR-CI-Laufbelege für db-domain-account-write-path-proof, db-domain-node-write-path-proof und db-domain-edge-write-path-proof ausstehend (Proofs in der Matrix: prepared; Account-/Node-Harness wurde im AppConfig-Ripple von Phase E-C angepasst, zuvor grün in Run 27041187630)",
+        "PR-CI-Lauf 27429628985 (pull_request, PR #1188, Commit 7f5f2fbdcf891a468cbcf874b499f2032d1de077): Account-, Node- und Edge-Write-Proof-Jobs grün",
         "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
         "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
       ],
-      "next_action": "PR-CI-Laufbelege für db-domain-account-write-path-proof, db-domain-node-write-path-proof und db-domain-edge-write-path-proof einholen (Proofs: prepared; Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt); Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback und Runtime-Smoke/Cutover bleiben offen; JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus.",
+      "next_action": "PR-CI-Lauf 27429628985 (pull_request, PR #1188, Commit 7f5f2fbdcf891a468cbcf874b499f2032d1de077): Account-, Node- und Edge-Write-Proof-Jobs grün belegt ( Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt); Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback und Runtime-Smoke/Cutover bleiben offen; JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus.",
       "updated_at": "2026-06-12"
     },
     {
