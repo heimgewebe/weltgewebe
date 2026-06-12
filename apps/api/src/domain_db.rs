@@ -836,6 +836,18 @@ mod write_path_tests {
     }
 
     #[test]
+    fn payload_from_keys_returns_empty_object_for_missing_or_null_fields() {
+        let source = serde_json::json!({
+            "summary": null,
+            "private_note": "secret"
+        });
+
+        let payload = payload_from_keys(&["summary", "tags"], &source);
+
+        assert_eq!(payload, "{}");
+    }
+
+    #[test]
     fn ron_flag_forces_ron_mode() {
         let record = json!({
             "id": "writepath-unit-ron",
