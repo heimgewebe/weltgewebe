@@ -724,8 +724,7 @@
           "docs/reports/domain-edge-write-path-proof.md"
         ]
       },
-      "updated_at": "2026-06-12",
-      "next_action": "Edge-Write-Proof nach Cache-Limit-Fix erneut in PR-CI belegen. Account-/Node-Write-Proof nach Phase-E-C-Harness-Anpassung erneut zu belegen. Schema-, Backfill- und Read-Path-Proof bleiben mit Run 27041187630 belegt. JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus."
+      "updated_at": "2026-06-12"
     },
     {
       "id": "DOCMETA-START-HERE-001",

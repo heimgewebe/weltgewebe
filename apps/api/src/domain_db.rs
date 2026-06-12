@@ -849,12 +849,11 @@ pub async fn insert_domain_edge(
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
 
-    let (limit_reached,): (bool,) =
-        sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
-            .bind(max_edges_i64)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(EdgeWriteError::Database)?;
+    let (limit_reached,): (bool,) = sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
+        .bind(max_edges_i64)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(EdgeWriteError::Database)?;
 
     if limit_reached {
         tx.rollback().await.ok();

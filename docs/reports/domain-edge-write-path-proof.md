@@ -131,7 +131,7 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 - DB-Integrationstest: `apps/api/tests/db_domain_edge_write_path.rs` —
   drei Persistenz-Ebenen: direkte `domain_edges`-Zeile, Cache/GET im selben
   Prozess, `load_edges_from_postgres`-Roundtrip; zusätzlich Duplicate-409,
-  Blockierfälle, kein JSONL-Side-Effect. Der vollständige Runtime-Proof ist durch den PR-CI-Job `db-domain-edge-write-path-proof` in Run 27429628985 belegt.
+  Blockierfälle, kein JSONL-Side-Effect. Edge-Write-Proof nach Cache-Limit-Fix erneut in PR-CI zu belegen.
 - CI-Job: `db-domain-edge-write-path-proof` in `.github/workflows/api.yml`
   (PostgreSQL 16, `--include-ignored --test-threads=1`).
 
