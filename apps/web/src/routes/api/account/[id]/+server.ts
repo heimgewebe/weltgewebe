@@ -1,19 +1,22 @@
 import { json, error } from "@sveltejs/kit";
-import { demoAccounts } from "$lib/demo/demoData";
-import { resolveAccountNodes } from "$lib/demo/resolvers";
+import {
+  resolveAccount,
+  resolveAccountNodes,
+  getAccountEntries,
+} from "$lib/demo/resolvers";
 import type { RequestEvent } from "@sveltejs/kit";
 
 export const prerender = true;
-export const entries = () => demoAccounts.map((a) => ({ id: a.id }));
+export const entries = () => getAccountEntries();
 
 export function GET({ params }: RequestEvent) {
   const { id } = params;
 
-  if (!id) {
+  if (!id || id.trim() === "") {
     throw error(400, "ID is required");
   }
 
-  const account = demoAccounts.find((a) => a.id === id);
+  const account = resolveAccount(id);
 
   if (!account) {
     throw error(404, "Account not found");

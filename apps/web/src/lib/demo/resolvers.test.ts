@@ -3,8 +3,14 @@ import {
   resolveAccountNodes,
   resolveNodeParticipants,
   resolveEdgeParticipants,
+  resolveNode,
+  resolveAccount,
+  resolveEdge,
+  getNodeEntries,
+  getAccountEntries,
+  getEdgeEntries,
 } from "./resolvers";
-import { demoEdges } from "./demoData";
+import { demoAccounts, demoEdges, demoNodes } from "./demoData";
 
 describe("Demo Resolvers", () => {
   describe("Invariant Checks (Edge Index Safety)", () => {
@@ -95,6 +101,48 @@ describe("Demo Resolvers", () => {
       const details = resolveEdgeParticipants(edgeId);
       expect(details.source_details?.title).toBe("weltgewebeknoten1");
       expect(details.target_details?.title).toBe("fairschenkbox");
+    });
+  });
+
+  describe("ID resolvers", () => {
+    it("resolveNode returns an existing node by ID", () => {
+      const node = demoNodes[0];
+      expect(resolveNode(node.id)).toBe(node);
+    });
+    it("resolveNode returns undefined for an unknown node ID", () => {
+      expect(resolveNode("unknown-node")).toBeUndefined();
+    });
+    it("resolveAccount returns an existing account by ID", () => {
+      const account = demoAccounts[0];
+      expect(resolveAccount(account.id)).toBe(account);
+    });
+    it("resolveAccount returns undefined for an unknown account ID", () => {
+      expect(resolveAccount("unknown-account")).toBeUndefined();
+    });
+    it("resolveEdge returns an existing edge by ID", () => {
+      const edge = demoEdges[0];
+      expect(resolveEdge(edge.id)).toBe(edge);
+    });
+    it("resolveEdge returns undefined for an unknown edge ID", () => {
+      expect(resolveEdge("unknown-edge")).toBeUndefined();
+    });
+  });
+
+  describe("Prerender entries", () => {
+    it("getNodeEntries returns node ID entries", () => {
+      expect(getNodeEntries()).toEqual(
+        demoNodes.map((node) => ({ id: node.id })),
+      );
+    });
+    it("getAccountEntries returns account ID entries", () => {
+      expect(getAccountEntries()).toEqual(
+        demoAccounts.map((account) => ({ id: account.id })),
+      );
+    });
+    it("getEdgeEntries returns edge ID entries", () => {
+      expect(getEdgeEntries()).toEqual(
+        demoEdges.map((edge) => ({ id: edge.id })),
+      );
     });
   });
 });
