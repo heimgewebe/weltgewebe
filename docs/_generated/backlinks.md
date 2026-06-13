@@ -10,14 +10,64 @@ summary: Automatisch generierter Graph der Rückverweise.
 
 Generated automatically. Do not edit.
 
+## .github/workflows/api.yml
+
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-backfill-proof.md
+
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/agent-reading-protocol.md
+- [relates_to] docs/security/agent-write-scope-baseline.md
 
 ## agent-policy.yaml
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/security/agent-write-scope-baseline.md
+
+## apps/api/src/auth/accounts.rs
+
+- [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
+
+## apps/api/src/routes/accounts.rs
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
+
+## apps/api/src/routes/edges.rs
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+
+## apps/api/src/routes/nodes.rs
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+
+## apps/api/src/state.rs
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+
+## apps/api/tests/db_domain_account_write_path.rs
+
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+
+## apps/api/tests/db_domain_backfill.rs
+
+- [relates_to] docs/reports/domain-backfill-proof.md
+
+## audit/impl-registry.yaml
+
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+
+## contracts/agent/task.schema.json
+
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## contracts/domain/edge.schema.json
+
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 
 ## docs/adr/0042-consume-semantah-contracts.md
 
@@ -36,6 +86,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0005-auth.md
 - [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
+- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
@@ -51,6 +102,7 @@ Generated automatically. Do not edit.
 
 ## docs/adr/ADR-0007__auth-persistence-production-db-path.md
 
+- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 - [relates_to] docs/blueprints/auth-persistence-runtime-proof.md
 - [relates_to] docs/blueprints/auth-roadmap.md
 - [relates_to] docs/proofs/sqlx-pgbouncer-session-crud-proof.md
@@ -59,6 +111,12 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-persistence-runtime-proof.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 - [relates_to] docs/reports/auth-status-matrix.md
+- [relates_to] docs/runbooks/db-recovery.md
+
+## docs/adr/ADR-0008__domain-mail-provider-boundaries.md
+
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/runbooks/domain-mail-cutover.md
 
 ## docs/architekturstruktur.md
 
@@ -70,6 +128,8 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/agent-operability-blaupause.md
 
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/blueprints/doc-structure-task-control.md
 - [depends_on] docs/roadmap.md
 
 ## docs/blueprints/auth-persistence-runtime-proof.md
@@ -92,6 +152,37 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/specs/auth-blueprint.md
+
+## docs/blueprints/blueprint-agent-safety-control-layer.md
+
+- [relates_to] docs/claims/README.md
+- [relates_to] docs/security/agent-write-scope-baseline.md
+
+## docs/blueprints/doc-structure-task-control-examples.md
+
+- [relates_to] docs/blueprints/doc-structure-task-control-roadmap.md
+- [relates_to] docs/blueprints/doc-structure-task-control.md
+
+## docs/blueprints/doc-structure-task-control-roadmap.md
+
+- [relates_to] docs/blueprints/doc-structure-task-control-examples.md
+- [relates_to] docs/blueprints/doc-structure-task-control.md
+- [depends_on] docs/roadmap.md
+
+## docs/blueprints/doc-structure-task-control.md
+
+- [depends_on] docs/blueprints/doc-structure-task-control-examples.md
+- [depends_on] docs/blueprints/doc-structure-task-control-roadmap.md
+
+## docs/blueprints/domain-data-postgres-cutover.md
+
+- [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-backfill-proof.md
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-read-path-proof.md
 
 ## docs/blueprints/kartenklarheit-phase6.md
 
@@ -151,14 +242,20 @@ Generated automatically. Do not edit.
 - [relates_to] docs/architekturstruktur.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/reports/optimierungsbericht.md
+- [relates_to] docs/runbooks/db-recovery.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/techstack.md
+
+## docs/deploy/DRIFT_POLICY.md
+
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 
 ## docs/deploy/README.md
 
 - [relates_to] docs/blueprints/weltgewebe.deploy.plan.md
 - [relates_to] docs/deploy/CHANGELOG.md
 - [relates_to] docs/deploy/DRIFT_POLICY.md
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.deployment.md
 - [relates_to] docs/deploy/heimserver.integration.md
@@ -169,6 +266,19 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deployment_governance.md
 - [relates_to] docs/edge/systemd/README.md
 - [relates_to] docs/runbook.md
+
+## docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+
+- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
+- [relates_to] docs/deploy/README.md
+- [relates_to] docs/reports/domain-provider-role-finding.md
+- [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/runbooks/domain-mail-cutover.md
+
+## docs/deploy/heim-first-phase0.md
+
+- [relates_to] docs/blueprints/weltgewebe.config.diff.md
+- [relates_to] docs/blueprints/weltgewebe.deploy.plan.md
 
 ## docs/deploy/heimserver.deployment.md
 
@@ -186,6 +296,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deployment.md
+- [relates_to] docs/runbooks/incident-response.md
 
 ## docs/deployment.md
 
@@ -194,6 +305,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/weltgewebe.deploy.plan.md
 - [relates_to] docs/deploy/DRIFT_POLICY.md
 - [relates_to] docs/deploy/README.md
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/deploy/heimserver.deployment.md
 - [relates_to] docs/deploy/heimserver.integration.md
 - [relates_to] docs/deploy/security.md
@@ -204,6 +316,7 @@ Generated automatically. Do not edit.
 ## docs/deployment_governance.md
 
 - [relates_to] docs/deploy/README.md
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/deployment.md
 
 ## docs/dev/codespaces.md
@@ -250,10 +363,12 @@ Generated automatically. Do not edit.
 ## docs/policies/agent-reading-protocol.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/architecture-critique.md
 - [relates_to] docs/reports/agent-readiness-audit.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [relates_to] docs/reports/optimierungsstatus.md
+- [relates_to] docs/tasks/README.md
 
 ## docs/policies/orientierung.md
 
@@ -299,6 +414,7 @@ Generated automatically. Do not edit.
 ## docs/reports/agent-readiness-audit.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 
 ## docs/reports/auth-persistence-next-step.md
 
@@ -332,6 +448,35 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/passkey-register-verify-prep.md
 - [depends_on] docs/roadmap.md
 
+## docs/reports/domain-account-write-path-proof.md
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-read-path-proof.md
+
+## docs/reports/domain-backfill-proof.md
+
+- [relates_to] docs/reports/domain-read-path-proof.md
+
+## docs/reports/domain-node-write-path-proof.md
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+
+## docs/reports/domain-provider-role-finding.md
+
+- [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+
+## docs/reports/domain-read-path-proof.md
+
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/optimierungsstatus.md
+
 ## docs/reports/map-architekturkritik.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
@@ -348,17 +493,39 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/map-architekturkritik.md
 - [depends_on] docs/roadmap.md
 
+## docs/reports/opt-arc-001-db-proof-matrix.json
+
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+
 ## docs/reports/optimierungsbericht.md
 
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [depends_on] docs/reports/optimierungsstatus.md
 
 ## docs/reports/optimierungsstatus.md
 
+- [relates_to] docs/blueprints/doc-structure-task-control-roadmap.md
+- [relates_to] docs/blueprints/doc-structure-task-control.md
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-read-path-proof.md
 - [relates_to] docs/reports/optimierungsbericht.md
 - [depends_on] docs/roadmap.md
+- [relates_to] docs/specs/list-pagination-api.md
+- [depends_on] docs/tasks/README.md
+- [depends_on] docs/tasks/board.md
 
 ## docs/roadmap.md
 
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/blueprints/kartenklarheit.md
+- [relates_to] docs/blueprints/map-blaupause.md
+- [relates_to] docs/blueprints/ui-blaupause.md
+- [relates_to] docs/blueprints/ui-state-machine.md
+- [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
+- [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 
 ## docs/runbook.md
@@ -366,14 +533,20 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deployment.md
 - [relates_to] docs/runbook.observability.md
 - [relates_to] docs/runbooks/README.md
+- [relates_to] docs/runbooks/db-recovery.md
+- [relates_to] docs/runbooks/incident-response.md
 
 ## docs/runbook.observability.md
 
 - [relates_to] docs/runbook.md
+- [relates_to] docs/runbooks/incident-response.md
 
 ## docs/runbooks/README.md
 
 - [relates_to] docs/runbooks/codespaces-recovery.md
+- [relates_to] docs/runbooks/db-recovery.md
+- [relates_to] docs/runbooks/domain-mail-cutover.md
+- [relates_to] docs/runbooks/incident-response.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 - [relates_to] docs/runbooks/uv-tooling.md
 
@@ -381,6 +554,24 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/dev/codespaces.md
 - [relates_to] docs/runbooks/README.md
+
+## docs/runbooks/db-recovery.md
+
+- [relates_to] docs/runbooks/README.md
+- [relates_to] docs/runbooks/incident-response.md
+
+## docs/runbooks/domain-mail-cutover.md
+
+- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
+- [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/reports/domain-provider-role-finding.md
+- [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/runbooks/README.md
+
+## docs/runbooks/incident-response.md
+
+- [relates_to] docs/runbooks/README.md
+- [relates_to] docs/runbooks/db-recovery.md
 
 ## docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
@@ -416,7 +607,13 @@ Generated automatically. Do not edit.
 
 ## docs/specs/contract.md
 
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/specs/list-pagination-api.md
+
+## docs/specs/list-pagination-api.md
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 
 ## docs/specs/privacy-api.md
 
@@ -425,6 +622,36 @@ Generated automatically. Do not edit.
 ## docs/specs/privacy-ui.md
 
 - [relates_to] docs/specs/privacy-api.md
+
+## docs/tasks/README.md
+
+- [relates_to] docs/tasks/board.md
+
+## docs/tasks/board.md
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-account-write-path-proof.md
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-provider-role-finding.md
+- [relates_to] docs/reports/domain-read-path-proof.md
+- [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/security/agent-write-scope-baseline.md
+- [relates_to] docs/tasks/README.md
+
+## docs/tasks/index.json
+
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
+- [relates_to] docs/blueprints/doc-structure-task-control-examples.md
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/claims/README.md
+- [relates_to] docs/reports/domain-backfill-proof.md
+- [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-write-path-proof.md
+- [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/planning-registration-findings.md
+- [relates_to] docs/tasks/board.md
 
 ## docs/techstack.md
 
@@ -464,5 +691,34 @@ Generated automatically. Do not edit.
 
 ## repo.meta.yaml
 
+- [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/policies/agent-reading-protocol.md
 - [relates_to] docs/policies/architecture-critique.md
+
+## scripts/agent/check_non_ideal_task.py
+
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## scripts/agent/tests/test_check_non_ideal_task.py
+
+- [relates_to] docs/reference/agent-operability-fixture-matrix.md
+
+## scripts/basemap/build-hamburg-pmtiles.sh
+
+- [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
+
+## scripts/docmeta/audit_account_email_uniqueness.py
+
+- [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
+
+## scripts/docmeta/check_planning_registration.py
+
+- [relates_to] docs/reports/planning-registration-findings.md
+
+## scripts/docmeta/validate_claim_registry.py
+
+- [relates_to] docs/claims/README.md
+
+## scripts/guard/basemap-runtime-proof.sh
+
+- [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
