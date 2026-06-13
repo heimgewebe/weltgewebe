@@ -155,37 +155,68 @@ status: active
 
         self.assertEqual(records[0].derived_referenced_by_paths, ("docs/_generated/doc-index.md",))
 
-    def test_exact_path_matching_ignores_old_suffix(self) -> None:
-        self.assertFalse(
-            gen._contains_exact_path_reference(
-                "docs/reports/foo.md.old",
-                "docs/reports/foo.md",
-            )
+    def test_exact_path_matching_accepts_sentence_period(self) -> None:
+        report_path = self._write(
+            "docs/reports/foo.md",
+            """---
+status: active
+---
+# Foo
+""",
         )
+        self._write("docs/tasks/check.md", f"Read {_rel(report_path, self.root)}.\n")
 
-    def test_exact_path_matching_ignores_dash_suffix(self) -> None:
-        self.assertFalse(
-            gen._contains_exact_path_reference(
-                "docs/reports/foo.md-extra",
-                "docs/reports/foo.md",
-            )
-        )
+        records = gen.collect_reports(self._config())
 
-    def test_exact_path_matching_accepts_plain_path(self) -> None:
-        self.assertTrue(
-            gen._contains_exact_path_reference(
-                "docs/reports/foo.md",
-                "docs/reports/foo.md",
-            )
-        )
+        self.assertEqual(records[0].primary_referenced_by_paths, ("docs/tasks/check.md",))
 
-    def test_exact_path_matching_accepts_anchor_suffix(self) -> None:
-        self.assertTrue(
-            gen._contains_exact_path_reference(
-                "docs/reports/foo.md#section",
-                "docs/reports/foo.md",
-            )
-        )
+    def test_exact_path_pattern_accepts_plain_path(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("docs/reports/foo.md"))
+
+    def test_exact_path_pattern_accepts_sentence_period(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("docs/reports/foo.md."))
+
+    def test_exact_path_pattern_accepts_comma_after_path(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("docs/reports/foo.md,"))
+
+    def test_exact_path_pattern_accepts_semicolon_after_path(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("docs/reports/foo.md;"))
+
+    def test_exact_path_pattern_accepts_closing_parenthesis_after_path(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("(docs/reports/foo.md)"))
+
+    def test_exact_path_pattern_accepts_backtick_wrapped_path(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("`docs/reports/foo.md`"))
+
+    def test_exact_path_pattern_accepts_anchor_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertTrue(pattern.search("docs/reports/foo.md#section"))
+
+    def test_exact_path_pattern_rejects_old_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertFalse(pattern.search("docs/reports/foo.md.old"))
+
+    def test_exact_path_pattern_rejects_bak_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertFalse(pattern.search("docs/reports/foo.md.bak"))
+
+    def test_exact_path_pattern_rejects_dash_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertFalse(pattern.search("docs/reports/foo.md-extra"))
+
+    def test_exact_path_pattern_rejects_underscore_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertFalse(pattern.search("docs/reports/foo.md_extra"))
+
+    def test_exact_path_pattern_rejects_slash_suffix(self) -> None:
+        pattern = gen._compile_path_reference_pattern("docs/reports/foo.md")
+        self.assertFalse(pattern.search("docs/reports/foo.md/extra"))
 
     def test_superseded_by_not_absent_for_active_reports(self) -> None:
         self._write(

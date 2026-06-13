@@ -333,11 +333,10 @@ def _extract_relations(raw_relations: object) -> list[RelationEntry]:
     return relations
 
 
-def _contains_exact_path_reference(content: str, report_rel: str) -> bool:
-    pattern = re.compile(
-        rf"(?<![A-Za-z0-9_./-]){re.escape(report_rel)}(?![A-Za-z0-9_./-])"
+def _compile_path_reference_pattern(report_rel: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"(?<![A-Za-z0-9_./-]){re.escape(report_rel)}(?![A-Za-z0-9_/-]|\.[A-Za-z0-9_])"
     )
-    return pattern.search(content) is not None
 
 
 def _iter_reference_files(search_paths: tuple[Path, ...]) -> list[Path]:
@@ -366,6 +365,10 @@ def _build_reference_index(
 ) -> dict[str, tuple[str, ...]]:
     reference_index: defaultdict[str, set[str]] = defaultdict(set)
     report_rels = [_as_rel(path, repo_root) for path in report_paths]
+    patterns = {
+        report_rel: _compile_path_reference_pattern(report_rel)
+        for report_rel in report_rels
+    }
 
     for search_file in search_files:
         if skip_file is not None and search_file == skip_file:
@@ -375,7 +378,7 @@ def _build_reference_index(
         for report_rel in report_rels:
             if search_rel == report_rel:
                 continue
-            if _contains_exact_path_reference(content, report_rel):
+            if report_rel in content and patterns[report_rel].search(content):
                 reference_index[report_rel].add(search_rel)
 
     return {
