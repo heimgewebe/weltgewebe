@@ -44,41 +44,49 @@ OPT-ARC-001 ist nicht einfach „PostgreSQL verwenden“. Es geht um einen
 kontrollierten Persistenz-Cutover für die Domänendaten `nodes`, `edges` und
 `accounts`.
 
-Der aktuell belegte Ist-Zustand ist klar:
+Der belegte Ist-Zustand nach Phase E-C / PR #1196:
 
-- Die Domänendaten werden weiterhin aus JSONL-Dateien geladen und in
-  In-Memory-Caches gehalten.
-- PostgreSQL existiert bereits für Sessions und andere Auth-/Betriebsanteile,
-  ist aber noch nicht die primäre Wahrheit für die Domänendaten.
-- Eine direkte Code-Migration ohne Cutover-Plan erhöht das Risiko von
-  Datenverlust, inkonsistenten Lese-/Schreibpfaden, fehlgeschlagenem Rollback
-  und einer stillen Doppelwahrheit zwischen JSONL und PostgreSQL.
+- PostgreSQL-Domain-Tabellen und Migrationen für nodes, edges und accounts existieren.
+- JSONL bleibt weiterhin Default-Wahrheit, solange kein expliziter Cutover erfolgt.
+- PostgreSQL-Read-Path existiert opt-in hinter Domain-Read-Konfiguration.
+- PostgreSQL-Write-Paths existieren opt-in für:
+  - `POST /accounts`
+  - `PATCH /nodes`
+  - `POST /edges`
+- `APP_CONFIG_PATH` ist fail-closed: eine explizit gesetzte, fehlerhafte Config fällt nicht still auf Defaults zurück.
+- Neue PostgreSQL-Account-Create-Zeilen persistieren eine stabile `webauthn_user_id`; Cache und Reload erhalten dieselbe UUID.
+- Lokale Runtime-Caches bestehen weiter.
+- Produktions-Cutover ist nicht erfolgt.
 
 Diese Blaupause definiert deshalb den Migrationspfad, die Prüfregeln und die
 Rückfalllogik, bevor Produktionscode verändert wird.
 
 ## Verifizierter Ist-Zustand
 
-| Domain | Aktuelle Lesequelle | Aktuelle Schreibquelle | Runtime-Cache | PostgreSQL-Status |
-|---|---|---|---|---|
-| nodes | JSONL über `nodes_path()`, `BufReader::lines`, `serde_json::from_str` | JSONL-Rückschreibung über `patch_node` mit Temp-Datei + Rename | `OrderedCache<Node>` | nicht primär |
-| edges | JSONL über `edges_path()`, `BufReader::lines`, `serde_json::from_str` | kein Schreibpfad im geprüften Code gefunden; aktuell nur JSONL-gestützter Lese-/Ladepfad belegt | `OrderedCache<Edge>` | nicht primär |
-| accounts | `demo.accounts.jsonl` über `accounts_path()` und `BufReader::lines` | gemischt: JSONL-Append über `append_account_line` beim Anlegen; In-Memory-Mutationen in Auth-Flows, u. a. Step-up-E-Mail-Änderung und WebAuthn-User-ID-Writeback über `AccountStore` | `AccountStore` | nicht primär |
+| Domain | Aktuelle Default-Lesequelle | Opt-in PostgreSQL-Lesequelle | Aktuelle Default-Schreibquelle | Opt-in PostgreSQL-Schreibpfad | Runtime-Cache | PostgreSQL-Status |
+|---|---|---|---|---|---|---|
+| nodes | JSONL | vorhanden | JSONL-Patch | `PATCH /nodes` hinter Write-Gate | `OrderedCache<Node>` | Schema, Backfill, Read-Path und opt-in Write-Path vorhanden; nicht Default |
+| edges | JSONL | vorhanden | kein JSONL-Create als Default-Cutover; Edge-Create opt-in PostgreSQL vorhanden | `POST /edges` hinter Write-Gate | `OrderedCache<Edge>` | Schema, Backfill, Read-Path und opt-in Write-Path vorhanden; nicht Default |
+| accounts | JSONL | vorhanden | JSONL-Append als Default; weitere Auth-Mutationen teils weiterhin offen | `POST /accounts` hinter Write-Gate | `AccountStore` | Schema, Backfill, Read-Path und opt-in Create-Write-Path vorhanden; neue PostgreSQL-Creates persistieren `webauthn_user_id`; nicht Default |
 
 Zusatzbefund:
 
-- `apps/api/src/state.rs` enthält weiterhin In-Memory-Caches für `accounts`,
-  `nodes` und `edges` sowie einen optionalen `db_pool`, der für die
-  Domänendaten noch nicht als primäre Persistenzschicht verwendet wird.
-- `apps/api/migrations/` enthält derzeit nur die Session-Migrationen; es gibt
-  dort noch keine PostgreSQL-Tabellen für `nodes`, `edges` oder `accounts`.
-- Account-Schreibpfade sind breiter als der JSONL-Append-Pfad: Neben dem
-  Anlegen von Accounts müssen spätere Auth-Mutationen wie E-Mail-Änderung
-  und WebAuthn-User-ID-Writeback im Cutover explizit erfasst werden.
+- `ApiState` hält weiterhin prozesslokale In-Memory-Caches.
+- PostgreSQL ist für Domain-Daten opt-in verfügbar, aber nicht Default-Wahrheit.
+- Config-Gates müssen explizit gesetzt werden; fehlerhafte `APP_CONFIG_PATH`-Konfigurationen fail-closed.
+- PostgreSQL-Write-Slices sind getrennt implementiert:
+  - E-A Account-Create
+  - E-B Node-Patch
+  - E-C Edge-Create
+- Offene Account-Mutationen bleiben:
+  - Step-up-E-Mail-Persistenz
+  - WebAuthn-Credential-Writeback / Passkey-Cutover
+  - Legacy-Backfill und späteres `NOT NULL` für die WebAuthn-UUID-Spalte
+  - E-Mail-Eindeutigkeit
 
 ## Zielzustand
 
-Der Zielzustand ist ein klarer, einziger primärer Truth-Layer für
+Dieser Zielzustand ist noch nicht erreicht. Er definiert einen klaren, einzigen primären Truth-Layer für
 Domänendaten:
 
 - PostgreSQL ist die primäre Persistenzschicht für `nodes`, `edges` und
@@ -96,8 +104,8 @@ Domänendaten:
 
 ## Vorgeschlagenes Tabellenmodell
 
-Die folgenden Tabellen sind als Zielbild zu verstehen, nicht als fertige SQL-
-Migration.
+Die folgenden Tabellen beschreiben Zielmodell und bereits teilweise implementierten Stand.
+Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 
 ### `domain_nodes`
 
@@ -130,6 +138,9 @@ Migration.
   `target_id`, plus ein zusammengesetzter Index für häufige Join-/Filterpfade.
 - Eindeutigkeitsregeln: mindestens `id`; weitere Constraints nur, wenn sie aus
   dem aktuellen Domänenvertrag ableitbar sind.
+- Edge-Create existiert opt-in.
+- Aktuelle Edge-Create-Semantik nutzt serialisierten PostgreSQL-Pfad mit Tabellenlock, Duplicate-Precheck, Cache-Limit-Check und finalem Insert.
+- Performance-/Limit-Strategie bleibt offen.
 - Migrationsprovenienz: analog zu `domain_nodes`.
 - Foreign-Key-Entscheidung: **ausstehendes explizites Orphan-/Referenz-Audit**.
   Default-Kandidat sind strikte FKs auf `domain_nodes(id)` für `source_id`
@@ -157,7 +168,10 @@ Migration.
   Lese-Aufwand das rechtfertigt; das ist aber eine explizite Folge-Entscheidung.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
-  Step-up-E-Mail-Änderungen und WebAuthn-User-ID-Writeback.
+  Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writebacks. Die Spalte
+  `webauthn_user_id` wird bei neuen PostgreSQL-Account-Create-Zeilen persistiert.
+  Legacy-Fälle ohne diese UUID bleiben vorerst erhalten.
+  Backfill/Audit und späteres `NOT NULL` Constraint sind offen. WebAuthn-Credential-Writeback bleibt offen.
 - Indexe: Primärschlüssel auf `id`, eindeutiger Index auf `email` oder
   `lower(email)`, falls E-Mail-Login oder Lookup das benötigen.
 - Eindeutigkeitsregeln: öffentliche und private Sicht müssen getrennt bleiben;
@@ -167,15 +181,30 @@ Migration.
 
 ## Cutover-Phasen
 
-| Phase | Inhalt | Ergebnis |
+| Phase | Inhalt | Ergebnis / aktueller Stand |
 |---|---|---|
-| A | Blueprint und Statusabgleich | Diese PR: Cutover-Plan, Ist-Befund und Statuspflege; kein Produktionscode, keine Migrationen |
-| B | SQL-Schema-Entwurf und Migrationstests | Tabellen für Nodes, Edges und Accounts; Down-Migrationen wo sinnvoll; kein Runtime-Switch |
-| C | Backfill-/Import-Pfad | Deterministischer JSONL→PostgreSQL-Import mit ID-Erhalt, Zähl- und Checksum-Prüfung, idempotent |
-| D | Read-Path hinter Feature-Flag/Config | PostgreSQL-Lesepfad für alle drei Domänen; JSONL nur noch als explizite Fallback-Option |
-| E | Write-Path-Cutover | Schreibpfade wechseln auf PostgreSQL; Dual-Write nur falls bewusst entschieden und reconciliation-fähig |
-| F | Runtime-Smoke und CI-Beweis | API-Smoke gegen PostgreSQL-Domänendaten; Cursor- und Legacy-Listenverhalten geprüft |
-| G | JSONL-Demontage | JSONL verlässt den primären Runtime-Pfad; Seed-/Export-Artefakte bleiben nur dokumentiert erhalten |
+| A | Blueprint und Statusabgleich | vorhanden; dieser PR aktualisiert den Blueprint auf Phase E-C + PR #1196 |
+| B | SQL-Schema-Entwurf und Migrationstests | implementiert und proof-geführt |
+| C | Backfill-/Import-Pfad | implementiert und proof-geführt |
+| D | Read-Path hinter Config | implementiert opt-in; JSONL bleibt Default |
+| E-A | Account-Create-Write-Path | implementiert opt-in; neue PostgreSQL-Creates persistieren stabile `webauthn_user_id` |
+| E-B | Node-Patch-Write-Path | implementiert opt-in |
+| E-C | Edge-Create-Write-Path | implementiert opt-in |
+| E-Rest | Weitere Account-/Integritätsblocker | offen: Step-up-E-Mail, WebAuthn-Credential-Writeback, E-Mail-Unique, Legacy-Backfill/NOT NULL |
+| F | Runtime-Smoke und Betriebsentscheidung | offen |
+| G | JSONL-Demontage | offen |
+
+## Offene Cutover-Blocker nach Phase E-C
+
+- Produktions-Cutover nicht erfolgt; JSONL bleibt Default-Wahrheit.
+- Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten, dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
+- E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
+- Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
+- WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
+- Legacy-Accounts ohne persistierte WebAuthn-UUID brauchen Backfill/Audit vor späterem `NOT NULL` auf der Spalte.
+- Edge-Create funktioniert opt-in, aber Lock-/Limit-Strategie ist nicht performance-optimiert.
+- Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb ist offen.
+- JSONL-Demontage ist offen.
 
 ## Regeln für die Datenmigration
 
@@ -208,60 +237,22 @@ Migration.
 
 ## CI- und Proof-Anforderungen
 
-Für die späteren Implementierungs-PRs sind konzeptionell folgende Gates
-vorzusehen:
+Bereits vorhandene Proofs:
+- Schema migrations
+- Backfill
+- Read path
+- Account create write path
+- Node patch write path
+- Edge create write path
+- OPT-ARC-001 DB proof matrix guard
 
-- `cargo test --locked` für die betroffenen API-Tests.
-- Migrations-Tests für Schema-Erzeugung und Rückbau.
-- API-Integrations-Tests gegen PostgreSQL.
-- Runtime-Smoke für `/nodes`, `/edges` und `/accounts`.
-- Paritäts-Tests für Cursor-Paginierung und Legacy-Listenverhalten.
-- Account-Write-Paritäts-Tests für Create, Step-up-E-Mail-Änderung und
-  WebAuthn-User-ID-Writeback.
-- Orphan-/Referenz-Audit vor der FK-Entscheidung: Anzahl und IDs
-  potenziell verwaister Edges müssen ausgewiesen werden; das Ergebnis
-  entscheidet zwischen strikten FKs und loser Referenzsemantik mit Guard oder
-  Quarantäne.
-- Doku-/Task-Guards wie `validate_relations`, `docs-relations-guard`,
-  `generate_task_index --check` und `validate_task_index`.
-
-Diese Gates sind hier als Zielvorgabe dokumentiert; sie werden erst in den
-Implementierungsphasen relevant, wenn die jeweilige Infrastruktur existiert.
-
-## Phase-D-Status (2026-06-03)
-
-Phase D ist als optionaler, read-only PostgreSQL-Read-Path hinter explizitem
-Config-Gate implementiert. Die `db_domain_read_path`-Suite ist als lokaler
-PostgreSQL-Proof vorbereitet; der PR-CI-Beleg für
-`db-domain-read-path-proof` steht aus. Mutierende Domänen-Endpunkte werden bei
-`WELTGEWEBE_DOMAIN_READ_SOURCE=postgres` mit `409 CONFLICT` und
-`DOMAIN_READ_SOURCE_READ_ONLY` blockiert, damit keine JSONL-only Writes nach
-einem Neustart durch den PostgreSQL-Read-Path verschwinden. Das ist kein
-Produktions-Cutover: JSONL bleibt im Default-/JSONL-Modus Default-Lesequelle
-und Write-Truth, und Phase E bleibt offen.
-
-## Phase-E-A-Status (2026-06-04)
-
-Phase E-A implementiert einen bewusst engen, opt-in PostgreSQL-Schreibpfad
-**ausschließlich** für die Account-Erzeugung (`POST /accounts`) hinter einem
-eigenen Write-Gate `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE`
-(`domain_account_write_source`, Default `jsonl`). Der Write-Gate ist getrennt
-vom Read-Gate; `postgres` erfordert hart `domain_read_source=postgres` plus
-einen Pool (Config-Load- bzw. Startup-Fehler statt stillem Fallback). Es gibt
-kein Dual-Write: JSONL-Modus schreibt nie PostgreSQL, PostgreSQL-Modus hängt
-nie JSONL an. Der DB-Insert nutzt dasselbe semantische Mapping wie der
-Phase-C-Backfill, sodass eine erzeugte Zeile mit „JSONL-Create + Backfill“
-identisch ist; das In-Memory-`AccountStore` wird erst nach erfolgreichem
-DB-Write aktualisiert, ein fehlgeschlagener Insert mutiert weder Cache noch
-JSONL und liefert bei Primärschlüsselkollision `409 CONFLICT`.
-
-Bewusst **nicht** Teil dieser Slice: `PATCH /nodes`-Write (im Postgres-Read-Modus
-weiterhin blockiert), Edge-Writes, Step-up-E-Mail-Persistenz und
-WebAuthn-User-ID-Writeback. JSONL bleibt Default und wird nicht entfernt. Belege
-und Testmatrix siehe `docs/reports/domain-account-write-path-proof.md`. Der
-PR-CI-Job `db-domain-account-write-path-proof` ist vorbereitet; der
-PR-CI-Beleg steht aus. Das ist kein Produktions-Cutover; OPT-ARC-001 bleibt
-`partial` und Phase E (Rest) bleibt offen.
+Weiter erforderlich:
+- Runtime-smoke für vollständigen PostgreSQL-Domain-Betrieb
+- Multi-instance/cache-coherence proof, falls horizontale Skalierung erlaubt werden soll
+- E-Mail-unique proof
+- Step-up-E-Mail-Persistenz proof
+- WebAuthn-Credential-Writeback proof
+- JSONL-demontage proof
 
 ## Akzeptanzkriterien für OPT-ARC-001
 
@@ -276,31 +267,3 @@ ist:
 - CI belegt Migration und Runtime-Verhalten.
 - Dokumentation und Statusartefakte werden erst nach diesem Beweis auf `done`
   gesetzt.
-
-## Nicht-Ziele (Phase D / Read-Path-Slice)
-
-Diese Liste beschreibt die Read-Path-Slice (Phase D). Der enge Account-Create-
-Schreibpfad ist seit Phase E-A die einzige Ausnahme; alle übrigen Punkte gelten
-weiter (siehe „Phase-E-A-Status“ und `docs/reports/domain-account-write-path-proof.md`).
-
-- Kein vollständiger Write-Path-Cutover (nur `POST /accounts` ist als Phase E-A
-  implementiert).
-- Kein PostgreSQL-Write-Path für Nodes, Edges, Step-up-E-Mail oder
-  WebAuthn-User-ID-Writeback; kein Dual-Write.
-- Keine Entfernung von JSONL.
-- Kein Produktions-Cutover.
-- Kein Startup-Backfill.
-- Keine Endpoint-Contract-Änderungen.
-- Kein Claim, dass OPT-ARC-001 erledigt ist.
-- Kein Auth-Redesign.
-- Kein UI-Redesign.
-- Kein Performance-Benchmark-Claim jenseits dieses Phase-D-Proofs.
-
-## Einordnung
-
-Die Phase-D-Slice ergänzte den optionalen read-only PostgreSQL-Read-Path hinter
-explizitem Config-Gate. Phase E-A ergänzt darauf aufbauend genau einen engen
-PostgreSQL-Schreibpfad für `POST /accounts` hinter einem getrennten Write-Gate.
-Beide markieren OPT-ARC-001 bewusst noch nicht als erledigt. Phase E (Rest)
-bleibt offen; JSONL bleibt im Default-/JSONL-Modus
-Default-Lesequelle und Write-Truth bis Phase E/Cutover.
