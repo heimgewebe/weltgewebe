@@ -818,8 +818,12 @@ pub enum EdgeWriteError {
 
 /// Insert exactly one edge row into `domain_edges` (Phase E-C).
 ///
-/// A primary-key collision surfaces as [`EdgeWriteError::DuplicateId`].
-/// A limit condition surfaces as [`EdgeWriteError::CacheLimitReached`].
+/// The PostgreSQL create path is serialized in a transaction:
+/// table-level lock, duplicate precheck, cache-limit count check, then final
+/// INSERT. Duplicate ids are checked before the cache-limit condition so the
+/// client receives the more precise 409 cause. A unique violation can still
+/// surface as a defensive fallback.
+///
 /// This function performs no in-memory mutation and writes no JSONL.
 pub async fn insert_domain_edge(
     pool: &PgPool,

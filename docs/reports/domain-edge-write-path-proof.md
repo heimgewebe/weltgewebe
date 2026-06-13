@@ -65,8 +65,11 @@ Downgrade auf JSONL.
 - JSONL-Modus: bestehender Pfad unverändert (Persist-Lock,
   `inspect_edge_persistence_for_create`, Boundary-/Limit-/Suffix-Safety,
   `append_edge_line` mit fsync).
-- PostgreSQL-Modus: kein JSONL-Append, keine JSONL-Inspection; plain `INSERT`
-  in `domain_edges`; fehlender Pool → 500, kein JSONL-Fallback.
+- PostgreSQL-Modus: kein JSONL-Append, keine JSONL-Inspection;
+  `insert_domain_edge` nutzt eine serialisierte Transaktion mit
+  `LOCK TABLE domain_edges IN EXCLUSIVE MODE`, Duplicate-Precheck,
+  `COUNT(*) >= MAX_EDGES_CACHE`-Prüfung und finalem Insert. Fehlender Pool → 500,
+  kein JSONL-Fallback.
 - Routing/Auth unverändert: `POST /edges` bleibt `require_write`;
   `GET /edges` und `GET /edges/{id}` bleiben lesbar wie bisher.
 
@@ -92,14 +95,17 @@ DB-Insert); ein fehlgeschriebener Edge landet nie als Phantom im Cache.
 JSONL und PostgreSQL verwenden denselben finalen Edge-Wert für Cache und
 Response; `GET /edges/{id}` liefert den Edge im selben Prozess.
 
-### Duplicate-/Fehler-Mapping
+### Duplicate-/Limit-/Fehler-Mapping
 
-- Duplicate-ID im PostgreSQL-Modus: plain `INSERT` ohne `ON CONFLICT`;
-  Unique-Violation (SQLSTATE 23505 via `is_unique_violation`) → 409
-  „edge id already exists“. Der Phase-C-Backfill-Upsert bleibt ein separater
-  Nicht-Runtime-Pfad.
+- Duplicate-ID im PostgreSQL-Modus: transaktionaler Duplicate-Precheck unter
+  DB-Lock; Duplicate gewinnt vor Cache-Limit und wird als 409
+  „edge id already exists“ gemappt. Eine Unique-Violation bleibt defensiver
+  Fallback.
+- Cache-Limit im PostgreSQL-Modus: `COUNT(*) >= MAX_EDGES_CACHE` innerhalb
+  derselben serialisierten Transaktion; bei erreichtem Limit 409
+  „edge cache limit reached“, kein Insert, kein Cache-Eintrag, kein JSONL.
 - Andere DB-Fehler → 500 „failed to persist edge“.
-- JSONL-Fehlersemantik unverändert (Limit 409, Append-Fehler 500).
+- JSONL-Fehlersemantik unverändert.
 
 ### JSONL-Regressionsschutz
 
@@ -144,4 +150,8 @@ Datei → 409, Cache-after-persist und kein Phantom-Cache bei Persistenzfehler.
 
 - FK-/Orphan-Semantik bleibt offen (Migrationskommentar in `20260531000002_create_domain_edges.up.sql`).
 - JSONL bleibt Default-Lesequelle und Write-Truth bis zum Cutover.
-- Im JSONL-Modus scannt ein erfolgreicher Create die JSONL-Datei weiterhin O(N) (Duplicate-/Limit-Inspection); der PostgreSQL-Modus ersetzt das durch den Unique-Index.
+- Im JSONL-Modus scannt ein erfolgreicher Create die JSONL-Datei weiterhin O(N)
+  (Duplicate-/Limit-Inspection). Der PostgreSQL-Modus vermeidet die
+  JSONL-Datei-Inspection, nutzt aktuell aber einen table-level Lock plus
+  `COUNT(*)` zur Cache-Limit-Sicherung; diese Serialisierung ist
+  korrektheitsorientiert und für Cutover/Skalierung später erneut zu bewerten.
