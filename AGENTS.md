@@ -194,4 +194,4 @@ exit 1
 
 ### 6. Frontend Numeric Validation
 
-When mapping numeric data to frontend visual properties (like weights or opacities) or coordinates (like lat/lon), always sanitize the input by checking `typeof value === 'number' && Number.isFinite(value)` to prevent WebGL/rendering crashes or silent failures caused by `NaN` or `Infinity`.
+When mapping numeric data to frontend visual properties or coordinates, first reject non-finite values with `typeof value === 'number' && Number.isFinite(value)` so `NaN` and `Infinity` cannot reach WebGL/rendering code. Then apply domain-specific bounds before rendering or map movement, for example latitude/longitude ranges for coordinates, `0..1` for opacity, and non-negative bounded values for weights, widths, radii, or sizes.
