@@ -419,10 +419,11 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
 /// JSONL (default): persistence safety checks (file-level duplicate id,
 /// cache-limit materializability) followed by a durable JSONL append (fsync).
 /// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE=postgres`,
-/// requires the PostgreSQL read source): a plain INSERT into `domain_edges`;
-/// a duplicate id surfaces as 409 via the unique violation. No dual-write:
-/// JSONL mode never touches PostgreSQL, PostgreSQL mode never appends JSONL
-/// and never falls back to JSONL.
+/// requires the PostgreSQL read source): PostgreSQL mode uses `insert_domain_edge`: a serialized transaction with a
+/// table-level lock, duplicate precheck, cache-limit count check, and final
+/// INSERT. Duplicate ids still map to 409; a unique violation remains a
+/// defensive fallback. No dual-write: JSONL mode never touches PostgreSQL,
+/// PostgreSQL mode never appends JSONL and never falls back to JSONL.
 pub async fn create_edge(
     State(state): State<ApiState>,
     Json(payload): Json<Value>,
@@ -517,9 +518,10 @@ pub async fn create_edge(
             }
         }
         DomainEdgeWriteSource::Postgres => {
-            // No JSONL inspection and no JSONL append in this mode: the plain
-            // INSERT's primary key makes a duplicate id surface as 409, and a
-            // restart reloads edges from domain_edges.
+            // No JSONL inspection and no JSONL append in this mode. `insert_domain_edge`
+            // serializes the DB write with a table-level lock, duplicate precheck,
+            // cache-limit count check, and final INSERT; unique violation remains only a
+            // defensive fallback.
             //
             // The cache-level duplicate check stays for parity with the JSONL
             // arm: tests may seed the cache directly.
