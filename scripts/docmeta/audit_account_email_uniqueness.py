@@ -31,6 +31,7 @@ def main():
         "records_invalid_json": 0,
         "records_non_object_json": 0,
         "records_missing_id": 0,
+        "records_non_string_id": 0,
         "records_non_string_email": 0,
         "records_trim_changes_value": 0,
         "records_case_changes_value": 0,
@@ -110,7 +111,17 @@ def main():
                             add_finding(item_err)
                             continue
                             
-                        id_str = str(id_val)
+                        if not isinstance(id_val, str):
+                            summary["records_non_string_id"] += 1
+                            item_err = {
+                                "source_path": path_str,
+                                "line_number": line_num,
+                                "classifications": ["non_string_id"]
+                            }
+                            add_finding(item_err)
+                            continue
+                            
+                        id_str = id_val
 
                         item = {
                             "source_path": path_str,
@@ -150,6 +161,10 @@ def main():
                             add_classification(item, "empty_after_trim")
                             summary["records_empty_after_trim"] += 1
                             add_finding(item)
+                            
+                            current_runtime_key = normalize_ascii_lower(raw_email)
+                            item["current_runtime_key"] = current_runtime_key
+                            current_groups[current_runtime_key].append(item)
                             continue
                             
                         add_classification(item, "valid_email")
@@ -184,7 +199,7 @@ def main():
 
     # Process current runtime duplicates
     for key, items in sorted(current_groups.items()):
-        if len(items) > 1:
+        if len(set(i["id"] for i in items)) > 1:
             summary["duplicate_current_runtime_key_groups"] += 1
             sorted_items = sorted(items, key=sort_key)
             for i in sorted_items:
@@ -198,7 +213,7 @@ def main():
 
     # Process proposed constraint duplicates
     for key, items in sorted(proposed_groups.items()):
-        if len(items) > 1:
+        if len(set(i["id"] for i in items)) > 1:
             summary["duplicate_proposed_constraint_key_groups"] += 1
             sorted_items = sorted(items, key=sort_key)
             for i in sorted_items:

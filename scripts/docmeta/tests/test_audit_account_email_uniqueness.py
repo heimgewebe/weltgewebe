@@ -220,3 +220,36 @@ def test_unicode_output_is_not_ascii_escaped_with_duplicate(tmp_path):
     assert result.returncode == 0
     assert "ß" in result.stdout
     assert "İ" in result.stdout
+
+def test_empty_whitespace_grouping(tmp_path):
+    lines = [
+        json.dumps({"id": "1", "email": ""}),
+        json.dumps({"id": "2", "email": ""}),
+        json.dumps({"id": "3", "email": "   "}),
+        json.dumps({"id": "4", "email": "   "}),
+    ]
+    code, out, err = run_script(tmp_path, lines)
+    assert code == 0
+    assert out["summary"]["duplicate_current_runtime_key_groups"] == 2
+    assert out["summary"]["duplicate_proposed_constraint_key_groups"] == 0
+
+def test_same_id_no_duplicate(tmp_path):
+    lines = [
+        json.dumps({"id": "1", "email": "a@example.org"}),
+        json.dumps({"id": "1", "email": "a@example.org"}), # same ID
+    ]
+    code, out, err = run_script(tmp_path, lines, ["--fail-on-duplicates"])
+    assert code == 0 # Should not fail because distinct ID count is 1
+    assert out["summary"]["duplicate_current_runtime_key_groups"] == 0
+    assert out["summary"]["duplicate_proposed_constraint_key_groups"] == 0
+
+def test_non_string_id(tmp_path):
+    lines = [
+        json.dumps({"id": 123, "email": "a@example.org"}),
+        json.dumps({"id": 456, "email": "a@example.org"}),
+    ]
+    code, out, err = run_script(tmp_path, lines, ["--fail-on-duplicates"])
+    assert code == 0
+    assert out["summary"]["records_non_string_id"] == 2
+    assert out["summary"]["duplicate_current_runtime_key_groups"] == 0
+    assert out["summary"]["duplicate_proposed_constraint_key_groups"] == 0

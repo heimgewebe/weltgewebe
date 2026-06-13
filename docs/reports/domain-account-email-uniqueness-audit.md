@@ -35,7 +35,11 @@ Vorbereitung eines Unique-Index auf Account-E-Mails in PostgreSQL durch reproduz
 ## Aktuelle Runtime-Semantik
 
 - Der Index-Schlüssel wird momentan ohne `.trim()` gebildet, lediglich durch ASCII-Lowercase-Konvertierung: `email.to_ascii_lowercase()`.
+- Die Runtime lädt nur String-IDs. Account-Records mit ungültigen (z.B. Integer) IDs werden vom Audit als Fehler (`non_string_id`) markiert und in keine Gruppen aufgenommen, da das PostgreSQL-Mapping nicht-leere String-IDs verlangt.
+- Die "Current-Runtime"-Gruppierung erfasst alle rohen E-Mail-Strings, einschließlich leerer (`""`) oder aus Whitespace bestehender (`"   "`) E-Mails.
+- Die "Proposed-Constraint"-Gruppierung ignoriert E-Mails, die nach dem Trimmen leer sind (`empty_after_trim`).
 - Bei Duplikaten (auch Bulk-Load) gewinnt die lexikographisch kleinste Account-ID.
+- Das Audit-Skript implementiert als Grenze einen distinct-ID-Minimalfix: Es meldet nur dann Duplikat-Konflikte, wenn mehr als eine eindeutige Account-ID beteiligt ist.
 - Das ist als Übergangsverhalten akzeptabel, aber nicht als DB-Cutover-Invariante geeignet.
 - API-Create verhält sich jedoch so: `trim` + `empty` => keine E-Mail (wird nicht gespeichert).
 
@@ -67,6 +71,7 @@ Das Skript `scripts/docmeta/audit_account_email_uniqueness.py` unterscheidet fol
 - `invalid_json`
 - `non_object_json`
 - `missing_id`
+- `non_string_id`
 - `non_string_email`
 
 ## JSONL-Audit
