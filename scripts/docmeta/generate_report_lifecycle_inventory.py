@@ -14,11 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORTS_DIR = REPO_ROOT / "docs" / "reports"
 OUTPUT_PATH = REPO_ROOT / "docs" / "_generated" / "report-lifecycle-inventory.md"
 PRIMARY_REFERENCE_SEARCH_PATHS = (
-    REPO_ROOT / "docs" / "tasks",
-    REPO_ROOT / "docs" / "blueprints",
-    REPO_ROOT / "docs" / "reports",
-    REPO_ROOT / "docs" / "proofs",
-    REPO_ROOT / "docs" / "roadmap.md",
+    REPO_ROOT / "docs",
 )
 DERIVED_REFERENCE_SEARCH_PATHS = (
     REPO_ROOT / "docs" / "_generated",
@@ -339,19 +335,34 @@ def _compile_path_reference_pattern(report_rel: str) -> re.Pattern[str]:
     )
 
 
-def _iter_reference_files(search_paths: tuple[Path, ...]) -> list[Path]:
+def _is_relative_to(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
+def _iter_reference_files(
+    search_paths: tuple[Path, ...],
+    exclude_paths: tuple[Path, ...] = (),
+) -> list[Path]:
     files: list[Path] = []
     seen: set[Path] = set()
     for path in search_paths:
         if not path.exists():
             continue
         if path.is_file():
-            if path not in seen:
+            if path not in seen and not any(
+                _is_relative_to(path, excluded_path) for excluded_path in exclude_paths
+            ):
                 files.append(path)
                 seen.add(path)
             continue
         for file_path in sorted(candidate for candidate in path.rglob("*.md") if candidate.is_file()):
-            if file_path not in seen:
+            if file_path not in seen and not any(
+                _is_relative_to(file_path, excluded_path) for excluded_path in exclude_paths
+            ):
                 files.append(file_path)
                 seen.add(file_path)
     return files
@@ -394,7 +405,10 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
     )
     primary_reference_index = _build_reference_index(
         report_paths=report_paths,
-        search_files=_iter_reference_files(inventory_config.primary_search_paths),
+        search_files=_iter_reference_files(
+            inventory_config.primary_search_paths,
+            exclude_paths=inventory_config.derived_search_paths,
+        ),
         repo_root=inventory_config.repo_root,
     )
     derived_reference_index = _build_reference_index(

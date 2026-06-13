@@ -27,9 +27,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_missing_owner_task | 23 |
 | files_with_review_after | 0 |
 | files_missing_review_after | 23 |
-| files_primary_referenced | 17 |
-| files_primary_unreferenced | 6 |
-| files_with_derived_references | 13 |
+| files_primary_referenced | 18 |
+| files_primary_unreferenced | 5 |
+| files_with_derived_references | 23 |
 | files_with_relations | 22 |
 | files_with_missing_supersession_target | 0 |
 
@@ -46,29 +46,29 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
-| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  | 2 | 2 | 1 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  | 0 | 2 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  | 5 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  | 4 | 3 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  | 3 | 2 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 0 | 2 | 5 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 4 | 2 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 2 | 0 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 0 | 0 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  | 7 | 0 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-backfill-proof.md | report | active |  |  |  |  | 3 | 0 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  | 0 | 0 | 7 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-edge-write-path-proof.md | report | active |  |  |  |  | 3 | 0 | 7 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-node-write-path-proof.md | report | active |  |  |  |  | 5 | 0 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  | 1 | 0 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-read-path-proof.md | report | active |  |  |  |  | 5 | 0 | 5 | lifecycle, owner_task, review_after |  |
-| docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  | 1 | 0 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-architekturkritik.md | report | active |  |  |  |  | 4 | 3 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  | 6 | 3 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsbericht.md | report | active |  |  |  |  | 2 | 2 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  | 16 | 2 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  | 0 | 2 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/planning-registration-findings.md | report | active |  |  |  |  | 1 | 0 | 2 | lifecycle, owner_task, review_after |  |
+| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  | 2 | 3 | 1 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  | 5 | 4 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  | 4 | 4 | 3 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  | 4 | 3 | 6 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 1 | 3 | 5 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 5 | 3 | 3 | lifecycle, owner_task, review_after |  |
+| docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  | 7 | 3 | 6 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-backfill-proof.md | report | active |  |  |  |  | 3 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  | 0 | 3 | 7 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-edge-write-path-proof.md | report | active |  |  |  |  | 3 | 3 | 7 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-node-write-path-proof.md | report | active |  |  |  |  | 5 | 3 | 6 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  | 1 | 3 | 3 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-read-path-proof.md | report | active |  |  |  |  | 5 | 3 | 5 | lifecycle, owner_task, review_after |  |
+| docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/map-architekturkritik.md | report | active |  |  |  |  | 4 | 4 | 2 | lifecycle, owner_task, review_after |  |
+| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  | 6 | 4 | 2 | lifecycle, owner_task, review_after |  |
+| docs/reports/optimierungsbericht.md | report | active |  |  |  |  | 2 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  | 17 | 4 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/planning-registration-findings.md | report | active |  |  |  |  | 1 | 3 | 2 | lifecycle, owner_task, review_after |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -145,11 +145,16 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/optimierungsstatus.md`
 
 - `docs/reports/auth-persistence-runtime-proof.md`
+  - `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
   - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
   - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
   - `docs/reports/auth-persistence-runtime-target-reconciliation.md`
 
+- `docs/reports/auth-persistence-runtime-target-reconciliation.md`
+  - `docs/adr/ADR-0007__auth-persistence-production-db-path.md`
+
 - `docs/reports/auth-status-matrix.md`
+  - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md`
   - `docs/blueprints/auth-roadmap.md`
   - `docs/reports/optimierungsstatus.md`
   - `docs/reports/passkey-register-verify-prep.md`
@@ -227,6 +232,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-read-path-proof.md`
   - `docs/reports/optimierungsbericht.md`
   - `docs/roadmap.md`
+  - `docs/specs/list-pagination-api.md`
   - `docs/tasks/README.md`
   - `docs/tasks/board.md`
 
@@ -237,64 +243,127 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/agent-readiness-audit.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-next-step.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/supersession-map.md`
 
 - `docs/reports/auth-persistence-readiness.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/supersession-map.md`
 
 - `docs/reports/auth-persistence-runtime-proof.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-runtime-target-reconciliation.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-status-matrix.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/cost-report.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/orphans.md`
   - `docs/_generated/relations-analysis.md`
 
+- `docs/reports/domain-account-email-uniqueness-audit.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-account-write-path-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-backfill-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-edge-create-semantics-preflight.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-edge-write-path-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-node-write-path-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-provider-role-finding.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/domain-read-path-proof.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/inwx-zone-reconciliation-plan.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
 - `docs/reports/map-architekturkritik.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/map-status-matrix.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/optimierungsbericht.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/optimierungsstatus.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/relations-analysis.md`
 
 - `docs/reports/passkey-register-verify-prep.md`
   - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+
+- `docs/reports/planning-registration-findings.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
-- `docs/reports/auth-persistence-runtime-target-reconciliation.md`
 - `docs/reports/cost-report.md`
 - `docs/reports/domain-account-email-uniqueness-audit.md`
 - `docs/reports/domain-edge-create-semantics-preflight.md`

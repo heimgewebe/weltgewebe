@@ -13,6 +13,8 @@ class TestGenerateReportLifecycleInventory(unittest.TestCase):
         self._mkdir("docs/tasks")
         self._mkdir("docs/blueprints")
         self._mkdir("docs/proofs")
+        self._mkdir("docs/adr")
+        self._mkdir("docs/specs")
         self._mkdir("docs/_generated")
 
     def tearDown(self) -> None:
@@ -32,13 +34,7 @@ class TestGenerateReportLifecycleInventory(unittest.TestCase):
             repo_root=self.root,
             reports_dir=self.root / "docs" / "reports",
             output_path=self.root / "docs" / "_generated" / "report-lifecycle-inventory.md",
-            primary_search_paths=(
-                self.root / "docs" / "tasks",
-                self.root / "docs" / "blueprints",
-                self.root / "docs" / "reports",
-                self.root / "docs" / "proofs",
-                self.root / "docs" / "roadmap.md",
-            ),
+            primary_search_paths=(self.root / "docs",),
             derived_search_paths=(self.root / "docs" / "_generated",),
         )
 
@@ -154,6 +150,54 @@ status: active
         records = gen.collect_reports(self._config())
 
         self.assertEqual(records[0].derived_referenced_by_paths, ("docs/_generated/doc-index.md",))
+
+    def test_adr_references_count_as_primary_references(self) -> None:
+        report_path = self._write(
+            "docs/reports/auth-status-matrix.md",
+            """---
+id: docs.reports.auth-status-matrix
+title: Auth Status Matrix
+doc_type: reference
+status: active
+---
+# Auth Status Matrix
+""",
+        )
+        self._write(
+            "docs/adr/ADR-0006__auth-magic-link-session-passkey.md",
+            f"See {_rel(report_path, self.root)}.\n",
+        )
+
+        records = gen.collect_reports(self._config())
+
+        self.assertEqual(
+            records[0].primary_referenced_by_paths,
+            ("docs/adr/ADR-0006__auth-magic-link-session-passkey.md",),
+        )
+
+    def test_specs_references_count_as_primary_references(self) -> None:
+        report_path = self._write(
+            "docs/reports/passkey-register-verify-prep.md",
+            """---
+id: docs.reports.passkey
+title: Passkey Prep
+doc_type: report
+status: active
+---
+# Passkey Prep
+""",
+        )
+        self._write(
+            "docs/specs/auth-api.md",
+            f"See {_rel(report_path, self.root)}.\n",
+        )
+
+        records = gen.collect_reports(self._config())
+
+        self.assertEqual(
+            records[0].primary_referenced_by_paths,
+            ("docs/specs/auth-api.md",),
+        )
 
     def test_exact_path_matching_accepts_sentence_period(self) -> None:
         report_path = self._write(
