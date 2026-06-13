@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS domain_accounts_email_normalized_unique;

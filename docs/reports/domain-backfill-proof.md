@@ -121,17 +121,21 @@ No silent continuation: all quarantined lines are counted in `BackfillReport`.
 
 ## Duplicate Email Policy (Accounts)
 
-Phase B intentionally allows duplicate emails in `domain_accounts`.
-The import audits duplicates:
-
+Phase B originally tolerated duplicate emails in `domain_accounts`. TODO 2A
+supersedes that for normalized non-empty emails: the partial unique index
+`domain_accounts_email_normalized_unique` (`lower(btrim(email))`, where the
+trimmed email is non-empty) now rejects a duplicate. The import still audits
+duplicates first:
 
 - Before inserting each account, a `COUNT` query checks for existing rows with
   the same `lower(email)` and a different `id`.
 - If found, the email is added to `report.duplicate_emails`.
-- Import continues regardless.
+- The duplicate row is then rejected by the unique index and skipped
+  (`report.skipped_records`); the import does not abort.
 
-
-This audit is a Phase C diagnostic; enforcement policy is deferred to Phase D/E.
+NULL and after-trim-empty emails remain unaffected. See
+`docs/reports/domain-account-email-uniqueness-audit.md` (TODO 2A) for the
+constraint policy.
 
 
 ## Legacy Account Semantics

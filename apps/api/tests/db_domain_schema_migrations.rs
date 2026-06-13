@@ -249,12 +249,14 @@ async fn domain_schema_basic_insert_and_read() {
     pool.close().await;
 }
 
-/// Verifies that the Phase-B accounts schema currently allows duplicate emails
-/// (case-insensitive) while still providing a case-insensitive lookup index.
-/// NULL emails are also allowed.
+/// Verifies that normalized non-empty account emails are unique
+/// (case-insensitive) via the `domain_accounts_email_normalized_unique` partial
+/// index, while NULL emails remain allowed and the case-insensitive lookup index
+/// stays in place. TODO 2A supersedes the former Phase-B duplicate-email
+/// tolerance for this narrow invariant only.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
-async fn domain_accounts_email_duplicates_are_allowed_in_phase_b() {
+async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
 
@@ -271,20 +273,24 @@ async fn domain_accounts_email_duplicates_are_allowed_in_phase_b() {
     // Insert first account with email
     sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-dup-a', 'ron', 'dup-a', 'ron', 0, 'gast', 'probe@example.com', '{}', '{}')",
+         VALUES ('test-email-dup-a', 'ron', 'dup-a', 'ron', 0, 'gast', 'alpha@example.invalid', '{}', '{}')",
     )
     .execute(&pool)
     .await
     .expect("first insert with email must succeed");
 
-    // Second account with same email (different case) currently also succeeds.
-    sqlx::query(
+    // Second account with the same normalized email (different case) must now be
+    // rejected by the normalized unique index (TODO 2A).
+    let dup_result = sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
-         VALUES ('test-email-dup-b', 'ron', 'dup-b', 'ron', 0, 'gast', 'PROBE@example.com', '{}', '{}')",
+         VALUES ('test-email-dup-b', 'ron', 'dup-b', 'ron', 0, 'gast', 'ALPHA@example.invalid', '{}', '{}')",
     )
     .execute(&pool)
-    .await
-    .expect("duplicate email insert must succeed in Phase B");
+    .await;
+    assert!(
+        dup_result.is_err(),
+        "duplicate normalized email must be rejected by domain_accounts_email_normalized_unique"
+    );
 
     // Two accounts without email (NULL) must both succeed
     sqlx::query(

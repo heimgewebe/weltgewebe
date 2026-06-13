@@ -21,34 +21,24 @@
       "id": "db-domain-schema-migrations-proof",
       "phase": "B",
       "claim": "Domain PostgreSQL schema migrations are executable in CI against PostgreSQL 16.",
-      "state": "ci_proven",
+      "state": "prepared",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-schema-migrations-proof",
       "test": "apps/api/tests/db_domain_schema_migrations.rs",
       "report": null,
-      "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27041187630",
-        "run_id": 27041187630,
-        "commit": "b10076ee743202d3ef07af42a464267c82f4a5c0",
-        "job": "db-domain-schema-migrations-proof"
-      },
+      "ci_evidence": null,
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_schema_migrations -- --include-ignored --test-threads=1"
     },
     {
       "id": "db-domain-backfill-proof",
       "phase": "C",
       "claim": "JSONL-to-PostgreSQL backfill for nodes, edges and accounts is implemented as an opt-in proof path.",
-      "state": "ci_proven",
+      "state": "prepared",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-backfill-proof",
       "test": "apps/api/tests/db_domain_backfill.rs",
       "report": "docs/reports/domain-backfill-proof.md",
-      "ci_evidence": {
-        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27041187630",
-        "run_id": 27041187630,
-        "commit": "b10076ee743202d3ef07af42a464267c82f4a5c0",
-        "job": "db-domain-backfill-proof"
-      },
+      "ci_evidence": null,
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_backfill -- --include-ignored --test-threads=1"
     },
     {

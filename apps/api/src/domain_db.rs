@@ -653,12 +653,23 @@ impl NewDomainAccountRow {
     }
 }
 
+/// Name of the partial unique index that enforces normalized account-email
+/// uniqueness (`lower(btrim(email))` where the trimmed email is non-empty).
+/// Kept in sync with the migration
+/// `20260613000001_domain_accounts_email_normalized_unique`.
+pub const ACCOUNT_EMAIL_UNIQUE_CONSTRAINT: &str = "domain_accounts_email_normalized_unique";
+
 /// Error from the account-create write path.
 #[derive(Debug, thiserror::Error)]
 pub enum AccountWriteError {
     /// The account `id` (primary key) already exists in `domain_accounts`.
     #[error("account id already exists")]
     DuplicateId,
+    /// Another account already persists the same normalized, non-empty email
+    /// (`lower(btrim(email))`), rejected by the partial unique index
+    /// [`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`].
+    #[error("account email already exists")]
+    DuplicateEmail,
     /// The JSONL-shaped record could not be mapped to a row.
     #[error("failed to map account record: {0}")]
     Mapping(#[source] anyhow::Error),
@@ -670,9 +681,13 @@ pub enum AccountWriteError {
 /// Insert exactly one account row into `domain_accounts` (Phase E-A).
 ///
 /// A plain `INSERT` (no `ON CONFLICT`) is used on purpose: account creation must
-/// never silently overwrite an existing account. A primary-key collision surfaces
-/// as [`AccountWriteError::DuplicateId`] so the route can return `409 CONFLICT`.
-/// This function performs no in-memory mutation and writes no JSONL.
+/// never silently overwrite an existing account. The database unique constraints
+/// are the race-safety boundary; a violation is classified by constraint name so
+/// the route can return a precise `409 CONFLICT` cause: a primary-key collision
+/// surfaces as [`AccountWriteError::DuplicateId`], and a normalized-email
+/// collision (the partial unique index [`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`]) as
+/// [`AccountWriteError::DuplicateEmail`]. This function performs no in-memory
+/// mutation and writes no JSONL.
 pub async fn insert_account_from_jsonl_record(
     pool: &PgPool,
     record: &Value,
@@ -714,7 +729,15 @@ pub async fn insert_account_from_jsonl_record(
     match result {
         Ok(_) => Ok(()),
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            Err(AccountWriteError::DuplicateId)
+            // Classify the violated unique constraint by name so the route can
+            // return a precise 409 cause. A normalized-email collision and a
+            // primary-key (account id) collision both map to 409, but carry
+            // distinct error bodies.
+            if db_err.constraint() == Some(ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) {
+                Err(AccountWriteError::DuplicateEmail)
+            } else {
+                Err(AccountWriteError::DuplicateId)
+            }
         }
         Err(e) => Err(AccountWriteError::Database(e)),
     }

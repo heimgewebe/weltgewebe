@@ -275,3 +275,65 @@ PR E2 kann erst nach einem echten Datenlauf gegen relevante JSONL- und/oder
 PostgreSQL-Daten entscheiden, ob der spätere Constraint auf lower(email),
 lower(trim(email)), physisch bereinigten Daten oder einer anderen expliziten
 Policy beruhen soll.
+
+## TODO 2A Ergebnis
+
+Status: umgesetzt. Der unter `ready_for_constraint_design` freigegebene Constraint
+ist jetzt im PostgreSQL-Account-Create-Pfad implementiert.
+
+- Normalisierter Unique-Index eingeführt: `domain_accounts_email_normalized_unique`
+- Normalisierung: `lower(btrim(email))`
+- Partial Predicate: `email IS NOT NULL AND btrim(email) <> ''`
+- Fehlende / NULL / nach Trim leere E-Mails: nicht unique-relevant
+- Duplicate normalisierte nicht-leere E-Mail im PostgreSQL-Create-Pfad: `409 CONFLICT`
+- DB-Constraint ist die Race-Sicherheitsgrenze; die App-Vorabprüfung bleibt nur Komfort
+- Unique-Violation wird über den Constraint-Namen klassifiziert
+  (`AccountWriteError::DuplicateEmail`), keine String-Suche im DB-Fehlertext
+- Kein JSONL-Cutover, kein Step-up-E-Mail-Fix, kein WebAuthn-Credential-Cutover, kein Runtime-Smoke
+
+### Geänderte Artefakte
+
+- Migration up/down: `apps/api/migrations/20260613000001_domain_accounts_email_normalized_unique.up.sql` und `.down.sql`
+- Fehlerklassifikation: `apps/api/src/domain_db.rs` (`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`,
+  `AccountWriteError::DuplicateEmail`, `insert_account_from_jsonl_record`)
+- HTTP-Mapping: `apps/api/src/routes/accounts.rs` (`create_account` → `409 CONFLICT`,
+  generische Meldung ohne E-Mail-, ID- oder Constraint-Leak)
+- Tests: `apps/api/tests/db_domain_account_email_unique.rs`
+
+### Nicht-ASCII-Semantik (bewusste DB-Policy)
+
+PostgreSQL `lower(...)` ist für Nicht-ASCII-Zeichen nicht byte-identisch mit der
+Rust-Semantik `to_ascii_lowercase()` des In-Memory-`AccountStore`. Diese Abweichung
+ist – wie in den Audit-Abschnitten oben bereits dokumentiert – bewusst akzeptiert:
+Der Unique-Index ist die durable Race-Grenze des PostgreSQL-Pfades, der ASCII-Lookup
+bleibt das Laufzeitverhalten des Stores. Es wurde keine zusätzliche
+Normalisierungsspalte eingeführt, um den PR minimal und auf die bestehende
+`domain_accounts`-Tabelle fokussiert zu halten.
+
+### Reload-/Index-Semantik
+
+`load_accounts_from_postgres` ruft `rebuild_email_index` auf, das bei
+gleich-normalisierten E-Mails deterministisch die lexikografisch kleinste Account-ID
+als Owner wählt. Nach dieser Migration kann PostgreSQL keine zwei nicht-leeren,
+gleich-normalisierten E-Mails mehr persistieren. Der lexikografische Tie-Break ist
+damit im PostgreSQL-Pfad unerreichbar und nur noch JSONL-/Legacy-Verhalten, nicht der
+PostgreSQL-Constraint-Zustand.
+
+### Abgelöste Phase-B-Proofs
+
+Der Index löst die frühere Phase-B-Duplikat-Toleranz ausschließlich für
+normalisierte, nicht-leere E-Mails ab. Zwei bislang `ci_proven` Proofs behaupteten
+die Toleranz und wurden gezielt an die neue Invariante angepasst:
+
+- `apps/api/tests/db_domain_schema_migrations.rs`: Der frühere
+  „Duplikate erlaubt"-Test prüft jetzt, dass der normalisierte Unique-Index
+  Case-Varianten ablehnt (NULL bleibt erlaubt).
+- `apps/api/tests/db_domain_backfill.rs`: Der Duplikat-E-Mail-Backfill-Test
+  prüft jetzt Audit + Skip (erste Zeile importiert, Duplikat auditiert und
+  übersprungen) statt „beide importiert".
+
+Beide Proofs (`db-domain-schema-migrations-proof`, `db-domain-backfill-proof`)
+sind in `docs/reports/opt-arc-001-db-proof-matrix.json` auf `prepared`
+zurückgesetzt (kein `ci_evidence`), bis die PR-CI sie gegen den neuen Stand neu
+belegt. Die Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen
+Cutover, kein Dual-Write und keine Runtime-Backfill-Änderung.

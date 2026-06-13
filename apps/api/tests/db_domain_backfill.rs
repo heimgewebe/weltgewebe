@@ -444,7 +444,7 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
                 .await
                 .unwrap_or_else(|e| panic!("existence check failed for account {id}: {e}"));
 
-        sqlx::query(
+        let upsert_result = sqlx::query(
             "INSERT INTO domain_accounts
                  (id, kind, title, mode, radius_m, disabled,
                   location_lat, location_lon,
@@ -489,13 +489,28 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
         .bind(&public_payload)
         .bind(&private_payload)
         .execute(pool)
-        .await
-        .unwrap_or_else(|e| panic!("failed to upsert account {id}: {e}"));
+        .await;
 
-        if already_exists {
-            report.records_updated += 1;
-        } else {
-            report.records_inserted += 1;
+        match upsert_result {
+            Ok(_) => {
+                if already_exists {
+                    report.records_updated += 1;
+                } else {
+                    report.records_inserted += 1;
+                }
+            }
+            // TODO 2A: the normalized account-email unique index rejects a
+            // duplicate non-empty email. The duplicate was already audited
+            // above; skip the row instead of aborting the backfill. Only this
+            // exact constraint is handled here — any other database error still
+            // aborts the import.
+            Err(sqlx::Error::Database(db_err))
+                if db_err.constraint()
+                    == Some(weltgewebe_api::domain_db::ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) =>
+            {
+                report.skipped_records += 1;
+            }
+            Err(e) => panic!("failed to upsert account {id}: {e}"),
         }
     }
 
@@ -904,9 +919,9 @@ async fn domain_backfill_duplicate_id_converges() {
     pool.close().await;
 }
 
-/// Proves that duplicate emails across accounts are audited and reported.
-/// Both accounts are imported (Phase B allows duplicate emails).
-/// The duplicate is flagged in report.duplicate_emails.
+/// Proves that a duplicate normalized account email is audited AND rejected by
+/// the `domain_accounts_email_normalized_unique` index (TODO 2A): the first
+/// account is imported, the duplicate is audited and skipped (not imported).
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_duplicate_account_emails_audited() {
@@ -923,10 +938,15 @@ async fn domain_backfill_duplicate_account_emails_audited() {
 
     let r = import_accounts(&pool, DUPLICATE_EMAIL_ACCOUNT_FIXTURE).await;
 
-    // Both records imported (Phase B policy: duplicate emails are tolerated)
+    // TODO 2A: the normalized unique index rejects the second duplicate-email
+    // account; the first is imported, the duplicate is audited and skipped.
     assert_eq!(r.records_read, 2);
-    assert_eq!(r.records_inserted, 2, "both accounts must be imported");
+    assert_eq!(r.records_inserted, 1, "only the first account is imported");
     assert_eq!(r.records_updated, 0);
+    assert_eq!(
+        r.skipped_records, 1,
+        "the duplicate-email account must be skipped by the unique index"
+    );
 
     // Second account's email is flagged as a duplicate
     assert_eq!(
@@ -939,7 +959,7 @@ async fn domain_backfill_duplicate_account_emails_audited() {
         "dup@proof.example"
     );
 
-    // Both rows are present in the DB
+    // Only the first row is present in the DB (the duplicate was rejected).
     let (count,): (i64,) = sqlx::query_as(
         "SELECT COUNT(*) FROM domain_accounts WHERE id IN \
          ('backfill-proof-account-dup-email-a', 'backfill-proof-account-dup-email-b')",
@@ -948,8 +968,8 @@ async fn domain_backfill_duplicate_account_emails_audited() {
     .await
     .expect("count query failed");
     assert_eq!(
-        count, 2,
-        "Phase B allows both duplicate-email accounts to be imported"
+        count, 1,
+        "the normalized unique index rejects the duplicate-email account"
     );
 
     sqlx::query(
