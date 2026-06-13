@@ -2,6 +2,17 @@ import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
 import { ICONS, MARKER_SIZES } from "$lib/ui/icons";
 
+function hasRenderablePosition(item: MapEntityViewModel): boolean {
+  return (
+    Number.isFinite(item.lat) &&
+    Number.isFinite(item.lon) &&
+    item.lat >= -90 &&
+    item.lat <= 90 &&
+    item.lon >= -180 &&
+    item.lon <= 180
+  );
+}
+
 export class NodesOverlay {
   private activeMarkers = new Map<
     string,
@@ -39,6 +50,15 @@ export class NodesOverlay {
     const currentIds = new Set<string>();
 
     for (const item of points) {
+      if (!hasRenderablePosition(item)) {
+        const existing = this.activeMarkers.get(item.id);
+        if (existing) {
+          existing.cleanup();
+          this.activeMarkers.delete(item.id);
+        }
+        continue;
+      }
+
       currentIds.add(item.id);
       const markerCategory = this.getMarkerCategory(item.type);
       let existing = this.activeMarkers.get(item.id);
