@@ -100,7 +100,7 @@
 
     const lat = item.lat;
     const lon = item.lon;
-    if (map && typeof lat === 'number' && typeof lon === 'number' && !isNaN(lat) && !isNaN(lon)) {
+    if (map && typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon)) {
       const currentZoom = map.getZoom();
       map.flyTo({
         center: [lon, lat],

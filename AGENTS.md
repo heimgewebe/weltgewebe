@@ -191,3 +191,7 @@ exit 1
 ### 5. Zielbild
 
 - Code-Vorschläge aus dieser Umgebung sollen direkt lauffähig, syntaktisch korrekt und CI-tauglich sein – ohne händische Nachkorrekturen von offensichtlichen Tipp- und Syntaxfehlern.
+
+### 6. Frontend Numeric Validation
+
+When mapping numeric data to frontend visual properties (like weights or opacities) or coordinates (like lat/lon), always sanitize the input by checking `typeof value === 'number' && Number.isFinite(value)` to prevent WebGL/rendering crashes or silent failures caused by `NaN` or `Infinity`.
