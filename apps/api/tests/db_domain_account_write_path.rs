@@ -3,10 +3,11 @@
 //! Proves that, when `domain_read_source=postgres` and
 //! `domain_account_write_source=postgres`, `POST /accounts` writes one row into
 //! `domain_accounts`, updates the in-memory `AccountStore`, never appends JSONL,
-//! and that the Phase D loader reconstructs the same public projection.
+//! and that the Phase D loader reconstructs the same public projection and
+//! stable WebAuthn user identity.
 //!
 //! Phase scope: account-create only. Node writes, edge writes, step-up email
-//! persistence and WebAuthn user-id writeback persistence are NOT implemented.
+//! persistence and WebAuthn credential writeback are NOT implemented.
 //!
 //! Run with:
 //!   DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
@@ -16,7 +17,7 @@
 //! Notes:
 //! - Tests are ignored by default to keep offline paths green.
 //! - DATABASE_URL must point to direct PostgreSQL (not PgBouncer at :6432).
-//! - Fixture rows use the `writepath-%` id prefix and are cleaned before/after.
+//! - Fixture rows use a recognizable UUID namespace and are cleaned before/after.
 
 use anyhow::{Context, Result};
 use axum::{
@@ -79,9 +80,9 @@ async fn run_migrations(pool: &PgPool) {
 // validates them), so fixtures use a recognizable UUID namespace that the
 // cleanup matches with LIKE. Operator ids are in-memory only (never written to
 // the database) and need not be UUIDs.
-const SUCCESS_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000001";
 const RADIUS_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000002";
 const DUP_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000003";
+const WEBAUTHN_STABLE_ID: &str = "aaaaaaaa-aaaa-4aaa-8aaa-000000000004";
 
 async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_accounts WHERE id LIKE 'aaaaaaaa-aaaa-4aaa-8aaa-%'")
@@ -208,11 +209,12 @@ fn post_accounts(cookie: &str, json_body: &str) -> Request<body::Body> {
 }
 
 /// Core success proof: account create writes domain_accounts, updates the cache,
-/// does not append JSONL, and reloads with the same public projection.
+/// does not append JSONL, and reloads with the same public projection and
+/// WebAuthn user identity.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
-async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> Result<()> {
+async fn account_create_persists_stable_webauthn_user_id_across_reload() -> Result<()> {
     let pool = connect_pool().await;
     run_migrations(&pool).await;
     clean(&pool).await;
@@ -224,7 +226,7 @@ async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> R
 
     let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-admin-1").await?;
 
-    let id = SUCCESS_ID;
+    let id = WEBAUTHN_STABLE_ID;
     let body = format!(
         r#"{{"id":"{id}","title":"Write Path","location":{{"lat":53.55,"lon":9.99}},"radius_m":0,"summary":"Hello","tags":["a","b"],"role":"weber"}}"#
     );
@@ -267,6 +269,15 @@ async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> R
     assert!((lat.unwrap() - 53.55).abs() < 1e-9);
     assert!((lon.unwrap() - 9.99).abs() < 1e-9);
 
+    let db_webauthn_user_id: Option<String> =
+        sqlx::query_scalar("SELECT webauthn_user_id::text FROM domain_accounts WHERE id = $1")
+            .bind(id)
+            .fetch_one(&pool)
+            .await?;
+    let db_webauthn_user_id =
+        db_webauthn_user_id.expect("new account must persist webauthn_user_id");
+    let db_uuid = uuid::Uuid::parse_str(&db_webauthn_user_id)?;
+
     // JSONB payloads: public carries summary+tags; private mirrors backfill mode.
     let (public_text, private_text): (String, String) = sqlx::query_as(
         "SELECT public_payload::text, private_payload::text FROM domain_accounts WHERE id = $1",
@@ -305,6 +316,7 @@ async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> R
         assert_eq!(internal.public.title, "Write Path");
         assert_eq!(internal.public.mode, AccountMode::Verortet);
         assert_eq!(internal.role, Role::Weber);
+        assert_eq!(internal.webauthn_user_id, db_uuid);
     }
 
     // Loader reload reconstructs the same public projection.
@@ -316,6 +328,7 @@ async fn postgres_account_create_writes_domain_accounts_and_updates_cache() -> R
     assert_eq!(internal.public.mode, AccountMode::Verortet);
     assert_eq!(internal.public.radius_m, 0);
     assert_eq!(internal.public.summary.as_deref(), Some("Hello"));
+    assert_eq!(internal.webauthn_user_id, db_uuid);
     let pos = internal
         .public
         .public_pos

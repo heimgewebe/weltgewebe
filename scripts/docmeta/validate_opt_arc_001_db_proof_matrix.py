@@ -84,7 +84,9 @@ PROOF_REQUIRED_FIELDS = frozenset({
 # write path for POST /edges); the remaining non-goals stay binding.
 REQUIRED_NON_GOALS = (
     "step_up_email_persistence",
-    "webauthn_user_id_writeback",
+    "webauthn_credential_writeback",
+    "legacy_webauthn_user_id_backfill",
+    "webauthn_user_id_not_null",
     "jsonl_removal",
     "production_cutover",
     "dual_write",
