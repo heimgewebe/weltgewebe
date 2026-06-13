@@ -10,7 +10,7 @@ summary: >
   Proof-Bericht für OPT-ARC-001 Phase E-A: optionaler PostgreSQL-Schreibpfad
   ausschließlich für die Account-Erzeugung (`POST /accounts`) hinter explizitem
   Write-Gate. JSONL bleibt Default; kein Dual-Write; Knoten-, Kanten-, Step-up-
-  E-Mail- und WebAuthn-Writeback-Persistenz bleiben unverändert.
+  E-Mail- und WebAuthn-Credential-Persistenz bleiben unverändert.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -55,8 +55,9 @@ Geltende Grenzen:
   blockiert).
 - Kein Edge-Write-Path.
 - Keine Step-up-E-Mail-Persistenz nach PostgreSQL.
-- Kein WebAuthn-User-ID-Writeback nach PostgreSQL (Account-Create persistiert
-  `webauthn_user_id` als NULL, identisch zum bisherigen JSONL-Verhalten).
+- Kein WebAuthn-Credential-Writeback nach PostgreSQL.
+- Kein Backfill und kein `NOT NULL` für bestehende Accounts mit
+  `webauthn_user_id IS NULL`.
 - Keine Entfernung von JSONL.
 - Kein Startup-Backfill.
 - Kein Produktions-Cutover. OPT-ARC-001 bleibt `partial`.
@@ -116,11 +117,17 @@ Geltende Grenzen:
 
 `id`, `kind` (aus `type`, hier `garnrolle`), `title`, `mode` (`verortet`),
 `radius_m`, `disabled` (`false`), `location_lat`/`location_lon` (private
-Residenz), `role`, `email` (optional), `webauthn_user_id` (NULL — kein
-Writeback), `created_at`/`updated_at` (NULL — wie JSONL-Create + Backfill),
+Residenz), `role`, `email` (optional), `webauthn_user_id` (beim Account-Create
+neu erzeugte UUID), `created_at`/`updated_at` (NULL — wie JSONL-Create +
+Backfill),
 `public_payload` (`summary`, `tags`), `private_payload` (spiegelt den
 Backfill: explizites `mode`; bei Legacy-Eingaben zusätzlich `visibility`,
 `suppress_public_pos`, `ron_flag`).
+
+Neue PostgreSQL-Account-Create-Zeilen persistieren damit eine stabile
+`webauthn_user_id`, die der lokale Cache unverändert übernimmt und die
+`load_accounts_from_postgres` nach einem Reload wiederherstellt. Bestehende
+NULL-Werte bleiben über den Legacy-Fallback unterstützt.
 
 `public_pos` ist **keine** gespeicherte Spalte: Sie wird beim Lesen
 deterministisch aus `location_lat`/`location_lon`/`radius_m`/`id` berechnet.
@@ -151,10 +158,10 @@ DATABASE_URL=postgres://welt:gewebe@localhost:5432/weltgewebe \
 
 Testfälle:
 
-- `postgres_account_create_writes_domain_accounts_and_updates_cache`:
+- `account_create_persists_stable_webauthn_user_id_across_reload`:
   Erfolg (201), korrekte Spalten/Payloads, Cache enthält den Account sofort,
-  kein JSONL-Append, `load_accounts_from_postgres` rekonstruiert dieselbe
-  öffentliche Projektion.
+  kein JSONL-Append; DB, Cache und `load_accounts_from_postgres` verwenden
+  dieselbe parsebare `webauthn_user_id`.
 - `postgres_account_create_radius_persists_obfuscated_public_pos`:
   Bei `radius_m>0` speichert die DB die reale Residenz und den Radius, die
   Antwort ist gejittert, der Loader reproduziert exakt denselben Jitter.
@@ -183,7 +190,7 @@ erhält Datenschutz über `visibility=private` und bestehende Loader-Semantik
 | D | Read-Path-Switch (read-only, opt-in) | implementiert; CI-Beleg ausstehend |
 | E-A | Account-Create-Write-Path (diese Slice) | implementiert; CI-Beleg ausstehend |
 | E-B | Node-Patch-Write-Path (`PATCH /nodes`) | implementiert; CI-Beleg ausstehend |
-| E (Rest) | Edge-Writes, Step-up-E-Mail-Persistenz, WebAuthn-User-ID-Writeback | offen |
+| E (Rest) | Step-up-E-Mail-Persistenz, WebAuthn-Credential-Writeback, Passkey-Cutover sowie Backfill/Audit und späteres `NOT NULL` für Legacy-NULL-Werte | offen |
 | F | Runtime-Smoke und CI-Beweis | offen |
 | G | JSONL-Demontage | offen |
 

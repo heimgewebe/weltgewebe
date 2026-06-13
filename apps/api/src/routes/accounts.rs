@@ -429,8 +429,8 @@ async fn append_account_line(record: &Value) -> std::io::Result<()> {
 /// must be bootstrapped via `scripts/dev/bootstrap-first-account.sh`; all
 /// subsequent Admins can be created through this endpoint by an existing Admin.
 ///
-/// Persists by appending to the JSONL store (durable across restart) and
-/// inserts into the in-memory store (immediate visibility for GET /accounts).
+/// Persists to the configured account-create write source and inserts into the
+/// in-memory store (immediate visibility for GET /accounts).
 pub async fn create_account(
     State(state): State<ApiState>,
     Extension(ctx): Extension<AuthContext>,
@@ -530,6 +530,7 @@ pub async fn create_account(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
+    let webauthn_user_id = Uuid::new_v4();
 
     // --- Build canonical JSONL record (matches contract after key projection;
     // role/email are operational fields read by the API) ---
@@ -550,6 +551,10 @@ pub async fn create_account(
     if let Some(e) = &email {
         record.insert("email".into(), json!(e));
     }
+    record.insert(
+        "webauthn_user_id".into(),
+        Value::String(webauthn_user_id.to_string()),
+    );
     let record = Value::Object(record);
 
     let public = map_json_to_public_account(&record).ok_or_else(|| {
@@ -626,7 +631,7 @@ pub async fn create_account(
             public: public.clone(),
             role,
             email,
-            webauthn_user_id: Uuid::new_v4(),
+            webauthn_user_id,
         });
     }
 
