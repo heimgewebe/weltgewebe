@@ -46,14 +46,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |
 | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
-| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  | 2 | 3 | 1 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  | 5 | 4 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  | 4 | 4 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  | 3 | 3 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 0 | 3 | 5 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 4 | 3 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after |  |
+| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  | 2 | 2 | 1 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  | 0 | 2 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  | 5 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  | 4 | 3 | 3 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  | 3 | 2 | 6 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 0 | 2 | 5 | lifecycle, owner_task, review_after |  |
+| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 4 | 2 | 3 | lifecycle, owner_task, review_after |  |
+| docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 2 | 0 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 0 | 0 | 4 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  | 7 | 0 | 6 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-backfill-proof.md | report | active |  |  |  |  | 3 | 0 | 4 | lifecycle, owner_task, review_after |  |
@@ -63,11 +63,11 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  | 1 | 0 | 3 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-read-path-proof.md | report | active |  |  |  |  | 5 | 0 | 5 | lifecycle, owner_task, review_after |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  | 1 | 0 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-architekturkritik.md | report | active |  |  |  |  | 4 | 4 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  | 6 | 4 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsbericht.md | report | active |  |  |  |  | 2 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  | 16 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/map-architekturkritik.md | report | active |  |  |  |  | 4 | 3 | 2 | lifecycle, owner_task, review_after |  |
+| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  | 6 | 3 | 2 | lifecycle, owner_task, review_after |  |
+| docs/reports/optimierungsbericht.md | report | active |  |  |  |  | 2 | 2 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  | 16 | 2 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  | 0 | 2 | 4 | lifecycle, owner_task, review_after |  |
 | docs/reports/planning-registration-findings.md | report | active |  |  |  |  | 1 | 0 | 2 | lifecycle, owner_task, review_after |  |
 
 ## Absent Core Lifecycle Metadata
@@ -237,71 +237,58 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/agent-readiness-audit.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-next-step.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/supersession-map.md`
 
 - `docs/reports/auth-persistence-readiness.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/supersession-map.md`
 
 - `docs/reports/auth-persistence-runtime-proof.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-persistence-runtime-target-reconciliation.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/auth-status-matrix.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/cost-report.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/orphans.md`
   - `docs/_generated/relations-analysis.md`
 
 - `docs/reports/map-architekturkritik.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/map-status-matrix.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/impl-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/optimierungsbericht.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/optimierungsstatus.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 - `docs/reports/passkey-register-verify-prep.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
 
 ## Primary Unreferenced Reports

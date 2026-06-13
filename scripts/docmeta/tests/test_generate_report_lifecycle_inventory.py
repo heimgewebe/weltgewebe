@@ -259,6 +259,26 @@ review_after: 2026-12-01
 
         self.assertTrue(record.missing_supersession_target)
 
+    def test_terminal_status_matching_is_case_insensitive(self) -> None:
+        self._write(
+            "docs/reports/terminal.md",
+            """---
+id: docs.reports.terminal
+title: Terminal
+doc_type: report
+status: Superseded
+lifecycle: observed
+owner_task: docs/tasks/terminal.md
+review_after: 2026-12-01
+---
+# Terminal
+""",
+        )
+
+        record = gen.collect_reports(self._config())[0]
+
+        self.assertTrue(record.missing_supersession_target)
+
     def test_relations_are_rendered_in_markdown_output(self) -> None:
         self._write(
             "docs/reports/rel.md",
@@ -280,6 +300,27 @@ relations:
         self.assertIn("## Relations", markdown)
         self.assertIn("relates_to", markdown)
         self.assertIn("docs/reports/other.md", markdown)
+
+    def test_relation_target_pipe_is_escaped_in_markdown_table(self) -> None:
+        self._write(
+            "docs/reports/rel.md",
+            """---
+id: docs.reports.rel
+title: Relation
+doc_type: report
+status: active
+relations:
+  - type: relates_to
+    target: docs/reports/other|broken.md
+---
+# Relation
+""",
+        )
+
+        markdown = gen.render_inventory(gen.collect_reports(self._config()))
+
+        self.assertIn("docs/reports/other&#124;broken.md", markdown)
+        self.assertNotIn("docs/reports/other|broken.md", markdown)
 
     def test_doc_type_distribution_is_rendered(self) -> None:
         self._write("docs/reports/a.md", "---\ndoc_type: report\nstatus: active\n---\n")

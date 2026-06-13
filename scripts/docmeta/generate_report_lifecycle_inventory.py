@@ -417,6 +417,7 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
             sorted({relation.target for relation in relations if relation.target})
         )
         status = _string_value(frontmatter.get("status"))
+        normalized_status = status.lower()
         superseded_by = _string_value(frontmatter.get("superseded_by"))
         records.append(
             ReportRecord(
@@ -438,7 +439,7 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
                 absent_core_lifecycle_fields=tuple(
                     field for field in CORE_LIFECYCLE_FIELDS if not _string_value(frontmatter.get(field))
                 ),
-                missing_supersession_target=status in TERMINAL_STATUSES and not superseded_by,
+                missing_supersession_target=normalized_status in TERMINAL_STATUSES and not superseded_by,
                 frontmatter_parse_warning=warning,
             )
         )
