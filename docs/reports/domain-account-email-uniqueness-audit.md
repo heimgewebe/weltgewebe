@@ -54,7 +54,7 @@ Vorbereitung eines Unique-Index auf Account-E-Mails in PostgreSQL durch reproduz
 1. **Trim-Verhalten**: API-Create behält die Logik `trim + empty => keine E-Mail` bei.
 2. **Index-Key**: Persistierte nicht-leere E-Mails werden für spätere Eindeutigkeit ASCII-lowercase verglichen.
 3. **Datenbank-Constraint**: Für den späteren DB-Index ist `lower(email)` nur dann ausreichend, wenn gespeicherte Legacy-Werte bereits getrimmt sind. Falls Legacy-Whitespace möglich ist, muss vor E2 entweder die Datenbank bereinigt werden, oder der Index muss als `lower(btrim(email))` mit passender Policy definiert werden.
-4. **Fehlende Werte**: E-Mails, die nach dem Trimmen leer sind, oder als `null` / abwesend in JSONL stehen, werden ignoriert und unterliegen nicht der Eindeutigkeitsprüfung.
+4. **Fehlende Werte**: Für die vorgeschlagene spätere Constraint-Policy werden E-Mails ignoriert, die nach dem Trimmen leer sind. Die Current-Runtime-Gruppierung bleibt davon unberührt und erfasst rohe String-E-Mails inklusive leerer und Whitespace-Werte.
 
 ## Konfliktklassen
 

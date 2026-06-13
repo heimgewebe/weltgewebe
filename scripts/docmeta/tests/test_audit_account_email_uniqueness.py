@@ -180,6 +180,7 @@ def test_missing_id_and_non_string_email(tmp_path):
     
     non_strings = [f for f in findings if "non_string_email" in f["classifications"]]
     assert len(non_strings) == 2
+
 def test_non_object_json(tmp_path):
     lines = [
         json.dumps(["not", "an", "object"]),
@@ -203,8 +204,6 @@ def test_unicode_output_is_not_ascii_escaped_with_duplicate(tmp_path):
         encoding="utf-8",
     )
 
-    import subprocess
-    import sys
     result = subprocess.run(
         [
             sys.executable,
@@ -233,6 +232,14 @@ def test_empty_whitespace_grouping(tmp_path):
     assert out["summary"]["duplicate_current_runtime_key_groups"] == 2
     assert out["summary"]["duplicate_proposed_constraint_key_groups"] == 0
 
+    current_keys = {
+        group["key"]
+        for group in out["duplicate_groups"]["current_runtime_key"]
+    }
+    assert "" in current_keys
+    assert "   " in current_keys
+    assert out["duplicate_groups"]["proposed_constraint_key"] == []
+
 def test_same_id_no_duplicate(tmp_path):
     lines = [
         json.dumps({"id": "1", "email": "a@example.org"}),
@@ -253,3 +260,9 @@ def test_non_string_id(tmp_path):
     assert out["summary"]["records_non_string_id"] == 2
     assert out["summary"]["duplicate_current_runtime_key_groups"] == 0
     assert out["summary"]["duplicate_proposed_constraint_key_groups"] == 0
+    
+    non_string_id_findings = [
+        f for f in out["findings"]
+        if "non_string_id" in f.get("classifications", [])
+    ]
+    assert len(non_string_id_findings) == 2
