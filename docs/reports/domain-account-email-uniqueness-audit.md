@@ -226,7 +226,7 @@ Begründung:
 
 ## Runtime-Audit-Lauf 2026-06-13
 
-### Quellen
+### Runtime-Quellen
 
 - PostgreSQL: ausgeführt auf dem Heimserver im Docker-Compose-Projekt `weltgewebe`, Service `db`, Tabelle `public.domain_accounts`.
 - JSONL: keine Runtime-JSONL-Quelle auditiert; repo-lokal wurde nur `.gewebe/in/demo.accounts.jsonl` als `demo_or_fixture` gefunden.
@@ -234,7 +234,7 @@ Begründung:
   - PostgreSQL target: `weltgewebe` Compose-Projekt, Service `db`; konkrete Datenbank-URL nicht dokumentiert.
   - JSONL runtime source: n/a.
 
-### PostgreSQL-Aggregate
+### Runtime-PostgreSQL-Aggregate
 
 | Metrik | Wert |
 | --- | ---: |
@@ -246,17 +246,17 @@ Begründung:
 | empty_email_count | 0 |
 | whitespace_changed_count | 0 |
 
-### Redaktionsregel
+### Runtime-Redaktionsregel
 
 Dieser Runtime-Audit-Abschnitt enthält keine echten E-Mail-Adressen, keine Account-IDs, keine Account-Zeilen und keine Datenbank-URL. Dokumentiert werden nur aggregierte Counts und ein redigiertes Ausführungsziel.
 
-### Policy-Einschätzung
+### Runtime-Policy-Einschätzung
 
 Der aktuelle PostgreSQL-Runtime-Bestand enthält keine Account-Records. Damit liegen im aktuellen DB-Zustand keine vorhandenen E-Mail-Kollisionen vor, die einen späteren Unique-Constraint blockieren würden. Das ist keine Aussage über frühere oder externe Legacy-Datenbestände; es belegt nur den aktuell auditierten Runtime-Zustand auf dem Heimserver.
 
 Für TODO 2 ist damit der Constraint-Design-Schritt freigegeben. Wegen der bereits dokumentierten Trim-Frage bleibt `lower(btrim(email))` gegenüber `lower(email)` der robustere Constraint-Kandidat, sofern die endgültige Policy leere bzw. nach Trim leere E-Mails weiterhin ignoriert.
 
-### Entscheidung für nächsten Schritt
+### Runtime-Entscheidung für nächsten Schritt
 
 Status: `ready_for_constraint_design`
 
