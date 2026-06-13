@@ -197,7 +197,7 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 | Phase | Inhalt | Ergebnis / aktueller Stand |
 |---|---|---|
 | A | Blueprint und Statusabgleich | vorhanden; dieser PR aktualisiert den Blueprint auf Phase E-C + PR #1196 |
-| B | SQL-Schema-Entwurf und Migrationstests | implementiert und proof-geführt |
+| B | SQL-Schema-Entwurf und Migrationstests | implementiert; Edge-FK-/Orphan-Gate offen |
 | C | Backfill-/Import-Pfad | implementiert und proof-geführt |
 | D | Read-Path hinter Config | implementiert opt-in; JSONL bleibt Default |
 | E-A | Account-Create-Write-Path | implementiert opt-in; neue PostgreSQL-Creates persistieren stabile `webauthn_user_id` |
@@ -210,6 +210,13 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 ## Offene Cutover-Blocker nach Phase E-C
 
 - Produktions-Cutover nicht erfolgt; JSONL bleibt Default-Wahrheit.
+- PostgreSQL-vs-JSONL-Listenparität ist offen: Legacy-`offset`/`limit`
+  und Cursor-Paginierung müssen vor dem Cutover gegen den bestehenden
+  API-Vertrag geprüft werden.
+- Edge-Orphan-/Referenz-Audit ist offen: Vor Produktions-Cutover muss
+  entschieden werden, ob `domain_edges.source_id`/`target_id` strikte
+  Foreign Keys auf `domain_nodes(id)` erhalten oder ob eine lose
+  Referenzsemantik mit Guard/Quarantäne-Report bewusst akzeptiert wird.
 - Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten,
   dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
 - E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
@@ -265,6 +272,14 @@ Bereits vorhandene Proofs:
 
 Weiter erforderlich:
 
+- PostgreSQL-vs-JSONL-Listenparitäts-Proof:
+  - `/nodes` und `/edges` müssen im Legacy-Modus die bisherige
+    Einfüge-/Dateireihenfolge bewahren.
+  - `/accounts` muss im Legacy-Modus die bisherige ID-Sortierung bewahren.
+  - Der Cursor-Modus muss für alle drei Domänen weiterhin stabil nach ID
+    sortieren.
+- Edge-Orphan-/Referenz-Audit-Proof vor der finalen Entscheidung zwischen
+  Foreign Keys und bewusst loser Referenzsemantik.
 - Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb
 - Multi-Instance-/Cache-Kohärenz-Proof, falls horizontale Skalierung
   erlaubt werden soll
@@ -286,3 +301,7 @@ ist:
 - CI belegt Migration und Runtime-Verhalten.
 - Dokumentation und Statusartefakte werden erst nach diesem Beweis auf `done`
   gesetzt.
+- PostgreSQL-vs-JSONL-Listenparität ist für Legacy- und Cursor-Modus
+  belegt.
+- Edge-Referenzintegrität ist durch Foreign Keys oder eine bewusst
+  dokumentierte lose Referenzsemantik mit Guard/Quarantäne abgesichert.
