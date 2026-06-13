@@ -9,18 +9,38 @@ class TestGenerateReportLifecycleInventory(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
-        (self.root / "docs" / "reports").mkdir(parents=True, exist_ok=True)
-        (self.root / "docs" / "tasks").mkdir(parents=True, exist_ok=True)
-        (self.root / "docs" / "_generated").mkdir(parents=True, exist_ok=True)
+        self._mkdir("docs/reports")
+        self._mkdir("docs/tasks")
+        self._mkdir("docs/blueprints")
+        self._mkdir("docs/proofs")
+        self._mkdir("docs/_generated")
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
+
+    def _mkdir(self, rel_path: str) -> None:
+        (self.root / rel_path).mkdir(parents=True, exist_ok=True)
 
     def _write(self, rel_path: str, content: str) -> Path:
         path = self.root / rel_path
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
         return path
+
+    def _config(self) -> gen.InventoryConfig:
+        return gen.InventoryConfig(
+            repo_root=self.root,
+            reports_dir=self.root / "docs" / "reports",
+            output_path=self.root / "docs" / "_generated" / "report-lifecycle-inventory.md",
+            primary_search_paths=(
+                self.root / "docs" / "tasks",
+                self.root / "docs" / "blueprints",
+                self.root / "docs" / "reports",
+                self.root / "docs" / "proofs",
+                self.root / "docs" / "roadmap.md",
+            ),
+            derived_search_paths=(self.root / "docs" / "_generated",),
+        )
 
     def test_collect_reports_parses_complete_frontmatter(self) -> None:
         report_path = self._write(
@@ -43,8 +63,7 @@ relations:
         )
         self._write("docs/tasks/alpha.md", f"Uses {_rel(report_path, self.root)}\n")
 
-        with temporary_repo_root(self.root):
-            records = gen.collect_reports(self.root / "docs" / "reports")
+        records = gen.collect_reports(self._config())
 
         self.assertEqual(len(records), 1)
         record = records[0]
@@ -58,22 +77,23 @@ relations:
         self.assertEqual(record.relations_count, 1)
         self.assertEqual(record.relation_types, ("relates_to",))
         self.assertEqual(record.relation_targets, ("docs/reports/beta.md",))
-        self.assertEqual(record.referenced_by_paths, ("docs/tasks/alpha.md",))
-        self.assertEqual(record.missing_lifecycle_fields, ())
+        self.assertEqual(record.primary_referenced_by_paths, ("docs/tasks/alpha.md",))
+        self.assertEqual(record.derived_referenced_by_paths, ())
+        self.assertEqual(record.absent_core_lifecycle_fields, ())
+        self.assertFalse(record.missing_supersession_target)
         self.assertEqual(record.frontmatter_parse_warning, "")
 
     def test_collect_reports_keeps_report_without_frontmatter(self) -> None:
         self._write("docs/reports/no-frontmatter.md", "# No frontmatter\n")
 
-        with temporary_repo_root(self.root):
-            records = gen.collect_reports(self.root / "docs" / "reports")
+        records = gen.collect_reports(self._config())
 
         self.assertEqual(len(records), 1)
         record = records[0]
         self.assertFalse(record.has_frontmatter)
         self.assertEqual(record.frontmatter_parse_warning, "frontmatter missing")
 
-    def test_missing_lifecycle_fields_are_diagnostic_only(self) -> None:
+    def test_missing_core_lifecycle_metadata_is_diagnostic_only(self) -> None:
         self._write(
             "docs/reports/partial.md",
             """---
@@ -86,17 +106,19 @@ status: active
 """,
         )
 
-        with temporary_repo_root(self.root):
-            records = gen.collect_reports(self.root / "docs" / "reports")
-            markdown = gen.render_inventory(records)
+        records = gen.collect_reports(self._config())
+        markdown = gen.render_inventory(records)
 
-        self.assertEqual(records[0].missing_lifecycle_fields, ("lifecycle", "owner_task", "review_after", "superseded_by"))
+        self.assertEqual(
+            records[0].absent_core_lifecycle_fields,
+            ("lifecycle", "owner_task", "review_after"),
+        )
         self.assertIn("descriptive only", markdown)
-        self.assertIn("not policy violations", markdown)
         self.assertNotIn("invalid", markdown.lower())
         self.assertNotIn("must fix", markdown.lower())
+        self.assertNotIn("violation", markdown.lower())
 
-    def test_reference_search_finds_exact_report_paths(self) -> None:
+    def test_generated_references_do_not_count_as_primary_references(self) -> None:
         report_path = self._write(
             "docs/reports/bar.md",
             """---
@@ -108,53 +130,154 @@ status: active
 # Bar
 """,
         )
-        self._write("docs/tasks/foo.md", f"Reference {_rel(report_path, self.root)}\n")
+        self._write("docs/_generated/doc-index.md", f"Derived {_rel(report_path, self.root)}\n")
 
-        with temporary_repo_root(self.root):
-            records = gen.collect_reports(self.root / "docs" / "reports")
+        records = gen.collect_reports(self._config())
 
-        self.assertEqual(records[0].referenced_by_paths, ("docs/tasks/foo.md",))
+        self.assertEqual(records[0].primary_referenced_by_paths, ())
+        self.assertEqual(records[0].referenced_by_count, 0)
+
+    def test_generated_references_appear_as_derived_references(self) -> None:
+        report_path = self._write(
+            "docs/reports/bar.md",
+            """---
+id: docs.reports.bar
+title: Bar
+doc_type: report
+status: active
+---
+# Bar
+""",
+        )
+        self._write("docs/_generated/doc-index.md", f"Derived {_rel(report_path, self.root)}\n")
+
+        records = gen.collect_reports(self._config())
+
+        self.assertEqual(records[0].derived_referenced_by_paths, ("docs/_generated/doc-index.md",))
+
+    def test_exact_path_matching_ignores_old_suffix(self) -> None:
+        self.assertFalse(
+            gen._contains_exact_path_reference(
+                "docs/reports/foo.md.old",
+                "docs/reports/foo.md",
+            )
+        )
+
+    def test_exact_path_matching_ignores_dash_suffix(self) -> None:
+        self.assertFalse(
+            gen._contains_exact_path_reference(
+                "docs/reports/foo.md-extra",
+                "docs/reports/foo.md",
+            )
+        )
+
+    def test_exact_path_matching_accepts_plain_path(self) -> None:
+        self.assertTrue(
+            gen._contains_exact_path_reference(
+                "docs/reports/foo.md",
+                "docs/reports/foo.md",
+            )
+        )
+
+    def test_exact_path_matching_accepts_anchor_suffix(self) -> None:
+        self.assertTrue(
+            gen._contains_exact_path_reference(
+                "docs/reports/foo.md#section",
+                "docs/reports/foo.md",
+            )
+        )
+
+    def test_superseded_by_not_absent_for_active_reports(self) -> None:
+        self._write(
+            "docs/reports/active.md",
+            """---
+id: docs.reports.active
+title: Active
+doc_type: report
+status: active
+lifecycle: observed
+owner_task: docs/tasks/active.md
+review_after: 2026-12-01
+---
+# Active
+""",
+        )
+
+        record = gen.collect_reports(self._config())[0]
+
+        self.assertEqual(record.absent_core_lifecycle_fields, ())
+        self.assertFalse(record.missing_supersession_target)
+
+    def test_terminal_status_without_superseded_by_is_reported(self) -> None:
+        self._write(
+            "docs/reports/terminal.md",
+            """---
+id: docs.reports.terminal
+title: Terminal
+doc_type: report
+status: superseded
+lifecycle: observed
+owner_task: docs/tasks/terminal.md
+review_after: 2026-12-01
+---
+# Terminal
+""",
+        )
+
+        record = gen.collect_reports(self._config())[0]
+
+        self.assertTrue(record.missing_supersession_target)
+
+    def test_relations_are_rendered_in_markdown_output(self) -> None:
+        self._write(
+            "docs/reports/rel.md",
+            """---
+id: docs.reports.rel
+title: Relation
+doc_type: report
+status: active
+relations:
+  - type: relates_to
+    target: docs/reports/other.md
+---
+# Relation
+""",
+        )
+
+        markdown = gen.render_inventory(gen.collect_reports(self._config()))
+
+        self.assertIn("## Relations", markdown)
+        self.assertIn("relates_to", markdown)
+        self.assertIn("docs/reports/other.md", markdown)
+
+    def test_doc_type_distribution_is_rendered(self) -> None:
+        self._write("docs/reports/a.md", "---\ndoc_type: report\nstatus: active\n---\n")
+        self._write("docs/reports/b.md", "---\ndoc_type: reference\nstatus: active\n---\n")
+
+        markdown = gen.render_inventory(gen.collect_reports(self._config()))
+
+        self.assertIn("## Doc Type Distribution", markdown)
+        self.assertIn("| report | 1 |", markdown)
+        self.assertIn("| reference | 1 |", markdown)
+
+    def test_collect_reports_uses_config_instead_of_global_mutation(self) -> None:
+        self._write("docs/reports/alpha.md", "---\nstatus: active\n---\n")
+
+        records = gen.collect_reports(self._config())
+
+        self.assertEqual([record.path for record in records], ["docs/reports/alpha.md"])
 
     def test_inventory_is_sorted_deterministically_by_path(self) -> None:
         self._write("docs/reports/zeta.md", "# Zeta\n")
         self._write("docs/reports/alpha.md", "# Alpha\n")
 
-        with temporary_repo_root(self.root):
-            records = gen.collect_reports(self.root / "docs" / "reports")
+        records = gen.collect_reports(self._config())
 
         self.assertEqual([record.path for record in records], ["docs/reports/alpha.md", "docs/reports/zeta.md"])
 
 
 def _rel(path: Path, root: Path) -> str:
     return str(path.relative_to(root)).replace("\\", "/")
-
-
-class temporary_repo_root:
-    def __init__(self, root: Path) -> None:
-        self.root = root
-        self.original_repo_root = gen.REPO_ROOT
-        self.original_reports_dir = gen.REPORTS_DIR
-        self.original_output_path = gen.OUTPUT_PATH
-        self.original_reference_search_paths = gen.REFERENCE_SEARCH_PATHS
-
-    def __enter__(self) -> None:
-        gen.REPO_ROOT = self.root
-        gen.REPORTS_DIR = self.root / "docs" / "reports"
-        gen.OUTPUT_PATH = self.root / "docs" / "_generated" / "report-lifecycle-inventory.md"
-        gen.REFERENCE_SEARCH_PATHS = [
-            self.root / "docs" / "tasks",
-            self.root / "docs" / "blueprints",
-            self.root / "docs" / "reports",
-            self.root / "docs" / "proofs",
-            self.root / "docs" / "roadmap.md",
-            self.root / "docs" / "_generated",
-        ]
-
-    def __exit__(self, exc_type, exc, tb) -> None:
-        gen.REPO_ROOT = self.original_repo_root
-        gen.REPORTS_DIR = self.original_reports_dir
-        gen.OUTPUT_PATH = self.original_output_path
-        gen.REFERENCE_SEARCH_PATHS = self.original_reference_search_paths
 
 
 if __name__ == "__main__":

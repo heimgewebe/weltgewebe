@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import sys
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,15 +13,18 @@ if __package__ in {None, ""}:
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORTS_DIR = REPO_ROOT / "docs" / "reports"
 OUTPUT_PATH = REPO_ROOT / "docs" / "_generated" / "report-lifecycle-inventory.md"
-REFERENCE_SEARCH_PATHS = [
+PRIMARY_REFERENCE_SEARCH_PATHS = (
     REPO_ROOT / "docs" / "tasks",
     REPO_ROOT / "docs" / "blueprints",
     REPO_ROOT / "docs" / "reports",
     REPO_ROOT / "docs" / "proofs",
     REPO_ROOT / "docs" / "roadmap.md",
+)
+DERIVED_REFERENCE_SEARCH_PATHS = (
     REPO_ROOT / "docs" / "_generated",
-]
-LIFECYCLE_FIELDS = ("lifecycle", "owner_task", "review_after", "superseded_by")
+)
+CORE_LIFECYCLE_FIELDS = ("lifecycle", "owner_task", "review_after")
+TERMINAL_STATUSES = {"superseded", "archived", "deprecated"}
 
 HEADER = """\
 ---
@@ -34,9 +38,18 @@ summary: Automatisch generiertes Inventar der Report-Lifecycle-Metadaten.
 # Report Lifecycle Inventory
 
 Generated automatically. Do not edit manually.
-This inventory is descriptive only. Missing lifecycle fields are expected at this stage and are not policy violations.
-Reference counts are based on heuristic text matches against selected documentation paths.
+This inventory is descriptive only. Absent core lifecycle metadata is expected at this stage and is not a policy judgement.
+Primary references are exact path matches in canonical documentation surfaces. Derived generated references are reported separately.
 """
+
+
+@dataclass(frozen=True)
+class InventoryConfig:
+    repo_root: Path
+    reports_dir: Path
+    output_path: Path
+    primary_search_paths: tuple[Path, ...]
+    derived_search_paths: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
@@ -60,17 +73,34 @@ class ReportRecord:
     relations_count: int
     relation_types: tuple[str, ...]
     relation_targets: tuple[str, ...]
-    referenced_by_paths: tuple[str, ...]
-    missing_lifecycle_fields: tuple[str, ...]
+    primary_referenced_by_paths: tuple[str, ...]
+    derived_referenced_by_paths: tuple[str, ...]
+    absent_core_lifecycle_fields: tuple[str, ...]
+    missing_supersession_target: bool
     frontmatter_parse_warning: str
 
     @property
+    def referenced_by_paths(self) -> tuple[str, ...]:
+        return self.primary_referenced_by_paths
+
+    @property
     def referenced_by_count(self) -> int:
-        return len(self.referenced_by_paths)
+        # Primary references only; derived/generated references are reported separately.
+        return len(self.primary_referenced_by_paths)
 
 
-def _as_rel(path: Path) -> str:
-    return str(path.relative_to(REPO_ROOT)).replace("\\", "/")
+def default_inventory_config() -> InventoryConfig:
+    return InventoryConfig(
+        repo_root=REPO_ROOT,
+        reports_dir=REPORTS_DIR,
+        output_path=OUTPUT_PATH,
+        primary_search_paths=PRIMARY_REFERENCE_SEARCH_PATHS,
+        derived_search_paths=DERIVED_REFERENCE_SEARCH_PATHS,
+    )
+
+
+def _as_rel(path: Path, repo_root: Path) -> str:
+    return str(path.relative_to(repo_root)).replace("\\", "/")
 
 
 def _read_text(path: Path) -> str:
@@ -193,7 +223,7 @@ def _parse_relations_block(lines: list[str], start_index: int) -> tuple[str, lis
             index += 1
             continue
 
-        if not raw_line[:1] in {" ", "\t"}:
+        if raw_line[:1] not in {" ", "\t"}:
             break
 
         if stripped.startswith("- "):
@@ -247,13 +277,14 @@ def _parse_multiline_scalar_block(lines: list[str], start_index: int) -> tuple[s
 
     while index < len(lines):
         raw_line = lines[index]
-        if raw_line.strip() and not raw_line[:1] in {" ", "\t"}:
+        if raw_line.strip() and raw_line[:1] not in {" ", "\t"}:
             break
-        if raw_line.strip():
+        if raw_line[:1] in {" ", "\t"}:
             values.append(raw_line.strip())
         index += 1
 
-    return " ".join(values).strip(), index
+    joined = " ".join(part for part in values if part)
+    return joined.strip(), index
 
 
 def _parse_generic_block_value(lines: list[str], start_index: int) -> tuple[object, int]:
@@ -266,7 +297,7 @@ def _parse_generic_block_value(lines: list[str], start_index: int) -> tuple[obje
         if not stripped:
             index += 1
             continue
-        if not raw_line[:1] in {" ", "\t"}:
+        if raw_line[:1] not in {" ", "\t"}:
             break
         if stripped.startswith("- "):
             values.append(_strip_quotes(stripped[2:].strip()))
@@ -279,40 +310,10 @@ def _parse_generic_block_value(lines: list[str], start_index: int) -> tuple[obje
     return "", index
 
 
-def collect_reports(reports_dir: Path = REPORTS_DIR) -> list[ReportRecord]:
-    reports = []
-    report_paths = sorted(path for path in reports_dir.glob("*.md") if path.is_file())
-    reference_index = _build_reference_index(report_paths)
-
-    for path in report_paths:
-        content = _read_text(path)
-        has_frontmatter, frontmatter, warning = _parse_frontmatter(content)
-        relations = _extract_relations(frontmatter.get("relations", []))
-        rel_path = _as_rel(path)
-        reports.append(
-            ReportRecord(
-                path=rel_path,
-                has_frontmatter=has_frontmatter,
-                doc_id=_string_value(frontmatter.get("id")),
-                title=_string_value(frontmatter.get("title")),
-                doc_type=_string_value(frontmatter.get("doc_type")),
-                status=_string_value(frontmatter.get("status")),
-                lifecycle=_string_value(frontmatter.get("lifecycle")),
-                owner_task=_string_value(frontmatter.get("owner_task")),
-                review_after=_string_value(frontmatter.get("review_after")),
-                superseded_by=_string_value(frontmatter.get("superseded_by")),
-                relations_count=len(relations),
-                relation_types=tuple(relation.relation_type for relation in relations if relation.relation_type),
-                relation_targets=tuple(relation.target for relation in relations if relation.target),
-                referenced_by_paths=tuple(reference_index.get(rel_path, [])),
-                missing_lifecycle_fields=tuple(
-                    field for field in LIFECYCLE_FIELDS if not _string_value(frontmatter.get(field))
-                ),
-                frontmatter_parse_warning=warning,
-            )
-        )
-
-    return reports
+def _string_value(value: object) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    return ""
 
 
 def _extract_relations(raw_relations: object) -> list[RelationEntry]:
@@ -332,38 +333,17 @@ def _extract_relations(raw_relations: object) -> list[RelationEntry]:
     return relations
 
 
-def _string_value(value: object) -> str:
-    if isinstance(value, str):
-        return value.strip()
-    return ""
+def _contains_exact_path_reference(content: str, report_rel: str) -> bool:
+    pattern = re.compile(
+        rf"(?<![A-Za-z0-9_./-]){re.escape(report_rel)}(?![A-Za-z0-9_./-])"
+    )
+    return pattern.search(content) is not None
 
 
-def _build_reference_index(report_paths: list[Path]) -> dict[str, list[str]]:
-    search_files = _iter_reference_files()
-    reference_index: dict[str, set[str]] = {_as_rel(path): set() for path in report_paths}
-
-    for search_file in search_files:
-        search_rel = _as_rel(search_file)
-        if search_file == OUTPUT_PATH:
-            continue
-        content = _read_text(search_file)
-        for report_path in report_paths:
-            report_rel = _as_rel(report_path)
-            if search_rel == report_rel:
-                continue
-            if report_rel in content:
-                reference_index.setdefault(report_rel, set()).add(search_rel)
-
-    return {
-        report_rel: sorted(paths)
-        for report_rel, paths in sorted(reference_index.items())
-    }
-
-
-def _iter_reference_files() -> list[Path]:
+def _iter_reference_files(search_paths: tuple[Path, ...]) -> list[Path]:
     files: list[Path] = []
     seen: set[Path] = set()
-    for path in REFERENCE_SEARCH_PATHS:
+    for path in search_paths:
         if not path.exists():
             continue
         if path.is_file():
@@ -378,22 +358,118 @@ def _iter_reference_files() -> list[Path]:
     return files
 
 
+def _build_reference_index(
+    report_paths: list[Path],
+    search_files: list[Path],
+    repo_root: Path,
+    skip_file: Path | None = None,
+) -> dict[str, tuple[str, ...]]:
+    reference_index: defaultdict[str, set[str]] = defaultdict(set)
+    report_rels = [_as_rel(path, repo_root) for path in report_paths]
+
+    for search_file in search_files:
+        if skip_file is not None and search_file == skip_file:
+            continue
+        search_rel = _as_rel(search_file, repo_root)
+        content = _read_text(search_file)
+        for report_rel in report_rels:
+            if search_rel == report_rel:
+                continue
+            if _contains_exact_path_reference(content, report_rel):
+                reference_index[report_rel].add(search_rel)
+
+    return {
+        report_rel: tuple(sorted(reference_index.get(report_rel, set())))
+        for report_rel in sorted(report_rels)
+    }
+
+
+def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]:
+    inventory_config = config or default_inventory_config()
+    report_paths = sorted(
+        path for path in inventory_config.reports_dir.glob("*.md") if path.is_file()
+    )
+    primary_reference_index = _build_reference_index(
+        report_paths=report_paths,
+        search_files=_iter_reference_files(inventory_config.primary_search_paths),
+        repo_root=inventory_config.repo_root,
+    )
+    derived_reference_index = _build_reference_index(
+        report_paths=report_paths,
+        search_files=_iter_reference_files(inventory_config.derived_search_paths),
+        repo_root=inventory_config.repo_root,
+        skip_file=inventory_config.output_path,
+    )
+
+    records: list[ReportRecord] = []
+    for path in report_paths:
+        content = _read_text(path)
+        has_frontmatter, frontmatter, warning = _parse_frontmatter(content)
+        relations = _extract_relations(frontmatter.get("relations", []))
+        rel_path = _as_rel(path, inventory_config.repo_root)
+        relation_types = tuple(
+            sorted({relation.relation_type for relation in relations if relation.relation_type})
+        )
+        relation_targets = tuple(
+            sorted({relation.target for relation in relations if relation.target})
+        )
+        status = _string_value(frontmatter.get("status"))
+        superseded_by = _string_value(frontmatter.get("superseded_by"))
+        records.append(
+            ReportRecord(
+                path=rel_path,
+                has_frontmatter=has_frontmatter,
+                doc_id=_string_value(frontmatter.get("id")),
+                title=_string_value(frontmatter.get("title")),
+                doc_type=_string_value(frontmatter.get("doc_type")),
+                status=status,
+                lifecycle=_string_value(frontmatter.get("lifecycle")),
+                owner_task=_string_value(frontmatter.get("owner_task")),
+                review_after=_string_value(frontmatter.get("review_after")),
+                superseded_by=superseded_by,
+                relations_count=len(relations),
+                relation_types=relation_types,
+                relation_targets=relation_targets,
+                primary_referenced_by_paths=primary_reference_index.get(rel_path, ()),
+                derived_referenced_by_paths=derived_reference_index.get(rel_path, ()),
+                absent_core_lifecycle_fields=tuple(
+                    field for field in CORE_LIFECYCLE_FIELDS if not _string_value(frontmatter.get(field))
+                ),
+                missing_supersession_target=status in TERMINAL_STATUSES and not superseded_by,
+                frontmatter_parse_warning=warning,
+            )
+        )
+
+    return records
+
+
 def build_summary(records: list[ReportRecord]) -> list[tuple[str, int]]:
     return [
-        ("reports_total", len(records)),
-        ("reports_with_frontmatter", sum(1 for record in records if record.has_frontmatter)),
-        ("reports_without_frontmatter", sum(1 for record in records if not record.has_frontmatter)),
-        ("reports_with_status", sum(1 for record in records if record.status)),
-        ("reports_missing_status", sum(1 for record in records if not record.status)),
-        ("reports_with_lifecycle", sum(1 for record in records if record.lifecycle)),
-        ("reports_missing_lifecycle", sum(1 for record in records if not record.lifecycle)),
-        ("reports_with_owner_task", sum(1 for record in records if record.owner_task)),
-        ("reports_missing_owner_task", sum(1 for record in records if not record.owner_task)),
-        ("reports_with_review_after", sum(1 for record in records if record.review_after)),
-        ("reports_missing_review_after", sum(1 for record in records if not record.review_after)),
-        ("reports_referenced", sum(1 for record in records if record.referenced_by_count > 0)),
-        ("reports_unreferenced", sum(1 for record in records if record.referenced_by_count == 0)),
+        ("files_total", len(records)),
+        ("files_with_frontmatter", sum(1 for record in records if record.has_frontmatter)),
+        ("files_without_frontmatter", sum(1 for record in records if not record.has_frontmatter)),
+        ("files_with_status", sum(1 for record in records if record.status)),
+        ("files_missing_status", sum(1 for record in records if not record.status)),
+        ("files_with_lifecycle", sum(1 for record in records if record.lifecycle)),
+        ("files_missing_lifecycle", sum(1 for record in records if not record.lifecycle)),
+        ("files_with_owner_task", sum(1 for record in records if record.owner_task)),
+        ("files_missing_owner_task", sum(1 for record in records if not record.owner_task)),
+        ("files_with_review_after", sum(1 for record in records if record.review_after)),
+        ("files_missing_review_after", sum(1 for record in records if not record.review_after)),
+        ("files_primary_referenced", sum(1 for record in records if record.referenced_by_count > 0)),
+        ("files_primary_unreferenced", sum(1 for record in records if record.referenced_by_count == 0)),
+        ("files_with_derived_references", sum(1 for record in records if record.derived_referenced_by_paths)),
+        ("files_with_relations", sum(1 for record in records if record.relations_count > 0)),
+        (
+            "files_with_missing_supersession_target",
+            sum(1 for record in records if record.missing_supersession_target),
+        ),
     ]
+
+
+def build_doc_type_distribution(records: list[ReportRecord]) -> list[tuple[str, int]]:
+    counts = Counter(record.doc_type or "<missing>" for record in records)
+    return sorted(counts.items())
 
 
 def render_inventory(records: list[ReportRecord]) -> str:
@@ -404,16 +480,28 @@ def render_inventory(records: list[ReportRecord]) -> str:
     sections.extend(
         [
             "",
+            "## Doc Type Distribution",
+            "",
+            "| doc_type | Count |",
+            "| --- | ---: |",
+        ]
+    )
+    for doc_type, count in build_doc_type_distribution(records):
+        sections.append(f"| {_cell(doc_type)} | {count} |")
+
+    sections.extend(
+        [
+            "",
             "## Reports",
             "",
-            "| Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | refs | missing |",
-            "| --- | --- | --- | --- | --- | --- | --- | ---: | --- |",
+            "| Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |",
+            "| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for record in records:
         sections.append(
             "| {path} | {doc_type} | {status} | {lifecycle} | {owner_task} | {review_after} | "
-            "{superseded_by} | {refs} | {missing} |".format(
+            "{superseded_by} | {primary_refs} | {derived_refs} | {relations} | {absent} | {terminal_supersession} |".format(
                 path=record.path,
                 doc_type=_cell(record.doc_type),
                 status=_cell(record.status),
@@ -421,33 +509,111 @@ def render_inventory(records: list[ReportRecord]) -> str:
                 owner_task=_cell(record.owner_task),
                 review_after=_cell(record.review_after),
                 superseded_by=_cell(record.superseded_by),
-                refs=record.referenced_by_count,
-                missing=_cell(", ".join(record.missing_lifecycle_fields)),
+                primary_refs=record.referenced_by_count,
+                derived_refs=len(record.derived_referenced_by_paths),
+                relations=record.relations_count,
+                absent=_cell(", ".join(record.absent_core_lifecycle_fields)),
+                terminal_supersession="missing target" if record.missing_supersession_target else "",
             )
         )
 
-    sections.extend(["", "## Missing Lifecycle Fields", "", "| Path | Missing fields |", "| --- | --- |"])
-    for record in records:
-        if record.missing_lifecycle_fields:
-            sections.append(f"| {record.path} | {_cell(', '.join(record.missing_lifecycle_fields))} |")
+    sections.extend(
+        [
+            "",
+            "## Absent Core Lifecycle Metadata",
+            "",
+            "| Path | Absent fields |",
+            "| --- | --- |",
+        ]
+    )
+    absent_records = [record for record in records if record.absent_core_lifecycle_fields]
+    if absent_records:
+        for record in absent_records:
+            sections.append(
+                f"| {record.path} | {_cell(', '.join(record.absent_core_lifecycle_fields))} |"
+            )
+    else:
+        sections.append("| _None_ | _None_ |")
 
-    sections.extend(["", "## Referenced Reports", "", "| Path | Referenced by |", "| --- | --- |"])
-    for record in records:
-        if record.referenced_by_paths:
-            sections.append(f"| {record.path} | {_cell(', '.join(record.referenced_by_paths))} |")
+    sections.extend(["", "## Relations", ""])
+    relation_records = [record for record in records if record.relations_count > 0]
+    if relation_records:
+        sections.extend(
+            [
+                "| Path | Count | Types | Targets |",
+                "| --- | ---: | --- | --- |",
+            ]
+        )
+        for record in relation_records:
+            sections.append(
+                "| {path} | {count} | {types} | {targets} |".format(
+                    path=record.path,
+                    count=record.relations_count,
+                    types=_cell(", ".join(record.relation_types)),
+                    targets=_cell(", ".join(record.relation_targets)),
+                )
+            )
+    else:
+        sections.append("_None_")
 
-    sections.extend(["", "## Unreferenced Reports", "", "| Path |", "| --- |"])
-    for record in records:
-        if not record.referenced_by_paths:
-            sections.append(f"| {record.path} |")
+    sections.extend(["", "## Primary Referenced Reports", ""])
+    primary_referenced_records = [record for record in records if record.primary_referenced_by_paths]
+    if primary_referenced_records:
+        for record in primary_referenced_records:
+            sections.append(f"- `{record.path}`")
+            for ref_path in record.primary_referenced_by_paths:
+                sections.append(f"  - `{ref_path}`")
+            sections.append("")
+    else:
+        sections.append("None.")
+        sections.append("")
 
-    sections.extend(["", "## Parse Warnings", "", "| Path | Warning |", "| --- | --- |"])
+    sections.extend(["## Derived Referenced Reports", ""])
+    derived_referenced_records = [record for record in records if record.derived_referenced_by_paths]
+    if derived_referenced_records:
+        for record in derived_referenced_records:
+            sections.append(f"- `{record.path}`")
+            for ref_path in record.derived_referenced_by_paths:
+                sections.append(f"  - `{ref_path}`")
+            sections.append("")
+    else:
+        sections.append("None.")
+        sections.append("")
+
+    sections.extend(["## Primary Unreferenced Reports", ""])
+    primary_unreferenced_records = [record for record in records if not record.primary_referenced_by_paths]
+    if primary_unreferenced_records:
+        for record in primary_unreferenced_records:
+            sections.append(f"- `{record.path}`")
+        sections.append("")
+    else:
+        sections.append("_None_")
+        sections.append("")
+
+    terminal_gap_records = [record for record in records if record.missing_supersession_target]
+    sections.extend(["## Terminal Supersession Diagnostics", ""])
+    if terminal_gap_records:
+        sections.extend(
+            [
+                "| Path | Status | Diagnostic |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for record in terminal_gap_records:
+            sections.append(f"| {record.path} | {_cell(record.status)} | missing superseded_by target |")
+    else:
+        sections.append("None.")
+    sections.append("")
+
+    sections.extend(["## Parse Warnings", ""])
     warning_records = [record for record in records if record.frontmatter_parse_warning]
     if warning_records:
+        sections.extend(["| Path | Warning |", "| --- | --- |"])
         for record in warning_records:
             sections.append(f"| {record.path} | {_cell(record.frontmatter_parse_warning)} |")
     else:
-        sections.append("| _None_ | _None_ |")
+        sections.append("None.")
+        sections.append("")
 
     return "\n".join(sections).rstrip() + "\n"
 
@@ -455,20 +621,21 @@ def render_inventory(records: list[ReportRecord]) -> str:
 def _cell(value: str) -> str:
     if not value:
         return ""
-    return re.sub(r"\s+", " ", value.replace("|", "\\|")).strip()
+    return re.sub(r"\s+", " ", value.replace("|", "&#124;")).strip()
 
 
-def generate(output_path: Path = OUTPUT_PATH, reports_dir: Path = REPORTS_DIR) -> Path:
-    records = collect_reports(reports_dir)
+def generate(config: InventoryConfig | None = None) -> Path:
+    inventory_config = config or default_inventory_config()
+    records = collect_reports(inventory_config)
     content = render_inventory(records)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(content, encoding="utf-8")
-    return output_path
+    inventory_config.output_path.parent.mkdir(parents=True, exist_ok=True)
+    inventory_config.output_path.write_text(content, encoding="utf-8")
+    return inventory_config.output_path
 
 
 def main() -> None:
     output_path = generate()
-    print(f"Generated {_as_rel(output_path)}")
+    print(f"Generated {_as_rel(output_path, default_inventory_config().repo_root)}")
 
 
 if __name__ == "__main__":
