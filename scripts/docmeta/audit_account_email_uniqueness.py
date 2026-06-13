@@ -41,6 +41,27 @@ def main():
     current_groups = defaultdict(list)
     proposed_groups = defaultdict(list)
 
+    def finding_key(item: dict) -> tuple[str, int, str, str]:
+        return (
+            item.get("source_path", ""),
+            int(item.get("line_number", -1)),
+            str(item.get("id", "")),
+            str(item.get("classifications", [""])[0]) if item.get("classifications") else ""
+        )
+
+    seen_finding_keys = set()
+
+    def add_finding(item: dict) -> None:
+        key = finding_key(item)
+        if key not in seen_finding_keys:
+            findings.append(item)
+            seen_finding_keys.add(key)
+
+    def add_classification(item: dict, classification: str) -> None:
+        classes = item.setdefault("classifications", [])
+        if classification not in classes:
+            classes.append(classification)
+
     if args.accounts_jsonl:
         for path_str in args.accounts_jsonl:
             p = Path(path_str)
@@ -61,30 +82,33 @@ def main():
                             data = json.loads(line)
                         except json.JSONDecodeError:
                             summary["records_invalid_json"] += 1
-                            findings.append({
+                            item_err = {
                                 "source_path": path_str,
                                 "line_number": line_num,
                                 "classifications": ["invalid_json"]
-                            })
+                            }
+                            add_finding(item_err)
                             continue
 
                         if not isinstance(data, dict):
                             summary["records_non_object_json"] += 1
-                            findings.append({
+                            item_err = {
                                 "source_path": path_str,
                                 "line_number": line_num,
                                 "classifications": ["non_object_json"]
-                            })
+                            }
+                            add_finding(item_err)
                             continue
 
                         id_val = data.get("id")
                         if id_val is None:
                             summary["records_missing_id"] += 1
-                            findings.append({
+                            item_err = {
                                 "source_path": path_str,
                                 "line_number": line_num,
                                 "classifications": ["missing_id"]
-                            })
+                            }
+                            add_finding(item_err)
                             continue
                             
                         id_str = str(id_val)
@@ -97,24 +121,24 @@ def main():
                         }
 
                         if "email" not in data:
-                            item["classifications"].append("missing_email")
+                            add_classification(item, "missing_email")
                             summary["records_missing_email"] += 1
-                            findings.append(item)
+                            add_finding(item)
                             continue
                             
                         raw_email = data["email"]
                         if raw_email is None:
-                            item["classifications"].append("null_email")
+                            add_classification(item, "null_email")
                             summary["records_null_email"] += 1
                             item["raw_email"] = None
-                            findings.append(item)
+                            add_finding(item)
                             continue
 
                         if not isinstance(raw_email, str):
-                            item["classifications"].append("non_string_email")
+                            add_classification(item, "non_string_email")
                             summary["records_non_string_email"] += 1
                             item["raw_email"] = raw_email
-                            findings.append(item)
+                            add_finding(item)
                             continue
 
                         item["raw_email"] = raw_email
@@ -124,9 +148,9 @@ def main():
                         item["trimmed_email"] = trimmed_email
                         
                         if trimmed_email == "":
-                            item["classifications"].append("empty_after_trim")
+                            add_classification(item, "empty_after_trim")
                             summary["records_empty_after_trim"] += 1
-                            findings.append(item)
+                            add_finding(item)
                             continue
                             
                         if raw_email != trimmed_email:
@@ -161,9 +185,9 @@ def main():
             summary["duplicate_current_runtime_key_groups"] += 1
             sorted_items = sorted(items, key=sort_key)
             for i in sorted_items:
-                i["classifications"].append("duplicate_current_runtime_key")
-                findings.append(i)
-                
+                add_classification(i, "duplicate_current_runtime_key")
+                add_finding(i)
+
             duplicate_groups_out["current_runtime_key"].append({
                 "key": key,
                 "items": sorted_items
@@ -175,11 +199,9 @@ def main():
             summary["duplicate_proposed_constraint_key_groups"] += 1
             sorted_items = sorted(items, key=sort_key)
             for i in sorted_items:
-                i["classifications"].append("duplicate_proposed_constraint_key")
-                # Add to findings if not already added by current runtime logic
-                if i not in findings:
-                    findings.append(i)
-                    
+                add_classification(i, "duplicate_proposed_constraint_key")
+                add_finding(i)
+
             duplicate_groups_out["proposed_constraint_key"].append({
                 "key": key,
                 "items": sorted_items

@@ -165,3 +165,69 @@ def test_missing_id_and_non_string_email(tmp_path):
     
     non_strings = [f for f in findings if "non_string_email" in f["classifications"]]
     assert len(non_strings) == 2
+def test_non_object_json(tmp_path):
+    lines = [
+        json.dumps(["not", "an", "object"]),
+        json.dumps({"id": "1", "email": "a@example.org"}),
+    ]
+    code, out, err = run_script(tmp_path, lines)
+    assert code == 0
+    assert out["summary"]["records_non_object_json"] == 1
+
+    findings = [
+        f for f in out["findings"]
+        if "non_object_json" in f.get("classifications", [])
+    ]
+    assert len(findings) == 1
+
+def test_unicode_output_is_not_ascii_escaped(tmp_path):
+    jsonl_file = tmp_path / "test.jsonl"
+    jsonl_file.write_text(
+        json.dumps({"id": "1", "email": "ALEX-ß-İ-I@example.org"}) + "\n",
+        encoding="utf-8",
+    )
+
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.docmeta.audit_account_email_uniqueness",
+            "--accounts-jsonl",
+            str(jsonl_file),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    # In order to trigger stdout with the string, we need a finding or duplicate.
+    # The missing id test logic added "missing_id", but here it's valid so it has NO findings.
+    # We should add a duplicate to ensure it's outputted.
+
+def test_unicode_output_is_not_ascii_escaped_with_duplicate(tmp_path):
+    jsonl_file = tmp_path / "test.jsonl"
+    jsonl_file.write_text(
+        json.dumps({"id": "1", "email": "ALEX-ß-İ-I@example.org"}) + "\n" +
+        json.dumps({"id": "2", "email": "alex-ß-İ-i@example.org"}) + "\n",
+        encoding="utf-8",
+    )
+
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scripts.docmeta.audit_account_email_uniqueness",
+            "--accounts-jsonl",
+            str(jsonl_file),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "ß" in result.stdout
+    assert "İ" in result.stdout

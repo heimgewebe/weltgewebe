@@ -5,6 +5,16 @@ doc_type: report
 status: draft
 lang: de
 canonicality: supporting
+relations:
+  - type: relates_to
+    target: docs/blueprints/domain-data-postgres-cutover.md
+  - type: relates_to
+    target: apps/api/src/auth/accounts.rs
+  - type: relates_to
+    target: apps/api/src/routes/accounts.rs
+  - type: relates_to
+    target: scripts/docmeta/audit_account_email_uniqueness.py
+summary: Audit report on account e-mail uniqueness, duplicates, and runtime behavior to prepare for a DB unique constraint.
 ---
 
 # Domain Account E-Mail Uniqueness Audit
@@ -68,6 +78,11 @@ Das Skript gibt Exit-Code 0 zurück, außer wenn `--fail-on-duplicates` verwende
 
 (Audit-Harness vorhanden; Produktions-/Runtime-Datenlauf ausstehend.)
 
+> [!NOTE]
+> Das Skript streamt JSONL-Rohzeilen und vermeidet eine vollständige Rohdatenliste. Für exakte Duplikaterkennung hält es jedoch Schlüsselzustand im Speicher. Bei sehr großen Produktions-Dumps kann ein späterer Two-Pass- oder SQLite-basierter Audit sinnvoll sein.
+>
+> Produktionsläufe dürfen nicht unredigiert in PRs, Issues oder Reports kopiert werden. Für Produktionsdaten sind nur aggregierte Counts, Hashes oder redigierte Beispiele zulässig.
+
 ## PostgreSQL-Audit-SQL
 
 Aktuelle Runtime-Annäherung:
@@ -85,6 +100,9 @@ ORDER BY email_key;
 ```
 
 Trim-orientierte mögliche Constraint-Policy:
+
+> [!NOTE]
+> Auch `trim(email)` bzw. `btrim(email)` ist nur eine SQL-Annäherung an die API-/Audit-Trim-Semantik in Rust. Vor PR E2 muss geprüft werden, ob Legacy-Daten nur einfache ASCII-Leerzeichen oder weitere Whitespace-Zeichen enthalten.
 
 ```sql
 SELECT
