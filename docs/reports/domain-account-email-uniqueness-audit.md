@@ -161,6 +161,69 @@ FROM domain_accounts;
 - Kein PostgreSQL-Cutover-Claim.
 - Keine JSONL-Demontage.
 
+## Audit-Lauf 2026-06-13
+
+### Quellen
+
+- JSONL: `.gewebe/in/demo.accounts.jsonl` (generiertes Demo-Daten-Set aus `scripts/dev/generate-demo-data.sh`; kein produktiver Datenbestand)
+- PostgreSQL: übersprungen — `DATABASE_URL` nicht gesetzt in dieser Ausführungsumgebung
+- Source-Fingerprint:
+  - JSONL sha256: `2ceaac9bfbf54aab891b96402fdc6915b7d5f5670bbe74f9ce6cfbc50b80c1b6`
+  - JSONL size\_bytes: 303
+  - PostgreSQL target: nicht ausgeführt
+
+### Aggregierte Ergebnisse
+
+| Metrik | Wert |
+| --- | ---: |
+| records\_total | 1 |
+| records\_with\_email | 0 |
+| records\_missing\_email | 1 |
+| records\_null\_email | 0 |
+| records\_empty\_after\_trim | 0 |
+| records\_non\_string\_email | 0 |
+| records\_trim\_changes\_value | 0 |
+| records\_case\_changes\_value | 0 |
+| duplicate\_current\_runtime\_key\_groups | 0 |
+| duplicate\_proposed\_constraint\_key\_groups | 0 |
+
+### PostgreSQL-Aggregate
+
+| Metrik | Wert |
+| --- | ---: |
+| lower(email) duplicate groups | n/a — nicht ausgeführt |
+| lower(btrim(email)) duplicate groups | n/a — nicht ausgeführt |
+| null\_email\_count | n/a — nicht ausgeführt |
+| empty\_email\_count | n/a — nicht ausgeführt |
+| whitespace\_changed\_count | n/a — nicht ausgeführt |
+
+### Redaktionsregel
+
+Dieser Report enthält keine echten E-Mail-Adressen, keine unredigierten Account-Zeilen und keine produktionsnahen Rohdaten. Die Datenquelle ist ein generiertes Demo-Daten-Set ohne personenbezogene Daten.
+
+### Policy-Einschätzung
+
+Das ausgeführte Demo-Daten-Set enthält kein `email`-Feld (alle 1 Records: `missing_email`). Der Audit-Harness funktioniert korrekt und liefert deterministische Ergebnisse; Exit-Code 0 bei `--fail-on-duplicates` bestätigt, dass keine Duplikate bezüglich des vorgeschlagenen Constraint-Schlüssels vorliegen.
+
+Da keine produktiven JSONL-Daten und keine `DATABASE_URL` in dieser Ausführungsumgebung verfügbar sind, kann die endgültige Constraint-Policy noch nicht festgelegt werden:
+
+- `duplicate_proposed_constraint_key_groups = 0` gilt nur für das Demo-Daten-Set; keine aussagekräftige Duplikat-Prüfung gegen Produktionsdaten möglich.
+- Kein `whitespace_changed_count`-Wert aus PostgreSQL verfügbar.
+- Kein produktiver JSONL-Datenbestand auditiert.
+
+TODO 2 bleibt daher blockiert bis ein echter Datenlauf gegen Runtime-/Deployment-Daten möglich ist.
+
+### Entscheidung für nächsten Schritt
+
+Status: `needs_real_data_run`
+
+Begründung:
+
+- Demo-Daten-Audit: Harness validiert — Skript startet, verarbeitet JSONL korrekt, Exit-Code 0 bei `--fail-on-duplicates`.
+- Kein produktiver JSONL-Account-Datenbestand im Repo oder in dieser Ausführungsumgebung verfügbar.
+- `DATABASE_URL` nicht gesetzt; PostgreSQL-Audit nicht durchführbar.
+- Für TODO 2 (Unique-Index) wird ein Datenlauf gegen Deployment-Daten benötigt; der vorliegende Harness ist dafür einsatzbereit.
+
 ## Nächster PR
 
 PR E2 kann erst nach einem echten Datenlauf gegen relevante JSONL- und/oder
