@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 368 |
+| Relationen gesamt | 371 |
 | — depends_on | 18 |
-| — relates_to | 348 |
+| — relates_to | 351 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (134 Dokumente):
+**Cluster 1** (136 Dokumente):
 
 - `.github/workflows/api.yml`
 - `AGENTS.md`
@@ -44,6 +44,7 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_backfill.rs`
 - `audit/impl-registry.yaml`
 - `contracts/domain/edge.schema.json`
+- `docs/_generated/report-lifecycle-inventory.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/adr/ADR-0002__reentry-kriterien.md`
@@ -105,6 +106,7 @@ _Keine Lücken erkannt._
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
 - `docs/process/fahrplan.md`
+- `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
