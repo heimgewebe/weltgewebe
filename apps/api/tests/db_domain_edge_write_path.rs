@@ -2,8 +2,7 @@
 //!
 //! Proves that, when `domain_read_source=postgres` and
 //! `domain_edge_write_source=postgres`, `POST /edges` inserts exactly one row
-//! into `domain_edges` (serialized via LOCK TABLE, SELECT EXISTS duplicate precheck,
-//! COUNT limit check, and final INSERT), updates the
+//! into `domain_edges` (plain INSERT, duplicate id -> 409), updates the
 //! in-memory edge cache only after the successful insert, never touches JSONL,
 //! and that `load_edges_from_postgres` reconstructs the stored edge including
 //! `source_type`, `target_type`, `note` and `created_at`.
@@ -455,8 +454,8 @@ async fn postgres_edge_create_omits_note_key_when_absent() -> Result<()> {
     Ok(())
 }
 
-/// C. Duplicate id from the database surfaces as 409 (duplicate id checked via SELECT EXISTS
-/// before the final INSERT): the second create leaves exactly one row and no extra cache
+/// C. Duplicate id from the database surfaces as 409 (plain INSERT, no
+/// ON CONFLICT): the second create leaves exactly one row and no extra cache
 /// entry.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
@@ -484,7 +483,7 @@ async fn postgres_edge_create_duplicate_id_returns_409() -> Result<()> {
 
     // Insert the conflicting row AFTER the cache was loaded, so the route's
     // cache-level duplicate check cannot see it and the 409 must come from the
-    // SELECT EXISTS duplicate precheck in the database transaction.
+    // database unique violation.
     sqlx::query(
         "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
          VALUES ($1, $2, $3, 'reference', NOW(), '{}'::jsonb)",
