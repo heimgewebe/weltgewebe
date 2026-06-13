@@ -67,7 +67,7 @@ Downgrade auf JSONL.
   `append_edge_line` mit fsync).
 - PostgreSQL-Modus: kein JSONL-Append, keine JSONL-Inspection;
   `insert_domain_edge` nutzt eine serialisierte Transaktion mit
-  `LOCK TABLE domain_edges IN EXCLUSIVE MODE`, Duplicate-Precheck,
+  `LOCK TABLE domain_edges IN EXCLUSIVE MODE`, Duplicate-Precheck via `SELECT EXISTS`,
   `COUNT(*) >= MAX_EDGES_CACHE`-Prüfung und finalem Insert. Fehlender Pool → 500,
   kein JSONL-Fallback.
 - Routing/Auth unverändert: `POST /edges` bleibt `require_write`;

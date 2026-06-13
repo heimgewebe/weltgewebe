@@ -231,8 +231,7 @@ sein. Daraus folgt exakt:
   `required` führt.
 - **Read-after-Write-Symmetrie:** `load_edges_from_postgres` (`domain_db.rs:138-187`)
   rekonstruiert exakt diese Felder — keine Anpassung der Read-Logik nötig.
-- **DB-Fehler-Mapping:** reiner `INSERT` (kein `ON CONFLICT`); Unique-Violation
-  auf `id` → 409; sonstige `sqlx::Error` → 500. **Keine FKs, kein Orphan-Audit.**
+- **DB-Fehler-Mapping:** Serialisierter Pfad via `LOCK TABLE domain_edges IN EXCLUSIVE MODE`, Duplicate-Precheck (`SELECT EXISTS`) → 409, Limit-Check (`COUNT(*) >= MAX_EDGES_CACHE`) → 409, finaler `INSERT`. Unique-Violation ist nur ein defensiver Fallback; sonstige `sqlx::Error` → 500. **Keine FKs, kein Orphan-Audit.**
 
 ### Config Matrix
 
@@ -259,15 +258,14 @@ Cache wird **nur nach** erfolgreicher durabler Schreibung aktualisiert (JSONL:
 nach `fsync`; Postgres: nach `INSERT` ohne Fehler). Bei Persistenzfehler **kein**
 Cache-Insert (kein Phantom-Edge). Der `edges_persist`-Mutex serialisiert
 Dup-Check und Schreibung, damit nebenläufige Creates die `id`-Prüfung nicht
-unterlaufen. Im Postgres-Modus bleibt die `id`-Eindeutigkeit zusätzlich durch die
-PK-Unique-Violation (409) abgesichert.
+unterlaufen. Im Postgres-Modus ist die `id`-Eindeutigkeit primär durch den `SELECT EXISTS`-Precheck innerhalb der Transaktion sichergestellt, die PK-Unique-Violation (409) ist nur ein defensiver Fallback.
 
 ### Duplicate-/Fehler-Mapping
 
 | Fall | Code |
 |---|---|
 | `id` existiert bereits (Cache, JSONL-Modus) | 409 `edge id already exists` |
-| `id` existiert bereits (PK-Violation, Postgres-Modus) | 409 `edge id already exists` |
+| `id` existiert bereits (Duplicate-Precheck, Postgres-Modus) | 409 `edge id already exists` |
 | ungültige Eingabe (fehlendes `source_id`/`target_id`, ungültiges `edge_kind`) | 400 |
 | JSONL-`fsync`-/Append-Fehler | 500 `failed to persist edge` |
 | sonstiger DB-Fehler | 500 |
