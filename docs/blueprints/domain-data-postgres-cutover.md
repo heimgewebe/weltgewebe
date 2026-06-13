@@ -53,21 +53,33 @@ Der belegte Ist-Zustand nach Phase E-C / PR #1196:
   - `POST /accounts`
   - `PATCH /nodes`
   - `POST /edges`
-- `APP_CONFIG_PATH` ist fail-closed: eine explizit gesetzte, fehlerhafte Config fällt nicht still auf Defaults zurück.
-- Neue PostgreSQL-Account-Create-Zeilen persistieren eine stabile `webauthn_user_id`; Cache und Reload erhalten dieselbe UUID.
+- `APP_CONFIG_PATH` ist fail-closed: eine explizit gesetzte,
+  fehlerhafte Config fällt nicht still auf Defaults zurück.
+- Neue PostgreSQL-Account-Create-Zeilen persistieren eine stabile
+  `webauthn_user_id`; Cache und Reload erhalten dieselbe UUID.
 - Lokale Runtime-Caches bestehen weiter.
 - Produktions-Cutover ist nicht erfolgt.
 
-Diese Blaupause definiert deshalb den Migrationspfad, die Prüfregeln und die
-Rückfalllogik, bevor Produktionscode verändert wird.
+Diese Blaupause ordnet deshalb den verbleibenden Cutover-Pfad, die Prüfregeln
+und die Rückfalllogik, bevor PostgreSQL als primäre Domain-Wahrheit aktiviert
+wird.
 
 ## Verifizierter Ist-Zustand
 
-| Domain | Aktuelle Default-Lesequelle | Opt-in PostgreSQL-Lesequelle | Aktuelle Default-Schreibquelle | Opt-in PostgreSQL-Schreibpfad | Runtime-Cache | PostgreSQL-Status |
-|---|---|---|---|---|---|---|
-| nodes | JSONL | vorhanden | JSONL-Patch | `PATCH /nodes` hinter Write-Gate | `OrderedCache<Node>` | Schema, Backfill, Read-Path und opt-in Write-Path vorhanden; nicht Default |
-| edges | JSONL | vorhanden | kein JSONL-Create als Default-Cutover; Edge-Create opt-in PostgreSQL vorhanden | `POST /edges` hinter Write-Gate | `OrderedCache<Edge>` | Schema, Backfill, Read-Path und opt-in Write-Path vorhanden; nicht Default |
-| accounts | JSONL | vorhanden | JSONL-Append als Default; weitere Auth-Mutationen teils weiterhin offen | `POST /accounts` hinter Write-Gate | `AccountStore` | Schema, Backfill, Read-Path und opt-in Create-Write-Path vorhanden; neue PostgreSQL-Creates persistieren `webauthn_user_id`; nicht Default |
+| Domain | Default | PostgreSQL opt-in | Status |
+|---|---|---|---|
+| nodes | JSONL read/write | Read-Path + `PATCH /nodes` | Nicht Default |
+| edges | JSONL read/legacy | Read-Path + `POST /edges` | Nicht Default |
+| accounts | JSONL read/create | Read-Path + `POST /accounts` | Nicht Default |
+
+Zusatzdetails:
+
+- `nodes`: Schema/Backfill/Read-Path proof-geführt; opt-in Node-Patch
+  vorhanden; nicht Default.
+- `edges`: Schema/Backfill/Read-Path proof-geführt; opt-in Edge-Create
+  vorhanden; nicht Default.
+- `accounts`: Schema/Backfill/Read-Path proof-geführt; opt-in Account-Create
+  vorhanden; neue PostgreSQL-Creates persistieren `webauthn_user_id`.
 
 Zusatzbefund:
 
@@ -139,7 +151,8 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 - Eindeutigkeitsregeln: mindestens `id`; weitere Constraints nur, wenn sie aus
   dem aktuellen Domänenvertrag ableitbar sind.
 - Edge-Create existiert opt-in.
-- Aktuelle Edge-Create-Semantik nutzt serialisierten PostgreSQL-Pfad mit Tabellenlock, Duplicate-Precheck, Cache-Limit-Check und finalem Insert.
+- Aktuelle Edge-Create-Semantik nutzt serialisierten PostgreSQL-Pfad
+  mit Tabellenlock, Duplicate-Precheck, Cache-Limit-Check und finalem Insert.
 - Performance-/Limit-Strategie bleibt offen.
 - Migrationsprovenienz: analog zu `domain_nodes`.
 - Foreign-Key-Entscheidung: **ausstehendes explizites Orphan-/Referenz-Audit**.
@@ -168,10 +181,10 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   Lese-Aufwand das rechtfertigt; das ist aber eine explizite Folge-Entscheidung.
 - Schreibpfad-Abdeckung: Der Cutover muss nicht nur Account-Erzeugung,
   sondern auch spätere Account-Mutationen abdecken, insbesondere
-  Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writebacks. Die Spalte
+  Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writeback. Die Spalte
   `webauthn_user_id` wird bei neuen PostgreSQL-Account-Create-Zeilen persistiert.
   Legacy-Fälle ohne diese UUID bleiben vorerst erhalten.
-  Backfill/Audit und späteres `NOT NULL` Constraint sind offen. WebAuthn-Credential-Writeback bleibt offen.
+  Backfill/Audit und späteres `NOT NULL` sind offen. WebAuthn-Credential-Writeback bleibt offen.
 - Indexe: Primärschlüssel auf `id`, eindeutiger Index auf `email` oder
   `lower(email)`, falls E-Mail-Login oder Lookup das benötigen.
 - Eindeutigkeitsregeln: öffentliche und private Sicht müssen getrennt bleiben;
@@ -197,12 +210,15 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 ## Offene Cutover-Blocker nach Phase E-C
 
 - Produktions-Cutover nicht erfolgt; JSONL bleibt Default-Wahrheit.
-- Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten, dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
+- Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten,
+  dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
 - E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
 - Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
 - WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
-- Legacy-Accounts ohne persistierte WebAuthn-UUID brauchen Backfill/Audit vor späterem `NOT NULL` auf der Spalte.
-- Edge-Create funktioniert opt-in, aber Lock-/Limit-Strategie ist nicht performance-optimiert.
+- Legacy-Accounts ohne persistierte WebAuthn-UUID brauchen Backfill/Audit
+  vor späterem `NOT NULL` auf der Spalte.
+- Edge-Create funktioniert opt-in, aber Lock-/Limit-Strategie ist
+  nicht performance-optimiert.
 - Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb ist offen.
 - JSONL-Demontage ist offen.
 
@@ -238,21 +254,24 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 ## CI- und Proof-Anforderungen
 
 Bereits vorhandene Proofs:
-- Schema migrations
+
+- Schema-Migrationen
 - Backfill
-- Read path
-- Account create write path
-- Node patch write path
-- Edge create write path
-- OPT-ARC-001 DB proof matrix guard
+- Read-Path
+- Account-Create-Write-Path
+- Node-Patch-Write-Path
+- Edge-Create-Write-Path
+- OPT-ARC-001-DB-Proof-Matrix-Guard
 
 Weiter erforderlich:
-- Runtime-smoke für vollständigen PostgreSQL-Domain-Betrieb
-- Multi-instance/cache-coherence proof, falls horizontale Skalierung erlaubt werden soll
-- E-Mail-unique proof
-- Step-up-E-Mail-Persistenz proof
-- WebAuthn-Credential-Writeback proof
-- JSONL-demontage proof
+
+- Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb
+- Multi-Instance-/Cache-Kohärenz-Proof, falls horizontale Skalierung
+  erlaubt werden soll
+- E-Mail-Unique-Proof
+- Step-up-E-Mail-Persistenz-Proof
+- WebAuthn-Credential-Writeback-Proof
+- JSONL-Demontage-Proof
 
 ## Akzeptanzkriterien für OPT-ARC-001
 
