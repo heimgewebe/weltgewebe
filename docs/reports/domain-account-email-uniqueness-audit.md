@@ -224,6 +224,51 @@ Begründung:
 - `DATABASE_URL` nicht gesetzt; PostgreSQL-Audit nicht durchführbar.
 - Für TODO 2 (Unique-Index) wird ein Datenlauf gegen Deployment-Daten benötigt; der vorliegende Harness ist dafür einsatzbereit.
 
+## Runtime-Audit-Lauf 2026-06-13
+
+### Runtime-Quellen
+
+- PostgreSQL: ausgeführt auf dem Heimserver im Docker-Compose-Projekt `weltgewebe`, Service `db`, Tabelle `public.domain_accounts`.
+- JSONL: keine Runtime-JSONL-Quelle auditiert; repo-lokal wurde nur `.gewebe/in/demo.accounts.jsonl` als `demo_or_fixture` gefunden.
+- Source-Fingerprint:
+  - PostgreSQL target: `weltgewebe` Compose-Projekt, Service `db`; konkrete Datenbank-URL nicht dokumentiert.
+  - JSONL runtime source: n/a.
+
+### Runtime-PostgreSQL-Aggregate
+
+| Metrik | Wert |
+| --- | ---: |
+| `domain_accounts` exists | ja |
+| lower(email) duplicate groups | 0 |
+| lower(btrim(email)) duplicate groups | 0 |
+| records_total | 0 |
+| null_email_count | 0 |
+| empty_email_count | 0 |
+| whitespace_changed_count | 0 |
+
+### Runtime-Redaktionsregel
+
+Dieser Runtime-Audit-Abschnitt enthält keine echten E-Mail-Adressen, keine Account-IDs, keine Account-Zeilen und keine Datenbank-URL. Dokumentiert werden nur aggregierte Counts und ein redigiertes Ausführungsziel.
+
+### Runtime-Policy-Einschätzung
+
+Der aktuelle PostgreSQL-Runtime-Bestand enthält keine Account-Records. Damit liegen im aktuellen DB-Zustand keine vorhandenen E-Mail-Kollisionen vor, die einen späteren Unique-Constraint blockieren würden. Das ist keine Aussage über frühere oder externe Legacy-Datenbestände; es belegt nur den aktuell auditierten Runtime-Zustand auf dem Heimserver.
+
+Für TODO 2 ist damit der Constraint-Design-Schritt freigegeben. Wegen der bereits dokumentierten Trim-Frage bleibt `lower(btrim(email))` gegenüber `lower(email)` der robustere Constraint-Kandidat, sofern die endgültige Policy leere bzw. nach Trim leere E-Mails weiterhin ignoriert.
+
+### Runtime-Entscheidung für nächsten Schritt
+
+Status: `ready_for_constraint_design`
+
+Begründung:
+
+- `domain_accounts` ist im PostgreSQL-Runtime-Stack vorhanden.
+- Der aktuelle PostgreSQL-Bestand enthält 0 Account-Records.
+- Es gibt 0 Duplicate-Gruppen für `lower(email)`.
+- Es gibt 0 Duplicate-Gruppen für `lower(btrim(email))`.
+- Es gibt keine gemessenen Whitespace- oder Empty-Email-Legacy-Fälle im aktuellen DB-Bestand.
+- TODO 2 bleibt ein eigener PR: kein Unique-Index, keine Runtime-Änderung und kein API-Konfliktmapping in diesem Report-PR.
+
 ## Nächster PR
 
 PR E2 kann erst nach einem echten Datenlauf gegen relevante JSONL- und/oder
