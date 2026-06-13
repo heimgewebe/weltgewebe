@@ -14,7 +14,10 @@ relations:
     target: apps/api/src/routes/accounts.rs
   - type: relates_to
     target: scripts/docmeta/audit_account_email_uniqueness.py
-summary: Audit report on account e-mail uniqueness, duplicates, and runtime behavior to prepare for a DB unique constraint.
+summary: >
+  Audit- und Policy-Report zur Vorbereitung einer späteren PostgreSQL-
+  E-Mail-Eindeutigkeitsregel für Domain-Accounts ohne Runtime-Code,
+  Migration oder Unique-Index in diesem PR.
 ---
 
 # Domain Account E-Mail Uniqueness Audit
@@ -62,7 +65,9 @@ Das Skript `scripts/docmeta/audit_account_email_uniqueness.py` unterscheidet fol
 - `trim_changes_value`
 - `case_changes_value`
 - `invalid_json`
+- `non_object_json`
 - `missing_id`
+- `non_string_email`
 
 ## JSONL-Audit
 
@@ -86,6 +91,11 @@ Das Skript gibt Exit-Code 0 zurück, außer wenn `--fail-on-duplicates` verwende
 ## PostgreSQL-Audit-SQL
 
 Aktuelle Runtime-Annäherung:
+
+> [!NOTE]
+> PostgreSQL lower(...) ist für Nicht-ASCII-Zeichen nicht identisch mit der
+> aktuellen Rust-Semantik to_ascii_lowercase(). Die SQL-Queries sind daher
+> Audit-Annäherungen, keine finale Constraint-Definition.
 
 ```sql
 SELECT
@@ -131,7 +141,8 @@ FROM domain_accounts;
 
 - Ein reproduzierbares Audit-Paket ist vorhanden.
 - Das aktuelle E-Mail-Runtime-Verhalten ist dokumentiert und auf Grundlage von Code-Prüfung belegt.
-- Konfliktklassen und eine Normalisierungs-Policy wurden definiert.
+- Konfliktklassen sind definiert.
+- Die Normalisierungs-Policy ist als Entscheidungsvorlage dokumentiert und vor PR E2 final zu bestätigen.
 - PostgreSQL-Queries für das DB-Audit sind vorbereitet.
 
 ## Nicht-Ziele
@@ -147,4 +158,7 @@ FROM domain_accounts;
 
 ## Nächster PR
 
-PR E2 (falls das Audit keine Blockaden ergibt): Umsetzung des Unique-Constraints in PostgreSQL basierend auf den Entscheidungen dieser Normalisierungs-Policy.
+PR E2 kann erst nach einem echten Datenlauf gegen relevante JSONL- und/oder
+PostgreSQL-Daten entscheiden, ob der spätere Constraint auf lower(email),
+lower(trim(email)), physisch bereinigten Daten oder einer anderen expliziten
+Policy beruhen soll.

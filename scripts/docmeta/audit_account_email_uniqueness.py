@@ -41,12 +41,11 @@ def main():
     current_groups = defaultdict(list)
     proposed_groups = defaultdict(list)
 
-    def finding_key(item: dict) -> tuple[str, int, str, str]:
+    def finding_key(item: dict) -> tuple[str, int, str]:
         return (
             item.get("source_path", ""),
             int(item.get("line_number", -1)),
-            str(item.get("id", "")),
-            str(item.get("classifications", [""])[0]) if item.get("classifications") else ""
+            str(item.get("id", ""))
         )
 
     seen_finding_keys = set()
@@ -153,13 +152,17 @@ def main():
                             add_finding(item)
                             continue
                             
+                        add_classification(item, "valid_email")
+                            
                         if raw_email != trimmed_email:
+                            add_classification(item, "trim_changes_value")
                             summary["records_trim_changes_value"] += 1
                             
                         current_runtime_key = normalize_ascii_lower(raw_email)
                         proposed_constraint_key = normalize_ascii_lower(trimmed_email)
                         
                         if current_runtime_key != raw_email:
+                            add_classification(item, "case_changes_value")
                             summary["records_case_changes_value"] += 1
                             
                         item["current_runtime_key"] = current_runtime_key
@@ -167,8 +170,8 @@ def main():
                         
                         current_groups[current_runtime_key].append(item)
                         proposed_groups[proposed_constraint_key].append(item)
-            except Exception as e:
-                print(f"Error reading file {path_str}: {e}", file=sys.stderr)
+            except OSError as exc:
+                print(f"Error reading file {path_str}: {exc}", file=sys.stderr)
                 sys.exit(1)
 
     duplicate_groups_out = {

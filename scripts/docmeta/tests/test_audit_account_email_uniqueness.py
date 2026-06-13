@@ -51,6 +51,11 @@ def test_case_only_duplicate(tmp_path):
     
     group_prop = out["duplicate_groups"]["proposed_constraint_key"][0]
     assert group_prop["key"] == "alex@example.org"
+    
+    classes_by_id = {item["id"]: item["classifications"] for item in group_curr["items"]}
+    assert "case_changes_value" in classes_by_id["1"]
+    assert "valid_email" in classes_by_id["1"]
+    assert "valid_email" in classes_by_id["2"]
 
 def test_whitespace_sensitive_duplicate(tmp_path):
     lines = [
@@ -67,6 +72,11 @@ def test_whitespace_sensitive_duplicate(tmp_path):
     
     group = out["duplicate_groups"]["proposed_constraint_key"][0]
     assert group["key"] == "alex@example.org"
+
+    classes_by_id = {item["id"]: item["classifications"] for item in group["items"]}
+    assert "trim_changes_value" in classes_by_id["1"]
+    assert "valid_email" in classes_by_id["1"]
+    assert "valid_email" in classes_by_id["2"]
 
 def test_missing_null_empty(tmp_path):
     lines = [
@@ -131,7 +141,9 @@ def test_ascii_only_lower(tmp_path):
     code, out, err = run_script(tmp_path, lines)
     assert code == 0
     assert out["summary"]["duplicate_current_runtime_key_groups"] == 1
-    finding = [f for f in out["findings"] if f["id"] == "1"][0]
+    findings_1 = [f for f in out["findings"] if f["id"] == "1"]
+    assert len(findings_1) == 1
+    finding = findings_1[0]
     assert finding["current_runtime_key"] == "alex-ß-İ-i@example.org"
     assert finding["proposed_constraint_key"] == "alex-ß-İ-i@example.org"
 
@@ -160,8 +172,11 @@ def test_missing_id_and_non_string_email(tmp_path):
     findings = out["findings"]
     assert len(findings) == 3
     
-    missing_id = [f for f in findings if "missing_id" in f["classifications"]][0]
-    assert "missing_id" in missing_id["classifications"]
+    missing_id_findings = [
+        f for f in findings
+        if "missing_id" in f.get("classifications", [])
+    ]
+    assert len(missing_id_findings) == 1
     
     non_strings = [f for f in findings if "non_string_email" in f["classifications"]]
     assert len(non_strings) == 2
@@ -179,32 +194,6 @@ def test_non_object_json(tmp_path):
         if "non_object_json" in f.get("classifications", [])
     ]
     assert len(findings) == 1
-
-def test_unicode_output_is_not_ascii_escaped(tmp_path):
-    jsonl_file = tmp_path / "test.jsonl"
-    jsonl_file.write_text(
-        json.dumps({"id": "1", "email": "ALEX-ß-İ-I@example.org"}) + "\n",
-        encoding="utf-8",
-    )
-
-    import subprocess
-    import sys
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "scripts.docmeta.audit_account_email_uniqueness",
-            "--accounts-jsonl",
-            str(jsonl_file),
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0
-    # In order to trigger stdout with the string, we need a finding or duplicate.
-    # The missing id test logic added "missing_id", but here it's valid so it has NO findings.
-    # We should add a duplicate to ensure it's outputted.
 
 def test_unicode_output_is_not_ascii_escaped_with_duplicate(tmp_path):
     jsonl_file = tmp_path / "test.jsonl"
