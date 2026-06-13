@@ -184,7 +184,8 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   Step-up-E-Mail-Änderungen und WebAuthn-Credential-Writeback. Die Spalte
   `webauthn_user_id` wird bei neuen PostgreSQL-Account-Create-Zeilen persistiert.
   Legacy-Fälle ohne diese UUID bleiben vorerst erhalten.
-  Backfill/Audit und späteres `NOT NULL` sind offen. WebAuthn-Credential-Writeback bleibt offen.
+  Backfill/Audit und späteres `NOT NULL` bleiben offen.
+  Auch WebAuthn-Credential-Writeback bleibt offen.
 - Indexe: Primärschlüssel auf `id`, eindeutiger Index auf `email` oder
   `lower(email)`, falls E-Mail-Login oder Lookup das benötigen.
 - Eindeutigkeitsregeln: öffentliche und private Sicht müssen getrennt bleiben;
