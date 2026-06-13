@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildMapScene, resolveApiMode } from "./scene";
+import { buildMapScene, isRenderableCoordinate, resolveApiMode } from "./scene";
 import type { Node, Account, Edge } from "./types";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -45,6 +45,21 @@ describe("resolveApiMode", () => {
 
   it("returns 'local' when apiBase is undefined", () => {
     expect(resolveApiMode(undefined)).toBe("local");
+  });
+});
+
+describe("isRenderableCoordinate", () => {
+  it("accepts finite coordinates inside inclusive map bounds", () => {
+    expect(isRenderableCoordinate(-90, -180)).toBe(true);
+    expect(isRenderableCoordinate(90, 180)).toBe(true);
+    expect(isRenderableCoordinate(53.5, 10.0)).toBe(true);
+  });
+
+  it("rejects invalid render coordinates", () => {
+    expect(isRenderableCoordinate(0 / 0, 10.0)).toBe(false);
+    expect(isRenderableCoordinate(53.5, 1 / 0)).toBe(false);
+    expect(isRenderableCoordinate(91, 10.0)).toBe(false);
+    expect(isRenderableCoordinate(53.5, 181)).toBe(false);
   });
 });
 
@@ -104,6 +119,29 @@ describe("buildMapScene", () => {
     });
 
     expect(scene.entities).toHaveLength(0);
+  });
+
+  it("excludes invalid render coordinates before map overlay creation", () => {
+    const scene = buildMapScene({
+      nodes: [
+        makeNode({ id: "valid-node", location: { lat: 53.5, lon: 10.0 } }),
+        makeNode({ id: "bad-node", location: { lat: 91, lon: 10.0 } }),
+      ],
+      accounts: [
+        makeAccount({ id: "valid-account", public_pos: { lat: 53.56, lon: 10.06 } }),
+        makeAccount({ id: "bad-account", public_pos: { lat: 53.56, lon: 181 } }),
+      ],
+      edges: [],
+      loadState: "ok",
+      resourceStatus: [],
+      apiBase: undefined,
+      basemapMode: "local-sovereign",
+    });
+
+    expect(scene.entities.map((entity) => entity.id)).toEqual([
+      "valid-node",
+      "valid-account",
+    ]);
   });
 
   it("merges nodes and accounts into entities", () => {
