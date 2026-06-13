@@ -247,31 +247,20 @@ impl AppConfig {
 
     pub fn load() -> Result<Self> {
         let config = match env::var("APP_CONFIG_PATH") {
-            Ok(path) => {
-                if !Path::new(&path).is_file() {
-                    tracing::warn!(
-                        path,
-                        "configuration file specified but not found or is not a regular file; falling back to defaults"
-                    );
-                    serde_yaml::from_str(Self::DEFAULT_CONFIG)
-                        .context("failed to parse embedded default configuration")?
-                } else {
-                    match Self::load_from_path(&path) {
-                        Ok(cfg) => cfg,
-                        Err(e) => {
-                            tracing::warn!(
-                                path,
-                                error = %e,
-                                "failed to load configuration file; falling back to defaults"
-                            );
-                            serde_yaml::from_str(Self::DEFAULT_CONFIG)
-                                .context("failed to parse embedded default configuration")?
-                        }
-                    }
-                }
-            }
-            Err(_) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
+            Ok(path) => Self::load_from_path(&path).with_context(|| {
+                format!(
+                    "APP_CONFIG_PATH is set to '{}', but the configuration could not be loaded",
+                    path
+                )
+            })?,
+            Err(env::VarError::NotPresent) => serde_yaml::from_str(Self::DEFAULT_CONFIG)
                 .context("failed to parse embedded default configuration")?,
+            Err(env::VarError::NotUnicode(value)) => {
+                anyhow::bail!(
+                    "APP_CONFIG_PATH is set but is not valid Unicode: {:?}",
+                    value
+                );
+            }
         };
 
         config.apply_env_overrides()
@@ -718,7 +707,7 @@ delegation_expire_days: 28
 
     #[test]
     #[serial]
-    fn load_uses_embedded_defaults_when_config_file_missing() -> Result<()> {
+    fn load_uses_defaults_when_app_config_path_is_unset() -> Result<()> {
         let temp_dir = tempdir()?;
         let _dir = DirGuard::change_to(temp_dir.path())?;
 
@@ -727,19 +716,24 @@ delegation_expire_days: 28
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
         assert_eq!(cfg.fade_days, 7);
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
 
         Ok(())
     }
 
     #[test]
     #[serial]
-    fn load_falls_back_to_defaults_when_config_path_is_invalid() -> Result<()> {
+    fn load_errors_when_app_config_path_is_missing() -> Result<()> {
         let temp_dir = tempdir()?;
         let invalid_path = temp_dir.path().join("does-not-exist.yml");
 
@@ -747,16 +741,134 @@ delegation_expire_days: 28
             "APP_CONFIG_PATH",
             invalid_path.to_str().expect("path is valid utf-8"),
         );
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
+
+        let res = AppConfig::load();
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(err_msg.contains("APP_CONFIG_PATH is set to"));
+        assert!(err_msg.contains("does-not-exist.yml"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_errors_when_app_config_path_is_not_a_file() -> Result<()> {
+        let temp_dir = tempdir()?;
+
+        // temp_dir.path() is a directory, not a file
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            temp_dir.path().to_str().expect("path is valid utf-8"),
+        );
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
+
+        let res = AppConfig::load();
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        // A set APP_CONFIG_PATH is operator intent; falling back to defaults would hide a deployment/configuration error.
+        assert!(err_msg.contains("APP_CONFIG_PATH is set to"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_errors_when_app_config_path_yaml_is_invalid() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), "fade_days: [")?;
+
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            file.path().to_str().expect("path is valid utf-8"),
+        );
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
+
+        let res = AppConfig::load();
+        assert!(res.is_err());
+        let err_msg = res.unwrap_err().to_string();
+        assert!(err_msg.contains("APP_CONFIG_PATH is set to"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_errors_when_explicit_config_fails_domain_write_validation() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        let invalid_yaml = r#"fade_days: 30
+ron_days: 14
+anonymize_opt_in: false
+delegation_expire_days: 365
+domain_read_source: jsonl
+domain_account_write_source: postgres
+"#;
+        std::fs::write(file.path(), invalid_yaml)?;
+
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            file.path().to_str().expect("path is valid utf-8"),
+        );
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
+
+        let res = AppConfig::load();
+        assert!(res.is_err());
+        let err_msg = format!("{:?}", res.unwrap_err());
+        assert!(err_msg
+            .contains("domain_account_write_source=postgres requires domain_read_source=postgres"));
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn load_uses_explicit_app_config_path_when_valid() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        let valid_yaml = r#"fade_days: 42
+ron_days: 84
+anonymize_opt_in: true
+delegation_expire_days: 28
+"#;
+        std::fs::write(file.path(), valid_yaml)?;
+
+        let _config_path = EnvGuard::set(
+            "APP_CONFIG_PATH",
+            file.path().to_str().expect("path is valid utf-8"),
+        );
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+        let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
+        let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
+        let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
+        let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert_eq!(cfg.fade_days, 7);
+        assert_eq!(cfg.fade_days, 42);
         assert_eq!(cfg.ron_days, 84);
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.delegation_expire_days, 28);
+        assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
+        assert_eq!(
+            cfg.domain_account_write_source,
+            DomainAccountWriteSource::Jsonl
+        );
+        assert_eq!(cfg.domain_node_write_source, DomainNodeWriteSource::Jsonl);
+        assert_eq!(cfg.domain_edge_write_source, DomainEdgeWriteSource::Jsonl);
 
         Ok(())
     }
