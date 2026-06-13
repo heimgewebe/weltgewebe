@@ -56,23 +56,47 @@ export function resolveApiMode(
 }
 
 /**
+ * Returns whether coordinates are safe to hand to MapLibre rendering APIs.
+ */
+export function isRenderableCoordinate(lat: number, lon: number): boolean {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lon >= -180 &&
+    lon <= 180
+  );
+}
+
+/**
  * Transforms nodes into MapEntityNode[].
  */
 function mapNodesToEntities(nodes: Node[]): MapEntityNode[] {
-  return nodes.map((n) => ({
-    type: "node" as const,
-    id: n.id,
-    title: n.title,
-    lat: n.location.lat,
-    lon: n.location.lon,
-    summary: n.summary,
-    info: n.info,
-    kind: n.kind,
-    tags: n.tags,
-    modules: n.modules,
-    created_at: n.created_at,
-    updated_at: n.updated_at,
-  }));
+  const result: MapEntityNode[] = [];
+  for (const n of nodes) {
+    const lat = n.location.lat;
+    const lon = n.location.lon;
+    if (!isRenderableCoordinate(lat, lon)) {
+      continue;
+    }
+
+    result.push({
+      type: "node" as const,
+      id: n.id,
+      title: n.title,
+      lat,
+      lon,
+      summary: n.summary,
+      info: n.info,
+      kind: n.kind,
+      tags: n.tags,
+      modules: n.modules,
+      created_at: n.created_at,
+      updated_at: n.updated_at,
+    });
+  }
+  return result;
 }
 
 /**
@@ -83,12 +107,18 @@ function mapAccountsToEntities(accounts: Account[]): MapEntityGarnrolle[] {
   const result: MapEntityGarnrolle[] = [];
   for (const a of accounts) {
     if (a.public_pos) {
+      const lat = a.public_pos.lat;
+      const lon = a.public_pos.lon;
+      if (!isRenderableCoordinate(lat, lon)) {
+        continue;
+      }
+
       result.push({
         type: "garnrolle" as const,
         id: a.id,
         title: a.title,
-        lat: a.public_pos.lat,
-        lon: a.public_pos.lon,
+        lat,
+        lon,
         summary: a.summary,
         modules: a.modules,
         created_at: a.created_at,
