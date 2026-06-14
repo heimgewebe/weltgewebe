@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 371 |
+| Relationen gesamt | 375 |
 | — depends_on | 18 |
-| — relates_to | 351 |
+| — relates_to | 355 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (136 Dokumente):
+**Cluster 1** (137 Dokumente):
 
 - `.github/workflows/api.yml`
 - `AGENTS.md`
@@ -106,6 +106,7 @@ _Keine Lücken erkannt._
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
 - `docs/process/fahrplan.md`
+- `docs/process/report-lifecycle-contract-alignment.md`
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
