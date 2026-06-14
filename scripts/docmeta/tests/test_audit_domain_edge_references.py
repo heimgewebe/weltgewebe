@@ -282,8 +282,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn("SUPER_SECRET_PASSWORD", result.stdout)
         self.assertNotIn("SUPER_SECRET_PASSWORD", result.stderr)
-        self.assertNotIn("example.invalid", result.stdout)
-        self.assertNotIn("example.invalid", result.stderr)
+        self.assertNotIn(env["DATABASE_URL"], result.stdout)
+        self.assertNotIn(env["DATABASE_URL"], result.stderr)
 
     def test_jsonl_output_contains_no_raw_ids_by_default(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
