@@ -34,6 +34,7 @@ async fn clean(pool: &PgPool) {
         .expect("clean domain_accounts");
 }
 
+// Each DB proof test starts from a clean rp-* fixture namespace.
 async fn prepare_pool() -> PgPool {
     let pool = direct_pool().await;
     run_migrations(&pool).await;
@@ -46,8 +47,6 @@ async fn prepare_pool() -> PgPool {
 #[serial]
 async fn nodes_loader_reconstructs_public_shape() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
          VALUES ('rp-node-a', 'place', 'Read Path Node', 53.55, 9.99, \
@@ -71,8 +70,6 @@ async fn nodes_loader_reconstructs_public_shape() {
 #[serial]
 async fn edges_loader_respects_max_edges_cache_limit() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
     for id in ["rp-edge-a", "rp-edge-b"] {
         sqlx::query(
@@ -99,8 +96,6 @@ async fn edges_loader_respects_max_edges_cache_limit() {
 #[serial]
 async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, email, public_payload, private_payload) \
@@ -131,8 +126,6 @@ async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
 #[serial]
 async fn accounts_loader_respects_mode_column_ron_even_with_location() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -160,8 +153,6 @@ async fn accounts_loader_respects_mode_column_ron_even_with_location() {
 #[serial]
 async fn accounts_loader_approximate_radius_zero_becomes_250() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -190,8 +181,6 @@ async fn accounts_loader_approximate_radius_zero_becomes_250() {
 #[serial]
 async fn accounts_loader_private_visibility_suppresses_public_pos() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -219,8 +208,6 @@ async fn accounts_loader_private_visibility_suppresses_public_pos() {
 #[serial]
 async fn accounts_loader_ron_flag_forces_ron_even_with_location() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -248,8 +235,6 @@ async fn accounts_loader_ron_flag_forces_ron_even_with_location() {
 #[serial]
 async fn empty_tables_with_only_fixtures_deleted_do_not_fail() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
 
     let _nodes = load_nodes_from_postgres(&pool).await.expect("load nodes");
     let _edges = load_edges_from_postgres(&pool).await.expect("load edges");
@@ -263,8 +248,6 @@ async fn empty_tables_with_only_fixtures_deleted_do_not_fail() {
 #[serial]
 async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     let pool = prepare_pool().await;
-    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
-    // shared test database tidy for successful runs.
     let temp_dir = tempfile::tempdir().expect("create temp dir");
     let _env = EnvGuard::set("GEWEBE_IN_DIR", temp_dir.path().to_str().unwrap());
 
@@ -396,5 +379,6 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
         ]
     );
 
+    // Keep the shared proof database tidy after the successful diagnostic run.
     clean(&pool).await;
 }
