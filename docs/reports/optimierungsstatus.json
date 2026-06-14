@@ -248,13 +248,14 @@
         "CI-Job: db-domain-edge-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
-        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)",
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): historische DB-Domain-Proof-Evidence; Schema- und Backfill-Proof bleiben belegt, der Read-Path-Proof-Harness wurde später durch den List-Order-Gap-Diagnostic erweitert und wartet auf frische PR-CI-Evidence",
         "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
       ],
       "missing_evidence": [
-        "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
         "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
+        "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
+        "Read-Path-Proof-Harness nach List-Order-Gap-Diagnostic wieder prepared; frische PR-CI-Evidence ausstehend",
+        "Legacy-Order-Preservation für /nodes und /edges bleibt Cutover-Blocker vor PostgreSQL-Read-Cutover"
       ],
       "updated_at": "2026-06-12"
     },

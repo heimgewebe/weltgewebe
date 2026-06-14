@@ -11,6 +11,8 @@ relations:
     target: docs/process/README.md
   - type: relates_to
     target: docs/_generated/report-lifecycle-inventory.md
+  - type: relates_to
+    target: docs/process/report-lifecycle-contract-alignment.md
 ---
 
 # Report Lifecycle Policy
@@ -63,32 +65,27 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 
 ## Contract-Alignment-Gate
 
-Diese Policy beschreibt das Zielmodell. Die hier beschriebenen zusätzlichen
-Lifecycle-Felder und Statuswerte sind noch nicht automatisch Teil des
-bestehenden DocMeta-Contracts.
+Diese Policy beschreibt weiterhin ein Zielmodell. Die hier beschriebenen
+Lifecycle-Felder sind durch diesen PR noch nicht automatisch Teil des
+bestehenden DocMeta-Contracts, eines Validators oder eines CI-Guards.
 
-Vor dem ersten Backfill oder einer Pilot-Annotation im Frontmatter muss ein
-separater Contract-Schritt entscheiden:
-
-- ob `contracts/docmeta.schema.json` und `architecture/docmeta.schema.md`
-  erweitert werden,
-- ob Lifecycle-Metadaten in einem eigenen Report-Lifecycle-Schema validiert
-  werden,
-- oder ob die Policy auf das bestehende DocMeta-Vokabular zurückgeschnitten
-  wird.
-
-Bis diese Entscheidung getroffen ist, dürfen neue Statuswerte wie `deferred`,
-`superseded` und `archived` nicht als allgemein contract-gültige
-DocMeta-Statuswerte verstanden werden.
+Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
+`superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
+`docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
 
 Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
 kanonische Policy-Quelle.
+
+Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
+Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
+späterer Übersicht folgt in separaten Tooling-PRs.
 
 ## Begriffe
 
 - **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
 - **Lifecycle**: Die Rolle eines Reports im Lebenszyklus: warum er existiert, wie lange er handlungsleitend ist und wann er geprüft oder abgelöst wird.
-- **Status**: Der aktuelle Zustand eines Reports, zum Beispiel `draft`, `active`, `superseded` oder `archived`.
+- **Status**: Der globale DocMeta-Status eines Reports, zum Beispiel `draft`, `active`, `deprecated` oder `canonical`.
+- **Lifecycle-Zustand**: Der report-spezifische Zustand in `lifecycle_state`, zum Beispiel `active`, `superseded` oder `archived`.
 - **Supersession**: Eine explizite Ablösung durch ein anderes Artefakt. Supersession bedeutet nicht automatisch Löschung.
 - **Archivierung**: Ein Report bleibt erhalten, ist aber nicht mehr handlungsleitend.
 - **Löschung**: Physisches Entfernen eines Reports aus dem Repo. Löschung ist der letzte Schritt und nur nach separater Prüfung erlaubt.
@@ -114,17 +111,25 @@ kanonische Policy-Quelle.
 
 ## Status-Semantik
 
-Bestehende DocMeta-Statuswerte wie `draft`, `active` und `deprecated` behalten
-ihre bisherige Contract-Bedeutung. Neue lifecycle-spezifische Werte wie
-`deferred`, `superseded` und `archived` sind erst nach Contract-Alignment als
-Frontmatter-Werte verwendbar.
+Die folgenden Werte beschreiben das Zielvokabular für den report-spezifischen
+`lifecycle_state`. Bestehende DocMeta-Statuswerte wie `draft`, `active` und
+`deprecated` behalten ihre bisherige Contract-Bedeutung. Neue
+lifecycle-spezifische Zustände wie `deferred`, `superseded` und `archived`
+werden nicht direkt als globale DocMeta-Statuswerte eingeführt.
 
-- **draft**: In Arbeit oder vorbereitend. Noch nicht maßgeblich.
 - **active**: Aktuell handlungsleitend oder als gültiger Bezugspunkt verwendbar.
 - **deferred**: Bewusst zurückgestellt. Nicht verworfen, aber derzeit nicht handlungsleitend.
-- **superseded**: Durch ein anderes Artefakt ersetzt. Das ablösende Artefakt soll über `superseded_by` angegeben werden.
+- **superseded**: Durch ein anderes Artefakt ersetzt. Das ablösende Artefakt soll über `superseded_by` und/oder `relations[type=supersedes]` nachvollziehbar sein.
 - **archived**: Historisch erhalten, aber nicht mehr handlungsleitend.
-- **deprecated**: Veraltet oder nicht mehr empfohlen, aber Ersatz, Archivierung oder Löschung sind noch nicht abschließend geklärt.
+
+`draft`, `active`, `deprecated` und `canonical` bleiben DocMeta-Statuswerte.
+Wenn ein Report zusätzlich einen Lifecycle-Zustand braucht, wird dieser über
+`lifecycle_state` modelliert.
+
+`active` kann sowohl als bestehender DocMeta-Status als auch als
+report-spezifischer `lifecycle_state` vorkommen. Der DocMeta-Status beschreibt
+die allgemeine Dokumentgültigkeit; `lifecycle_state: active` beschreibt, ob der
+Report fachlich noch handlungsleitend ist.
 
 Wichtig:
 `deprecated` ist kein Papierkorb.
@@ -137,6 +142,10 @@ Wichtig:
 - **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
 - **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
   fällig wird.
+- **lifecycle_state**: Report-spezifischer Lifecycle-Zustand, zum Beispiel
+  `active`, `deferred`, `superseded` oder `archived`. Dieses Feld ist Teil des
+  Zielmodells und wird erst nach Contract-Alignment oder eigenem
+  Lifecycle-Schema validatorfähig.
 - **superseded_by**: Pfad zum ablösenden Artefakt. Dieses Feld darf nicht als
   alleinige Supersession-Wahrheit verstanden werden. Die bestehende
   Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes`
@@ -162,10 +171,11 @@ lifecycle: audit
 
 Beispiel für die spätere Abbildung einer Ablösung:
 
-Im alten Report, falls das Lifecycle-Feld contract-aktiv wird:
+Im alten Report, falls die Lifecycle-Felder contract-aktiv werden:
 
 ```yaml
-status: superseded
+status: deprecated
+lifecycle_state: superseded
 superseded_by: docs/reports/new-proof.md
 ```
 
@@ -178,25 +188,26 @@ relations:
 ```
 
 Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
-`lifecycle`, `owner_task`, `review_after`, `superseded_by`. Spätere Validatoren
-sollen abweichende Schreibweisen wie `ownerTask` oder `reviewAfter` nicht als
-gleichwertig behandeln.
+`lifecycle`, `owner_task`, `review_after`, `lifecycle_state`, `superseded_by`.
+Spätere Validatoren sollen abweichende Schreibweisen wie `ownerTask`,
+`reviewAfter` oder `lifecycleState` nicht als gleichwertig behandeln.
 
-## Pflichtfelder nach Status
+## Pflichtfelder nach Lifecycle-Zustand
 
-| status | lifecycle | owner_task | review_after | superseded_by | Bemerkung |
+| lifecycle_state | lifecycle | owner_task | review_after | superseded_by | Bemerkung |
 | --- | --- | --- | --- | --- | --- |
-| draft | empfohlen | empfohlen | optional | nein | Noch nicht handlungsleitend, aber spätere Zuordnung soll vorbereitet werden. |
 | active | erforderlich | erforderlich | erforderlich | nein | Aktive Reports brauchen Zweck, Verantwortung und Review-Zeitpunkt. |
 | deferred | erforderlich | erforderlich | erforderlich | nein | Zurückgestellte Reports warten auf Prüfung oder Reaktivierung; abgelöste Reports sind `superseded`. |
 | superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung muss explizit nachvollziehbar sein. |
 | archived | erforderlich | erforderlich | nein | erforderlich* | Historisch erhalten, nicht mehr handlungsleitend; Legacy-Ausnahmen brauchen später ein explizites Ausnahmefeld. |
-| deprecated | erforderlich | erforderlich | empfohlen | erforderlich* | Veraltet, aber endgültiger Umgang noch offen; Ablösung oder Ausnahme muss später maschinenlesbar werden. |
+
+`draft` und `deprecated` bleiben DocMeta-Statuswerte. Wenn ein Report zusätzlich
+einen Lifecycle-Zustand braucht, wird dieser über `lifecycle_state` modelliert.
 
 `erforderlich*` bedeutet: Das aktuelle Inventory meldet terminale Status ohne
-`superseded_by` als Lücke. Falls historische Legacy-Dokumente ohne Ersatz
-zulässig werden sollen, braucht das einen späteren Generator-/Validator-Schritt
-mit explizitem Ausnahmefeld statt stiller Leerstelle.
+`superseded_by` als Lücke. Nach der Contract-Alignment-Entscheidung muss ein
+späterer Tooling-PR diese Prüfung auf `lifecycle_state` oder ein separates
+Lifecycle-Schema ausrichten.
 
 Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
 
@@ -229,9 +240,9 @@ bereits archivierte Quelle blockiert nicht automatisch.
 
 ## Archivierungsregeln
 
-Standard: `status: archived`
+Standard: `status: deprecated` mit `lifecycle_state: archived`
 
-Status-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
+Lifecycle-State-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
 
 Physische Archivierung ist später optional:
 
@@ -249,11 +260,12 @@ Wichtig: Noch keine Archivierung in diesem PR.
 
 ## Löschregeln
 
-Direktes Löschen aus draft oder active ist nicht erlaubt.
+Direktes Löschen aus `status: draft`, `status: active` oder
+`lifecycle_state: active` ist nicht erlaubt.
 
 Löschen nur, wenn alle Bedingungen erfüllt sind:
 
-- Report ist `archived` oder `superseded`.
+- Report hat `lifecycle_state: archived` oder `lifecycle_state: superseded`.
 - `superseded_by` existiert oder ein später definiertes maschinenlesbares
   Ausnahmefeld dokumentiert bewusst, warum kein Ersatzartefakt existiert.
 - Keine aktive Primary Reference existiert.
@@ -276,7 +288,7 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 6. **Backfill**: kleine Slices statt Massen-PR.
 7. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
 8. **Global strict**: erst nach abgeschlossenem Backfill.
-9. **Archivierung**: zunächst status-only.
+9. **Archivierung**: zunächst Lifecycle-State-only.
 10. **Löschung**: nur separat und nach Referenzcheck.
 
 Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
@@ -294,14 +306,16 @@ status: active
 lifecycle: audit
 owner_task: OPT-ARC-001
 review_after: 2026-07-13
+lifecycle_state: active
 ```
 
 ### Superseded proof
 
 ```yaml
-status: superseded
+status: deprecated
 lifecycle: proof
 owner_task: OPT-ARC-001
+lifecycle_state: superseded
 superseded_by: docs/reports/new-proof.md
 ```
 
@@ -310,6 +324,8 @@ superseded_by: docs/reports/new-proof.md
 Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine
 offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder
 Validator-Verhalten modelliert werden.
+
+Diese Beispiele zeigen das Zielmodell nach abgeschlossenem Contract Alignment.
 
 ## Offene Entscheidungen
 

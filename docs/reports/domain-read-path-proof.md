@@ -79,3 +79,70 @@ Geltende Grenzen:
 - Kein Abschalten oder Entfernen von JSONL.
 - Kein Produktions-Cutover.
 - Kein grüner PR-CI-Laufbeleg für den neuen Read-Path-Job in diesem Dokument.
+
+## JSONL/PostgreSQL List Parity Diagnostic
+
+Status: diagnostic_gap / prepared for CI.
+
+This diagnostic checks the loader/cache order that the legacy list endpoints
+paginate with `offset` / `limit` before any PostgreSQL runtime cutover.
+It is not a full HTTP route-level parity proof.
+
+### Current contract anchors
+
+- Legacy `/nodes` uses cache insertion order with `offset` / `limit`.
+- Legacy `/edges` uses cache insertion order with `offset` / `limit`.
+- Legacy `/accounts` uses account-id order through `AccountStore`.
+- Cursor mode uses stable id-ascending order for all domains.
+
+### Diagnostic result
+
+The test operates at loader/cache level. This is sufficient for the current
+legacy-order diagnostic because the legacy `/nodes` and `/edges` endpoints
+paginate `cache.iter_in_order()` directly, while `/accounts` iterates the
+`AccountStore` in id order.
+
+With deliberately non-id-sorted fixture data (`c, a, b`):
+
+| Domain | Legacy JSONL order | PostgreSQL loader order | Result |
+| --- | --- | --- | --- |
+| nodes | `c, a, b` | `a, b, c` | gap |
+| edges | `c, a, b` | `a, b, c` | gap |
+| accounts | `a, b, c` | `a, b, c` | parity |
+
+Cursor mode remains id-ascending by contract and is not the source of the
+legacy mismatch.
+
+### Consequence
+
+TODO 3 final parity proof remains open. This PR records the current gap; it does
+not decide or revise the canonical target ordering.
+
+The current blueprint requires PostgreSQL read cutover parity to preserve:
+
+- legacy `/nodes` order as the existing insertion/file order
+- legacy `/edges` order as the existing insertion/file order
+- legacy `/accounts` order as the existing id order
+- cursor order as stable id-ascending order for all three domains
+
+Therefore the nodes/edges legacy mismatch is a blocker for PostgreSQL read
+cutover until a follow-up PR implements order preservation or explicitly revises
+the blueprint first.
+
+Required follow-up outcome:
+
+- preserve legacy nodes/edges order in PostgreSQL, likely via an explicit
+  ordinal/position captured during JSONL backfill/import; or
+- first revise `docs/blueprints/domain-data-postgres-cutover.md` in a separate
+  API-contract decision PR before changing the target order.
+
+This diagnostic PR does neither.
+
+### Non-goals
+
+- no runtime cutover
+- no default-source change
+- no JSONL removal
+- no migration
+- no ORDER BY fix
+- no Step-up or WebAuthn claim

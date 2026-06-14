@@ -27,8 +27,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_missing_owner_task | 23 |
 | files_with_review_after | 0 |
 | files_missing_review_after | 23 |
-| files_primary_referenced | 18 |
-| files_primary_unreferenced | 5 |
+| files_primary_referenced | 19 |
+| files_primary_unreferenced | 4 |
 | files_with_derived_references | 23 |
 | files_with_relations | 22 |
 | files_with_missing_supersession_target | 0 |
@@ -54,7 +54,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 1 | 3 | 5 | lifecycle, owner_task, review_after |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 5 | 3 | 3 | lifecycle, owner_task, review_after |  |
 | docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  | 7 | 3 | 6 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-backfill-proof.md | report | active |  |  |  |  | 3 | 3 | 4 | lifecycle, owner_task, review_after |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  | 0 | 3 | 7 | lifecycle, owner_task, review_after |  |
@@ -159,6 +159,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/optimierungsstatus.md`
   - `docs/reports/passkey-register-verify-prep.md`
   - `docs/roadmap.md`
+
+- `docs/reports/domain-account-email-uniqueness-audit.md`
+  - `docs/reports/domain-backfill-proof.md`
 
 - `docs/reports/domain-account-write-path-proof.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -365,7 +368,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
 - `docs/reports/cost-report.md`
-- `docs/reports/domain-account-email-uniqueness-audit.md`
 - `docs/reports/domain-edge-create-semantics-preflight.md`
 - `docs/reports/passkey-register-verify-prep.md`
 

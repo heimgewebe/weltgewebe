@@ -107,6 +107,7 @@ _Keine Lücken erkannt._
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
 - `docs/process/fahrplan.md`
+- `docs/process/report-lifecycle-contract-alignment.md`
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
