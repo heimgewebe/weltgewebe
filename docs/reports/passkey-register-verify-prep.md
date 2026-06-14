@@ -304,7 +304,7 @@ Pfad C ist nachgelagert — sinnvoll als Teil des Folge-PR, nicht als separater 
 feat(auth): implement passkey register verify endpoint
 ```
 
-**Status:** Umgesetzt durch den genannten Folge-PR. Endpunkt `POST /auth/passkeys/register/verify` ist registriert, ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, konsumiert die `registration_id` single-use, legt das Credential im `PasskeyStore` ab (mit Duplicate-Detection → `409 CONFLICT`) und schreibt `webauthn_user_id` zurück. Erfolg liefert `200 OK {"ok": true}` ohne Session/Cookie. Negativpfade (T2 401, T4/T6/T7 400, T8 503) sind getestet. T1 (positiver Pfad) ist durch CI belegt (`CI_PROOFED`); T9 (Duplicate-Detection auf API-Ebene) bleibt offen.
+**Status:** Umgesetzt durch den genannten Folge-PR. Endpunkt `POST /auth/passkeys/register/verify` ist registriert, ruft `webauthn.finish_passkey_registration(...)` mit echter Kryptoprüfung auf, konsumiert die `registration_id` single-use, legt das Credential im `PasskeyStore` ab (mit Duplicate-Detection → `409 CONFLICT`) und schreibt `webauthn_user_id` zurück. Erfolg liefert `200 OK {"ok": true}` ohne Session/Cookie. Negativpfade (T2 401, T4/T6/T7 400, T8 503) sind getestet. T1 (positiver Pfad) ist durch CI belegt (`CI_PROOFED`); T9 (expliziter API-Proof für Credential-Duplikate) bleibt offen; die Implementierung enthält bereits Duplicate-Detection im `PasskeyStore` mit `409 CONFLICT`.
 
 ---
 
@@ -347,21 +347,21 @@ Der dedizierte CI-Job für denselben positiven Browser-Proof ist hinzugefügt.
 - Toolchain: Rust aus `toolchain.versions.yml`, Node aus `.node-version`, pnpm 9.11.0, Playwright Chromium mit System-Deps
 - Scope-Trennung: der Job führt ausschließlich `passkey-register-positive.proof.ts` aus. Der Basemap-Proof bleibt in `.github/workflows/basemap-runtime-proof.yml`; `playwright.proof.config.ts` bleibt auf `basemap-real-hamburg-visual.proof.ts` beschränkt.
 - Erwartete Proof-Summary: `register_options_status: 200`, `register_verify_status: 200`, `register_verify_set_cookie: null`, `session_cookie_unchanged: true`, `stored_credential_reflected: true`, `virtual_authenticator_credentials > 0`
-- Statuslogik: Durch CI auf `main` belegt (`CI_PROOFED`).
+- Statuslogik: CI-Job hinzugefügt; grüner Lauf stand noch aus. Status blieb `READY_FOR_CI_PROOF`, bis ein grüner Lauf referenziert werden konnte. Erst dann darf die Doku auf `PROVEN` aktualisiert werden (mit Run-ID/Link/Commit).
 
-## CI Proof
+## 10b. Nachtrag 2026-06-14 — CI-Proof erfolgreich
 
 - Workflow: `auth-passkey-register-proof`
-- Run: `27487642565`
+- Run: [`27487642565`](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565)
 - Commit: `cc54460`
 - Branch: `main`
 - Conclusion: `success`
-- Date: `2026-06-14`
-- Artifacts:
+- Im Run gelistete Artefakte:
   - `auth-passkey-register-proof-summary`
   - `auth-passkey-register-proof-report`
   - `auth-passkey-register-proof-traces`
-This proves the positive Passkey Register-Verify browser/authenticator path. It does not prove Passkey login, Auth-Verify, UI activation, passkey management, or durable runtime credential persistence.
+
+Dieser CI-Proof belegt den positiven Passkey-Register-Verify-Pfad mit Browser-/Authenticator-Flow. Er belegt nicht Passkey-Login, Auth-Verify, UI-Aktivierung, Passkey-Management oder dauerhafte Runtime-Credential-Persistenz.
 
 ---
 

@@ -285,8 +285,8 @@ Step-up bleibt aktionsgebunden und session-neutral.
 
 1. [x] Statusbeweis: Was existiert bereits?
 2. [x] Register-Options (`POST /auth/passkeys/register/options`) — Endpunkt, Step-up-403, Grant-Handoff implementiert; `BeginPasskeyRegistration`-Consume erzeugt `registration_grant_id`; `register/options` konsumiert Grant und startet WebAuthn-Ceremony
-3. [~] Register-Verify (`POST /auth/passkeys/register/verify`) — API-seitig implementiert mit echter `webauthn.finish_passkey_registration(...)`-Verifikation, single-use-Consume der `registration_id`, Credential-Speicherung über `PasskeyStore` (Duplicate-Detection → `409 CONFLICT`), `webauthn_user_id`-Writeback und session-neutralem Erfolgspfad (`200 OK`, kein Cookie). Negativpfade (401, 503, 400 unknown/mismatch/invalid credential, kein Set-Cookie) sind getestet. Passkey Register-Verify ist durch CI auf main belegt.
-   Beleg: Run 27487642565, Commit cc54460, Workflow auth-passkey-register-proof, success.
+3. [x] Register-Verify (`POST /auth/passkeys/register/verify`) — API-seitig implementiert mit echter `webauthn.finish_passkey_registration(...)`-Verifikation, single-use-Consume der `registration_id`, Credential-Speicherung über `PasskeyStore` (Duplicate-Detection → `409 CONFLICT`), `webauthn_user_id`-Writeback und session-neutralem Erfolgspfad (`200 OK`, kein Cookie). Negativpfade (401, 503, 400 unknown/mismatch/invalid credential, kein Set-Cookie) sind getestet. Passkey Register-Verify ist durch CI auf `main` belegt.
+   Beleg: [Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`, Workflow `auth-passkey-register-proof`, Conclusion `success`.
 4. [x] Voraussetzungen für Register-Verify — PasskeyStore + Writeback-Mutation implementiert; `register/options` vollständiger Grant-Handoff implementiert
 5. [ ] Auth-Options
 6. [ ] Auth-Verify
@@ -308,8 +308,8 @@ Step-up bleibt aktionsgebunden und session-neutral.
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` für gezielten Writeback vorbereitet und im Verify-Pfad aktiv aufgerufen
 - Step-up-Intent `BeginPasskeyRegistration` ergänzt (vollständiger Handoff mit Grant-Erzeugung und -Konsum)
 - Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Grant-Handoff, fail-closed `register/options` ohne Grant, erfolgreichen Ceremony-Start mit Grant sowie alle dokumentierten Negativpfade von `register/verify` (401, 503, 400 unknown/mismatch/invalid credential, kein Session-Cookie); CSRF-Drift-Guard erfasst die neue Route
-- Passkey Register-Verify ist durch CI auf main belegt.
-  Beleg: Run 27487642565, Commit cc54460, Workflow auth-passkey-register-proof, success.
+- Passkey Register-Verify ist durch CI auf `main` belegt.
+  Beleg: [Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`, Workflow `auth-passkey-register-proof`, Conclusion `success`.
 - **Offen:** persistente Account-Datenquelle für den `webauthn_user_id`-Writeback, Auth-Optionen/Verify, Passkey-Login/Management, UI
 
 ### Voraussetzungen
