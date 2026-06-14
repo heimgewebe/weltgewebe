@@ -349,12 +349,20 @@ Zusätzlich wurde erweitert:
   E-Mail-Kollision als `409 CONFLICT` ohne Cache- oder JSONL-Nebenwirkung
   zurückgegeben wird, sowie direkte Insert-Proofs.
 
-Die drei Proofs (`db-domain-schema-migrations-proof`, `db-domain-backfill-proof`,
-`db-domain-account-write-path-proof`) sind in
-`docs/reports/opt-arc-001-db-proof-matrix.json` auf `prepared` zurückgesetzt
-(`ci_evidence: null`), bis die PR-CI sie gegen den neuen Stand neu belegt. Die
-Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen Cutover,
-kein Dual-Write und keine Runtime-Backfill-Änderung.
+Die drei Proofs (`db-domain-schema-migrations-proof`,
+`db-domain-backfill-proof`, `db-domain-account-write-path-proof`) sind mit
+CI-Evidence neu belegt:
+
+- Run: `https://github.com/heimgewebe/weltgewebe/actions/runs/27487642549`
+- Run-ID: `27487642549`
+- Commit: `cc5446023417e65df1ae907cae9ad4c39612b3a0`
+- Jobs:
+  - `db-domain-schema-migrations-proof`
+  - `db-domain-backfill-proof`
+  - `db-domain-account-write-path-proof`
+
+Die Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen
+Cutover, kein Dual-Write und keine Runtime-Backfill-Änderung.
 
 ### Härtung vor Review
 

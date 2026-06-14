@@ -21,24 +21,34 @@
       "id": "db-domain-schema-migrations-proof",
       "phase": "B",
       "claim": "Domain PostgreSQL schema migrations are executable in CI against PostgreSQL 16.",
-      "state": "prepared",
+      "state": "ci_proven",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-schema-migrations-proof",
       "test": "apps/api/tests/db_domain_schema_migrations.rs",
       "report": null,
-      "ci_evidence": null,
+      "ci_evidence": {
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27487642549",
+        "run_id": 27487642549,
+        "commit": "cc5446023417e65df1ae907cae9ad4c39612b3a0",
+        "job": "db-domain-schema-migrations-proof"
+      },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_schema_migrations -- --include-ignored --test-threads=1"
     },
     {
       "id": "db-domain-backfill-proof",
       "phase": "C",
       "claim": "JSONL-to-PostgreSQL backfill for nodes, edges and accounts is implemented as an opt-in proof path.",
-      "state": "prepared",
+      "state": "ci_proven",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-backfill-proof",
       "test": "apps/api/tests/db_domain_backfill.rs",
       "report": "docs/reports/domain-backfill-proof.md",
-      "ci_evidence": null,
+      "ci_evidence": {
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27487642549",
+        "run_id": 27487642549,
+        "commit": "cc5446023417e65df1ae907cae9ad4c39612b3a0",
+        "job": "db-domain-backfill-proof"
+      },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_backfill -- --include-ignored --test-threads=1"
     },
     {
@@ -62,12 +72,17 @@
       "id": "db-domain-account-write-path-proof",
       "phase": "E-A",
       "claim": "Optional PostgreSQL write path for POST /accounts is implemented behind explicit write gate.",
-      "state": "prepared",
+      "state": "ci_proven",
       "workflow": ".github/workflows/api.yml",
       "workflow_job": "db-domain-account-write-path-proof",
       "test": "apps/api/tests/db_domain_account_write_path.rs",
       "report": "docs/reports/domain-account-write-path-proof.md",
-      "ci_evidence": null,
+      "ci_evidence": {
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27487642549",
+        "run_id": 27487642549,
+        "commit": "cc5446023417e65df1ae907cae9ad4c39612b3a0",
+        "job": "db-domain-account-write-path-proof"
+      },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_account_write_path -- --include-ignored --test-threads=1"
     },
     {
