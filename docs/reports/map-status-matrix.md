@@ -100,12 +100,15 @@ Eigene, URL-besessene Schicht fuer die Fokuspanel-/Kartenlinsen-Deep-Link-Adress
 getrennt vom fluechtigen Kartenzustand. Aktuelle Zielsemantik gemaess
 `docs/blueprints/ui-interaction-doctrine.md`:
 
-- `lens` (bisher `l`): Filter / Suche als Kartenlinse.
-- `focus` (bisher `r`): Fokus-Selection im ContextPanel.
-- `tab` (bisher `t`): Tab innerhalb eines gueltigen Fokuspanel-Kontexts.
+- `lens` (bisher grob `l`): Filter / Suche als Kartenlinse.
+- `focus` (bisher grob `r`): Fokus-Selection im ContextPanel.
+- `tab` (bisher grob `t`): Tab innerhalb eines gueltigen Fokuspanel-Kontexts.
+- `compose`: optionale spaetere Adressierung eines Kompositionsmodus; kein
+  direktes Erbe der bisherigen Kurzform `l` / `r` / `t`.
 
-Die Kurzform `l` / `r` / `t` ist das bisherige Altmodell und kein Zielcontract;
-sie wird durch `focus` / `tab` / `lens` / `compose` abgeloest.
+Die Kurzform `l` / `r` / `t` ist das bisherige Altmodell und kein Zielcontract
+fuer neue Implementierung. Spaetere Query-Navigation soll die semantische
+Zielrichtung `focus` / `tab` / `lens` / `compose` pruefen.
 
 - **Soll**: URL-Parameter und Kartenzustand sind klar getrennt dokumentiert; die
   URL-Schicht beschreibt Fokus-/Linsen-/Tab-Adressierung, nicht den fluechtigen

@@ -143,7 +143,7 @@ Typische Tabs:
 - Knoten
 - Güter
 
-### Faden / Edge
+### Faden (technisch: Edge)
 
 Typische Tabs:
 
@@ -152,9 +152,10 @@ Typische Tabs:
 - Verlauf
 - Handlung
 
-### Antrag
+### Antrag / Entscheidungsvorlage (fachlich vorgesehen)
 
-Typische Tabs:
+Falls Anträge als eigenständige Fokusobjekte geführt werden, folgen sie
+typischerweise dieser Ordnung:
 
 - Anliegen
 - Folgen
@@ -215,9 +216,9 @@ Nicht empfohlen als neuer Zielcontract:
 - `r = rechter Drawer`
 
 Die bisherige Kurzform `l` / `r` / `t` bleibt nur als historisches Altmodell in
-den Statusdokumenten erhalten (siehe `docs/reports/map-status-matrix.md`); sie
-ist noch nicht in der Kartenroute verdrahtet (Arbeitspaket Phase 4 in
-`docs/blueprints/kartenklarheit-roadmap.md`).
+den Statusdokumenten erhalten. Maßgeblich für den aktuellen Umsetzungsstand sind
+`docs/reports/map-status-matrix.md` und
+`docs/blueprints/kartenklarheit-roadmap.md`.
 
 ## Deprecated Begriffe
 
