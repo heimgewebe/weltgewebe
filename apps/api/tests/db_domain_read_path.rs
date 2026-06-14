@@ -46,6 +46,8 @@ async fn prepare_pool() -> PgPool {
 #[serial]
 async fn nodes_loader_reconstructs_public_shape() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
          VALUES ('rp-node-a', 'place', 'Read Path Node', 53.55, 9.99, \
@@ -69,6 +71,8 @@ async fn nodes_loader_reconstructs_public_shape() {
 #[serial]
 async fn edges_loader_respects_max_edges_cache_limit() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
     for id in ["rp-edge-a", "rp-edge-b"] {
         sqlx::query(
@@ -95,6 +99,8 @@ async fn edges_loader_respects_max_edges_cache_limit() {
 #[serial]
 async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, email, public_payload, private_payload) \
@@ -125,6 +131,8 @@ async fn accounts_loader_rebuilds_email_index_and_privacy_projection() {
 #[serial]
 async fn accounts_loader_respects_mode_column_ron_even_with_location() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -152,6 +160,8 @@ async fn accounts_loader_respects_mode_column_ron_even_with_location() {
 #[serial]
 async fn accounts_loader_approximate_radius_zero_becomes_250() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -180,6 +190,8 @@ async fn accounts_loader_approximate_radius_zero_becomes_250() {
 #[serial]
 async fn accounts_loader_private_visibility_suppresses_public_pos() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -207,6 +219,8 @@ async fn accounts_loader_private_visibility_suppresses_public_pos() {
 #[serial]
 async fn accounts_loader_ron_flag_forces_ron_even_with_location() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     sqlx::query(
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, radius_m, disabled, location_lat, location_lon, role, public_payload, private_payload) \
@@ -234,6 +248,8 @@ async fn accounts_loader_ron_flag_forces_ron_even_with_location() {
 #[serial]
 async fn empty_tables_with_only_fixtures_deleted_do_not_fail() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
 
     let _nodes = load_nodes_from_postgres(&pool).await.expect("load nodes");
     let _edges = load_edges_from_postgres(&pool).await.expect("load edges");
@@ -245,8 +261,10 @@ async fn empty_tables_with_only_fixtures_deleted_do_not_fail() {
 #[tokio::test]
 #[ignore]
 #[serial]
-async fn jsonl_postgres_list_order_contract_diagnostic() {
+async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     let pool = prepare_pool().await;
+    // prepare_pool() cleans rp-* fixtures before the test; the final clean keeps the
+    // shared test database tidy for successful runs.
     let temp_dir = tempfile::tempdir().expect("create temp dir");
     let _env = EnvGuard::set("GEWEBE_IN_DIR", temp_dir.path().to_str().unwrap());
 
@@ -270,9 +288,9 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
         .unwrap();
 
     let accounts_jsonl = "\
-{\"id\":\"rp-list-account-c\",\"kind\":\"garnrolle\",\"title\":\"C\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-c@example.invalid\",\"public_payload\":{},\"private_payload\":{}}
-{\"id\":\"rp-list-account-a\",\"kind\":\"garnrolle\",\"title\":\"A\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-a@example.invalid\",\"public_payload\":{},\"private_payload\":{}}
-{\"id\":\"rp-list-account-b\",\"kind\":\"garnrolle\",\"title\":\"B\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-b@example.invalid\",\"public_payload\":{},\"private_payload\":{}}
+{\"id\":\"rp-list-account-c\",\"type\":\"garnrolle\",\"title\":\"C\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-c@example.invalid\"}
+{\"id\":\"rp-list-account-a\",\"type\":\"garnrolle\",\"title\":\"A\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-a@example.invalid\"}
+{\"id\":\"rp-list-account-b\",\"type\":\"garnrolle\",\"title\":\"B\",\"mode\":\"ron\",\"role\":\"gast\",\"email\":\"rp-list-account-b@example.invalid\"}
 ";
     tokio::fs::write(temp_dir.path().join("demo.accounts.jsonl"), accounts_jsonl)
         .await
@@ -328,6 +346,12 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
     let jsonl_node_ids: Vec<&str> = jsonl_nodes.iter_in_order().map(|n| n.id.as_str()).collect();
     let postgres_node_ids: Vec<&str> = pg_nodes.iter_in_order().map(|n| n.id.as_str()).collect();
 
+    // Intentional gap assertion:
+    // This diagnostic records the current legacy-order mismatch between JSONL
+    // file/cache order and PostgreSQL id order. When TODO 3 is resolved via
+    // Option A/B/C in docs/reports/domain-read-path-proof.md, this diagnostic must
+    // be updated or replaced by the final parity proof.
+
     assert_ne!(jsonl_node_ids, postgres_node_ids);
     assert_eq!(
         jsonl_node_ids,
@@ -341,6 +365,12 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
     // Edges: Legacy JSONL loader retains file order. PG loader uses ORDER BY id ASC.
     let jsonl_edge_ids: Vec<&str> = jsonl_edges.iter_in_order().map(|e| e.id.as_str()).collect();
     let postgres_edge_ids: Vec<&str> = pg_edges.iter_in_order().map(|e| e.id.as_str()).collect();
+
+    // Intentional gap assertion:
+    // This diagnostic records the current legacy-order mismatch between JSONL
+    // file/cache order and PostgreSQL id order. When TODO 3 is resolved via
+    // Option A/B/C in docs/reports/domain-read-path-proof.md, this diagnostic must
+    // be updated or replaced by the final parity proof.
 
     assert_ne!(jsonl_edge_ids, postgres_edge_ids);
     assert_eq!(

@@ -84,8 +84,9 @@ Geltende Grenzen:
 
 Status: diagnostic_gap / prepared for CI.
 
-This diagnostic checks the current list-order contract before any PostgreSQL
-runtime cutover.
+This diagnostic checks the loader/cache order that the legacy list endpoints
+paginate with `offset` / `limit` before any PostgreSQL runtime cutover.
+It is not a full HTTP route-level parity proof.
 
 ### Current contract anchors
 
@@ -95,6 +96,11 @@ runtime cutover.
 - Cursor mode uses stable id-ascending order for all domains.
 
 ### Diagnostic result
+
+The test operates at loader/cache level. This is sufficient for the current
+legacy-order diagnostic because the legacy `/nodes` and `/edges` endpoints
+paginate `cache.iter_in_order()` directly, while `/accounts` iterates the
+`AccountStore` in id order.
 
 With deliberately non-id-sorted fixture data (`c, a, b`):
 
@@ -109,12 +115,18 @@ legacy mismatch.
 
 ### Consequence
 
-TODO 3 is not complete. A later PR must decide how to handle the legacy
+TODO 3 final parity proof remains open. This PR records the current gap; it does
+not decide the target legacy ordering. A later PR must decide how to handle the legacy
 nodes/edges order mismatch before a PostgreSQL read cutover:
 
 - Option A: preserve legacy order in PostgreSQL via explicit ordinal/position.
 - Option B: revise the legacy contract to id order.
 - Option C: accept PostgreSQL-specific legacy ordering and document the break.
+
+Preliminary preference: Option B (revise legacy list order to stable id order)
+is the simplest long-term contract and aligns legacy pagination with cursor
+pagination and PostgreSQL loaders. It remains a product/API decision and is not
+implemented in this diagnostic PR.
 
 ### Non-goals
 
