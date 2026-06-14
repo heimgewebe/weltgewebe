@@ -310,7 +310,7 @@ Step-up bleibt aktionsgebunden und session-neutral.
 - Unit- und Integrationstests belegen PasskeyStore, AccountStore-Writeback-Mutation, Grant-Handoff, fail-closed `register/options` ohne Grant, erfolgreichen Ceremony-Start mit Grant sowie alle dokumentierten Negativpfade von `register/verify` (401, 503, 400 unknown/mismatch/invalid credential, kein Session-Cookie); CSRF-Drift-Guard erfasst die neue Route
 - Passkey Register-Verify ist durch CI auf `main` belegt.
   Beleg: [Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`, Workflow `auth-passkey-register-proof`, Conclusion `success`.
-- **Offen:** persistente Account-Datenquelle für den `webauthn_user_id`-Writeback, Auth-Optionen/Verify, Passkey-Login/Management, UI
+- **Offen:** persistente Account-Datenquelle für den `webauthn_user_id`-Writeback, Passkey-Login-Flow (`auth/options`, `auth/verify`), Passkey-Management, UI
 
 ### Voraussetzungen
 
