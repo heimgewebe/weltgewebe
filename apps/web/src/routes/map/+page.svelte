@@ -12,9 +12,13 @@
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
   import type { MapEntityViewModel } from '$lib/map/types';
 
-  import { view, selection, systemState } from '$lib/stores/uiView';
-  import { activeFilters } from '$lib/stores/filterStore';
-  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import { page } from '$app/stores';
+
+  import { view, selection, systemState, enterKomposition } from '$lib/stores/uiView';
+  import { activeFilters, closeFilter } from '$lib/stores/filterStore';
+  import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
+  import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
+  import { parseMapUrlState, type MapUrlFocus, type ParsedMapUrlState } from '$lib/map/urlState';
   import {
     deriveFailedResourceLabels,
     deriveMarkerCounts,
@@ -113,6 +117,98 @@
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
+  }
+
+  // --- URL addressing (UI Interaction Doctrine, first slice) -----------------
+  // The URL is an addressing layer, not a second state machine: it maps query
+  // parameters onto the existing uiView / overlay stores. uiView stays the
+  // single source of truth and there is no store -> URL synchronisation here.
+  //
+  // Two intents are kept strictly apart:
+  //  - Immediate intents (compose=node, lens=filter|search) need no map data and
+  //    are applied as soon as the URL is known.
+  //  - Focus intents (focus=node|garnrolle|account:<id>) need the scene entities
+  //    and only count as resolved once their target is actually found.
+  // Priority is compose > focus > lens. A valid-but-unresolved focus deliberately
+  // blocks the lens fallback so a deep link never lands on the wrong surface.
+  function findMapEntityForFocus(focus: MapUrlFocus): MapEntityViewModel | null {
+    return markersData.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
+  }
+
+  function applyImmediateMapUrlAddressing(parsed: ParsedMapUrlState) {
+    if (parsed.compose === 'node') {
+      closeSearch();
+      closeFilter();
+      enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
+      return;
+    }
+    // A valid focus takes precedence. While it is unresolved, no lower-priority
+    // lens fallback may run.
+    if (parsed.focus) {
+      return;
+    }
+    if (parsed.lens === 'filter') {
+      openFilterExclusive();
+      return;
+    }
+    if (parsed.lens === 'search') {
+      openSearchExclusive();
+      return;
+    }
+  }
+
+  function tryApplyFocusMapUrlAddressing(parsed: ParsedMapUrlState): boolean {
+    if (!parsed.focus) return true;
+    const item = findMapEntityForFocus(parsed.focus);
+    if (!item) return false;
+    closeSearch();
+    closeFilter();
+    focusAndFlyToPoint(item);
+    return true;
+  }
+
+  // Identity key over the addressable entities, so a focus retry can react to
+  // entity *content* changes, not only to a changed list length.
+  function mapEntityAddressKey(items: MapEntityViewModel[]): string {
+    return items.map((item) => `${item.type}:${item.id}`).join('|');
+  }
+
+  // Separate locks: immediate intents fire once per distinct query; focus only
+  // locks once its target is resolved, and retries while it stays unresolved.
+  let lastAppliedImmediateUrlSearch = '';
+  let lastResolvedFocusUrlSearch = '';
+  let lastFocusAttemptKey = '';
+  $: {
+    const search = $page.url.search;
+    const parsed = parseMapUrlState($page.url.searchParams);
+    const entityAddressKey = mapEntityAddressKey(markersData);
+    if (search !== lastAppliedImmediateUrlSearch) {
+      lastAppliedImmediateUrlSearch = search;
+      applyImmediateMapUrlAddressing(parsed);
+      // compose is final and blocks focus/lens.
+      if (parsed.compose === 'node') {
+        lastResolvedFocusUrlSearch = search;
+      }
+      // Without a valid focus there is nothing left for the focus pass to do.
+      if (!parsed.focus) {
+        lastResolvedFocusUrlSearch = search;
+      }
+      // A new query string means a fresh focus attempt may run again.
+      lastFocusAttemptKey = '';
+    }
+    if (
+      parsed.focus &&
+      search !== lastResolvedFocusUrlSearch &&
+      entityAddressKey.length > 0
+    ) {
+      const focusAttemptKey = `${search}::${entityAddressKey}`;
+      if (focusAttemptKey !== lastFocusAttemptKey) {
+        lastFocusAttemptKey = focusAttemptKey;
+        if (tryApplyFocusMapUrlAddressing(parsed)) {
+          lastResolvedFocusUrlSearch = search;
+        }
+      }
+    }
   }
 
   function handleZoomToOwnGarnrolle() {

@@ -52,18 +52,23 @@
     },
     "query_parameter_vs_kartenzustand": {
       "soll": "URL-Adressierung (Fokus/Linse/Tab) und Kartenzustand sind klar getrennt dokumentiert",
-      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, per reiner Funktionen abgeleitete Presentation) ist fluechtig und wird nicht in die URL gespiegelt; die request-bezogene Szene bleibt route-lokal, nicht in einem Modul-Store. Die URL-Adressierungsschicht fuer Fokus (focus, bisher r), Linse (lens, bisher l) und Tab (tab, bisher t) ist als eigene, URL-besessene Schicht dokumentiert und bewusst aus den Presentation-Ableitungen herausgehalten. Die Zielsemantik focus/tab/lens/compose ist die Richtung fuer spaetere Query-Navigation; dabei adressiert compose optional spaetere Kompositionsmodi und ist kein direktes Erbe der bisherigen Kurzform l/r/t. Die bisherige Kurzform l/r/t bleibt ein historisches Altmodell und kein Zielcontract. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts (Legacy-Kurzform l/r/t) dokumentiert.",
+      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, per reiner Funktionen abgeleitete Presentation) ist fluechtig und wird nicht in die URL gespiegelt; die request-bezogene Szene bleibt route-lokal, nicht in einem Modul-Store. Die URL-Adressierungsschicht fuer Fokus (focus, bisher r), Linse (lens, bisher l) und Tab (tab, bisher t) ist als eigene, URL-besessene Schicht dokumentiert und bewusst aus den Presentation-Ableitungen herausgehalten. Die Zielsemantik focus/tab/lens/compose ist die Richtung fuer spaetere Query-Navigation; dabei adressiert compose optional spaetere Kompositionsmodi und ist kein direktes Erbe der bisherigen Kurzform l/r/t. Die bisherige Kurzform l/r/t bleibt ein historisches Altmodell und kein Zielcontract. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts (Legacy-Kurzform l/r/t) dokumentiert. Initiale URL-Adressierung beim Laden der Map ist fuer focus=node:<id>, focus=garnrolle:<id>, lens=filter, lens=search und compose=node implementiert und getestet: urlState.ts parst die Query rein und ohne Seiteneffekte, +page.svelte wendet sie als Adressierungsschicht auf die bestehenden uiView-/Overlay-Stores an (Prioritaet compose > focus > Linse; ein gueltiger, aber noch nicht aufloesbarer focus blockiert den Linsen-Fallback). Eine Store->URL-Synchronisation bleibt offen; center/zoom/bearing/pitch werden bewusst nicht gespiegelt. tab=<tab> wird parserseitig toleriert, aber noch nicht an ein Panel-Tab-Modell gebunden, da Tabs derzeit lokale Panelzustaende sind.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/reports/map-status-matrix.md",
         "docs/blueprints/kartenklarheit-roadmap.md"
       ],
       "missing_evidence": [
-        "Verdrahtung der Fokuspanel-/Kartenlinsen-Query-Navigation in die Route",
-        "Gezielte Query-Parameter-Tests (Phase 4)"
+        "Tab-Adressierung an ein adressierbares Panel-Tab-Modell binden (tab=<tab> derzeit parser-only)",
+        "Store->URL-Synchronisation, falls später gewollt",
+        "weitere Fokus- oder Kompositionsarten erst nach eigenem Contract"
       ],
       "risk": "gering",
       "code_runtime_evidence": [
+        "apps/web/src/lib/map/urlState.ts",
+        "apps/web/src/lib/map/urlState.test.ts",
+        "apps/web/src/routes/map/+page.svelte",
+        "apps/web/tests/map-url-state.spec.ts",
         "apps/web/src/lib/stores/mapView.ts",
         "apps/web/src/lib/stores/uiView.ts"
       ]
@@ -107,20 +112,22 @@
     },
     "testabdeckung": {
       "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
-      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab.",
+      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab; urlState.test.ts und map-url-state.spec.ts decken die URL-Adressierung (focus, lens, compose) als Parser-Unit- und Browser-Tests ab.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/reports/map-status-matrix.md"
       ],
       "missing_evidence": [
-        "Gezielte Query-Parameter-Navigation",
+        "Tab-Adressierung (tab=<tab> derzeit parser-only, nicht an UI-Tabs gebunden)",
         "Visuelle Abnahme",
         "Live-Runtime-Beweis gegen Caddy plus Artefakt"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
         "apps/web/src/lib/stores/mapView.test.ts",
+        "apps/web/src/lib/map/urlState.test.ts",
+        "apps/web/tests/map-url-state.spec.ts",
         "apps/web/tests/map-interaction.spec.ts",
         "apps/web/tests/map-load-fallback.spec.ts",
         "apps/web/tests/basemap.spec.ts",

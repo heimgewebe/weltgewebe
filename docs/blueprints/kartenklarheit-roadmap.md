@@ -174,7 +174,15 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 - [x] Kerninteraktion und Kontextbereich pruefen (`map-interaction.spec.ts`).
 - [x] Fehler-, Leere- und Ladezustaende absichern (`map-load-fallback.spec.ts`).
 - [x] Basemap-Verhalten separat absichern (`basemap.spec.ts`, `basemap-client-integration.spec.ts`, `basemap-sovereignty-testbuild.spec.ts`).
-- [ ] Tastatur- und Query-Parameter-Navigation gezielt absichern.
+- [~] Initiale URL-Adressierung beim Laden der Map (Fokus/Linse/Komposition) implementieren und gezielt absichern.
+  - umgesetzt: `focus=node:<id>`, `focus=garnrolle:<id>`, `lens=filter`,
+    `lens=search`, `compose=node` (Priorität `compose` > `focus` > Linse);
+    `tab=<tab>` wird parserseitig toleriert.
+  - belegt durch `apps/web/src/lib/map/urlState.test.ts` (Parser-Unit-Tests)
+    und `apps/web/tests/map-url-state.spec.ts` (Browser-Tests).
+  - offen: Tab-Adressierung, solange Tabs kein adressierbares Modell haben;
+    eine Store→URL-Synchronisation bleibt bewusst außen vor.
+- [ ] Tastatur-Navigation gezielt absichern.
 
 ### Stop-Kriterium der Phase 4
 
