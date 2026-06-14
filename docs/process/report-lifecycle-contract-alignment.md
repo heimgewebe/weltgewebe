@@ -130,7 +130,11 @@ bewusst eine andere kanonische Richtung beschlossen wurde.
 
 ## Inventory- und Validator-Abgrenzung
 
-Das bestehende Report-Lifecycle-Inventory bleibt in diesem PR unverändert.
+Das bestehende Report-Lifecycle-Inventory-Tooling bleibt in diesem PR
+unverändert.
+
+Das generierte Inventory-Artefakt darf sich nur ändern, wenn `make generate`
+eine reproduzierbare Aktualisierung des aktuellen Dokumentationsgraphen erzeugt.
 
 Es ist aktuell eine Bestandsaufnahme und liest noch:
 
