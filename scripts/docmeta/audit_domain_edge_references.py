@@ -44,7 +44,15 @@ def source_fingerprint(path: str) -> Dict[str, Any]:
 def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
     parsed = urlparse(database_url)
     env = os.environ.copy()
-    env.pop("DATABASE_URL", None)
+
+    # Remove existing PG* env vars
+    for key in [
+        "PGHOST", "PGPORT", "PGUSER", "PGPASSWORD", "PGDATABASE",
+        "PGSSLMODE", "PGCONNECT_TIMEOUT", "PGAPPNAME",
+        "PGSSLROOTCERT", "PGSSLCERT", "PGSSLKEY", "DATABASE_URL"
+    ]:
+        env.pop(key, None)
+
     if parsed.hostname:
         env["PGHOST"] = parsed.hostname
     if parsed.port:
@@ -77,12 +85,21 @@ def sanitize_psql_stderr(stderr: str) -> str:
     database_url = os.environ.get("DATABASE_URL")
     if database_url:
         text = text.replace(database_url, "<redacted>")
+        parsed = urlparse(database_url)
+        for value in [
+            parsed.hostname,
+            parsed.username,
+            parsed.password,
+            parsed.path.lstrip("/") if parsed.path else None,
+        ]:
+            if value:
+                text = text.replace(value, "<redacted>")
     text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://<redacted>", text)
     text = re.sub(r"(?i)(password=)[^ \n\t]+", r"\1<redacted>", text)
     text = re.sub(r"(?i)(PGPASSWORD=)[^ \n\t]+", r"\1<redacted>", text)
     return text[:500]
 
-def iter_psql_json_rows(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[Dict[str, Any]]:
+def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:
         proc = subprocess.Popen(
             ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
@@ -91,23 +108,30 @@ def iter_psql_json_rows(sql: str, postgres_env: Dict[str, str], label: str) -> I
             stderr=stderr_file,
             text=True,
         )
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            yield json.loads(line)
-        returncode = proc.wait()
-        stderr_file.seek(0)
-        stderr = stderr_file.read()
-        if returncode != 0:
-            logging.error(
-                "Failed to query %s via psql; returncode=%s; stderr=%s",
-                label,
-                returncode,
-                sanitize_psql_stderr(stderr),
-            )
-            sys.exit(1)
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                line = line.strip()
+                if line:
+                    yield line
+            returncode = proc.wait()
+            stderr_file.seek(0)
+            stderr = stderr_file.read()
+            if returncode != 0:
+                logging.error(
+                    "Failed to query %s via psql; returncode=%s; stderr=%s",
+                    label,
+                    returncode,
+                    sanitize_psql_stderr(stderr),
+                )
+                sys.exit(1)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait()
+
+def is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and value.strip() != ""
 
 def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any]]:
     node_ids = set()
@@ -119,6 +143,7 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
         "node_non_object_json_records": 0,
         "nodes_missing_id": 0,
         "nodes_non_string_id": 0,
+        "nodes_empty_id": 0,
     }
 
     try:
@@ -140,6 +165,10 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
 
                     if not isinstance(obj["id"], str):
                         summary["nodes_non_string_id"] += 1
+                        continue
+
+                    if obj["id"].strip() == "":
+                        summary["nodes_empty_id"] += 1
                         continue
 
                     if obj["id"] in node_ids:
@@ -166,11 +195,18 @@ def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[st
         "node_non_object_json_records": 0,
         "nodes_missing_id": 0,
         "nodes_non_string_id": 0,
+        "nodes_empty_id": 0,
     }
 
     sql = "SELECT json_build_object('id', id) FROM domain_nodes;"
-    for obj in iter_psql_json_rows(sql, postgres_env, "domain_nodes"):
+    for line in iter_psql_json_lines(sql, postgres_env, "domain_nodes"):
         summary["node_records_total"] += 1
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            summary["node_invalid_json_records"] += 1
+            continue
+
         if not isinstance(obj, dict):
             summary["node_non_object_json_records"] += 1
             continue
@@ -179,6 +215,9 @@ def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[st
             continue
         if not isinstance(obj["id"], str):
             summary["nodes_non_string_id"] += 1
+            continue
+        if obj["id"].strip() == "":
+            summary["nodes_empty_id"] += 1
             continue
         if obj["id"] in node_ids:
             summary["node_duplicate_ids"] += 1
@@ -220,9 +259,15 @@ def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[s
   'target_type', payload->>'target_type'
 ) FROM domain_edges;"""
     row_number = 0
-    for obj in iter_psql_json_rows(sql, postgres_env, "domain_edges"):
+    for line in iter_psql_json_lines(sql, postgres_env, "domain_edges"):
         row_number += 1
         edge_parse_summary["edge_records_total"] += 1
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            edge_parse_summary["invalid_json_records"] += 1
+            continue
+
         if not isinstance(obj, dict):
             edge_parse_summary["non_object_json_records"] += 1
             continue
@@ -234,13 +279,15 @@ def classify_edge_side(
     edge_ref: str,
     side: str,
     target_id: Optional[str],
-    type_hint: Optional[str],
+    type_hint: Optional[Any],
     node_ids: Set[str],
     show_ids: bool,
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     target_ref = target_id if show_ids else hash_id(target_id)
 
+    type_hint_type = None
     if type_hint is not None and not isinstance(type_hint, str):
+        type_hint_type = type(type_hint).__name__
         type_hint = str(type_hint)
 
     if type_hint == "node":
@@ -251,7 +298,10 @@ def classify_edge_side(
     elif type_hint in ["account", "role"]:
         return "typed_non_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_non_node_reference"}
     elif type_hint is not None:
-        return "typed_unknown_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_unknown_reference"}
+        finding = {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_unknown_reference"}
+        if type_hint_type:
+            finding["type_hint_type"] = type_hint_type
+        return "typed_unknown_reference", finding
     else:
         if target_id in node_ids:
             return "untyped_existing_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_existing_node_reference"}
@@ -263,7 +313,7 @@ def append_finding(
     finding: Dict[str, Any],
     max_findings: int,
 ) -> bool:
-    if len(findings) < max_findings:
+    if max_findings > 0 and len(findings) < max_findings:
         findings.append(finding)
         return False
     return True
@@ -304,6 +354,7 @@ def evaluate_audit_data(
         "node_non_object_json_records": node_parse_summary["node_non_object_json_records"],
         "nodes_missing_id": node_parse_summary["nodes_missing_id"],
         "nodes_non_string_id": node_parse_summary["nodes_non_string_id"],
+        "nodes_empty_id": node_parse_summary["nodes_empty_id"],
         "node_duplicate_ids": node_parse_summary["node_duplicate_ids"],
     }
 
@@ -317,7 +368,9 @@ def evaluate_audit_data(
         source_type = edge.get("source_type")
         target_type = edge.get("target_type")
 
-        if not isinstance(edge_id, str) or not isinstance(source_id, str) or not isinstance(target_id, str):
+        if (not is_non_empty_string(edge_id)
+            or not is_non_empty_string(source_id)
+            or not is_non_empty_string(target_id)):
             summary["malformed_edges"] += 1
 
             edge_ref = ""
@@ -387,6 +440,7 @@ def evaluate_audit_data(
         summary["node_non_object_json_records"] == 0 and
         summary["nodes_missing_id"] == 0 and
         summary["nodes_non_string_id"] == 0 and
+        summary["nodes_empty_id"] == 0 and
         summary["node_duplicate_ids"] == 0 and
         summary["malformed_edges"] == 0 and
         summary["invalid_json_records"] == 0 and
@@ -394,7 +448,6 @@ def evaluate_audit_data(
         summary["typed_node_missing_references"] == 0 and
         summary["typed_non_node_references"] == 0 and
         summary["typed_unknown_references"] == 0 and
-        summary["untyped_existing_node_references"] == 0 and
         summary["untyped_missing_references"] == 0
     )
 
@@ -405,6 +458,7 @@ def evaluate_audit_data(
         summary["node_non_object_json_records"] > 0 or
         summary["nodes_missing_id"] > 0 or
         summary["nodes_non_string_id"] > 0 or
+        summary["nodes_empty_id"] > 0 or
         summary["node_duplicate_ids"] > 0 or
         summary["malformed_edges"] > 0 or
         summary["invalid_json_records"] > 0 or
@@ -416,12 +470,14 @@ def evaluate_audit_data(
     requires_policy_decision = (
         summary["typed_non_node_references"] > 0 or
         summary["typed_unknown_references"] > 0 or
-        summary["untyped_existing_node_references"] > 0 or
         summary["untyped_missing_references"] > 0 or
         summary["typed_node_missing_references"] > 0
     )
 
     requires_runtime_data_run = source_kind != "runtime"
+
+    type_hint_backfill_recommended = summary["untyped_existing_node_references"] > 0
+    fk_compatible_reference_sides = summary["typed_node_references"] + summary["untyped_existing_node_references"]
 
     findings.sort(key=lambda x: (
         x.get("classification", ""),
@@ -439,7 +495,9 @@ def evaluate_audit_data(
             "loose_reference_semantics_observed": loose_reference_semantics_observed,
             "requires_policy_decision": requires_policy_decision,
             "requires_cleanup": requires_cleanup,
-            "requires_runtime_data_run": requires_runtime_data_run
+            "requires_runtime_data_run": requires_runtime_data_run,
+            "type_hint_backfill_recommended": type_hint_backfill_recommended,
+            "fk_compatible_reference_sides": fk_compatible_reference_sides
         },
         "findings_truncated": findings_truncated,
         "findings_limit": max_findings,
@@ -462,11 +520,12 @@ def main():
         sys.exit(1)
 
     if args.postgres:
-        if "DATABASE_URL" not in os.environ:
-            logging.error("DATABASE_URL not set for PostgreSQL audit")
-            sys.exit(1)
         if shutil.which("psql") is None:
             logging.error("psql is not available")
+            sys.exit(1)
+
+        if "DATABASE_URL" not in os.environ:
+            logging.error("DATABASE_URL not set for PostgreSQL audit")
             sys.exit(1)
 
         postgres_env = postgres_env_from_database_url(os.environ["DATABASE_URL"])
