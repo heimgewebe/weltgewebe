@@ -42,6 +42,7 @@ def source_fingerprint(path: str) -> Dict[str, Any]:
 def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
     parsed = urlparse(database_url)
     env = os.environ.copy()
+    env.pop("DATABASE_URL", None)
     if parsed.hostname:
         env["PGHOST"] = parsed.hostname
     if parsed.port:
@@ -422,6 +423,10 @@ def main():
     parser.add_argument("--show-ids", action="store_true", help="Show full IDs (not for committed reports)")
     parser.add_argument("--max-findings", type=int, default=100, help="Maximum number of findings to output")
     args = parser.parse_args()
+
+    if args.max_findings < 0:
+        logging.error("--max-findings must be >= 0")
+        sys.exit(1)
 
     if args.postgres:
         if "DATABASE_URL" not in os.environ:

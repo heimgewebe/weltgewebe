@@ -348,8 +348,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
 
-            self.assertTrue(data["source"]["nodes_source"]["size_bytes"] > 0)
-            self.assertTrue(data["source"]["edges_source"]["size_bytes"] > 0)
+            self.assertGreater(data["source"]["nodes_source"]["size_bytes"], 0)
+            self.assertGreater(data["source"]["edges_source"]["size_bytes"], 0)
             self.assertEqual(len(data["source"]["nodes_source"]["sha256"]), 64)
             self.assertEqual(len(data["source"]["edges_source"]["sha256"]), 64)
 
@@ -371,6 +371,12 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
             self.assertEqual(result.returncode, 0)
             self.assertNotIn("my-secret-target-id", result.stdout)
+
+
+    def test_negative_max_findings_fails(self):
+        result = run_script("--max-findings", "-1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--max-findings must be >= 0", result.stderr)
 
 if __name__ == "__main__":
     unittest.main()
