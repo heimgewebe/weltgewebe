@@ -218,12 +218,9 @@ ungeprüfter Rohstrings auswerten; sie muss Typ und Identifier kontrolliert
 dekodieren und ungültige Werte stabil ignorieren oder bereinigen.
 
 Für nutzerteilbare Links ist die ausgeschriebene Form (`focus`, `tab`, `lens`,
-`compose`) vorzuziehen. Eine Kurzform darf später nur eingeführt werden, wenn sie
-einen belegten Nutzen hat und die Lesbarkeit nicht verschlechtert.
-
-Falls später Kürze nötig ist, kann eine knappere Form geprüft werden
-(`f=<type>:<id>`, `tab`, `lens`, `compose`). Dieser Contract wird hier jedoch
-nicht final festgelegt.
+`compose`) vorzuziehen. Eine Kurzform wie `f=<type>:<id>` darf später nur
+eingeführt werden, wenn sie einen belegten Nutzen hat und die Lesbarkeit nicht
+verschlechtert. Dieser technische Contract wird hier nicht final festgelegt.
 
 Nicht empfohlen als neuer Zielcontract:
 
