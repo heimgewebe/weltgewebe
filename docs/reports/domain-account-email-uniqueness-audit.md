@@ -305,7 +305,9 @@ ist jetzt im PostgreSQL-Account-Create-Pfad implementiert.
   `AccountWriteError::DuplicateEmail`, `insert_account_from_jsonl_record`)
 - HTTP-Mapping: `apps/api/src/routes/accounts.rs` (`create_account` → `409 CONFLICT`,
   generische Meldung ohne E-Mail-, ID- oder Constraint-Leak)
-- Tests: `apps/api/tests/db_domain_account_email_unique.rs`
+- Tests: `apps/api/tests/db_domain_schema_migrations.rs`,
+  `apps/api/tests/db_domain_backfill.rs` und
+  `apps/api/tests/db_domain_account_write_path.rs`
 
 ### Nicht-ASCII-Semantik (bewusste DB-Policy)
 
@@ -326,24 +328,33 @@ gleich-normalisierten E-Mails mehr persistieren. Der lexikografische Tie-Break i
 damit im PostgreSQL-Pfad unerreichbar und nur noch JSONL-/Legacy-Verhalten, nicht der
 PostgreSQL-Constraint-Zustand.
 
-### Abgelöste Phase-B-Proofs
+### Abgelöste und erweiterte Proofs
 
 Der Index löst die frühere Phase-B-Duplikat-Toleranz ausschließlich für
-normalisierte, nicht-leere E-Mails ab. Zwei bislang `ci_proven` Proofs behaupteten
-die Toleranz und wurden gezielt an die neue Invariante angepasst:
+normalisierte, nicht-leere E-Mails ab.
+
+Semantisch abgelöst wurden:
 
 - `apps/api/tests/db_domain_schema_migrations.rs`: Der frühere
   „Duplikate erlaubt"-Test prüft jetzt, dass der normalisierte Unique-Index
-  Case-Varianten ablehnt (NULL bleibt erlaubt).
-- `apps/api/tests/db_domain_backfill.rs`: Der Duplikat-E-Mail-Backfill-Test
-  prüft jetzt Audit + Skip (erste Zeile importiert, Duplikat auditiert und
-  übersprungen) statt „beide importiert".
+  Case-Varianten ablehnt, dass nach Trim leere E-Mails DB-seitig abgelehnt werden
+  und dass `NULL` erlaubt bleibt.
+- `apps/api/tests/db_domain_backfill.rs`: Der Duplikat-E-Mail-Backfill-Test prüft
+  jetzt Audit + Skip mit `lower(btrim(email))` statt „beide importiert".
 
-Beide Proofs (`db-domain-schema-migrations-proof`, `db-domain-backfill-proof`)
-sind in `docs/reports/opt-arc-001-db-proof-matrix.json` auf `prepared`
-zurückgesetzt (kein `ci_evidence`), bis die PR-CI sie gegen den neuen Stand neu
-belegt. Die Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen
-Cutover, kein Dual-Write und keine Runtime-Backfill-Änderung.
+Zusätzlich wurde erweitert:
+
+- `apps/api/tests/db_domain_account_write_path.rs`: Der Account-Write-Path-Proof
+  enthält jetzt den Route-Level-Beweis, dass eine DB-seitig erkannte normalisierte
+  E-Mail-Kollision als `409 CONFLICT` ohne Cache- oder JSONL-Nebenwirkung
+  zurückgegeben wird, sowie direkte Insert-Proofs.
+
+Die drei Proofs (`db-domain-schema-migrations-proof`, `db-domain-backfill-proof`,
+`db-domain-account-write-path-proof`) sind in
+`docs/reports/opt-arc-001-db-proof-matrix.json` auf `prepared` zurückgesetzt
+(`ci_evidence: null`), bis die PR-CI sie gegen den neuen Stand neu belegt. Die
+Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen Cutover,
+kein Dual-Write und keine Runtime-Backfill-Änderung.
 
 ### Härtung vor Review
 
@@ -367,8 +378,8 @@ Vor dem Review wurde der PR gezielt gehärtet (kein Scope-Zuwachs):
   Constraint-Ausnahme bleibt nur defensive Rückfallebene.
 - **CI-Proof-Bündelung:** Der Route-409-Beweis und die direkten Insert-Proofs
   liegen jetzt in `apps/api/tests/db_domain_account_write_path.rs` (laufen im
-  Job `db-domain-account-write-path-proof`); die separate Testdatei entfällt.
-  Dieser Proof ist damit ebenfalls auf `prepared` zurückgesetzt.
+  Job `db-domain-account-write-path-proof`); die separate Testdatei entfällt
+  (siehe Abschnitt „Abgelöste und erweiterte Proofs").
 
 ### Follow-up: Login-Lookup-Normalisierung
 

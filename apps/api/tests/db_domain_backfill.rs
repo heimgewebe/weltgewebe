@@ -427,9 +427,9 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
 
         // Audit duplicate emails using the SAME normalization as the unique
         // index (lower(btrim(email))) and skip the duplicate BEFORE inserting,
-        // so a unique violation never poisons the transaction. The email was
-        // already trimmed/empty-normalized above, so after-trim-empty values are
-        // None here and never unique-relevant.
+        // so the normal path avoids an intentional unique violation before
+        // insert. The email was already trimmed/empty-normalized above, so
+        // after-trim-empty values are None here and never unique-relevant.
         if let Some(ref em) = email {
             let (dup_count,): (i64,) = sqlx::query_as(
                 "SELECT COUNT(*) FROM domain_accounts

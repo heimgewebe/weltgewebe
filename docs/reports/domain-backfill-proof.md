@@ -134,9 +134,10 @@ the duplicate **before** insert, using the SAME normalization as the index:
   bare `lower(email)` lookup index).
 - If a duplicate is found, the trimmed email is added to
   `report.duplicate_emails`, `report.skipped_records` is incremented, and the
-  row is skipped before any insert — so a unique violation never poisons the
-  transaction. The constraint-violation branch remains only as a defensive
-  backstop against a race or drift.
+  row is skipped before any insert. The normal path therefore avoids an
+  intentional unique violation before insert. The constraint-violation branch
+  remains only as a defensive backstop against a race or drift; it is not the
+  regular transaction mechanism.
 
 After-trim-empty emails are never persisted as a string: the mapper folds them
 to NULL, and the `domain_accounts_email_not_empty_after_trim` check constraint
