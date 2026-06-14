@@ -69,6 +69,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 
+## docs/_generated/report-lifecycle-inventory.md
+
+- [relates_to] docs/process/report-lifecycle.md
+
 ## docs/adr/0042-consume-semantah-contracts.md
 
 - [relates_to] docs/x-repo/semantAH.md
@@ -378,6 +382,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/bash-tooling-guidelines.md
 - [relates_to] docs/process/fahrplan.md
+- [relates_to] docs/process/report-lifecycle.md
 - [relates_to] docs/process/sprache.md
 
 ## docs/process/bash-tooling-guidelines.md
@@ -391,6 +396,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/process/README.md
 - [relates_to] docs/quickstart-gate-c.md
 - [depends_on] docs/roadmap.md
+
+## docs/process/report-lifecycle.md
+
+- [relates_to] docs/process/README.md
 
 ## docs/process/sprache.md
 
