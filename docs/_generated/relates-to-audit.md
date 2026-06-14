@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 375 |
+| Relationen gesamt | 376 |
 | — depends_on | 18 |
-| — relates_to | 355 |
+| — relates_to | 356 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 

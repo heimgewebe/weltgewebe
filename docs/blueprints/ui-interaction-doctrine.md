@@ -13,6 +13,8 @@ relations:
     target: docs/blueprints/ui-roadmap.md
   - type: relates_to
     target: docs/blueprints/kartenklarheit-roadmap.md
+  - type: relates_to
+    target: docs/roadmap.md
 ---
 
 # Weltgewebe UI Interaction Doctrine

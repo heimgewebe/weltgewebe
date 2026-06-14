@@ -536,6 +536,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-blaupause.md
 - [relates_to] docs/blueprints/ui-blaupause.md
+- [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-state-machine.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
