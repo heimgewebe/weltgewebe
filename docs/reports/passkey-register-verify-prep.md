@@ -326,7 +326,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 
 ## 10. Nachtrag 2026-05-27 — Positiver Lokalbeweis
 
-Der zuvor offene positive Register-Verify-Pfad ist jetzt lokal mit einem echten Browser-/Authenticator-Flow belegt.
+Der zuvor offene positive Register-Verify-Pfad wurde in diesem Schritt lokal mit einem echten Browser-/Authenticator-Flow belegt. Der spätere CI-Beleg ist in Abschnitt 10b dokumentiert.
 
 - Proof-Pfad: Step-up-/Grant-Handoff zu `POST /auth/passkeys/register/options`, echte Browser-Credential über `navigator.credentials.create(...)`, danach `POST /auth/passkeys/register/verify`
 - Transport: Playwright + Chromium, CDP-`WebAuthn.enable` und `WebAuthn.addVirtualAuthenticator`
@@ -361,7 +361,7 @@ Der dedizierte CI-Job für denselben positiven Browser-Proof ist hinzugefügt.
   - `auth-passkey-register-proof-report`
   - `auth-passkey-register-proof-traces`
 
-Dieser CI-Proof belegt den positiven Passkey-Register-Verify-Pfad mit Browser-/Authenticator-Flow. Er belegt nicht Passkey-Login, Auth-Verify, UI-Aktivierung, Passkey-Management oder dauerhafte Runtime-Credential-Persistenz.
+Dieser CI-Proof belegt den positiven Passkey-Register-Verify-Pfad mit Browser-/Authenticator-Flow. Er belegt nicht den Passkey-Login-Flow (`auth/options`, `auth/verify`), UI-Aktivierung, Passkey-Management oder dauerhafte Runtime-Credential-Persistenz.
 
 ---
 
