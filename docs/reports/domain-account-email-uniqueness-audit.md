@@ -271,7 +271,119 @@ Begründung:
 
 ## Nächster PR
 
-PR E2 kann erst nach einem echten Datenlauf gegen relevante JSONL- und/oder
-PostgreSQL-Daten entscheiden, ob der spätere Constraint auf lower(email),
-lower(trim(email)), physisch bereinigten Daten oder einer anderen expliziten
-Policy beruhen soll.
+Nach TODO 2A bleiben weiterhin offen:
+
+- PostgreSQL-vs-JSONL Listenparitäts-Proof
+- Edge-Orphan-/Referenz-Audit
+- Single-Instance-/Multi-Instance-Betriebsentscheidung
+- Step-up-E-Mail-Persistenz
+- WebAuthn-Credential-Writeback
+- vollständiger PostgreSQL-Domain-Runtime-Smoke
+- JSONL-Rolle / JSONL-Demontage
+
+Dieser PR ist kein Runtime-Cutover.
+
+## TODO 2A Ergebnis
+
+Status: umgesetzt. Der unter `ready_for_constraint_design` freigegebene Constraint
+ist jetzt im PostgreSQL-Account-Create-Pfad implementiert.
+
+- Normalisierter Unique-Index eingeführt: `domain_accounts_email_normalized_unique`
+- Normalisierung: `lower(btrim(email))`
+- Partial Predicate: `email IS NOT NULL AND btrim(email) <> ''`
+- Fehlende / NULL / nach Trim leere E-Mails: nicht unique-relevant
+- Duplicate normalisierte nicht-leere E-Mail im PostgreSQL-Create-Pfad: `409 CONFLICT`
+- DB-Constraint ist die Race-Sicherheitsgrenze; die App-Vorabprüfung bleibt nur Komfort
+- Unique-Violation wird über den Constraint-Namen klassifiziert
+  (`AccountWriteError::DuplicateEmail`), keine String-Suche im DB-Fehlertext
+- Kein JSONL-Cutover, kein Step-up-E-Mail-Fix, kein WebAuthn-Credential-Cutover, kein Runtime-Smoke
+
+### Geänderte Artefakte
+
+- Migration up/down: `apps/api/migrations/20260613000001_domain_accounts_email_normalized_unique.up.sql` und `.down.sql`
+- Fehlerklassifikation: `apps/api/src/domain_db.rs` (`ACCOUNT_EMAIL_UNIQUE_CONSTRAINT`,
+  `AccountWriteError::DuplicateEmail`, `insert_account_from_jsonl_record`)
+- HTTP-Mapping: `apps/api/src/routes/accounts.rs` (`create_account` → `409 CONFLICT`,
+  generische Meldung ohne E-Mail-, ID- oder Constraint-Leak)
+- Tests: `apps/api/tests/db_domain_schema_migrations.rs`,
+  `apps/api/tests/db_domain_backfill.rs` und
+  `apps/api/tests/db_domain_account_write_path.rs`
+
+### Nicht-ASCII-Semantik (bewusste DB-Policy)
+
+PostgreSQL `lower(...)` ist für Nicht-ASCII-Zeichen nicht byte-identisch mit der
+Rust-Semantik `to_ascii_lowercase()` des In-Memory-`AccountStore`. Diese Abweichung
+ist – wie in den Audit-Abschnitten oben bereits dokumentiert – bewusst akzeptiert:
+Der Unique-Index ist die durable Race-Grenze des PostgreSQL-Pfades, der ASCII-Lookup
+bleibt das Laufzeitverhalten des Stores. Es wurde keine zusätzliche
+Normalisierungsspalte eingeführt, um den PR minimal und auf die bestehende
+`domain_accounts`-Tabelle fokussiert zu halten.
+
+### Reload-/Index-Semantik
+
+`load_accounts_from_postgres` ruft `rebuild_email_index` auf, das bei
+gleich-normalisierten E-Mails deterministisch die lexikografisch kleinste Account-ID
+als Owner wählt. Nach dieser Migration kann PostgreSQL keine zwei nicht-leeren,
+gleich-normalisierten E-Mails mehr persistieren. Der lexikografische Tie-Break ist
+damit im PostgreSQL-Pfad unerreichbar und nur noch JSONL-/Legacy-Verhalten, nicht der
+PostgreSQL-Constraint-Zustand.
+
+### Abgelöste und erweiterte Proofs
+
+Der Index löst die frühere Phase-B-Duplikat-Toleranz ausschließlich für
+normalisierte, nicht-leere E-Mails ab.
+
+Semantisch abgelöst wurden:
+
+- `apps/api/tests/db_domain_schema_migrations.rs`: Der frühere
+  „Duplikate erlaubt"-Test prüft jetzt, dass der normalisierte Unique-Index
+  Case-Varianten ablehnt, dass nach Trim leere E-Mails DB-seitig abgelehnt werden
+  und dass `NULL` erlaubt bleibt.
+- `apps/api/tests/db_domain_backfill.rs`: Der Duplikat-E-Mail-Backfill-Test prüft
+  jetzt Audit + Skip mit `lower(btrim(email))` statt „beide importiert".
+
+Zusätzlich wurde erweitert:
+
+- `apps/api/tests/db_domain_account_write_path.rs`: Der Account-Write-Path-Proof
+  enthält jetzt den Route-Level-Beweis, dass eine DB-seitig erkannte normalisierte
+  E-Mail-Kollision als `409 CONFLICT` ohne Cache- oder JSONL-Nebenwirkung
+  zurückgegeben wird, sowie direkte Insert-Proofs.
+
+Die drei Proofs (`db-domain-schema-migrations-proof`, `db-domain-backfill-proof`,
+`db-domain-account-write-path-proof`) sind in
+`docs/reports/opt-arc-001-db-proof-matrix.json` auf `prepared` zurückgesetzt
+(`ci_evidence: null`), bis die PR-CI sie gegen den neuen Stand neu belegt. Die
+Phase-C-Backfill-Importsemantik ist sonst unverändert; es gibt keinen Cutover,
+kein Dual-Write und keine Runtime-Backfill-Änderung.
+
+### Härtung vor Review
+
+Vor dem Review wurde der PR gezielt gehärtet (kein Scope-Zuwachs):
+
+- **Fehlerklassifikation:** Nur `domain_accounts_email_normalized_unique`
+  (→ `DuplicateEmail`) und `domain_accounts_pkey` (→ `DuplicateId`) werden
+  spezifisch gemappt; jede andere – auch unbekannte – Unique-Violation bleibt
+  generischer `Database`-Fehler statt fälschlich `DuplicateId`.
+- **Migration-Preflight:** Vor `CREATE UNIQUE INDEX` bricht ein redigierter
+  `DO`-Block mit klarer Meldung (ohne E-Mail-/ID-/Rohdaten-Ausgabe) ab, wenn
+  Altbestände normalisierte Duplikate oder nach Trim leere E-Mails enthalten.
+  Keine automatische Bereinigung. `IF NOT EXISTS` wurde entfernt, um Drift nicht
+  zu kaschieren.
+- **After-trim-empty:** `NewDomainAccountRow::from_jsonl_record` trimmt jetzt und
+  bildet nach Trim leere Werte auf `None` ab; zusätzlich erzwingt der
+  Check-Constraint `domain_accounts_email_not_empty_after_trim`
+  (`email IS NULL OR btrim(email) <> ''`) die Invariante DB-seitig.
+- **Backfill-Audit:** nutzt dieselbe Normalisierung wie der Index
+  (`lower(btrim(email))`) und überspringt das Duplikat **vor** dem Insert; die
+  Constraint-Ausnahme bleibt nur defensive Rückfallebene.
+- **CI-Proof-Bündelung:** Der Route-409-Beweis und die direkten Insert-Proofs
+  liegen jetzt in `apps/api/tests/db_domain_account_write_path.rs` (laufen im
+  Job `db-domain-account-write-path-proof`); die separate Testdatei entfällt
+  (siehe Abschnitt „Abgelöste und erweiterte Proofs").
+
+### Follow-up: Login-Lookup-Normalisierung
+
+Der bestehende nicht-eindeutige Lookup-Index `domain_accounts_email_lookup`
+bleibt in diesem PR erhalten. Ein Folge-PR soll prüfen, ob Login-/Lookup-Queries
+auf `lower(btrim(email))` umgestellt werden können und der alte Lookup-Index
+danach entfallen kann.

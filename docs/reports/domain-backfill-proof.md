@@ -121,17 +121,29 @@ No silent continuation: all quarantined lines are counted in `BackfillReport`.
 
 ## Duplicate Email Policy (Accounts)
 
-Phase B intentionally allows duplicate emails in `domain_accounts`.
-The import audits duplicates:
+Phase B originally tolerated duplicate emails in `domain_accounts`. TODO 2A
+supersedes that for normalized non-empty emails: the partial unique index
+`domain_accounts_email_normalized_unique` (`lower(btrim(email))`, where the
+trimmed email is non-empty) now rejects a duplicate. The import audits and skips
+the duplicate **before** insert, using the SAME normalization as the index:
 
+- Each email is first trimmed; an after-trim-empty value is treated as "no
+  email" (NULL).
+- Before inserting, a `COUNT` query checks for existing rows with the same
+  `lower(btrim(email))` and a different `id` (matching the unique index, not the
+  bare `lower(email)` lookup index).
+- If a duplicate is found, the trimmed email is added to
+  `report.duplicate_emails`, `report.skipped_records` is incremented, and the
+  row is skipped before any insert. The normal path therefore avoids an
+  intentional unique violation before insert. The constraint-violation branch
+  remains only as a defensive backstop against a race or drift; it is not the
+  regular transaction mechanism.
 
-- Before inserting each account, a `COUNT` query checks for existing rows with
-  the same `lower(email)` and a different `id`.
-- If found, the email is added to `report.duplicate_emails`.
-- Import continues regardless.
-
-
-This audit is a Phase C diagnostic; enforcement policy is deferred to Phase D/E.
+After-trim-empty emails are never persisted as a string: the mapper folds them
+to NULL, and the `domain_accounts_email_not_empty_after_trim` check constraint
+rejects any after-trim-empty value at the storage layer. NULL emails stay
+allowed. See `docs/reports/domain-account-email-uniqueness-audit.md` (TODO 2A)
+for the constraint policy.
 
 
 ## Legacy Account Semantics

@@ -614,6 +614,13 @@ pub async fn create_account(
                         "account id already exists".to_string(),
                     ));
                 }
+                Err(AccountWriteError::DuplicateEmail) => {
+                    // Same generic message as the in-memory precheck above, so the
+                    // client sees a consistent 409 whether the conflict is caught
+                    // in memory or by the PostgreSQL unique index. The offending
+                    // email, account id and constraint name are never leaked.
+                    return Err((StatusCode::CONFLICT, "email already exists".to_string()));
+                }
                 Err(e) => {
                     tracing::error!(error = %e, "failed to insert account into domain_accounts");
                     return Err((
