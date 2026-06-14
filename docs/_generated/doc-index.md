@@ -83,6 +83,7 @@ Generated automatically. Do not edit.
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
 | process.report-lifecycle | Report Lifecycle Policy | policy | draft | docs/process/report-lifecycle.md |
+| process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | draft | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |

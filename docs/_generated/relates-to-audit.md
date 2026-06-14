@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 371 |
+| Relationen gesamt | 373 |
 | — depends_on | 18 |
-| — relates_to | 351 |
+| — relates_to | 353 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -44,7 +44,6 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_backfill.rs`
 - `audit/impl-registry.yaml`
 - `contracts/domain/edge.schema.json`
-- `docs/_generated/report-lifecycle-inventory.md`
 - `docs/adr/0043-edge-vs-conversation.md`
 - `docs/adr/ADR-0001__clean-slate-docs-monorepo.md`
 - `docs/adr/ADR-0002__reentry-kriterien.md`
@@ -106,6 +105,7 @@ _Keine Lücken erkannt._
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
 - `docs/process/fahrplan.md`
+- `docs/process/report-lifecycle-contract-alignment.md`
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
