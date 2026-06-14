@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 377 |
+| Relationen gesamt | 381 |
 | — depends_on | 18 |
-| — relates_to | 357 |
+| — relates_to | 361 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (137 Dokumente):
+**Cluster 1** (138 Dokumente):
 
 - `.github/workflows/api.yml`
 - `AGENTS.md`
