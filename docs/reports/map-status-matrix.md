@@ -53,7 +53,7 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Ist**: `map-interaction.spec.ts` deckt Kerninteraktion und Panel-Verhalten ab; `map-load-fallback.spec.ts` deckt partielle und komplette API-Fehler ab; `basemap.spec.ts`, `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` decken Basemap-Modi und den clientseitigen lokalen Pfad ab. `mapView.test.ts` deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab. `urlState.test.ts` und `map-url-state.spec.ts` decken die URL-Adressierung (`focus`, `lens`, `compose`) als Parser-Unit- und Browser-Tests ab.
 - **Status**: Teil
 - **Nachweis**: `apps/web/src/lib/stores/mapView.test.ts`, `apps/web/src/lib/map/urlState.test.ts`, `apps/web/tests/map-url-state.spec.ts`, `apps/web/tests/map-interaction.spec.ts`, `apps/web/tests/map-load-fallback.spec.ts`, `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`
-- **Fehlend**: Visuelle Abnahme und echter Live-Runtime-Beweis gegen Caddy plus Artefakt; die Query-Parameter-Navigation ist fuer `focus` / `lens` / `compose` abgedeckt, die Tab-Adressierung bleibt offen.
+- **Fehlend**: Visuelle Abnahme und echter Live-Runtime-Beweis gegen Caddy plus Artefakt; die initiale URL-Adressierung ist fuer `focus` / `lens` / `compose` abgedeckt, die Tab-Adressierung bleibt offen.
 
 ## 6. Runtime-Integration
 
@@ -119,21 +119,23 @@ Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
   Modul-Header in `apps/web/src/lib/stores/mapView.ts`, der die bisherige
   Kurzform `l` / `r` / `t` verwendet). Die URL-Adressierungsschicht ist als
   URL-eigene Schicht definiert und bewusst aus den Presentation-Ableitungen
-  herausgehalten. Query-Navigation ist für `focus=node:<id>`,
-  `focus=garnrolle:<id>`, `lens=filter`, `lens=search` und `compose=node`
-  implementiert und getestet: `apps/web/src/lib/map/urlState.ts` parst die Query
-  rein und ohne Seiteneffekte, `apps/web/src/routes/map/+page.svelte` wendet sie
-  als Adressierungsschicht auf die bestehenden uiView-/Overlay-Stores an (kein
-  Store→URL-Sync, keine Spiegelung von `center` / `zoom` / `bearing` / `pitch`,
-  Priorität `compose` > `focus` > Linse). `tab=<tab>` wird parserseitig toleriert,
-  aber noch nicht an ein Panel-Tab-Modell gebunden, da Tabs derzeit lokale
-  Panelzustände sind.
+  herausgehalten. Initiale URL-Adressierung beim Laden der Map ist für
+  `focus=node:<id>`, `focus=garnrolle:<id>`, `lens=filter`, `lens=search` und
+  `compose=node` implementiert und getestet: `apps/web/src/lib/map/urlState.ts`
+  parst die Query rein und ohne Seiteneffekte,
+  `apps/web/src/routes/map/+page.svelte` wendet sie als Adressierungsschicht auf
+  die bestehenden uiView-/Overlay-Stores an (Priorität `compose` > `focus` >
+  Linse; ein gültiger, aber noch nicht auflösbarer `focus` blockiert den
+  Linsen-Fallback). Eine Store→URL-Synchronisation bleibt offen;
+  `center` / `zoom` / `bearing` / `pitch` werden bewusst nicht gespiegelt.
+  `tab=<tab>` wird parserseitig toleriert, aber noch nicht an ein
+  Panel-Tab-Modell gebunden, da Tabs derzeit lokale Panelzustände sind.
 - **Status**: Teil
 - **Nachweis**: `apps/web/src/lib/map/urlState.ts`, `apps/web/src/lib/map/urlState.test.ts`, `apps/web/src/routes/map/+page.svelte`, `apps/web/tests/map-url-state.spec.ts`, `apps/web/src/lib/stores/mapView.ts`, `apps/web/src/lib/stores/uiView.ts`
-- **Fehlend**: Tab-Adressierung an ein adressierbares Panel-Tab-Modell binden,
-  `focus=edge:<id>` und weitere Kompositionsmodi sowie eine
-  Store→URL-Synchronisation bleiben offen (siehe
-  `docs/blueprints/kartenklarheit-roadmap.md`).
+- **Fehlend**: Tab-Adressierung an ein adressierbares Panel-Tab-Modell binden
+  (`tab=<tab>` derzeit parser-only) und eine Store→URL-Synchronisation, falls
+  später gewollt; weitere Fokus- oder Kompositionsarten erst nach eigenem
+  Contract (siehe `docs/blueprints/kartenklarheit-roadmap.md`).
 
 ## Essenz
 

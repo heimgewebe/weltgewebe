@@ -107,6 +107,53 @@ test.describe("Map URL addressing", () => {
     );
   });
 
+  test("opens garnrolle focus panel via account alias", async ({ page }) => {
+    await page.goto("/map?focus=account:url-acc-1");
+    const panel = page.getByTestId("context-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator(".panel-header h2")).toContainText("Garnrolle");
+  });
+
+  test("does not fall back to lens while a valid focus target is unresolved", async ({
+    page,
+  }) => {
+    await page.goto("/map?focus=node:missing&lens=filter");
+    // A valid-but-unresolved focus has priority and blocks the lens fallback.
+    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
+  });
+
+  test("opens filter lens even when no markers are available", async ({
+    page,
+  }) => {
+    // Empty datasets (registered after the beforeEach defaults, so they win):
+    // the lens is an immediate intent and must not depend on map data.
+    await page.route("**/api/nodes", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route("**/api/accounts", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+    await page.route("**/api/edges", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
+
+    await page.goto("/map?lens=filter");
+    await expect(page.getByTestId("filter-overlay")).toBeVisible();
+  });
+
   test("ignores invalid URL state without crashing", async ({ page }) => {
     await page.goto("/map?focus=node:&lens=nope&compose=edge");
     // The map shell still renders and no overlay/panel is forced open.

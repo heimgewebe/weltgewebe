@@ -68,8 +68,9 @@ export function parseFocusParam(value: string | null): MapUrlFocus | null {
 
   const rawType = value.slice(0, separatorIndex);
   const id = value.slice(separatorIndex + 1);
-  // Empty id ("node:") is invalid.
-  if (id.length === 0) return null;
+  // Empty or whitespace-only id ("node:", "node: ") is invalid. The id itself is
+  // not trimmed/mutated — only validated.
+  if (id.trim().length === 0) return null;
 
   switch (rawType) {
     case "node":
@@ -127,11 +128,11 @@ export function parseMapUrlState(
   }
 
   // `tab` is tolerated parser-side only; it is not bound to UI tabs yet.
-  // A present-but-empty tab (`?tab=`) is invalid.
+  // A present-but-empty or whitespace-only tab (`?tab=`, `?tab=%20`) is invalid.
   const rawTab = searchParams.get("tab");
   let tab: string | null = null;
   if (rawTab !== null) {
-    if (rawTab.length > 0) {
+    if (rawTab.trim().length > 0) {
       tab = rawTab;
     } else {
       invalidKeys.push("tab");

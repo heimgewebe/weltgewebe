@@ -36,6 +36,10 @@ describe("parseFocusParam", () => {
     expect(parseFocusParam("node:")).toBeNull();
   });
 
+  it("rejects a whitespace-only focus id", () => {
+    expect(parseFocusParam("node: ")).toBeNull();
+  });
+
   it("rejects an empty type", () => {
     expect(parseFocusParam(":abc")).toBeNull();
   });
@@ -108,6 +112,12 @@ describe("parseMapUrlState", () => {
     expect(result.invalidKeys).toContain("focus");
   });
 
+  it("records a URL-encoded whitespace-only focus id as invalid", () => {
+    const result = parse("focus=node:%20");
+    expect(result.focus).toBeNull();
+    expect(result.invalidKeys).toContain("focus");
+  });
+
   it("records a malformed focus as invalid", () => {
     const result = parse("focus=notavalidtype");
     expect(result.focus).toBeNull();
@@ -144,6 +154,12 @@ describe("parseMapUrlState", () => {
 
   it("records an empty tab as invalid", () => {
     const result = parse("tab=");
+    expect(result.tab).toBeNull();
+    expect(result.invalidKeys).toContain("tab");
+  });
+
+  it("records a whitespace-only tab as invalid", () => {
+    const result = parse("tab=%20");
     expect(result.tab).toBeNull();
     expect(result.invalidKeys).toContain("tab");
   });
