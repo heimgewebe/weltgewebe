@@ -282,9 +282,9 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) \
          VALUES \
-         (rp-list-node-c, place, C, 0.0, 0.0, {}::jsonb), \
-         (rp-list-node-a, place, A, 0.0, 0.0, {}::jsonb), \
-         (rp-list-node-b, place, B, 0.0, 0.0, {}::jsonb)",
+         ('rp-list-node-c', 'place', 'C', 0.0, 0.0, '{}'::jsonb), \
+         ('rp-list-node-a', 'place', 'A', 0.0, 0.0, '{}'::jsonb), \
+         ('rp-list-node-b', 'place', 'B', 0.0, 0.0, '{}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -293,9 +293,9 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
     sqlx::query(
         "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, payload) \
          VALUES \
-         (rp-list-edge-c, rp-list-node-c, rp-list-node-a, relates, {}::jsonb), \
-         (rp-list-edge-a, rp-list-node-a, rp-list-node-b, relates, {}::jsonb), \
-         (rp-list-edge-b, rp-list-node-b, rp-list-node-c, relates, {}::jsonb)",
+         ('rp-list-edge-c', 'rp-list-node-c', 'rp-list-node-a', 'relates', '{}'::jsonb), \
+         ('rp-list-edge-a', 'rp-list-node-a', 'rp-list-node-b', 'relates', '{}'::jsonb), \
+         ('rp-list-edge-b', 'rp-list-node-b', 'rp-list-node-c', 'relates', '{}'::jsonb)",
     )
     .execute(&pool)
     .await
@@ -305,9 +305,9 @@ async fn jsonl_postgres_list_order_contract_diagnostic() {
         "INSERT INTO domain_accounts \
          (id, kind, title, mode, role, email, public_payload, private_payload) \
          VALUES \
-         (rp-list-account-c, garnrolle, C, ron, gast, rp-list-account-c@example.invalid, {}::jsonb, {}::jsonb), \
-         (rp-list-account-a, garnrolle, A, ron, gast, rp-list-account-a@example.invalid, {}::jsonb, {}::jsonb), \
-         (rp-list-account-b, garnrolle, B, ron, gast, rp-list-account-b@example.invalid, {}::jsonb, {}::jsonb)"
+         ('rp-list-account-c', 'garnrolle', 'C', 'ron', 'gast', 'rp-list-account-c@example.invalid', '{}'::jsonb, '{}'::jsonb), \
+         ('rp-list-account-a', 'garnrolle', 'A', 'ron', 'gast', 'rp-list-account-a@example.invalid', '{}'::jsonb, '{}'::jsonb), \
+         ('rp-list-account-b', 'garnrolle', 'B', 'ron', 'gast', 'rp-list-account-b@example.invalid', '{}'::jsonb, '{}'::jsonb)"
     )
     .execute(&pool)
     .await
