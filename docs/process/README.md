@@ -22,7 +22,7 @@ relations:
 
 - [Fahrplan](fahrplan.md) – zeitlicher Ablauf und Meilensteine (**kanonisch**)
 - [Sprache](sprache.md) – Leitfaden zur Projektsprache
-- [Report Lifecycle Policy](report-lifecycle.md) – Regeln für Status, Review, Ablösung, Archivierung und Löschung von Reports
+- [Report Lifecycle Policy](report-lifecycle.md) – Regeln für Status, Review, Ablösung, Archivierung und Löschung von Reports.
 - [Bash Tooling Guidelines](bash-tooling-guidelines.md) – Best Practices für zukünftige Shell-Skripte
 
 [Zurück zum Doku-Index](../index.md)
