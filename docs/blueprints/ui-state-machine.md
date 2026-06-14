@@ -38,11 +38,20 @@ Die UI kennt genau drei globale Zustände:
 
 Kein weiterer globaler Zustand darf eingeführt werden ohne Anpassung dieses Dokuments.
 
-Suche, Filter, Tabs und Hover sind lokale Modi, keine globalen Zustände. Auch
-URL-Parameter sind eine Adressierungsschicht für bestehende Zustände und bilden
-keine zweite State Machine. Die fachliche Einordnung dieser Flächen, Kartenlinsen
-und der späteren URL-Adressierung definiert die
-[UI Interaction Doctrine](ui-interaction-doctrine.md).
+## 2.1 Invarianten
+
+Die globalen Zustände haben folgende Invarianten:
+
+- `navigation`: keine aktive `selection`, kein `kompositionDraft`.
+- `fokus`: genau eine aktive `selection`.
+- `komposition`: genau ein aktiver `kompositionDraft`.
+- `contextPanelOpen` ist abgeleitet aus `systemState !== "navigation"`.
+- `contextPanelOpen` darf nicht als zweite Wahrheit gepflegt werden.
+
+Suche, Filter, Tabs, Hover und URL-Parameter sind lokale Modi oder
+Adressierungsschichten. Sie dürfen keine zusätzliche globale State Machine
+bilden. Die fachliche Einordnung dieser Flächen, Kartenlinsen und der späteren
+URL-Adressierung definiert die [UI Interaction Doctrine](ui-interaction-doctrine.md).
 
 ## 3 State-Machine-Diagramm
 

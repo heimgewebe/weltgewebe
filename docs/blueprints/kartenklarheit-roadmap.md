@@ -117,7 +117,8 @@ Kartenlogik, Markerzustand, Fokuspanel-Zustand und Kartenlinsen sollen nicht dau
   - Dokumentiert in `docs/reports/map-status-matrix.md`, Abschnitt
     „Query-Parameter-Zustand vs. Kartenzustand".
   - Zielsemantik gemäß `docs/blueprints/ui-interaction-doctrine.md`:
-    `focus` / `tab` / `lens` / `compose`. Die bisherige Kurzform `l` / `r` / `t`
+    `focus` / `tab` / `lens`; `compose` kann später zusätzlich
+    Kompositionsmodi adressieren. Die bisherige Kurzform `l` / `r` / `t`
     bleibt nur als Altmodell erhalten und ist kein Zielcontract.
 
 ### Verifikation der Phase 2

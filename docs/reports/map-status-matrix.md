@@ -9,6 +9,8 @@ relations:
     target: docs/blueprints/kartenklarheit-roadmap.md
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
+  - type: relates_to
+    target: docs/blueprints/ui-interaction-doctrine.md
 ---
 
 Dieses Dokument beschreibt den belegbaren Ist-Zustand der aktuellen

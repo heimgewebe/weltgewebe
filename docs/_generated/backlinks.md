@@ -222,6 +222,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/ui-state-machine.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 
+## docs/blueprints/ui-interaction-doctrine.md
+
+- [relates_to] docs/reports/map-status-matrix.md
+
 ## docs/blueprints/ui-roadmap.md
 
 - [relates_to] docs/blueprints/ui-blaupause.md

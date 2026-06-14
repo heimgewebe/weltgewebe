@@ -57,7 +57,7 @@ Sie zeigt:
 - Garnrollen
 - Fäden
 - räumliche Zusammenhänge
-- Aktivitätsdichte
+- Aktivitätsdichte über Fäden und Objektbeziehungen
 
 ### Fokuspanel / ContextPanel
 
@@ -189,6 +189,10 @@ Sie erzeugen keinen weiteren globalen UI-Zustand.
 Filter ist keine linke Drawer-Fläche.
 Suche ist kein vierter Global-State.
 
+Technisch werden Kartenlinsen durch Store- und Presentation-Ableitungen,
+kartenbezogene Filterlogik und UI-Overlays umgesetzt. Sie verändern die sichtbare
+Perspektive auf die Karte, aber nicht die globale UI-State-Machine.
+
 ## URL-Adressierung
 
 URL-State darf bestehende UI-Zustände adressieren.
@@ -207,6 +211,15 @@ Beispiele:
 - `/map?focus=garnrolle:anna&tab=knoten`
 - `/map?lens=filter`
 - `/map?compose=node`
+
+Identifier in `focus=<type>:<id>` müssen URL-encoded werden. Eine spätere
+Implementierung darf die Selection-Referenz nicht durch naives Splitten
+ungeprüfter Rohstrings auswerten; sie muss Typ und Identifier kontrolliert
+dekodieren und ungültige Werte stabil ignorieren oder bereinigen.
+
+Für nutzerteilbare Links ist die ausgeschriebene Form (`focus`, `tab`, `lens`,
+`compose`) vorzuziehen. Eine Kurzform darf später nur eingeführt werden, wenn sie
+einen belegten Nutzen hat und die Lesbarkeit nicht verschlechtert.
 
 Falls später Kürze nötig ist, kann eine knappere Form geprüft werden
 (`f=<type>:<id>`, `tab`, `lens`, `compose`). Dieser Contract wird hier jedoch
@@ -260,6 +273,12 @@ Sie darf bestehende Zustände adressieren:
 - Komposition
 
 Sie darf keine neuen globalen Zustände einführen.
+
+Die URL ist eine Adressierungsschicht, nicht die zweite UI-State-Wahrheit. Bei
+Page-Load, Popstate und expliziter Navigation darf sie bestehende Zustände
+adressieren. Der kanonische UI-Zustand bleibt in der State Machine (`uiView`).
+UI-Aktionen, die später URL-State ändern, müssen über einen deterministischen
+Adapter laufen und Rückkopplungsschleifen zwischen Router und Store vermeiden.
 
 Leitsätze:
 
