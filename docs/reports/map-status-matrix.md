@@ -9,6 +9,8 @@ relations:
     target: docs/blueprints/kartenklarheit-roadmap.md
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
+  - type: relates_to
+    target: docs/blueprints/ui-interaction-doctrine.md
 ---
 
 Dieses Dokument beschreibt den belegbaren Ist-Zustand der aktuellen
@@ -94,27 +96,35 @@ absichtlich nicht in die URL gespiegelt:
 - Filter- und Suchzustand: `activeFilters`, `isSearchOpen`, `searchQuery`
   (`apps/web/src/lib/stores/filterStore.ts`, `searchStore.ts`).
 
-### Query-Parameter-Zustand (`l`, `r`, `t`) (URL-eigen, Deep-Link-Contract)
+### Query-Parameter-Zustand (URL-eigen, Fokuspanel-/Kartenlinsen-Adressierung)
 
-Eigene, URL-besessene Schicht fuer die Drawer-/Tab-Deep-Link-Adressierung,
-getrennt vom fluechtigen Kartenzustand:
+Eigene, URL-besessene Schicht für die Fokuspanel-/Kartenlinsen-Deep-Link-Adressierung,
+getrennt vom flüchtigen Kartenzustand. Aktuelle Zielsemantik gemäß
+`docs/blueprints/ui-interaction-doctrine.md`:
 
-- `l` — linker Drawer (Filter-Overlay): offen/zu.
-- `r` — rechter Drawer (Kontextbereich / aktive Selektion): offen/zu bzw. adressiertes Objekt.
-- `t` — aktiver Tab innerhalb des Kontextpanels.
+- `lens` (bisher grob `l`): Filter / Suche als Kartenlinse.
+- `focus` (bisher grob `r`): Fokus-Selection im ContextPanel.
+- `tab` (bisher grob `t`): Tab innerhalb eines gültigen Fokuspanel-Kontexts.
+- `compose`: optionale spätere Adressierung eines Kompositionsmodus; kein
+  direktes Erbe der bisherigen Kurzform `l` / `r` / `t`.
+
+Die Kurzform `l` / `r` / `t` ist das bisherige Altmodell und kein Zielcontract
+für neue Implementierung. Spätere Query-Navigation soll die semantische
+Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
 
 - **Soll**: URL-Parameter und Kartenzustand sind klar getrennt dokumentiert; die
-  URL-Schicht beschreibt Drawer/Tab-Adressierung, nicht den fluechtigen
+  URL-Schicht beschreibt Fokus-/Linsen-/Tab-Adressierung, nicht den flüchtigen
   Kartenausschnitt.
 - **Ist**: Die Trennung ist dokumentiert (dieser Abschnitt sowie der
-  Modul-Header in `apps/web/src/lib/stores/mapView.ts`). Der Contract `l`/`r`/`t`
-  ist als URL-eigene Schicht definiert und bewusst aus den
-  Presentation-Ableitungen herausgehalten.
+  Modul-Header in `apps/web/src/lib/stores/mapView.ts`, der die bisherige
+  Kurzform `l` / `r` / `t` verwendet). Die URL-Adressierungsschicht ist als
+  URL-eigene Schicht definiert und bewusst aus den Presentation-Ableitungen
+  herausgehalten.
 - **Status**: Teil
 - **Nachweis**: `apps/web/src/lib/stores/mapView.ts`, `apps/web/src/lib/stores/uiView.ts`
-- **Fehlend**: Verdrahtung der `l`/`r`/`t`-Navigation in die Route und gezielte
-  Query-Parameter-Tests bleiben als Arbeitspaket der Phase 4 offen
-  (siehe `docs/blueprints/kartenklarheit-roadmap.md`).
+- **Fehlend**: Verdrahtung der Fokuspanel-/Kartenlinsen-Query-Navigation in die
+  Route und gezielte Query-Parameter-Tests bleiben als Arbeitspaket der Phase 4
+  offen (siehe `docs/blueprints/kartenklarheit-roadmap.md`).
 
 ## Essenz
 

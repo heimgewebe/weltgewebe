@@ -127,6 +127,7 @@ Generated automatically. Do not edit.
 | tasks.board | Weltgewebe Task Board | task-board | active | docs/tasks/board.md |
 | tasks.readme | Task-Control – Einstieg | guide | active | docs/tasks/README.md |
 | ui-blaupause | Weltgewebe UI-Blaupause | blueprint | canonical | docs/blueprints/ui-blaupause.md |
+| ui-interaction-doctrine | Weltgewebe UI Interaction Doctrine | blueprint | canonical | docs/blueprints/ui-interaction-doctrine.md |
 | ui-roadmap | Weltgewebe UI Roadmap | blueprint | canonical | docs/blueprints/ui-roadmap.md |
 | ui-state-machine | Weltgewebe UI State Machine | blueprint | canonical | docs/blueprints/ui-state-machine.md |
 | versionierungs-blaupause | Weltgewebe Deploy-Versionierung und Browser-Aktualität | blueprint | draft | docs/blueprints/versionierungs-blaupause.md |

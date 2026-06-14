@@ -92,7 +92,7 @@ Die Kartenroute soll nicht dauerhaft direkt auf Demo-Daten verdrahtet bleiben.
 
 ### Ziel der Phase 2
 
-Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer einzelnen Routendatei zusammenliegen.
+Kartenlogik, Markerzustand, Fokuspanel-Zustand und Kartenlinsen sollen nicht dauerhaft in einer einzelnen Routendatei zusammenliegen.
 
 ### Arbeitspakete der Phase 2
 
@@ -113,9 +113,13 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
   - Paneldaten: Das selektierte Entity reist als `selection.data` ueber `uiView`;
     der `ContextPanel` liest es direkt aus dem Store statt aus der Route.
 - [x] Ein kleines Karten-View-Model oder Szenenmodell definieren.
-- [x] Query-Parameter-Zustand (`l`, `r`, `t`) und Kartenzustand getrennt dokumentieren.
+- [x] Fokuspanel-/Kartenlinsen-Query-Zustand und Kartenzustand getrennt dokumentieren.
   - Dokumentiert in `docs/reports/map-status-matrix.md`, Abschnitt
     „Query-Parameter-Zustand vs. Kartenzustand".
+  - Zielsemantik gemäß `docs/blueprints/ui-interaction-doctrine.md`:
+    `focus` / `tab` / `lens`; `compose` kann später zusätzlich
+    Kompositionsmodi adressieren. Die bisherige Kurzform `l` / `r` / `t`
+    bleibt nur als Altmodell erhalten und ist kein Zielcontract.
 
 ### Verifikation der Phase 2
 
@@ -129,10 +133,10 @@ Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer ei
 - [x] Auswahlzustand (uiView), Markerbeschreibung (reine Ableitungsfunktionen in
   `mapView`) und Paneldaten (`selection.data`) sind aus der Route entkoppelt; die
   Route haelt nur noch die request-lokale Szene plus die imperative
-  MapLibre-/Overlay-Lebenszyklus-Orchestrierung. Die URL-Parameter-Schicht
-  (`l`, `r`, `t`) ist dokumentarisch vom Kartenzustand getrennt; die
-  tatsaechliche Query-Parameter-Navigation bleibt als Arbeitspaket in Phase 4
-  offen.
+  MapLibre-/Overlay-Lebenszyklus-Orchestrierung. Die URL-Adressierungsschicht
+  für Fokus, Linse und Tab (bisherige Kurzform `l` / `r` / `t`) ist
+  dokumentarisch vom Kartenzustand getrennt; die tatsaechliche
+  Query-Parameter-Navigation bleibt als Arbeitspaket in Phase 4 offen.
 
 ---
 

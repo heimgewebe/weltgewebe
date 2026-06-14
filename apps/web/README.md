@@ -3,6 +3,10 @@
 Frontend-only Prototyp zur Diskussion von UX und Vokabular (Karte, Knoten,
 Fäden, Kontextpanel, Aktionsleiste).
 
+Das kanonische Interaktionsmodell (Fokuspanel, Kartenlinsen, Komposition) ist in
+der [UI Interaction Doctrine](../../docs/blueprints/ui-interaction-doctrine.md)
+dokumentiert.
+
 ## Development & Preview
 
 Das Projekt verwendet pnpm via Corepack. Aktiviere es mit `corepack enable`.
