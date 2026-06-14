@@ -1,6 +1,6 @@
 ---
 id: reports.domain-edge-reference-audit
-title: "Domain Edge Reference Audit — OPT-ARC-001 TODO 4"
+title: "Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4"
 doc_type: report
 status: active
 created: 2026-06-14
@@ -27,12 +27,13 @@ relations:
 
 # Domain Edge Reference Audit
 
-Task: OPT-ARC-001 TODO 4
+Task: OPT-ARC-001 Teilaufgabe 4
 Status: diagnostic / decision-prep
 
 ## Kurzurteil
 
-- Repositories enthalten keine JSONL-Daten, daher wurde der Audit auf `skipped` gesetzt und es ist ein `runtime_data_run` nötig.
+Dieser PR beweist das Audit-Harness, nicht die Runtime-Datenlage.
+Da keine entscheidungsfähige JSONL- oder PostgreSQL-Runtime-Quelle geprüft wurde, bleibt die FK-Entscheidung blockiert bis zu einem Runtime-Datenlauf.
 
 - Keine Foreign-Key-Migration in diesem PR.
 
@@ -70,8 +71,7 @@ Nicht geprüft oder nicht geändert:
 ## Blueprint-Anker
 
 Der Cutover-Blueprint verlangt vor Foreign Keys ein explizites Orphan-/Referenz-Audit.
-Strikte FKs auf `domain_nodes(id)` sind nur zulässig, wenn das aktuelle Modell nicht
-bewusst externe, fehlende oder entitätsübergreifende Referenzen erlaubt.
+Strikte FKs auf `domain_nodes(id)` sind nur zulässig, wenn das aktuelle Modell nicht bewusst externe, fehlende oder entitätsübergreifende Referenzen erlaubt.
 
 ## Audit-Methode
 
@@ -85,28 +85,52 @@ bewusst externe, fehlende oder entitätsübergreifende Referenzen erlaubt.
 
 - Rohdaten werden nicht committed.
 
+## Ausführungsprovenienz
+
+### JSONL-Suche
+
+Befehl:
+
+```bash
+find . \
+  -path './.git' -prune -o \
+  -path './target' -prune -o \
+  -path './node_modules' -prune -o \
+  -path './apps/web/node_modules' -prune -o \
+  -type f \( -name '*nodes*.jsonl' -o -name '*edges*.jsonl' \) \
+  -print
+
+```
+
+Ergebnis:
+keine Kandidaten
+
+### PostgreSQL
+
+DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
+
 ## JSONL-Ergebnis
 
 | Metrik | Wert |
 | --- | ---: |
 | executed | no |
 | source_kind | skipped |
-| nodes_total | 0 |
-| edges_total | 0 |
-| edge_sides_total | 0 |
-| typed_node_references | 0 |
-| typed_node_missing_references | 0 |
-| typed_non_node_references | 0 |
-| typed_unknown_references | 0 |
-| untyped_existing_node_references | 0 |
-| untyped_missing_references | 0 |
-| node_reference_sides | 0 |
-| missing_node_reference_sides | 0 |
-| malformed_edges | 0 |
-| invalid_json_records | 0 |
-| non_object_json_records | 0 |
-| edges_with_any_missing_node_reference | 0 |
-| edges_with_both_missing_node_references | 0 |
+| nodes_total | n/a |
+| edges_total | n/a |
+| edge_sides_total | n/a |
+| typed_node_references | n/a |
+| typed_node_missing_references | n/a |
+| typed_non_node_references | n/a |
+| typed_unknown_references | n/a |
+| untyped_existing_node_references | n/a |
+| untyped_missing_references | n/a |
+| node_reference_sides | n/a |
+| missing_node_reference_sides | n/a |
+| malformed_edges | n/a |
+| invalid_json_records | n/a |
+| non_object_json_records | n/a |
+| edges_with_any_missing_node_reference | n/a |
+| edges_with_both_missing_node_references | n/a |
 | strict_node_fk_ready | false |
 | loose_reference_semantics_observed | false |
 | requires_policy_decision | false |
@@ -119,48 +143,46 @@ bewusst externe, fehlende oder entitätsübergreifende Referenzen erlaubt.
 | --- | ---: |
 | executed | no |
 | source_kind | skipped |
-| nodes_total | 0 |
-| edges_total | 0 |
-| edge_sides_total | 0 |
-| typed_node_references | 0 |
-| typed_node_missing_references | 0 |
-| typed_non_node_references | 0 |
-| typed_unknown_references | 0 |
-| untyped_existing_node_references | 0 |
-| untyped_missing_references | 0 |
-| node_reference_sides | 0 |
-| missing_node_reference_sides | 0 |
-| malformed_edges | 0 |
-| invalid_json_records | 0 |
-| non_object_json_records | 0 |
-| edges_with_any_missing_node_reference | 0 |
-| edges_with_both_missing_node_references | 0 |
+| nodes_total | n/a |
+| edges_total | n/a |
+| edge_sides_total | n/a |
+| typed_node_references | n/a |
+| typed_node_missing_references | n/a |
+| typed_non_node_references | n/a |
+| typed_unknown_references | n/a |
+| untyped_existing_node_references | n/a |
+| untyped_missing_references | n/a |
+| node_reference_sides | n/a |
+| missing_node_reference_sides | n/a |
+| malformed_edges | n/a |
+| invalid_json_records | n/a |
+| non_object_json_records | n/a |
+| edges_with_any_missing_node_reference | n/a |
+| edges_with_both_missing_node_references | n/a |
 | strict_node_fk_ready | false |
 | loose_reference_semantics_observed | false |
 | requires_policy_decision | false |
 | requires_cleanup | false |
 | requires_runtime_data_run | true |
 
-PostgreSQL runtime audit skipped: DATABASE_URL not set.
-
-### Redigierte Finding-Klassen
+## Redigierte Finding-Klassen
 
 Keine vollständigen Edge-, Node-, Account- oder Role-IDs in diesem Report.
 
 | Klasse | Anzahl | Bedeutung |
 | --- | --- | --- |
-| typed_node_missing_reference | 0 | Typ ist node, aber ID fehlt in Nodes |
-| typed_non_node_reference | 0 | Typ-Hinweis ist account oder role |
-| typed_unknown_reference | 0 | Typ-Hinweis ist unbekannt |
-| untyped_existing_node_reference | 0 | Typ fehlt, ID existiert aber in Nodes |
-| untyped_missing_reference | 0 | Typ fehlt und ID fehlt in Nodes |
-| malformed_edge | 0 | Edge ist strukturell unvollständig |
-| invalid_json | 0 | JSONL-Zeile ist nicht parsebar |
-| non_object_json | 0 | JSONL-Zeile ist kein Objekt |
+| typed_node_missing_reference | n/a | Typ ist node, aber ID fehlt in Nodes |
+| typed_non_node_reference | n/a | Typ-Hinweis ist account oder role |
+| typed_unknown_reference | n/a | Typ-Hinweis ist unbekannt |
+| untyped_existing_node_reference | n/a | Typ fehlt, ID existiert aber in Nodes |
+| untyped_missing_reference | n/a | Typ fehlt und ID fehlt in Nodes |
+| malformed_edge | n/a | Edge ist strukturell unvollständig |
+| invalid_json | n/a | JSONL-Zeile ist nicht parsebar |
+| non_object_json | n/a | JSONL-Zeile ist kein Objekt |
 
-### Entscheidungsvorlage
+## Entscheidungsvorlage
 
-#### Option A — Strikte Foreign Keys
+### Option A — Strikte Foreign Keys
 
 Geeignet nur wenn:
 
@@ -177,11 +199,10 @@ Geeignet nur wenn:
 - keine malformed Edges existieren
 
 Konsequenz:
-
 `source_id REFERENCES domain_nodes(id)`
 `target_id REFERENCES domain_nodes(id)`
 
-#### Option B — Lose Referenzsemantik mit Guard/Quarantäne-Report
+### Option B — Lose Referenzsemantik mit Guard/Quarantäne-Report
 
 Geeignet wenn:
 
@@ -194,11 +215,9 @@ Geeignet wenn:
 - untypisierte Altlasten eine direkte FK-Migration blockieren
 
 Konsequenz:
+Keine direkten FKs auf `domain_nodes(id)`, sondern expliziter Integrity-Guard oder Quarantäne-Report.
 
-Keine direkten FKs auf `domain_nodes(id)`, sondern expliziter Integrity-Guard
-oder Quarantäne-Report.
-
-### Empfehlung
+## Empfehlung
 
 Status: needs_runtime_data_run
 
