@@ -102,7 +102,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
 - [x] Phase 0 — Kanonisierung & Drift-Stopp · [auth-roadmap §4](blueprints/auth-roadmap.md)
 - [x] Phase 1 — Ist-vs-Ziel-Beweis · [auth-roadmap §5](blueprints/auth-roadmap.md)
 - [x] Phase 2 — Session-/Device-Modell vervollständigen · [auth-roadmap §6](blueprints/auth-roadmap.md)
-- [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; positiver Register-Verify-Pfad lokal bewiesen (`LOCAL_PROOF_ONLY`); verpflichtender CI-Job `auth-passkey-register-proof` in `.github/workflows/auth-passkey-register-proof.yml` hinzugefügt (CI-Job hinzugefügt; grüner Lauf steht noch aus, `READY_FOR_CI_PROOF`); UI-E2E weiter offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
+- [~] Phase 3 — Step-up Auth · Passkey-Register-Grant-Handoff belegt; Passkey Register-Verify ist durch CI belegt ([Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`); Passkey-Login-Flow (`auth/options`, `auth/verify`), Management, UI und dauerhafte Persistenz bleiben offen · [auth-roadmap §7/§8](blueprints/auth-roadmap.md)
 - [~] Phase 4 — Auth-Persistenz Runtime-Proof
   - SQL/psql-Migration + psql-basierter PgBouncer-CRUD-Smoke belegt
   - SQLx/Rust-CRUD gegen direkten PostgreSQL-Pfad ist belegt (PROVEN; Session-Tabellen-CRUD-Primitive)
