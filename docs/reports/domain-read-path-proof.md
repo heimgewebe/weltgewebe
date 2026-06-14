@@ -123,14 +123,18 @@ The current blueprint requires PostgreSQL read cutover parity to preserve:
 - legacy `/edges` order as the existing insertion/file order
 - legacy `/accounts` order as the existing id order
 - cursor order as stable id-ascending order for all three domains
+
 Therefore the nodes/edges legacy mismatch is a blocker for PostgreSQL read
 cutover until a follow-up PR implements order preservation or explicitly revises
 the blueprint first.
+
 Required follow-up outcome:
+
 - preserve legacy nodes/edges order in PostgreSQL, likely via an explicit
   ordinal/position captured during JSONL backfill/import; or
 - first revise `docs/blueprints/domain-data-postgres-cutover.md` in a separate
   API-contract decision PR before changing the target order.
+
 This diagnostic PR does neither.
 
 ### Non-goals

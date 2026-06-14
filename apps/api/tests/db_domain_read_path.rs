@@ -342,9 +342,10 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
 
     // Intentional gap assertion:
     // This diagnostic records the current legacy-order mismatch between JSONL
-    // file/cache order and PostgreSQL id order. When TODO 3 is resolved by implementing blueprint-required legacy order
-    // preservation or by explicitly revising the blueprint first, this diagnostic
-    // must be updated or replaced by the final parity proof.
+    // file/cache order and PostgreSQL id order. When TODO 3 is resolved by
+    // implementing blueprint-required legacy order preservation or by explicitly
+    // revising the blueprint first, this diagnostic must be updated or replaced
+    // by the final parity proof.
 
     assert_ne!(jsonl_node_ids, postgres_node_ids);
     assert_eq!(
@@ -370,9 +371,10 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
 
     // Intentional gap assertion:
     // This diagnostic records the current legacy-order mismatch between JSONL
-    // file/cache order and PostgreSQL id order. When TODO 3 is resolved by implementing blueprint-required legacy order
-    // preservation or by explicitly revising the blueprint first, this diagnostic
-    // must be updated or replaced by the final parity proof.
+    // file/cache order and PostgreSQL id order. When TODO 3 is resolved by
+    // implementing blueprint-required legacy order preservation or by explicitly
+    // revising the blueprint first, this diagnostic must be updated or replaced
+    // by the final parity proof.
 
     assert_ne!(jsonl_edge_ids, postgres_edge_ids);
     assert_eq!(
