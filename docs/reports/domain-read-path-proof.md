@@ -116,8 +116,8 @@ legacy mismatch.
 ### Consequence
 
 TODO 3 final parity proof remains open. This PR records the current gap; it does
-not decide the target legacy ordering. A later PR must decide how to handle the legacy
-nodes/edges order mismatch before a PostgreSQL read cutover:
+not decide the target legacy ordering. A later PR must decide how to handle the
+legacy nodes/edges order mismatch before a PostgreSQL read cutover:
 
 - Option A: preserve legacy order in PostgreSQL via explicit ordinal/position.
 - Option B: revise the legacy contract to id order.
