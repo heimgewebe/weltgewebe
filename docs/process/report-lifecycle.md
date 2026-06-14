@@ -11,6 +11,8 @@ relations:
     target: docs/process/README.md
   - type: relates_to
     target: docs/_generated/report-lifecycle-inventory.md
+  - type: relates_to
+    target: docs/process/report-lifecycle-contract-alignment.md
 ---
 
 # Report Lifecycle Policy

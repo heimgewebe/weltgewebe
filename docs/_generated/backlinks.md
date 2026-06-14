@@ -401,6 +401,7 @@ Generated automatically. Do not edit.
 ## docs/process/report-lifecycle-contract-alignment.md
 
 - [relates_to] docs/process/README.md
+- [relates_to] docs/process/report-lifecycle.md
 
 ## docs/process/report-lifecycle.md
 
