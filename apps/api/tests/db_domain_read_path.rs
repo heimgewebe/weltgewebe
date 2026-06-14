@@ -326,8 +326,19 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
 
     // 4. Assert Diagnostic Outcomes
     // Nodes: Legacy JSONL loader retains file order. PG loader uses ORDER BY id ASC.
-    let jsonl_node_ids: Vec<&str> = jsonl_nodes.iter_in_order().map(|n| n.id.as_str()).collect();
-    let postgres_node_ids: Vec<&str> = pg_nodes.iter_in_order().map(|n| n.id.as_str()).collect();
+    // The PostgreSQL proof database may contain unrelated local rows. Scope the
+    // comparison to this diagnostic's rp-list-* fixtures so the assertion proves
+    // list-order semantics, not database cleanliness.
+    let jsonl_node_ids: Vec<&str> = jsonl_nodes
+        .iter_in_order()
+        .map(|n| n.id.as_str())
+        .filter(|id| id.starts_with("rp-list-node-"))
+        .collect();
+    let postgres_node_ids: Vec<&str> = pg_nodes
+        .iter_in_order()
+        .map(|n| n.id.as_str())
+        .filter(|id| id.starts_with("rp-list-node-"))
+        .collect();
 
     // Intentional gap assertion:
     // This diagnostic records the current legacy-order mismatch between JSONL
@@ -346,8 +357,16 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     );
 
     // Edges: Legacy JSONL loader retains file order. PG loader uses ORDER BY id ASC.
-    let jsonl_edge_ids: Vec<&str> = jsonl_edges.iter_in_order().map(|e| e.id.as_str()).collect();
-    let postgres_edge_ids: Vec<&str> = pg_edges.iter_in_order().map(|e| e.id.as_str()).collect();
+    let jsonl_edge_ids: Vec<&str> = jsonl_edges
+        .iter_in_order()
+        .map(|e| e.id.as_str())
+        .filter(|id| id.starts_with("rp-list-edge-"))
+        .collect();
+    let postgres_edge_ids: Vec<&str> = pg_edges
+        .iter_in_order()
+        .map(|e| e.id.as_str())
+        .filter(|id| id.starts_with("rp-list-edge-"))
+        .collect();
 
     // Intentional gap assertion:
     // This diagnostic records the current legacy-order mismatch between JSONL
@@ -366,8 +385,16 @@ async fn jsonl_postgres_legacy_list_order_gap_diagnostic() {
     );
 
     // Accounts: AccountStore uses BTreeMap, so both loaders yield ID-ascending order.
-    let jsonl_account_ids: Vec<&str> = jsonl_accounts.iter().map(|(id, _)| id.as_str()).collect();
-    let postgres_account_ids: Vec<&str> = pg_accounts.iter().map(|(id, _)| id.as_str()).collect();
+    let jsonl_account_ids: Vec<&str> = jsonl_accounts
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .filter(|id| id.starts_with("rp-list-account-"))
+        .collect();
+    let postgres_account_ids: Vec<&str> = pg_accounts
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .filter(|id| id.starts_with("rp-list-account-"))
+        .collect();
 
     assert_eq!(jsonl_account_ids, postgres_account_ids);
     assert_eq!(

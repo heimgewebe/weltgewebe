@@ -24,7 +24,7 @@
         "docs/specs/list-pagination-api.md"
       ],
       "missing_evidence": [],
-      "next_action": "Cursor-Paginierung für /nodes, /edges, /accounts implementiert und in PR #1121 verifiziert (Commit 98bb7e2)",
+      "next_action": "Cursor-Paginierung f\u00fcr /nodes, /edges, /accounts implementiert und in PR #1121 verifiziert (Commit 98bb7e2)",
       "updated_at": "2026-05-31"
     },
     {
@@ -46,9 +46,9 @@
         "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
+        "CI-Nachweis der geh\u00e4rteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
-      "next_action": "CI-Lauf abwarten; bei grünem contracts-domain-check / Validate Domain Schemas als erledigt markieren",
+      "next_action": "CI-Lauf abwarten; bei gr\u00fcnem contracts-domain-check / Validate Domain Schemas als erledigt markieren",
       "updated_at": "2026-05-29"
     },
     {
@@ -68,7 +68,7 @@
         "docs/runbook.md"
       ],
       "missing_evidence": [],
-      "next_action": "keine – eigenständige Runbooks erstellt und über Doku-Hygiene-Guards (validate_relations, docs-relations-guard, generate_task_index --check) verifiziert",
+      "next_action": "keine \u2013 eigenst\u00e4ndige Runbooks erstellt und \u00fcber Doku-Hygiene-Guards (validate_relations, docs-relations-guard, generate_task_index --check) verifiziert",
       "updated_at": "2026-05-30"
     },
     {
@@ -109,7 +109,7 @@
         "apps/web/tests/basemap-client-integration.spec.ts"
       ],
       "missing_evidence": [],
-      "next_action": "keine – visuelle Abnahme separat in map-status-matrix.md",
+      "next_action": "keine \u2013 visuelle Abnahme separat in map-status-matrix.md",
       "updated_at": "2026-05-27"
     },
     {
@@ -128,7 +128,7 @@
         "docs/adr/ADR-0007__auth-persistence-production-db-path.md"
       ],
       "missing_evidence": [],
-      "next_action": "keine – Refresh-Token-Persistenz und Session-Leak-Tests sind eigenständige Auth-Phase-6-Themen",
+      "next_action": "keine \u2013 Refresh-Token-Persistenz und Session-Leak-Tests sind eigenst\u00e4ndige Auth-Phase-6-Themen",
       "updated_at": "2026-05-27"
     },
     {
@@ -146,7 +146,7 @@
         "apps/api/src/lib.rs"
       ],
       "missing_evidence": [],
-      "next_action": "keine – weitere Domain-Migrationen gehören zu OPT-ARC-001",
+      "next_action": "keine \u2013 weitere Domain-Migrationen geh\u00f6ren zu OPT-ARC-001",
       "updated_at": "2026-05-27"
     },
     {
@@ -201,13 +201,13 @@
       "missing_evidence": [
         "Kein Trivy-Container-Scan-Schritt definiert"
       ],
-      "next_action": "Trivy-Schritt in security.yml ergänzen",
+      "next_action": "Trivy-Schritt in security.yml erg\u00e4nzen",
       "updated_at": "2026-04-27"
     },
     {
       "id": "OPT-ARC-001",
       "area": "Architektur",
-      "title": "JSONL → PostgreSQL",
+      "title": "JSONL \u2192 PostgreSQL",
       "status": "partial",
       "priority": "high",
       "risk": "high",
@@ -248,20 +248,20 @@
         "CI-Job: db-domain-edge-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
-        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)",
-        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): historische DB-Domain-Proof-Evidence; Schema- und Backfill-Proof bleiben belegt, der Read-Path-Proof-Harness wurde sp\u00e4ter durch den List-Order-Gap-Diagnostic erweitert und wartet auf frische PR-CI-Evidence",
+        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof gr\u00fcn"
       ],
       "missing_evidence": [
         "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
-        "JSONL bleibt Default-Lesequelle und Write-Truth im Default-/JSONL-Modus bis Cutover; kein Dual-Write",
-        "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
+        "Read-Path-Proof-Harness nach List-Order-Gap-Diagnostic wieder prepared; frische PR-CI-Evidence ausstehend",
+        "Legacy-Order-Preservation f\u00fcr /nodes und /edges bleibt Cutover-Blocker vor PostgreSQL-Read-Cutover"
       ],
       "updated_at": "2026-06-12"
     },
     {
       "id": "OPT-API-004",
       "area": "API",
-      "title": "Limit-Obergrenze /nodes & /accounts (Parität zu /edges)",
+      "title": "Limit-Obergrenze /nodes & /accounts (Parit\u00e4t zu /edges)",
       "status": "done",
       "priority": "high",
       "risk": "medium",
@@ -274,13 +274,13 @@
         "apps/api/src/routes/edges.rs"
       ],
       "missing_evidence": [],
-      "next_action": "keine – Cursor-Paginierung bleibt unter OPT-API-001",
+      "next_action": "keine \u2013 Cursor-Paginierung bleibt unter OPT-API-001",
       "updated_at": "2026-05-25"
     },
     {
       "id": "OPT-API-005",
       "area": "API",
-      "title": "Login-E-Mail Längenbegrenzung",
+      "title": "Login-E-Mail L\u00e4ngenbegrenzung",
       "status": "done",
       "priority": "low",
       "risk": "low",
@@ -312,7 +312,7 @@
         "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
+        "CI-Nachweis der geh\u00e4rteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
       "next_action": "CI-Lauf abwarten; danach mit OPT-CON-001 konsolidieren oder als erledigt markieren",
       "updated_at": "2026-05-29"
@@ -387,10 +387,10 @@
       ],
       "missing_evidence": [
         "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
-        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
+        "Verbleibende Node-20-Metadatenwarnungen m\u00fcssen nach PR-CI f\u00fcr Stage B erfasst werden",
         "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
       ],
-      "next_action": "CI-Lauf unter erzwungener Node-24-Action-Runtime prüfen und verbleibende Node-20-Metadatenwarnungen für Stage B erfassen.",
+      "next_action": "CI-Lauf unter erzwungener Node-24-Action-Runtime pr\u00fcfen und verbleibende Node-20-Metadatenwarnungen f\u00fcr Stage B erfassen.",
       "updated_at": "2026-06-05"
     },
     {
