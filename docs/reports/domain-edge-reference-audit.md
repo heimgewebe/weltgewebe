@@ -38,6 +38,7 @@ bleibt die FK-Entscheidung blockiert bis zu einem Runtime-Datenlauf.
 
 - Keine Foreign-Key-Migration in diesem PR.
 - Kein Runtime-Cutover-Claim.
+
 - Ergebnis bereitet nur die spätere Entscheidung vor.
 
 ## Scope
@@ -47,16 +48,20 @@ Geprüft werden:
 
 - JSONL-Edges gegen JSONL-Nodes
 - PostgreSQL `domain_edges` gegen `domain_nodes`, falls `DATABASE_URL` gesetzt ist
+
 - `source_id`
 - `target_id`
+
 - optionale `source_type` / `target_type` Hinweise
 
 Nicht geprüft oder nicht geändert:
 
 - keine FK-Migration
 - kein Runtime-Code
+
 - keine Edge-Normalisierung
 - keine Quarantäne-Mutation
+
 - keine JSONL-Demontage
 
 ## Blueprint-Anker
@@ -69,8 +74,10 @@ wenn das aktuelle Modell nicht bewusst externe, fehlende oder entitätsübergrei
 
 - Nodes werden als Menge vorhandener `id`s geladen.
 - Jede Edge wird auf `source_id` und `target_id` geprüft.
+
 - Typ-Hints (`source_type`, `target_type`) werden klassifiziert.
 - Findings werden redigiert.
+
 - Rohdaten werden nicht committed.
 
 ## Ausführungsprovenienz
@@ -87,10 +94,15 @@ find . \
   -path './apps/web/node_modules' -prune -o \
   -type f \( -name '*nodes*.jsonl' -o -name '*edges*.jsonl' \) \
   -print
+
 ```
 
 Ergebnis:
+
+```text
 keine Kandidaten
+
+```
 
 ### PostgreSQL
 
@@ -108,6 +120,7 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 | node_non_object_json_records | n/a |
 | nodes_missing_id | n/a |
 | nodes_non_string_id | n/a |
+| node_duplicate_ids | n/a |
 | edge_records_total | n/a |
 | auditable_edges_total | n/a |
 | nodes_total | n/a |
@@ -144,6 +157,7 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 | node_non_object_json_records | n/a |
 | nodes_missing_id | n/a |
 | nodes_non_string_id | n/a |
+| node_duplicate_ids | n/a |
 | edge_records_total | n/a |
 | auditable_edges_total | n/a |
 | nodes_total | n/a |
@@ -191,8 +205,10 @@ Geeignet nur wenn:
 
 - echte Runtime-Daten oder ausdrücklich entscheidungsfähige Daten geprüft wurden
 - keine typisierten Nicht-Node-Referenzen existieren
+
 - keine unbekannten Typ-Hints existieren
 - keine untypisierten Referenzen offen sind
+
 - keine missing Node references existieren
 - keine malformed Edges existieren
 
@@ -201,6 +217,7 @@ Konsequenz:
 ```text
 source_id REFERENCES domain_nodes(id)
 target_id REFERENCES domain_nodes(id)
+
 ```
 
 ### Option B — Lose Referenzsemantik mit Guard/Quarantäne-Report
@@ -209,12 +226,17 @@ Geeignet wenn:
 
 - Edges bewusst auf Accounts, Roles oder externe Entitäten zeigen können
 - Typ-Hints heterogen sind
+
 - historische Orphans existieren, die nicht still gelöscht werden dürfen
 - untypisierte Altlasten eine direkte FK-Migration blockieren
 
 Konsequenz:
+
+```text
 Keine direkten FKs auf `domain_nodes(id)`, sondern expliziter
 Integrity-Guard oder Quarantäne-Report.
+
+```
 
 ## Empfehlung
 
@@ -224,4 +246,5 @@ Begründung:
 
 - Keine lokalen JSONL-Daten für Kanten und Knoten gefunden.
 - Keine PostgreSQL DB verfügbar, da DATABASE_URL nicht gesetzt ist.
+
 - Ein Runtime Data Run ist notwendig, um über Foreign Keys zu entscheiden.

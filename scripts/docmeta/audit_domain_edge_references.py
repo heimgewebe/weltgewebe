@@ -3,11 +3,15 @@ import hashlib
 import json
 import logging
 import os
+import re
+import shutil
 import subprocess
 import sys
+import tempfile
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any, Dict, Optional, Set, Tuple
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
@@ -22,9 +26,7 @@ def hash_id(id_val: Optional[str]) -> Optional[str]:
         return None
     return hash_ref(id_val, "ref")
 
-def hash_edge(id_val: Optional[str]) -> str:
-    if not id_val:
-        return "edge:sha256:unknown"
+def hash_edge(id_val: str) -> str:
     return hash_ref(id_val, "edge")
 
 def source_fingerprint(path: str) -> Dict[str, Any]:
@@ -53,39 +55,65 @@ def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
         env["PGPASSWORD"] = unquote(parsed.password)
     if parsed.path and parsed.path != "/":
         env["PGDATABASE"] = unquote(parsed.path.lstrip("/"))
+
+    query = parse_qs(parsed.query, keep_blank_values=False)
+    query_env_map = {
+        "sslmode": "PGSSLMODE",
+        "connect_timeout": "PGCONNECT_TIMEOUT",
+        "application_name": "PGAPPNAME",
+        "sslrootcert": "PGSSLROOTCERT",
+        "sslcert": "PGSSLCERT",
+        "sslkey": "PGSSLKEY",
+    }
+    for key, env_key in query_env_map.items():
+        values = query.get(key)
+        if values:
+            env[env_key] = values[-1]
+
     return env
 
-def classify_edge_side(
-    *,
-    edge_ref: str,
-    side: str,
-    target_id: Optional[str],
-    type_hint: Optional[str],
-    node_ids: Set[str],
-    show_ids: bool,
-) -> Tuple[str, Optional[Dict[str, Any]]]:
-    target_ref = target_id if show_ids else hash_id(target_id)
+def sanitize_psql_stderr(stderr: str) -> str:
+    text = stderr or ""
+    text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://<redacted>", text)
+    text = re.sub(r"(?i)(password=)[^ \n\t]+", r"\1<redacted>", text)
+    text = re.sub(r"(?i)(PGPASSWORD=)[^ \n\t]+", r"\1<redacted>", text)
+    if os.environ.get("DATABASE_URL"):
+        text = text.replace(os.environ.get("DATABASE_URL", ""), "<redacted>")
+    return text[:500]
 
-    if type_hint == "node":
-        if target_id in node_ids:
-            return "typed_node_reference", None
-        else:
-            return "typed_node_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": "node", "classification": "typed_node_missing_reference"}
-    elif type_hint in ["account", "role"]:
-        return "typed_non_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_non_node_reference"}
-    elif type_hint is not None:
-        return "typed_unknown_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_unknown_reference"}
-    else:
-        if target_id in node_ids:
-            return "untyped_existing_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_existing_node_reference"}
-        else:
-            return "untyped_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_missing_reference"}
+def iter_psql_json_rows(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[Dict[str, Any]]:
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:
+        proc = subprocess.Popen(
+            ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
+            env=postgres_env,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            yield json.loads(line)
+        returncode = proc.wait()
+        stderr_file.seek(0)
+        stderr = stderr_file.read()
+        if returncode != 0:
+            logging.error(
+                "Failed to query %s via psql; returncode=%s; stderr=%s",
+                label,
+                returncode,
+                sanitize_psql_stderr(stderr),
+            )
+            sys.exit(1)
 
 def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any]]:
     node_ids = set()
     summary = {
         "node_records_total": 0,
         "node_ids_total": 0,
+        "node_duplicate_ids": 0,
         "node_invalid_json_records": 0,
         "node_non_object_json_records": 0,
         "nodes_missing_id": 0,
@@ -113,24 +141,53 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
                         summary["nodes_non_string_id"] += 1
                         continue
 
+                    if obj["id"] in node_ids:
+                        summary["node_duplicate_ids"] += 1
+                        continue
+
                     node_ids.add(obj["id"])
                     summary["node_ids_total"] += 1
                 except json.JSONDecodeError:
                     summary["node_invalid_json_records"] += 1
     except FileNotFoundError:
-        logging.error(f"Nodes file not found: {path}")
+        logging.error("Nodes file not found: %s", path)
         sys.exit(1)
 
     return node_ids, summary, source_fingerprint(path)
 
-def load_jsonl_edges(path: str) -> Tuple[list[Dict[str, Any]], Dict[str, int], Dict[str, Any]]:
-    edges = []
+def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[str, int]]:
+    node_ids = set()
     summary = {
-        "edge_records_total": 0,
-        "invalid_json_records": 0,
-        "non_object_json_records": 0,
+        "node_records_total": 0,
+        "node_ids_total": 0,
+        "node_duplicate_ids": 0,
+        "node_invalid_json_records": 0,
+        "node_non_object_json_records": 0,
+        "nodes_missing_id": 0,
+        "nodes_non_string_id": 0,
     }
 
+    sql = "SELECT json_build_object('id', id) FROM domain_nodes;"
+    for obj in iter_psql_json_rows(sql, postgres_env, "domain_nodes"):
+        summary["node_records_total"] += 1
+        if not isinstance(obj, dict):
+            summary["node_non_object_json_records"] += 1
+            continue
+        if "id" not in obj:
+            summary["nodes_missing_id"] += 1
+            continue
+        if not isinstance(obj["id"], str):
+            summary["nodes_non_string_id"] += 1
+            continue
+        if obj["id"] in node_ids:
+            summary["node_duplicate_ids"] += 1
+            continue
+        node_ids.add(obj["id"])
+        summary["node_ids_total"] += 1
+
+    return node_ids, summary
+
+def iter_jsonl_edges(path: str, edge_parse_summary: Dict[str, int]) -> Iterator[Dict[str, Any]]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             line_number = 0
@@ -139,73 +196,21 @@ def load_jsonl_edges(path: str) -> Tuple[list[Dict[str, Any]], Dict[str, int], D
                 line = line.strip()
                 if not line:
                     continue
-                summary["edge_records_total"] += 1
+                edge_parse_summary["edge_records_total"] += 1
                 try:
                     obj = json.loads(line)
                     if not isinstance(obj, dict):
-                        summary["non_object_json_records"] += 1
+                        edge_parse_summary["non_object_json_records"] += 1
                         continue
                     obj["line_number"] = line_number
-                    edges.append(obj)
+                    yield obj
                 except json.JSONDecodeError:
-                    summary["invalid_json_records"] += 1
+                    edge_parse_summary["invalid_json_records"] += 1
     except FileNotFoundError:
-        logging.error(f"Edges file not found: {path}")
+        logging.error("Edges file not found: %s", path)
         sys.exit(1)
 
-    return edges, summary, source_fingerprint(path)
-
-def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[str, int]]:
-    node_ids = set()
-    summary = {
-        "node_records_total": 0,
-        "node_ids_total": 0,
-        "node_invalid_json_records": 0,
-        "node_non_object_json_records": 0,
-        "nodes_missing_id": 0,
-        "nodes_non_string_id": 0,
-    }
-
-    sql = "SELECT json_build_object('id', id) FROM domain_nodes;"
-    try:
-        result = subprocess.run(
-            ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
-            env=postgres_env, capture_output=True, text=True, check=True
-        )
-        for line in result.stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            summary["node_records_total"] += 1
-            try:
-                obj = json.loads(line)
-                if not isinstance(obj, dict):
-                    summary["node_non_object_json_records"] += 1
-                    continue
-                if "id" not in obj:
-                    summary["nodes_missing_id"] += 1
-                    continue
-                if not isinstance(obj["id"], str):
-                    summary["nodes_non_string_id"] += 1
-                    continue
-                node_ids.add(obj["id"])
-                summary["node_ids_total"] += 1
-            except json.JSONDecodeError:
-                summary["node_invalid_json_records"] += 1
-    except subprocess.CalledProcessError as e:
-        logging.error("Failed to query domain_nodes via psql; returncode=%s", e.returncode)
-        sys.exit(1)
-
-    return node_ids, summary
-
-def load_postgres_edges(postgres_env: Dict[str, str]) -> Tuple[list[Dict[str, Any]], Dict[str, int]]:
-    edges = []
-    summary = {
-        "edge_records_total": 0,
-        "invalid_json_records": 0,
-        "non_object_json_records": 0,
-    }
-
+def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[str, int]) -> Iterator[Dict[str, Any]]:
     sql = """SELECT json_build_object(
   'id', id,
   'source_id', source_id,
@@ -213,38 +218,59 @@ def load_postgres_edges(postgres_env: Dict[str, str]) -> Tuple[list[Dict[str, An
   'source_type', payload->>'source_type',
   'target_type', payload->>'target_type'
 ) FROM domain_edges;"""
+    row_number = 0
+    for obj in iter_psql_json_rows(sql, postgres_env, "domain_edges"):
+        row_number += 1
+        edge_parse_summary["edge_records_total"] += 1
+        if not isinstance(obj, dict):
+            edge_parse_summary["non_object_json_records"] += 1
+            continue
+        obj["row_number"] = row_number
+        yield obj
 
-    try:
-        result = subprocess.run(
-            ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
-            env=postgres_env, capture_output=True, text=True, check=True
-        )
-        row_number = 0
-        for line in result.stdout.splitlines():
-            row_number += 1
-            line = line.strip()
-            if not line:
-                continue
-            summary["edge_records_total"] += 1
-            try:
-                obj = json.loads(line)
-                if not isinstance(obj, dict):
-                    summary["non_object_json_records"] += 1
-                    continue
-                obj["row_number"] = row_number
-                edges.append(obj)
-            except json.JSONDecodeError:
-                summary["invalid_json_records"] += 1
-    except subprocess.CalledProcessError as e:
-        logging.error("Failed to query domain_edges via psql; returncode=%s", e.returncode)
-        sys.exit(1)
+def classify_edge_side(
+    *,
+    edge_ref: str,
+    side: str,
+    target_id: Optional[str],
+    type_hint: Optional[str],
+    node_ids: Set[str],
+    show_ids: bool,
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    target_ref = target_id if show_ids else hash_id(target_id)
 
-    return edges, summary
+    if type_hint is not None and not isinstance(type_hint, str):
+        type_hint = str(type_hint)
+
+    if type_hint == "node":
+        if target_id in node_ids:
+            return "typed_node_reference", None
+        else:
+            return "typed_node_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": "node", "classification": "typed_node_missing_reference"}
+    elif type_hint in ["account", "role"]:
+        return "typed_non_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_non_node_reference"}
+    elif type_hint is not None:
+        return "typed_unknown_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_unknown_reference"}
+    else:
+        if target_id in node_ids:
+            return "untyped_existing_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_existing_node_reference"}
+        else:
+            return "untyped_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_missing_reference"}
+
+def append_finding(
+    findings: list[Dict[str, Any]],
+    finding: Dict[str, Any],
+    max_findings: int,
+) -> bool:
+    if len(findings) < max_findings:
+        findings.append(finding)
+        return False
+    return True
 
 def evaluate_audit_data(
     *,
     node_ids: Set[str],
-    edges: list[Dict[str, Any]],
+    edges: Iterable[Dict[str, Any]],
     source: Dict[str, Any],
     source_kind: str,
     show_ids: bool,
@@ -255,9 +281,9 @@ def evaluate_audit_data(
 
     summary = {
         "nodes_total": node_parse_summary["node_ids_total"],
-        "edges_total": 0, # Note: this in old script was edges_total.
+        "edges_total": 0,
         "auditable_edges_total": 0,
-        "edge_records_total": edge_parse_summary["edge_records_total"],
+        "edge_records_total": 0,
         "edge_sides_total": 0,
         "typed_node_references": 0,
         "typed_node_missing_references": 0,
@@ -268,8 +294,8 @@ def evaluate_audit_data(
         "node_reference_sides": 0,
         "missing_node_reference_sides": 0,
         "malformed_edges": 0,
-        "invalid_json_records": edge_parse_summary["invalid_json_records"],
-        "non_object_json_records": edge_parse_summary["non_object_json_records"],
+        "invalid_json_records": 0,
+        "non_object_json_records": 0,
         "edges_with_any_missing_node_reference": 0,
         "edges_with_both_missing_node_references": 0,
         "node_records_total": node_parse_summary["node_records_total"],
@@ -277,9 +303,11 @@ def evaluate_audit_data(
         "node_non_object_json_records": node_parse_summary["node_non_object_json_records"],
         "nodes_missing_id": node_parse_summary["nodes_missing_id"],
         "nodes_non_string_id": node_parse_summary["nodes_non_string_id"],
+        "node_duplicate_ids": node_parse_summary["node_duplicate_ids"],
     }
 
     findings = []
+    findings_truncated = False
 
     for edge in edges:
         edge_id = edge.get("id")
@@ -299,17 +327,18 @@ def evaluate_audit_data(
             else:
                 edge_ref = hash_ref("unknown", "edge")
 
-            findings.append({
+            finding = {
                 "edge_ref": edge_ref,
                 "side": "unknown",
                 "target_ref": None,
                 "type_hint": None,
                 "classification": "malformed_edge"
-            })
+            }
+            if append_finding(findings, finding, max_findings):
+                findings_truncated = True
             continue
 
         summary["auditable_edges_total"] += 1
-        summary["edges_total"] += 1
         edge_ref = edge_id if show_ids else hash_edge(edge_id)
         missing_node_count = 0
 
@@ -322,7 +351,8 @@ def evaluate_audit_data(
             missing_node_count += 1
         summary[src_class + "s"] = summary.get(src_class + "s", 0) + 1
         if src_finding:
-            findings.append(src_finding)
+            if append_finding(findings, src_finding, max_findings):
+                findings_truncated = True
 
         # Target
         tgt_class, tgt_finding = classify_edge_side(
@@ -333,12 +363,18 @@ def evaluate_audit_data(
             missing_node_count += 1
         summary[tgt_class + "s"] = summary.get(tgt_class + "s", 0) + 1
         if tgt_finding:
-            findings.append(tgt_finding)
+            if append_finding(findings, tgt_finding, max_findings):
+                findings_truncated = True
 
         if missing_node_count > 0:
             summary["edges_with_any_missing_node_reference"] += 1
         if missing_node_count == 2:
             summary["edges_with_both_missing_node_references"] += 1
+
+    summary["edge_records_total"] = edge_parse_summary["edge_records_total"]
+    summary["invalid_json_records"] = edge_parse_summary["invalid_json_records"]
+    summary["non_object_json_records"] = edge_parse_summary["non_object_json_records"]
+    summary["edges_total"] = summary["edge_records_total"]
 
     summary["edge_sides_total"] = summary["auditable_edges_total"] * 2
     summary["node_reference_sides"] = summary["typed_node_references"] + summary["untyped_existing_node_references"]
@@ -350,6 +386,7 @@ def evaluate_audit_data(
         summary["node_non_object_json_records"] == 0 and
         summary["nodes_missing_id"] == 0 and
         summary["nodes_non_string_id"] == 0 and
+        summary["node_duplicate_ids"] == 0 and
         summary["malformed_edges"] == 0 and
         summary["invalid_json_records"] == 0 and
         summary["non_object_json_records"] == 0 and
@@ -367,6 +404,7 @@ def evaluate_audit_data(
         summary["node_non_object_json_records"] > 0 or
         summary["nodes_missing_id"] > 0 or
         summary["nodes_non_string_id"] > 0 or
+        summary["node_duplicate_ids"] > 0 or
         summary["malformed_edges"] > 0 or
         summary["invalid_json_records"] > 0 or
         summary["non_object_json_records"] > 0 or
@@ -391,12 +429,6 @@ def evaluate_audit_data(
         str(x.get("target_ref", ""))
     ))
 
-    findings_truncated = False
-    findings_limit = max_findings
-    if len(findings) > max_findings:
-        findings = findings[:max_findings]
-        findings_truncated = True
-
     return {
         "schema_version": "1.0.0",
         "source": source,
@@ -409,7 +441,7 @@ def evaluate_audit_data(
             "requires_runtime_data_run": requires_runtime_data_run
         },
         "findings_truncated": findings_truncated,
-        "findings_limit": findings_limit,
+        "findings_limit": max_findings,
         "findings": findings
     }
 
@@ -432,15 +464,19 @@ def main():
         if "DATABASE_URL" not in os.environ:
             logging.error("DATABASE_URL not set for PostgreSQL audit")
             sys.exit(1)
-        try:
-            subprocess.run(["psql", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-        except (subprocess.SubprocessError, FileNotFoundError):
+        if shutil.which("psql") is None:
             logging.error("psql is not available")
             sys.exit(1)
 
         postgres_env = postgres_env_from_database_url(os.environ["DATABASE_URL"])
         node_ids, node_summary = load_postgres_nodes(postgres_env)
-        edges, edge_summary = load_postgres_edges(postgres_env)
+
+        edge_parse_summary = {
+            "edge_records_total": 0,
+            "invalid_json_records": 0,
+            "non_object_json_records": 0,
+        }
+        edges_iterable = iter_postgres_edges(postgres_env, edge_parse_summary)
 
         source = {
             "kind": "postgres",
@@ -448,13 +484,19 @@ def main():
         }
     elif args.nodes_jsonl and args.edges_jsonl:
         node_ids, node_summary, node_source = load_jsonl_nodes(args.nodes_jsonl)
-        edges, edge_summary, edge_source = load_jsonl_edges(args.edges_jsonl)
+
+        edge_parse_summary = {
+            "edge_records_total": 0,
+            "invalid_json_records": 0,
+            "non_object_json_records": 0,
+        }
+        edges_iterable = iter_jsonl_edges(args.edges_jsonl, edge_parse_summary)
 
         source = {
             "kind": "jsonl",
             "source_kind": args.source_kind,
             "nodes_source": node_source,
-            "edges_source": edge_source
+            "edges_source": source_fingerprint(args.edges_jsonl)
         }
     else:
         logging.error("Must provide either --postgres or both --nodes-jsonl and --edges-jsonl")
@@ -462,12 +504,12 @@ def main():
 
     result = evaluate_audit_data(
         node_ids=node_ids,
-        edges=edges,
+        edges=edges_iterable,
         source=source,
         source_kind=args.source_kind,
         show_ids=args.show_ids,
         node_parse_summary=node_summary,
-        edge_parse_summary=edge_summary,
+        edge_parse_summary=edge_parse_summary,
         max_findings=args.max_findings
     )
 

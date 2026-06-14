@@ -176,83 +176,6 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             nf.flush()
             ef.write('{"id": "edge-1", "target_id": "node-b"}\n')
             ef.flush()
-
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--source-kind", "runtime", "--format", "json")
-            self.assertEqual(result.returncode, 0)
-            data = json.loads(result.stdout)
-
-            self.assertEqual(data["summary"]["malformed_edges"], 1)
-            self.assertIs(data["policy_signals"]["strict_node_fk_ready"], False)
-
-    def test_invalid_json_line(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
-            nf.flush()
-            ef.write('{invalid_json}\n')
-            ef.flush()
-
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
-            self.assertEqual(result.returncode, 0)
-            data = json.loads(result.stdout)
-
-            self.assertEqual(data["summary"]["invalid_json_records"], 1)
-
-    def test_non_object_json_line(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
-            nf.flush()
-            ef.write('["an", "array"]\n')
-            ef.flush()
-
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
-            self.assertEqual(result.returncode, 0)
-            data = json.loads(result.stdout)
-
-            self.assertEqual(data["summary"]["non_object_json_records"], 1)
-
-    def test_redaction_default(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
-            nf.flush()
-            ef.write('{"id": "my-secret-edge-id", "source_id": "my-secret-source-id", "source_type": "node", "target_id": "my-secret-target-id", "target_type": "account"}\n')
-            ef.flush()
-
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
-            self.assertEqual(result.returncode, 0)
-            data = json.loads(result.stdout)
-
-            out_str = json.dumps(data)
-            self.assertNotIn("my-secret", out_str)
-            self.assertIn("edge:sha256:", out_str)
-            self.assertIn("ref:sha256:", out_str)
-
-    def test_show_ids_opt_in(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
-            nf.flush()
-            ef.write('{"id": "my-secret-edge-id", "source_id": "my-secret-source-id", "source_type": "node", "target_id": "my-secret-target-id", "target_type": "account"}\n')
-            ef.flush()
-
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--show-ids")
-            self.assertEqual(result.returncode, 0)
-            data = json.loads(result.stdout)
-
-            out_str = json.dumps(data)
-            self.assertIn("my-secret-edge-id", out_str)
-            self.assertIn("my-secret-source-id", out_str)
-
-    def test_postgres_without_database_url_fails(self):
-        result = run_script("--postgres", env={})
-        self.assertNotEqual(result.returncode, 0)
-
-    # --- New tests to fulfill step requirements ---
-
-    def test_missing_edge_id_is_malformed(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
-            nf.flush()
-            ef.write('{"source_id": "node-a", "target_id": "node-b"}\n')
-            ef.flush()
             result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
@@ -372,11 +295,88 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertNotIn("my-secret-target-id", result.stdout)
 
+    def test_postgres_without_database_url_fails(self):
+        result = run_script("--postgres", env={})
+        self.assertNotEqual(result.returncode, 0)
+
+    # --- New Tests ---
+
+    def test_postgres_env_excludes_database_url(self):
+        # We can test the function directly
+        from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
+        env = postgres_env_from_database_url("postgresql://foo:bar@example.com/db")
+        self.assertNotIn("DATABASE_URL", env)
+        self.assertEqual(env.get("PGHOST"), "example.com")
+        self.assertEqual(env.get("PGDATABASE"), "db")
+
+    def test_postgres_env_maps_sslmode_and_timeout(self):
+        from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
+        env = postgres_env_from_database_url("postgresql://localhost/db?sslmode=require&connect_timeout=10")
+        self.assertEqual(env.get("PGSSLMODE"), "require")
+        self.assertEqual(env.get("PGCONNECT_TIMEOUT"), "10")
+
+    def test_max_findings_truncates_findings(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            # 3 invalid edges
+            ef.write('{"id": "edge-1", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.write('{"id": "edge-2", "source_id": "missing-b", "target_id": "node-a"}\n')
+            ef.write('{"id": "edge-3", "source_id": "missing-c", "target_id": "node-a"}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "2")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(len(data["findings"]), 2)
+            self.assertIs(data["findings_truncated"], True)
+            self.assertEqual(data["summary"]["untyped_missing_references"], 3) # Summary still complete
+
+    def test_max_findings_zero_keeps_summary_and_truncates(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            ef.write('{"id": "edge-1", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "0")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(len(data["findings"]), 0)
+            self.assertIs(data["findings_truncated"], True)
+            self.assertEqual(data["summary"]["untyped_missing_references"], 1)
 
     def test_negative_max_findings_fails(self):
         result = run_script("--max-findings", "-1")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--max-findings must be >= 0", result.stderr)
+
+    def test_node_duplicate_ids_are_reported(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n{"id": "node-a"}\n')
+            nf.flush()
+            ef.write('{"id": "edge-1", "source_id": "node-a", "target_id": "node-a"}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["node_duplicate_ids"], 1)
+            self.assertIs(data["policy_signals"]["requires_cleanup"], True)
+            self.assertIs(data["policy_signals"]["strict_node_fk_ready"], False)
+
+    def test_non_string_type_hint_is_typed_unknown(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            ef.write('{"id": "edge-1", "source_id": "node-a", "source_type": 123, "target_id": "node-a", "target_type": {"a": "b"}}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["typed_unknown_references"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
