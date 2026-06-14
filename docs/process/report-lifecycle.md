@@ -3,7 +3,6 @@ id: process.report-lifecycle
 title: Report Lifecycle Policy
 doc_type: policy
 status: draft
-canonicality: canonical
 summary: >
   Policy für Lebenszyklus, Status, Pflichtfelder, Archivierung und Löschung
   von Reports.
@@ -17,6 +16,11 @@ relations:
 # Report Lifecycle Policy
 
 ## Zweck
+
+Diese Datei ist der vorgeschlagene Zielort für Report-Lifecycle-Regeln. Sie
+bleibt `draft`, bis die Policy in einem späteren Schritt in das Truth Model
+und den DocMeta-Contract integriert oder bewusst als nicht-kanonische
+Prozessregel bestätigt wird.
 
 Reports sollen nicht dauerhaft als scheinbar aktuelle Wahrheit im Repo liegen.
 Jeder Report soll später beantworten können:
@@ -57,6 +61,26 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 - Diese Policy verändert keine Task-Wahrheit.
 - Diese Policy ersetzt keine fachliche Review-Entscheidung.
 
+## Contract-Alignment-Gate
+
+Diese Policy beschreibt das Zielmodell. Die hier beschriebenen zusätzlichen
+Lifecycle-Felder und Statuswerte sind noch nicht automatisch Teil des
+bestehenden DocMeta-Contracts.
+
+Vor dem ersten Backfill oder einer Pilot-Annotation im Frontmatter muss ein
+separater Contract-Schritt entscheiden:
+
+- ob `contracts/docmeta.schema.json` und `architecture/docmeta.schema.md`
+  erweitert werden,
+- ob Lifecycle-Metadaten in einem eigenen Report-Lifecycle-Schema validiert
+  werden,
+- oder ob die Policy auf das bestehende DocMeta-Vokabular zurückgeschnitten
+  wird.
+
+Bis diese Entscheidung getroffen ist, dürfen neue Statuswerte wie `deferred`,
+`superseded` und `archived` nicht als allgemein contract-gültige
+DocMeta-Statuswerte verstanden werden.
+
 ## Begriffe
 
 - **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
@@ -72,13 +96,24 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 
 - **audit**: Prüft einen Bestand, Datenzustand oder Prozesszustand. Risiko: veraltet schnell, wenn Daten oder Prozess wechseln.
 - **proof**: Belegt eine technische oder organisatorische Eigenschaft. Risiko: verliert Gültigkeit bei Code-, CI- oder Infrastrukturänderungen.
+  Die Klasse `proof` kann für Reports unter `docs/reports/*.md` genutzt werden,
+  die einen Proof-Charakter haben. Dateien unter `docs/proofs/**` bleiben in
+  dieser Phase vom Geltungsbereich ausgenommen und können später eine eigene
+  Lifecycle-Regel bekommen.
 - **status**: Verdichtet aktuellen Stand eines Vorhabens. Risiko: wird leicht mit dauerhafter Wahrheit verwechselt.
 - **decision-prep**: Bereitet eine Entscheidung vor, ersetzt sie aber nicht. Risiko: bleibt nach Entscheidung weiter sichtbar, obwohl die Entscheidung schon gefallen ist.
 - **generated**: Wird automatisch erzeugt und soll nicht manuell editiert werden. Risiko: Drift zwischen Generator und committed Artefakt.
+  Diese Klasse gilt nur für Artefakte, die ausdrücklich als Report geführt
+  werden. Nicht jedes Artefakt unter `docs/_generated/**` wird dadurch zu einem
+  Report.
 - **planning**: Beschreibt geplante Arbeit, offene Schritte oder Ordnungsvorhaben. Risiko: Planungsstand wird mit Umsetzung verwechselt.
 - **legacy**: Historisch nützlich, aber nicht mehr aktuell handlungsleitend. Risiko: unmarkierte Legacy-Dokumente erzeugen Scheinkohärenz.
 
 ## Status-Semantik
+
+Die folgenden Statuswerte bilden das Zielvokabular für den Report-Lifecycle.
+Sie sind erst dann als Frontmatter-Werte verwendbar, wenn das
+Contract-Alignment-Gate abgeschlossen ist.
 
 - **draft**: In Arbeit oder vorbereitend. Noch nicht maßgeblich.
 - **active**: Aktuell handlungsleitend oder als gültiger Bezugspunkt verwendbar.
@@ -98,7 +133,16 @@ Wichtig:
 - **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
 - **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
   fällig wird.
-- **superseded_by**: Pfad zum ablösenden Artefakt. Kann ein anderer Report, ein Blueprint, ein Proof oder ein anderes kanonisches Dokument sein.
+- **superseded_by**: Pfad zum ablösenden Artefakt. Dieses Feld darf nicht als
+  alleinige Supersession-Wahrheit verstanden werden. Die bestehende
+  Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes`
+  ab: Das neue Artefakt verweist auf das alte Artefakt. Ein späterer Validator
+  muss `superseded_by` und `relations[type=supersedes]` gegeneinander prüfen
+  oder eine der beiden Formen als kanonisch festlegen.
+
+Auch diese zusätzlichen Lifecycle-Felder sind Zielmodell-Felder. Ob sie direkt
+im DocMeta-Frontmatter, in einem separaten Lifecycle-Schema oder über einen
+späteren Validator geprüft werden, entscheidet das Contract-Alignment-Gate.
 
 `lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart im
 Repo, zum Beispiel `report` oder `policy`. `lifecycle` beschreibt die Rolle
@@ -112,6 +156,18 @@ doc_type: report
 lifecycle: audit
 ```
 
+Beispiel für die spätere Abbildung einer Ablösung:
+
+```yaml
+# Im alten Report, falls das Lifecycle-Feld contract-aktiv wird:
+status: superseded
+superseded_by: docs/reports/new-proof.md
+# Im neuen oder ersetzenden Dokument:
+relations:
+  - type: supersedes
+    target: docs/reports/old-proof.md
+```
+
 Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
 `lifecycle`, `owner_task`, `review_after`, `superseded_by`. Spätere Validatoren
 sollen abweichende Schreibweisen wie `ownerTask` oder `reviewAfter` nicht als
@@ -123,10 +179,15 @@ gleichwertig behandeln.
 | --- | --- | --- | --- | --- | --- |
 | draft | empfohlen | empfohlen | optional | nein | Noch nicht handlungsleitend, aber spätere Zuordnung soll vorbereitet werden. |
 | active | erforderlich | erforderlich | erforderlich | nein | Aktive Reports brauchen Zweck, Verantwortung und Review-Zeitpunkt. |
-| deferred | erforderlich | erforderlich | erforderlich | optional | Zurückgestellte Reports brauchen einen Wiedervorlagepunkt. |
+| deferred | erforderlich | erforderlich | erforderlich | nein | Zurückgestellte Reports warten auf Prüfung oder Reaktivierung; abgelöste Reports sind `superseded`. |
 | superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung muss explizit nachvollziehbar sein. |
-| archived | erforderlich | empfohlen | nein | empfohlen | Historisch erhalten, nicht mehr handlungsleitend. |
-| deprecated | erforderlich | erforderlich | empfohlen | empfohlen | Veraltet, aber endgültiger Umgang noch offen; Verantwortlichkeit und Report-Klasse sollen erhalten bleiben. |
+| archived | erforderlich | erforderlich | nein | erforderlich* | Historisch erhalten, nicht mehr handlungsleitend; Legacy-Ausnahmen brauchen später ein explizites Ausnahmefeld. |
+| deprecated | erforderlich | erforderlich | empfohlen | erforderlich* | Veraltet, aber endgültiger Umgang noch offen; Ablösung oder Ausnahme muss später maschinenlesbar werden. |
+
+`erforderlich*` bedeutet: Das aktuelle Inventory meldet terminale Status ohne
+`superseded_by` als Lücke. Falls historische Legacy-Dokumente ohne Ersatz
+zulässig werden sollen, braucht das einen späteren Generator-/Validator-Schritt
+mit explizitem Ausnahmefeld statt stiller Leerstelle.
 
 Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
 
@@ -152,6 +213,10 @@ Regeln:
 - Derived references allein blockieren keine Archivierung.
 - Derived references zeigen aber, dass ein Report noch in generierten Übersichten erscheint.
 - Vor physischer Archivierung oder Löschung muss ein Referenzcheck laufen.
+
+Ob eine Primary Reference Archivierung oder Löschung blockiert, hängt vom
+Status und Zweck des referenzierenden Dokuments ab. Eine historische oder
+bereits archivierte Quelle blockiert nicht automatisch.
 
 ## Archivierungsregeln
 
@@ -192,13 +257,17 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 
 1. **Inventory vorhanden**: Reportbestand sichtbar machen.
 2. **Policy definieren**: diese Datei.
-3. **Pilot**: genau einen Report annotieren.
-4. **Validator**: report/warn/strict implementieren, aber noch nicht hart aktivieren.
-5. **Backfill**: kleine Slices statt Massen-PR.
-6. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
-7. **Global strict**: erst nach abgeschlossenem Backfill.
-8. **Archivierung**: zunächst status-only.
-9. **Löschung**: nur separat und nach Referenzcheck.
+3. **Contract Alignment**: entscheiden, ob DocMeta-Contract,
+   Architecture-Doku oder ein separates Lifecycle-Schema erweitert wird.
+4. **Pilot**: genau einen Report annotieren, erst nach Contract Alignment.
+5. **Validator**: `report`, `warn` und `strict` implementieren. `report` ist
+   lokal nutzbar, `warn` kann nicht-blockierend in CI laufen, `strict` bleibt
+   vorhanden, aber noch nicht aktiv.
+6. **Backfill**: kleine Slices statt Massen-PR.
+7. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
+8. **Global strict**: erst nach abgeschlossenem Backfill.
+9. **Archivierung**: zunächst status-only.
+10. **Löschung**: nur separat und nach Referenzcheck.
 
 Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
 
@@ -224,16 +293,14 @@ superseded_by: docs/reports/new-proof.md
 
 ### Archived legacy report
 
-```yaml
-status: archived
-lifecycle: legacy
-owner_task: historical
-```
+Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine
+offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder
+Validator-Verhalten modelliert werden.
 
 ## Offene Entscheidungen
 
 - Welche Werte für `owner_task` genau zulässig werden.
-- Ob `review_after` zwingend ISO-Datum YYYY-MM-DD wird.
+- Ob für `review_after` später zusätzliche Regeln wie maximale Review-Intervalle gelten.
 - Ob `lifecycle` später ein Enum wird.
 - Wann `deprecated` statt `superseded` verwendet wird.
 - Ob physische Archivierung überhaupt nötig ist.
