@@ -331,7 +331,7 @@ Der zuvor offene positive Register-Verify-Pfad wurde in diesem Schritt lokal mit
 - Proof-Pfad: Step-up-/Grant-Handoff zu `POST /auth/passkeys/register/options`, echte Browser-Credential über `navigator.credentials.create(...)`, danach `POST /auth/passkeys/register/verify`
 - Transport: Playwright + Chromium, CDP-`WebAuthn.enable` und `WebAuthn.addVirtualAuthenticator`
 - Belegt: `200 OK {"ok": true}`, kein `Set-Cookie` auf `register/verify`, Session-Cookie bleibt unverändert, Credential wird im `PasskeyStore` sichtbar
-- Einstufung: durch CI belegt.
+- Einstufung zum Zeitpunkt dieses Nachtrags: lokaler Browser-/Authenticator-Proof; der spätere CI-Beleg ist in Abschnitt 10b dokumentiert.
 
 ---
 
