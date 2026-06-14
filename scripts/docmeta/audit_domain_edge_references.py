@@ -74,11 +74,12 @@ def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
 
 def sanitize_psql_stderr(stderr: str) -> str:
     text = stderr or ""
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        text = text.replace(database_url, "<redacted>")
     text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://<redacted>", text)
     text = re.sub(r"(?i)(password=)[^ \n\t]+", r"\1<redacted>", text)
     text = re.sub(r"(?i)(PGPASSWORD=)[^ \n\t]+", r"\1<redacted>", text)
-    if os.environ.get("DATABASE_URL"):
-        text = text.replace(os.environ.get("DATABASE_URL", ""), "<redacted>")
     return text[:500]
 
 def iter_psql_json_rows(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[Dict[str, Any]]:
