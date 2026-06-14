@@ -117,6 +117,7 @@ legacy mismatch.
 
 TODO 3 final parity proof remains open. This PR records the current gap; it does
 not decide or revise the canonical target ordering.
+
 The current blueprint requires PostgreSQL read cutover parity to preserve:
 
 - legacy `/nodes` order as the existing insertion/file order
