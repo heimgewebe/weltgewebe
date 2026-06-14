@@ -69,6 +69,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 
+## docs/_generated/report-lifecycle-inventory.md
+
+- [relates_to] docs/process/report-lifecycle.md
+
 ## docs/adr/0042-consume-semantah-contracts.md
 
 - [relates_to] docs/x-repo/semantAH.md

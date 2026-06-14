@@ -3,70 +3,83 @@ id: process.report-lifecycle
 title: Report Lifecycle Policy
 doc_type: policy
 status: draft
-canonicality: kanonisch nach Contract-Alignment
 summary: >
-  Zukünftige Regeln für den Lebenszyklus von Reports. Definiert Status,
-  Review-Fristen, Ablösung und Archivierung.
+  Policy für Lebenszyklus, Status, Pflichtfelder, Archivierung und Löschung
+  von Reports.
 relations:
   - type: relates_to
     target: docs/process/README.md
+  - type: relates_to
+    target: docs/_generated/report-lifecycle-inventory.md
 ---
 
 # Report Lifecycle Policy
 
 ## Zweck
 
-Dieses Dokument definiert den Lebenszyklus von Dokumenten unter `docs/reports/`
-sowie von weiteren Artefakten, die ausdrücklich die `doc_type: report` oder
-`lifecycle`-Rolle tragen.
+Diese Datei ist der vorgeschlagene Zielort für Report-Lifecycle-Regeln. Sie
+bleibt `draft`, bis die Policy in einem späteren Schritt in das Truth Model
+und den DocMeta-Contract integriert oder bewusst als nicht-kanonische
+Prozessregel bestätigt wird.
 
-Es soll sicherstellen, dass Reports nicht lautlos veralten und bei Ablösung oder
-Archivierung ein klarer Pfad erkennbar bleibt.
+Reports sollen nicht dauerhaft als scheinbar aktuelle Wahrheit im Repo liegen.
+Jeder Report soll später beantworten können:
+
+- Wozu existiert er?
+- Welcher Task oder welches Vorhaben gehört dazu?
+- Ist er aktiv?
+- Wann muss er überprüft werden?
+- Wodurch wurde er abgelöst?
+- Darf er archiviert werden?
+- Darf er gelöscht werden?
+
+Wichtig: Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
 ## Geltungsbereich
 
-Die Policy gilt für:
+Gilt für:
 
-- Alle Dateien in `docs/reports/*.md`.
-- Jede Datei, die `doc_type: report` deklariert, unabhängig vom Verzeichnis.
+- `docs/reports/*.md`
 
-Sie gilt nicht für:
+Noch nicht verbindlich für:
 
-- Architektur-Dokumente (`docs/adr/`, `docs/blueprints/`, `docs/specs/`),
-  sofern sie nicht explizit als Report markiert sind.
-- Aufgaben (`docs/tasks/`).
-- Code-Kommentare.
+- `docs/proofs/**`
+- `docs/adr/**`
+- `docs/specs/**`
+- `docs/blueprints/**`
+- `docs/tasks/**`
+
+Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports referenzieren und dadurch deren Archivierung oder Löschung blockieren, werden aber selbst nicht durch diese Policy klassifiziert.
+
+## Nicht-Ziele
+
+- Diese Policy klassifiziert noch keine bestehenden Reports.
+- Diese Policy archiviert keine Reports.
+- Diese Policy löscht keine Reports.
+- Diese Policy aktiviert keinen Validator.
+- Diese Policy verschärft keine CI.
+- Diese Policy verändert keine Task-Wahrheit.
+- Diese Policy ersetzt keine fachliche Review-Entscheidung.
 
 ## Contract-Alignment-Gate
-
-Aktuell ist dieses Dokument ein Entwurf (Draft). Es dokumentiert ein
-Zielmodell. Dieses Modell darf erst auf echten Bestand angewendet werden
-(Pilot, Backfill, Validator), wenn geklärt ist, wo die neuen Lifecycle-Felder
-technisch definiert werden.
 
 Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
 `superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
 `docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
 
-Basis für diese Entscheidung ist die Bestandsaufnahme im
-[Report Lifecycle Inventory](../_generated/report-lifecycle-inventory.md).
-Erst nach dieser Entscheidung wird die Policy verbindlich.
-
 Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
 Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
 späterer Übersicht folgt in separaten Tooling-PRs.
 
-## Vokabular-Gate
+## Begriffe
 
-Für den ersten Wurf (Inventory, Policy, Pilot) ist nur das Folgende erlaubt:
-
-- Keine harten Enums in Frontmatter-Validatoren einbauen, bevor der Pilot nicht abgeschlossen ist.
-- Referenzklassen in Inventory und Validator strikt trennen: Primary Reference
-  vs Derived Reference.
-
-- **Primary Reference**: Ein direkter Frontmatter-Link aus einem anderen
-  handgeschriebenen Dokument, das als kanonisch oder normativ gilt. Zum
-  Beispiel Tasks, Blueprints, ADRs, Specs, Proofs, Reports oder Roadmap.
+- **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
+- **Lifecycle**: Die Rolle eines Reports im Lebenszyklus: warum er existiert, wie lange er handlungsleitend ist und wann er geprüft oder abgelöst wird.
+- **Status**: Der aktuelle Zustand eines Reports, zum Beispiel `draft`, `active`, `superseded` oder `archived`.
+- **Supersession**: Eine explizite Ablösung durch ein anderes Artefakt. Supersession bedeutet nicht automatisch Löschung.
+- **Archivierung**: Ein Report bleibt erhalten, ist aber nicht mehr handlungsleitend.
+- **Löschung**: Physisches Entfernen eines Reports aus dem Repo. Löschung ist der letzte Schritt und nur nach separater Prüfung erlaubt.
+- **Primary Reference**: Eine handgeschriebene Referenz aus fachlich relevanten Dokumenten, zum Beispiel Tasks, Blueprints, ADRs, Specs, Proofs, Reports oder Roadmap.
 - **Derived Reference**: Eine generierte Referenz aus `docs/_generated/**`. Sie zeigt Sichtbarkeit oder Indexierung, beweist aber nicht automatisch fachliche Aktualität.
 
 ## Report-Klassen
@@ -121,7 +134,7 @@ Wichtig:
 - **superseded_by**: Pfad zum ablösenden Artefakt. Dieses Feld darf nicht als
   alleinige Supersession-Wahrheit verstanden werden. Die bestehende
   Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes`
-  abb: Das neue Artefakt verweist auf das alte Artefakt. Ein späterer Validator
+  ab: Das neue Artefakt verweist auf das alte Artefakt. Ein späterer Validator
   muss `superseded_by` und `relations[type=supersedes]` gegeneinander prüfen
   oder eine der beiden Formen als kanonisch festlegen.
 
