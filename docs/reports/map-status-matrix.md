@@ -98,22 +98,22 @@ absichtlich nicht in die URL gespiegelt:
 
 ### Query-Parameter-Zustand (URL-eigen, Fokuspanel-/Kartenlinsen-Adressierung)
 
-Eigene, URL-besessene Schicht fuer die Fokuspanel-/Kartenlinsen-Deep-Link-Adressierung,
-getrennt vom fluechtigen Kartenzustand. Aktuelle Zielsemantik gemaess
+Eigene, URL-besessene Schicht für die Fokuspanel-/Kartenlinsen-Deep-Link-Adressierung,
+getrennt vom flüchtigen Kartenzustand. Aktuelle Zielsemantik gemäß
 `docs/blueprints/ui-interaction-doctrine.md`:
 
 - `lens` (bisher grob `l`): Filter / Suche als Kartenlinse.
 - `focus` (bisher grob `r`): Fokus-Selection im ContextPanel.
-- `tab` (bisher grob `t`): Tab innerhalb eines gueltigen Fokuspanel-Kontexts.
-- `compose`: optionale spaetere Adressierung eines Kompositionsmodus; kein
+- `tab` (bisher grob `t`): Tab innerhalb eines gültigen Fokuspanel-Kontexts.
+- `compose`: optionale spätere Adressierung eines Kompositionsmodus; kein
   direktes Erbe der bisherigen Kurzform `l` / `r` / `t`.
 
 Die Kurzform `l` / `r` / `t` ist das bisherige Altmodell und kein Zielcontract
-fuer neue Implementierung. Spaetere Query-Navigation soll die semantische
-Zielrichtung `focus` / `tab` / `lens` / `compose` pruefen.
+für neue Implementierung. Spätere Query-Navigation soll die semantische
+Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
 
 - **Soll**: URL-Parameter und Kartenzustand sind klar getrennt dokumentiert; die
-  URL-Schicht beschreibt Fokus-/Linsen-/Tab-Adressierung, nicht den fluechtigen
+  URL-Schicht beschreibt Fokus-/Linsen-/Tab-Adressierung, nicht den flüchtigen
   Kartenausschnitt.
 - **Ist**: Die Trennung ist dokumentiert (dieser Abschnitt sowie der
   Modul-Header in `apps/web/src/lib/stores/mapView.ts`, der die bisherige
@@ -142,9 +142,4 @@ Fuer Scope `pmtiles-content` ist der Proof jetzt PROVEN: [CI-Lauf 26447341921](h
 (Job `basemap-pmtiles-content-proof`, [Job 77857000606](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606),
 Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 `PROVEN: HTTP-served PMTiles Magic verified` und
-`PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`, Artefakt
-`basemap-hamburg-v0.1.0.pmtiles` mit SHA256
-`3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab` und
-Groesse `23948909` Bytes.
-Offen bleiben die Produktionsentscheidung fuer den
-Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.
+`PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`.
