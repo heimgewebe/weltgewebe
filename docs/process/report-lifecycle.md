@@ -81,6 +81,9 @@ Bis diese Entscheidung getroffen ist, dürfen neue Statuswerte wie `deferred`,
 `superseded` und `archived` nicht als allgemein contract-gültige
 DocMeta-Statuswerte verstanden werden.
 
+Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
+kanonische Policy-Quelle.
+
 ## Begriffe
 
 - **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
@@ -111,9 +114,10 @@ DocMeta-Statuswerte verstanden werden.
 
 ## Status-Semantik
 
-Die folgenden Statuswerte bilden das Zielvokabular für den Report-Lifecycle.
-Sie sind erst dann als Frontmatter-Werte verwendbar, wenn das
-Contract-Alignment-Gate abgeschlossen ist.
+Bestehende DocMeta-Statuswerte wie `draft`, `active` und `deprecated` behalten
+ihre bisherige Contract-Bedeutung. Neue lifecycle-spezifische Werte wie
+`deferred`, `superseded` und `archived` sind erst nach Contract-Alignment als
+Frontmatter-Werte verwendbar.
 
 - **draft**: In Arbeit oder vorbereitend. Noch nicht maßgeblich.
 - **active**: Aktuell handlungsleitend oder als gültiger Bezugspunkt verwendbar.
@@ -158,11 +162,16 @@ lifecycle: audit
 
 Beispiel für die spätere Abbildung einer Ablösung:
 
+Im alten Report, falls das Lifecycle-Feld contract-aktiv wird:
+
 ```yaml
-# Im alten Report, falls das Lifecycle-Feld contract-aktiv wird:
 status: superseded
 superseded_by: docs/reports/new-proof.md
-# Im neuen oder ersetzenden Dokument:
+```
+
+Im neuen oder ersetzenden Dokument:
+
+```yaml
 relations:
   - type: supersedes
     target: docs/reports/old-proof.md
