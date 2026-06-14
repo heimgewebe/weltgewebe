@@ -65,10 +65,14 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 
 ## Contract-Alignment-Gate
 
+Diese Policy beschreibt weiterhin ein Zielmodell. Die hier beschriebenen
+Lifecycle-Felder sind durch diesen PR noch nicht automatisch Teil des
+bestehenden DocMeta-Contracts, eines Validators oder eines CI-Guards.
 Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
 `superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
 `docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
-
+Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
+kanonische Policy-Quelle.
 Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
 Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
 späterer Übersicht folgt in separaten Tooling-PRs.
@@ -117,6 +121,11 @@ werden nicht direkt als globale DocMeta-Statuswerte eingeführt.
 `draft`, `active`, `deprecated` und `canonical` bleiben DocMeta-Statuswerte.
 Wenn ein Report zusätzlich einen Lifecycle-Zustand braucht, wird dieser über
 `lifecycle_state` modelliert.
+
+`active` kann sowohl als bestehender DocMeta-Status als auch als
+report-spezifischer `lifecycle_state` vorkommen. Der DocMeta-Status beschreibt
+die allgemeine Dokumentgültigkeit; `lifecycle_state: active` beschreibt, ob der
+Report fachlich noch handlungsleitend ist.
 
 Wichtig:
 `deprecated` ist kein Papierkorb.
@@ -297,7 +306,7 @@ lifecycle_state: active
 ### Superseded proof
 
 ```yaml
-status: active
+status: deprecated
 lifecycle: proof
 owner_task: OPT-ARC-001
 lifecycle_state: superseded
