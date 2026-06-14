@@ -579,9 +579,14 @@ impl NewDomainAccountRow {
             .unwrap_or("gast")
             .to_string();
 
+        // Normalize like the API create path: trim, then treat an after-trim
+        // empty value as "no email" (None). This keeps the persisted value
+        // consistent with the normalized unique index `lower(btrim(email))` and
+        // the `domain_accounts_email_not_empty_after_trim` check constraint.
         let email = v
             .get("email")
             .and_then(|v| v.as_str())
+            .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
 
@@ -659,6 +664,11 @@ impl NewDomainAccountRow {
 /// `20260613000001_domain_accounts_email_normalized_unique`.
 pub const ACCOUNT_EMAIL_UNIQUE_CONSTRAINT: &str = "domain_accounts_email_normalized_unique";
 
+/// Name of the `domain_accounts` primary-key constraint (PostgreSQL default
+/// `<table>_pkey`). Kept in sync with the table definition in
+/// `20260531000003_create_domain_accounts`.
+pub const ACCOUNT_ID_PRIMARY_KEY_CONSTRAINT: &str = "domain_accounts_pkey";
+
 /// Error from the account-create write path.
 #[derive(Debug, thiserror::Error)]
 pub enum AccountWriteError {
@@ -729,14 +739,18 @@ pub async fn insert_account_from_jsonl_record(
     match result {
         Ok(_) => Ok(()),
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            // Classify the violated unique constraint by name so the route can
-            // return a precise 409 cause. A normalized-email collision and a
-            // primary-key (account id) collision both map to 409, but carry
-            // distinct error bodies.
+            // Classify ONLY the two constraints this code owns; both map to a
+            // precise 409 cause with distinct error bodies. Any other unique
+            // violation (e.g. a future constraint) stays a generic database
+            // error instead of being mislabelled as a duplicate id. Each
+            // `constraint()` borrow ends at the comparison, so `db_err` can be
+            // moved back into the generic error in the final branch.
             if db_err.constraint() == Some(ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) {
                 Err(AccountWriteError::DuplicateEmail)
-            } else {
+            } else if db_err.constraint() == Some(ACCOUNT_ID_PRIMARY_KEY_CONSTRAINT) {
                 Err(AccountWriteError::DuplicateId)
+            } else {
+                Err(AccountWriteError::Database(sqlx::Error::Database(db_err)))
             }
         }
         Err(e) => Err(AccountWriteError::Database(e)),
@@ -1127,6 +1141,32 @@ mod write_path_tests {
         assert_eq!(
             private.get("ron_flag").and_then(|v| v.as_bool()),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn email_is_trimmed_and_after_trim_empty_becomes_none() {
+        let with_email = |email: Value| json!({ "id": "wp-email", "type": "garnrolle", "title": "E", "email": email });
+        let no_email = json!({ "id": "wp-email", "type": "garnrolle", "title": "E" });
+
+        let map = |v: &Value| {
+            NewDomainAccountRow::from_jsonl_record(v)
+                .expect("map")
+                .email
+        };
+
+        assert_eq!(map(&no_email), None, "missing email => None");
+        assert_eq!(map(&with_email(Value::Null)), None, "null email => None");
+        assert_eq!(map(&with_email(json!(""))), None, "empty email => None");
+        assert_eq!(
+            map(&with_email(json!("   "))),
+            None,
+            "after-trim-empty email => None"
+        );
+        assert_eq!(
+            map(&with_email(json!(" alpha@example.invalid "))).as_deref(),
+            Some("alpha@example.invalid"),
+            "surrounding whitespace is trimmed"
         );
     }
 }

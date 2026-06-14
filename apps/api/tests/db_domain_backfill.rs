@@ -355,9 +355,13 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
             .unwrap_or("gast")
             .to_string();
 
+        // Normalize like from_jsonl_record / the API create path: trim, then
+        // treat an after-trim-empty value as "no email" (None), matching the
+        // unique index and the not-empty-after-trim check constraint.
         let email: Option<String> = v
             .get("email")
             .and_then(|v| v.as_str())
+            .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
 
@@ -421,11 +425,19 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
             serde_json::to_string(&serde_json::Value::Object(priv_map)).unwrap()
         };
 
-        // Audit duplicate emails (does not block import — Phase B policy)
+        // Audit duplicate emails using the SAME normalization as the unique
+        // index (lower(btrim(email))) and skip the duplicate BEFORE inserting,
+        // so a unique violation never poisons the transaction. The email was
+        // already trimmed/empty-normalized above, so after-trim-empty values are
+        // None here and never unique-relevant.
         if let Some(ref em) = email {
             let (dup_count,): (i64,) = sqlx::query_as(
                 "SELECT COUNT(*) FROM domain_accounts
-                 WHERE lower(email) = lower($1) AND id != $2",
+                 WHERE email IS NOT NULL
+                   AND btrim(email) <> ''
+                   AND btrim($1) <> ''
+                   AND lower(btrim(email)) = lower(btrim($1))
+                   AND id != $2",
             )
             .bind(em.as_str())
             .bind(&id)
@@ -434,6 +446,8 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
             .unwrap_or((0,));
             if dup_count > 0 {
                 report.duplicate_emails.push(em.clone());
+                report.skipped_records += 1;
+                continue;
             }
         }
 
@@ -499,15 +513,18 @@ async fn import_accounts(pool: &sqlx::PgPool, content: &str) -> BackfillReport {
                     report.records_inserted += 1;
                 }
             }
-            // TODO 2A: the normalized account-email unique index rejects a
-            // duplicate non-empty email. The duplicate was already audited
-            // above; skip the row instead of aborting the backfill. Only this
-            // exact constraint is handled here — any other database error still
-            // aborts the import.
+            // Defensive last resort only: the lower(btrim(email)) audit above is
+            // the normal skip path, so this arm is reached only under a race or
+            // drift (a concurrent writer between audit and insert). Audit and
+            // skip rather than abort the backfill; only this exact constraint is
+            // handled — any other database error still aborts the import.
             Err(sqlx::Error::Database(db_err))
                 if db_err.constraint()
                     == Some(weltgewebe_api::domain_db::ACCOUNT_EMAIL_UNIQUE_CONSTRAINT) =>
             {
+                if let Some(ref em) = email {
+                    report.duplicate_emails.push(em.clone());
+                }
                 report.skipped_records += 1;
             }
             Err(e) => panic!("failed to upsert account {id}: {e}"),
@@ -548,7 +565,7 @@ const DUPLICATE_ID_NODE_FIXTURE: &str = r#"
 
 const DUPLICATE_EMAIL_ACCOUNT_FIXTURE: &str = r#"
 {"id":"backfill-proof-account-dup-email-a","type":"garnrolle","title":"Dup Email A","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
-{"id":"backfill-proof-account-dup-email-b","type":"garnrolle","title":"Dup Email B","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"dup@proof.example"}
+{"id":"backfill-proof-account-dup-email-b","type":"garnrolle","title":"Dup Email B","mode":"verortet","radius_m":0,"location":{"lat":53.0,"lon":10.0},"role":"gast","email":"  DUP@proof.example  "}
 "#;
 
 const LEGACY_ACCOUNT_FIXTURE: &str = r#"
@@ -919,9 +936,11 @@ async fn domain_backfill_duplicate_id_converges() {
     pool.close().await;
 }
 
-/// Proves that a duplicate normalized account email is audited AND rejected by
-/// the `domain_accounts_email_normalized_unique` index (TODO 2A): the first
-/// account is imported, the duplicate is audited and skipped (not imported).
+/// Proves that a whitespace- and case-variant duplicate account email (the
+/// second fixture row is `"  DUP@proof.example  "`) is audited AND skipped using
+/// the SAME `lower(btrim(email))` normalization as the
+/// `domain_accounts_email_normalized_unique` index (TODO 2A): the first account
+/// is imported, the duplicate is audited and skipped (not imported).
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_backfill_duplicate_account_emails_audited() {
@@ -938,21 +957,25 @@ async fn domain_backfill_duplicate_account_emails_audited() {
 
     let r = import_accounts(&pool, DUPLICATE_EMAIL_ACCOUNT_FIXTURE).await;
 
-    // TODO 2A: the normalized unique index rejects the second duplicate-email
-    // account; the first is imported, the duplicate is audited and skipped.
+    // TODO 2A: the lower(btrim(email)) audit detects the whitespace/case-variant
+    // duplicate and skips it BEFORE insert; the first row is imported.
     assert_eq!(r.records_read, 2);
     assert_eq!(r.records_inserted, 1, "only the first account is imported");
     assert_eq!(r.records_updated, 0);
     assert_eq!(
         r.skipped_records, 1,
-        "the duplicate-email account must be skipped by the unique index"
+        "the duplicate-email account must be skipped"
     );
 
-    // Second account's email is flagged as a duplicate
+    // The duplicate is audited as the trimmed value and normalizes to the same key.
     assert_eq!(
         r.duplicate_emails.len(),
         1,
         "one duplicate email must be audited (the second account)"
+    );
+    assert_eq!(
+        r.duplicate_emails[0], "DUP@proof.example",
+        "the audited duplicate is the trimmed (not raw) email value"
     );
     assert_eq!(
         r.duplicate_emails[0].to_ascii_lowercase(),

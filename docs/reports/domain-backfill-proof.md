@@ -124,18 +124,25 @@ No silent continuation: all quarantined lines are counted in `BackfillReport`.
 Phase B originally tolerated duplicate emails in `domain_accounts`. TODO 2A
 supersedes that for normalized non-empty emails: the partial unique index
 `domain_accounts_email_normalized_unique` (`lower(btrim(email))`, where the
-trimmed email is non-empty) now rejects a duplicate. The import still audits
-duplicates first:
+trimmed email is non-empty) now rejects a duplicate. The import audits and skips
+the duplicate **before** insert, using the SAME normalization as the index:
 
-- Before inserting each account, a `COUNT` query checks for existing rows with
-  the same `lower(email)` and a different `id`.
-- If found, the email is added to `report.duplicate_emails`.
-- The duplicate row is then rejected by the unique index and skipped
-  (`report.skipped_records`); the import does not abort.
+- Each email is first trimmed; an after-trim-empty value is treated as "no
+  email" (NULL).
+- Before inserting, a `COUNT` query checks for existing rows with the same
+  `lower(btrim(email))` and a different `id` (matching the unique index, not the
+  bare `lower(email)` lookup index).
+- If a duplicate is found, the trimmed email is added to
+  `report.duplicate_emails`, `report.skipped_records` is incremented, and the
+  row is skipped before any insert — so a unique violation never poisons the
+  transaction. The constraint-violation branch remains only as a defensive
+  backstop against a race or drift.
 
-NULL and after-trim-empty emails remain unaffected. See
-`docs/reports/domain-account-email-uniqueness-audit.md` (TODO 2A) for the
-constraint policy.
+After-trim-empty emails are never persisted as a string: the mapper folds them
+to NULL, and the `domain_accounts_email_not_empty_after_trim` check constraint
+rejects any after-trim-empty value at the storage layer. NULL emails stay
+allowed. See `docs/reports/domain-account-email-uniqueness-audit.md` (TODO 2A)
+for the constraint policy.
 
 
 ## Legacy Account Semantics

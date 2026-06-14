@@ -39,7 +39,7 @@ use weltgewebe_api::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
         DomainReadSource,
     },
-    domain_db::load_accounts_from_postgres,
+    domain_db::{insert_account_from_jsonl_record, load_accounts_from_postgres, AccountWriteError},
     middleware::{auth::auth_middleware, csrf::require_csrf},
     routes::{
         accounts::{AccountInternal, AccountMode, AccountPublic},
@@ -472,6 +472,168 @@ async fn postgres_account_create_duplicate_id_conflicts_without_side_effects() -
     assert!(
         !in_dir.join("demo.accounts.jsonl").exists(),
         "failed DB insert must not append JSONL"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+// ── TODO 2A: normalized account-email uniqueness ─────────────────────────────
+//
+// These proofs live in the account-create write-path suite so they run in the
+// existing `db-domain-account-write-path-proof` CI job (no separate proof job).
+
+const EMAIL_ALPHA: &str = "alpha@example.invalid";
+const EMAIL_BETA: &str = "beta@example.invalid";
+
+fn email_fixture_id(n: u32) -> String {
+    format!("aaaaaaaa-aaaa-4aaa-8aaa-{n:012}")
+}
+
+/// A minimal validated, JSONL-shaped account record for the write-path insert.
+fn account_record(id: &str, email: Option<&str>) -> serde_json::Value {
+    let mut m = serde_json::Map::new();
+    m.insert("id".into(), serde_json::json!(id));
+    m.insert("type".into(), serde_json::json!("garnrolle"));
+    m.insert("title".into(), serde_json::json!("Email Unique Fixture"));
+    if let Some(e) = email {
+        m.insert("email".into(), serde_json::json!(e));
+    }
+    serde_json::Value::Object(m)
+}
+
+async fn try_insert(pool: &PgPool, id: &str, email: Option<&str>) -> Result<(), AccountWriteError> {
+    insert_account_from_jsonl_record(pool, &account_record(id, email)).await
+}
+
+/// Direct write-path proof: the normalized unique index is the boundary. Exact,
+/// case- and whitespace-variant duplicates all surface as `DuplicateEmail`
+/// (no in-memory precheck), exactly one row survives, while a distinct email,
+/// a missing email and after-trim-empty emails are allowed.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn insert_account_classifies_duplicate_email_and_allows_empties() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    try_insert(&pool, &email_fixture_id(20), Some(EMAIL_ALPHA))
+        .await
+        .expect("first non-empty email must insert");
+    for (n, variant) in [
+        (21u32, EMAIL_ALPHA),
+        (22, "ALPHA@example.invalid"),
+        (23, "  alpha@example.invalid  "),
+    ] {
+        let err = try_insert(&pool, &email_fixture_id(n), Some(variant))
+            .await
+            .expect_err("normalized duplicate email must be rejected by the DB");
+        assert!(
+            matches!(err, AccountWriteError::DuplicateEmail),
+            "expected DuplicateEmail (constraint-classified), got {err:?}"
+        );
+    }
+
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM domain_accounts WHERE lower(btrim(email)) = $1")
+            .bind(EMAIL_ALPHA)
+            .fetch_one(&pool)
+            .await
+            .expect("count by normalized email");
+    assert_eq!(count, 1, "the unique index must leave exactly one winner");
+
+    // Distinct email is independent; missing and after-trim-empty are allowed
+    // (the mapper folds "" and "   " to NULL, so multiple coexist).
+    try_insert(&pool, &email_fixture_id(24), Some(EMAIL_BETA))
+        .await
+        .expect("distinct email must insert");
+    try_insert(&pool, &email_fixture_id(25), None)
+        .await
+        .expect("missing email must insert");
+    try_insert(&pool, &email_fixture_id(26), Some(""))
+        .await
+        .expect("empty-string email must insert as NULL");
+    try_insert(&pool, &email_fixture_id(27), Some("   "))
+        .await
+        .expect("whitespace-only email must insert as NULL");
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Route-level proof: a row that exists in PostgreSQL but NOT in the in-memory
+/// cache forces the conflict to be surfaced by the unique index, not the cache
+/// precheck. `POST /accounts` returns 409 and leaves the existing row, the cache
+/// and JSONL untouched.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn route_maps_db_email_conflict_to_409_without_side_effects() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let existing_id = email_fixture_id(10);
+    let new_id = email_fixture_id(11);
+
+    // Seed a row directly in PostgreSQL (deliberately absent from the cache).
+    sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, mode, radius_m, role, email, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', 'Existing', 'verortet', 0, 'weber', $2, '{}'::jsonb, '{}'::jsonb)",
+    )
+    .bind(&existing_id)
+    .bind(EMAIL_ALPHA)
+    .execute(&pool)
+    .await
+    .expect("seed existing domain_accounts row with an email");
+
+    let (app, cookie, state) = postgres_write_app(pool.clone(), "email-unique-admin").await?;
+
+    let body = format!(
+        r#"{{"id":"{new_id}","title":"Conflicting","location":{{"lat":1.0,"lon":2.0}},"email":"{EMAIL_ALPHA}"}}"#
+    );
+    let res = app.clone().oneshot(post_accounts(&cookie, &body)).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::CONFLICT,
+        "duplicate normalized email must map to 409 via the DB constraint"
+    );
+
+    // Existing row untouched.
+    let (title,): (String,) = sqlx::query_as("SELECT title FROM domain_accounts WHERE id = $1")
+        .bind(&existing_id)
+        .fetch_one(&pool)
+        .await
+        .expect("existing row still present");
+    assert_eq!(title, "Existing", "create must never overwrite on conflict");
+
+    // The conflicting account was never persisted.
+    let new_exists: Option<(String,)> =
+        sqlx::query_as("SELECT id FROM domain_accounts WHERE id = $1")
+            .bind(&new_id)
+            .fetch_optional(&pool)
+            .await
+            .expect("query conflicting id");
+    assert!(
+        new_exists.is_none(),
+        "rejected account must not be persisted"
+    );
+
+    // Cache not mutated and JSONL not written on a failed insert.
+    assert!(
+        state.accounts.read().await.get(&new_id).is_none(),
+        "failed DB insert must not populate the in-memory cache"
+    );
+    assert!(
+        !in_dir.join("demo.accounts.jsonl").exists(),
+        "PostgreSQL write mode must not append JSONL"
     );
 
     clean(&pool).await;

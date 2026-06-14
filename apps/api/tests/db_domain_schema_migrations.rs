@@ -251,9 +251,11 @@ async fn domain_schema_basic_insert_and_read() {
 
 /// Verifies that normalized non-empty account emails are unique
 /// (case-insensitive) via the `domain_accounts_email_normalized_unique` partial
-/// index, while NULL emails remain allowed and the case-insensitive lookup index
-/// stays in place. TODO 2A supersedes the former Phase-B duplicate-email
-/// tolerance for this narrow invariant only.
+/// index and that after-trim-empty emails are rejected by the
+/// `domain_accounts_email_not_empty_after_trim` check constraint, while NULL
+/// emails remain allowed and the case-insensitive lookup index stays in place.
+/// TODO 2A supersedes the former Phase-B duplicate-email tolerance for this
+/// narrow invariant only.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
@@ -280,16 +282,22 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
     .expect("first insert with email must succeed");
 
     // Second account with the same normalized email (different case) must now be
-    // rejected by the normalized unique index (TODO 2A).
+    // rejected specifically by the normalized unique index (TODO 2A), identified
+    // by constraint name so any unrelated database error fails the test.
     let dup_result = sqlx::query(
         "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
          VALUES ('test-email-dup-b', 'ron', 'dup-b', 'ron', 0, 'gast', 'ALPHA@example.invalid', '{}', '{}')",
     )
     .execute(&pool)
     .await;
-    assert!(
-        dup_result.is_err(),
-        "duplicate normalized email must be rejected by domain_accounts_email_normalized_unique"
+    let dup_err = dup_result.expect_err("duplicate normalized email must be rejected");
+    let dup_db_err = dup_err
+        .as_database_error()
+        .expect("duplicate email rejection must be a database error");
+    assert_eq!(
+        dup_db_err.constraint(),
+        Some(weltgewebe_api::domain_db::ACCOUNT_EMAIL_UNIQUE_CONSTRAINT),
+        "must be rejected by the normalized email unique index, not another constraint"
     );
 
     // Two accounts without email (NULL) must both succeed
@@ -308,6 +316,29 @@ async fn domain_accounts_normalized_email_uniqueness_is_enforced() {
     .execute(&pool)
     .await
     .expect("second NULL-email insert must succeed");
+
+    // After-trim-empty emails are rejected by the check constraint
+    // domain_accounts_email_not_empty_after_trim. NULL stays allowed (above);
+    // "" and whitespace-only must fail with that specific constraint.
+    for (probe_id, probe_email) in [("test-email-empty", ""), ("test-email-ws", "   ")] {
+        let res = sqlx::query(
+            "INSERT INTO domain_accounts (id, kind, title, mode, radius_m, role, email, public_payload, private_payload)
+             VALUES ($1, 'ron', 'empty-email', 'ron', 0, 'gast', $2, '{}', '{}')",
+        )
+        .bind(probe_id)
+        .bind(probe_email)
+        .execute(&pool)
+        .await;
+        let err = res.expect_err("after-trim-empty email must be rejected");
+        let db_err = err
+            .as_database_error()
+            .expect("check-constraint rejection must be a database error");
+        assert_eq!(
+            db_err.constraint(),
+            Some("domain_accounts_email_not_empty_after_trim"),
+            "after-trim-empty email must violate the not-empty-after-trim check"
+        );
+    }
 
     // Radius supports full u32 range via BIGINT + CHECK constraint.
     sqlx::query("DELETE FROM domain_accounts WHERE id = 'test-radius-u32-max'")
