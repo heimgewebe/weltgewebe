@@ -70,8 +70,8 @@ Repo-Stand tatsaechlich vorhanden sind.
   Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
   **Fresh CI-Evidence pmtiles-content**:
-  Run-URL: `omitted-for-connector-safety`
-  Job-URL: `omitted-for-connector-safety`
+  Run-URL: `https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921`
+  Job-URL: `https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606`
   Event: `pull_request`
   Branch: `chore/api-dockerfile-cargo-build-jobs`
 
@@ -130,7 +130,7 @@ Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
 
 Die Karte besitzt einen expliziten Loader-Contract, ein Szenenmodell und belegte Fehlerpfade.
 Der blockierende CI-Job `basemap-range-delivery-proof` fuer HTTP-206-Range-Delivery
-ist PROVEN: CI-Lauf 25970466659
+ist PROVEN: [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
 (Commit 14feefd6), Guard-Output `PROVEN: Caddy PMTiles Range delivery verified
 (scope=range-delivery)`, Response-Header `HTTP/1.1 206 Partial Content`.
 Der Scope `pmtiles-content` ist im selben Workflow als eigener blockierender
@@ -138,8 +138,8 @@ Proof-Job hinterlegt (`basemap-pmtiles-content-proof`) und prueft Endpoint,
 HTTP-206-Range, 7-Byte-Magic `PMTiles` und optionale SHA256 gegen ein echtes
 in CI erzeugtes Artefakt. Der Guard ist fachlich erweitert um
 `PROVEN: HTTP-served PMTiles Magic verified`.
-Fuer Scope `pmtiles-content` ist der Proof jetzt PROVEN: CI-Lauf 26447341921
-(Job `basemap-pmtiles-content-proof`, Job 77857000606,
+Fuer Scope `pmtiles-content` ist der Proof jetzt PROVEN: [CI-Lauf 26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921)
+(Job `basemap-pmtiles-content-proof`, [Job 77857000606](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606),
 Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 `PROVEN: HTTP-served PMTiles Magic verified` und
 `PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`.
