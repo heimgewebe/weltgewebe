@@ -349,7 +349,7 @@ review_after: 2026-12-01
         self.assertFalse(record.missing_supersession_target)
         self.assertIn("lifecycle_state", record.absent_core_lifecycle_fields)
 
-    def test_archived_lifecycle_state_is_terminal(self) -> None:
+    def test_archived_lifecycle_state_without_superseded_by_is_not_supersession_gap(self) -> None:
         self._write(
             "docs/reports/archived.md",
             """---
@@ -368,7 +368,34 @@ lifecycle_state: archived
 
         record = gen.collect_reports(self._config())[0]
 
-        self.assertTrue(record.missing_supersession_target)
+        self.assertFalse(record.missing_supersession_target)
+        self.assertEqual(record.lifecycle_state, "archived")
+        self.assertNotIn("lifecycle_state", record.absent_core_lifecycle_fields)
+
+
+    def test_terminal_supersession_diagnostics_render_lifecycle_state(self) -> None:
+        self._write(
+            "docs/reports/terminal.md",
+            """---
+id: docs.reports.terminal
+title: Terminal
+doc_type: report
+status: deprecated
+lifecycle_state: superseded
+lifecycle: observed
+owner_task: docs/tasks/terminal.md
+review_after: 2026-12-01
+---
+# Terminal
+""",
+        )
+        markdown = gen.render_inventory(gen.collect_reports(self._config()))
+        self.assertIn("## Terminal Supersession Diagnostics", markdown)
+        self.assertIn("| Path | lifecycle_state | Diagnostic |", markdown)
+        self.assertIn(
+            "| docs/reports/terminal.md | superseded | missing superseded_by target |",
+            markdown,
+        )
 
     def test_relations_are_rendered_in_markdown_output(self) -> None:
         self._write(

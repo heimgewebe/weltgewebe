@@ -25,7 +25,7 @@ CORE_LIFECYCLE_FIELDS = (
     "review_after",
     "lifecycle_state",
 )
-TERMINAL_LIFECYCLE_STATES = {"superseded", "archived"}
+SUPERSESSION_REQUIRED_LIFECYCLE_STATES = {"superseded"}
 
 HEADER = """\
 ---
@@ -462,7 +462,8 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
                     field for field in CORE_LIFECYCLE_FIELDS if not _string_value(frontmatter.get(field))
                 ),
                 missing_supersession_target=(
-                    normalized_lifecycle_state in TERMINAL_LIFECYCLE_STATES and not superseded_by
+                    normalized_lifecycle_state in SUPERSESSION_REQUIRED_LIFECYCLE_STATES
+                    and not superseded_by
                 ),
                 frontmatter_parse_warning=warning,
             )
