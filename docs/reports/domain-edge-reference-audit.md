@@ -6,7 +6,7 @@ status: active
 created: 2026-06-14
 lang: de
 summary: >
-  Diagnosebericht für OPT-ARC-001 TODO 4. Auditiert Edge-Referenzen gegen
+  Diagnosebericht für OPT-ARC-001 Teilaufgabe 4. Auditiert Edge-Referenzen gegen
   vorhandene Nodes, klassifiziert Orphans, typisierte Nicht-Node-Referenzen und
   unklare Referenzen und bereitet die Entscheidung zwischen strikten
   Foreign Keys und loser Referenzsemantik vor.
