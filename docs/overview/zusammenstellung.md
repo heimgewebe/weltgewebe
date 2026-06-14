@@ -23,6 +23,7 @@ wie Ethik & UX entlang des gesamten Vorhabens abgesichert werden.
 | **Ethik & Wirkung**    | Leitplanken, Risiken, Schutzbedarfe  | `policies/`, `docs/konzepte/garnrolle-und-verortung.md`, `docs/ethik/`, `docs/process/fahrplan.md` |
 | **User Experience**    | UX-Guidelines, Prototypen, Feedback  | `apps/web/README.md`,`docs/ux/`,`docs/runbooks/`       |
 | **Architektur**        | Technische Boundaries, Integrationen | `docs/architekturstruktur.md`, `docs/architecture/`    |
+|                        | UI Interaction Doctrine              | `docs/blueprints/ui-interaction-doctrine.md`           |
 |                        | UI-Blaupause                         | `docs/blueprints/ui-blaupause.md`                      |
 |                        | UI State Machine                     | `docs/blueprints/ui-state-machine.md`                  |
 |                        | UI Roadmap                           | `docs/blueprints/ui-roadmap.md`                        |

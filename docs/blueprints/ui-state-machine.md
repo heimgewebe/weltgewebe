@@ -38,6 +38,12 @@ Die UI kennt genau drei globale Zustände:
 
 Kein weiterer globaler Zustand darf eingeführt werden ohne Anpassung dieses Dokuments.
 
+Suche, Filter, Tabs und Hover sind lokale Modi, keine globalen Zustände. Auch
+URL-Parameter sind eine Adressierungsschicht für bestehende Zustände und bilden
+keine zweite State Machine. Die fachliche Einordnung dieser Flächen, Kartenlinsen
+und der späteren URL-Adressierung definiert die
+[UI Interaction Doctrine](ui-interaction-doctrine.md).
+
 ## 3 State-Machine-Diagramm
 
 ```text

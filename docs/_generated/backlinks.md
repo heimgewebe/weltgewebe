@@ -195,6 +195,7 @@ Generated automatically. Do not edit.
 ## docs/blueprints/kartenklarheit-roadmap.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
+- [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/reports/map-architekturkritik.md
 - [relates_to] docs/reports/map-status-matrix.md
 - [depends_on] docs/roadmap.md
@@ -216,6 +217,7 @@ Generated automatically. Do not edit.
 
 ## docs/blueprints/ui-blaupause.md
 
+- [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-roadmap.md
 - [relates_to] docs/blueprints/ui-state-machine.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
@@ -223,12 +225,14 @@ Generated automatically. Do not edit.
 ## docs/blueprints/ui-roadmap.md
 
 - [relates_to] docs/blueprints/ui-blaupause.md
+- [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-state-machine.md
 - [depends_on] docs/roadmap.md
 
 ## docs/blueprints/ui-state-machine.md
 
 - [relates_to] docs/blueprints/ui-blaupause.md
+- [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/blueprints/ui-roadmap.md
 
 ## docs/blueprints/versionierungs-blaupause.md
