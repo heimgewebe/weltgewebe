@@ -31,6 +31,10 @@ Jeder Report soll später beantworten können:
 
 Wichtig: Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
+Diese Policy ist der kanonische Ort für Report-Lifecycle-Regeln. Ihr Status
+bleibt `draft`, bis Pilot-Annotation und Warnmodus die Begriffe praktisch
+bestätigt haben.
+
 ## Geltungsbereich
 
 Gilt für:
@@ -71,10 +75,10 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 ## Report-Klassen
 
 - **audit**: Prüft einen Bestand, Datenzustand oder Prozesszustand. Risiko: veraltet schnell, wenn Daten oder Prozess wechseln.
-- **proof**: Belegt eine technische oder organisatorische Eigenschaft. Risiko: verliert Gültigkeit bei Code-, CI- oder Infrastrukturänderungen.
+- **proof**: Belegt eine technische oder organisatorische Eigenschaft. Risiko: verliert Gültigkeit bei Code-, CI- oder Infrastrukturänderungen. Die Klasse `proof` kann für Reports unter `docs/reports/*.md` genutzt werden, die einen Proof-Charakter haben. Dateien unter `docs/proofs/**` bleiben in dieser Phase vom Geltungsbereich ausgenommen und können später eine eigene Lifecycle-Regel bekommen.
 - **status**: Verdichtet aktuellen Stand eines Vorhabens. Risiko: wird leicht mit dauerhafter Wahrheit verwechselt.
 - **decision-prep**: Bereitet eine Entscheidung vor, ersetzt sie aber nicht. Risiko: bleibt nach Entscheidung weiter sichtbar, obwohl die Entscheidung schon gefallen ist.
-- **generated**: Wird automatisch erzeugt und soll nicht manuell editiert werden. Risiko: Drift zwischen Generator und committed Artefakt.
+- **generated**: Wird automatisch erzeugt und soll nicht manuell editiert werden. Diese Klasse gilt nur für Artefakte, die ausdrücklich als Report geführt werden. Nicht jedes Artefakt unter `docs/_generated/**` wird dadurch zu einem Report. Risiko: Drift zwischen Generator und committed Artefakt.
 - **planning**: Beschreibt geplante Arbeit, offene Schritte oder Ordnungsvorhaben. Risiko: Planungsstand wird mit Umsetzung verwechselt.
 - **legacy**: Historisch nützlich, aber nicht mehr aktuell handlungsleitend. Risiko: unmarkierte Legacy-Dokumente erzeugen Scheinkohärenz.
 
@@ -95,9 +99,24 @@ Wichtig:
 ## Lifecycle-Felder
 
 - **lifecycle**: Report-Klasse oder Lifecycle-Rolle.
+- `lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart
+  im Repo, zum Beispiel `report` oder `policy`. `lifecycle` beschreibt die
+  Rolle eines Reports innerhalb seines Lebenszyklus, zum Beispiel `audit`,
+  `proof` oder `status`.
 - **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
-- **review_after**: Datum, ab dem erneute Prüfung fällig wird. Für spätere Validatoren soll ein ISO-Datum YYYY-MM-DD bevorzugt werden.
+- **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
+  fällig wird.
 - **superseded_by**: Pfad zum ablösenden Artefakt. Kann ein anderer Report, ein Blueprint, ein Proof oder ein anderes kanonisches Dokument sein.
+
+```yaml
+doc_type: report
+lifecycle: audit
+```
+
+Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
+`lifecycle`, `owner_task`, `review_after`, `superseded_by`. Spätere Validatoren
+sollen abweichende Schreibweisen wie `ownerTask` oder `reviewAfter` nicht als
+gleichwertig behandeln.
 
 ## Pflichtfelder nach Status
 
@@ -105,10 +124,10 @@ Wichtig:
 | --- | --- | --- | --- | --- | --- |
 | draft | empfohlen | empfohlen | optional | nein | Noch nicht handlungsleitend, aber spätere Zuordnung soll vorbereitet werden. |
 | active | erforderlich | erforderlich | erforderlich | nein | Aktive Reports brauchen Zweck, Verantwortung und Review-Zeitpunkt. |
-| deferred | erforderlich | erforderlich | erforderlich | optional | Zurückgestellte Reports brauchen einen Wiedervorlagepunkt. |
+| deferred | erforderlich | erforderlich | erforderlich | nein | Zurückgestellte Reports warten auf Prüfung oder Reaktivierung; abgelöste Reports sind `superseded`. |
 | superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung muss explizit nachvollziehbar sein. |
-| archived | erforderlich | empfohlen | nein | empfohlen | Historisch erhalten, nicht mehr handlungsleitend. |
-| deprecated | empfohlen | empfohlen | empfohlen | empfohlen | Veraltet, aber endgültiger Umgang noch offen. |
+| archived | erforderlich | erforderlich | nein | empfohlen | Historisch erhalten, nicht mehr handlungsleitend; bei Legacy-Dokumenten ist `owner_task: historical` zulässig. |
+| deprecated | empfohlen | erforderlich | empfohlen | empfohlen | Veraltet, aber endgültiger Umgang noch offen; Verantwortlichkeit soll erhalten bleiben. |
 
 Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
 
@@ -135,11 +154,19 @@ Regeln:
 - Derived references zeigen aber, dass ein Report noch in generierten Übersichten erscheint.
 - Vor physischer Archivierung oder Löschung muss ein Referenzcheck laufen.
 
+Ob eine Primary Reference Archivierung oder Löschung blockiert, hängt vom
+Status und Zweck des referenzierenden Dokuments ab. Eine historische oder
+bereits archivierte Quelle blockiert nicht automatisch.
+
 ## Archivierungsregeln
 
 Standard: `status: archived`
 
 Status-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
+
+Bei Archivierung soll ein vorhandenes `owner_task` erhalten bleiben. Für
+historische Legacy-Dokumente ohne rekonstruierbaren Task ist
+`owner_task: historical` zulässig.
 
 Physische Archivierung ist später optional:
 
@@ -175,7 +202,7 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 1. **Inventory vorhanden**: Reportbestand sichtbar machen.
 2. **Policy definieren**: diese Datei.
 3. **Pilot**: genau einen Report annotieren.
-4. **Validator**: report/warn/strict implementieren, aber noch nicht hart aktivieren.
+4. **Validator**: `report`, `warn` und `strict` implementieren. `report` ist lokal nutzbar, `warn` kann nicht-blockierend in CI laufen, `strict` bleibt vorhanden, aber noch nicht aktiv.
 5. **Backfill**: kleine Slices statt Massen-PR.
 6. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
 7. **Global strict**: erst nach abgeschlossenem Backfill.
@@ -215,7 +242,7 @@ owner_task: historical
 ## Offene Entscheidungen
 
 - Welche Werte für `owner_task` genau zulässig werden.
-- Ob `review_after` zwingend ISO-Datum YYYY-MM-DD wird.
+- Ob für `review_after` später zusätzliche Regeln wie maximale Review-Intervalle gelten.
 - Ob `lifecycle` später ein Enum wird.
 - Wann `deprecated` statt `superseded` verwendet wird.
 - Ob physische Archivierung überhaupt nötig ist.
