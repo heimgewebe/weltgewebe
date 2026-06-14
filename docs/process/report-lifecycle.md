@@ -245,7 +245,8 @@ Direktes Löschen aus draft oder active ist nicht erlaubt.
 Löschen nur, wenn alle Bedingungen erfüllt sind:
 
 - Report ist `archived` oder `superseded`.
-- `superseded_by` existiert oder bewusste Verwerfungsbegründung ist dokumentiert.
+- `superseded_by` existiert oder ein später definiertes maschinenlesbares
+  Ausnahmefeld dokumentiert bewusst, warum kein Ersatzartefakt existiert.
 - Keine aktive Primary Reference existiert.
 - Kein Audit-, Compliance- oder historischer Rekonstruktionswert besteht.
 - Generierte Artefakte bleiben reproduzierbar.
@@ -272,6 +273,10 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
 
 ## Beispiele
+
+Die folgenden Beispiele zeigen das Zielmodell nach abgeschlossenem
+Contract-Alignment. Sie sind in dieser Phase noch keine allgemein gültigen
+DocMeta-Frontmatter-Vorgaben.
 
 ### Active audit
 
