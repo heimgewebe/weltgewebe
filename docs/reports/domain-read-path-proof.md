@@ -116,17 +116,22 @@ legacy mismatch.
 ### Consequence
 
 TODO 3 final parity proof remains open. This PR records the current gap; it does
-not decide the target legacy ordering. A later PR must decide how to handle the
-legacy nodes/edges order mismatch before a PostgreSQL read cutover:
+not decide or revise the canonical target ordering.
+The current blueprint requires PostgreSQL read cutover parity to preserve:
 
-- Option A: preserve legacy order in PostgreSQL via explicit ordinal/position.
-- Option B: revise the legacy contract to id order.
-- Option C: accept PostgreSQL-specific legacy ordering and document the break.
-
-Preliminary preference: Option B (revise legacy list order to stable id order)
-is the simplest long-term contract and aligns legacy pagination with cursor
-pagination and PostgreSQL loaders. It remains a product/API decision and is not
-implemented in this diagnostic PR.
+- legacy `/nodes` order as the existing insertion/file order
+- legacy `/edges` order as the existing insertion/file order
+- legacy `/accounts` order as the existing id order
+- cursor order as stable id-ascending order for all three domains
+Therefore the nodes/edges legacy mismatch is a blocker for PostgreSQL read
+cutover until a follow-up PR implements order preservation or explicitly revises
+the blueprint first.
+Required follow-up outcome:
+- preserve legacy nodes/edges order in PostgreSQL, likely via an explicit
+  ordinal/position captured during JSONL backfill/import; or
+- first revise `docs/blueprints/domain-data-postgres-cutover.md` in a separate
+  API-contract decision PR before changing the target order.
+This diagnostic PR does neither.
 
 ### Non-goals
 
