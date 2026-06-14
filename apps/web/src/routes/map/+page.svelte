@@ -12,9 +12,13 @@
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
   import type { MapEntityViewModel } from '$lib/map/types';
 
-  import { view, selection, systemState } from '$lib/stores/uiView';
-  import { activeFilters } from '$lib/stores/filterStore';
-  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
+  import { page } from '$app/stores';
+
+  import { view, selection, systemState, enterKomposition } from '$lib/stores/uiView';
+  import { activeFilters, closeFilter } from '$lib/stores/filterStore';
+  import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
+  import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
+  import { parseMapUrlState, type MapUrlFocus } from '$lib/map/urlState';
   import {
     deriveFailedResourceLabels,
     deriveMarkerCounts,
@@ -113,6 +117,54 @@
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
+  }
+
+  // --- URL addressing (UI Interaction Doctrine, first slice) -----------------
+  // The URL is an addressing layer, not a second state machine: it maps query
+  // parameters onto the existing uiView / overlay stores. uiView stays the
+  // single source of truth and there is no store -> URL synchronisation here.
+  function findMapEntityForFocus(focus: MapUrlFocus): MapEntityViewModel | null {
+    return markersData.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
+  }
+
+  function applyMapUrlAddressing() {
+    const parsed = parseMapUrlState($page.url.searchParams);
+
+    // Priority: compose > focus > lens-only navigation.
+    if (parsed.compose === 'node') {
+      closeSearch();
+      closeFilter();
+      enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
+      return;
+    }
+
+    if (parsed.focus) {
+      const item = findMapEntityForFocus(parsed.focus);
+      if (item) {
+        closeSearch();
+        closeFilter();
+        focusAndFlyToPoint(item);
+        return;
+      }
+    }
+
+    if (parsed.lens === 'filter') {
+      openFilterExclusive();
+      return;
+    }
+
+    if (parsed.lens === 'search') {
+      openSearchExclusive();
+    }
+  }
+
+  // Apply URL addressing once per distinct query string, after the scene data is
+  // available (so focus deep links can resolve an entity). Guarded against
+  // re-entry so store updates never feed back into a router/store loop.
+  let lastAppliedMapUrlSearch = '';
+  $: if ($page.url.search !== lastAppliedMapUrlSearch && markersData.length > 0) {
+    lastAppliedMapUrlSearch = $page.url.search;
+    applyMapUrlAddressing();
   }
 
   function handleZoomToOwnGarnrolle() {
