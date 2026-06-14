@@ -68,11 +68,14 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 Diese Policy beschreibt weiterhin ein Zielmodell. Die hier beschriebenen
 Lifecycle-Felder sind durch diesen PR noch nicht automatisch Teil des
 bestehenden DocMeta-Contracts, eines Validators oder eines CI-Guards.
+
 Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
 `superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
 `docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
+
 Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
 kanonische Policy-Quelle.
+
 Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
 Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
 späterer Übersicht folgt in separaten Tooling-PRs.
@@ -81,7 +84,8 @@ späterer Übersicht folgt in separaten Tooling-PRs.
 
 - **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
 - **Lifecycle**: Die Rolle eines Reports im Lebenszyklus: warum er existiert, wie lange er handlungsleitend ist und wann er geprüft oder abgelöst wird.
-- **Status**: Der aktuelle Zustand eines Reports, zum Beispiel `draft`, `active`, `superseded` oder `archived`.
+- **Status**: Der globale DocMeta-Status eines Reports, zum Beispiel `draft`, `active`, `deprecated` oder `canonical`.
+- **Lifecycle-Zustand**: Der report-spezifische Zustand in `lifecycle_state`, zum Beispiel `active`, `superseded` oder `archived`.
 - **Supersession**: Eine explizite Ablösung durch ein anderes Artefakt. Supersession bedeutet nicht automatisch Löschung.
 - **Archivierung**: Ein Report bleibt erhalten, ist aber nicht mehr handlungsleitend.
 - **Löschung**: Physisches Entfernen eines Reports aus dem Repo. Löschung ist der letzte Schritt und nur nach separater Prüfung erlaubt.
@@ -167,10 +171,11 @@ lifecycle: audit
 
 Beispiel für die spätere Abbildung einer Ablösung:
 
-Im alten Report, falls das Lifecycle-Feld contract-aktiv wird:
+Im alten Report, falls die Lifecycle-Felder contract-aktiv werden:
 
 ```yaml
-status: superseded
+status: deprecated
+lifecycle_state: superseded
 superseded_by: docs/reports/new-proof.md
 ```
 
@@ -183,9 +188,9 @@ relations:
 ```
 
 Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
-`lifecycle`, `owner_task`, `review_after`, `superseded_by`. Spätere Validatoren
-sollen abweichende Schreibweisen wie `ownerTask` oder `reviewAfter` nicht als
-gleichwertig behandeln.
+`lifecycle`, `owner_task`, `review_after`, `lifecycle_state`, `superseded_by`.
+Spätere Validatoren sollen abweichende Schreibweisen wie `ownerTask`,
+`reviewAfter` oder `lifecycleState` nicht als gleichwertig behandeln.
 
 ## Pflichtfelder nach Lifecycle-Zustand
 
@@ -235,9 +240,9 @@ bereits archivierte Quelle blockiert nicht automatisch.
 
 ## Archivierungsregeln
 
-Standard: `status: archived`
+Standard: `status: deprecated` mit `lifecycle_state: archived`
 
-Status-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
+Lifecycle-State-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
 
 Physische Archivierung ist später optional:
 
@@ -255,11 +260,12 @@ Wichtig: Noch keine Archivierung in diesem PR.
 
 ## Löschregeln
 
-Direktes Löschen aus draft oder active ist nicht erlaubt.
+Direktes Löschen aus `status: draft`, `status: active` oder
+`lifecycle_state: active` ist nicht erlaubt.
 
 Löschen nur, wenn alle Bedingungen erfüllt sind:
 
-- Report ist `archived` oder `superseded`.
+- Report hat `lifecycle_state: archived` oder `lifecycle_state: superseded`.
 - `superseded_by` existiert oder ein später definiertes maschinenlesbares
   Ausnahmefeld dokumentiert bewusst, warum kein Ersatzartefakt existiert.
 - Keine aktive Primary Reference existiert.
@@ -282,7 +288,7 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 6. **Backfill**: kleine Slices statt Massen-PR.
 7. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
 8. **Global strict**: erst nach abgeschlossenem Backfill.
-9. **Archivierung**: zunächst status-only.
+9. **Archivierung**: zunächst Lifecycle-State-only.
 10. **Löschung**: nur separat und nach Referenzcheck.
 
 Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
