@@ -96,8 +96,26 @@ Wichtig:
 
 - **lifecycle**: Report-Klasse oder Lifecycle-Rolle.
 - **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
-- **review_after**: Datum, ab dem erneute Prüfung fällig wird. Für spätere Validatoren soll ein ISO-Datum YYYY-MM-DD bevorzugt werden.
+- **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
+  fällig wird.
 - **superseded_by**: Pfad zum ablösenden Artefakt. Kann ein anderer Report, ein Blueprint, ein Proof oder ein anderes kanonisches Dokument sein.
+
+`lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart im
+Repo, zum Beispiel `report` oder `policy`. `lifecycle` beschreibt die Rolle
+eines Reports innerhalb seines Lebenszyklus, zum Beispiel `audit`, `proof`
+oder `status`.
+
+Beispiel:
+
+```yaml
+doc_type: report
+lifecycle: audit
+```
+
+Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
+`lifecycle`, `owner_task`, `review_after`, `superseded_by`. Spätere Validatoren
+sollen abweichende Schreibweisen wie `ownerTask` oder `reviewAfter` nicht als
+gleichwertig behandeln.
 
 ## Pflichtfelder nach Status
 
@@ -108,7 +126,7 @@ Wichtig:
 | deferred | erforderlich | erforderlich | erforderlich | optional | Zurückgestellte Reports brauchen einen Wiedervorlagepunkt. |
 | superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung muss explizit nachvollziehbar sein. |
 | archived | erforderlich | empfohlen | nein | empfohlen | Historisch erhalten, nicht mehr handlungsleitend. |
-| deprecated | empfohlen | empfohlen | empfohlen | empfohlen | Veraltet, aber endgültiger Umgang noch offen. |
+| deprecated | erforderlich | erforderlich | empfohlen | empfohlen | Veraltet, aber endgültiger Umgang noch offen; Verantwortlichkeit und Report-Klasse sollen erhalten bleiben. |
 
 Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
 
