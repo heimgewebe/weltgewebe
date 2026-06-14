@@ -79,3 +79,48 @@ Geltende Grenzen:
 - Kein Abschalten oder Entfernen von JSONL.
 - Kein Produktions-Cutover.
 - Kein grüner PR-CI-Laufbeleg für den neuen Read-Path-Job in diesem Dokument.
+
+## JSONL/PostgreSQL List Parity Diagnostic
+
+Status: diagnostic_gap / prepared for CI.
+
+This diagnostic checks the current list-order contract before any PostgreSQL
+runtime cutover.
+
+### Current contract anchors
+
+- Legacy `/nodes` uses cache insertion order with `offset` / `limit`.
+- Legacy `/edges` uses cache insertion order with `offset` / `limit`.
+- Legacy `/accounts` uses account-id order through `AccountStore`.
+- Cursor mode uses stable id-ascending order for all domains.
+
+### Diagnostic result
+
+With deliberately non-id-sorted fixture data (`c, a, b`):
+
+| Domain | Legacy JSONL order | PostgreSQL loader order | Result |
+| --- | --- | --- | --- |
+| nodes | `c, a, b` | `a, b, c` | gap |
+| edges | `c, a, b` | `a, b, c` | gap |
+| accounts | `a, b, c` | `a, b, c` | parity |
+
+Cursor mode remains id-ascending by contract and is not the source of the
+legacy mismatch.
+
+### Consequence
+
+TODO 3 is not complete. A later PR must decide how to handle the legacy
+nodes/edges order mismatch before a PostgreSQL read cutover:
+
+- Option A: preserve legacy order in PostgreSQL via explicit ordinal/position.
+- Option B: revise the legacy contract to id order.
+- Option C: accept PostgreSQL-specific legacy ordering and document the break.
+
+### Non-goals
+
+- no runtime cutover
+- no default-source change
+- no JSONL removal
+- no migration
+- no ORDER BY fix
+- no Step-up or WebAuthn claim
