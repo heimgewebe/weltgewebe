@@ -545,7 +545,7 @@ def render_inventory(records: list[ReportRecord]) -> str:
                 derived_refs=len(record.derived_referenced_by_paths),
                 relations=record.relations_count,
                 absent=_cell(", ".join(record.absent_core_lifecycle_fields)),
-                supersession_target_diagnostic="missing target" if record.missing_supersession_target else "",
+                supersession_target_diagnostic="missing superseded_by target" if record.missing_supersession_target else "",
             )
         )
 

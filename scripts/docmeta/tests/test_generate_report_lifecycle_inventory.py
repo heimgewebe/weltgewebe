@@ -288,18 +288,18 @@ review_after: 2026-12-01
 
     def test_superseded_lifecycle_state_without_superseded_by_is_reported(self) -> None:
         self._write(
-            "docs/reports/terminal.md",
+            "docs/reports/superseded.md",
             """---
-id: docs.reports.terminal
-title: Terminal
+id: docs.reports.superseded
+title: Superseded
 doc_type: report
 status: deprecated
 lifecycle_state: superseded
 lifecycle: observed
-owner_task: docs/tasks/terminal.md
+owner_task: docs/tasks/superseded.md
 review_after: 2026-12-01
 ---
-# Terminal
+# Superseded
 """,
         )
 
@@ -309,18 +309,18 @@ review_after: 2026-12-01
 
     def test_superseded_lifecycle_state_matching_is_case_insensitive(self) -> None:
         self._write(
-            "docs/reports/terminal.md",
+            "docs/reports/superseded.md",
             """---
-id: docs.reports.terminal
-title: Terminal
+id: docs.reports.superseded
+title: Superseded
 doc_type: report
 status: deprecated
 lifecycle_state: Superseded
 lifecycle: observed
-owner_task: docs/tasks/terminal.md
+owner_task: docs/tasks/superseded.md
 review_after: 2026-12-01
 ---
-# Terminal
+# Superseded
 """,
         )
 
@@ -374,25 +374,25 @@ lifecycle_state: archived
 
     def test_supersession_target_diagnostics_render_lifecycle_state(self) -> None:
         self._write(
-            "docs/reports/terminal.md",
+            "docs/reports/superseded.md",
             """---
-id: docs.reports.terminal
-title: Terminal
+id: docs.reports.superseded
+title: Superseded
 doc_type: report
 status: deprecated
 lifecycle_state: superseded
 lifecycle: observed
-owner_task: docs/tasks/terminal.md
+owner_task: docs/tasks/superseded.md
 review_after: 2026-12-01
 ---
-# Terminal
+# Superseded
 """,
         )
         markdown = gen.render_inventory(gen.collect_reports(self._config()))
         self.assertIn("## Supersession Target Diagnostics", markdown)
         self.assertIn("| Path | lifecycle_state | Diagnostic |", markdown)
         self.assertIn(
-            "| docs/reports/terminal.md | superseded | missing superseded_by target |",
+            "| docs/reports/superseded.md | superseded | missing superseded_by target |",
             markdown,
         )
 
