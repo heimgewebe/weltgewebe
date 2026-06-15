@@ -59,6 +59,7 @@ generate:
 	python3 -m scripts.docmeta.generate_relations_analysis
 	python3 -m scripts.docmeta.generate_relates_to_audit
 	python3 -m scripts.docmeta.generate_report_lifecycle_inventory
+	python3 -m scripts.docmeta.generate_report_lifecycle
 
 diagnose: generate
 
