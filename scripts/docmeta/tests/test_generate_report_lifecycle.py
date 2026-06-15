@@ -42,6 +42,16 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertIn("| reports_checked | 1 |", content)
         self.assertIn("| reports_ignored_non_report | 1 |", content)
 
+    def test_doc_type_is_case_insensitive_for_report_grouping(self):
+        self._write_report(
+            "mixed.md",
+            "---\ndoc_type: Report\nstatus: active\nlifecycle_state: active\nlifecycle: audit\nowner_task: T1\nreview_after: 2026-01-01\n---"
+        )
+        generate(self.root, self.output_path)
+        content = self.output_path.read_text(encoding="utf-8")
+        self.assertIn("| reports_checked | 1 |", content)
+        self.assertIn("docs/reports/mixed.md", content)
+
     def test_active_report_group(self):
         self._write_report("active1.md", "---\ndoc_type: report\nlifecycle_state: active\nstatus: active\nlifecycle: production\nowner_task: T123\nreview_after: 2026-01-01\n---")
         

@@ -77,10 +77,14 @@ def collect_lifecycle_rows(root: Path, records: list[ReportRecord]) -> list[Life
         )
     return rows
 
+def _norm(value: str) -> str:
+    return value.strip().lower()
+
 def group_rows(rows: list[LifecycleOverviewRow]) -> dict[str, list[LifecycleOverviewRow]]:
     groups = defaultdict(list)
     for row in rows:
-        if row.doc_type != "report":
+        doc_type = _norm(row.doc_type)
+        if doc_type != "report":
             groups["non_report"].append(row)
         elif not row.lifecycle_state:
             groups["unclassified"].append(row)
@@ -106,7 +110,8 @@ def build_summary(rows: list[LifecycleOverviewRow]) -> dict[str, int]:
     }
     
     for row in rows:
-        if row.doc_type == "report":
+        doc_type = _norm(row.doc_type)
+        if doc_type == "report":
             summary["reports_checked"] += 1
             if row.lifecycle_state:
                 summary["reports_with_lifecycle_state"] += 1
@@ -193,7 +198,7 @@ def render_markdown(rows: list[LifecycleOverviewRow], summary: dict[str, int]) -
     render_report_table("Archived Reports", groups.get("archived", []))
     render_report_table("Unclassified Reports", groups.get("unclassified", []))
     
-    reports_with_findings = [r for r in rows if r.findings and r.doc_type == "report"]
+    reports_with_findings = [r for r in rows if r.findings and _norm(r.doc_type) == "report"]
     reports_with_findings.sort(key=lambda r: r.path)
     lines.extend([
         "## Reports With Findings",
