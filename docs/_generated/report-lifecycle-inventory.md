@@ -21,14 +21,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 23 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 0 |
-| files_missing_lifecycle_state | 23 |
-| files_with_lifecycle | 0 |
-| files_missing_lifecycle | 23 |
-| files_with_owner_task | 0 |
-| files_missing_owner_task | 23 |
-| files_with_review_after | 0 |
-| files_missing_review_after | 23 |
+| files_with_lifecycle_state | 1 |
+| files_missing_lifecycle_state | 22 |
+| files_with_lifecycle | 1 |
+| files_missing_lifecycle | 22 |
+| files_with_owner_task | 1 |
+| files_missing_owner_task | 22 |
+| files_with_review_after | 1 |
+| files_missing_review_after | 22 |
 | files_primary_referenced | 19 |
 | files_primary_unreferenced | 4 |
 | files_with_derived_references | 23 |
@@ -56,7 +56,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  |  | 1 | 3 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 5 | 3 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/cost-report.md | reference | active |  |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 1 | 3 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  |  | 7 | 3 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/domain-backfill-proof.md | report | active |  |  |  |  |  | 3 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  |  | 0 | 3 | 7 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -66,7 +66,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-read-path-proof.md | report | active |  |  |  |  |  | 5 | 3 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 4 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 6 | 4 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 7 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 17 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -84,7 +84,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/auth-persistence-runtime-target-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/cost-report.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/domain-account-email-uniqueness-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-account-write-path-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-backfill-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | lifecycle, owner_task, review_after, lifecycle_state |
@@ -121,7 +120,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
-| docs/reports/map-status-matrix.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-architekturkritik.md |
+| docs/reports/map-status-matrix.md | 3 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/blueprints/ui-interaction-doctrine.md, docs/reports/map-architekturkritik.md |
 | docs/reports/optimierungsbericht.md | 4 | relates_to | docs/datenmodell.md, docs/policies/agent-reading-protocol.md, docs/reports/optimierungsstatus.md, docs/techstack.md |
 | docs/reports/optimierungsstatus.md | 4 | depends_on, relates_to | docs/policies/agent-reading-protocol.md, docs/reports/auth-persistence-readiness.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsbericht.md |
 | docs/reports/passkey-register-verify-prep.md | 4 | relates_to | docs/adr/ADR-0006__auth-magic-link-session-passkey.md, docs/blueprints/auth-roadmap.md, docs/reports/auth-status-matrix.md, docs/specs/auth-api.md |
@@ -215,6 +214,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/kartenklarheit-roadmap.md`
   - `docs/blueprints/kartenklarheit.md`
   - `docs/blueprints/map-roadmap.md`
+  - `docs/blueprints/ui-interaction-doctrine.md`
   - `docs/reports/map-architekturkritik.md`
   - `docs/roadmap.md`
 

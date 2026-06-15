@@ -96,7 +96,7 @@ Generated automatically. Do not edit.
 | reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | active | docs/reports/auth-persistence-runtime-target-reconciliation.md |
 | reports.auth-status-matrix | Auth Status Matrix | reference | active | docs/reports/auth-status-matrix.md |
 | reports.cost-report | Cost Report | reference | active | docs/reports/cost-report.md |
-| reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | draft | docs/reports/domain-account-email-uniqueness-audit.md |
+| reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | active | docs/reports/domain-account-email-uniqueness-audit.md |
 | reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | active | docs/reports/domain-account-write-path-proof.md |
 | reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
 | reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | active | docs/reports/domain-edge-create-semantics-preflight.md |
