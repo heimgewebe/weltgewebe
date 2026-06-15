@@ -15,6 +15,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+MAX_PSQL_STDERR_LOG_BYTES = 500
+
 CLASSIFICATION_COUNTERS = {
     "typed_node_reference": "typed_node_references",
     "typed_node_missing_reference": "typed_node_missing_references",
@@ -45,6 +47,13 @@ def hash_id(id_val: Optional[str]) -> Optional[str]:
 
 def hash_edge(id_val: str) -> str:
     return hash_ref(id_val, "edge")
+
+def safe_source_fingerprint(path: str, label: str) -> Dict[str, Any]:
+    try:
+        return source_fingerprint(path)
+    except OSError as exc:
+        logging.error("Cannot fingerprint %s file %s: %s", label, path, exc.strerror or exc)
+        sys.exit(1)
 
 def source_fingerprint(path: str) -> Dict[str, Any]:
     p = Path(path)
@@ -120,13 +129,17 @@ def sanitize_psql_stderr(stderr: str) -> str:
 
 def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:
-        proc = subprocess.Popen(
-            ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
-            env=postgres_env,
-            stdout=subprocess.PIPE,
-            stderr=stderr_file,
-            text=True,
-        )
+        try:
+            proc = subprocess.Popen(
+                ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", sql],
+                env=postgres_env,
+                stdout=subprocess.PIPE,
+                stderr=stderr_file,
+                text=True,
+            )
+        except OSError as exc:
+            logging.error("Failed to start psql for %s: %s", label, exc.strerror or exc)
+            sys.exit(1)
         try:
             assert proc.stdout is not None
             for line in proc.stdout:
@@ -202,7 +215,7 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
         logging.error("Cannot read nodes file %s: %s", path, exc.strerror or exc)
         sys.exit(1)
 
-    return node_ids, summary, source_fingerprint(path)
+    return node_ids, summary, safe_source_fingerprint(path, "nodes")
 
 def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[str, int]]:
     node_ids = set()
@@ -604,7 +617,7 @@ def main():
             "kind": "jsonl",
             "source_kind": args.source_kind,
             "nodes_source": node_source,
-            "edges_source": source_fingerprint(args.edges_jsonl)
+            "edges_source": safe_source_fingerprint(args.edges_jsonl, "edges")
         }
     else:
         logging.error("Must provide either --postgres or both --nodes-jsonl and --edges-jsonl")
