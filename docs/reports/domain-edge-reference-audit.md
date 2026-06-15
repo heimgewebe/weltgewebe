@@ -231,11 +231,8 @@ Geeignet wenn:
 
 Konsequenz:
 
-```text
 Keine direkten FKs auf `domain_nodes(id)`, sondern expliziter
 Integrity-Guard oder Quarantäne-Report.
-
-```
 
 ## Empfehlung
 

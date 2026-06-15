@@ -61,7 +61,7 @@ def source_fingerprint(path: str) -> Dict[str, Any]:
 def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
     parsed = urlparse(database_url)
     if parsed.scheme not in {"postgres", "postgresql"}:
-        raise ValueError("DATABASE_URL must use postgres:// or postgresql:// URI format")
+        raise ValueError("DATABASE_URL must use a PostgreSQL URI with scheme postgres or postgresql")
     env = os.environ.copy()
 
     # Remove existing PG* env vars
@@ -198,8 +198,8 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
                     summary["node_ids_total"] += 1
                 except json.JSONDecodeError:
                     summary["node_invalid_json_records"] += 1
-    except FileNotFoundError:
-        logging.error("Nodes file not found: %s", path)
+    except OSError as exc:
+        logging.error("Cannot read nodes file %s: %s", path, exc.strerror or exc)
         sys.exit(1)
 
     return node_ids, summary, source_fingerprint(path)
@@ -265,8 +265,8 @@ def iter_jsonl_edges(path: str, edge_parse_summary: Dict[str, int]) -> Iterator[
                     yield obj
                 except json.JSONDecodeError:
                     edge_parse_summary["invalid_json_records"] += 1
-    except FileNotFoundError:
-        logging.error("Edges file not found: %s", path)
+    except OSError as exc:
+        logging.error("Cannot read edges file %s: %s", path, exc.strerror or exc)
         sys.exit(1)
 
 def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[str, int]) -> Iterator[Dict[str, Any]]:
@@ -548,7 +548,7 @@ def main():
     parser.add_argument("--nodes-jsonl", type=str, help="Path to nodes JSONL file")
     parser.add_argument("--edges-jsonl", type=str, help="Path to edges JSONL file")
     parser.add_argument("--postgres", action="store_true", help="Run against PostgreSQL runtime")
-    parser.add_argument("--source-kind", type=str, choices=["repo-fixture", "runtime", "unknown"], default="unknown", help="Source kind")
+    parser.add_argument("--source-kind", type=str, choices=["repo-fixture", "runtime", "unknown"], default="unknown", help="Source kind; use runtime for FK-readiness decisions")
     parser.add_argument("--format", type=str, choices=["json"], default="json", help="Output format")
     parser.add_argument("--show-ids", action="store_true", help="Show full IDs (not for committed reports)")
     parser.add_argument("--max-findings", type=int, default=100, help="Maximum number of findings to output")
@@ -590,7 +590,7 @@ def main():
 
         edges_path = Path(args.edges_jsonl)
         if not edges_path.is_file():
-            logging.error("Edges file not found: %s", args.edges_jsonl)
+            logging.error("Cannot read edges file %s: not a regular file", args.edges_jsonl)
             sys.exit(1)
 
         edge_parse_summary = {

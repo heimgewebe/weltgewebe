@@ -41,7 +41,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nodes_file:
             result = run_script("--nodes-jsonl", nodes_file.name, "--edges-jsonl", "does_not_exist.jsonl")
             self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Edges file not found", result.stderr)
+            self.assertIn("Cannot read edges file", result.stderr)
             self.assertNotIn("Traceback", result.stderr)
 
     def test_all_typed_node_references_valid(self):
@@ -428,8 +428,6 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual({f["type_hint_type"] for f in findings}, {"int", "dict"})
             self.assertEqual({f["type_hint"] for f in findings}, {"<int>", "<dict>"})
 
-
-
     def test_empty_edge_id_is_malformed(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
             nf.write('{"id": "node-a"}\n')
@@ -497,8 +495,6 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         for key in env:
             self.assertNotIn("unknown", key.lower())
 
-
-
     def test_unknown_string_type_hint_is_redacted_when_not_safe(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
             nf.write('{"id": "node-a"}\n')
@@ -514,7 +510,6 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             finding = data["findings"][0]
             self.assertTrue(finding["type_hint"].startswith("type_hint:sha256:"))
 
-
     def test_postgres_env_rejects_libpq_dsn_string(self):
         from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
 
@@ -523,14 +518,13 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
                 "host=localhost port=5432 user=postgres dbname=mydb"
             )
 
-
     def test_postgres_rejects_libpq_dsn_before_psql_preflight(self):
         result = run_script(
             "--postgres",
             env={"DATABASE_URL": "host=localhost port=5432 user=postgres dbname=mydb"},
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("DATABASE_URL must use postgres:// or postgresql:// URI format", result.stderr)
+        self.assertIn("DATABASE_URL must use a PostgreSQL URI with scheme postgres or postgresql", result.stderr)
 
     def test_empty_string_type_hint_is_treated_as_untyped(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as nf, tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as ef:
@@ -559,6 +553,45 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
             self.assertEqual(data["summary"]["typed_unknown_references"], 0)
             self.assertNotIn('"type_hint": ""', result.stdout)
+
+    def test_edges_path_directory_fails_without_traceback(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as nf, tempfile.TemporaryDirectory() as edge_dir:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+
+            result = run_script(
+                "--nodes-jsonl",
+                nf.name,
+                "--edges-jsonl",
+                edge_dir,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("edges file", result.stderr.lower())
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_nodes_path_directory_fails_without_traceback(self):
+        with tempfile.TemporaryDirectory() as node_dir, tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as ef:
+            ef.write('{"id": "edge-1", "source_id": "node-a", "target_id": "node-b"}\n')
+            ef.flush()
+
+            result = run_script(
+                "--nodes-jsonl",
+                node_dir,
+                "--edges-jsonl",
+                ef.name,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("nodes file", result.stderr.lower())
+            self.assertNotIn("Traceback", result.stderr)
+
+    def test_postgres_edges_query_orders_by_id(self):
+        import inspect
+        from scripts.docmeta.audit_domain_edge_references import iter_postgres_edges
+
+        source = inspect.getsource(iter_postgres_edges)
+        self.assertIn("ORDER BY id", source)
 
 if __name__ == "__main__":
     unittest.main()
