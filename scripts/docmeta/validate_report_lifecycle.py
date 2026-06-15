@@ -12,7 +12,6 @@ if __package__ in {None, ""}:
 from scripts.docmeta.docmeta import parse_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPORTS_DIR = REPO_ROOT / "docs" / "reports"
 
 
 @dataclass(frozen=True)
@@ -25,9 +24,13 @@ class Finding:
 
 
 def _string_value(value: object) -> str:
+    if value is None:
+        return ""
     if isinstance(value, str):
         return value.strip()
-    return ""
+    if isinstance(value, (list, tuple, set, dict)):
+        return ""
+    return str(value).strip()
 
 
 def _load_frontmatter(path: Path) -> dict[str, object]:
@@ -103,9 +106,16 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
     return findings
 
 
-def _build_summary(findings: list[Finding], report_count: int) -> dict[str, int]:
+def _build_summary(
+    findings: list[Finding],
+    files_scanned: int,
+    reports_checked: int,
+    reports_ignored_non_report: int
+) -> dict[str, int]:
     summary = {
-        "reports_checked": report_count,
+        "files_scanned": files_scanned,
+        "reports_checked": reports_checked,
+        "reports_ignored_non_report": reports_ignored_non_report,
         "findings_total": len(findings),
         "missing_status": 0,
         "missing_lifecycle": 0,
@@ -129,7 +139,9 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         "",
         "| Metric | Value |",
         "| --- | ---: |",
+        f"| files_scanned | {summary['files_scanned']} |",
         f"| reports_checked | {summary['reports_checked']} |",
+        f"| reports_ignored_non_report | {summary['reports_ignored_non_report']} |",
         f"| findings_total | {summary['findings_total']} |",
         f"| missing_status | {summary['missing_status']} |",
         f"| missing_lifecycle | {summary['missing_lifecycle']} |",
@@ -154,14 +166,27 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
 def run(root: Path, mode: str) -> tuple[str, int]:
     paths = _iter_report_paths(root)
     all_findings = []
+    reports_checked = 0
+    reports_ignored_non_report = 0
+
     for p in paths:
         fm = _load_frontmatter(p)
+        doc_type = _string_value(fm.get("doc_type")).strip().lower()
+        if doc_type == "report":
+            reports_checked += 1
+        else:
+            reports_ignored_non_report += 1
         findings = _validate_report(p, fm, root)
         all_findings.extend(findings)
 
     all_findings.sort(key=lambda f: (f.path, f.code))
 
-    summary = _build_summary(all_findings, len(paths))
+    summary = _build_summary(
+        all_findings,
+        files_scanned=len(paths),
+        reports_checked=reports_checked,
+        reports_ignored_non_report=reports_ignored_non_report,
+    )
     report_str = _render_report(all_findings, summary, mode)
     return report_str, 0
 

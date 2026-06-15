@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import datetime
 import io
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.docmeta.validate_report_lifecycle import main, run, _validate_report, Finding
+from scripts.docmeta.validate_report_lifecycle import main, run, _validate_report
 
 
 def write_report(root: Path, name: str, frontmatter: str, body: str = "Body\n") -> Path:
@@ -180,9 +181,111 @@ status: active
         self.assertEqual(exit_code, 0)
         self.assertIn("# Report Lifecycle Validation", rendered)
         self.assertIn("Mode: report", rendered)
+        self.assertIn("| files_scanned |", rendered)
         self.assertIn("| reports_checked |", rendered)
+        self.assertIn("| reports_ignored_non_report |", rendered)
         self.assertIn("| findings_total |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
+
+    def test_validate_report_with_datetime_date_review_after(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "review_after": datetime.date(2026, 7, 13),
+            "lifecycle": "audit"
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertNotIn("missing_review_after", codes)
+
+    def test_run_with_unquoted_date_in_frontmatter(self) -> None:
+        write_report(
+            self.tmp_root,
+            "example.md",
+            """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+lifecycle: audit
+review_after: 2026-07-13
+            """
+        )
+        rendered, exit_code = run(self.tmp_root, "report")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("| missing_review_after | 0 |", rendered)
+
+    def test_run_scans_and_checks_precise_metrics(self) -> None:
+        # Fixture 1: a report
+        write_report(
+            self.tmp_root,
+            "example_report.md",
+            """
+id: reports.example_report
+title: Example Report
+doc_type: report
+status: active
+lifecycle: audit
+review_after: 2026-07-13
+            """
+        )
+        # Fixture 2: a reference (non-report)
+        write_report(
+            self.tmp_root,
+            "example_ref.md",
+            """
+id: reports.example_ref
+title: Example Reference
+doc_type: reference
+status: active
+            """
+        )
+
+        rendered, exit_code = run(self.tmp_root, "report")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("| files_scanned | 2 |", rendered)
+        self.assertIn("| reports_checked | 1 |", rendered)
+        self.assertIn("| reports_ignored_non_report | 1 |", rendered)
+
+    def test_blank_frontmatter_values_are_missing(self) -> None:
+        write_report(
+            self.tmp_root,
+            "example.md",
+            """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+lifecycle:
+review_after:
+            """
+        )
+        rendered, exit_code = run(self.tmp_root, "report")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("missing_lifecycle", rendered)
+        self.assertIn("missing_review_after", rendered)
+
+    def test_blank_owner_task_is_missing_for_lifecycle_state_active(self) -> None:
+        write_report(
+            self.tmp_root,
+            "example.md",
+            """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task:
+review_after: 2026-07-13
+            """
+        )
+        rendered, exit_code = run(self.tmp_root, "report")
+        self.assertEqual(exit_code, 0)
+        self.assertIn("missing_owner_task", rendered)
 
 
 if __name__ == "__main__":
