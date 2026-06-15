@@ -31,12 +31,18 @@
       "name": "static-config-proven",
       "status": "PROVEN",
       "scope": "code+docs (static)",
-      "evidence": [
-        "map-style/style.json",
-        "apps/web/src/lib/map/basemap.ts",
-        "apps/web/src/lib/map/config/basemap.current.ts",
-        "apps/web/tests/basemap.spec.ts"
-      ],
+      "evidence": {
+        "files": [
+          "map-style/style.json",
+          "apps/web/src/lib/map/basemap.ts",
+          "apps/web/src/lib/map/config/basemap.current.ts",
+          "apps/web/tests/basemap.spec.ts"
+        ],
+        "ci_runs": [],
+        "jobs": [],
+        "artifacts": [],
+        "description": "Static configuration and basic unit tests"
+      },
       "does_not_establish": ["runtime_delivery", "rendering"]
     },
     {
@@ -44,10 +50,16 @@
       "name": "mocked-client-path-proven",
       "status": "PROVEN",
       "scope": "test (mocked)",
-      "evidence": [
-        "apps/web/tests/basemap-client-integration.spec.ts",
-        "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
-      ],
+      "evidence": {
+        "files": [
+          "apps/web/tests/basemap-client-integration.spec.ts",
+          "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
+        ],
+        "ci_runs": [],
+        "jobs": [],
+        "artifacts": [],
+        "description": "Mocked client integration tests"
+      },
       "does_not_establish": ["real_http_backend_delivery", "real_content"]
     },
     {
@@ -56,8 +68,11 @@
       "status": "PROVEN",
       "scope": "ci|synthetic",
       "evidence": {
-        "job": "basemap-range-delivery-proof",
-        "runs": [27028165272, 26535801825, 26447341921, 25970466659],
+        "files": ["infra/caddy/Caddyfile.proof"],
+        "ci_runs": [27028165272, 26535801825, 26447341921, 25970466659],
+        "jobs": ["basemap-range-delivery-proof"],
+        "artifacts": [],
+        "description": "Synthetic range delivery check in CI",
         "caddy_image": "caddy:2.7",
         "caddy_config": "infra/caddy/Caddyfile.proof",
         "artifact_kind": "synthetic"
@@ -70,8 +85,11 @@
       "status": "PROVEN",
       "scope": "ci|local|magic+hash",
       "evidence": {
-        "job": "basemap-pmtiles-content-proof",
-        "runs": [27028165272, 26535801825, 26447341921],
+        "files": ["docs/proofs/basemap-hamburg-artifact-proof.md"],
+        "ci_runs": [27028165272, 26535801825, 26447341921],
+        "jobs": ["basemap-pmtiles-content-proof"],
+        "artifacts": [],
+        "description": "Real PMTiles magic byte check in CI",
         "guard_scope": "pmtiles-content",
         "local_proof": "docs/proofs/basemap-hamburg-artifact-proof.md"
       },
@@ -82,8 +100,20 @@
       "name": "real-pmtiles-structure-proven",
       "status": "NOT_PROVEN",
       "scope": "none",
-      "evidence": "guard prints 'NOT_PROVEN: Deep PMTiles structure validation (tile index, directory, metadata integrity)'",
-      "gap": "pmtiles_v3_header_parse | root_directory_offset_length | metadata_or_tile_read"
+      "evidence": {
+        "files": [],
+        "ci_runs": [],
+        "jobs": [],
+        "artifacts": [],
+        "description": "Deep PMTiles structure validation (tile index, directory, metadata integrity) - NOT_PROVEN"
+      },
+      "does_not_establish": [
+        "pmtiles_structure",
+        "tile_directory_integrity",
+        "metadata_integrity",
+        "tile_read"
+      ],
+      "gap_description": "pmtiles_v3_header_parse | root_directory_offset_length | metadata_or_tile_read"
     },
     {
       "id": "P5",
@@ -91,8 +121,11 @@
       "status": "PROVEN",
       "scope": "ci|real_map|via-vite-middleware",
       "evidence": {
-        "job": "basemap-visual-proof",
-        "runs": [27028165272, 26535801825],
+        "files": ["apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts"],
+        "ci_runs": [27028165272, 26535801825],
+        "jobs": ["basemap-visual-proof"],
+        "artifacts": [],
+        "description": "Browser real tile load check in CI via Vite middleware",
         "job_ids": [79773804577, 78164572577],
         "test": "apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts",
         "signals": ["isStyleLoaded=true", "http_206_range", "canvas_visible", "remote_violations=0"]
@@ -105,8 +138,11 @@
       "status": "PARTIAL",
       "scope": "ci|screenshot-no-baseline",
       "evidence": {
+        "files": [],
+        "ci_runs": [27028165272],
+        "jobs": [],
         "artifacts": ["screenshot.png", "proof-summary.json"],
-        "run": 27028165272,
+        "description": "Visual artifacts screenshot upload",
         "job_id": 79773804577
       },
       "does_not_establish": ["visual_correctness_pixel_or_baseline"],
@@ -118,11 +154,25 @@
       "status": "NOT_PROVEN",
       "scope": "none",
       "evidence": {
+        "files": [
+          "infra/caddy/Dockerfile",
+          "infra/caddy/Caddyfile.heim",
+          "infra/caddy/Caddyfile.prod"
+        ],
+        "ci_runs": [],
+        "jobs": [],
+        "artifacts": [],
+        "description": "Production-like Caddy server config check",
         "proof_caddy": "caddy:2.7 + infra/caddy/Caddyfile.proof (oder Vite-Middleware)",
         "prod_caddy": "infra/caddy/Dockerfile = caddy:2.8.4 + caddy-ratelimit@v0.1.0, Caddyfile.heim",
         "prod_net": "infra/caddy/Caddyfile.prod ohne /local-basemap/ route"
       },
-      "gap": "version_drift | config_surface_drift | heim_vs_net_architecture"
+      "does_not_establish": [
+        "production_caddy_version_match",
+        "ratelimit_integration",
+        "production_caddy_routing"
+      ],
+      "gap_description": "version_drift | config_surface_drift | heim_vs_net_architecture"
     }
   ],
   "reproducibility": {

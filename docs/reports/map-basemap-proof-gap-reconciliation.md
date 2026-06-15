@@ -113,7 +113,7 @@ ent-driften".
 - Build: `scripts/basemap/build-hamburg-pmtiles.sh` (Planetiler `0.8.2`, gepinnt per
   Image-Digest; OSM-Input `hamburg-250101.osm.pbf` mit SHA256 verifiziert).
 - Guard-Scope `pmtiles-content`: lokale Datei nicht-leer + Magic `PMTiles` an Offset 0
-  + optional SHA256 + via Caddy ausgelieferte Magic-Bytes `0-6` (`PMTiles`) bei HTTP 206.
+  - optional SHA256 + via Caddy ausgelieferte Magic-Bytes `0-6` (`PMTiles`) bei HTTP 206.
 - CI-Job `basemap-pmtiles-content-proof` baut das echte Hamburg-Artefakt im Lauf,
   serviert es ueber Caddy, prueft Magic + SHA256. Blockierend.
 - **Bewertung:** echtes Artefakt + Magic + intra-run SHA256 bewiesen; **keine**
@@ -185,7 +185,9 @@ ent-driften".
   `23948909` Bytes.
 - Gleicher gepinnter Planetiler-Digest, gleicher gepinnter OSM-Input-Hash —
   trotzdem **unterschiedliche Ausgabe** (Δ 32 Bytes). Der Build deklariert selbst:
-  „outputs are not yet strictly reproducible".
+  „outputs are not yet strictly reproducible". Die Ursache ist noch nicht belegt.
+  Plausible Kandidaten sind PMTiles-/MBTiles-Metadaten, Build-Zeitstempel, SQLite/Page-Layout
+  oder Planetiler-Ausgabedetails. Dieser Report behauptet daher nur die Abweichung, nicht die Ursache.
 - Konsequenz: Der SHA256-Check des Guards ist **intra-run/selbstreferenziell** (er
   hasht die soeben gebaute Datei und vergleicht sie mit der im selben Lauf
   geschriebenen `meta.json`). Er beweist Integritaet innerhalb eines Laufs, **nicht**

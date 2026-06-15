@@ -175,6 +175,6 @@ Die visuelle Kartenabnahme in GitHub Actions ist inzwischen PROVEN (Job
 echtes Artefakt via Vite-Middleware, nicht Caddy). Offen bleiben die
 Produktionsentscheidung fuer den Basemap-Modus, die visuelle Korrektheit
 (Pixel-/Baseline-Vergleich), ein produktionsnaher Caddy-Proof (Proof nutzt
-`caddy:2.7`, Produktion baut `caddy:2.8.4`) und die tiefe
+`caddy:2.7`, der Produktions-/Heim-Pfad basiert auf `caddy:2.8.4`) und die tiefe
 PMTiles-Strukturvalidierung — Einordnung in
 `docs/reports/map-basemap-proof-gap-reconciliation.md`.
