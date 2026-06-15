@@ -209,6 +209,12 @@ describe("parseMapUrlState", () => {
     expect(result.invalidKeys).toContain("tab");
   });
 
+  it("records each invalid known key at most once", () => {
+    const result = parse("focus=node:&focus=node:b&lens=nope&lens=filter");
+    expect(result.invalidKeys.filter((key) => key === "focus")).toHaveLength(1);
+    expect(result.invalidKeys.filter((key) => key === "lens")).toHaveLength(1);
+  });
+
   it("combines several invalid values without throwing", () => {
     const result = parse("focus=node:&lens=nope&compose=edge&tab=");
     expect(result.focus).toBeNull();

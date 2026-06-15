@@ -137,7 +137,9 @@ test.describe("Map URL addressing", () => {
     await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
   });
 
-  test("lens URL leaves prior composition state", async ({ page }) => {
+  test("navigating to lens URL does not show stale composition panel", async ({
+    page,
+  }) => {
     await page.goto("/map?compose=node");
     await expect(page.getByTestId("context-panel")).toBeVisible();
 
@@ -146,13 +148,39 @@ test.describe("Map URL addressing", () => {
     await expect(page.getByTestId("context-panel")).toHaveCount(0);
   });
 
-  test("lens URL leaves prior focus state", async ({ page }) => {
+  test("navigating to lens URL does not show stale focus panel", async ({
+    page,
+  }) => {
     await page.goto("/map?focus=node:url-node-1");
     await expect(page.getByTestId("context-panel")).toBeVisible();
 
     await page.goto("/map?lens=filter");
     await expect(page.getByTestId("filter-overlay")).toBeVisible();
     await expect(page.getByTestId("context-panel")).toHaveCount(0);
+  });
+
+  test("plain map URL does not show stale composition panel", async ({
+    page,
+  }) => {
+    await page.goto("/map?compose=node");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+
+    await page.goto("/map");
+    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.getByTestId("context-panel")).toHaveCount(0);
+    await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("search-overlay")).toHaveCount(0);
+  });
+
+  test("plain map URL does not show stale focus panel", async ({ page }) => {
+    await page.goto("/map?focus=node:url-node-1");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+
+    await page.goto("/map");
+    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.getByTestId("context-panel")).toHaveCount(0);
+    await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("search-overlay")).toHaveCount(0);
   });
 
   test("unresolved focus closes an already open lens instead of falling back to it", async ({

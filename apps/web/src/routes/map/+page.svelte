@@ -183,8 +183,10 @@
 
   // Separate locks: immediate intents fire once per distinct query; focus only
   // locks once its target is resolved, and retries while it stays unresolved.
-  let lastAppliedImmediateUrlSearch = '';
-  let lastResolvedFocusUrlSearch = '';
+  // `null` sentinels (not '') ensure the very first render — including plain
+  // `/map` with an empty query — runs through the effect and leaves stale state.
+  let lastAppliedImmediateUrlSearch: string | null = null;
+  let lastResolvedFocusUrlSearch: string | null = null;
   $: {
     const search = $page.url.search;
     const parsed = parseMapUrlState($page.url.searchParams);

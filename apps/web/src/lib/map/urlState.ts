@@ -100,6 +100,13 @@ export function isSupportedCompose(
   return value === "node";
 }
 
+/** Records a known key as invalid at most once (order of first sighting). */
+function addInvalidKey(invalidKeys: string[], key: string) {
+  if (!invalidKeys.includes(key)) {
+    invalidKeys.push(key);
+  }
+}
+
 /**
  * Reads a single value for a known key. A repeated known key (e.g.
  * `?focus=a&focus=b`) is ambiguous, so it is recorded as invalid and treated as
@@ -113,7 +120,7 @@ function getSingleParam(
   const values = searchParams.getAll(key);
   if (values.length === 0) return null;
   if (values.length > 1) {
-    invalidKeys.push(key);
+    addInvalidKey(invalidKeys, key);
     return null;
   }
   return values[0];
@@ -135,19 +142,19 @@ export function parseMapUrlState(
   const rawFocus = getSingleParam(searchParams, "focus", invalidKeys);
   const focus = parseFocusParam(rawFocus);
   if (rawFocus !== null && focus === null) {
-    invalidKeys.push("focus");
+    addInvalidKey(invalidKeys, "focus");
   }
 
   const rawLens = getSingleParam(searchParams, "lens", invalidKeys);
   const lens = isSupportedLens(rawLens) ? rawLens : null;
   if (rawLens !== null && lens === null) {
-    invalidKeys.push("lens");
+    addInvalidKey(invalidKeys, "lens");
   }
 
   const rawCompose = getSingleParam(searchParams, "compose", invalidKeys);
   const compose = isSupportedCompose(rawCompose) ? rawCompose : null;
   if (rawCompose !== null && compose === null) {
-    invalidKeys.push("compose");
+    addInvalidKey(invalidKeys, "compose");
   }
 
   // `tab` is tolerated parser-side only; it is not bound to UI tabs yet.
@@ -158,7 +165,7 @@ export function parseMapUrlState(
     if (rawTab.trim().length > 0) {
       tab = rawTab;
     } else {
-      invalidKeys.push("tab");
+      addInvalidKey(invalidKeys, "tab");
     }
   }
 

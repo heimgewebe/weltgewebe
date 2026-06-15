@@ -109,8 +109,8 @@ getrennt vom flüchtigen Kartenzustand. Aktuelle Zielsemantik gemäß
   direktes Erbe der bisherigen Kurzform `l` / `r` / `t`.
 
 Die Kurzform `l` / `r` / `t` ist das bisherige Altmodell und kein Zielcontract
-für neue Implementierung. Spätere Query-Navigation soll die semantische
-Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
+für neue Implementierung. Spätere URL-Adressierung und optionale Navigation soll
+die semantische Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
 
 - **Soll**: URL-Parameter und Kartenzustand sind klar getrennt dokumentiert; die
   URL-Schicht beschreibt Fokus-/Linsen-/Tab-Adressierung, nicht den flüchtigen
