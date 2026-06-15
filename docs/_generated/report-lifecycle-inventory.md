@@ -21,6 +21,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 23 |
 | files_missing_status | 0 |
+| files_with_lifecycle_state | 0 |
+| files_missing_lifecycle_state | 23 |
 | files_with_lifecycle | 0 |
 | files_missing_lifecycle | 23 |
 | files_with_owner_task | 0 |
@@ -44,59 +46,59 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 ## Reports
 
-| Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |
-| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
-| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  | 2 | 3 | 1 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  | 5 | 4 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  | 4 | 4 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  | 4 | 3 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  | 1 | 3 | 5 | lifecycle, owner_task, review_after |  |
-| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  | 5 | 3 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/cost-report.md | reference | active |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  | 7 | 3 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-backfill-proof.md | report | active |  |  |  |  | 3 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  | 0 | 3 | 7 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-edge-write-path-proof.md | report | active |  |  |  |  | 3 | 3 | 7 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-node-write-path-proof.md | report | active |  |  |  |  | 5 | 3 | 6 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  | 1 | 3 | 3 | lifecycle, owner_task, review_after |  |
-| docs/reports/domain-read-path-proof.md | report | active |  |  |  |  | 5 | 3 | 5 | lifecycle, owner_task, review_after |  |
-| docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-architekturkritik.md | report | active |  |  |  |  | 4 | 4 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  | 6 | 4 | 2 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsbericht.md | report | active |  |  |  |  | 2 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  | 17 | 4 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after |  |
-| docs/reports/planning-registration-findings.md | report | active |  |  |  |  | 1 | 3 | 2 | lifecycle, owner_task, review_after |  |
+| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |
+| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
+| docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  |  | 2 | 3 | 1 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  |  | 5 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  |  | 4 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  |  | 4 | 3 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  |  | 1 | 3 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 5 | 3 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/cost-report.md | reference | active |  |  |  |  |  | 0 | 3 | 0 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | draft |  |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-account-write-path-proof.md | report | active |  |  |  |  |  | 7 | 3 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-backfill-proof.md | report | active |  |  |  |  |  | 3 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-edge-create-semantics-preflight.md | report | active |  |  |  |  |  | 0 | 3 | 7 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-edge-write-path-proof.md | report | active |  |  |  |  |  | 3 | 3 | 7 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-node-write-path-proof.md | report | active |  |  |  |  |  | 5 | 3 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  |  | 1 | 3 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-read-path-proof.md | report | active |  |  |  |  |  | 5 | 3 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  |  | 1 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 4 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 7 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 17 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/planning-registration-findings.md | report | active |  |  |  |  |  | 1 | 3 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
 
 ## Absent Core Lifecycle Metadata
 
 | Path | Absent fields |
 | --- | --- |
-| docs/reports/agent-readiness-audit.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-persistence-next-step.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-persistence-readiness.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-persistence-runtime-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | lifecycle, owner_task, review_after |
-| docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after |
-| docs/reports/cost-report.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-account-email-uniqueness-audit.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-account-write-path-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-backfill-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-edge-create-semantics-preflight.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-edge-write-path-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-node-write-path-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-provider-role-finding.md | lifecycle, owner_task, review_after |
-| docs/reports/domain-read-path-proof.md | lifecycle, owner_task, review_after |
-| docs/reports/inwx-zone-reconciliation-plan.md | lifecycle, owner_task, review_after |
-| docs/reports/map-architekturkritik.md | lifecycle, owner_task, review_after |
-| docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after |
-| docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after |
-| docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after |
-| docs/reports/passkey-register-verify-prep.md | lifecycle, owner_task, review_after |
-| docs/reports/planning-registration-findings.md | lifecycle, owner_task, review_after |
+| docs/reports/agent-readiness-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-next-step.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-readiness.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-runtime-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/cost-report.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-account-email-uniqueness-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-account-write-path-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-backfill-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-edge-create-semantics-preflight.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-edge-write-path-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-node-write-path-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-provider-role-finding.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/domain-read-path-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/inwx-zone-reconciliation-plan.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/map-architekturkritik.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/map-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/passkey-register-verify-prep.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/planning-registration-findings.md | lifecycle, owner_task, review_after, lifecycle_state |
 
 ## Relations
 
@@ -119,7 +121,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/inwx-zone-reconciliation-plan.md | 4 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/reports/domain-provider-role-finding.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/map-architekturkritik.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-status-matrix.md |
-| docs/reports/map-status-matrix.md | 2 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/reports/map-architekturkritik.md |
+| docs/reports/map-status-matrix.md | 3 | relates_to | docs/blueprints/kartenklarheit-roadmap.md, docs/blueprints/ui-interaction-doctrine.md, docs/reports/map-architekturkritik.md |
 | docs/reports/optimierungsbericht.md | 4 | relates_to | docs/datenmodell.md, docs/policies/agent-reading-protocol.md, docs/reports/optimierungsstatus.md, docs/techstack.md |
 | docs/reports/optimierungsstatus.md | 4 | depends_on, relates_to | docs/policies/agent-reading-protocol.md, docs/reports/auth-persistence-readiness.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsbericht.md |
 | docs/reports/passkey-register-verify-prep.md | 4 | relates_to | docs/adr/ADR-0006__auth-magic-link-session-passkey.md, docs/blueprints/auth-roadmap.md, docs/reports/auth-status-matrix.md, docs/specs/auth-api.md |
@@ -213,6 +215,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/kartenklarheit-roadmap.md`
   - `docs/blueprints/kartenklarheit.md`
   - `docs/blueprints/map-roadmap.md`
+  - `docs/blueprints/ui-interaction-doctrine.md`
   - `docs/reports/map-architekturkritik.md`
   - `docs/roadmap.md`
 

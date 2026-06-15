@@ -19,8 +19,13 @@ PRIMARY_REFERENCE_SEARCH_PATHS = (
 DERIVED_REFERENCE_SEARCH_PATHS = (
     REPO_ROOT / "docs" / "_generated",
 )
-CORE_LIFECYCLE_FIELDS = ("lifecycle", "owner_task", "review_after")
-TERMINAL_STATUSES = {"superseded", "archived", "deprecated"}
+CORE_LIFECYCLE_FIELDS = (
+    "lifecycle",
+    "owner_task",
+    "review_after",
+    "lifecycle_state",
+)
+SUPERSESSION_REQUIRED_LIFECYCLE_STATES = {"superseded"}
 
 HEADER = """\
 ---
@@ -62,6 +67,7 @@ class ReportRecord:
     title: str
     doc_type: str
     status: str
+    lifecycle_state: str
     lifecycle: str
     owner_task: str
     review_after: str
@@ -431,7 +437,8 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
             sorted({relation.target for relation in relations if relation.target})
         )
         status = _string_value(frontmatter.get("status"))
-        normalized_status = status.lower()
+        lifecycle_state = _string_value(frontmatter.get("lifecycle_state"))
+        normalized_lifecycle_state = lifecycle_state.lower()
         superseded_by = _string_value(frontmatter.get("superseded_by"))
         records.append(
             ReportRecord(
@@ -441,6 +448,7 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
                 title=_string_value(frontmatter.get("title")),
                 doc_type=_string_value(frontmatter.get("doc_type")),
                 status=status,
+                lifecycle_state=lifecycle_state,
                 lifecycle=_string_value(frontmatter.get("lifecycle")),
                 owner_task=_string_value(frontmatter.get("owner_task")),
                 review_after=_string_value(frontmatter.get("review_after")),
@@ -453,7 +461,10 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
                 absent_core_lifecycle_fields=tuple(
                     field for field in CORE_LIFECYCLE_FIELDS if not _string_value(frontmatter.get(field))
                 ),
-                missing_supersession_target=normalized_status in TERMINAL_STATUSES and not superseded_by,
+                missing_supersession_target=(
+                    normalized_lifecycle_state in SUPERSESSION_REQUIRED_LIFECYCLE_STATES
+                    and not superseded_by
+                ),
                 frontmatter_parse_warning=warning,
             )
         )
@@ -468,6 +479,8 @@ def build_summary(records: list[ReportRecord]) -> list[tuple[str, int]]:
         ("files_without_frontmatter", sum(1 for record in records if not record.has_frontmatter)),
         ("files_with_status", sum(1 for record in records if record.status)),
         ("files_missing_status", sum(1 for record in records if not record.status)),
+        ("files_with_lifecycle_state", sum(1 for record in records if record.lifecycle_state)),
+        ("files_missing_lifecycle_state", sum(1 for record in records if not record.lifecycle_state)),
         ("files_with_lifecycle", sum(1 for record in records if record.lifecycle)),
         ("files_missing_lifecycle", sum(1 for record in records if not record.lifecycle)),
         ("files_with_owner_task", sum(1 for record in records if record.owner_task)),
@@ -512,17 +525,18 @@ def render_inventory(records: list[ReportRecord]) -> str:
             "",
             "## Reports",
             "",
-            "| Path | doc_type | status | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |",
-            "| --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
+            "| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for record in records:
         sections.append(
-            "| {path} | {doc_type} | {status} | {lifecycle} | {owner_task} | {review_after} | "
+            "| {path} | {doc_type} | {status} | {lifecycle_state} | {lifecycle} | {owner_task} | {review_after} | "
             "{superseded_by} | {primary_refs} | {derived_refs} | {relations} | {absent} | {terminal_supersession} |".format(
                 path=record.path,
                 doc_type=_cell(record.doc_type),
                 status=_cell(record.status),
+                lifecycle_state=_cell(record.lifecycle_state),
                 lifecycle=_cell(record.lifecycle),
                 owner_task=_cell(record.owner_task),
                 review_after=_cell(record.review_after),
@@ -613,12 +627,12 @@ def render_inventory(records: list[ReportRecord]) -> str:
     if terminal_gap_records:
         sections.extend(
             [
-                "| Path | Status | Diagnostic |",
+                "| Path | lifecycle_state | Diagnostic |",
                 "| --- | --- | --- |",
             ]
         )
         for record in terminal_gap_records:
-            sections.append(f"| {record.path} | {_cell(record.status)} | missing superseded_by target |")
+            sections.append(f"| {record.path} | {_cell(record.lifecycle_state)} | missing superseded_by target |")
     else:
         sections.append("None.")
     sections.append("")
