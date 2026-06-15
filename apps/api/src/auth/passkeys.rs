@@ -37,6 +37,10 @@ const REGISTRATION_TTL_SECS: i64 = 300;
 /// TTL for passkey registration grants (5 minutes — matches step-up token and registration TTL).
 const REGISTRATION_GRANT_TTL_SECS: i64 = 300;
 
+/// TTL for in-progress passkey authentications / login ceremonies (5 minutes —
+/// matches the registration TTL convention).
+const AUTHENTICATION_TTL_SECS: i64 = 300;
+
 /// Error returned when inserting a passkey into [`PasskeyStore`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PasskeyStoreInsertError {
@@ -301,6 +305,100 @@ pub fn start_passkey_registration(
         input.user_display_name,
         exclude_credentials,
     )
+}
+
+// ── Authentication (login) options & state store ──────────────────────────
+
+/// Begin a passkey authentication (login) ceremony.
+///
+/// `allow_credentials` MUST contain the passkeys the ceremony is allowed to
+/// satisfy — i.e. the registered passkeys of the account identified by the
+/// `auth/options` request. webauthn-rs pins `UserVerificationPolicy::Required`
+/// for this ceremony. The returned [`PasskeyAuthentication`] state MUST be stored
+/// server-side (single-use) until the client completes the ceremony via
+/// `auth/verify`; it pairs with the `RequestChallengeResponse` and is required to
+/// verify the assertion.
+pub fn start_passkey_authentication(
+    webauthn: &Webauthn,
+    allow_credentials: &[Passkey],
+) -> Result<(RequestChallengeResponse, PasskeyAuthentication), WebauthnError> {
+    webauthn.start_passkey_authentication(allow_credentials)
+}
+
+/// An in-progress passkey authentication, kept until the client calls
+/// `auth/verify`.
+struct PendingAuthentication {
+    account_id: String,
+    state: PasskeyAuthentication,
+    created_at: DateTime<Utc>,
+}
+
+/// In-memory store for in-progress passkey authentications (login ceremonies).
+///
+/// Keyed by a random opaque ID returned to the client so it can correlate the
+/// `auth/options` response with the subsequent `auth/verify` request.
+///
+/// This store is deliberately **separate** from [`PasskeyRegistrationStore`]:
+/// registration state (`PasskeyRegistration`) and authentication state
+/// (`PasskeyAuthentication`) are distinct WebAuthn ceremonies and must never be
+/// interchangeable. Like the registration store it is in-memory, TTL-bounded
+/// (5 minutes) and single-use.
+#[derive(Clone, Default)]
+pub struct PasskeyAuthenticationStore {
+    store: Arc<TokioRwLock<HashMap<String, PendingAuthentication>>>,
+}
+
+impl PasskeyAuthenticationStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Store a new in-progress authentication bound to `account_id`. Returns the
+    /// opaque authentication ID that must be sent back by the client.
+    pub async fn insert(&self, account_id: String, state: PasskeyAuthentication) -> String {
+        let id = Uuid::new_v4().to_string();
+        let pending = PendingAuthentication {
+            account_id,
+            state,
+            created_at: Utc::now(),
+        };
+        let mut store = self.store.write().await;
+        // Opportunistic cleanup of expired entries.
+        let cutoff = Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS);
+        store.retain(|_, v| v.created_at > cutoff);
+        store.insert(id.clone(), pending);
+        id
+    }
+
+    /// Consume a pending authentication by ID (single-use). Returns the bound
+    /// `account_id` together with the WebAuthn authentication state, or `None` if
+    /// the entry does not exist, has already been consumed, or has expired.
+    ///
+    /// Unlike registration consume there is no account binding to check here: the
+    /// caller of `auth/verify` is unauthenticated and presents only the opaque
+    /// authentication ID. Possession of the ID alone grants nothing — a valid
+    /// assertion over the stored challenge is still required by the caller before
+    /// any session is created.
+    pub async fn consume(
+        &self,
+        authentication_id: &str,
+    ) -> Option<(String, PasskeyAuthentication)> {
+        let mut store = self.store.write().await;
+        let cutoff = Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS);
+        let is_expired = match store.get(authentication_id) {
+            None => return None,
+            Some(entry) => entry.created_at <= cutoff,
+        };
+        if is_expired {
+            // Clean up the stale entry and reject.
+            store.remove(authentication_id);
+            return None;
+        }
+        // Valid: single-use consume.
+        store
+            .remove(authentication_id)
+            .map(|pending| (pending.account_id, pending.state))
+    }
 }
 
 // ── Registration Grant Store ──────────────────────────────────────────────
@@ -619,6 +717,41 @@ webauthn_rp_id: example.com\n";
         assert!(
             correct.is_some(),
             "correct account must still consume after a wrong-account attempt"
+        );
+    }
+
+    #[tokio::test]
+    async fn authentication_store_insert_and_consume_is_single_use() {
+        let store = PasskeyAuthenticationStore::new();
+        let webauthn = test_webauthn();
+        // Proves a passkey is accepted by the authentication-ceremony start.
+        let (_, state) = webauthn
+            .start_passkey_authentication(&[test_passkey(1)])
+            .expect("start_passkey_authentication should accept a credential");
+
+        let id = store.insert("acct-1".to_string(), state).await;
+
+        let consumed = store.consume(&id).await;
+        assert!(consumed.is_some(), "consume should succeed once");
+        assert_eq!(
+            consumed.unwrap().0,
+            "acct-1",
+            "consume must return the bound account_id"
+        );
+
+        let again = store.consume(&id).await;
+        assert!(
+            again.is_none(),
+            "consume must fail on second attempt (single-use)"
+        );
+    }
+
+    #[tokio::test]
+    async fn authentication_store_unknown_id_returns_none() {
+        let store = PasskeyAuthenticationStore::new();
+        assert!(
+            store.consume("no-such-authentication-id").await.is_none(),
+            "unknown authentication id must fail-closed"
         );
     }
 

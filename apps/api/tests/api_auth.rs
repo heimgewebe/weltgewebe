@@ -123,6 +123,7 @@ fn test_state() -> Result<ApiState> {
         webauthn: None,
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
         passkeys: Default::default(),
     })
 }
@@ -5140,5 +5141,240 @@ async fn passkey_register_options_excludes_existing_credentials() -> Result<()> 
     let decoded_id = URL_SAFE_NO_PAD.decode(id_b64)?;
     assert_eq!(decoded_id, expected_cred_id);
 
+    Ok(())
+}
+
+// ── Passkey Login (Authentication) backend — PR 1 ─────────────────────────
+//
+// Backend-only slice: the *positive* (real-assertion) path is intentionally
+// left to the browser / virtual-authenticator proof (PR 2). These tests cover
+// the option ceremony, the fail-closed error paths, single-use state, and the
+// hard cookie invariant: a session cookie is set ONLY on a successful verify.
+
+/// Start a real login ceremony via `auth/options` and return its
+/// `authentication_id`. The account must already own a passkey.
+async fn start_auth_ceremony(app: &Router, email: &str) -> Result<String> {
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(format!(r#"{{"email":"{email}"}}"#)))?;
+    let res = app.clone().oneshot(req).await?;
+    assert_eq!(
+        res.status(),
+        StatusCode::OK,
+        "auth/options must succeed to start a ceremony"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    Ok(json["authentication_id"]
+        .as_str()
+        .context("authentication_id must be present")?
+        .to_string())
+}
+
+fn seed_passkey(state: &ApiState, account_id: &str, seed: u8) -> Result<()> {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+    let cred_id_b64 = URL_SAFE_NO_PAD.encode([seed; 32]);
+    state
+        .passkeys
+        .insert(
+            account_id.to_string(),
+            mock_passkey_with_credential_id(&cred_id_b64)?,
+        )
+        .expect("seed passkey must insert");
+    Ok(())
+}
+
+/// `auth/options` returns options + an authentication_id and never sets a cookie.
+#[tokio::test]
+async fn passkey_auth_options_returns_options_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    seed_passkey(&state, "u1", 7)?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::OK);
+    assert!(
+        !res.headers().contains_key(axum::http::header::SET_COOKIE),
+        "auth/options must never set a session cookie"
+    );
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(
+        json.get("authentication_id")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.is_empty()),
+        "must return a non-empty authentication_id"
+    );
+    assert!(
+        json.get("options").is_some(),
+        "must return WebAuthn options"
+    );
+    Ok(())
+}
+
+/// `auth/options` fail-closes with 503 when WebAuthn is unconfigured (no cookie).
+#[tokio::test]
+async fn passkey_auth_options_requires_webauthn_config() -> Result<()> {
+    let state = test_state_with_accounts()?; // webauthn is None
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(json["error"], "PASSKEYS_NOT_CONFIGURED");
+    Ok(())
+}
+
+/// `auth/options` fail-closes uniformly for an unknown identifier *and* for a
+/// known account without a passkey — same status, no cookie either way.
+#[tokio::test]
+async fn passkey_auth_options_no_credentials_fails_closed_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?; // u1 exists but has NO passkey seeded
+    let app = app_with_auth(state);
+
+    // Known account, but without a registered passkey.
+    let known_no_passkey = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+    let res = app.clone().oneshot(known_no_passkey).await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+
+    // Entirely unknown identifier — indistinguishable response.
+    let unknown = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":"nobody@example.com"}"#))?;
+    let res2 = app.oneshot(unknown).await?;
+    assert_eq!(res2.status(), StatusCode::NOT_FOUND);
+    assert!(!res2.headers().contains_key(axum::http::header::SET_COOKIE));
+    Ok(())
+}
+
+/// `auth/options` rejects a malformed/empty request without a cookie.
+#[tokio::test]
+async fn passkey_auth_options_rejects_malformed_request_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":""}"#))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    Ok(())
+}
+
+/// `auth/verify` fail-closes with 503 when WebAuthn is unconfigured (no cookie).
+#[tokio::test]
+async fn passkey_auth_verify_requires_webauthn_config() -> Result<()> {
+    let state = test_state_with_accounts()?; // webauthn is None
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(
+            r#"{"authentication_id":"x","credential":{}}"#,
+        ))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    Ok(())
+}
+
+/// `auth/verify` with an unknown authentication_id is rejected without a cookie.
+#[tokio::test]
+async fn passkey_auth_verify_unknown_state_rejected_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(
+            r#"{"authentication_id":"does-not-exist","credential":{}}"#,
+        ))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(json["error"], "AUTHENTICATION_INVALID");
+    Ok(())
+}
+
+/// `auth/verify` with a malformed assertion over a real, freshly issued state is
+/// rejected as CREDENTIAL_INVALID without a cookie (and consumes the state).
+#[tokio::test]
+async fn passkey_auth_verify_invalid_assertion_rejected_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    seed_passkey(&state, "u1", 9)?;
+    let app = app_with_auth(state);
+
+    let auth_id = start_auth_ceremony(&app, "u1@example.com").await?;
+
+    let req = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"authentication_id":"{auth_id}","credential":{{"not":"a-real-assertion"}}}}"#
+        )))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(json["error"], "CREDENTIAL_INVALID");
+    Ok(())
+}
+
+/// `auth/verify` consumes the authentication state single-use: a second attempt
+/// with the same authentication_id is rejected as unknown, without a cookie.
+#[tokio::test]
+async fn passkey_auth_verify_reused_state_rejected_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    seed_passkey(&state, "u1", 11)?;
+    let app = app_with_auth(state);
+
+    let auth_id = start_auth_ceremony(&app, "u1@example.com").await?;
+
+    // First verify consumes the state (and fails the bogus assertion).
+    let first = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"authentication_id":"{auth_id}","credential":{{}}}}"#
+        )))?;
+    let res1 = app.clone().oneshot(first).await?;
+    assert_eq!(res1.status(), StatusCode::BAD_REQUEST);
+    assert!(!res1.headers().contains_key(axum::http::header::SET_COOKIE));
+    let b1 = body::to_bytes(res1.into_body(), usize::MAX).await?;
+    let j1: serde_json::Value = serde_json::from_slice(&b1)?;
+    assert_eq!(j1["error"], "CREDENTIAL_INVALID");
+
+    // Second verify with the same id is rejected as unknown (single-use).
+    let second = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"authentication_id":"{auth_id}","credential":{{}}}}"#
+        )))?;
+    let res2 = app.oneshot(second).await?;
+    assert_eq!(res2.status(), StatusCode::BAD_REQUEST);
+    assert!(!res2.headers().contains_key(axum::http::header::SET_COOKIE));
+    let b2 = body::to_bytes(res2.into_body(), usize::MAX).await?;
+    let j2: serde_json::Value = serde_json::from_slice(&b2)?;
+    assert_eq!(j2["error"], "AUTHENTICATION_INVALID");
     Ok(())
 }

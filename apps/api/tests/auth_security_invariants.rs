@@ -136,6 +136,7 @@ fn build_state() -> Result<ApiState> {
         webauthn: None,
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
         passkeys: Default::default(),
     })
 }
@@ -396,6 +397,14 @@ const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[
     // Magic-link request/consume are pre-session or redirect-driven entry points with their own flow handling.
     ("POST", "/auth/magic-link/request"),
     ("POST", "/auth/magic-link/consume"),
+    // Passkey login (auth/options + auth/verify) are pre-session entry points: the
+    // request carries no session cookie, so `require_csrf` skips them (step 3 of the
+    // middleware) — exactly like magic-link request/consume above. There is no
+    // ambient session authority to abuse, and `auth/verify` is authoritative: it
+    // consumes single-use server-side state and verifies a real WebAuthn assertion
+    // before any session is created. They are therefore exempt, not covered.
+    ("POST", "/auth/passkeys/auth/options"),
+    ("POST", "/auth/passkeys/auth/verify"),
     // Logout intentionally remains exempt so a sign-out action can be executed without the CSRF middleware path.
     ("POST", "/auth/logout"),
 ];
@@ -583,4 +592,31 @@ fn csrf_mutating_route_drift_guard_matches_router_declarations() {
         "CSRF policy lists contain routes that are no longer declared: {}",
         format_route_set(&stale_routes)
     );
+}
+
+/// The passkey login routes are classified as CSRF-exempt (pre-session entry
+/// points skipped by `require_csrf`), not covered. This locks the deliberate
+/// classification so a future drift fix cannot silently move them into the
+/// covered set, which would imply a protection the middleware does not apply.
+#[test]
+fn passkey_login_routes_are_classified_csrf_exempt() {
+    let exempt = route_set(CSRF_EXEMPT_MUTATING_ROUTES);
+    let covered = route_set(CSRF_COVERED_MUTATING_ROUTES);
+
+    for route in [
+        (
+            "POST".to_string(),
+            "/auth/passkeys/auth/options".to_string(),
+        ),
+        ("POST".to_string(), "/auth/passkeys/auth/verify".to_string()),
+    ] {
+        assert!(
+            exempt.contains(&route),
+            "{route:?} must be classified CSRF-exempt (pre-session login entry point)"
+        );
+        assert!(
+            !covered.contains(&route),
+            "{route:?} must not be listed as CSRF-covered: it is pre-session and skipped by require_csrf"
+        );
+    }
 }

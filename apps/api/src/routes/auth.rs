@@ -18,7 +18,8 @@ use uuid::Uuid;
 use crate::{
     auth::challenges::ChallengeIntent,
     auth::passkeys::{
-        start_passkey_registration, ConsumeGrantResult, PasskeyStoreInsertError, RegistrationInput,
+        start_passkey_authentication, start_passkey_registration, ConsumeGrantResult,
+        PasskeyStoreInsertError, RegistrationInput,
     },
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
@@ -27,7 +28,7 @@ use crate::{
     routes::accounts::{AccountInternal, AccountPublic},
     state::ApiState,
 };
-use webauthn_rs::prelude::RegisterPublicKeyCredential;
+use webauthn_rs::prelude::{PublicKeyCredential, RegisterPublicKeyCredential};
 
 #[cfg(feature = "integration-testing")]
 const PASSKEY_PROOF_ACCOUNT_ID: &str = "proof-passkey-user";
@@ -2068,6 +2069,276 @@ pub async fn passkey_register_verify(
 
     let body = serde_json::json!({"ok": true});
     (StatusCode::OK, Json(body)).into_response()
+}
+
+// ── Passkey Login (Authentication) ────────────────────────────────────────
+
+#[derive(serde::Deserialize)]
+pub struct PasskeyAuthOptionsPayload {
+    pub email: String,
+}
+
+/// POST /auth/passkeys/auth/options
+///
+/// Starts a passkey authentication (login) ceremony for the account identified
+/// by `email`. The endpoint is **pre-session / unauthenticated** and never sets
+/// a session cookie. On success it returns an opaque `authentication_id` plus the
+/// WebAuthn `RequestChallengeResponse`; the paired authentication state is stored
+/// server-side single-use until `auth/verify`.
+///
+/// **Anti-enumeration:** this flow is account-hint based, so it cannot be made
+/// fully indistinguishable without decoy challenges. For PR 1 the
+/// no-credentials case (unknown identifier *or* an account without passkeys) is
+/// **deliberately fail-closed** with a single uniform `404 NO_PASSKEY_CREDENTIALS`
+/// (no server state, no cookie). The residual signal (has-passkey vs. not) is a
+/// documented, accepted risk to be closed by a later decoy/discoverable
+/// iteration. Malformed input fail-closes with `400`; a missing WebAuthn config
+/// fail-closes with `503`.
+pub async fn passkey_auth_options(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    payload: Option<Json<PasskeyAuthOptionsPayload>>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    let webauthn = match state.webauthn.as_ref() {
+        Some(w) => w,
+        None => {
+            tracing::warn!(
+                event = "auth.passkey.auth_options.not_configured",
+                request_id = %request_id,
+                "Passkey auth-options called but WebAuthn is not configured"
+            );
+            let err = serde_json::json!({
+                "error": "PASSKEYS_NOT_CONFIGURED",
+                "message": "Passkey support is not enabled on this server"
+            });
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+        }
+    };
+
+    let email = match payload.as_ref().map(|p| p.email.trim()) {
+        Some(email) if !email.is_empty() && email.len() <= MAX_EMAIL_LEN => email.to_string(),
+        _ => {
+            let err = serde_json::json!({
+                "error": "INVALID_REQUEST",
+                "message": "A valid email is required"
+            });
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    // Resolve the account id under the accounts lock, then drop it before
+    // touching the passkey store.
+    let account_id = {
+        let accounts = state.accounts.read().await;
+        accounts.get_by_email(&email).map(|a| a.public.id.clone())
+    };
+
+    // Unknown identifier and an account without passkeys both fail-close
+    // identically: no server state, no cookie.
+    let passkeys = match &account_id {
+        Some(id) => state.passkeys.list_for_account(id),
+        None => Vec::new(),
+    };
+    let (account_id, passkeys) = match account_id {
+        Some(id) if !passkeys.is_empty() => (id, passkeys),
+        _ => {
+            tracing::info!(
+                event = "auth.passkey.auth_options.no_credentials",
+                request_id = %request_id,
+                "Passkey auth-options: no passkey credentials for identifier (fail-closed)"
+            );
+            let err = serde_json::json!({
+                "error": "NO_PASSKEY_CREDENTIALS",
+                "message": "No passkey is available for this account"
+            });
+            return (StatusCode::NOT_FOUND, Json(err)).into_response();
+        }
+    };
+
+    match start_passkey_authentication(webauthn, &passkeys) {
+        Err(e) => {
+            tracing::error!(
+                event = "auth.passkey.auth_options.webauthn_error",
+                request_id = %request_id,
+                account_id = %account_id,
+                error = %e,
+                "WebAuthn start_passkey_authentication failed"
+            );
+            let err = serde_json::json!({"error": "INTERNAL_SERVER_ERROR"});
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
+        }
+        Ok((rcr, auth_state)) => {
+            let authentication_id = state
+                .passkey_authentications
+                .insert(account_id.clone(), auth_state)
+                .await;
+
+            tracing::info!(
+                event = "auth.passkey.auth_options.ok",
+                request_id = %request_id,
+                account_id = %account_id,
+                authentication_id = %authentication_id,
+                "Passkey authentication ceremony started"
+            );
+
+            let body = serde_json::json!({
+                "authentication_id": authentication_id,
+                "options": rcr,
+            });
+            (StatusCode::OK, Json(body)).into_response()
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct PasskeyAuthVerifyPayload {
+    pub authentication_id: String,
+    /// Raw WebAuthn assertion. Kept as `Value` and deserialized into
+    /// `PublicKeyCredential` only *after* the single-use state has been consumed,
+    /// so a malformed assertion cannot probe the challenge more than once. The
+    /// real cryptographic check below is unchanged.
+    pub credential: serde_json::Value,
+}
+
+/// POST /auth/passkeys/auth/verify
+///
+/// Completes the passkey login ceremony started by `auth/options`. The handler:
+/// consumes the server-side authentication state **single-use**; performs a real
+/// cryptographic assertion check via `webauthn.finish_passkey_authentication`
+/// (no shortcuts); resolves the asserted credential ID to its owning account via
+/// the global credential index and asserts it matches the ceremony account; and
+/// only then creates a session and sets the session cookie.
+///
+/// **Every** error path fail-closes WITHOUT a cookie. Unknown, reused, expired,
+/// mismatched, or invalid states are all rejected.
+pub async fn passkey_auth_verify(
+    State(state): State<ApiState>,
+    headers: HeaderMap,
+    jar: CookieJar,
+    payload: Option<Json<PasskeyAuthVerifyPayload>>,
+) -> impl IntoResponse {
+    let request_id = get_request_id(&headers);
+
+    let webauthn = match state.webauthn.as_ref() {
+        Some(w) => w,
+        None => {
+            tracing::warn!(
+                event = "auth.passkey.auth_verify.not_configured",
+                request_id = %request_id,
+                "Passkey auth-verify called but WebAuthn is not configured"
+            );
+            let err = serde_json::json!({
+                "error": "PASSKEYS_NOT_CONFIGURED",
+                "message": "Passkey support is not enabled on this server"
+            });
+            return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+        }
+    };
+
+    let payload = match payload {
+        Some(Json(payload)) => payload,
+        None => {
+            let err = serde_json::json!({
+                "error": "INVALID_REQUEST",
+                "message": "A valid authentication_id and credential are required"
+            });
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    if payload.authentication_id.trim().is_empty() {
+        let err = serde_json::json!({"error": "INVALID_REQUEST"});
+        return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    // Single-use consume of the server-side authentication state. Unknown,
+    // reused, and expired ids all fail-close here (consume-first guarantees the
+    // challenge can never be probed twice).
+    let (expected_account_id, auth_state) = match state
+        .passkey_authentications
+        .consume(&payload.authentication_id)
+        .await
+    {
+        Some(value) => value,
+        None => {
+            tracing::warn!(
+                event = "auth.passkey.auth_verify.authentication_invalid",
+                request_id = %request_id,
+                "Passkey auth-verify: authentication_id unknown, already used, or expired"
+            );
+            let err = serde_json::json!({"error": "AUTHENTICATION_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    let credential: PublicKeyCredential = match serde_json::from_value(payload.credential) {
+        Ok(credential) => credential,
+        Err(_) => {
+            tracing::warn!(
+                event = "auth.passkey.auth_verify.credential_malformed",
+                request_id = %request_id,
+                "Passkey auth-verify: assertion payload could not be parsed"
+            );
+            let err = serde_json::json!({"error": "CREDENTIAL_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    // Real WebAuthn assertion verification — no shortcuts.
+    let auth_result = match webauthn.finish_passkey_authentication(&credential, &auth_state) {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(
+                event = "auth.passkey.auth_verify.webauthn_error",
+                request_id = %request_id,
+                error = %e,
+                "WebAuthn finish_passkey_authentication rejected the assertion"
+            );
+            let err = serde_json::json!({"error": "CREDENTIAL_INVALID"});
+            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+        }
+    };
+
+    // Resolve the asserted credential to its owning account via the global
+    // credential index, and assert it matches the account the ceremony was
+    // started for (defence-in-depth against a credential/account mismatch).
+    let account_id = match state.passkeys.find_by_credential_id(auth_result.cred_id()) {
+        Some(stored) if stored.account_id == expected_account_id => stored.account_id,
+        _ => {
+            tracing::warn!(
+                event = "auth.passkey.auth_verify.credential_mismatch",
+                request_id = %request_id,
+                "Passkey auth-verify: asserted credential does not resolve to the ceremony account"
+            );
+            let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
+            return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+        }
+    };
+
+    // Assertion verified — only now is a session created and a cookie set.
+    let session = match state.sessions.create(account_id.clone(), None).await {
+        Ok(session) => session,
+        Err(error) => {
+            return session_backend_json_response_with_jar(
+                "passkey_auth_verify.create",
+                &error,
+                jar,
+            );
+        }
+    };
+
+    tracing::info!(
+        event = "auth.passkey.auth_verify.ok",
+        request_id = %request_id,
+        account_id = %account_id,
+        "Passkey login verified; session established"
+    );
+
+    let cookie = build_session_cookie(session.id, None);
+    let body = serde_json::json!({"ok": true, "account_id": account_id});
+    (StatusCode::OK, jar.add(cookie), Json(body)).into_response()
 }
 
 #[cfg(feature = "integration-testing")]
