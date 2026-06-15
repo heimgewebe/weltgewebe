@@ -12,6 +12,7 @@ Generated automatically. Do not edit.
 
 | id | title | type | status | path |
 | --- | --- | --- | --- | --- |
+| DEPLOY-DNS-001B | Historical INWX Zone Entry Checklist — Predelegation Assumption Superseded | task | done | docs/tasks/DEPLOY-DNS-001B.md |
 | adr.0042-consume-semantah-contracts | ADR-0042 — SemanticAH-Contracts konsumieren | reference | active | docs/adr/0042-consume-semantah-contracts.md |
 | adr.0043-edge-vs-conversation | ADR-0043 — Edge vs. Conversation | reference | active | docs/adr/0043-edge-vs-conversation.md |
 | adr.ADR-0001__clean-slate-docs-monorepo | ADR-0001 — Clean Slate und Docs-Monorepo | reference | active | docs/adr/ADR-0001__clean-slate-docs-monorepo.md |
@@ -22,9 +23,9 @@ Generated automatically. Do not edit.
 | adr.ADR-0006-auth-magic-link-session-passkey | ADR-0006 — Auth: Magic Link, Session und optionaler Passkey | reference | active | docs/adr/ADR-0006__auth-magic-link-session-passkey.md |
 | adr.ADR-0007-auth-persistence-production-db-path | ADR-0007 — Auth-Persistenz Produktionspfad: Direkter PostgreSQL-Zugriff statt PgBouncer | reference | accepted | docs/adr/ADR-0007__auth-persistence-production-db-path.md |
 | adr.ADR-0008-domain-mail-provider-boundaries | ADR-0008 — Domain-, Mail- und SMTP-Providergrenzen | reference | accepted | docs/adr/ADR-0008__domain-mail-provider-boundaries.md |
+| blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
 | blueprint-doc-structure-task-control-roadmap | Dokumentationsstruktur und Task-Steuerung Roadmap | roadmap | draft | docs/blueprints/doc-structure-task-control-roadmap.md |
-| blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprints.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof-Blaupause | blueprint | active | docs/blueprints/auth-persistence-runtime-proof.md |
 | blueprints.auth-roadmap | Auth Roadmap | roadmap | active | docs/blueprints/auth-roadmap.md |
 | blueprints.domain-data-postgres-cutover | Domain Data PostgreSQL Cutover | blueprint | active | docs/blueprints/domain-data-postgres-cutover.md |
@@ -33,18 +34,17 @@ Generated automatically. Do not edit.
 | blueprints.weltgewebe.deploy.plan | Deploy-Plan | reference | deprecated | docs/blueprints/weltgewebe.deploy.plan.md |
 | datenmodell | Datenmodell | reference | active | docs/datenmodell.md |
 | deploy.CHANGELOG | Deploy Changelog | reference | active | docs/deploy/CHANGELOG.md |
-| DEPLOY-DNS-001B | Historical INWX Zone Entry Checklist — Predelegation Assumption Superseded | task | done | docs/tasks/DEPLOY-DNS-001B.md |
-| deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Domain-/Mail-Migration: IONOS zu INWX + mailbox.org + Brevo | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
 | deploy.DRIFT_POLICY | Drift Policy | reference | active | docs/deploy/DRIFT_POLICY.md |
+| deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |
+| deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Domain-/Mail-Migration: IONOS zu INWX + mailbox.org + Brevo | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
 | deploy.heim-first-phase0 | Heim-First Phase 0 | reference | active | docs/deploy/heim-first-phase0.md |
 | deploy.heimserver.deployment | Heimserver Deployment | reference | active | docs/deploy/heimserver.deployment.md |
 | deploy.heimserver.integration | Heimserver Integration | reference | active | docs/deploy/heimserver.integration.md |
-| deployment-contract | Deployment Contract and Preflight Guard | guide | active | docs/deployment.md |
-| deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
-| deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |
 | deploy.security | Deploy Security | architecture | active | docs/deploy/security.md |
 | deploy.vps | VPS-Deployment | reference | active | docs/deploy/vps.md |
 | deploy.weltgewebe.naming | Weltgewebe Naming | reference | active | docs/deploy/weltgewebe.naming.md |
+| deployment-contract | Deployment Contract and Preflight Guard | guide | active | docs/deployment.md |
+| deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
@@ -60,8 +60,8 @@ Generated automatically. Do not edit.
 | docs.reference.agent-operability-fixture-matrix | Agent-Betriebsfaehigkeit: Fixture-Matrix | reference | active | docs/reference/agent-operability-fixture-matrix.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |
-| docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |
+| docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
 | docs.security.agent-write-scope-baseline | Agent Write Scope Baseline | security | active | docs/security/agent-write-scope-baseline.md |
 | docs.techstack | Techstack | architecture | active | docs/techstack.md |
 | docs.vision | Vision | reference | active | docs/vision.md |
@@ -79,11 +79,11 @@ Generated automatically. Do not edit.
 | overview.inhalt | Inhalt (Übersicht) | reference | active | docs/overview/inhalt.md |
 | overview.zusammenstellung | Zusammenstellung (Übersicht) | reference | active | docs/overview/zusammenstellung.md |
 | policies.orientierung | Orientierung | reference | active | docs/policies/orientierung.md |
+| process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
-| process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
-| process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | draft | docs/process/report-lifecycle-contract-alignment.md |
 | process.report-lifecycle | Report Lifecycle Policy | policy | draft | docs/process/report-lifecycle.md |
+| process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | draft | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
@@ -109,12 +109,12 @@ Generated automatically. Do not edit.
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
 | reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | active | docs/reports/passkey-register-verify-prep.md |
 | reports.planning-registration-findings | Planning Registration Findings Triage | report | active | docs/reports/planning-registration-findings.md |
+| runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
 | runbooks.db-recovery | DB Recovery Runbook | reference | active | docs/runbooks/db-recovery.md |
 | runbooks.domain-mail-cutover | Runbook — Domain-, Mail- und SMTP-Cutover | runbook | active | docs/runbooks/domain-mail-cutover.md |
 | runbooks.incident-response | Incident Response Runbook | reference | active | docs/runbooks/incident-response.md |
 | runbooks.ops.runbook.weltgewebe-selfhost-deploy | Selfhost-Deploy Runbook | reference | active | docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md |
-| runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.uv-tooling | UV-Tooling | reference | active | docs/runbooks/uv-tooling.md |
 | specs.auth-api | Auth API Spec | reference | active | docs/specs/auth-api.md |
 | specs.auth-blueprint | Auth Blueprint | reference | active | docs/specs/auth-blueprint.md |

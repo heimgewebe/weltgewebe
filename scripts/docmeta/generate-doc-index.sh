@@ -43,7 +43,7 @@ find docs -type f -name "*.md" ! -path "docs/_generated/*" -print0 | while IFS= 
 done
 
 # Sort entries deterministically and append to output
-sort "$TEMP_ENTRIES" >> "$OUT_FILE"
+LC_ALL=C sort "$TEMP_ENTRIES" >> "$OUT_FILE"
 rm -f "$TEMP_ENTRIES"
 
 echo "Generated $OUT_FILE"
