@@ -268,17 +268,16 @@ def iter_jsonl_edges(path: str, edge_parse_summary: Dict[str, int]) -> Iterator[
         sys.exit(1)
 
 def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[str, int]) -> Iterator[Dict[str, Any]]:
+    # Type hints are currently stored in domain_edges.payload by the existing
+    # edge write path/migration; do not reference flat source_type/target_type
+    # columns unless a later migration introduces them.
     sql = """SELECT json_build_object(
   'id', id,
   'source_id', source_id,
   'target_id', target_id,
   'source_type', payload->>'source_type',
   'target_type', payload->>'target_type'
-) FROM domain_edges;
-# Type hints are currently stored in domain_edges.payload by the existing
-# edge write path/migration; do not reference flat source_type/target_type
-# columns unless a later migration introduces them.
-"""
+) FROM domain_edges;"""
     row_number = 0
     for line in iter_psql_json_lines(sql, postgres_env, "domain_edges"):
         row_number += 1
@@ -578,6 +577,11 @@ def main():
         }
     elif args.nodes_jsonl and args.edges_jsonl:
         node_ids, node_summary, node_source = load_jsonl_nodes(args.nodes_jsonl)
+
+        edges_path = Path(args.edges_jsonl)
+        if not edges_path.is_file():
+            logging.error("Edges file not found: %s", args.edges_jsonl)
+            sys.exit(1)
 
         edge_parse_summary = {
             "edge_records_total": 0,

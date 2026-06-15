@@ -87,14 +87,12 @@ find . \
   -path './apps/web/node_modules' -prune -o \
   -type f \( -name '*nodes*.jsonl' -o -name '*edges*.jsonl' \) \
   -print
-
 ```
 
 Ergebnis:
 
 ```text
 keine Kandidaten
-
 ```
 
 ### PostgreSQL
@@ -221,7 +219,6 @@ Konsequenz:
 ```text
 source_id REFERENCES domain_nodes(id)
 target_id REFERENCES domain_nodes(id)
-
 ```
 
 ### Option B — Lose Referenzsemantik mit Guard/Quarantäne-Report

@@ -41,6 +41,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nodes_file:
             result = run_script("--nodes-jsonl", nodes_file.name, "--edges-jsonl", "does_not_exist.jsonl")
             self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Edges file not found", result.stderr)
 
     def test_all_typed_node_references_valid(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
