@@ -155,8 +155,12 @@
       leaveToNavigation();
       return;
     }
-    // Lens-only (or empty) URL: leave any prior focus/composition first, then
-    // open the requested lens.
+    // Lens-only (or empty / invalid-lens) URL: leave any prior focus/composition
+    // and close stale lens overlays first, then open the requested lens if the
+    // URL still addresses a valid one. This matters for same-route/popstate
+    // transitions (e.g. /map?lens=filter -> /map) where stores are not reset.
+    closeSearch();
+    closeFilter();
     leaveToNavigation();
     if (parsed.lens === 'filter') {
       openFilterExclusive();
