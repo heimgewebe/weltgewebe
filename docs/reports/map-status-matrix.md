@@ -170,7 +170,7 @@ Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 `basemap-hamburg-v0.1.0.pmtiles` mit SHA256
 `3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab` und
 Groesse `23948909` Bytes.
-Die visuelle Kartenabnahme in GitHub Actions ist inzwischen PROVEN (Job
+Der Visual-Runtime-Proof in GitHub Actions ist inzwischen PROVEN (Job
 `basemap-visual-proof` grün auf `main`, CI-Lauf 27028165272/26535801825; Scope:
 echtes Artefakt via Vite-Middleware, nicht Caddy). Offen bleiben die
 Produktionsentscheidung fuer den Basemap-Modus, die visuelle Korrektheit

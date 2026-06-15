@@ -262,7 +262,7 @@ Sondern:
   [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
   [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
   Scope: nur 7-Byte-Magic; Tile-Directory-/Strukturvalidierung (P4) bleibt Future Work.
-- [x] Visuelle Abnahme (Scope CI, via Vite-Middleware) PROVEN: Job
+- [x] **Visual-Runtime-Proof (Scope CI, via Vite-Middleware) PROVEN:** Job
   `basemap-visual-proof` ist grün auf `main`
   ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
   Job 79773804577; [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),

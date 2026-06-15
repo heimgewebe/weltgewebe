@@ -53,8 +53,8 @@ Scope-Grenzen). Echte Restleerstellen bleiben: tiefe PMTiles-Strukturvalidierung
 (P4), visuelle **Korrektheit** statt nur Rendering-Signal (P6),
 Produktionsnaehe der Caddy-Konfiguration (P7) und die **Reproduzierbarkeit** des
 Artefakts. Der naechste PR ist deshalb nicht „erst mal ein echtes Artefakt bauen"
-(das existiert), sondern „die echte Restleerstelle schliessen + die Doku
-ent-driften".
+(das existiert), sondern „die echte Restleerstelle schliessen + die Dokumentation
+konsolidieren".
 
 ## 1. Warum dieser Task jetzt
 
@@ -206,6 +206,12 @@ ent-driften".
 | SHA256/Groesse des „v0.1.0"-Artefakts | `artifact-proof.md` (`f0734…`/23948877) vs `map-status-matrix` (`3eea…`/23948909) | abweichend → nicht reproduzierbar | **Nicht-reproduzierbar; bisher nicht eingeordnet** | als bewusste Leerstelle dokumentieren (intra-run SHA) |
 | Caddy-Version im Proof vs. Produktion | nirgends abgeglichen | Proof `caddy:2.7`, Prod/Heim `caddy:2.8.4`+`caddy-ratelimit` (`infra/caddy/Dockerfile`) | **Bisher unbenannte Drift** | als P7-Gap fuehren |
 
+> **Residuale Drift (bewusst):** Dieser PR korrigiert nur `docs/reports/map-status-matrix.md` + `.json`
+> und `docs/blueprints/kartenklarheit-roadmap.md`. `docs/blueprints/kartenklarheit-phase6.md`
+> bleibt **bewusst unveraendert** (ausserhalb des erlaubten Korrektur-Sets) und fuehrt
+> `pmtiles-content` sowie die visuelle Abnahme weiterhin als offen. Diese Restdivergenz
+> ist hier benannt und sollte in einem Folge-PR synchronisiert werden.
+
 ## 5. Synthetisch vs. echtes Kartenartefakt
 
 - **Synthetisch (P2):** Der `range-delivery`-Job schreibt deterministisch 64 KiB
@@ -252,7 +258,7 @@ Schlussfolgerungen:
 Der naechste PR ist **nicht** „erst mal ein echtes Artefakt im CI bauen" — das ist
 bereits PROVEN (P3) inklusive Browser-Rendering (P5). Die minimal sinnvolle echte
 Restleerstelle ist **P4 (PMTiles-Strukturvalidierung jenseits der Magic-Bytes)**,
-flankiert von der Doku-Ent-Driftung.
+flankiert von der Konsolidierung der Dokumentation.
 
 Empfehlung: **MAP-PROOF-002 — Real PMTiles structural validation fixture**.
 
