@@ -56,6 +56,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(data["summary"]["typed_node_references"], 2)
             self.assertIs(data["policy_signals"]["strict_node_fk_ready"], True)
             self.assertIs(data["policy_signals"]["requires_runtime_data_run"], False)
+            self.assertEqual(data["policy_signals"]["fk_compatible_reference_sides"], 2)
+            self.assertIs(data["policy_signals"]["type_hint_backfill_recommended"], False)
 
     def test_all_typed_node_references_valid_but_repo_fixture(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -138,7 +140,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             ef.write('{"id": "edge-1", "source_id": "ext-1", "source_type": "external", "target_id": "node-a", "target_type": "node"}\n')
             ef.flush()
 
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--source-kind", "runtime")
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
 
@@ -161,6 +163,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertIs(data["policy_signals"]["requires_cleanup"], False)
             self.assertIs(data["policy_signals"]["requires_policy_decision"], False)
             self.assertIs(data["policy_signals"]["type_hint_backfill_recommended"], True)
+            self.assertEqual(data["findings"], [])
+            self.assertEqual(data["policy_signals"]["fk_compatible_reference_sides"], 2)
 
     def test_untyped_missing_reference(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -175,6 +179,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
 
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
             self.assertIs(data["policy_signals"]["requires_cleanup"], True)
+            self.assertIs(data["policy_signals"]["requires_policy_decision"], True)
+            self.assertIs(data["policy_signals"]["strict_node_fk_ready"], False)
 
     def test_malformed_edge_missing_source_id(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -283,7 +289,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(len(data["source"]["nodes_source"]["sha256"]), 64)
             self.assertEqual(len(data["source"]["edges_source"]["sha256"]), 64)
 
-    def test_sanitize_psql_stderr_redacts_url_password_host(self):
+    def test_postgres_cli_error_does_not_print_database_url(self):
         env = {"DATABASE_URL": "postgresql://user:SUPER_SECRET_PASSWORD@example.invalid/db"}
         result = run_script("--postgres", env=env)
         self.assertNotEqual(result.returncode, 0)
@@ -295,6 +301,28 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         self.assertNotIn("postgresql://user", result.stderr)
         # Should not log the full path
         self.assertNotIn("/db", result.stderr)
+
+    def test_sanitize_psql_stderr_redacts_url_password_host(self):
+        from scripts.docmeta.audit_domain_edge_references import sanitize_psql_stderr
+        old_database_url = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = (
+            "postgresql://user:SUPER_SECRET_PASSWORD@example.invalid/db"
+        )
+        try:
+            raw = (
+                "connection to postgresql://user:SUPER_SECRET_PASSWORD@example.invalid/db "
+                "failed password=SUPER_SECRET_PASSWORD PGPASSWORD=SUPER_SECRET_PASSWORD"
+            )
+            clean = sanitize_psql_stderr(raw)
+            self.assertNotIn("SUPER_SECRET_PASSWORD", clean)
+            self.assertNotIn("example.invalid", clean)
+            self.assertNotIn("postgresql://user", clean)
+            self.assertNotIn("/db", clean)
+        finally:
+            if old_database_url is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = old_database_url
 
     def test_jsonl_output_contains_no_raw_ids_by_default(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -387,12 +415,15 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             data = json.loads(result.stdout)
 
             self.assertEqual(data["summary"]["typed_unknown_references"], 2)
+            self.assertNotIn("{'a': 'b'}", result.stdout)
+            self.assertNotIn('"a": "b"', result.stdout)
             findings = [
                 f for f in data["findings"]
                 if f["classification"] == "typed_unknown_reference"
             ]
             self.assertEqual(len(findings), 2)
             self.assertEqual({f["type_hint_type"] for f in findings}, {"int", "dict"})
+            self.assertEqual({f["type_hint"] for f in findings}, {"<int>", "<dict>"})
 
 
 
@@ -435,10 +466,12 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             nf.flush()
             ef.write('{"id": "edge-1", "source_id": "node-a", "target_id": "node-b"}\n')
             ef.flush()
-            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--source-kind", "runtime")
             self.assertEqual(result.returncode, 0)
             data = json.loads(result.stdout)
             self.assertEqual(data["summary"]["nodes_empty_id"], 1)
+            self.assertIs(data["policy_signals"]["requires_cleanup"], True)
+            self.assertIs(data["policy_signals"]["strict_node_fk_ready"], False)
 
     def test_postgres_env_removes_existing_pg_env(self):
         from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
@@ -461,6 +494,22 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         for key in env:
             self.assertNotIn("unknown", key.lower())
 
+
+
+    def test_unknown_string_type_hint_is_redacted_when_not_safe(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            ef.write('{"id": "edge-1", "source_id": "node-a", "source_type": "some-long-string-with-sensitives!@#$", "target_id": "node-a", "target_type": "node"}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["typed_unknown_references"], 1)
+            self.assertNotIn("some-long-string-with-sensitives", result.stdout)
+            finding = data["findings"][0]
+            self.assertTrue(finding["type_hint"].startswith("type_hint:sha256:"))
 
 if __name__ == "__main__":
     unittest.main()

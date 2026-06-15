@@ -15,6 +15,23 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
+CLASSIFICATION_COUNTERS = {
+    "typed_node_reference": "typed_node_references",
+    "typed_node_missing_reference": "typed_node_missing_references",
+    "typed_non_node_reference": "typed_non_node_references",
+    "typed_unknown_reference": "typed_unknown_references",
+    "untyped_existing_node_reference": "untyped_existing_node_references",
+    "untyped_missing_reference": "untyped_missing_references",
+}
+
+def increment_classification(summary: Dict[str, int], classification: str) -> None:
+    try:
+        counter_key = CLASSIFICATION_COUNTERS[classification]
+    except KeyError:
+        raise RuntimeError(f"Unknown edge reference classification: {classification}")
+    summary[counter_key] += 1
+
+
 def hash_ref(ref: str, prefix: str) -> str:
     if not ref:
         return ""
@@ -257,7 +274,11 @@ def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[s
   'target_id', target_id,
   'source_type', payload->>'source_type',
   'target_type', payload->>'target_type'
-) FROM domain_edges;"""
+) FROM domain_edges;
+# Type hints are currently stored in domain_edges.payload by the existing
+# edge write path/migration; do not reference flat source_type/target_type
+# columns unless a later migration introduces them.
+"""
     row_number = 0
     for line in iter_psql_json_lines(sql, postgres_env, "domain_edges"):
         row_number += 1
@@ -274,6 +295,21 @@ def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[s
         obj["row_number"] = row_number
         yield obj
 
+
+ALLOWED_TYPE_HINTS = {"node", "account", "role"}
+
+def safe_type_hint_for_finding(type_hint: Any) -> Tuple[Optional[str], Optional[str]]:
+    if type_hint is None:
+        return None, None
+    if isinstance(type_hint, str):
+        if type_hint in ALLOWED_TYPE_HINTS:
+            return type_hint, "str"
+        if len(type_hint) <= 64 and re.fullmatch(r"[A-Za-z0-9_.:-]+", type_hint):
+            return type_hint, "str"
+        return hash_ref(type_hint, "type_hint"), "str"
+    type_hint_type = type(type_hint).__name__
+    return f"<{type_hint_type}>", type_hint_type
+
 def classify_edge_side(
     *,
     edge_ref: str,
@@ -285,26 +321,24 @@ def classify_edge_side(
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     target_ref = target_id if show_ids else hash_id(target_id)
 
-    type_hint_type = None
-    if type_hint is not None and not isinstance(type_hint, str):
-        type_hint_type = type(type_hint).__name__
-        type_hint = str(type_hint)
+    type_hint_value = type_hint if isinstance(type_hint, str) else None
+    safe_type_hint, type_hint_type = safe_type_hint_for_finding(type_hint)
 
-    if type_hint == "node":
+    if type_hint_value == "node":
         if target_id in node_ids:
             return "typed_node_reference", None
         else:
             return "typed_node_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": "node", "classification": "typed_node_missing_reference"}
-    elif type_hint in ["account", "role"]:
-        return "typed_non_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_non_node_reference"}
+    elif type_hint_value in ["account", "role"]:
+        return "typed_non_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint_value, "classification": "typed_non_node_reference"}
     elif type_hint is not None:
-        finding = {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": type_hint, "classification": "typed_unknown_reference"}
+        finding = {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": safe_type_hint, "classification": "typed_unknown_reference"}
         if type_hint_type:
             finding["type_hint_type"] = type_hint_type
         return "typed_unknown_reference", finding
     else:
         if target_id in node_ids:
-            return "untyped_existing_node_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_existing_node_reference"}
+            return "untyped_existing_node_reference", None
         else:
             return "untyped_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_missing_reference"}
 
@@ -403,7 +437,7 @@ def evaluate_audit_data(
         )
         if src_class == "typed_node_missing_reference" or src_class == "untyped_missing_reference":
             missing_node_count += 1
-        summary[src_class + "s"] = summary.get(src_class + "s", 0) + 1
+        increment_classification(summary, src_class)
         if src_finding:
             if append_finding(findings, src_finding, max_findings):
                 findings_truncated = True
@@ -415,7 +449,7 @@ def evaluate_audit_data(
         )
         if tgt_class == "typed_node_missing_reference" or tgt_class == "untyped_missing_reference":
             missing_node_count += 1
-        summary[tgt_class + "s"] = summary.get(tgt_class + "s", 0) + 1
+        increment_classification(summary, tgt_class)
         if tgt_finding:
             if append_finding(findings, tgt_finding, max_findings):
                 findings_truncated = True

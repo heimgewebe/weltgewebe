@@ -133,6 +133,8 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 | non_object_json_records | n/a |
 | edges_with_any_missing_node_reference | n/a |
 | edges_with_both_missing_node_references | n/a |
+| type_hint_backfill_recommended | n/a |
+| fk_compatible_reference_sides | n/a |
 | strict_node_fk_ready | false |
 | loose_reference_semantics_observed | n/a |
 | requires_policy_decision | n/a |
@@ -171,6 +173,8 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 | non_object_json_records | n/a |
 | edges_with_any_missing_node_reference | n/a |
 | edges_with_both_missing_node_references | n/a |
+| type_hint_backfill_recommended | n/a |
+| fk_compatible_reference_sides | n/a |
 | strict_node_fk_ready | false |
 | loose_reference_semantics_observed | n/a |
 | requires_policy_decision | n/a |
@@ -181,12 +185,15 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 
 Keine vollständigen Edge-, Node-, Account- oder Role-IDs in diesem Report.
 
+Ungetypte, aber auflösbare Node-Referenzen erscheinen nicht als Finding.
+Sie werden nur über `untyped_existing_node_references` und
+`type_hint_backfill_recommended` ausgewiesen.
+
 | Klasse | Anzahl | Bedeutung |
 | --- | --- | --- |
 | typed_node_missing_reference | n/a | Typ ist node, aber ID fehlt in Nodes |
 | typed_non_node_reference | n/a | Typ-Hinweis ist account oder role |
 | typed_unknown_reference | n/a | Typ-Hinweis ist unbekannt |
-| untyped_existing_node_reference | n/a | Typ fehlt, ID existiert aber in Nodes |
 | untyped_missing_reference | n/a | Typ fehlt und ID fehlt in Nodes |
 | malformed_edge | n/a | Edge ist strukturell unvollständig |
 | invalid_json | n/a | JSONL-Zeile ist nicht parsebar |
@@ -204,7 +211,8 @@ Geeignet nur wenn:
 - echte Runtime-Daten oder ausdrücklich entscheidungsfähige Daten geprüft wurden
 - keine typisierten Nicht-Node-Referenzen existieren
 - keine unbekannten Typ-Hints existieren
-- keine untypisierten Referenzen offen sind
+- keine untypisierten fehlenden Referenzen existieren
+- nur node-getypte oder ungetypte, aber auflösbare Node-Referenzen vorkommen
 - keine missing Node references existieren
 - keine malformed Edges existieren
 
