@@ -156,11 +156,11 @@
       return;
     }
     // Lens-only (or empty / invalid-lens) URL: leave any prior focus/composition
-    // and close stale lens overlays first, then open the requested lens if the
-    // URL still addresses a valid one. This matters for same-route/popstate
+    // first. If the URL still addresses a valid lens, use the exclusive overlay
+    // helpers so cross-overlay focus-restore suppression stays intact (and the
+    // search query is not cleared unnecessarily). If it addresses no valid lens,
+    // close stale lens overlays — this matters for same-route/popstate
     // transitions (e.g. /map?lens=filter -> /map) where stores are not reset.
-    closeSearch();
-    closeFilter();
     leaveToNavigation();
     if (parsed.lens === 'filter') {
       openFilterExclusive();
@@ -170,6 +170,8 @@
       openSearchExclusive();
       return;
     }
+    closeSearch();
+    closeFilter();
   }
 
   function tryApplyFocusMapUrlAddressing(

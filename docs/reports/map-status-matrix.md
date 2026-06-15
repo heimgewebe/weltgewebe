@@ -127,8 +127,8 @@ die semantische Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
   die bestehenden uiView-/Overlay-Stores an (Priorität `compose` > `focus` >
   Linse; ein gültiger, aber noch nicht auflösbarer `focus` blockiert den
   Linsen-Fallback). Ein Intent-Wechsel über die URL verlässt zuvor gesetzte
-  Fokus-/Kompositionszustände und schließt veraltete Linsen-Overlays, bevor die
-  adressierte Linse geöffnet wird; doppelte bekannte Query-Keys gelten als
+  Fokus-/Kompositionszustände und schließt veraltete Linsen-Overlays oder öffnet
+  die adressierte Linse exklusiv; doppelte bekannte Query-Keys gelten als
   ungültig. Bei gültigem `focus=<type>:<id>` wird
   der initiale Default-Fly der Karte unterdrückt, damit ein noch nicht
   aufgelöster Fokus nicht zunächst durch eine Default-Zentrierung übersteuert
