@@ -185,6 +185,7 @@ status: active
         self.assertIn("| reports_checked |", rendered)
         self.assertIn("| reports_ignored_non_report |", rendered)
         self.assertIn("| findings_total |", rendered)
+        self.assertIn("| missing_lifecycle_state |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
 
     def test_validate_report_with_datetime_date_review_after(self) -> None:
@@ -344,6 +345,21 @@ review_after: 2026-07-13
         codes = [f.code for f in findings]
         self.assertIn("missing_owner_task", codes)
         self.assertNotIn("missing_superseded_by", codes)
+
+    def test_deferred_lifecycle_state_missing_lifecycle(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "deferred",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertIn("missing_lifecycle", codes)
 
 
 if __name__ == "__main__":
