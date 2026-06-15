@@ -322,6 +322,9 @@ def classify_edge_side(
 ) -> Tuple[str, Optional[Dict[str, Any]]]:
     target_ref = target_id if show_ids else hash_id(target_id)
 
+    if isinstance(type_hint, str) and type_hint.strip() == "":
+        type_hint = None
+
     type_hint_value = type_hint if isinstance(type_hint, str) else None
     safe_type_hint, type_hint_type = safe_type_hint_for_finding(type_hint)
 
@@ -555,10 +558,6 @@ def main():
         sys.exit(1)
 
     if args.postgres:
-        if shutil.which("psql") is None:
-            logging.error("psql is not available")
-            sys.exit(1)
-
         if "DATABASE_URL" not in os.environ:
             logging.error("DATABASE_URL not set for PostgreSQL audit")
             sys.exit(1)
@@ -567,6 +566,10 @@ def main():
             postgres_env = postgres_env_from_database_url(os.environ["DATABASE_URL"])
         except ValueError as exc:
             logging.error("%s", exc)
+            sys.exit(1)
+
+        if shutil.which("psql") is None:
+            logging.error("psql is not available")
             sys.exit(1)
         node_ids, node_summary = load_postgres_nodes(postgres_env)
 

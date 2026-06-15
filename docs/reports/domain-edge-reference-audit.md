@@ -227,7 +227,7 @@ Geeignet wenn:
 - Edges bewusst auf Accounts, Roles oder externe Entitäten zeigen können
 - Typ-Hints heterogen sind
 - historische Orphans existieren, die nicht still gelöscht werden dürfen
-- untypisierte Altlasten eine direkte FK-Migration blockieren
+- untypisierte fehlende oder nicht eindeutig auflösbare Altlasten eine direkte FK-Migration blockieren
 
 Konsequenz:
 

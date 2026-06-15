@@ -290,7 +290,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(len(data["source"]["nodes_source"]["sha256"]), 64)
             self.assertEqual(len(data["source"]["edges_source"]["sha256"]), 64)
 
-    def test_postgres_cli_error_does_not_print_database_url(self):
+    def test_postgres_cli_preflight_error_does_not_print_database_url(self):
         env = {"DATABASE_URL": "postgresql://user:SUPER_SECRET_PASSWORD@example.invalid/db"}
         result = run_script("--postgres", env=env)
         self.assertNotEqual(result.returncode, 0)
@@ -522,6 +522,43 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             postgres_env_from_database_url(
                 "host=localhost port=5432 user=postgres dbname=mydb"
             )
+
+
+    def test_postgres_rejects_libpq_dsn_before_psql_preflight(self):
+        result = run_script(
+            "--postgres",
+            env={"DATABASE_URL": "host=localhost port=5432 user=postgres dbname=mydb"},
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DATABASE_URL must use postgres:// or postgresql:// URI format", result.stderr)
+
+    def test_empty_string_type_hint_is_treated_as_untyped(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as nf, tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            ef.write(
+                '{"id": "edge-1", "source_id": "node-a", "source_type": "", '
+                '"target_id": "missing-b", "target_type": "   "}\n'
+            )
+            ef.flush()
+
+            result = run_script(
+                "--nodes-jsonl",
+                nf.name,
+                "--edges-jsonl",
+                ef.name,
+                "--format",
+                "json",
+                "--source-kind",
+                "runtime",
+            )
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["untyped_existing_node_references"], 1)
+            self.assertEqual(data["summary"]["untyped_missing_references"], 1)
+            self.assertEqual(data["summary"]["typed_unknown_references"], 0)
+            self.assertNotIn('"type_hint": ""', result.stdout)
 
 if __name__ == "__main__":
     unittest.main()
