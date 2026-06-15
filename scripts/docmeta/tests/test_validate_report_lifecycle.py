@@ -287,6 +287,64 @@ review_after: 2026-07-13
         self.assertEqual(exit_code, 0)
         self.assertIn("missing_owner_task", rendered)
 
+    def test_report_without_lifecycle_state_yields_finding(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertIn("missing_lifecycle_state", codes)
+
+    def test_deferred_lifecycle_state_missing_owner_task_and_review_after(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "active",
+            "lifecycle_state": "deferred",
+            "lifecycle": "audit",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertIn("missing_owner_task", codes)
+        self.assertIn("missing_review_after", codes)
+
+    def test_superseded_lifecycle_state_with_only_superseded_by(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "superseded",
+            "superseded_by": "reports.new_one",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertIn("missing_lifecycle", codes)
+        self.assertIn("missing_owner_task", codes)
+        self.assertNotIn("missing_superseded_by", codes)
+
+    def test_archived_lifecycle_state_missing_owner_task(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "deprecated",
+            "lifecycle_state": "archived",
+            "lifecycle": "audit",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        codes = [f.code for f in findings]
+        self.assertIn("missing_owner_task", codes)
+        self.assertNotIn("missing_superseded_by", codes)
+
 
 if __name__ == "__main__":
     unittest.main()

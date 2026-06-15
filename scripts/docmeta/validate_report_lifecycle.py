@@ -78,6 +78,10 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
             ))
             added_codes.add(code)
 
+    # Rule: doc_type: report needs lifecycle_state
+    if not lifecycle_state:
+        add_finding("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state")
+
     # Regel 1 — doc_type: report braucht status
     if not status:
         add_finding("missing_status", "status", "report documents should define status")
@@ -90,7 +94,7 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
     if status in {"active", "draft"} and not review_after:
         add_finding("missing_review_after", "review_after", "active/draft reports should define review_after")
 
-    # Regel 4 — lifecycle_state: active braucht Kernfelder
+    # Regel 4 — Pflichtfeldlogik für bekannte lifecycle_state-Werte
     if lifecycle_state == "active":
         if not lifecycle:
             add_finding("missing_lifecycle", "lifecycle", "active reports should define lifecycle")
@@ -98,10 +102,25 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
             add_finding("missing_owner_task", "owner_task", "active reports should define owner_task")
         if not review_after:
             add_finding("missing_review_after", "review_after", "active/draft reports should define review_after")
-
-    # Regel 5 — lifecycle_state: superseded braucht superseded_by
-    if lifecycle_state == "superseded" and not superseded_by:
-        add_finding("missing_superseded_by", "superseded_by", "superseded reports should define superseded_by")
+    elif lifecycle_state == "deferred":
+        if not lifecycle:
+            add_finding("missing_lifecycle", "lifecycle", "deferred reports should define lifecycle")
+        if not owner_task:
+            add_finding("missing_owner_task", "owner_task", "deferred reports should define owner_task")
+        if not review_after:
+            add_finding("missing_review_after", "review_after", "deferred reports should define review_after")
+    elif lifecycle_state == "superseded":
+        if not lifecycle:
+            add_finding("missing_lifecycle", "lifecycle", "superseded reports should define lifecycle")
+        if not owner_task:
+            add_finding("missing_owner_task", "owner_task", "superseded reports should define owner_task")
+        if not superseded_by:
+            add_finding("missing_superseded_by", "superseded_by", "superseded reports should define superseded_by")
+    elif lifecycle_state == "archived":
+        if not lifecycle:
+            add_finding("missing_lifecycle", "lifecycle", "archived reports should define lifecycle")
+        if not owner_task:
+            add_finding("missing_owner_task", "owner_task", "archived reports should define owner_task")
 
     return findings
 
@@ -122,6 +141,7 @@ def _build_summary(
         "missing_owner_task": 0,
         "missing_review_after": 0,
         "missing_superseded_by": 0,
+        "missing_lifecycle_state": 0,
     }
     for f in findings:
         if f.code in summary:
@@ -148,6 +168,7 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| missing_owner_task | {summary['missing_owner_task']} |",
         f"| missing_review_after | {summary['missing_review_after']} |",
         f"| missing_superseded_by | {summary['missing_superseded_by']} |",
+        f"| missing_lifecycle_state | {summary['missing_lifecycle_state']} |",
         "",
         "## Findings",
         "",
