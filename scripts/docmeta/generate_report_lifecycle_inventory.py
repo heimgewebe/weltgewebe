@@ -525,14 +525,14 @@ def render_inventory(records: list[ReportRecord]) -> str:
             "",
             "## Reports",
             "",
-            "| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |",
+            "| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | supersession target diagnostic |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for record in records:
         sections.append(
             "| {path} | {doc_type} | {status} | {lifecycle_state} | {lifecycle} | {owner_task} | {review_after} | "
-            "{superseded_by} | {primary_refs} | {derived_refs} | {relations} | {absent} | {terminal_supersession} |".format(
+            "{superseded_by} | {primary_refs} | {derived_refs} | {relations} | {absent} | {supersession_target_diagnostic} |".format(
                 path=record.path,
                 doc_type=_cell(record.doc_type),
                 status=_cell(record.status),
@@ -545,7 +545,7 @@ def render_inventory(records: list[ReportRecord]) -> str:
                 derived_refs=len(record.derived_referenced_by_paths),
                 relations=record.relations_count,
                 absent=_cell(", ".join(record.absent_core_lifecycle_fields)),
-                terminal_supersession="missing target" if record.missing_supersession_target else "",
+                supersession_target_diagnostic="missing target" if record.missing_supersession_target else "",
             )
         )
 
@@ -622,16 +622,16 @@ def render_inventory(records: list[ReportRecord]) -> str:
         sections.append("_None_")
         sections.append("")
 
-    terminal_gap_records = [record for record in records if record.missing_supersession_target]
-    sections.extend(["## Terminal Supersession Diagnostics", ""])
-    if terminal_gap_records:
+    supersession_gap_records = [record for record in records if record.missing_supersession_target]
+    sections.extend(["## Supersession Target Diagnostics", ""])
+    if supersession_gap_records:
         sections.extend(
             [
                 "| Path | lifecycle_state | Diagnostic |",
                 "| --- | --- | --- |",
             ]
         )
-        for record in terminal_gap_records:
+        for record in supersession_gap_records:
             sections.append(f"| {record.path} | {_cell(record.lifecycle_state)} | missing superseded_by target |")
     else:
         sections.append("None.")

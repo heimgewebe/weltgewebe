@@ -46,7 +46,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 ## Reports
 
-| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | terminal supersession |
+| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | supersession target diagnostic |
 | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
 | docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  |  | 2 | 3 | 1 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  |  | 0 | 3 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -373,7 +373,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 - `docs/reports/domain-edge-create-semantics-preflight.md`
 - `docs/reports/passkey-register-verify-prep.md`
 
-## Terminal Supersession Diagnostics
+## Supersession Target Diagnostics
 
 None.
 

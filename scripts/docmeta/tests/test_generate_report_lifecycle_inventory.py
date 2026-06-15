@@ -286,7 +286,7 @@ review_after: 2026-12-01
         self.assertEqual(record.absent_core_lifecycle_fields, ())
         self.assertFalse(record.missing_supersession_target)
 
-    def test_terminal_lifecycle_state_without_superseded_by_is_reported(self) -> None:
+    def test_superseded_lifecycle_state_without_superseded_by_is_reported(self) -> None:
         self._write(
             "docs/reports/terminal.md",
             """---
@@ -307,7 +307,7 @@ review_after: 2026-12-01
 
         self.assertTrue(record.missing_supersession_target)
 
-    def test_terminal_lifecycle_state_matching_is_case_insensitive(self) -> None:
+    def test_superseded_lifecycle_state_matching_is_case_insensitive(self) -> None:
         self._write(
             "docs/reports/terminal.md",
             """---
@@ -372,8 +372,7 @@ lifecycle_state: archived
         self.assertEqual(record.lifecycle_state, "archived")
         self.assertNotIn("lifecycle_state", record.absent_core_lifecycle_fields)
 
-
-    def test_terminal_supersession_diagnostics_render_lifecycle_state(self) -> None:
+    def test_supersession_target_diagnostics_render_lifecycle_state(self) -> None:
         self._write(
             "docs/reports/terminal.md",
             """---
@@ -390,7 +389,7 @@ review_after: 2026-12-01
 """,
         )
         markdown = gen.render_inventory(gen.collect_reports(self._config()))
-        self.assertIn("## Terminal Supersession Diagnostics", markdown)
+        self.assertIn("## Supersession Target Diagnostics", markdown)
         self.assertIn("| Path | lifecycle_state | Diagnostic |", markdown)
         self.assertIn(
             "| docs/reports/terminal.md | superseded | missing superseded_by target |",
@@ -418,6 +417,7 @@ relations:
         self.assertIn("files_with_lifecycle_state", markdown)
         self.assertIn("files_missing_lifecycle_state", markdown)
         self.assertIn("| Path | doc_type | status | lifecycle_state |", markdown)
+        self.assertIn("supersession target diagnostic", markdown)
         self.assertIn("## Relations", markdown)
         self.assertIn("relates_to", markdown)
         self.assertIn("docs/reports/other.md", markdown)
