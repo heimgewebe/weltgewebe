@@ -144,8 +144,10 @@
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
       "missing_evidence": [
-        "Gruener GitHub-Actions-Lauf fuer Job basemap-visual-proof (READY_FOR_CI_PROOF, nicht PROVEN)",
-        "Tile-Directory- und strukturelle PMTiles-Validierung"
+        "Visuelle Korrektheit (Pixel-/Baseline-Vergleich) — Visual-Job rendert und prueft Souveraenitaet, aber kein Pixelvergleich",
+        "Produktionsnaher Caddy-Proof (Proof nutzt caddy:2.7 + Caddyfile.proof bzw. Vite-Middleware; Produktion baut caddy:2.8.4 + caddy-ratelimit, Caddyfile.heim)",
+        "Tile-Directory- und strukturelle PMTiles-Validierung",
+        "Cross-Environment-Reproduzierbarkeit des Artefakts (SHA256 env-abhaengig)"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
@@ -161,7 +163,8 @@
       ],
       "scope_status": {
         "range-delivery": "proven",
-        "pmtiles-content": "proven"
+        "pmtiles-content": "proven",
+        "visual": "proven"
       },
       "evidence": {
         "workflow": "Basemap Runtime Proof",
@@ -189,12 +192,13 @@
       },
       "proven": [
         "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content",
-        "PMTiles-Content-Proof via Caddy gegen echtes CI-Artefakt (Scope pmtiles-content) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606, Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes"
+        "PMTiles-Content-Proof via Caddy gegen echtes CI-Artefakt (Scope pmtiles-content) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606, Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes",
+        "Visual-Runtime-Proof (Browser -> Vite-Middleware -> echtes Hamburg-PMTiles -> HTTP 206 -> MapLibre canvas + isStyleLoaded() + 0 externe Provider) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272 (Job basemap-visual-proof 79773804577, main, 2026-06-05) und https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825 (Job 78164572577, main, 2026-05-27). Scope: Vite-Middleware, nicht Caddy; visuelle Korrektheit/Pixelvergleich bleibt NOT_PROVEN. Einordnung: docs/reports/map-basemap-proof-gap-reconciliation.md"
       ]
     }
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (scope=range-delivery und scope=pmtiles-content): blockierende Jobs basemap-range-delivery-proof und basemap-pmtiles-content-proof haben HTTP 206 via Caddy sowie HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
+    "Deploy_Artefakt": "PROVEN (scope=range-delivery, scope=pmtiles-content und scope=visual): blockierende Jobs basemap-range-delivery-proof, basemap-pmtiles-content-proof und basemap-visual-proof haben HTTP 206 via Caddy, HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt sowie MapLibre-Rendering echter lokaler Tiles via Vite-Middleware belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae; visual: Run #27028165272 und #26535801825 auf main). Offen: visuelle Korrektheit (Pixel-/Baseline-Vergleich), produktionsnaher Caddy (Proof caddy:2.7 vs Produktion caddy:2.8.4 + caddy-ratelimit), tiefe PMTiles-Strukturvalidierung und Cross-Env-Reproduzierbarkeit — siehe docs/reports/map-basemap-proof-gap-reconciliation.md."
   }
 }

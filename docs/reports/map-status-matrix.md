@@ -64,8 +64,14 @@ Repo-Stand tatsaechlich vorhanden sind.
 - **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work.
   **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
   (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
-  CI-Ausführung des visuellen Proofs: READY_FOR_CI_PROOF — Job `basemap-visual-proof` in
-  `.github/workflows/basemap-runtime-proof.yml` eingerichtet; kein grüner GitHub-Actions-Lauf liegt noch vor.
+  CI-Ausführung des visuellen Proofs: PROVEN — Job `basemap-visual-proof` in
+  `.github/workflows/basemap-runtime-proof.yml` ist grün auf `main`
+  ([CI-Lauf 27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
+  Job 79773804577, 2026-06-05; zuvor [CI-Lauf 26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
+  Job 78164572577, 2026-05-27). Scope: echtes Hamburg-Artefakt über die Vite-Middleware
+  (nicht Caddy). Visuelle Korrektheit (Pixel-/Baseline-Vergleich) und produktionsnaher
+  Caddy bleiben NOT_PROVEN; differenzierte Einordnung in
+  `docs/reports/map-basemap-proof-gap-reconciliation.md`.
   Map-Interaktion und clientseitige Fehlerbehandlung sind belegt.
   Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
@@ -164,5 +170,11 @@ Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 `basemap-hamburg-v0.1.0.pmtiles` mit SHA256
 `3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab` und
 Groesse `23948909` Bytes.
-Offen bleiben die Produktionsentscheidung fuer den
-Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.
+Die visuelle Kartenabnahme in GitHub Actions ist inzwischen PROVEN (Job
+`basemap-visual-proof` grün auf `main`, CI-Lauf 27028165272/26535801825; Scope:
+echtes Artefakt via Vite-Middleware, nicht Caddy). Offen bleiben die
+Produktionsentscheidung fuer den Basemap-Modus, die visuelle Korrektheit
+(Pixel-/Baseline-Vergleich), ein produktionsnaher Caddy-Proof (Proof nutzt
+`caddy:2.7`, Produktion baut `caddy:2.8.4`) und die tiefe
+PMTiles-Strukturvalidierung — Einordnung in
+`docs/reports/map-basemap-proof-gap-reconciliation.md`.

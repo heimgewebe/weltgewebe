@@ -253,12 +253,22 @@ Sondern:
     Range-Auslieferungs-Kette, nicht den PMTiles-Magic-Byte-Check.
   - Das ausgelieferte Artefakt ist im CI ein deterministisches, synthetisches
     64-KiB-Testartefakt — keine echte Karte. Es belegt nur die Caddy-Range-Kette.
-- [ ] **PMTiles-Magic-Byte-Check im CI:** Der Guard kennt
-  `BASEMAP_PROOF_SCOPE=pmtiles-content` (prueft die PMTiles-Magic-Bytes), wird in
-  diesem Scope aber erst ausfuehrbar, sobald ein echtes PMTiles-Artefakt im CI
-  produziert oder geladen wird. Hamburg-/Deutschland-Builds bleiben heavy und
-  laufen weiterhin nur via `workflow_dispatch`.
-- [ ] Visuelle Abnahme: Karte rendert ohne Fallback nach realem Tile-Load.
+- [x] **PMTiles-Magic-Byte-Check im CI (Scope `pmtiles-content`) PROVEN:** Job
+  `basemap-pmtiles-content-proof` baut ein echtes Hamburg-PMTiles-Artefakt im Lauf
+  (`scripts/basemap/build-hamburg-pmtiles.sh`), serviert es ueber Caddy und prueft
+  Magic `PMTiles` + SHA256. Der Job laeuft path-gated auf `pull_request`/`push`
+  (nicht nur `workflow_dispatch`). **PROVEN:** Runs
+  [26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921),
+  [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
+  [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
+  Scope: nur 7-Byte-Magic; Tile-Directory-/Strukturvalidierung (P4) bleibt Future Work.
+- [x] Visuelle Abnahme (Scope CI, via Vite-Middleware) PROVEN: Job
+  `basemap-visual-proof` ist grün auf `main`
+  ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
+  Job 79773804577; [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
+  Job 78164572577): MapLibre-Canvas + `isStyleLoaded()` + HTTP 206 + 0 externe Provider.
+  Offen bleiben die visuelle **Korrektheit** (Pixel-/Baseline-Vergleich) und ein
+  produktionsnaher Caddy-Pfad — siehe `docs/reports/map-basemap-proof-gap-reconciliation.md`.
 
 ### Abgrenzung: Was kein Ersatz fuer den Runtime-Beweis ist
 
@@ -275,10 +285,11 @@ Sondern:
   [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659) (Commit 14feefd6),
   Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
   Response `HTTP/1.1 206 Partial Content`.
-- [ ] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
-  PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix; Tile-Directory- und
-  Strukturvalidierung bleiben Future Work). Steht aus, solange im CI
-  kein echtes Artefakt produziert wird.
+- [x] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
+  PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix). **PROVEN** im CI (Jobs
+  `basemap-pmtiles-content-proof`/`basemap-visual-proof` grün auf `main`, Runs
+  26447341921/26535801825/27028165272). Tile-Directory- und Strukturvalidierung
+  (P4) sowie Cross-Env-Reproduzierbarkeit bleiben Future Work.
 
 ---
 
@@ -290,7 +301,9 @@ Sondern:
 - [x] Fehlerpfade testbar machen.
 - [x] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
   PROVEN — [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
-  (Commit 14feefd6). PMTiles-Magic-Byte-Check bleibt offen.
+  (Commit 14feefd6). PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und visuelle
+  CI-Abnahme sind inzwischen ebenfalls PROVEN (Runs 26447341921/26535801825/27028165272);
+  tiefe PMTiles-Strukturvalidierung (P4) bleibt offen.
 
 ---
 
@@ -304,5 +317,7 @@ Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job nicht blockiere
 blockierender Job `basemap-range-delivery-proof` PROVEN (CI-Lauf #25970466659, Commit 14feefd6,
 Guard `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
 Response `HTTP/1.1 206 Partial Content`).
-PMTiles-Magic-Byte-Check bleibt offen; `pmtiles-content`-Scope prueft nur die ersten
-7 Magic-Bytes der lokalen Artefaktdatei, keine Tile-Directory-Struktur.
+PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und visuelle CI-Abnahme sind
+inzwischen PROVEN; der `pmtiles-content`-Scope prueft nur die ersten 7 Magic-Bytes,
+keine Tile-Directory-Struktur (P4 offen). Differenzierte Einordnung:
+`docs/reports/map-basemap-proof-gap-reconciliation.md`.
