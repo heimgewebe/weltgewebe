@@ -395,6 +395,8 @@ review_after: 2026-12-01
             "| docs/reports/superseded.md | superseded | missing superseded_by target |",
             markdown,
         )
+        self.assertIn("supersession target diagnostic", markdown)
+        self.assertEqual(markdown.count("missing superseded_by target"), 2)
 
     def test_relations_are_rendered_in_markdown_output(self) -> None:
         self._write(
