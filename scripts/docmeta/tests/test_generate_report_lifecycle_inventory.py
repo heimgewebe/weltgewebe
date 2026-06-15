@@ -46,6 +46,7 @@ id: docs.reports.alpha
 title: Alpha
 doc_type: report
 status: active
+lifecycle_state: active
 lifecycle: observed
 owner_task: docs/tasks/alpha.md
 review_after: 2026-12-01
@@ -67,6 +68,7 @@ relations:
         self.assertEqual(record.doc_id, "docs.reports.alpha")
         self.assertEqual(record.title, "Alpha")
         self.assertEqual(record.lifecycle, "observed")
+        self.assertEqual(record.lifecycle_state, "active")
         self.assertEqual(record.owner_task, "docs/tasks/alpha.md")
         self.assertEqual(record.review_after, "2026-12-01")
         self.assertEqual(record.superseded_by, "docs/reports/beta.md")
@@ -107,7 +109,7 @@ status: active
 
         self.assertEqual(
             records[0].absent_core_lifecycle_fields,
-            ("lifecycle", "owner_task", "review_after"),
+            ("lifecycle", "owner_task", "review_after", "lifecycle_state"),
         )
         self.assertIn("descriptive only", markdown)
         self.assertNotIn("invalid", markdown.lower())
@@ -270,6 +272,7 @@ id: docs.reports.active
 title: Active
 doc_type: report
 status: active
+lifecycle_state: active
 lifecycle: observed
 owner_task: docs/tasks/active.md
 review_after: 2026-12-01
@@ -283,19 +286,20 @@ review_after: 2026-12-01
         self.assertEqual(record.absent_core_lifecycle_fields, ())
         self.assertFalse(record.missing_supersession_target)
 
-    def test_terminal_status_without_superseded_by_is_reported(self) -> None:
+    def test_superseded_lifecycle_state_without_superseded_by_is_reported(self) -> None:
         self._write(
-            "docs/reports/terminal.md",
+            "docs/reports/superseded.md",
             """---
-id: docs.reports.terminal
-title: Terminal
+id: docs.reports.superseded
+title: Superseded
 doc_type: report
-status: superseded
+status: deprecated
+lifecycle_state: superseded
 lifecycle: observed
-owner_task: docs/tasks/terminal.md
+owner_task: docs/tasks/superseded.md
 review_after: 2026-12-01
 ---
-# Terminal
+# Superseded
 """,
         )
 
@@ -303,25 +307,96 @@ review_after: 2026-12-01
 
         self.assertTrue(record.missing_supersession_target)
 
-    def test_terminal_status_matching_is_case_insensitive(self) -> None:
+    def test_superseded_lifecycle_state_matching_is_case_insensitive(self) -> None:
         self._write(
-            "docs/reports/terminal.md",
+            "docs/reports/superseded.md",
             """---
-id: docs.reports.terminal
-title: Terminal
+id: docs.reports.superseded
+title: Superseded
 doc_type: report
-status: Superseded
+status: deprecated
+lifecycle_state: Superseded
 lifecycle: observed
-owner_task: docs/tasks/terminal.md
+owner_task: docs/tasks/superseded.md
 review_after: 2026-12-01
 ---
-# Terminal
+# Superseded
 """,
         )
 
         record = gen.collect_reports(self._config())[0]
 
         self.assertTrue(record.missing_supersession_target)
+
+    def test_deprecated_without_lifecycle_state_is_not_terminal(self) -> None:
+        self._write(
+            "docs/reports/legacy.md",
+            """---
+id: docs.reports.legacy
+title: Legacy
+doc_type: report
+status: deprecated
+lifecycle: legacy
+owner_task: OPT-ARC-001
+review_after: 2026-12-01
+---
+# Legacy
+""",
+        )
+
+        record = gen.collect_reports(self._config())[0]
+
+        self.assertFalse(record.missing_supersession_target)
+        self.assertIn("lifecycle_state", record.absent_core_lifecycle_fields)
+
+    def test_archived_lifecycle_state_without_superseded_by_is_not_supersession_gap(self) -> None:
+        self._write(
+            "docs/reports/archived.md",
+            """---
+id: docs.reports.archived
+title: Archived
+doc_type: report
+status: deprecated
+lifecycle: legacy
+owner_task: OPT-ARC-001
+review_after: 2026-12-01
+lifecycle_state: archived
+---
+# Archived
+""",
+        )
+
+        record = gen.collect_reports(self._config())[0]
+
+        self.assertFalse(record.missing_supersession_target)
+        self.assertEqual(record.lifecycle_state, "archived")
+        self.assertNotIn("lifecycle_state", record.absent_core_lifecycle_fields)
+
+    def test_supersession_target_diagnostics_render_lifecycle_state(self) -> None:
+        self._write(
+            "docs/reports/superseded.md",
+            """---
+id: docs.reports.superseded
+title: Superseded
+doc_type: report
+status: deprecated
+lifecycle_state: superseded
+lifecycle: observed
+owner_task: docs/tasks/superseded.md
+review_after: 2026-12-01
+---
+# Superseded
+""",
+        )
+        markdown = gen.render_inventory(gen.collect_reports(self._config()))
+        self.assertIn("## Supersession Target Diagnostics", markdown)
+        self.assertIn("| Path | lifecycle_state | Diagnostic |", markdown)
+        self.assertIn(
+            "| docs/reports/superseded.md | superseded | missing superseded_by target |",
+            markdown,
+        )
+        self.assertIn("supersession target diagnostic", markdown)
+        self.assertEqual(markdown.count("missing superseded_by target"), 2)
 
     def test_relations_are_rendered_in_markdown_output(self) -> None:
         self._write(
@@ -341,6 +416,10 @@ relations:
 
         markdown = gen.render_inventory(gen.collect_reports(self._config()))
 
+        self.assertIn("files_with_lifecycle_state", markdown)
+        self.assertIn("files_missing_lifecycle_state", markdown)
+        self.assertIn("| Path | doc_type | status | lifecycle_state |", markdown)
+        self.assertIn("supersession target diagnostic", markdown)
         self.assertIn("## Relations", markdown)
         self.assertIn("relates_to", markdown)
         self.assertIn("docs/reports/other.md", markdown)
