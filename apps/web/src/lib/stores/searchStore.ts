@@ -13,6 +13,14 @@ export function toggleSearch() {
   });
 }
 
+/**
+ * Opens the search overlay unconditionally. Used by URL deep-link addressing,
+ * which must never toggle (a toggle could close an already-open overlay).
+ */
+export function openSearch() {
+  isSearchOpen.set(true);
+}
+
 export function closeSearch() {
   isSearchOpen.set(false);
   searchQuery.set("");
