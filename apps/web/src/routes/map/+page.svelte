@@ -361,8 +361,15 @@
 
         const currentSelection = get(selection);
         const currentSystemState = get(systemState);
+        // A valid focus deep link addresses a specific entity. Suppress the
+        // default fly-to so the map does not first center on the default
+        // location while the focus target is still being resolved (which would
+        // cause a double fly / flicker). Invalid or duplicate focus params are
+        // not valid focus and therefore do not block the default behaviour.
+        const pendingFocus =
+          parseMapUrlState(get(page).url.searchParams).focus !== null;
 
-        if (!currentSelection && currentSystemState === 'navigation') {
+        if (!pendingFocus && !currentSelection && currentSystemState === 'navigation') {
           const currentZoom = map?.getZoom() ?? 14;
           map?.flyTo({
             center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],

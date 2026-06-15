@@ -128,10 +128,14 @@ die semantische Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
   Linse; ein gültiger, aber noch nicht auflösbarer `focus` blockiert den
   Linsen-Fallback). Ein Intent-Wechsel über die URL verlässt zuvor gesetzte
   Fokus-/Kompositionszustände, bevor die neue Linse geöffnet wird; doppelte
-  bekannte Query-Keys gelten als ungültig. Eine Store→URL-Synchronisation bleibt
-  offen; `center` / `zoom` / `bearing` / `pitch` werden bewusst nicht gespiegelt.
-  `tab=<tab>` wird parserseitig toleriert, aber noch nicht an ein
-  Panel-Tab-Modell gebunden, da Tabs derzeit lokale Panelzustände sind.
+  bekannte Query-Keys gelten als ungültig. Bei gültigem `focus=<type>:<id>` wird
+  der initiale Default-Fly der Karte unterdrückt, damit ein noch nicht
+  aufgelöster Fokus nicht zunächst durch eine Default-Zentrierung übersteuert
+  wird (ungültiger/doppelter `focus` unterdrückt ihn nicht). Eine
+  Store→URL-Synchronisation bleibt offen; `center` / `zoom` / `bearing` / `pitch`
+  werden bewusst nicht gespiegelt. `tab=<tab>` wird parserseitig toleriert, aber
+  noch nicht an ein Panel-Tab-Modell gebunden, da Tabs derzeit lokale
+  Panelzustände sind.
 - **Status**: Teil
 - **Nachweis**: `apps/web/src/lib/map/urlState.ts`, `apps/web/src/lib/map/urlState.test.ts`, `apps/web/src/routes/map/+page.svelte`, `apps/web/tests/map-url-state.spec.ts`, `apps/web/src/lib/stores/mapView.ts`, `apps/web/src/lib/stores/uiView.ts`
 - **Fehlend**: Tab-Adressierung an ein adressierbares Panel-Tab-Modell binden
