@@ -209,9 +209,8 @@ Geeignet nur wenn:
 - echte Runtime-Daten oder ausdrücklich entscheidungsfähige Daten geprüft wurden
 - keine typisierten Nicht-Node-Referenzen existieren
 - keine unbekannten Typ-Hints existieren
-- keine untypisierten fehlenden Referenzen existieren
+- keine fehlenden Node-Referenzen existieren
 - nur node-getypte oder ungetypte, aber auflösbare Node-Referenzen vorkommen
-- keine missing Node references existieren
 - keine malformed Edges existieren
 
 Konsequenz:

@@ -60,6 +60,8 @@ def source_fingerprint(path: str) -> Dict[str, Any]:
 
 def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
     parsed = urlparse(database_url)
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise ValueError("DATABASE_URL must use postgres:// or postgresql:// URI format")
     env = os.environ.copy()
 
     # Remove existing PG* env vars
@@ -561,7 +563,11 @@ def main():
             logging.error("DATABASE_URL not set for PostgreSQL audit")
             sys.exit(1)
 
-        postgres_env = postgres_env_from_database_url(os.environ["DATABASE_URL"])
+        try:
+            postgres_env = postgres_env_from_database_url(os.environ["DATABASE_URL"])
+        except ValueError as exc:
+            logging.error("%s", exc)
+            sys.exit(1)
         node_ids, node_summary = load_postgres_nodes(postgres_env)
 
         edge_parse_summary = {

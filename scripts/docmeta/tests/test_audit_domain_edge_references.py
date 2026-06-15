@@ -374,9 +374,10 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
 
     def test_max_findings_zero_keeps_summary_and_truncates(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n')
+            nf.write('{"id": "node-a"}\n{"id": "node-b"}\n')
             nf.flush()
             ef.write('{"id": "edge-1", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.write('{"id": "edge-2", "source_id": "node-a", "target_id": "node-b"}\n')
             ef.flush()
             result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "0")
             self.assertEqual(result.returncode, 0)
@@ -385,6 +386,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(len(data["findings"]), 0)
             self.assertIs(data["findings_truncated"], True)
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
+            self.assertEqual(data["summary"]["untyped_existing_node_references"], 3)
 
     def test_negative_max_findings_fails(self):
         result = run_script("--max-findings", "-1")
@@ -511,6 +513,15 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertNotIn("some-long-string-with-sensitives", result.stdout)
             finding = data["findings"][0]
             self.assertTrue(finding["type_hint"].startswith("type_hint:sha256:"))
+
+
+    def test_postgres_env_rejects_libpq_dsn_string(self):
+        from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
+
+        with self.assertRaises(ValueError):
+            postgres_env_from_database_url(
+                "host=localhost port=5432 user=postgres dbname=mydb"
+            )
 
 if __name__ == "__main__":
     unittest.main()
