@@ -118,9 +118,9 @@
     },
     {
       "id": "P5",
-      "name": "browser-real-tile-load-proven",
+      "name": "browser-pmtiles-protocol-init-proven",
       "status": "PROVEN",
-      "scope": "ci|real_map|via-vite-middleware",
+      "scope": "ci|real_map|header_range_and_render_init|via-vite-middleware",
       "evidence": {
         "files": ["apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts"],
         "ci_runs": [27028165272, 26535801825],
@@ -128,11 +128,11 @@
           "basemap-visual-proof (job 79773804577, run 27028165272)",
           "basemap-visual-proof (job 78164572577, run 26535801825)"
         ],
-        "descriptions": ["Browser loads the real Hamburg artifact via the Vite middleware (not Caddy); MapLibre canvas visible, HTTP 206 Range delivery, zero external tile providers."],
+        "descriptions": ["Browser accesses the real Hamburg artifact via the Vite middleware; a separate direct Range request proves HTTP 206 for the artifact; MapLibre canvas is visible, isStyleLoaded=true, at least one local PMTiles request is observed, and remote tile providers are not contacted. This does not prove vector-tile payload delivery."],
         "artifacts": [],
-        "signals": ["isStyleLoaded=true", "http_206_range", "canvas_visible", "remote_violations=0"]
+        "signals": ["direct_http_206_range", "pmtiles_request_observed", "canvas_visible", "isStyleLoaded=true", "remote_violations=0"]
       },
-      "does_not_establish": ["caddy_path_for_visual", "visual_correctness_pixel", "production"]
+      "does_not_establish": ["vector_tile_payload_read", "tile_data_delivery", "source_loaded_with_tile_payload", "caddy_path_for_visual", "visual_correctness_pixel", "production"]
     },
     {
       "id": "P6",
@@ -201,10 +201,12 @@
     "mocked-client-path (P1)",
     "caddy-range-delivery (P2, synthetic, CI)",
     "real-pmtiles-magic+hash (P3, CI)",
-    "browser-real-tile-load (P5, via Vite middleware, CI)"
+    "browser-pmtiles-protocol-init (P5, via Vite middleware, CI)"
   ],
   "known_not_proven_scopes": [
     "pmtiles-structural-validation (P4)",
+    "vector-tile-payload-delivery",
+    "source-loaded-with-real-tile-data",
     "visual-correctness-pixel (P6, partial only)",
     "production-like-caddy (P7)",
     "cross-environment-reproducibility"
@@ -256,7 +258,7 @@
     {
       "statement": "visual proof: READY_FOR_CI_PROOF / no green run yet",
       "sources": ["docs/reports/map-status-matrix.md", "docs/reports/map-status-matrix.json", "docs/blueprints/kartenklarheit-phase6.md", "docs/blueprints/kartenklarheit-roadmap.md"],
-      "finding": "green on main (runs 27028165272, 26535801825)",
+      "finding": "green on main (runs 27028165272, 26535801825); proves PMTiles protocol/header access + render initialization, not vector-tile payload delivery",
       "assessment": "stale_underclaim"
     },
     {
@@ -290,13 +292,12 @@
       "assessment": "new_finding_p7"
     }
   ],
-  "residual_drift": [
-    {
-      "doc": "docs/blueprints/kartenklarheit-phase6.md",
-      "status": "intentionally_unchanged",
-      "reason": "Outside the allowed correction set for this PR; still shows pmtiles-content and visual as open. Tracked here as residual drift to be synced in a follow-up."
-    }
-  ],
+  "residual_drift": [],
+  "phase6_sync": {
+    "status": "updated_in_this_pr",
+    "doc": "docs/blueprints/kartenklarheit-phase6.md",
+    "note": "Phase 6 now lists pmtiles-content and the browser/PMTiles-init proof as PROVEN (with scope limits); P4 structure, vector-tile payload delivery, P6 pixel correctness and P7 production-like Caddy remain open."
+  },
   "future_cleanup": [
     "docs/reports/map-status-matrix.json currently stores some evidence as prose strings (proven[], open_architectural_decisions); a future report-schema cleanup should normalize these into structured evidence objects. Out of scope for this PR."
   ],

@@ -3,7 +3,7 @@ id: map-basemap-proof-gap-reconciliation
 title: MAP-PROOF-001 — Basemap Proof Gap Reconciliation
 doc_type: report
 status: active
-summary: Diagnose-/Reconciliation-Report, der den belegbaren Beweisstand der Basemap-Runtime (statische Config, gemockter Client, Caddy-Range, PMTiles-Content, Browser-Rendering, visuelle Abnahme, Produktions-Caddy) gegen verifizierte CI-Evidenz abgleicht und den naechsten Implementierungs-PR ableitet.
+summary: Diagnose-/Reconciliation-Report, der den belegbaren Beweisstand der Basemap-Runtime (statische Config, gemockter Client, Caddy-Range, PMTiles-Content, Browser-/PMTiles-Init, visuelle Artefakte, Produktions-Caddy) gegen verifizierte CI-Evidenz abgleicht und den naechsten Implementierungs-PR ableitet.
 relations:
   - type: relates_to
     target: docs/reports/map-status-matrix.md
@@ -41,8 +41,8 @@ PMTiles-Content-Proof."
 **Antithese (Repo-Befund):** Der Dump und die verifizierte CI-Historie zeigen das
 Gegenteil der Restleerstellen-Hypothese: Der `basemap-runtime-proof.yml`-Workflow
 betreibt vier Jobs, von denen drei blockierend sind. Real-Caddy-Range (synthetisch),
-echtes Hamburg-PMTiles-Artefakt (Magic + SHA256) und das **browserseitige
-MapLibre-Rendering echter lokaler Tiles** sind **bereits gruen auf `main`**.
+echtes Hamburg-PMTiles-Artefakt (Magic + SHA256) und der **browserseitige
+PMTiles-Protokollzugriff samt Render-Initialisierung** sind **bereits gruen auf `main`**.
 Die Statusdokumente sind hier nicht zu optimistisch, sondern zu **pessimistisch**:
 Sie behaupten teils noch `NOT_PROVEN` / `READY_FOR_CI_PROOF`, obwohl die Jobs
 nachweislich gruen sind.
@@ -50,9 +50,9 @@ nachweislich gruen sind.
 **Synthese:** Die eigentliche Leerstelle ist nicht „Beweis fehlt", sondern
 „Beweis-Einordnung driftet". Real bewiesen sind P0–P3 und P5 (mit klaren
 Scope-Grenzen). Echte Restleerstellen bleiben: tiefe PMTiles-Strukturvalidierung
-(P4), visuelle **Korrektheit** statt nur Rendering-Signal (P6),
-Produktionsnaehe der Caddy-Konfiguration (P7) und die **Reproduzierbarkeit** des
-Artefakts. Der naechste PR ist deshalb nicht „erst mal ein echtes Artefakt bauen"
+(P4), die Vector-Tile-Payload-/Tile-Datenlieferung, visuelle **Korrektheit** statt
+nur Rendering-Signal (P6), Produktionsnaehe der Caddy-Konfiguration (P7) und die
+**Reproduzierbarkeit** des Artefakts. Der naechste PR ist deshalb nicht „erst mal ein echtes Artefakt bauen"
 (das existiert), sondern „die echte Restleerstelle schliessen + die Dokumentation
 konsolidieren".
 
@@ -127,17 +127,21 @@ konsolidieren".
   Metadata-Block) oder fuehrt einen Tile-Read durch.
 - **Bewertung:** `NOT_PROVEN`. Magic-Byte-Check ist keine Strukturvalidierung.
 
-### 2.6 Browser Real Tile Loading
+### 2.6 Browser PMTiles Protocol / Render Init
 
-- `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` laedt das **echte**
-  Hamburg-Artefakt ueber die **Vite-Middleware** (nicht Caddy), prueft direkten
-  Range-Request → HTTP 206 + `Accept-Ranges` + `Content-Range`, MapLibre-Canvas
-  sichtbar mit Dimensionen > 0, `isStyleLoaded() === true`, ≥ 1 lokaler
-  PMTiles-Range-Request und **0** Requests an externe Tile-Provider.
+- `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` greift auf das **echte**
+  Hamburg-Artefakt ueber die **Vite-Middleware** (nicht Caddy) zu: ein **separater
+  direkter** Range-Request beweist HTTP 206 + `Accept-Ranges` + `Content-Range`;
+  zusaetzlich werden MapLibre-Canvas sichtbar (Dimensionen > 0), `isStyleLoaded() === true`,
+  **≥ 1 beobachteter** lokaler PMTiles-(Range-)Request und **0** Requests an externe
+  Tile-Provider geprueft.
 - CI-Job `basemap-visual-proof` (`needs: basemap-pmtiles-content-proof`) fuehrt genau
   diesen Test aus. **Gruen auf `main`** (siehe Abschnitt 6).
-- **Bewertung:** browserseitiges Laden echter lokaler Tiles bewiesen — Pfad ueber
-  **Vite-Middleware**, nicht Caddy; kein Produktions-Caddy.
+- **Bewertung:** Browserseitiger PMTiles-Protokollzugriff und Render-Initialisierung
+  sind belegt. Der vorhandene Test belegt **nicht**, dass ein Vector-Tile-Payload gelesen
+  wurde. Der beobachtete PMTiles-Request kann Header-/Indexzugriff sein; der harte
+  HTTP-206-Beweis stammt aus einem separaten direkten Range-Request. Echte
+  Tile-Datenlieferung / Source-loaded-Tile-Payload bleibt `NOT_PROVEN`.
 
 ### 2.7 Visual Artifact / Screenshot
 
@@ -171,7 +175,7 @@ konsolidieren".
 | P2 caddy-range-synthetic | PROVEN | CI + synthetisch | Job `basemap-range-delivery-proof`, Run 27028165272 (Job 79773383993); fruehere Runs 25970466659, 26447341921; `caddy:2.7`+`Caddyfile.proof`, 64-KiB-Synthetik | echte Caddy-206-Range-Kette auf `/local-basemap/*` | echten Karteninhalt (Artefakt synthetisch) | → P3 |
 | P3 real-pmtiles-magic | PROVEN | CI + lokal, Magic/Hash | Job `basemap-pmtiles-content-proof`, Run 27028165272 (Job 79773383882) + Run 26447341921 (Job 77857000606); `docs/proofs/basemap-hamburg-artifact-proof.md` | echtes Hamburg-PMTiles, Magic `PMTiles`@0, intra-run SHA256, Caddy liefert Bytes 0-6 via 206 | tiefe Struktur; **Reproduzierbarkeit** (SHA env-abhaengig) | → P4 + Reprod. |
 | P4 real-pmtiles-structure | NOT_PROVEN | — | Guard druckt `NOT_PROVEN: Deep PMTiles structure validation` | nichts ueber Magic hinaus | Tile-Directory/Metadata/Tile-Read | Strukturparser/Inspect auf Fixture |
-| P5 browser-real-tile-load | PROVEN | CI + echtes Artefakt via **Vite** | Job `basemap-visual-proof`, Run 27028165272 (Job 79773804577) + Run 26535801825 (Job 78164572577); `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` | Browser laedt echte lokale Tiles E2E, `isStyleLoaded()`, 206, 0 externe Provider | **Caddy**-Pfad fuer Visual; Pixel-Korrektheit; Produktion | → P6, P7 |
+| P5 browser-pmtiles-protocol-init | PROVEN | CI + echtes Artefakt via Vite-Middleware | separater direkter HTTP-206-Range-Request + beobachteter lokaler PMTiles-Request + Canvas sichtbar + `isStyleLoaded()` + 0 externe Provider; Run 27028165272 (Job 79773804577), Run 26535801825 (Job 78164572577); `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` | Vector-Tile-Payload-/Tile-Datenlieferung, Source-loaded-Tile-Payload, Caddy-Visual-Pfad, Pixel-Korrektheit, Produktion | → P6, P7 |
 | P6 visual-artifact | PARTIAL | CI Screenshot, kein Baseline | `screenshot.png` + `proof-summary.json` (Run 27028165272 Job 79773804577) | Screenshot + Rendering-/Souveraenitaets-Signal | visuelle **Korrektheit** (kein Pixel-/Baseline-Vergleich) | bewusst bounded (Pixelvergleich = Nicht-Ziel) |
 | P7 production-like-caddy | NOT_PROVEN | — | Proof `caddy:2.7`+`Caddyfile.proof` bzw. Vite; Prod `infra/caddy/Dockerfile`=`caddy:2.8.4`+`caddy-ratelimit`, `Caddyfile.heim`; `Caddyfile.prod` ohne `/local-basemap/` | nichts ueber Prod-Aequivalenz | Version-/Config-/Architektur-Aequivalenz | Prod-naher Caddy-Proof |
 
@@ -206,11 +210,12 @@ konsolidieren".
 | SHA256/Groesse des „v0.1.0"-Artefakts | `artifact-proof.md` (`f0734…`/23948877) vs `map-status-matrix` (`3eea…`/23948909) | abweichend → nicht reproduzierbar | **Nicht-reproduzierbar; bisher nicht eingeordnet** | als bewusste Leerstelle dokumentieren (intra-run SHA) |
 | Caddy-Version im Proof vs. Produktion | nirgends abgeglichen | Proof `caddy:2.7`, Prod/Heim `caddy:2.8.4`+`caddy-ratelimit` (`infra/caddy/Dockerfile`) | **Bisher unbenannte Drift** | als P7-Gap fuehren |
 
-> **Residuale Drift (bewusst):** Dieser PR korrigiert nur `docs/reports/map-status-matrix.md` + `.json`
-> und `docs/blueprints/kartenklarheit-roadmap.md`. `docs/blueprints/kartenklarheit-phase6.md`
-> bleibt **bewusst unveraendert** (ausserhalb des erlaubten Korrektur-Sets) und fuehrt
-> `pmtiles-content` sowie die visuelle Abnahme weiterhin als offen. Diese Restdivergenz
-> ist hier benannt und sollte in einem Folge-PR synchronisiert werden.
+> **Phase-6-Sync (in diesem PR):** Dieser PR korrigiert `docs/reports/map-status-matrix.md` + `.json`,
+> `docs/blueprints/kartenklarheit-roadmap.md` **und** `docs/blueprints/kartenklarheit-phase6.md`.
+> Damit ist die zuvor bewusst belassene Drift aufgeloest: Phase 6 fuehrt `pmtiles-content`
+> und den Browser-/PMTiles-Init-Proof jetzt konsistent als PROVEN (mit Scope-Grenzen),
+> waehrend PMTiles-Struktur (P4), Vector-Tile-Payload-Lieferung, Pixel-Korrektheit (P6)
+> und produktionsnaher Caddy (P7) offen bleiben.
 
 ## 5. Synthetisch vs. echtes Kartenartefakt
 
@@ -218,8 +223,8 @@ konsolidieren".
   Pseudozufall — bewusst **kein** gueltiges PMTiles. Er beweist ausschliesslich die
   Caddy-Range-Kette (206 + Header). Er beweist **keinen** Karteninhalt.
 - **Echt (P3/P5):** Der `pmtiles-content`- und der `visual`-Job bauen das echte
-  Hamburg-Artefakt (Planetiler, gepinnt) und beweisen Magic/Hash bzw.
-  Browser-Rendering.
+  Hamburg-Artefakt (Planetiler, gepinnt) und beweisen Magic/Hash bzw. den
+  Browser-/PMTiles-Protokollzugriff samt Render-Initialisierung (kein Tile-Payload-Read).
 - **Regel:** Range-Delivery ist PROVEN, aber bei synthetischem Scope bleibt echter
   Karteninhalt **getrennt** zu betrachten. „Caddy liefert 206" ⇒ nicht „die Karte
   stimmt". P2 und P3/P5 duerfen nicht vermischt werden.
@@ -256,7 +261,7 @@ Schlussfolgerungen:
 ## 7. Minimal ausreichender naechster Implementierungs-PR
 
 Der naechste PR ist **nicht** „erst mal ein echtes Artefakt im CI bauen" — das ist
-bereits PROVEN (P3) inklusive Browser-Rendering (P5). Die minimal sinnvolle echte
+bereits PROVEN (P3) inklusive Browser-/PMTiles-Init (P5). Die minimal sinnvolle echte
 Restleerstelle ist **P4 (PMTiles-Strukturvalidierung jenseits der Magic-Bytes)**,
 flankiert von der Konsolidierung der Dokumentation.
 
@@ -367,10 +372,10 @@ oder Lockfiles. Aenderungen ausschliesslich in `docs/`.
 ## Essenz
 
 - **Bewiesen (mit Scope):** P0 (static config), P1 (mocked client), P2 (Caddy-Range,
-  **synthetisch**), P3 (echtes PMTiles Magic+Hash, CI), P5 (Browser-Rendering echter
-  Tiles via **Vite**, CI).
-- **Nicht bewiesen:** P4 (PMTiles-Struktur), P6 (visuelle **Korrektheit**), P7
-  (produktionsnaher Caddy) sowie Cross-Env-Reproduzierbarkeit.
+  **synthetisch**), P3 (echtes PMTiles Magic+Hash, CI), P5 (Browser-/PMTiles-Protokollzugriff
+  + Render-Initialisierung via **Vite**, CI).
+- **Nicht bewiesen:** P4 (PMTiles-Struktur), die Vector-Tile-Payload-/Tile-Datenlieferung,
+  P6 (visuelle **Korrektheit**), P7 (produktionsnaher Caddy) sowie Cross-Env-Reproduzierbarkeit.
 - **Kern-Reconciliation:** Die Statusdokumente **untertreiben** — der Visual-CI-Job
   ist gruen auf `main`, wird aber teils noch als `NOT_PROVEN`/`READY_FOR_CI_PROOF`
   gefuehrt; `pmtiles-content` ist gruen, in Roadmap/Phase6 aber noch offen.

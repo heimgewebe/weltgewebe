@@ -262,12 +262,14 @@ Sondern:
   [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
   [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
   Scope: nur 7-Byte-Magic; Tile-Directory-/Strukturvalidierung (P4) bleibt Future Work.
-- [x] **Visual-Runtime-Proof (Scope CI, via Vite-Middleware) PROVEN:** Job
+- [x] **Browser-/PMTiles-Init-Proof (Scope CI, via Vite-Middleware) PROVEN:** Job
   `basemap-visual-proof` ist grün auf `main`
   ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
   Job 79773804577; [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
-  Job 78164572577): MapLibre-Canvas + `isStyleLoaded()` + HTTP 206 + 0 externe Provider.
-  Offen bleiben die visuelle **Korrektheit** (Pixel-/Baseline-Vergleich) und ein
+  Job 78164572577). Belegt sind ein separater direkter PMTiles-Range-Request mit HTTP 206,
+  ein beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()` und 0 externe
+  Provider. Offen bleiben die Vector-Tile-Payload-/Tile-Datenlieferung (der Proof belegt
+  keinen Tile-Payload-Read), die visuelle **Korrektheit** (Pixel-/Baseline-Vergleich) und ein
   produktionsnaher Caddy-Pfad — siehe `docs/reports/map-basemap-proof-gap-reconciliation.md`.
 
 ### Abgrenzung: Was kein Ersatz fuer den Runtime-Beweis ist
@@ -301,9 +303,9 @@ Sondern:
 - [x] Fehlerpfade testbar machen.
 - [x] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
   PROVEN — [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
-  (Commit 14feefd6). PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und visuelle
-  CI-Abnahme sind inzwischen ebenfalls PROVEN (Runs 26447341921/26535801825/27028165272);
-  tiefe PMTiles-Strukturvalidierung (P4) bleibt offen.
+  (Commit 14feefd6). PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und der
+  Browser-/PMTiles-Init-Proof sind inzwischen ebenfalls PROVEN (Runs 26447341921/26535801825/27028165272);
+  Vector-Tile-Payload-Lieferung und tiefe PMTiles-Strukturvalidierung (P4) bleiben offen.
 
 ---
 
@@ -317,7 +319,8 @@ Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job nicht blockiere
 blockierender Job `basemap-range-delivery-proof` PROVEN (CI-Lauf #25970466659, Commit 14feefd6,
 Guard `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
 Response `HTTP/1.1 206 Partial Content`).
-PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und visuelle CI-Abnahme sind
-inzwischen PROVEN; der `pmtiles-content`-Scope prueft nur die ersten 7 Magic-Bytes,
-keine Tile-Directory-Struktur (P4 offen). Differenzierte Einordnung:
+PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und der Browser-/PMTiles-Init-Proof
+sind inzwischen PROVEN; letzterer belegt Protokoll-/Header-Zugriff + Render-Init, **nicht**
+die Vector-Tile-Payload-Lieferung. Der `pmtiles-content`-Scope prueft nur die ersten 7
+Magic-Bytes, keine Tile-Directory-Struktur (P4 offen). Differenzierte Einordnung:
 `docs/reports/map-basemap-proof-gap-reconciliation.md`.
