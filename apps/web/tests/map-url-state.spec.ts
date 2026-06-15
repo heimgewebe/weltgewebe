@@ -18,6 +18,20 @@ test.describe("Map URL addressing", () => {
   test.beforeEach(async ({ page }) => {
     await mockApiResponses(page);
 
+    // mockApiResponses mocks the local-sovereign style (/local-basemap/style.json,
+    // the active mode in the e2e build). This extra route is a defensive mock for
+    // the external MapLibre demo style so the test never depends on the network.
+    await page.route(
+      "https://demotiles.maplibre.org/style.json",
+      async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+        });
+      },
+    );
+
     await page.route("**/api/nodes", async (route) => {
       await route.fulfill({
         status: 200,
@@ -121,6 +135,36 @@ test.describe("Map URL addressing", () => {
     // A valid-but-unresolved focus has priority and blocks the lens fallback.
     await expect(page.locator("#map")).toBeVisible();
     await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
+  });
+
+  test("lens URL leaves prior composition state", async ({ page }) => {
+    await page.goto("/map?compose=node");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+
+    await page.goto("/map?lens=filter");
+    await expect(page.getByTestId("filter-overlay")).toBeVisible();
+    await expect(page.getByTestId("context-panel")).toHaveCount(0);
+  });
+
+  test("lens URL leaves prior focus state", async ({ page }) => {
+    await page.goto("/map?focus=node:url-node-1");
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+
+    await page.goto("/map?lens=filter");
+    await expect(page.getByTestId("filter-overlay")).toBeVisible();
+    await expect(page.getByTestId("context-panel")).toHaveCount(0);
+  });
+
+  test("unresolved focus closes an already open lens instead of falling back to it", async ({
+    page,
+  }) => {
+    await page.goto("/map?lens=filter");
+    await expect(page.getByTestId("filter-overlay")).toBeVisible();
+
+    await page.goto("/map?focus=node:missing&lens=filter");
+    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.getByTestId("filter-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("context-panel")).toHaveCount(0);
   });
 
   test("opens filter lens even when no markers are available", async ({

@@ -58,6 +58,9 @@ export type ParsedMapUrlState = {
  *
  * Returns `null` for any malformed input: missing separator, empty type,
  * empty id, or an unsupported type. Never throws.
+ *
+ * Leading/trailing whitespace is not normalized. Whitespace-only ids are
+ * invalid; otherwise ids are treated as exact identifiers.
  */
 export function parseFocusParam(value: string | null): MapUrlFocus | null {
   if (!value) return null;
@@ -98,30 +101,50 @@ export function isSupportedCompose(
 }
 
 /**
+ * Reads a single value for a known key. A repeated known key (e.g.
+ * `?focus=a&focus=b`) is ambiguous, so it is recorded as invalid and treated as
+ * absent. Returns `null` when the key is missing or duplicated.
+ */
+function getSingleParam(
+  searchParams: URLSearchParams,
+  key: string,
+  invalidKeys: string[],
+): string | null {
+  const values = searchParams.getAll(key);
+  if (values.length === 0) return null;
+  if (values.length > 1) {
+    invalidKeys.push(key);
+    return null;
+  }
+  return values[0];
+}
+
+/**
  * Parses the full `/map` addressing state from a `URLSearchParams`.
  *
  * Pure and total: it never throws and never mutates its input. Unknown query
- * keys are ignored; known keys with invalid values are recorded in
- * `invalidKeys` while their parsed field stays `null`.
+ * keys are ignored; known keys with invalid values — including a known key
+ * that appears more than once — are recorded in `invalidKeys` while their
+ * parsed field stays `null`.
  */
 export function parseMapUrlState(
   searchParams: URLSearchParams,
 ): ParsedMapUrlState {
   const invalidKeys: string[] = [];
 
-  const rawFocus = searchParams.get("focus");
+  const rawFocus = getSingleParam(searchParams, "focus", invalidKeys);
   const focus = parseFocusParam(rawFocus);
   if (rawFocus !== null && focus === null) {
     invalidKeys.push("focus");
   }
 
-  const rawLens = searchParams.get("lens");
+  const rawLens = getSingleParam(searchParams, "lens", invalidKeys);
   const lens = isSupportedLens(rawLens) ? rawLens : null;
   if (rawLens !== null && lens === null) {
     invalidKeys.push("lens");
   }
 
-  const rawCompose = searchParams.get("compose");
+  const rawCompose = getSingleParam(searchParams, "compose", invalidKeys);
   const compose = isSupportedCompose(rawCompose) ? rawCompose : null;
   if (rawCompose !== null && compose === null) {
     invalidKeys.push("compose");
@@ -129,7 +152,7 @@ export function parseMapUrlState(
 
   // `tab` is tolerated parser-side only; it is not bound to UI tabs yet.
   // A present-but-empty or whitespace-only tab (`?tab=`, `?tab=%20`) is invalid.
-  const rawTab = searchParams.get("tab");
+  const rawTab = getSingleParam(searchParams, "tab", invalidKeys);
   let tab: string | null = null;
   if (rawTab !== null) {
     if (rawTab.trim().length > 0) {

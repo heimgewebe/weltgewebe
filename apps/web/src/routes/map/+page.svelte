@@ -14,7 +14,7 @@
 
   import { page } from '$app/stores';
 
-  import { view, selection, systemState, enterKomposition } from '$lib/stores/uiView';
+  import { view, selection, systemState, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
   import { activeFilters, closeFilter } from '$lib/stores/filterStore';
   import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
   import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
@@ -126,13 +126,17 @@
   //
   // Two intents are kept strictly apart:
   //  - Immediate intents (compose=node, lens=filter|search) need no map data and
-  //    are applied as soon as the URL is known.
+  //    are applied as soon as the URL is known. They also leave any stale
+  //    focus/composition state so the addressed surface always starts clean.
   //  - Focus intents (focus=node|garnrolle|account:<id>) need the scene entities
   //    and only count as resolved once their target is actually found.
   // Priority is compose > focus > lens. A valid-but-unresolved focus deliberately
   // blocks the lens fallback so a deep link never lands on the wrong surface.
-  function findMapEntityForFocus(focus: MapUrlFocus): MapEntityViewModel | null {
-    return markersData.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
+  function findMapEntityForFocus(
+    focus: MapUrlFocus,
+    items: MapEntityViewModel[],
+  ): MapEntityViewModel | null {
+    return items.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
   }
 
   function applyImmediateMapUrlAddressing(parsed: ParsedMapUrlState) {
@@ -142,11 +146,18 @@
       enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
       return;
     }
-    // A valid focus takes precedence. While it is unresolved, no lower-priority
-    // lens fallback may run.
+    // A valid focus takes precedence: leave stale focus/composition and close
+    // overlays now; the focus pass resolves the target once data is available.
+    // While it is unresolved, no lower-priority lens fallback may run.
     if (parsed.focus) {
+      closeSearch();
+      closeFilter();
+      leaveToNavigation();
       return;
     }
+    // Lens-only (or empty) URL: leave any prior focus/composition first, then
+    // open the requested lens.
+    leaveToNavigation();
     if (parsed.lens === 'filter') {
       openFilterExclusive();
       return;
@@ -157,9 +168,12 @@
     }
   }
 
-  function tryApplyFocusMapUrlAddressing(parsed: ParsedMapUrlState): boolean {
+  function tryApplyFocusMapUrlAddressing(
+    parsed: ParsedMapUrlState,
+    items: MapEntityViewModel[],
+  ): boolean {
     if (!parsed.focus) return true;
-    const item = findMapEntityForFocus(parsed.focus);
+    const item = findMapEntityForFocus(parsed.focus, items);
     if (!item) return false;
     closeSearch();
     closeFilter();
@@ -167,46 +181,32 @@
     return true;
   }
 
-  // Identity key over the addressable entities, so a focus retry can react to
-  // entity *content* changes, not only to a changed list length.
-  function mapEntityAddressKey(items: MapEntityViewModel[]): string {
-    return items.map((item) => `${item.type}:${item.id}`).join('|');
-  }
-
   // Separate locks: immediate intents fire once per distinct query; focus only
   // locks once its target is resolved, and retries while it stays unresolved.
   let lastAppliedImmediateUrlSearch = '';
   let lastResolvedFocusUrlSearch = '';
-  let lastFocusAttemptKey = '';
   $: {
     const search = $page.url.search;
     const parsed = parseMapUrlState($page.url.searchParams);
-    const entityAddressKey = mapEntityAddressKey(markersData);
     if (search !== lastAppliedImmediateUrlSearch) {
       lastAppliedImmediateUrlSearch = search;
       applyImmediateMapUrlAddressing(parsed);
-      // compose is final and blocks focus/lens.
-      if (parsed.compose === 'node') {
+      // compose is final; without a valid focus there is nothing for the focus
+      // pass to do. Either way the focus lock is satisfied for this query.
+      if (parsed.compose === 'node' || !parsed.focus) {
         lastResolvedFocusUrlSearch = search;
       }
-      // Without a valid focus there is nothing left for the focus pass to do.
-      if (!parsed.focus) {
-        lastResolvedFocusUrlSearch = search;
-      }
-      // A new query string means a fresh focus attempt may run again.
-      lastFocusAttemptKey = '';
     }
+    // Focus resolves directly against the live entity list, so the data
+    // dependency stays visible to Svelte without an artificial key. A retry can
+    // still happen on a later markersData change while focus is unresolved.
     if (
       parsed.focus &&
       search !== lastResolvedFocusUrlSearch &&
-      entityAddressKey.length > 0
+      markersData.length > 0
     ) {
-      const focusAttemptKey = `${search}::${entityAddressKey}`;
-      if (focusAttemptKey !== lastFocusAttemptKey) {
-        lastFocusAttemptKey = focusAttemptKey;
-        if (tryApplyFocusMapUrlAddressing(parsed)) {
-          lastResolvedFocusUrlSearch = search;
-        }
+      if (tryApplyFocusMapUrlAddressing(parsed, markersData)) {
+        lastResolvedFocusUrlSearch = search;
       }
     }
   }

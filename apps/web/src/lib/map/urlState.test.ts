@@ -180,6 +180,35 @@ describe("parseMapUrlState", () => {
     expect(result.focus).toBeNull();
   });
 
+  it("ignores duplicate unknown keys", () => {
+    const result = parse("foo=bar&foo=qux");
+    expect(result.invalidKeys).toEqual([]);
+  });
+
+  it("records duplicate focus parameters as invalid", () => {
+    const result = parse("focus=node:a&focus=node:b");
+    expect(result.focus).toBeNull();
+    expect(result.invalidKeys).toContain("focus");
+  });
+
+  it("records duplicate lens parameters as invalid", () => {
+    const result = parse("lens=filter&lens=search");
+    expect(result.lens).toBeNull();
+    expect(result.invalidKeys).toContain("lens");
+  });
+
+  it("records duplicate compose parameters as invalid", () => {
+    const result = parse("compose=node&compose=node");
+    expect(result.compose).toBeNull();
+    expect(result.invalidKeys).toContain("compose");
+  });
+
+  it("records duplicate tab parameters as invalid", () => {
+    const result = parse("tab=a&tab=b");
+    expect(result.tab).toBeNull();
+    expect(result.invalidKeys).toContain("tab");
+  });
+
   it("combines several invalid values without throwing", () => {
     const result = parse("focus=node:&lens=nope&compose=edge&tab=");
     expect(result.focus).toBeNull();

@@ -126,8 +126,10 @@ Zielrichtung `focus` / `tab` / `lens` / `compose` prüfen.
   `apps/web/src/routes/map/+page.svelte` wendet sie als Adressierungsschicht auf
   die bestehenden uiView-/Overlay-Stores an (Priorität `compose` > `focus` >
   Linse; ein gültiger, aber noch nicht auflösbarer `focus` blockiert den
-  Linsen-Fallback). Eine Store→URL-Synchronisation bleibt offen;
-  `center` / `zoom` / `bearing` / `pitch` werden bewusst nicht gespiegelt.
+  Linsen-Fallback). Ein Intent-Wechsel über die URL verlässt zuvor gesetzte
+  Fokus-/Kompositionszustände, bevor die neue Linse geöffnet wird; doppelte
+  bekannte Query-Keys gelten als ungültig. Eine Store→URL-Synchronisation bleibt
+  offen; `center` / `zoom` / `bearing` / `pitch` werden bewusst nicht gespiegelt.
   `tab=<tab>` wird parserseitig toleriert, aber noch nicht an ein
   Panel-Tab-Modell gebunden, da Tabs derzeit lokale Panelzustände sind.
 - **Status**: Teil
