@@ -241,6 +241,9 @@ Integrity-Guard oder Quarantäne-Report.
 
 Status: needs_runtime_data_run
 
+Für eine entscheidungsfähige FK-Readiness-Prüfung muss der Runtime-Lauf explizit mit
+`--postgres --source-kind runtime` ausgeführt werden.
+
 Begründung:
 
 - Keine lokalen JSONL-Daten für Kanten und Knoten gefunden.

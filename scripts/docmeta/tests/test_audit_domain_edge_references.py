@@ -42,6 +42,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             result = run_script("--nodes-jsonl", nodes_file.name, "--edges-jsonl", "does_not_exist.jsonl")
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Edges file not found", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
 
     def test_all_typed_node_references_valid(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -374,10 +375,9 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
 
     def test_max_findings_zero_keeps_summary_and_truncates(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
-            nf.write('{"id": "node-a"}\n{"id": "node-b"}\n')
+            nf.write('{"id": "node-a"}\n')
             nf.flush()
             ef.write('{"id": "edge-1", "source_id": "missing-a", "target_id": "node-a"}\n')
-            ef.write('{"id": "edge-2", "source_id": "node-a", "target_id": "node-b"}\n')
             ef.flush()
             result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "0")
             self.assertEqual(result.returncode, 0)
@@ -386,7 +386,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(len(data["findings"]), 0)
             self.assertIs(data["findings_truncated"], True)
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
-            self.assertEqual(data["summary"]["untyped_existing_node_references"], 3)
+            self.assertEqual(data["summary"]["untyped_existing_node_references"], 1)
 
     def test_negative_max_findings_fails(self):
         result = run_script("--max-findings", "-1")

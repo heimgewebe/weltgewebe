@@ -279,7 +279,8 @@ def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[s
   'target_id', target_id,
   'source_type', payload->>'source_type',
   'target_type', payload->>'target_type'
-) FROM domain_edges;"""
+) FROM domain_edges
+ORDER BY id;"""
     row_number = 0
     for line in iter_psql_json_lines(sql, postgres_env, "domain_edges"):
         row_number += 1
