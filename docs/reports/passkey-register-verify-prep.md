@@ -318,7 +318,7 @@ Der `register/verify`-Implementierungs-PR darf erst starten, wenn:
 | `AccountStore.update_webauthn_user_id()` implementiert | **belegt** |
 | Step-up-Handoff-Zielbild entschieden | **belegt (Pfad A: Step-up vor `register/options`)** |
 | Step-up-Handoff technisch realisiert | **belegt** — `PasskeyRegistrationGrantStore` (TTL 5 Min, single-use, account/device-gebunden); `BeginPasskeyRegistration`-Consume erzeugt Grant; `register/options` konsumiert Grant und startet Ceremony |
-| Test-Fixtures-Strategie für `finish_passkey_registration` entschieden | **teilweise obsolet** — lokaler Browser-/Virtual-Authenticator-Proof existiert; für CI bleibt die Stabilisierung des Browser-Pfads offen |
+| T1 / positiver Browser-/Authenticator-Pfad | **erledigt** | Durch CI belegt: Workflow `auth-passkey-register-proof`, [Run 27487642565](https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565), Commit `cc54460`. |
 | UI bleibt deaktiviert (`account-section-passkey-cta` disabled, Test grün) | **belegt** (Zeile 227 in account-section.spec.ts) |
 | Magic-Link-Pfad bleibt grün | **belegt** (api_auth.rs) |
 

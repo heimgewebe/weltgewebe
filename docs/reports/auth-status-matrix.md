@@ -168,7 +168,6 @@ Ein Bereich erhält den Status `Teil` auch dann, wenn ein funktional verwandter 
 - `PasskeyRegistrationStore` für laufende Registrierungen (In-Memory, TTL 5 Min) aktiv genutzt (nach Grant-Consume)
 - Langlebiger `PasskeyStore` für registrierte Credentials (In-Memory, account-gebunden, duplicate detection, list/find/remove)
 - `AccountStore.update_webauthn_user_id(account_id, uuid)` als Writeback-Mutation implementiert
-- **Offen:** Positiver Verify-Pfad mit echter WebAuthn-Antwort (Browser-/Authenticator-Beleg), Auth-Options, Auth-Verify, Passkey-Login/-Management, persistente Ablage über Neustart, UI
 
 **Dokumentationsbelege:** auth-roadmap.md (Phase 4 aktualisiert), [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)
 **Code-, Test- und Verifikationsbelege:**
