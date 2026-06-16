@@ -157,6 +157,7 @@ Runtime-Daten.
 | requires_policy_decision | n/a |
 | requires_cleanup | n/a |
 | requires_runtime_data_run | true |
+| runtime_reference_data_observed | n/a |
 
 ## PostgreSQL-Ergebnis
 
@@ -197,11 +198,13 @@ Runtime-Daten.
 | requires_policy_decision | false |
 | requires_cleanup | false |
 | requires_runtime_data_run | true |
+| runtime_reference_data_observed | false |
 
 Hinweis: Das JSON-Policy-Signal `requires_runtime_data_run` bleibt bei einem Runtime-Lauf
 ohne auditable Edge-Referenzen bewusst `true`, und `strict_node_fk_ready` bleibt `false`.
 Ein leerer Runtime-Smoke belegt nur die technische Ausführbarkeit des Auditpfads,
 nicht die FK-Readiness repräsentativer Daten.
+`runtime_reference_data_observed` ist in diesem Smoke-Lauf entsprechend `false`.
 
 ## Redigierte Finding-Klassen
 
