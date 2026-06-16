@@ -3983,6 +3983,9 @@ fn app_with_auth(state: ApiState) -> Router {
             state.clone(),
             weltgewebe_api::middleware::auth::auth_middleware,
         ))
+        // Provide a peer address so handlers that extract `ConnectInfo`
+        // (e.g. the rate-limited `auth/options`) resolve a client IP.
+        .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 8080))))
         .with_state(state)
 }
 
@@ -5376,5 +5379,80 @@ async fn passkey_auth_verify_reused_state_rejected_without_cookie() -> Result<()
     let b2 = body::to_bytes(res2.into_body(), usize::MAX).await?;
     let j2: serde_json::Value = serde_json::from_slice(&b2)?;
     assert_eq!(j2["error"], "AUTHENTICATION_INVALID");
+    Ok(())
+}
+
+fn disabled_account(id: &str, email: &str) -> AccountInternal {
+    AccountInternal {
+        public: AccountPublic {
+            id: id.to_string(),
+            kind: "garnrolle".to_string(),
+            title: "Disabled User".to_string(),
+            summary: None,
+            public_pos: None,
+            mode: weltgewebe_api::routes::accounts::AccountMode::Ron,
+            radius_m: 0,
+            disabled: true,
+            tags: vec![],
+        },
+        role: Role::Gast,
+        email: Some(email.to_string()),
+        webauthn_user_id: uuid::Uuid::new_v4(),
+    }
+}
+
+/// A disabled account that *owns a passkey* must still fail-close at
+/// `auth/options` — folded into the uniform no-credentials 404, no cookie — so
+/// a disabled account can neither start a ceremony nor be distinguished.
+#[tokio::test]
+async fn passkey_auth_options_rejects_disabled_account_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    seed_passkey(&state, "u1", 13)?;
+    // Disable u1 (insert replaces by id); the passkey in PasskeyStore remains.
+    state
+        .accounts
+        .write()
+        .await
+        .insert(disabled_account("u1", "u1@example.com"));
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from(r#"{"email":"u1@example.com"}"#))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(
+        res.status(),
+        StatusCode::NOT_FOUND,
+        "disabled account must fold into the uniform no-credentials response"
+    );
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    Ok(())
+}
+
+/// `auth/options` is rate-limited before it creates any WebAuthn state, and the
+/// throttled response carries no cookie.
+#[tokio::test]
+async fn passkey_auth_options_is_rate_limited_without_cookie() -> Result<()> {
+    let mut state = test_state_with_webauthn()?;
+    state.config.auth_rl_ip_per_min = Some(1);
+    state.rate_limiter = Arc::new(AuthRateLimiter::new(&state.config));
+    seed_passkey(&state, "u1", 15)?;
+    let app = app_with_auth(state);
+
+    let req = || {
+        Request::post("/auth/passkeys/auth/options")
+            .header("content-type", "application/json")
+            .body(body::Body::from(r#"{"email":"u1@example.com"}"#))
+    };
+
+    // First request within the per-minute IP budget succeeds.
+    let res1 = app.clone().oneshot(req()?).await?;
+    assert_eq!(res1.status(), StatusCode::OK);
+
+    // Second request from the same IP is throttled — and sets no cookie.
+    let res2 = app.oneshot(req()?).await?;
+    assert_eq!(res2.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(!res2.headers().contains_key(axum::http::header::SET_COOKIE));
     Ok(())
 }

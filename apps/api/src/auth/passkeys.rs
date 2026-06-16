@@ -41,11 +41,27 @@ const REGISTRATION_GRANT_TTL_SECS: i64 = 300;
 /// matches the registration TTL convention).
 const AUTHENTICATION_TTL_SECS: i64 = 300;
 
+/// Hard upper bound on concurrently in-flight passkey authentications.
+///
+/// `auth/options` is unauthenticated and pre-session, so without a ceiling a
+/// caller could grow the in-memory store without limit (the per-request rate
+/// limiter is the primary bound; this is defence-in-depth). At ~5 min TTL this
+/// caps steady-state memory while staying far above any legitimate concurrency.
+const AUTHENTICATION_STORE_MAX_ENTRIES: usize = 10_000;
+
 /// Error returned when inserting a passkey into [`PasskeyStore`].
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum PasskeyStoreInsertError {
     #[error("passkey credential already exists")]
     DuplicateCredentialId,
+}
+
+/// Error returned when updating a stored passkey via
+/// [`PasskeyStore::update_credential`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum PasskeyStoreUpdateError {
+    #[error("credential not found for account")]
+    NotFound,
 }
 
 /// Stored passkey together with its owning account.
@@ -166,6 +182,47 @@ impl PasskeyStore {
             store.credential_index.remove(credential_id);
         }
         changed
+    }
+
+    /// Applies a WebAuthn [`AuthenticationResult`] to the stored credential it
+    /// refers to (signature counter, backup flags) per webauthn-rs semantics.
+    ///
+    /// `update_credential` mutates the credential in place and never changes the
+    /// credential ID, so the `credential_index` stays consistent and needs no
+    /// reindexing. The credential must belong to `account_id`
+    /// (defence-in-depth); a missing credential or a cross-account mismatch
+    /// fail-closes with [`PasskeyStoreUpdateError::NotFound`].
+    ///
+    /// Returns `true` if the stored credential changed, `false` if it matched
+    /// but nothing changed (e.g. a synced passkey reporting a constant counter).
+    pub fn update_credential(
+        &self,
+        account_id: &str,
+        auth_result: &AuthenticationResult,
+    ) -> Result<bool, PasskeyStoreUpdateError> {
+        let mut store = self.store.write_recover();
+        let credential_id = auth_result.cred_id();
+
+        // Verify ownership first; the immutable borrow ends before the mutable one.
+        let owned_by_account = store
+            .credential_index
+            .get(credential_id)
+            .is_some_and(|owner| owner == account_id);
+        if !owned_by_account {
+            return Err(PasskeyStoreUpdateError::NotFound);
+        }
+
+        let passkey = store
+            .account_passkeys
+            .get_mut(account_id)
+            .and_then(|passkeys| {
+                passkeys
+                    .iter_mut()
+                    .find(|candidate| candidate.cred_id() == credential_id)
+            })
+            .ok_or(PasskeyStoreUpdateError::NotFound)?;
+
+        Ok(passkey.update_credential(auth_result).unwrap_or(false))
     }
 }
 
@@ -325,6 +382,13 @@ pub fn start_passkey_authentication(
     webauthn.start_passkey_authentication(allow_credentials)
 }
 
+/// Error returned when inserting into [`PasskeyAuthenticationStore`].
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum PasskeyAuthenticationStoreInsertError {
+    #[error("passkey authentication store is at capacity")]
+    Full,
+}
+
 /// An in-progress passkey authentication, kept until the client calls
 /// `auth/verify`.
 struct PendingAuthentication {
@@ -342,10 +406,22 @@ struct PendingAuthentication {
 /// registration state (`PasskeyRegistration`) and authentication state
 /// (`PasskeyAuthentication`) are distinct WebAuthn ceremonies and must never be
 /// interchangeable. Like the registration store it is in-memory, TTL-bounded
-/// (5 minutes) and single-use.
-#[derive(Clone, Default)]
+/// (5 minutes) and single-use; additionally it is capacity-bounded
+/// ([`AUTHENTICATION_STORE_MAX_ENTRIES`]) as defence-in-depth against unbounded
+/// growth from the unauthenticated `auth/options` endpoint.
+#[derive(Clone)]
 pub struct PasskeyAuthenticationStore {
     store: Arc<TokioRwLock<HashMap<String, PendingAuthentication>>>,
+    max_entries: usize,
+}
+
+impl Default for PasskeyAuthenticationStore {
+    fn default() -> Self {
+        Self {
+            store: Arc::new(TokioRwLock::new(HashMap::new())),
+            max_entries: AUTHENTICATION_STORE_MAX_ENTRIES,
+        }
+    }
 }
 
 impl PasskeyAuthenticationStore {
@@ -353,9 +429,44 @@ impl PasskeyAuthenticationStore {
         Self::default()
     }
 
+    /// Test-only constructor with a custom capacity, so the capacity behaviour
+    /// can be exercised without inserting tens of thousands of entries.
+    #[cfg(test)]
+    fn with_capacity_for_test(max_entries: usize) -> Self {
+        Self {
+            store: Arc::new(TokioRwLock::new(HashMap::new())),
+            max_entries,
+        }
+    }
+
+    /// Test-only: directly insert an already-expired entry (bypassing the cap),
+    /// so the expired-entry pruning path can be exercised deterministically.
+    #[cfg(test)]
+    async fn insert_expired_for_test(&self, account_id: String, state: PasskeyAuthentication) {
+        let pending = PendingAuthentication {
+            account_id,
+            state,
+            created_at: Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS + 1),
+        };
+        self.store
+            .write()
+            .await
+            .insert(Uuid::new_v4().to_string(), pending);
+    }
+
     /// Store a new in-progress authentication bound to `account_id`. Returns the
-    /// opaque authentication ID that must be sent back by the client.
-    pub async fn insert(&self, account_id: String, state: PasskeyAuthentication) -> String {
+    /// opaque authentication ID that must be sent back by the client, or
+    /// [`PasskeyAuthenticationStoreInsertError::Full`] if the store is at
+    /// capacity even after pruning expired entries.
+    ///
+    /// Pruning the expired entries (an `O(N)` `retain`) only runs when the store
+    /// is at capacity, so the steady-state insert stays `O(1)` and does not pay
+    /// for a full scan under the write lock on every call.
+    pub async fn insert(
+        &self,
+        account_id: String,
+        state: PasskeyAuthentication,
+    ) -> Result<String, PasskeyAuthenticationStoreInsertError> {
         let id = Uuid::new_v4().to_string();
         let pending = PendingAuthentication {
             account_id,
@@ -363,11 +474,17 @@ impl PasskeyAuthenticationStore {
             created_at: Utc::now(),
         };
         let mut store = self.store.write().await;
-        // Opportunistic cleanup of expired entries.
-        let cutoff = Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS);
-        store.retain(|_, v| v.created_at > cutoff);
+        if store.len() >= self.max_entries {
+            // Only now pay for the expired-entry sweep; if it does not free a
+            // slot, reject rather than grow without bound.
+            let cutoff = Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS);
+            store.retain(|_, v| v.created_at > cutoff);
+            if store.len() >= self.max_entries {
+                return Err(PasskeyAuthenticationStoreInsertError::Full);
+            }
+        }
         store.insert(id.clone(), pending);
-        id
+        Ok(id)
     }
 
     /// Consume a pending authentication by ID (single-use). Returns the bound
@@ -729,7 +846,10 @@ webauthn_rp_id: example.com\n";
             .start_passkey_authentication(&[test_passkey(1)])
             .expect("start_passkey_authentication should accept a credential");
 
-        let id = store.insert("acct-1".to_string(), state).await;
+        let id = store
+            .insert("acct-1".to_string(), state)
+            .await
+            .expect("insert under capacity should succeed");
 
         let consumed = store.consume(&id).await;
         assert!(consumed.is_some(), "consume should succeed once");
@@ -753,6 +873,104 @@ webauthn_rp_id: example.com\n";
             store.consume("no-such-authentication-id").await.is_none(),
             "unknown authentication id must fail-closed"
         );
+    }
+
+    fn test_authentication_state() -> PasskeyAuthentication {
+        let webauthn = test_webauthn();
+        let (_, state) = webauthn
+            .start_passkey_authentication(&[test_passkey(1)])
+            .expect("start_passkey_authentication should accept a credential");
+        state
+    }
+
+    #[tokio::test]
+    async fn passkey_authentication_store_rejects_insert_when_capacity_reached() {
+        let store = PasskeyAuthenticationStore::with_capacity_for_test(1);
+
+        let first = store
+            .insert("acct-1".to_string(), test_authentication_state())
+            .await;
+        assert!(first.is_ok(), "first insert fits within capacity");
+
+        let second = store
+            .insert("acct-2".to_string(), test_authentication_state())
+            .await;
+        assert_eq!(
+            second,
+            Err(PasskeyAuthenticationStoreInsertError::Full),
+            "insert beyond capacity (no expired entries to prune) must be rejected"
+        );
+    }
+
+    #[tokio::test]
+    async fn passkey_authentication_store_allows_insert_after_expired_entries_are_pruned() {
+        let store = PasskeyAuthenticationStore::with_capacity_for_test(1);
+
+        // Pre-fill the single slot with an already-expired entry.
+        store
+            .insert_expired_for_test("stale".to_string(), test_authentication_state())
+            .await;
+
+        // The store is "full" by count, but the expired entry must be pruned so
+        // a fresh insert succeeds.
+        let fresh = store
+            .insert("acct-1".to_string(), test_authentication_state())
+            .await;
+        assert!(
+            fresh.is_ok(),
+            "insert must succeed after the expired entry is pruned"
+        );
+    }
+
+    #[test]
+    fn passkey_store_updates_credential_after_authentication_result() {
+        let store = PasskeyStore::new();
+        let passkey = test_passkey(70);
+        let credential_id = passkey.cred_id().clone();
+        store
+            .insert("acct-a".to_string(), passkey)
+            .expect("insert credential");
+
+        // A genuine `AuthenticationResult` built via serde — no browser needed.
+        let auth_result = test_authentication_result(&credential_id, 7);
+
+        // Wrong account fail-closes and mutates nothing.
+        assert_eq!(
+            store.update_credential("acct-b", &auth_result),
+            Err(PasskeyStoreUpdateError::NotFound),
+            "cross-account update must be rejected"
+        );
+
+        // Correct account: counter advances 0 -> 7, so the credential changed.
+        assert_eq!(
+            store.update_credential("acct-a", &auth_result),
+            Ok(true),
+            "advancing the signature counter must report a change"
+        );
+
+        // Re-applying the same result is a no-op (counter already at 7).
+        assert_eq!(
+            store.update_credential("acct-a", &auth_result),
+            Ok(false),
+            "re-applying an identical result must report no change"
+        );
+    }
+
+    fn test_authentication_result(
+        credential_id: &CredentialID,
+        counter: u32,
+    ) -> AuthenticationResult {
+        let cred_id_value = serde_json::to_value(credential_id).expect("credential id serializes");
+        serde_json::from_value(json!({
+            "cred_id": cred_id_value,
+            "needs_update": true,
+            "user_verified": true,
+            "backup_state": false,
+            "backup_eligible": false,
+            "counter": counter,
+            "extensions": {}
+        }))
+        .expect("authentication result fixture must deserialize")
     }
 
     #[test]

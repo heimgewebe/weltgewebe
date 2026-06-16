@@ -19,7 +19,7 @@ use crate::{
     auth::challenges::ChallengeIntent,
     auth::passkeys::{
         start_passkey_authentication, start_passkey_registration, ConsumeGrantResult,
-        PasskeyStoreInsertError, RegistrationInput,
+        PasskeyAuthenticationStoreInsertError, PasskeyStoreInsertError, RegistrationInput,
     },
     auth::session::SessionBackendError,
     auth::step_up_tokens::ConsumeMatchResult,
@@ -2096,6 +2096,7 @@ pub struct PasskeyAuthOptionsPayload {
 /// fail-closes with `503`.
 pub async fn passkey_auth_options(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     payload: Option<Json<PasskeyAuthOptionsPayload>>,
 ) -> impl IntoResponse {
@@ -2128,11 +2129,41 @@ pub async fn passkey_auth_options(
         }
     };
 
+    // Rate-limit BEFORE any expensive or state-creating work (account lookup,
+    // WebAuthn ceremony, server-side state insert). This endpoint is pre-session
+    // and unauthenticated, so it must be bounded exactly like the magic-link
+    // request path it mirrors.
+    let email_norm = email.to_ascii_lowercase();
+    let client_ip = effective_client_ip(addr, &headers);
+    let email_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(email_norm.as_bytes());
+        let full = format!("{:x}", hasher.finalize());
+        full[..16].to_string()
+    };
+    if let Err(e) = state.rate_limiter.check(client_ip, &email_hash) {
+        tracing::warn!(
+            event = "auth.passkey.auth_options.rate_limited",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            email_hash = %email_hash,
+            error = %e,
+            "Passkey auth-options rate limited"
+        );
+        let err = serde_json::json!({"error": "RATE_LIMITED"});
+        return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
+    }
+
     // Resolve the account id under the accounts lock, then drop it before
-    // touching the passkey store.
+    // touching the passkey store. A **disabled** account is folded into the same
+    // uniform no-credentials path below — no distinguishable response — matching
+    // how the magic-link request path treats disabled accounts.
     let account_id = {
         let accounts = state.accounts.read().await;
-        accounts.get_by_email(&email).map(|a| a.public.id.clone())
+        accounts
+            .get_by_email(&email_norm)
+            .filter(|account| !account.public.disabled)
+            .map(|account| account.public.id.clone())
     };
 
     // Unknown identifier and an account without passkeys both fail-close
@@ -2170,10 +2201,23 @@ pub async fn passkey_auth_options(
             (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
         }
         Ok((rcr, auth_state)) => {
-            let authentication_id = state
+            let authentication_id = match state
                 .passkey_authentications
                 .insert(account_id.clone(), auth_state)
-                .await;
+                .await
+            {
+                Ok(id) => id,
+                Err(PasskeyAuthenticationStoreInsertError::Full) => {
+                    tracing::warn!(
+                        event = "auth.passkey.auth_options.store_full",
+                        request_id = %request_id,
+                        account_id = %account_id,
+                        "Passkey auth-options: authentication state store at capacity"
+                    );
+                    let err = serde_json::json!({"error": "SERVICE_OVERLOADED"});
+                    return (StatusCode::SERVICE_UNAVAILABLE, Json(err)).into_response();
+                }
+            };
 
             tracing::info!(
                 event = "auth.passkey.auth_options.ok",
@@ -2208,11 +2252,14 @@ pub struct PasskeyAuthVerifyPayload {
 /// consumes the server-side authentication state **single-use**; performs a real
 /// cryptographic assertion check via `webauthn.finish_passkey_authentication`
 /// (no shortcuts); resolves the asserted credential ID to its owning account via
-/// the global credential index and asserts it matches the ceremony account; and
-/// only then creates a session and sets the session cookie.
+/// the global credential index and asserts it matches the ceremony account;
+/// writes back the WebAuthn credential state (signature counter / backup flags);
+/// re-validates that the account still exists and is enabled; and only then
+/// creates a session and sets the session cookie.
 ///
 /// **Every** error path fail-closes WITHOUT a cookie. Unknown, reused, expired,
-/// mismatched, or invalid states are all rejected.
+/// mismatched, or invalid states — and accounts disabled mid-ceremony — are all
+/// rejected.
 pub async fn passkey_auth_verify(
     State(state): State<ApiState>,
     headers: HeaderMap,
@@ -2316,6 +2363,35 @@ pub async fn passkey_auth_verify(
             return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
         }
     };
+
+    // Persist the WebAuthn credential state (signature counter, backup flags) per
+    // webauthn-rs semantics. `update_credential` never changes the credential ID,
+    // so the global credential index stays consistent. A failure here means the
+    // credential vanished between resolution and update (e.g. a concurrent
+    // removal) — fail-closed rather than mint a session for a gone credential.
+    if let Err(e) = state.passkeys.update_credential(&account_id, &auth_result) {
+        tracing::warn!(
+            event = "auth.passkey.auth_verify.credential_update_failed",
+            request_id = %request_id,
+            error = %e,
+            "Passkey auth-verify: credential state update failed; refusing session"
+        );
+        let err = serde_json::json!({"error": "CREDENTIAL_MISMATCH"});
+        return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
+    }
+
+    // Re-validate the account immediately before minting a session: it may have
+    // been deleted or disabled between auth/options and auth/verify. Fail-closed
+    // (no session, no cookie) if it is no longer active.
+    if !state.accounts.read().await.is_account_active(&account_id) {
+        tracing::warn!(
+            event = "auth.passkey.auth_verify.account_inactive",
+            request_id = %request_id,
+            "Passkey auth-verify: account missing or disabled at verify; refusing session"
+        );
+        let err = serde_json::json!({"error": "ACCOUNT_INACTIVE"});
+        return (StatusCode::FORBIDDEN, Json(err)).into_response();
+    }
 
     // Assertion verified — only now is a session created and a cookie set.
     let session = match state.sessions.create(account_id.clone(), None).await {
