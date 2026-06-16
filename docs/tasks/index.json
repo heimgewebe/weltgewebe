@@ -794,6 +794,409 @@
         ]
       },
       "updated_at": "2026-06-05"
+    },
+    {
+      "id": "DB-PROOF-001",
+      "title": "Edge-Orphan- und Referenz-Audit vor PostgreSQL-FK-Entscheidung",
+      "area": "api",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
+      ],
+      "missing_evidence": [
+        "Kein Edge-Orphan-/Referenz-Audit-Skript und kein reproduzierbarer Audit-Report vorhanden (Pendant zu scripts/docmeta/audit_account_email_uniqueness.py fehlt fuer Edges)",
+        "Kein Datenlauf gegen Runtime-/Deployment-Edges, der valide vs. verwaiste source_id/target_id-Referenzen quantifiziert"
+      ],
+      "acceptance": [
+        "Audit zaehlt reproduzierbar valide Edges, Orphans (fehlende source_id/target_id-Nodes) und betroffene Edge-Typen, ohne Orphans still zu verwerfen",
+        "Audit benennt entscheidungsfaehig Option A (strikte Foreign Keys auf domain_nodes(id)) vs. Option B (lose Referenzsemantik mit Guard/Quarantaene)",
+        "Keine FK-Migration und keine Runtime-Aenderung in diesem Task",
+        "Bericht ist redigiert: keine unredigierten Rohdaten/IDs aus Produktionslaeufen"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/domain-data-postgres-cutover.md",
+          "docs/reports/domain-account-email-uniqueness-audit.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOMAIN-PG-001",
+      "title": "Edge-Referenz-Policy umsetzen (Foreign Keys oder Guard)",
+      "area": "api",
+      "status": "blocked",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
+      ],
+      "missing_evidence": [
+        "DB-PROOF-001 (Edge-Orphan-/Referenz-Audit) ist noch nicht abgeschlossen; die FK-Entscheidung ist in der Edge-Schema-Migration ausdruecklich deferred",
+        "Keine FK-Migration und kein Referenz-Guard implementiert"
+      ],
+      "acceptance": [
+        "Die in DB-PROOF-001 entschiedene Referenzpolitik ist technisch abgesichert (Option A: FK auf domain_nodes(id) mit kontrolliertem API-Fehler; Option B: Guard/Quarantaene-Report mit sichtbaren Orphans)",
+        "Keine stillen Datenverluste; vorhandene Orphans werden vor FK bereinigt oder bewusst als loses Modell dokumentiert",
+        "Tests fuer valide und ungueltige Referenzen ergaenzt"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/domain-data-postgres-cutover.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOMAIN-PG-002",
+      "title": "Single-Instance-Invariante oder Multi-Instance-Kohaerenz entscheiden",
+      "area": "infra",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [],
+      "missing_evidence": [
+        "Keine dokumentierte Betriebsentscheidung Single-Instance vs. Multi-Instance fuer den PostgreSQL-Domain-Pfad; prozesslokale Runtime-Caches bleiben unadressiert",
+        "Kein Guard/Smoke, der Cross-Instance-Kohaerenz oder die Single-Instance-Grenze belegt"
+      ],
+      "acceptance": [
+        "Option A: horizontale Skalierung ist ausdruecklich ausgeschlossen, das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Deployment-/Runtime-Doku festgehalten",
+        "oder Option B: Cross-Instance-Kohaerenz ist technisch geloest oder klar begrenzt und durch Test/Smoke belegt",
+        "Entscheidung ist im Cutover-Blueprint verankert; kein stiller Cache-Split-Brain"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/domain-data-postgres-cutover.md",
+          "docs/reports/auth-persistence-readiness.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "AUTH-PG-001",
+      "title": "Step-up-E-Mail-Persistenz nach PostgreSQL",
+      "area": "auth",
+      "status": "open",
+      "priority": "high",
+      "effort": "M",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/routes/auth.rs"
+      ],
+      "missing_evidence": [
+        "Step-up-E-Mail-Persistenz ist ein ausdrueckliches Non-Goal von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json: step_up_email_persistence) und noch nicht implementiert",
+        "Kein PostgreSQL-Write-Pfad/Proof, der eine via PUT /auth/me/email geaenderte E-Mail restart-stabil belegt"
+      ],
+      "acceptance": [
+        "Step-up-E-Mail-Aenderung (UpdateEmail-Intent) ist nach PostgreSQL-Cutover restart-stabil und nicht cache-only",
+        "E-Mail-Unique-Regel (domain_accounts_email_normalized_unique) bleibt gewahrt; Konflikt liefert kontrolliert 409",
+        "Fehlersemantik definiert: Konflikt, ungueltige E-Mail, nicht autorisiert, abgelaufenes Step-up"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/auth-status-matrix.md",
+          "docs/blueprints/domain-data-postgres-cutover.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "AUTH-PG-002",
+      "title": "WebAuthn-Credential-Persistenz / Passkey-Cutover nach PostgreSQL",
+      "area": "auth",
+      "status": "open",
+      "priority": "high",
+      "effort": "L",
+      "risk": "high",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/auth/passkeys.rs",
+        "apps/api/src/routes/auth.rs",
+        "apps/api/src/routes/accounts.rs"
+      ],
+      "missing_evidence": [
+        "WebAuthn-Credential-Writeback ist ein ausdrueckliches Non-Goal von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json: webauthn_credential_writeback); PasskeyStore und webauthn_user_id-Writeback sind aktuell In-Memory (auth-status-matrix.md 2.8: persistente Ablage ueber Neustart offen)",
+        "Kein PostgreSQL-Persistenzmodell und keine Migration fuer registrierte Passkey-Credentials",
+        "Kein Restart-Stabilitaets-Proof (Registrierung, Reload, Login)"
+      ],
+      "acceptance": [
+        "Registrierter WebAuthn-Credential-Zustand ist restart-stabil (kein reiner Cache)",
+        "Public/Private-Trennung bleibt gewahrt; keine Credential-Daten leaken in die oeffentliche Account-Projektion",
+        "Ein blosser webauthn_user_id-Fix wird nicht als vollstaendiger WebAuthn-Cutover deklariert (siehe AUTH-PG-003)",
+        "Menschliches Review fuer credentials/ vor Merge"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/auth-status-matrix.md",
+          "docs/reports/passkey-register-verify-prep.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "AUTH-PG-003",
+      "title": "Legacy-Backfill fuer webauthn_user_id und spaeteres NOT NULL",
+      "area": "auth",
+      "status": "blocked",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/routes/accounts.rs"
+      ],
+      "missing_evidence": [
+        "legacy_webauthn_user_id_backfill und webauthn_user_id_not_null sind ausdrueckliche Non-Goals von OPT-ARC-001 (docs/reports/opt-arc-001-db-proof-matrix.json)",
+        "WebAuthn-Credential-Persistenz (AUTH-PG-002) ist fachlich noch nicht geklaert; die Backfill-Strategie haengt davon ab",
+        "Kein Audit, wie viele Accounts webauthn_user_id IS NULL haben, und kein Backfill-Test"
+      ],
+      "acceptance": [
+        "Audit der Accounts mit fehlender webauthn_user_id liegt vor; Backfill-Strategie ist dokumentiert und testbar",
+        "Reload erzeugt keine neue Identitaet (keine stille UUID-Neuerzeugung)",
+        "NOT NULL wird erst nach Audit und erfolgreichem Backfill geprueft; Migration ist nachvollziehbar"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/auth-status-matrix.md",
+          "docs/reports/opt-arc-001-db-proof-matrix.json"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOMAIN-PG-003",
+      "title": "Edge-Cache-Limit ohne Tabellenlock und Vollzaehlung designen",
+      "area": "api",
+      "status": "open",
+      "priority": "low",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        "apps/api/src/routes/edges.rs"
+      ],
+      "missing_evidence": [
+        "Kein gemessener Insert-Pfad und keine dokumentierte Trade-off-Entscheidung zur Abloesung von LOCK TABLE + COUNT(*)",
+        "Bewusst zurueckgestellt (TODO C1): erst Messpunkt/Design, dann Umbau"
+      ],
+      "acceptance": [
+        "Entscheidung mit Trade-offs dokumentiert; Race-Sicherheit bleibt erhalten",
+        "Duplicate-vor-Limit-Semantik bleibt erhalten oder wird bewusst geaendert",
+        "Kein ungemessener/spekulativer Performance-Umbau"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/domain-data-postgres-cutover.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "CI-TOOL-001",
+      "title": "Dev-Setup-Hygiene: Task-Runner-Dedup (Makefile/Justfile) und Node/pnpm engines",
+      "area": "ci",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "Makefile",
+        "Justfile",
+        "apps/web/package.json",
+        ".node-version",
+        ".nvmrc"
+      ],
+      "missing_evidence": [
+        "Makefile und Justfile fuehren up/down beide direkt 'docker compose ... --profile dev' aus (Duplikat ohne Delegation)",
+        "Root package.json hat kein engines-Feld (apps/web/package.json hat eines: node ^20.19.0 || ^22.13.0 || >=24)"
+      ],
+      "acceptance": [
+        "Nur eine Ebene enthaelt echte Compose-up/down-Logik; die andere delegiert",
+        "Node-/pnpm-Versionen sind konsistent sichtbar (engines), ohne ein zweites Versionssystem zu erzeugen; JSON bleibt valide",
+        "Keine Container-Starts noetig (Dry-Run/Lint genuegt als Nachweis)"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/techstack.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOCS-CTL-001",
+      "title": "Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B)",
+      "area": "docs",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "docs/reports/cost-report.md",
+        "docs/tasks/DEPLOY-DNS-001B.md"
+      ],
+      "missing_evidence": [
+        "docs/reports/cost-report.md und docs/tasks/DEPLOY-DNS-001B.md werden vom Orphan-Generator weiterhin als verwaist gefuehrt; fachliche Lifecycle-Einordnung steht aus"
+      ],
+      "acceptance": [
+        "Beide Dokumente sind fachlich eingeordnet (aktiv/archived/superseded/Ausnahme), nicht nur kosmetisch verlinkt",
+        "Orphan-Report ist leer oder die Ausnahmen sind bewusst dokumentiert",
+        "Die historische Deploy-/DNS-Aufgabe (DEPLOY-DNS-001B) wird nicht als aktuelle Handlungsanweisung reaktiviert"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/cost-report.md",
+          "docs/tasks/DEPLOY-DNS-001B.md",
+          "docs/index.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOCS-CTL-002",
+      "title": "Blueprint-/Planning-Status-Konsistenz (draft/active/canonical/deprecated)",
+      "area": "docs",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        "docs/reports/planning-registration-findings.md",
+        "scripts/docmeta/planning_registration.yml",
+        "docs/blueprints/kartenklarheit.md",
+        "docs/blueprints/map-blaupause.md"
+      ],
+      "missing_evidence": [
+        "kartenklarheit.md und map-blaupause.md tragen frontmatter-status 'draft', werden in docs/index.md aber als aktive/normative Leitdokumente gefuehrt (Status-Widerspruch)"
+      ],
+      "acceptance": [
+        "Keine unbegruendeten draft-/canonical-Widersprueche; betroffene Blueprints werden einzeln gelesen und nicht pauschal hochgestuft",
+        "Deprecated-Dokumente werden nicht reaktiviert",
+        "Planning-Registration-Check (scripts/docmeta/check_planning_registration.py) bleibt gruen; generierte Reports werden ueber ihren Generator aktualisiert"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/blueprints/kartenklarheit.md",
+          "docs/blueprints/map-blaupause.md",
+          "docs/reports/planning-registration-findings.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "OPT-CI-003",
+      "title": "Action-Refs vereinheitlichen (dtolnay/rust-toolchain + uv-Pin)",
+      "area": "ci",
+      "status": "partial",
+      "priority": "low",
+      "effort": "S",
+      "risk": "low",
+      "owner": "unknown",
+      "evidence": [
+        ".github/workflows/python-tooling.yml"
+      ],
+      "missing_evidence": [
+        "dtolnay/rust-toolchain weiterhin gemischt @stable/@v1",
+        "gepinnte uv-Version nicht erzwungen"
+      ],
+      "acceptance": [
+        "Keine gemischten dtolnay-rust-toolchain-Refs; Rust-Version weiterhin aus zentraler Quelle",
+        "uv-Version ist zentral nachvollziehbar und in CI wirksam, ohne zweite Pinning-Logik"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "OPT-CI-004",
+      "title": "Dependency-Update-Automation (Dependabot/Renovate)",
+      "area": "ci",
+      "status": "open",
+      "priority": "medium",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [],
+      "missing_evidence": [
+        "keine .github/dependabot.yml oder Renovate-Config vorhanden"
+      ],
+      "acceptance": [
+        "Update-Automation existiert (Dependabot oder Renovate); PR-Flut ist begrenzt (Limit/Gruppierung)",
+        "Relevante Oekosysteme (Actions, pnpm/npm, Cargo, Docker, Python/uv) sind bewusst ein- oder ausgeschlossen"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
+    },
+    {
+      "id": "OPT-INF-002",
+      "title": "Third-Party-Actions per Commit-SHA pinnen",
+      "area": "infra",
+      "status": "open",
+      "priority": "low",
+      "effort": "S",
+      "risk": "medium",
+      "owner": "unknown",
+      "evidence": [
+        ".github/workflows/"
+      ],
+      "missing_evidence": [
+        "repo-weit nur Tag-Pinning, kein SHA-Pinning",
+        "Sequenzierung (TODO C3): SHA-Pinning erst nach Dependency-Update-Automation (OPT-CI-004), sonst Update-Weg unklar"
+      ],
+      "acceptance": [
+        "Third-Party-Actions sind per Commit-SHA gepinnt; Ursprungstag als Kommentar; Update-Weg bleibt klar",
+        "Policy dokumentiert; CI gruen"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/reports/optimierungsstatus.md"
+        ]
+      },
+      "updated_at": "2026-06-16"
     }
   ]
 }
