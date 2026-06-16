@@ -125,7 +125,8 @@ def sanitize_psql_stderr(stderr: str) -> str:
     text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://<redacted>", text)
     text = re.sub(r"(?i)(password=)[^ \n\t]+", r"\1<redacted>", text)
     text = re.sub(r"(?i)(PGPASSWORD=)[^ \n\t]+", r"\1<redacted>", text)
-    return text[:500]
+    # stderr is redirected to avoid pipe deadlocks; logged stderr is bounded here.
+    return text[:MAX_PSQL_STDERR_LOG_BYTES]
 
 def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:

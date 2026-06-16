@@ -32,12 +32,18 @@ Status: diagnostic / decision-prep
 
 ## Kurzurteil
 
-Dieser PR beweist das Audit-Harness und hat die PostgreSQL-Runtime-Datenlage evaluiert.
-Da die Prüfung gegen die Runtime-DB erfolgreich durchgeführt wurde und `strict_node_fk_ready` auf `true` steht, ist die FK-Einführung aus Datensicht nicht mehr blockiert.
+Dieser PR beweist das Audit-Harness und zusätzlich einen technischen PostgreSQL-Smoke-Lauf
+gegen eine migrierte, aber leere Datenbankinstanz.
+
+Der PostgreSQL-Auditpfad wurde erfolgreich ausgeführt. Da die geprüfte Instanz
+0 Nodes und 0 Edges enthielt, belegt der Lauf keine repräsentative FK-Readiness
+realer Runtime-Daten. Die FK-Entscheidung bleibt blockiert bis zu einem Lauf gegen
+repräsentative Runtime-Daten.
 
 - Keine Foreign-Key-Migration in diesem PR.
-- Kein Runtime-Cutover-Claim in diesem Dokument (wird im Cutover-Blueprint geregelt).
-- Die Datenlage erlaubt die Einführung strikter Foreign Keys.
+- Kein Runtime-Cutover-Claim.
+- Kein FK-Readiness-Claim für produktive oder repräsentative Daten.
+- PostgreSQL-Smoke-Lauf erfolgreich gegen leere DB.
 
 ## Scope
 
@@ -45,7 +51,7 @@ Dieses Audit prüft Edge-Referenzen gegen vorhandene Nodes.
 Geprüft werden:
 
 - JSONL-Edges gegen JSONL-Nodes
-- PostgreSQL `domain_edges` gegen `domain_nodes`, falls `DATABASE_URL` gesetzt ist
+- PostgreSQL `domain_edges` gegen `domain_nodes`, wenn `--postgres` gesetzt ist und `DATABASE_URL` verfügbar ist
 - `source_id`
 - `target_id`
 - optionale `source_type` / `target_type` Hinweise
@@ -104,7 +110,13 @@ python3 scripts/docmeta/audit_domain_edge_references.py --postgres --source-kind
 
 Ergebnis:
 
-Die Runtime-Daten zeigten keine verletzenden Referenzen (die Datenbank-Instanz enthielt 0 Knoten/Kanten), womit `strict_node_fk_ready: true` erfüllt ist.
+Der PostgreSQL-Auditpfad wurde technisch erfolgreich gegen eine migrierte
+Datenbankinstanz ausgeführt. Die geprüfte Instanz enthielt 0 Nodes und 0 Edges.
+Dadurch existierten in dieser Instanz keine verletzenden Referenzen.
+
+Ein leerer Datenbestand ist ein Smoke-Proof des Auditpfads, aber kein
+repräsentativer Datenbeleg für die FK-Readiness produktiver oder historischer
+Runtime-Daten.
 
 ## JSONL-Ergebnis
 
@@ -186,6 +198,11 @@ Die Runtime-Daten zeigten keine verletzenden Referenzen (die Datenbank-Instanz e
 | requires_cleanup | false |
 | requires_runtime_data_run | false |
 
+Hinweis: `strict_node_fk_ready: true` gilt hier nur für die geprüfte leere Instanz.
+Da keine Edges vorhanden waren, wurden keine realen Edge-Referenzen geprüft.
+Dieser Wert ist daher kein Freigabesignal für eine FK-Migration gegen
+repräsentative Runtime-Daten.
+
 ## Redigierte Finding-Klassen
 
 Keine vollständigen Edge-, Node-, Account- oder Role-IDs in diesem Report.
@@ -243,11 +260,15 @@ Integrity-Guard oder Quarantäne-Report.
 
 ## Empfehlung
 
-Status: ready
+Status: runtime_empty_smoke_passed / needs_representative_runtime_data_run
 
-Der Runtime-Datenlauf wurde erfolgreich gegen die PostgreSQL-Datenbank durchgeführt.
+Der PostgreSQL-Auditpfad ist technisch lauffähig. Die geprüfte DB war jedoch leer
+(0 Nodes, 0 Edges). Daher bleibt die fachliche FK-Entscheidung offen.
 
-Begründung:
+Nächster Schritt:
 
-- Die Auswertung zeigt keine fehlenden oder fehlerhaften Referenzen (Datenbank war zum Zeitpunkt des Audits leer oder konsistent).
-- `strict_node_fk_ready` ist `true`, was die Einführung strikter Foreign Keys (`Option A`) blockierungsfrei erlaubt.
+1. Audit gegen repräsentative Runtime-Daten ausführen.
+2. Nur wenn dort keine fehlenden Node-Referenzen, keine typisierten Nicht-Node-Referenzen,
+   keine unbekannten Type-Hints und keine malformed Edges auftreten, kann Option A
+   weiter vorbereitet werden.
+3. Falls heterogene oder externe Referenzen auftreten, bleibt Option B erforderlich.

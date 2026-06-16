@@ -292,17 +292,20 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(len(data["source"]["edges_source"]["sha256"]), 64)
 
     def test_postgres_cli_preflight_error_does_not_print_database_url(self):
-        env = {"DATABASE_URL": "postgresql://user:SUPER_SECRET_PASSWORD@example.invalid/db"}
+        env = {
+            "DATABASE_URL": "host=example.invalid password=SUPER_SECRET_PASSWORD dbname=db"
+        }
         result = run_script("--postgres", env=env)
+
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn(
+            "DATABASE_URL must use a PostgreSQL URI with scheme postgres or postgresql",
+            result.stderr,
+        )
         self.assertNotIn("SUPER_SECRET_PASSWORD", result.stdout)
         self.assertNotIn("SUPER_SECRET_PASSWORD", result.stderr)
         self.assertNotIn("example.invalid", result.stdout)
         self.assertNotIn("example.invalid", result.stderr)
-        self.assertNotIn("postgresql://user", result.stdout)
-        self.assertNotIn("postgresql://user", result.stderr)
-        # Should not log the full path
-        self.assertNotIn("/db", result.stderr)
 
     def test_sanitize_psql_stderr_redacts_url_password_host(self):
         from scripts.docmeta.audit_domain_edge_references import sanitize_psql_stderr
