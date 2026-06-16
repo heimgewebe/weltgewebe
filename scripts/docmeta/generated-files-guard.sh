@@ -27,6 +27,7 @@ REQUIRED_FILES=(
     "agent-readiness.md"
     "claim-evidence-map.md"
     "report-lifecycle-inventory.md"
+    "report-lifecycle.md"
 )
 
 for req in "${REQUIRED_FILES[@]}"; do
