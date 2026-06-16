@@ -191,7 +191,9 @@ konsolidieren".
   trotzdem **unterschiedliche Ausgabe** (Δ 32 Bytes). Der Build deklariert selbst:
   „outputs are not yet strictly reproducible". Die Ursache ist noch nicht belegt.
   Plausible Kandidaten sind PMTiles-/MBTiles-Metadaten, Build-Zeitstempel, SQLite/Page-Layout
-  oder Planetiler-Ausgabedetails. Dieser Report behauptet daher nur die Abweichung, nicht die Ursache.
+  oder Planetiler-Ausgabedetails. Eine weitere unverifizierte Hypothese ist eine
+  Thread-Count-/CPU-Core-Divergenz beim parallelen Planetiler-/PMTiles-Packprozess.
+  Dieser Report belegt die Abweichung, nicht ihre Ursache.
 - Konsequenz: Der SHA256-Check des Guards ist **intra-run/selbstreferenziell** (er
   hasht die soeben gebaute Datei und vergleicht sie mit der im selben Lauf
   geschriebenen `meta.json`). Er beweist Integritaet innerhalb eines Laufs, **nicht**
@@ -294,39 +296,60 @@ kein unbegrenzter Download, keine grosse PMTiles-Datei).
 
 ## 9. Proof-Summary-v1 Vorschlag
 
-PROVEN-Form (Beispiel fuer MAP-PROOF-002, Scope `pmtiles-content`):
+Beispiel für MAP-PROOF-002 (Strukturfixture-Form):
 
 ```json
 {
   "id": "MAP-PROOF-002",
   "status": "PROVEN",
-  "scope": "pmtiles-content",
-  "artifact_kind": "real_map",
+  "scope": "pmtiles-structure",
+  "artifact_kind": "tiny_committed_fixture",
   "checked_at": "2026-06-15T00:00:00Z",
-  "caddy": {
-    "config": "infra/caddy/Caddyfile.proof",
-    "image": "caddy:2.7"
-  },
   "pmtiles": {
-    "path": "build/basemap/basemap-hamburg-v0.1.0.pmtiles",
-    "sha256": "3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab",
-    "kind": "hamburg",
-    "structural_validation": "magic"
+    "path": "tests/fixtures/basemap/minimal.pmtiles",
+    "sha256": "<stable-fixture-sha256>",
+    "kind": "minimal-fixture",
+    "structural_validation": "header+directory+metadata-or-tile-read"
   },
-  "http": {
-    "range_status": 206,
-    "accept_ranges": true,
-    "content_range": "bytes 0-511/23948909"
-  },
-  "visual": {
-    "screenshot": "build/proofs/basemap-visual/screenshot.png",
-    "network_proof": "build/proofs/basemap-visual/proof-summary.json"
+  "checks": {
+    "magic": true,
+    "header_parse": true,
+    "root_directory": true,
+    "metadata": "optional",
+    "tile_read": "optional-or-required-by-implementation"
   },
   "does_not_establish": [
-    "pmtiles_structure_beyond_magic",
+    "hamburg_runtime_delivery",
+    "browser_rendering",
     "visual_correctness_pixel",
     "production_like_caddy",
-    "cross_environment_reproducibility"
+    "cross_environment_hamburg_reproducibility"
+  ]
+}
+```
+
+Example: current browser-pmtiles-init proof (not MAP-PROOF-002):
+
+```json
+{
+  "id": "MAP-PROOF-001-P5",
+  "status": "PROVEN",
+  "scope": "browser-pmtiles-init",
+  "browser": {
+    "transport": "vite-middleware",
+    "signals": [
+      "direct_http_206_range",
+      "pmtiles_request_observed",
+      "canvas_visible",
+      "isStyleLoaded=true",
+      "remote_violations=0"
+    ]
+  },
+  "does_not_establish": [
+    "vector_tile_payload_read",
+    "caddy_path_for_visual",
+    "visual_correctness_pixel",
+    "production_like_caddy"
   ]
 }
 ```

@@ -71,7 +71,7 @@ Repo-Stand tatsaechlich vorhanden sind.
   Job 78164572577, 2026-05-27). Belegt sind ein separater direkter PMTiles-Range-Request
   mit HTTP 206, ein beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()`
   und 0 externe Provider — Scope: echtes Hamburg-Artefakt über die Vite-Middleware (nicht
-  Caddy). Er belegt **keinen** Vector-Tile-Payload-Read und keine Tile-Datenlieferung über
+  Caddy). Dieser Proof belegt **keinen** Vector-Tile-Payload-Read und keine Tile-Datenlieferung über
   Header-/Indexzugriffe hinaus. Vector-Tile-Payload-Lieferung, visuelle Korrektheit
   (Pixel-/Baseline-Vergleich) und produktionsnaher Caddy bleiben NOT_PROVEN; differenzierte
   Einordnung in `docs/reports/map-basemap-proof-gap-reconciliation.md`.
@@ -175,7 +175,7 @@ Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 Groesse `23948909` Bytes.
 Der Browser-/PMTiles-Init-Proof in GitHub Actions ist inzwischen PROVEN (Job
 `basemap-visual-proof` grün auf `main`, CI-Lauf 27028165272/26535801825; Scope:
-echtes Artefakt via Vite-Middleware, nicht Caddy). Er belegt keinen
+echtes Artefakt via Vite-Middleware, nicht Caddy). Dieser Proof belegt keinen
 Vector-Tile-Payload-Read und keine Tile-Datenlieferung über Header-/Indexzugriffe
 hinaus. Offen bleiben die Produktionsentscheidung fuer den Basemap-Modus, die
 Vector-Tile-Payload-/Tile-Datenlieferung, die visuelle Korrektheit

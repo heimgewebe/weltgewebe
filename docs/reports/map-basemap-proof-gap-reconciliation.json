@@ -102,7 +102,7 @@
     },
     {
       "id": "P4",
-      "name": "real-pmtiles-structure-proven",
+      "name": "real-pmtiles-structure-validation",
       "status": "NOT_PROVEN",
       "scope": "none",
       "evidence": {
@@ -118,7 +118,7 @@
     },
     {
       "id": "P5",
-      "name": "browser-pmtiles-protocol-init-proven",
+      "name": "browser-pmtiles-protocol-init",
       "status": "PROVEN",
       "scope": "ci|real_map|header_range_and_render_init|via-vite-middleware",
       "evidence": {
@@ -136,7 +136,7 @@
     },
     {
       "id": "P6",
-      "name": "visual-artifact-proven",
+      "name": "visual-artifact-partial",
       "status": "PARTIAL",
       "scope": "ci|screenshot-no-baseline",
       "evidence": {
@@ -155,7 +155,7 @@
     },
     {
       "id": "P7",
-      "name": "production-like-caddy-proven",
+      "name": "production-like-caddy-validation",
       "status": "NOT_PROVEN",
       "scope": "none",
       "evidence": {
@@ -194,7 +194,7 @@
     },
     "note": "Gleicher gepinnter Planetiler-Digest und OSM-Input-Hash, aber abweichende Ausgabe (Delta 32 Bytes). Guard-SHA256 ist intra-run/selbstreferenziell.",
     "cause_status": "not_established",
-    "cause_hypotheses_unverified": ["pmtiles_or_mbtiles_metadata", "build_timestamps", "sqlite_or_page_layout", "planetiler_output_details"]
+    "cause_hypotheses_unverified": ["pmtiles_or_mbtiles_metadata", "build_timestamps", "sqlite_or_page_layout", "planetiler_output_details", "thread_count_or_cpu_core_divergence_in_parallel_packaging"]
   },
   "known_proven_scopes": [
     "static-config (P0)",

@@ -262,15 +262,10 @@ Sondern:
   [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
   [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
   Scope: nur 7-Byte-Magic; Tile-Directory-/Strukturvalidierung (P4) bleibt Future Work.
-- [x] **Browser-/PMTiles-Init-Proof (Scope CI, via Vite-Middleware) PROVEN:** Job
-  `basemap-visual-proof` ist grün auf `main`
-  ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
-  Job 79773804577; [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
-  Job 78164572577). Belegt sind ein separater direkter PMTiles-Range-Request mit HTTP 206,
-  ein beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()` und 0 externe
-  Provider. Offen bleiben die Vector-Tile-Payload-/Tile-Datenlieferung (der Proof belegt
-  keinen Tile-Payload-Read), die visuelle **Korrektheit** (Pixel-/Baseline-Vergleich) und ein
-  produktionsnaher Caddy-Pfad — siehe `docs/reports/map-basemap-proof-gap-reconciliation.md`.
+- [x] **Browser-/PMTiles-Init-Proof im CI:** direkter Range-Request, beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()`, 0 externe Provider. Job `basemap-visual-proof` ist grün auf `main` ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272) und [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825)).
+- [ ] **Vector-Tile-Payload-/Tile-Datenlieferung:** kein belegter Tile-Payload-Read.
+- [ ] **Visuelle Korrektheit:** kein Pixel-/Baseline-Vergleich.
+- [ ] **Produktionsnaher Caddy-Pfad:** Browser-Proof läuft via Vite-Middleware, nicht Caddy.
 
 ### Abgrenzung: Was kein Ersatz fuer den Runtime-Beweis ist
 
