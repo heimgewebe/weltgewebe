@@ -160,8 +160,8 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
     ist synthetisch und enthaelt keine echten Tiles.
 - [x] **PMTiles-Magic-Byte-Check im CI (Scope `pmtiles-content`) PROVEN.** Job
   `basemap-pmtiles-content-proof` baut ein echtes Hamburg-PMTiles-Artefakt im Lauf,
-  serviert es ueber Caddy und prueft Magic `"PMTiles"` an Offset 0 + intra-run SHA256
-  + HTTP-served Magic-Bytes. Der Job laeuft path-gated auf `pull_request`/`push`
+  serviert es ueber Caddy und prueft Magic `"PMTiles"` an Offset 0, intra-run SHA256
+  und HTTP-served Magic-Bytes. Der Job laeuft path-gated auf `pull_request`/`push`
   (nicht nur `workflow_dispatch`).
   **PROVEN:** Runs [26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921),
   [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),

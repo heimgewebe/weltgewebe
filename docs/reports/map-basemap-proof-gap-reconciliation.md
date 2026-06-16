@@ -175,7 +175,7 @@ konsolidieren".
 | P2 caddy-range-synthetic | PROVEN | CI + synthetisch | Job `basemap-range-delivery-proof`, Run 27028165272 (Job 79773383993); fruehere Runs 25970466659, 26447341921; `caddy:2.7`+`Caddyfile.proof`, 64-KiB-Synthetik | echte Caddy-206-Range-Kette auf `/local-basemap/*` | echten Karteninhalt (Artefakt synthetisch) | → P3 |
 | P3 real-pmtiles-magic | PROVEN | CI + lokal, Magic/Hash | Job `basemap-pmtiles-content-proof`, Run 27028165272 (Job 79773383882) + Run 26447341921 (Job 77857000606); `docs/proofs/basemap-hamburg-artifact-proof.md` | echtes Hamburg-PMTiles, Magic `PMTiles`@0, intra-run SHA256, Caddy liefert Bytes 0-6 via 206 | tiefe Struktur; **Reproduzierbarkeit** (SHA env-abhaengig) | → P4 + Reprod. |
 | P4 real-pmtiles-structure | NOT_PROVEN | — | Guard druckt `NOT_PROVEN: Deep PMTiles structure validation` | nichts ueber Magic hinaus | Tile-Directory/Metadata/Tile-Read | Strukturparser/Inspect auf Fixture |
-| P5 browser-pmtiles-protocol-init | PROVEN | CI + echtes Artefakt via Vite-Middleware | separater direkter HTTP-206-Range-Request + beobachteter lokaler PMTiles-Request + Canvas sichtbar + `isStyleLoaded()` + 0 externe Provider; Run 27028165272 (Job 79773804577), Run 26535801825 (Job 78164572577); `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` | Vector-Tile-Payload-/Tile-Datenlieferung, Source-loaded-Tile-Payload, Caddy-Visual-Pfad, Pixel-Korrektheit, Produktion | → P6, P7 |
+| P5 browser-pmtiles-protocol-init | PROVEN | CI + echtes Artefakt via Vite-Middleware | Job `basemap-visual-proof`, Run 27028165272 (Job 79773804577) + Run 26535801825 (Job 78164572577); `apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts` | separater direkter HTTP-206-Range-Request, beobachteter lokaler PMTiles-Request, Canvas sichtbar, `isStyleLoaded()`, 0 externe Provider | Vector-Tile-Payload-/Tile-Datenlieferung, Source-loaded-Tile-Payload, Caddy-Visual-Pfad, Pixel-Korrektheit, Produktion | → P6, P7 |
 | P6 visual-artifact | PARTIAL | CI Screenshot, kein Baseline | `screenshot.png` + `proof-summary.json` (Run 27028165272 Job 79773804577) | Screenshot + Rendering-/Souveraenitaets-Signal | visuelle **Korrektheit** (kein Pixel-/Baseline-Vergleich) | bewusst bounded (Pixelvergleich = Nicht-Ziel) |
 | P7 production-like-caddy | NOT_PROVEN | — | Proof `caddy:2.7`+`Caddyfile.proof` bzw. Vite; Prod `infra/caddy/Dockerfile`=`caddy:2.8.4`+`caddy-ratelimit`, `Caddyfile.heim`; `Caddyfile.prod` ohne `/local-basemap/` | nichts ueber Prod-Aequivalenz | Version-/Config-/Architektur-Aequivalenz | Prod-naher Caddy-Proof |
 
@@ -373,7 +373,7 @@ oder Lockfiles. Aenderungen ausschliesslich in `docs/`.
 
 - **Bewiesen (mit Scope):** P0 (static config), P1 (mocked client), P2 (Caddy-Range,
   **synthetisch**), P3 (echtes PMTiles Magic+Hash, CI), P5 (Browser-/PMTiles-Protokollzugriff
-  + Render-Initialisierung via **Vite**, CI).
+  und Render-Initialisierung via **Vite**, CI).
 - **Nicht bewiesen:** P4 (PMTiles-Struktur), die Vector-Tile-Payload-/Tile-Datenlieferung,
   P6 (visuelle **Korrektheit**), P7 (produktionsnaher Caddy) sowie Cross-Env-Reproduzierbarkeit.
 - **Kern-Reconciliation:** Die Statusdokumente **untertreiben** — der Visual-CI-Job
