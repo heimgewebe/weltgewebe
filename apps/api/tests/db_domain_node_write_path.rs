@@ -194,6 +194,7 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
         webauthn: None,
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
         passkeys: Default::default(),
     };
 
@@ -420,6 +421,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         webauthn: None,
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
         passkeys: Default::default(),
     };
 
@@ -590,6 +592,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         webauthn: None,
         passkey_registrations: Default::default(),
         passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
         passkeys: Default::default(),
     };
 
