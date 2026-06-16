@@ -75,7 +75,7 @@
       "ci_evidence": {
         "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27619224355",
         "run_id": 27619224355,
-        "commit": "05497c120f18176ea9742c0c579d6e41bd33bf12",
+        "commit": "7fbbf99ff6e8b502b14a3cfb4c140a78c8abd6bd",
         "job": "db-domain-account-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_account_write_path -- --include-ignored --test-threads=1"
@@ -92,7 +92,7 @@
       "ci_evidence": {
         "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27619224355",
         "run_id": 27619224355,
-        "commit": "05497c120f18176ea9742c0c579d6e41bd33bf12",
+        "commit": "7fbbf99ff6e8b502b14a3cfb4c140a78c8abd6bd",
         "job": "db-domain-node-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_node_write_path -- --include-ignored --test-threads=1"
@@ -109,7 +109,7 @@
       "ci_evidence": {
         "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27619224355",
         "run_id": 27619224355,
-        "commit": "05497c120f18176ea9742c0c579d6e41bd33bf12",
+        "commit": "7fbbf99ff6e8b502b14a3cfb4c140a78c8abd6bd",
         "job": "db-domain-edge-write-path-proof"
       },
       "command": "cargo test --locked -p weltgewebe-api --test db_domain_edge_write_path -- --include-ignored --test-threads=1"
