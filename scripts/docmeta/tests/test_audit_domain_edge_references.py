@@ -58,6 +58,7 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(data["summary"]["typed_node_references"], 2)
             self.assertIs(data["policy_signals"]["strict_node_fk_ready"], True)
             self.assertIs(data["policy_signals"]["requires_runtime_data_run"], False)
+            self.assertIs(data["policy_signals"]["runtime_reference_data_observed"], True)
             self.assertEqual(data["policy_signals"]["fk_compatible_reference_sides"], 2)
             self.assertIs(data["policy_signals"]["type_hint_backfill_recommended"], False)
 
@@ -595,6 +596,50 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
 
         source = inspect.getsource(iter_postgres_edges)
         self.assertIn("ORDER BY id", source)
+
+    def test_empty_runtime_smoke_requires_representative_runtime_data(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as nf, tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as ef:
+            nf.flush()
+            ef.flush()
+
+            result = run_script(
+                "--nodes-jsonl",
+                nf.name,
+                "--edges-jsonl",
+                ef.name,
+                "--source-kind",
+                "runtime",
+                "--format",
+                "json",
+            )
+
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["node_records_total"], 0)
+            self.assertEqual(data["summary"]["edge_records_total"], 0)
+            self.assertEqual(data["summary"]["auditable_edges_total"], 0)
+            self.assertEqual(data["summary"]["edge_sides_total"], 0)
+
+            self.assertIs(data["policy_signals"]["strict_node_fk_ready"], False)
+            self.assertIs(data["policy_signals"]["requires_runtime_data_run"], True)
+            self.assertIs(data["policy_signals"]["runtime_reference_data_observed"], False)
+
+    def test_postgres_env_removes_ambient_pg_variables(self):
+        from unittest.mock import patch
+        from scripts.docmeta.audit_domain_edge_references import postgres_env_from_database_url
+
+        with patch.dict(os.environ, {"PGOPTIONS": "ambient-opt", "PGPASSFILE": "ambient-file", "DATABASE_URL": "postgresql://user:pass@example.test:5432/db"}):
+            env = postgres_env_from_database_url("postgresql://user:pass@example.test:5432/db?sslmode=require")
+            self.assertNotIn("PGOPTIONS", env)
+            self.assertNotIn("PGPASSFILE", env)
+            self.assertNotIn("DATABASE_URL", env)
+            self.assertEqual(env.get("PGHOST"), "example.test")
+            self.assertEqual(env.get("PGPORT"), "5432")
+            self.assertEqual(env.get("PGUSER"), "user")
+            self.assertEqual(env.get("PGPASSWORD"), "pass")
+            self.assertEqual(env.get("PGDATABASE"), "db")
+            self.assertEqual(env.get("PGSSLMODE"), "require")
 
 if __name__ == "__main__":
     unittest.main()

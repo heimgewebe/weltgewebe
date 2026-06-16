@@ -192,16 +192,16 @@ Runtime-Daten.
 | edges_with_both_missing_node_references | 0 |
 | type_hint_backfill_recommended | false |
 | fk_compatible_reference_sides | 0 |
-| strict_node_fk_ready | true |
+| strict_node_fk_ready | false |
 | loose_reference_semantics_observed | false |
 | requires_policy_decision | false |
 | requires_cleanup | false |
-| requires_runtime_data_run | false |
+| requires_runtime_data_run | true |
 
-Hinweis: `strict_node_fk_ready: true` gilt hier nur für die geprüfte leere Instanz.
-Da keine Edges vorhanden waren, wurden keine realen Edge-Referenzen geprüft.
-Dieser Wert ist daher kein Freigabesignal für eine FK-Migration gegen
-repräsentative Runtime-Daten.
+Hinweis: Das JSON-Policy-Signal `requires_runtime_data_run` bleibt bei einem Runtime-Lauf
+ohne auditable Edge-Referenzen bewusst `true`, und `strict_node_fk_ready` bleibt `false`.
+Ein leerer Runtime-Smoke belegt nur die technische Ausführbarkeit des Auditpfads,
+nicht die FK-Readiness repräsentativer Daten.
 
 ## Redigierte Finding-Klassen
 
