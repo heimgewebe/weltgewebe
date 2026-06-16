@@ -44,14 +44,18 @@ heute vorliegt. Massgeblich sind dabei vor allem
 - Marker-Interaktion, Kontextbereich und Escape-/Karteninteraktionen sind durch `apps/web/tests/map-interaction.spec.ts` belegt.
 - Partielle und komplette API-Fehlerzustaende sind durch `apps/web/tests/map-load-fallback.spec.ts` belegt.
 - Der clientseitige lokale Basemap-Pfad ist durch `apps/web/tests/basemap.spec.ts`, `apps/web/tests/basemap-client-integration.spec.ts` und `apps/web/tests/basemap-sovereignty-testbuild.spec.ts` belegt.
-- URL-Parameter fuer Drawer-Zustaende (`l`, `r`, `t`) sind in der Route
-  explizit implementiert statt rein implizit im DOM versteckt.
+- Eine URL-Adressierung fuer Fokus, Linse und Tab ist dokumentarisch vorgesehen
+  und bewusst vom fluechtigen Kartenzustand getrennt gehalten (Statusmatrix
+  Abschnitt 7, Modul-Header in `apps/web/src/lib/stores/mapView.ts`). Die
+  tatsaechliche Route-Verdrahtung und gezielte Query-Tests bleiben offen
+  (Phase 4); ein frueher hier behaupteter Implementierungsstand der Parameter
+  `l` / `r` / `t` bestand nicht und ist korrigiert.
 
 ### Belegte Schwaechen
 
 - **Zentrale Orchestrierung in einer Datei:**
   `apps/web/src/routes/map/+page.svelte` bundelt Datenimport, lokalen Typ,
-  Kartenaufbau, Marker-Lifecycle, Tastatursteuerung und Drawer-Zustand.
+  Kartenaufbau, Marker-Lifecycle, Tastatursteuerung und Fokuspanel-/Overlay-Zustand.
 - **Hybridmodus statt geschlossener Basemap-Wahrheit:**
   `currentBasemap` schaltet lokal/test standardmaessig auf `local-sovereign`,
   Produktion aber standardmaessig auf `remote-style`. Diese Hybridentscheidung

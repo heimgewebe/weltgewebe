@@ -20,8 +20,9 @@ use self::{
     accounts::{create_account, get_account, list_accounts},
     auth::{
         consume_login_get, consume_login_post, consume_step_up, dev_login, list_dev_accounts,
-        list_devices, logout, logout_all, me, passkey_register_options, passkey_register_verify,
-        remove_device, request_login, request_step_up, session, session_refresh, update_email,
+        list_devices, logout, logout_all, me, passkey_auth_options, passkey_auth_verify,
+        passkey_register_options, passkey_register_verify, remove_device, request_login,
+        request_step_up, session, session_refresh, update_email,
     },
     edges::{create_edge, get_edge, list_edges},
     nodes::{get_node, list_nodes, patch_node},
@@ -74,7 +75,9 @@ pub fn api_router() -> Router<ApiState> {
         .route(
             "/auth/passkeys/register/verify",
             post(passkey_register_verify),
-        );
+        )
+        .route("/auth/passkeys/auth/options", post(passkey_auth_options))
+        .route("/auth/passkeys/auth/verify", post(passkey_auth_verify));
 
     #[cfg(feature = "integration-testing")]
     let router = router.route(

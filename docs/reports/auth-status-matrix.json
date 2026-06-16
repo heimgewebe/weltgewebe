@@ -180,7 +180,7 @@
     },
     "passkeys": {
       "soll": "register, auth, list, remove",
-      "ist": "Register-Options implementiert. Dedizierte webauthn_user_id pro Account (UUID v4, nicht aus account_id abgeleitet); wenn in Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil. Kurzlebiger PasskeyRegistrationGrantStore (In-Memory, TTL 5 Min, single-use, account- und device-gebunden) ist vorhanden; BeginPasskeyRegistration-Consume erzeugt registration_grant_id, register/options konsumiert den Grant und speichert registration_id im PasskeyRegistrationStore. Langlebiger PasskeyStore (In-Memory, account-gebunden, duplicate detection, list/find/remove) ist vorhanden; AccountStore.update_webauthn_user_id(account_id, uuid) ist als Writeback-Mutation implementiert. register/verify ist API-seitig implementiert (finish_passkey_registration, single-use, Duplicate-Detection, Writeback) und der positive Browser-Lauf ist lokal belegt (LOCAL_PROOF_ONLY); verpflichtender CI-Job ist hinzugefügt, grüner Lauf steht noch aus (READY_FOR_CI_PROOF). Login-/Management-Pfade bleiben offen.",
+      "ist": "Register-Options implementiert. Dedizierte webauthn_user_id pro Account (UUID v4, nicht aus account_id abgeleitet); wenn in Datenquelle vorhanden: dauerhaft stabil; sonst: lazy-backfill/prozessstabil. Kurzlebiger PasskeyRegistrationGrantStore (In-Memory, TTL 5 Min, single-use, account- und device-gebunden) ist vorhanden; BeginPasskeyRegistration-Consume erzeugt registration_grant_id, register/options konsumiert den Grant und speichert registration_id im PasskeyRegistrationStore. Langlebiger PasskeyStore (In-Memory, account-gebunden, duplicate detection, list/find/remove) ist vorhanden; AccountStore.update_webauthn_user_id(account_id, uuid) ist als Writeback-Mutation implementiert. register/verify ist API-seitig implementiert (finish_passkey_registration, single-use, Duplicate-Detection, Writeback) und der positive Browser-Lauf ist durch CI belegt (Run 27487642565, Commit cc54460). Passkey-Login-Flow (`auth/options`, `auth/verify`) und Management-Pfade bleiben offen.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/auth-roadmap.md (Phase 4 aktualisiert)",
@@ -200,7 +200,16 @@
         "apps/api/src/config.rs (webauthn_rp_id, webauthn_rp_origin)",
         "apps/api/src/routes/accounts.rs (webauthn_user_id)",
         "apps/api/tests/api_auth.rs"
-      ]
+      ],
+      "evidence": {
+        "workflow": "auth-passkey-register-proof",
+        "run_id": "27487642565",
+        "commit": "cc54460",
+        "branch": "main",
+        "conclusion": "success",
+        "date": "2026-06-14",
+        "run_url": "https://github.com/heimgewebe/weltgewebe/actions/runs/27487642565"
+      }
     },
     "security_invariants": {
       "soll": "Anti-Enumeration, Rate Limit, Proxy Handling, CSRF, Token Leak Prevention",
