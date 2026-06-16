@@ -50,5 +50,5 @@ Generated automatically. Do not edit.
 | Makefile (generate) | scripts.docmeta.generate_claim_evidence_map | `python3 -m scripts.docmeta.generate_claim_evidence_map` | *unclear* |
 | Makefile (generate) | scripts.docmeta.generate_relations_analysis | `python3 -m scripts.docmeta.generate_relations_analysis` | *unclear* |
 | Makefile (generate) | scripts.docmeta.generate_relates_to_audit | `python3 -m scripts.docmeta.generate_relates_to_audit` | *unclear* |
-| Makefile (generate) | scripts.docmeta.generate_report_lifecycle_inventory | `python3 -m scripts.docmeta.generate_report_lifecycle_inventory` | *unclear* |
 | Makefile (generate) | scripts.docmeta.generate_report_lifecycle | `python3 -m scripts.docmeta.generate_report_lifecycle` | *unclear* |
+| Makefile (generate) | scripts.docmeta.generate_report_lifecycle_inventory | `python3 -m scripts.docmeta.generate_report_lifecycle_inventory` | *unclear* |
