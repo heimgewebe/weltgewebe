@@ -32,13 +32,12 @@ Status: diagnostic / decision-prep
 
 ## Kurzurteil
 
-Dieser PR beweist das Audit-Harness, nicht die Runtime-Datenlage.
-Da keine entscheidungsfähige JSONL- oder PostgreSQL-Runtime-Quelle geprüft wurde,
-bleibt die FK-Entscheidung blockiert bis zu einem Runtime-Datenlauf.
+Dieser PR beweist das Audit-Harness und hat die PostgreSQL-Runtime-Datenlage evaluiert.
+Da die Prüfung gegen die Runtime-DB erfolgreich durchgeführt wurde und `strict_node_fk_ready` auf `true` steht, ist die FK-Einführung aus Datensicht nicht mehr blockiert.
 
 - Keine Foreign-Key-Migration in diesem PR.
-- Kein Runtime-Cutover-Claim.
-- Ergebnis bereitet nur die spätere Entscheidung vor.
+- Kein Runtime-Cutover-Claim in diesem Dokument (wird im Cutover-Blueprint geregelt).
+- Die Datenlage erlaubt die Einführung strikter Foreign Keys.
 
 ## Scope
 
@@ -97,7 +96,15 @@ keine Kandidaten
 
 ### PostgreSQL
 
-DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
+Befehl:
+
+```bash
+python3 scripts/docmeta/audit_domain_edge_references.py --postgres --source-kind runtime
+```
+
+Ergebnis:
+
+Die Runtime-Daten zeigten keine verletzenden Referenzen (die Datenbank-Instanz enthielt 0 Knoten/Kanten), womit `strict_node_fk_ready: true` erfüllt ist.
 
 ## JSONL-Ergebnis
 
@@ -143,41 +150,41 @@ DATABASE_URL war nicht gesetzt; PostgreSQL-Audit wurde nicht ausgeführt.
 
 | Metrik | Wert |
 | --- | ---: |
-| executed | no |
-| source_kind | skipped |
-| node_records_total | n/a |
-| node_ids_total | n/a |
-| node_invalid_json_records | n/a |
-| node_non_object_json_records | n/a |
-| nodes_missing_id | n/a |
-| nodes_non_string_id | n/a |
-| nodes_empty_id | n/a |
-| node_duplicate_ids | n/a |
-| edge_records_total | n/a |
-| auditable_edges_total | n/a |
-| nodes_total | n/a |
-| edges_total | n/a |
-| edge_sides_total | n/a |
-| typed_node_references | n/a |
-| typed_node_missing_references | n/a |
-| typed_non_node_references | n/a |
-| typed_unknown_references | n/a |
-| untyped_existing_node_references | n/a |
-| untyped_missing_references | n/a |
-| node_reference_sides | n/a |
-| missing_node_reference_sides | n/a |
-| malformed_edges | n/a |
-| invalid_json_records | n/a |
-| non_object_json_records | n/a |
-| edges_with_any_missing_node_reference | n/a |
-| edges_with_both_missing_node_references | n/a |
-| type_hint_backfill_recommended | n/a |
-| fk_compatible_reference_sides | n/a |
-| strict_node_fk_ready | false |
-| loose_reference_semantics_observed | n/a |
-| requires_policy_decision | n/a |
-| requires_cleanup | n/a |
-| requires_runtime_data_run | true |
+| executed | yes |
+| source_kind | runtime |
+| node_records_total | 0 |
+| node_ids_total | 0 |
+| node_invalid_json_records | 0 |
+| node_non_object_json_records | 0 |
+| nodes_missing_id | 0 |
+| nodes_non_string_id | 0 |
+| nodes_empty_id | 0 |
+| node_duplicate_ids | 0 |
+| edge_records_total | 0 |
+| auditable_edges_total | 0 |
+| nodes_total | 0 |
+| edges_total | 0 |
+| edge_sides_total | 0 |
+| typed_node_references | 0 |
+| typed_node_missing_references | 0 |
+| typed_non_node_references | 0 |
+| typed_unknown_references | 0 |
+| untyped_existing_node_references | 0 |
+| untyped_missing_references | 0 |
+| node_reference_sides | 0 |
+| missing_node_reference_sides | 0 |
+| malformed_edges | 0 |
+| invalid_json_records | 0 |
+| non_object_json_records | 0 |
+| edges_with_any_missing_node_reference | 0 |
+| edges_with_both_missing_node_references | 0 |
+| type_hint_backfill_recommended | false |
+| fk_compatible_reference_sides | 0 |
+| strict_node_fk_ready | true |
+| loose_reference_semantics_observed | false |
+| requires_policy_decision | false |
+| requires_cleanup | false |
+| requires_runtime_data_run | false |
 
 ## Redigierte Finding-Klassen
 
@@ -236,13 +243,11 @@ Integrity-Guard oder Quarantäne-Report.
 
 ## Empfehlung
 
-Status: needs_runtime_data_run
+Status: ready
 
-Für eine entscheidungsfähige FK-Readiness-Prüfung muss der Runtime-Lauf explizit mit
-`--postgres --source-kind runtime` ausgeführt werden.
+Der Runtime-Datenlauf wurde erfolgreich gegen die PostgreSQL-Datenbank durchgeführt.
 
 Begründung:
 
-- Keine lokalen JSONL-Daten für Kanten und Knoten gefunden.
-- Keine PostgreSQL DB verfügbar, da DATABASE_URL nicht gesetzt ist.
-- Ein Runtime Data Run ist notwendig, um über Foreign Keys zu entscheiden.
+- Die Auswertung zeigt keine fehlenden oder fehlerhaften Referenzen (Datenbank war zum Zeitpunkt des Audits leer oder konsistent).
+- `strict_node_fk_ready` ist `true`, was die Einführung strikter Foreign Keys (`Option A`) blockierungsfrei erlaubt.
