@@ -233,7 +233,6 @@ mod tests {
             webauthn: None,
             passkey_registrations: Default::default(),
             passkey_registration_grants: Default::default(),
-            passkey_authentications: Default::default(),
             passkeys: Default::default(),
         }
     }

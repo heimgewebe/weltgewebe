@@ -15,10 +15,6 @@ relations:
 
 Diese Blaupause beschreibt die konkrete, priorisierte Implementierungsfolge für die noch offenen UI-Arbeiten, abgeleitet aus der kanonischen State Machine und der UI-Blaupause.
 
-Die weitere UI-Arbeit folgt der [UI Interaction Doctrine](ui-interaction-doctrine.md).
-Suche und Filter bleiben lokale Kartenlinsen und werden nicht zu globalen
-UI-Zuständen.
-
 ⸻
 
 ## Phase 1 — Jetzt: Komposition wirklich fertig machen

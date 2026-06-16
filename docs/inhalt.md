@@ -65,11 +65,8 @@ besteht, solange kann ein Knoten sich nicht auflösen. Die Verzwirnung kann einz
 Knoten oder auch den gesamten Knoten betreffen.
 
 Unten ist eine Zeitleiste. Man kann hier in Tagesschritten zurückspringen und vergangene Webungen sehen.
-Filter werden über die Aktionsleiste als lokale Kartenlinse bzw. Filtermodus geöffnet. Sie steuern sichtbare
-Ebenen und Treffer auf der Karte, ohne einen weiteren globalen UI-Zustand einzuführen.
-
-In der Ecke oben rechts befindet sich die eigene Kontoeinstellung (nicht zu verwechseln mit
-Ortsgewebekontodarstellung oben). Man hat in seiner
+Auf der rechten Seite ist ein Slider mit den Filterkästchen für die toggelbaren Ebenen. Ecke oben rechts:
+eigene Kontoeinstellung (nicht zu verwechseln mit Ortsgewebekontodarstellung oben). Man hat in seiner
 eigenen Garnrolle einen privaten Bereich (Kontoeinstellungen, etc.) und einen öffentlich einsehbaren. In
 dem öffentlich einsehbaren kann man unter anderem Güter und Kompetenzen, die man der Gesamtheit zur
 Verfügung stellen möchte, angeben.

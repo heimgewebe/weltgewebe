@@ -12,13 +12,9 @@
   import FilterOverlay from '$lib/components/FilterOverlay.svelte';
   import type { MapEntityViewModel } from '$lib/map/types';
 
-  import { page } from '$app/stores';
-
-  import { view, selection, systemState, enterKomposition, leaveToNavigation } from '$lib/stores/uiView';
-  import { activeFilters, closeFilter } from '$lib/stores/filterStore';
-  import { isSearchOpen, searchQuery, closeSearch } from '$lib/stores/searchStore';
-  import { openSearchExclusive, openFilterExclusive } from '$lib/stores/overlayManager';
-  import { parseMapUrlState, type MapUrlFocus, type ParsedMapUrlState } from '$lib/map/urlState';
+  import { view, selection, systemState } from '$lib/stores/uiView';
+  import { activeFilters } from '$lib/stores/filterStore';
+  import { isSearchOpen, searchQuery } from '$lib/stores/searchStore';
   import {
     deriveFailedResourceLabels,
     deriveMarkerCounts,
@@ -117,106 +113,6 @@
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     focusAndFlyToPoint(event.detail);
-  }
-
-  // --- URL addressing (UI Interaction Doctrine, first slice) -----------------
-  // The URL is an addressing layer, not a second state machine: it maps query
-  // parameters onto the existing uiView / overlay stores. uiView stays the
-  // single source of truth and there is no store -> URL synchronisation here.
-  //
-  // Two intents are kept strictly apart:
-  //  - Immediate intents (compose=node, lens=filter|search) need no map data and
-  //    are applied as soon as the URL is known. They also leave any stale
-  //    focus/composition state so the addressed surface always starts clean.
-  //  - Focus intents (focus=node|garnrolle|account:<id>) need the scene entities
-  //    and only count as resolved once their target is actually found.
-  // Priority is compose > focus > lens. A valid-but-unresolved focus deliberately
-  // blocks the lens fallback so a deep link never lands on the wrong surface.
-  function findMapEntityForFocus(
-    focus: MapUrlFocus,
-    items: MapEntityViewModel[],
-  ): MapEntityViewModel | null {
-    return items.find((item) => item.type === focus.type && item.id === focus.id) ?? null;
-  }
-
-  function applyImmediateMapUrlAddressing(parsed: ParsedMapUrlState) {
-    if (parsed.compose === 'node') {
-      closeSearch();
-      closeFilter();
-      enterKomposition({ mode: 'new-knoten', source: 'action-bar' });
-      return;
-    }
-    // A valid focus takes precedence: leave stale focus/composition and close
-    // overlays now; the focus pass resolves the target once data is available.
-    // While it is unresolved, no lower-priority lens fallback may run.
-    if (parsed.focus) {
-      closeSearch();
-      closeFilter();
-      leaveToNavigation();
-      return;
-    }
-    // Lens-only (or empty / invalid-lens) URL: leave any prior focus/composition
-    // first. If the URL still addresses a valid lens, use the exclusive overlay
-    // helpers so cross-overlay focus-restore suppression stays intact (and the
-    // search query is not cleared unnecessarily). If it addresses no valid lens,
-    // close stale lens overlays — this matters for same-route/popstate
-    // transitions (e.g. /map?lens=filter -> /map) where stores are not reset.
-    leaveToNavigation();
-    if (parsed.lens === 'filter') {
-      openFilterExclusive();
-      return;
-    }
-    if (parsed.lens === 'search') {
-      openSearchExclusive();
-      return;
-    }
-    closeSearch();
-    closeFilter();
-  }
-
-  function tryApplyFocusMapUrlAddressing(
-    parsed: ParsedMapUrlState,
-    items: MapEntityViewModel[],
-  ): boolean {
-    if (!parsed.focus) return true;
-    const item = findMapEntityForFocus(parsed.focus, items);
-    if (!item) return false;
-    closeSearch();
-    closeFilter();
-    focusAndFlyToPoint(item);
-    return true;
-  }
-
-  // Separate locks: immediate intents fire once per distinct query; focus only
-  // locks once its target is resolved, and retries while it stays unresolved.
-  // `null` sentinels (not '') ensure the very first render — including plain
-  // `/map` with an empty query — runs through the effect and leaves stale state.
-  let lastAppliedImmediateUrlSearch: string | null = null;
-  let lastResolvedFocusUrlSearch: string | null = null;
-  $: {
-    const search = $page.url.search;
-    const parsed = parseMapUrlState($page.url.searchParams);
-    if (search !== lastAppliedImmediateUrlSearch) {
-      lastAppliedImmediateUrlSearch = search;
-      applyImmediateMapUrlAddressing(parsed);
-      // compose is final; without a valid focus there is nothing for the focus
-      // pass to do. Either way the focus lock is satisfied for this query.
-      if (parsed.compose === 'node' || !parsed.focus) {
-        lastResolvedFocusUrlSearch = search;
-      }
-    }
-    // Focus resolves directly against the live entity list, so the data
-    // dependency stays visible to Svelte without an artificial key. A retry can
-    // still happen on a later markersData change while focus is unresolved.
-    if (
-      parsed.focus &&
-      search !== lastResolvedFocusUrlSearch &&
-      markersData.length > 0
-    ) {
-      if (tryApplyFocusMapUrlAddressing(parsed, markersData)) {
-        lastResolvedFocusUrlSearch = search;
-      }
-    }
   }
 
   function handleZoomToOwnGarnrolle() {
@@ -367,15 +263,8 @@
 
         const currentSelection = get(selection);
         const currentSystemState = get(systemState);
-        // A valid focus deep link addresses a specific entity. Suppress the
-        // default fly-to so the map does not first center on the default
-        // location while the focus target is still being resolved (which would
-        // cause a double fly / flicker). Invalid or duplicate focus params are
-        // not valid focus and therefore do not block the default behaviour.
-        const pendingFocus =
-          parseMapUrlState(get(page).url.searchParams).focus !== null;
 
-        if (!pendingFocus && !currentSelection && currentSystemState === 'navigation') {
+        if (!currentSelection && currentSystemState === 'navigation') {
           const currentZoom = map?.getZoom() ?? 14;
           map?.flyTo({
             center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],

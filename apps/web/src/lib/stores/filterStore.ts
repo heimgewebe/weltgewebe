@@ -7,14 +7,6 @@ export function toggleFilter() {
   isFilterOpen.update((v) => !v);
 }
 
-/**
- * Opens the filter overlay unconditionally. Used by URL deep-link addressing,
- * which must never toggle (a toggle could close an already-open overlay).
- */
-export function openFilter() {
-  isFilterOpen.set(true);
-}
-
 export function closeFilter() {
   isFilterOpen.set(false);
 }

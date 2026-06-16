@@ -51,24 +51,19 @@
       ]
     },
     "query_parameter_vs_kartenzustand": {
-      "soll": "URL-Adressierung (Fokus/Linse/Tab) und Kartenzustand sind klar getrennt dokumentiert",
-      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, per reiner Funktionen abgeleitete Presentation) ist fluechtig und wird nicht in die URL gespiegelt; die request-bezogene Szene bleibt route-lokal, nicht in einem Modul-Store. Die URL-Adressierungsschicht fuer Fokus (focus, bisher r), Linse (lens, bisher l) und Tab (tab, bisher t) ist als eigene, URL-besessene Schicht dokumentiert und bewusst aus den Presentation-Ableitungen herausgehalten. Die Zielsemantik focus/tab/lens/compose ist die Richtung fuer spaetere URL-Adressierung und optionale Navigation; dabei adressiert compose optional spaetere Kompositionsmodi und ist kein direktes Erbe der bisherigen Kurzform l/r/t. Die bisherige Kurzform l/r/t bleibt ein historisches Altmodell und kein Zielcontract. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts (Legacy-Kurzform l/r/t) dokumentiert. Initiale URL-Adressierung beim Laden der Map ist fuer focus=node:<id>, focus=garnrolle:<id>, lens=filter, lens=search und compose=node implementiert und getestet: urlState.ts parst die Query rein und ohne Seiteneffekte, +page.svelte wendet sie als Adressierungsschicht auf die bestehenden uiView-/Overlay-Stores an (Prioritaet compose > focus > Linse; ein gueltiger, aber noch nicht aufloesbarer focus blockiert den Linsen-Fallback). Ein Intent-Wechsel ueber die URL verlaesst zuvor gesetzte Fokus-/Kompositionszustaende und schliesst veraltete Linsen-Overlays oder oeffnet die adressierte Linse exklusiv; doppelte bekannte Query-Keys gelten als ungueltig. Bei gueltigem focus=<type>:<id> wird der initiale Default-Fly der Karte unterdrueckt, damit ein noch nicht aufgeloester Fokus nicht zunaechst durch eine Default-Zentrierung uebersteuert wird (ungueltiger/doppelter focus unterdrueckt ihn nicht). Eine Store->URL-Synchronisation bleibt offen; center/zoom/bearing/pitch werden bewusst nicht gespiegelt. tab=<tab> wird parserseitig toleriert, aber noch nicht an ein Panel-Tab-Modell gebunden, da Tabs derzeit lokale Panelzustaende sind.",
+      "soll": "URL-Parameter (l, r, t) und Kartenzustand sind klar getrennt dokumentiert",
+      "ist": "Kartenzustand (center, zoom, bearing, pitch, systemState, selection, activeFilters, isSearchOpen, searchQuery, per reiner Funktionen abgeleitete Presentation) ist fluechtig und wird nicht in die URL gespiegelt; die request-bezogene Szene bleibt route-lokal, nicht in einem Modul-Store. Der Deep-Link-Contract l (linker Drawer/Filter), r (rechter Drawer/Selektion), t (aktiver Tab) ist als eigene, URL-besessene Schicht definiert und bewusst aus den Presentation-Ableitungen herausgehalten. Die Trennung ist in der Statusmatrix (Abschnitt 7) und im Modul-Header von mapView.ts dokumentiert.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/reports/map-status-matrix.md",
         "docs/blueprints/kartenklarheit-roadmap.md"
       ],
       "missing_evidence": [
-        "Tab-Adressierung an ein adressierbares Panel-Tab-Modell binden (tab=<tab> derzeit parser-only)",
-        "Store->URL-Synchronisation, falls später gewollt",
-        "weitere Fokus- oder Kompositionsarten erst nach eigenem Contract"
+        "Verdrahtung der l/r/t-Navigation in die Route",
+        "Gezielte Query-Parameter-Tests (Phase 4)"
       ],
       "risk": "gering",
       "code_runtime_evidence": [
-        "apps/web/src/lib/map/urlState.ts",
-        "apps/web/src/lib/map/urlState.test.ts",
-        "apps/web/src/routes/map/+page.svelte",
-        "apps/web/tests/map-url-state.spec.ts",
         "apps/web/src/lib/stores/mapView.ts",
         "apps/web/src/lib/stores/uiView.ts"
       ]
@@ -112,22 +107,20 @@
     },
     "testabdeckung": {
       "soll": "Kerninteraktion und Fehlerpfade der Karte sind testseitig belegt",
-      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab; urlState.test.ts und map-url-state.spec.ts decken die URL-Adressierung (focus, lens, compose) als Parser-Unit- und Browser-Tests ab.",
+      "ist": "map-interaction.spec.ts deckt Kerninteraktion und Panel-Verhalten ab; map-load-fallback.spec.ts deckt partielle und komplette API-Fehler ab; basemap.spec.ts, basemap-client-integration.spec.ts und basemap-sovereignty-testbuild.spec.ts decken Basemap-Modi und den clientseitigen lokalen Pfad ab; mapView.test.ts deckt die entkoppelten Presentation-Ableitungen (reine Funktionen fuer Filter, Suche, Kantenfilter, Selektion) als Unit-Tests ab.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/reports/map-status-matrix.md"
       ],
       "missing_evidence": [
-        "Tab-Adressierung (tab=<tab> derzeit parser-only, nicht an UI-Tabs gebunden)",
+        "Gezielte Query-Parameter-Navigation",
         "Visuelle Abnahme",
         "Live-Runtime-Beweis gegen Caddy plus Artefakt"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
         "apps/web/src/lib/stores/mapView.test.ts",
-        "apps/web/src/lib/map/urlState.test.ts",
-        "apps/web/tests/map-url-state.spec.ts",
         "apps/web/tests/map-interaction.spec.ts",
         "apps/web/tests/map-load-fallback.spec.ts",
         "apps/web/tests/basemap.spec.ts",
@@ -137,18 +130,15 @@
     },
     "runtime_integration": {
       "soll": "Echter HTTP-206-Nachweis der Caddy PMTiles Range-Auslieferung gegen reales Artefakt",
-      "ist": "Der CI-Workflow betreibt vier Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256; 'basemap-visual-proof' (needs basemap-pmtiles-content-proof) fuehrt den Playwright Browser-/PMTiles-Init-Proof gegen das echte Artefakt via Vite-Middleware aus und beweist Protokoll-/Header-Zugriff + Render-Init, nicht die Vector-Tile-Payload-Lieferung. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. PROVEN (scope=pmtiles-content): CI-Lauf #26447341921, Job basemap-pmtiles-content-proof (#77857000606), Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes. Browser-/PMTiles-Init-Proof (visual job, scope=browser-pmtiles-init): PROVEN — CI-Lauf #27028165272 (Job basemap-visual-proof #79773804577, main) und #26535801825 (#78164572577); belegt Protokoll-/Header-Zugriff + Render-Initialisierung, nicht die Vector-Tile-Payload-Lieferung.",
+      "ist": "Der CI-Workflow betreibt drei Jobs: 'basemap-runtime-proof' meldet im skip-Modus weiterhin NOT_PROVEN ohne Caddy; 'basemap-range-delivery-proof' startet einen realen caddy:2.7-Container gegen ein deterministisches .pmtiles-Testartefakt, fuehrt einen Range-GET (bytes=0-511) aus und schlaegt bei abweichendem Status hart fehl; 'basemap-pmtiles-content-proof' erzeugt ein echtes PMTiles-Artefakt ueber scripts/basemap/build-hamburg-pmtiles.sh (Planetiler gepinnt, OSM-Snapshot mit SHA256 verifiziert), startet Caddy und prueft Scope pmtiles-content inklusive Endpoint, HTTP 206, 7-Byte-Magic 'PMTiles' und optionaler SHA256. PROVEN (scope=range-delivery): CI-Lauf #25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response-Header 'HTTP/1.1 206 Partial Content'. PROVEN (scope=pmtiles-content): CI-Lauf #26447341921, Job basemap-pmtiles-content-proof (#77857000606), Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes.",
       "status": "Teil",
       "documentation_evidence": [
         "docs/blueprints/kartenklarheit-roadmap.md",
         "docs/blueprints/kartenklarheit-phase6.md"
       ],
       "missing_evidence": [
-        "Vector-Tile-Payload-/Tile-Datenlieferung (Visual-Job beobachtet lokale PMTiles-Requests und einen direkten 206-Range-Request, beweist aber keinen Tile-Payload-Read)",
-        "Visuelle Korrektheit (Pixel-/Baseline-Vergleich) — Visual-Job rendert und prueft Souveraenitaet, aber kein Pixelvergleich",
-        "Produktionsnaher Caddy-Proof (Proof nutzt caddy:2.7 + Caddyfile.proof bzw. Vite-Middleware; der Produktions-/Heim-Pfad basiert auf caddy:2.8.4 + caddy-ratelimit, Caddyfile.heim)",
-        "Tile-Directory- und strukturelle PMTiles-Validierung",
-        "Cross-Environment-Reproduzierbarkeit des Artefakts (SHA256 env-abhaengig)"
+        "Gruener GitHub-Actions-Lauf fuer Job basemap-visual-proof (READY_FOR_CI_PROOF, nicht PROVEN)",
+        "Tile-Directory- und strukturelle PMTiles-Validierung"
       ],
       "risk": "mittel",
       "code_runtime_evidence": [
@@ -164,12 +154,7 @@
       ],
       "scope_status": {
         "range-delivery": "proven",
-        "pmtiles-content": "proven",
-        "browser-pmtiles-init": "proven",
-        "vector-tile-payload": "not_proven",
-        "visual-correctness": "not_proven",
-        "production-caddy": "not_proven",
-        "cross-env-reproducibility": "not_proven"
+        "pmtiles-content": "proven"
       },
       "evidence": {
         "workflow": "Basemap Runtime Proof",
@@ -197,13 +182,12 @@
       },
       "proven": [
         "HTTP-206-Range-Delivery via Caddy gegen .pmtiles-Endpoint unter /local-basemap/* (Scope range-delivery) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659, Commit 14feefd6, Guard-Output 'PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)', Response HTTP/1.1 206 Partial Content",
-        "PMTiles-Content-Proof via Caddy gegen echtes CI-Artefakt (Scope pmtiles-content) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606, Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes",
-        "Browser-/PMTiles-Init-Proof (Browser -> Vite-Middleware -> echtes Hamburg-PMTiles -> separater direkter HTTP-206-Range-Request + beobachteter lokaler PMTiles-Request + MapLibre canvas + isStyleLoaded() + 0 externe Provider) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272 (Job basemap-visual-proof 79773804577, main, 2026-06-05) und https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825 (Job 78164572577, main, 2026-05-27). PROVEN nur fuer Protokoll-/Header-Zugriff + Render-Initialisierung; NOT_PROVEN fuer Vector-Tile-Payload-Lieferung und Pixel-/Baseline-Korrektheit; Scope: Vite-Middleware, nicht Caddy. Einordnung: docs/reports/map-basemap-proof-gap-reconciliation.md"
+        "PMTiles-Content-Proof via Caddy gegen echtes CI-Artefakt (Scope pmtiles-content) — PROVEN: CI-Lauf https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921, Job https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921/job/77857000606, Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output 'PROVEN: HTTP-served PMTiles Magic verified' und 'PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)', Artefakt basemap-hamburg-v0.1.0.pmtiles, SHA256 3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab, Groesse 23948909 Bytes"
       ]
     }
   },
   "open_architectural_decisions": {
     "Basemap_Strategie": "Offen: remote-style als Produktionsdefault bewusst beibehalten oder local-sovereign produktiv erzwingen.",
-    "Deploy_Artefakt": "PROVEN (scope=range-delivery, scope=pmtiles-content und scope=browser-pmtiles-init): blockierende Jobs basemap-range-delivery-proof, basemap-pmtiles-content-proof und basemap-visual-proof haben HTTP 206 via Caddy, HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt sowie Browser-/PMTiles-Init (Protokoll-/Header-Zugriff + Render-Initialisierung) via Vite-Middleware belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae; browser-pmtiles-init: Run #27028165272 und #26535801825 auf main). Offen: Vector-Tile-Payload-/Tile-Datenlieferung, visuelle Korrektheit (Pixel-/Baseline-Vergleich), produktionsnaher Caddy (Proof nutzt caddy:2.7; der Produktions-/Heim-Pfad basiert auf caddy:2.8.4 + caddy-ratelimit), tiefe PMTiles-Strukturvalidierung und Cross-Env-Reproduzierbarkeit — siehe docs/reports/map-basemap-proof-gap-reconciliation.md."
+    "Deploy_Artefakt": "PROVEN (scope=range-delivery und scope=pmtiles-content): blockierende Jobs basemap-range-delivery-proof und basemap-pmtiles-content-proof haben HTTP 206 via Caddy sowie HTTP-served PMTiles-Magic gegen ein echtes CI-Artefakt belegt (range-delivery: Run #25970466659, Commit 14feefd6; pmtiles-content: Run #26447341921, Commit 3410c872964669fa27bfee958169ad9ce95594ae). Offen: visuelle Runtime-Abnahme in GitHub Actions und tiefe PMTiles-Strukturvalidierung."
   }
 }

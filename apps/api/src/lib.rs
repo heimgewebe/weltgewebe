@@ -203,7 +203,6 @@ pub async fn run() -> anyhow::Result<()> {
     };
     let passkey_registrations = crate::auth::passkeys::PasskeyRegistrationStore::new();
     let passkey_registration_grants = crate::auth::passkeys::PasskeyRegistrationGrantStore::new();
-    let passkey_authentications = crate::auth::passkeys::PasskeyAuthenticationStore::new();
     let passkeys = crate::auth::passkeys::PasskeyStore::new();
 
     let mailer = match crate::mailer::Mailer::new(&app_config) {
@@ -247,7 +246,6 @@ pub async fn run() -> anyhow::Result<()> {
         webauthn,
         passkey_registrations,
         passkey_registration_grants,
-        passkey_authentications,
         passkeys,
     };
 

@@ -158,30 +158,16 @@ curl -I http://localhost:8081/basemap/hamburg.pmtiles
     → 206 Partial Content + Accept-Ranges/Content-Range`.
   - Was *nicht* bewiesen ist: PMTiles-Magic-Byte-Check. Das Testartefakt im CI
     ist synthetisch und enthaelt keine echten Tiles.
-- [x] **PMTiles-Magic-Byte-Check im CI (Scope `pmtiles-content`) PROVEN.** Job
-  `basemap-pmtiles-content-proof` baut ein echtes Hamburg-PMTiles-Artefakt im Lauf,
-  serviert es ueber Caddy und prueft Magic `"PMTiles"` an Offset 0, intra-run SHA256
-  und HTTP-served Magic-Bytes. Der Job laeuft path-gated auf `pull_request`/`push`
-  (nicht nur `workflow_dispatch`).
-  **PROVEN:** Runs [26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921),
-  [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
-  [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
-  Scope: nur Magic + intra-run SHA / HTTP-served Magic-Bytes — **kein** vollstaendiger
-  Struktur-Check, keine Tile-Directory-Validierung.
-- [x] **Browser-/PMTiles-Init-Proof im CI PROVEN.** Job `basemap-visual-proof`
-  (`needs: basemap-pmtiles-content-proof`) ist grün auf `main`
-  ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
-  Job 79773804577; [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
-  Job 78164572577). Scope: separater direkter PMTiles-Range-Request mit HTTP 206,
-  beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()`, 0 externe
-  Provider (Browser → Vite-Middleware → PMTiles-Alias). **Kein** Beweis fuer
-  Vector-Tile-Payload-/Tile-Datenlieferung, Pixel-/Baseline-Korrektheit oder einen
-  produktionsnahen Caddy-Visual-Pfad.
-- [ ] **PMTiles-Strukturvalidierung (P4).** Header/Directory/Metadata/Tile-Read
-  jenseits der Magic-Bytes fehlt weiterhin.
-- [ ] **Vector-Tile-Payload-/Tile-Datenlieferung.** Der aktuelle
-  Browser-/PMTiles-Init-Proof belegt keinen echten Tile-Payload-Read (Source-loaded
-  mit Tile-Payload).
+- [ ] **PMTiles-Magic-Byte-Check im CI.** Guard kennt
+  `BASEMAP_PROOF_SCOPE=pmtiles-content` (prueft nur die ersten 7 Magic-Bytes
+  `"PMTiles"` — KEIN vollstaendiger Struktur-Check, keine Tile-Directory-Validierung),
+  wartet aber auf ein echtes PMTiles-Artefakt im CI-Pfad. Hamburg-/Deutschland-Builds
+  bleiben heavy und laufen nur via `workflow_dispatch`.
+- [ ] **Visuelle Abnahme.** Karte rendert ohne Fallback nach realem Tile-Load —
+  separater Schritt, nicht durch den Range-Delivery-Proof gedeckt.
+  READY_FOR_CI_PROOF: Job `basemap-visual-proof` in `.github/workflows/basemap-runtime-proof.yml`
+  eingerichtet (Browser → Vite-Middleware → PMTiles-Alias → HTTP 206 → MapLibre canvas + isStyleLoaded()).
+  Kein grüner GitHub-Actions-Lauf liegt noch vor → Status bleibt NOT_PROVEN.
 
 ---
 

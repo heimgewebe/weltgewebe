@@ -27,10 +27,6 @@ Die UI besteht aus drei Hauptflächen:
 
 Alle Funktionen entstehen aus Zuständen dieser drei Flächen.
 
-Das Fokuspanel ist die fachliche Rolle des technischen `ContextPanel`. Den
-kanonischen Interaktionscontract über alle Flächen, Kartenlinsen und die spätere
-URL-Adressierung definiert die [UI Interaction Doctrine](ui-interaction-doctrine.md).
-
 ⸻
 
 ## 2 Layout (Mobile-First)
@@ -98,8 +94,7 @@ Longpress auf Karte → Kompositionsmodus
 
 Rolle
 
-Das Kontextpanel ist der einzige Detailraum der UI. In seiner fachlichen Rolle
-ist es das Fokuspanel: der einzige Detail-, Entscheidungs- und Handlungsraum.
+Das Kontextpanel ist der einzige Detailraum der UI.
 
 Mobile:
 
@@ -108,9 +103,6 @@ Bottom-Sheet
 Desktop:
 
 rechte Seitenleiste
-
-Die rechte Seitenleiste ist eine Layout-Ausprägung des Fokuspanels, kein
-separater rechter Drawer.
 
 
 ⸻
@@ -280,10 +272,6 @@ Elemente
 * Neuer Knoten
 * Filter
 
-Suche und Filter sind lokale Kartenlinsen bzw. Overlays. Sie verändern
-Sichtbarkeit und Auswahl auf der Karte und bilden keinen weiteren globalen
-UI-Zustand.
-
 Hinweis: Der persönliche Kontoeinstieg befindet sich oben rechts über die Garnrolle, welche als Dropdown-Menü für Kontofunktionen dient. Innerhalb dieses Menüs kann die eigene Garnrolle gezielt auf der Karte fokussiert werden.
 
 ⸻
@@ -376,6 +364,5 @@ Nutzer erstellt neuen Inhalt.
 
 ## Weiterführende Dokumente
 
-* [Weltgewebe UI Interaction Doctrine](ui-interaction-doctrine.md)
 * [Weltgewebe UI State Machine](ui-state-machine.md)
 * [Weltgewebe UI Roadmap](ui-roadmap.md)

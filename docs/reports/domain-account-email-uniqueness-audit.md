@@ -2,11 +2,7 @@
 id: reports.domain-account-email-uniqueness-audit
 title: Domain Account E-Mail Uniqueness Audit
 doc_type: report
-status: active
-lifecycle_state: active
-lifecycle: audit
-owner_task: OPT-ARC-001
-review_after: 2026-07-13
+status: draft
 lang: de
 canonicality: supporting
 relations:
@@ -29,13 +25,6 @@ summary: >
 ## Ziel
 
 Vorbereitung eines Unique-Index auf Account-E-Mails in PostgreSQL durch reproduzierbares Auditieren von vorhandenen JSONL-Daten. Ziel ist es, das aktuelle Runtime-Verhalten zu dokumentieren und Normalisierungsfragen zu klären, bevor ein Constraint Daten-Integrität bricht. Dieser Report führt noch keine DB-Migration und keinen Unique-Index ein.
-
-## Lifecycle
-
-- Zweck: Auditiert die Eindeutigkeit und Nutzbarkeit von Account-E-Mail-Adressen im Domain-Modell.
-- Bereitet vor: OPT-ARC-001 und spätere Validator-/Backfill-Entscheidungen zur Account-E-Mail-Konsistenz.
-- Gültig bis: 2026-07-13 oder bis ein neuerer Audit-/Proof-Report diesen Report ausdrücklich ablöst.
-- Wird abgelöst durch: Noch offen.
 
 ## Belegter Ist-Zustand
 

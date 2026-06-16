@@ -3,10 +3,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     auth::{
-        challenges::ChallengeStore, passkeys::PasskeyAuthenticationStore,
-        passkeys::PasskeyRegistrationGrantStore, passkeys::PasskeyRegistrationStore,
-        passkeys::PasskeyStore, rate_limit::AuthRateLimiter, session::SessionBackend,
-        step_up_tokens::StepUpTokenStore, tokens::TokenStore,
+        challenges::ChallengeStore, passkeys::PasskeyRegistrationGrantStore,
+        passkeys::PasskeyRegistrationStore, passkeys::PasskeyStore, rate_limit::AuthRateLimiter,
+        session::SessionBackend, step_up_tokens::StepUpTokenStore, tokens::TokenStore,
     },
     config::AppConfig,
     mailer::Mailer,
@@ -85,9 +84,6 @@ pub struct ApiState {
     pub webauthn: Option<Arc<Webauthn>>,
     pub passkey_registrations: PasskeyRegistrationStore,
     pub passkey_registration_grants: PasskeyRegistrationGrantStore,
-    /// In-progress passkey authentication (login) ceremonies — separate from
-    /// `passkey_registrations`; in-memory, TTL-bounded, single-use.
-    pub passkey_authentications: PasskeyAuthenticationStore,
     pub passkeys: PasskeyStore,
 }
 

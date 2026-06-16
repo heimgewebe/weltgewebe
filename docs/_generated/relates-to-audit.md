@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 381 |
+| Relationen gesamt | 375 |
 | — depends_on | 18 |
-| — relates_to | 361 |
+| — relates_to | 355 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (138 Dokumente):
+**Cluster 1** (137 Dokumente):
 
 - `.github/workflows/api.yml`
 - `AGENTS.md`
@@ -69,7 +69,6 @@ _Keine Lücken erkannt._
 - `docs/blueprints/map-blaupause.md`
 - `docs/blueprints/map-roadmap.md`
 - `docs/blueprints/ui-blaupause.md`
-- `docs/blueprints/ui-interaction-doctrine.md`
 - `docs/blueprints/ui-roadmap.md`
 - `docs/blueprints/ui-state-machine.md`
 - `docs/blueprints/versionierungs-blaupause.md`

@@ -49,7 +49,6 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 ### UI-System
 
-– **UI Interaction Doctrine:** [blueprints/ui-interaction-doctrine.md](blueprints/ui-interaction-doctrine.md) (Kanonischer Interaktionscontract für Fokuspanel, Kartenlinsen, Komposition und spätere URL-Adressierung)
 – **UI-Blaupause:** [blueprints/ui-blaupause.md](blueprints/ui-blaupause.md) (Modell)
 – **UI State Machine:** [blueprints/ui-state-machine.md](blueprints/ui-state-machine.md) (Regelwerk)
 – **UI Roadmap:** [blueprints/ui-roadmap.md](blueprints/ui-roadmap.md) (Planung)

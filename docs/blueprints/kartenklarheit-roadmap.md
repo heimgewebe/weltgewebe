@@ -92,7 +92,7 @@ Die Kartenroute soll nicht dauerhaft direkt auf Demo-Daten verdrahtet bleiben.
 
 ### Ziel der Phase 2
 
-Kartenlogik, Markerzustand, Fokuspanel-Zustand und Kartenlinsen sollen nicht dauerhaft in einer einzelnen Routendatei zusammenliegen.
+Kartenlogik, Markerzustand und Drawer-Zustand sollen nicht dauerhaft in einer einzelnen Routendatei zusammenliegen.
 
 ### Arbeitspakete der Phase 2
 
@@ -113,13 +113,9 @@ Kartenlogik, Markerzustand, Fokuspanel-Zustand und Kartenlinsen sollen nicht dau
   - Paneldaten: Das selektierte Entity reist als `selection.data` ueber `uiView`;
     der `ContextPanel` liest es direkt aus dem Store statt aus der Route.
 - [x] Ein kleines Karten-View-Model oder Szenenmodell definieren.
-- [x] Fokuspanel-/Kartenlinsen-Query-Zustand und Kartenzustand getrennt dokumentieren.
+- [x] Query-Parameter-Zustand (`l`, `r`, `t`) und Kartenzustand getrennt dokumentieren.
   - Dokumentiert in `docs/reports/map-status-matrix.md`, Abschnitt
     „Query-Parameter-Zustand vs. Kartenzustand".
-  - Zielsemantik gemäß `docs/blueprints/ui-interaction-doctrine.md`:
-    `focus` / `tab` / `lens`; `compose` kann später zusätzlich
-    Kompositionsmodi adressieren. Die bisherige Kurzform `l` / `r` / `t`
-    bleibt nur als Altmodell erhalten und ist kein Zielcontract.
 
 ### Verifikation der Phase 2
 
@@ -133,10 +129,10 @@ Kartenlogik, Markerzustand, Fokuspanel-Zustand und Kartenlinsen sollen nicht dau
 - [x] Auswahlzustand (uiView), Markerbeschreibung (reine Ableitungsfunktionen in
   `mapView`) und Paneldaten (`selection.data`) sind aus der Route entkoppelt; die
   Route haelt nur noch die request-lokale Szene plus die imperative
-  MapLibre-/Overlay-Lebenszyklus-Orchestrierung. Die URL-Adressierungsschicht
-  für Fokus, Linse und Tab (bisherige Kurzform `l` / `r` / `t`) ist
-  dokumentarisch vom Kartenzustand getrennt; die tatsaechliche
-  Query-Parameter-Navigation bleibt als Arbeitspaket in Phase 4 offen.
+  MapLibre-/Overlay-Lebenszyklus-Orchestrierung. Die URL-Parameter-Schicht
+  (`l`, `r`, `t`) ist dokumentarisch vom Kartenzustand getrennt; die
+  tatsaechliche Query-Parameter-Navigation bleibt als Arbeitspaket in Phase 4
+  offen.
 
 ---
 
@@ -174,15 +170,7 @@ Vorhandene Browser-Tests sollen von Smoke-Absicherung zu gezielter Kartenregress
 - [x] Kerninteraktion und Kontextbereich pruefen (`map-interaction.spec.ts`).
 - [x] Fehler-, Leere- und Ladezustaende absichern (`map-load-fallback.spec.ts`).
 - [x] Basemap-Verhalten separat absichern (`basemap.spec.ts`, `basemap-client-integration.spec.ts`, `basemap-sovereignty-testbuild.spec.ts`).
-- [~] Initiale URL-Adressierung beim Laden der Map (Fokus/Linse/Komposition) implementieren und gezielt absichern.
-  - umgesetzt: `focus=node:<id>`, `focus=garnrolle:<id>`, `lens=filter`,
-    `lens=search`, `compose=node` (Priorität `compose` > `focus` > Linse);
-    `tab=<tab>` wird parserseitig toleriert.
-  - belegt durch `apps/web/src/lib/map/urlState.test.ts` (Parser-Unit-Tests)
-    und `apps/web/tests/map-url-state.spec.ts` (Browser-Tests).
-  - offen: Tab-Adressierung, solange Tabs kein adressierbares Modell haben;
-    eine Store→URL-Synchronisation bleibt bewusst außen vor.
-- [ ] Tastatur-Navigation gezielt absichern.
+- [ ] Tastatur- und Query-Parameter-Navigation gezielt absichern.
 
 ### Stop-Kriterium der Phase 4
 
@@ -253,19 +241,12 @@ Sondern:
     Range-Auslieferungs-Kette, nicht den PMTiles-Magic-Byte-Check.
   - Das ausgelieferte Artefakt ist im CI ein deterministisches, synthetisches
     64-KiB-Testartefakt — keine echte Karte. Es belegt nur die Caddy-Range-Kette.
-- [x] **PMTiles-Magic-Byte-Check im CI (Scope `pmtiles-content`) PROVEN:** Job
-  `basemap-pmtiles-content-proof` baut ein echtes Hamburg-PMTiles-Artefakt im Lauf
-  (`scripts/basemap/build-hamburg-pmtiles.sh`), serviert es ueber Caddy und prueft
-  Magic `PMTiles` + SHA256. Der Job laeuft path-gated auf `pull_request`/`push`
-  (nicht nur `workflow_dispatch`). **PROVEN:** Runs
-  [26447341921](https://github.com/heimgewebe/weltgewebe/actions/runs/26447341921),
-  [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
-  [27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272).
-  Scope: nur 7-Byte-Magic; Tile-Directory-/Strukturvalidierung (P4) bleibt Future Work.
-- [x] **Browser-/PMTiles-Init-Proof im CI:** direkter Range-Request, beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()`, 0 externe Provider. Job `basemap-visual-proof` ist grün auf `main` ([27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272) und [26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825)).
-- [ ] **Vector-Tile-Payload-/Tile-Datenlieferung:** kein belegter Tile-Payload-Read.
-- [ ] **Visuelle Korrektheit:** kein Pixel-/Baseline-Vergleich.
-- [ ] **Produktionsnaher Caddy-Pfad:** Browser-Proof läuft via Vite-Middleware, nicht Caddy.
+- [ ] **PMTiles-Magic-Byte-Check im CI:** Der Guard kennt
+  `BASEMAP_PROOF_SCOPE=pmtiles-content` (prueft die PMTiles-Magic-Bytes), wird in
+  diesem Scope aber erst ausfuehrbar, sobald ein echtes PMTiles-Artefakt im CI
+  produziert oder geladen wird. Hamburg-/Deutschland-Builds bleiben heavy und
+  laufen weiterhin nur via `workflow_dispatch`.
+- [ ] Visuelle Abnahme: Karte rendert ohne Fallback nach realem Tile-Load.
 
 ### Abgrenzung: Was kein Ersatz fuer den Runtime-Beweis ist
 
@@ -282,11 +263,10 @@ Sondern:
   [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659) (Commit 14feefd6),
   Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
   Response `HTTP/1.1 206 Partial Content`.
-- [x] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
-  PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix). **PROVEN** im CI (Jobs
-  `basemap-pmtiles-content-proof`/`basemap-visual-proof` grün auf `main`, Runs
-  26447341921/26535801825/27028165272). Tile-Directory- und Strukturvalidierung
-  (P4) sowie Cross-Env-Reproduzierbarkeit bleiben Future Work.
+- [ ] Guard-Script liefert PROVEN unter Scope `pmtiles-content` gegen ein echtes
+  PMTiles-Artefakt (Magic-Byte-Check, 7-Byte-Prefix; Tile-Directory- und
+  Strukturvalidierung bleiben Future Work). Steht aus, solange im CI
+  kein echtes Artefakt produziert wird.
 
 ---
 
@@ -298,9 +278,7 @@ Sondern:
 - [x] Fehlerpfade testbar machen.
 - [x] Basemap-Runtime-Beweis: blockierender CI-Job `basemap-range-delivery-proof`
   PROVEN — [CI-Lauf 25970466659](https://github.com/heimgewebe/weltgewebe/actions/runs/25970466659)
-  (Commit 14feefd6). PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und der
-  Browser-/PMTiles-Init-Proof sind inzwischen ebenfalls PROVEN (Runs 26447341921/26535801825/27028165272);
-  Vector-Tile-Payload-Lieferung und tiefe PMTiles-Strukturvalidierung (P4) bleiben offen.
+  (Commit 14feefd6). PMTiles-Magic-Byte-Check bleibt offen.
 
 ---
 
@@ -314,8 +292,5 @@ Phase 6 (Basemap Runtime Proof): Guard-Script eingezogen, CI-Job nicht blockiere
 blockierender Job `basemap-range-delivery-proof` PROVEN (CI-Lauf #25970466659, Commit 14feefd6,
 Guard `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`,
 Response `HTTP/1.1 206 Partial Content`).
-PMTiles-Magic-Byte-Check (Scope `pmtiles-content`) und der Browser-/PMTiles-Init-Proof
-sind inzwischen PROVEN; letzterer belegt Protokoll-/Header-Zugriff + Render-Init, **nicht**
-die Vector-Tile-Payload-Lieferung. Der `pmtiles-content`-Scope prueft nur die ersten 7
-Magic-Bytes, keine Tile-Directory-Struktur (P4 offen). Differenzierte Einordnung:
-`docs/reports/map-basemap-proof-gap-reconciliation.md`.
+PMTiles-Magic-Byte-Check bleibt offen; `pmtiles-content`-Scope prueft nur die ersten
+7 Magic-Bytes der lokalen Artefaktdatei, keine Tile-Directory-Struktur.

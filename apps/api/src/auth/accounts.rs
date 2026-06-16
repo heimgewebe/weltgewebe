@@ -29,15 +29,6 @@ impl AccountStore {
         self.map.get(id)
     }
 
-    /// Returns `true` iff an account with `account_id` exists and is not disabled.
-    ///
-    /// Used by auth flows that must fail-closed when an account is missing or has
-    /// been disabled (e.g. revalidating a passkey login right before a session is
-    /// created, in case the account was disabled mid-ceremony).
-    pub fn is_account_active(&self, account_id: &str) -> bool {
-        self.get(account_id).is_some_and(|acc| !acc.public.disabled)
-    }
-
     fn recompute_email_index_for_key(&mut self, key: &str) {
         let mut candidates = Vec::new();
         for (id, acc) in self.map.iter() {
@@ -192,29 +183,6 @@ mod tests {
         // Test case-insensitive ASCII normalization lookup
         assert!(store.get_by_email("test@example.com").is_some());
         assert!(store.get_by_email("TEST@EXAMPLE.COM").is_some());
-    }
-
-    #[test]
-    fn is_account_active_reflects_existence_and_disabled_flag() {
-        let mut store = AccountStore::new();
-        store.insert(dummy_account("active", Some("active@example.com")));
-
-        let mut disabled = dummy_account("disabled", Some("disabled@example.com"));
-        disabled.public.disabled = true;
-        store.insert(disabled);
-
-        assert!(
-            store.is_account_active("active"),
-            "active account is active"
-        );
-        assert!(
-            !store.is_account_active("disabled"),
-            "disabled account is not active"
-        );
-        assert!(
-            !store.is_account_active("missing"),
-            "missing account is not active"
-        );
     }
 
     #[test]

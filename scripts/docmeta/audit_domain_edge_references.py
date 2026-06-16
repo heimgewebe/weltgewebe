@@ -73,10 +73,13 @@ def postgres_env_from_database_url(database_url: str) -> Dict[str, str]:
         raise ValueError("DATABASE_URL must use a PostgreSQL URI with scheme postgres or postgresql")
     env = os.environ.copy()
 
-    # Remove existing DATABASE_URL and all ambient PG variables
-    for key in list(env):
-        if key == "DATABASE_URL" or key.startswith("PG"):
-            env.pop(key, None)
+    # Remove existing PG* env vars
+    for key in [
+        "PGHOST", "PGPORT", "PGUSER", "PGPASSWORD", "PGDATABASE",
+        "PGSSLMODE", "PGCONNECT_TIMEOUT", "PGAPPNAME",
+        "PGSSLROOTCERT", "PGSSLCERT", "PGSSLKEY", "DATABASE_URL"
+    ]:
+        env.pop(key, None)
 
     if parsed.hostname:
         env["PGHOST"] = parsed.hostname
@@ -122,7 +125,6 @@ def sanitize_psql_stderr(stderr: str) -> str:
     text = re.sub(r"postgres(?:ql)?://\S+", "postgresql://<redacted>", text)
     text = re.sub(r"(?i)(password=)[^ \n\t]+", r"\1<redacted>", text)
     text = re.sub(r"(?i)(PGPASSWORD=)[^ \n\t]+", r"\1<redacted>", text)
-    # stderr is redirected to avoid pipe deadlocks; logged stderr is bounded here.
     return text[:MAX_PSQL_STDERR_LOG_BYTES]
 
 def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
@@ -161,7 +163,7 @@ def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> 
                 proc.wait()
 
 def is_non_empty_string(value: Any) -> bool:
-    return isinstance(value, str) and bool(value) and not value.isspace()
+    return isinstance(value, str) and value.strip() != ""
 
 def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any]]:
     node_ids = set()
@@ -484,13 +486,8 @@ def evaluate_audit_data(
     summary["node_reference_sides"] = summary["typed_node_references"] + summary["untyped_existing_node_references"]
     summary["missing_node_reference_sides"] = summary["typed_node_missing_references"] + summary["untyped_missing_references"]
 
-    runtime_reference_data_observed = (
-        source_kind == "runtime"
-        and summary["auditable_edges_total"] > 0
-    )
-
     strict_node_fk_ready = (
-        runtime_reference_data_observed and
+        source_kind == "runtime" and
         summary["node_invalid_json_records"] == 0 and
         summary["node_non_object_json_records"] == 0 and
         summary["nodes_missing_id"] == 0 and
@@ -529,7 +526,7 @@ def evaluate_audit_data(
         summary["typed_node_missing_references"] > 0
     )
 
-    requires_runtime_data_run = not runtime_reference_data_observed
+    requires_runtime_data_run = source_kind != "runtime"
 
     type_hint_backfill_recommended = summary["untyped_existing_node_references"] > 0
     fk_compatible_reference_sides = summary["typed_node_references"] + summary["untyped_existing_node_references"]
@@ -551,7 +548,6 @@ def evaluate_audit_data(
             "requires_policy_decision": requires_policy_decision,
             "requires_cleanup": requires_cleanup,
             "requires_runtime_data_run": requires_runtime_data_run,
-            "runtime_reference_data_observed": runtime_reference_data_observed,
             "type_hint_backfill_recommended": type_hint_backfill_recommended,
             "fk_compatible_reference_sides": fk_compatible_reference_sides
         },
