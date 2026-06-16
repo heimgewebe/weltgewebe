@@ -5534,3 +5534,22 @@ async fn passkey_auth_verify_rejects_malformed_json_with_json_error_without_cook
     assert_eq!(json["error"], "INVALID_REQUEST");
     Ok(())
 }
+
+/// A request with no body / no JSON content-type also yields the uniform JSON
+/// `400 INVALID_REQUEST` (via `JsonRejection`), not a plaintext rejection, and
+/// no cookie.
+#[tokio::test]
+async fn passkey_auth_options_rejects_missing_body_with_json_error_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options").body(body::Body::empty())?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(json["error"], "INVALID_REQUEST");
+    Ok(())
+}

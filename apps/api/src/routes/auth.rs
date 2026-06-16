@@ -2162,7 +2162,10 @@ pub async fn passkey_auth_options(
     // Rate-limit BEFORE any expensive or state-creating work (account lookup,
     // WebAuthn ceremony, server-side state insert). This endpoint is pre-session
     // and unauthenticated, so it must be bounded exactly like the magic-link
-    // request path it mirrors.
+    // request path it mirrors. The identifier bucket is the email hash, so it
+    // intentionally shares the per-email budget with the magic-link request path
+    // (a single email is throttled across both login methods); the per-IP bucket
+    // is global. Same SHA-256 hex-prefix convention.
     let email_norm = email.to_ascii_lowercase();
     let client_ip = effective_client_ip(addr, &headers);
     let email_hash = {
@@ -2329,9 +2332,15 @@ pub async fn passkey_auth_verify(
     }
 
     // Rate-limit BEFORE consuming the single-use state or running any WebAuthn
-    // crypto. Keyed by client IP (mandatory) plus a hash of the authentication_id,
-    // so a flood from one peer — or against one ceremony — is bounded, and a
-    // throttled request never consumes the challenge.
+    // crypto, so a throttled request never burns the challenge. Keyed by client
+    // IP (mandatory) plus a route-scoped identifier bucket derived from the
+    // authentication_id (`passkey-verify:<hash>` — a different namespace from the
+    // email the magic-link/options limiter uses). Same SHA-256 hex-prefix
+    // convention as the magic-link/email limiter.
+    //
+    // NOTE: the per-IP bucket is global and shared across the pre-session auth
+    // endpoints, so a full passkey login (options then verify) can legitimately
+    // consume more than one IP rate-limit token.
     let client_ip = effective_client_ip(addr, &headers);
     let auth_id_hash = {
         let mut hasher = Sha256::new();
@@ -2339,7 +2348,8 @@ pub async fn passkey_auth_verify(
         let full = format!("{:x}", hasher.finalize());
         full[..16].to_string()
     };
-    if let Err(e) = state.rate_limiter.check(client_ip, &auth_id_hash) {
+    let verify_rate_key = format!("passkey-verify:{auth_id_hash}");
+    if let Err(e) = state.rate_limiter.check(client_ip, &verify_rate_key) {
         tracing::warn!(
             event = "auth.passkey.auth_verify.rate_limited",
             request_id = %request_id,
