@@ -32,21 +32,27 @@ use tower_http::request_id::{MakeRequestUuid, SetRequestIdLayer};
 use tracing_subscriber::{fmt, EnvFilter};
 
 pub async fn run() -> anyhow::Result<()> {
-    let dotenv = dotenvy::dotenv();
-    if let Ok(path) = &dotenv {
-        tracing::debug!(?path, "loaded environment variables from .env file");
-    }
+    // Load `.env` *before* initialising tracing so a `RUST_LOG` defined there is
+    // visible to `EnvFilter::try_from_default_env()` inside `init_tracing`. The
+    // load *result* must only be logged *after* the subscriber is installed —
+    // otherwise these diagnostics are emitted with no subscriber and silently
+    // dropped.
+    let dotenv_result = dotenvy::dotenv();
 
-    if let Err(error) = dotenv {
-        match &error {
-            dotenvy::Error::Io(io_error) if io_error.kind() == ErrorKind::NotFound => {}
-            _ => tracing::warn!(%error, "failed to load environment from .env file"),
-        }
-    }
     init_tracing()?;
 
+    match &dotenv_result {
+        Ok(path) => {
+            tracing::debug!(?path, "loaded environment variables from .env file");
+        }
+        Err(dotenvy::Error::Io(io_error)) if io_error.kind() == ErrorKind::NotFound => {}
+        Err(error) => {
+            tracing::warn!(%error, "failed to load environment from .env file");
+        }
+    }
+
     let app_config = AppConfig::load().context("failed to load API configuration")?;
-    let (db_pool, db_pool_configured) = initialise_database_pool().await;
+    let (db_pool, db_pool_configured) = initialise_database_pool().await?;
     let (nats_client, nats_configured) = initialise_nats_client().await;
 
     if let (true, Some(pool)) = (db_pool_configured, db_pool.as_ref()) {
@@ -307,34 +313,49 @@ fn init_tracing() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn initialise_database_pool() -> (Option<sqlx::PgPool>, bool) {
+/// Initialise the PostgreSQL pool from `DATABASE_URL`.
+///
+/// Startup contract (fail-fast). Per ADR-0007 the production auth/session and
+/// domain persistence paths run against a direct PostgreSQL connection:
+///
+/// - `DATABASE_URL` unset → `Ok((None, false))`: PostgreSQL is not configured;
+///   the API runs with in-memory sessions and JSONL domain data.
+/// - `DATABASE_URL` set → PostgreSQL connectivity is **mandatory**. The pool is
+///   configured and its initial connection is verified eagerly. On success
+///   `Ok((Some(pool), true))`; on any failure `Err(..)` so the API refuses to
+///   start rather than coming up half-wired.
+///
+/// Fail-fast is the only honest option here: every downstream startup step that
+/// needs a configured pool — schema migrations (`sqlx::migrate!(..).run(..)?`),
+/// the optional PostgreSQL domain read/write sources, and the `DbSessionStore`
+/// — already aborts startup on a missing or dead pool. Tolerating a dead initial
+/// connection would not yield a recoverable degraded mode; it would only defer
+/// the same abort to the migration step behind a misleading warning. Runtime
+/// readiness (`/health/ready`) keeps re-checking the database *after* a
+/// successful start, but it cannot resurrect a process that never finished
+/// booting — so the previous "readiness will keep retrying" startup message was
+/// untrue and has been removed. The function therefore never returns the
+/// inconsistent `(None, true)` / `(Some(dead_pool), true)` states.
+async fn initialise_database_pool() -> anyhow::Result<(Option<sqlx::PgPool>, bool)> {
     let database_url = match env::var("DATABASE_URL") {
         Ok(url) => url,
-        Err(_) => return (None, false),
+        Err(_) => return Ok((None, false)),
     };
 
-    let pool = match PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect_lazy(&database_url)
-    {
-        Ok(pool) => pool,
-        Err(error) => {
-            tracing::warn!(error = %error, "failed to configure database pool");
-            return (None, true);
-        }
-    };
+        .context("DATABASE_URL is set but the database pool could not be configured")?;
 
-    match pool.acquire().await {
-        Ok(connection) => drop(connection),
-        Err(error) => {
-            tracing::warn!(
-                error = %error,
-                "database connection unavailable at startup; readiness will keep retrying",
-            );
-        }
-    }
+    // Verify connectivity now and fail fast: `DATABASE_URL` is set, so a live
+    // PostgreSQL connection is a hard startup dependency (see the contract above).
+    // The acquired connection is returned to the pool when this guard drops.
+    let _connection = pool.acquire().await.context(
+        "DATABASE_URL is set but the initial PostgreSQL connection failed; \
+         refusing to start without database connectivity",
+    )?;
 
-    (Some(pool), true)
+    Ok((Some(pool), true))
 }
 
 async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
@@ -349,5 +370,48 @@ async fn initialise_nats_client() -> (Option<NatsClient>, bool) {
             tracing::warn!(error = %error, "failed to connect to NATS");
             (None, true)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::initialise_database_pool;
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
+
+    #[tokio::test]
+    #[serial]
+    async fn initialise_database_pool_returns_none_when_database_url_unset() {
+        let _guard = EnvGuard::unset("DATABASE_URL");
+
+        let (pool, configured) = initialise_database_pool()
+            .await
+            .expect("an absent DATABASE_URL must not be a startup error");
+
+        assert!(pool.is_none(), "no pool must be built without DATABASE_URL");
+        assert!(
+            !configured,
+            "db must report as not configured when DATABASE_URL is unset"
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn initialise_database_pool_fails_fast_when_database_url_is_unusable() {
+        // A set-but-unusable DATABASE_URL must be a hard startup error under the
+        // fail-fast contract — never a silent (None, true) / (Some(dead), true)
+        // degraded state, and never the old "readiness will keep retrying" lie.
+        // An unparseable value fails eagerly in `connect_lazy`, so this asserts
+        // the fail-fast path deterministically without a live-connection timeout.
+        let _guard = EnvGuard::set("DATABASE_URL", "not a valid url");
+
+        let error = initialise_database_pool()
+            .await
+            .expect_err("a set-but-unusable DATABASE_URL must abort startup");
+
+        assert!(
+            error.to_string().contains("DATABASE_URL is set"),
+            "error must explain the database startup contract, got: {error}"
+        );
     }
 }
