@@ -62,6 +62,8 @@ pub enum PasskeyStoreInsertError {
 pub enum PasskeyStoreUpdateError {
     #[error("credential not found for account")]
     NotFound,
+    #[error("credential update failed")]
+    UpdateFailed,
 }
 
 /// Stored passkey together with its owning account.
@@ -195,6 +197,8 @@ impl PasskeyStore {
     ///
     /// Returns `true` if the stored credential changed, `false` if it matched
     /// but nothing changed (e.g. a synced passkey reporting a constant counter).
+    ///
+    /// Mutates the stored credential under the store's internal write lock.
     pub fn update_credential(
         &self,
         account_id: &str,
@@ -222,7 +226,15 @@ impl PasskeyStore {
             })
             .ok_or(PasskeyStoreUpdateError::NotFound)?;
 
-        Ok(passkey.update_credential(auth_result).unwrap_or(false))
+        // webauthn-rs' `Passkey::update_credential` returns `Some(changed)` and
+        // only yields `None` on a credential-id mismatch. We located the
+        // credential by `auth_result.cred_id()`, so `None` is unreachable here;
+        // surface it as a hard failure rather than silently smoothing it to
+        // "no change".
+        match passkey.update_credential(auth_result) {
+            Some(changed) => Ok(changed),
+            None => Err(PasskeyStoreUpdateError::UpdateFailed),
+        }
     }
 }
 
@@ -500,21 +512,14 @@ impl PasskeyAuthenticationStore {
         &self,
         authentication_id: &str,
     ) -> Option<(String, PasskeyAuthentication)> {
-        let mut store = self.store.write().await;
+        // Remove-first: a single lookup that is single-use regardless of outcome.
+        // An expired entry is removed and rejected just the same.
+        let pending = self.store.write().await.remove(authentication_id)?;
         let cutoff = Utc::now() - chrono::Duration::seconds(AUTHENTICATION_TTL_SECS);
-        let is_expired = match store.get(authentication_id) {
-            None => return None,
-            Some(entry) => entry.created_at <= cutoff,
-        };
-        if is_expired {
-            // Clean up the stale entry and reject.
-            store.remove(authentication_id);
+        if pending.created_at <= cutoff {
             return None;
         }
-        // Valid: single-use consume.
-        store
-            .remove(authentication_id)
-            .map(|pending| (pending.account_id, pending.state))
+        Some((pending.account_id, pending.state))
     }
 }
 

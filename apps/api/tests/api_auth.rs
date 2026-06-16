@@ -5456,3 +5456,81 @@ async fn passkey_auth_options_is_rate_limited_without_cookie() -> Result<()> {
     assert!(!res2.headers().contains_key(axum::http::header::SET_COOKIE));
     Ok(())
 }
+
+/// `auth/verify` is rate-limited *before* it consumes the single-use state or
+/// runs any WebAuthn crypto: a throttled verify returns `429`, sets no cookie,
+/// and leaves the authentication state intact.
+#[tokio::test]
+async fn passkey_auth_verify_is_rate_limited_without_consuming_state() -> Result<()> {
+    let mut state = test_state_with_webauthn()?;
+    state.config.auth_rl_ip_per_min = Some(1);
+    state.rate_limiter = Arc::new(AuthRateLimiter::new(&state.config));
+    seed_passkey(&state, "u1", 17)?;
+    let auth_store = state.passkey_authentications.clone();
+    let app = app_with_auth(state);
+
+    // The single per-minute IP token is spent by auth/options, which yields a
+    // real authentication_id.
+    let auth_id = start_auth_ceremony(&app, "u1@example.com").await?;
+
+    // auth/verify is now over the IP budget: throttled, no cookie.
+    let req = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from(format!(
+            r#"{{"authentication_id":"{auth_id}","credential":{{}}}}"#
+        )))?;
+    let res = app.oneshot(req).await?;
+    assert_eq!(res.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+
+    // Crucially, the rate-limited verify must NOT have consumed the state.
+    assert!(
+        auth_store.consume(&auth_id).await.is_some(),
+        "a rate-limited verify must not consume the single-use authentication state"
+    );
+    Ok(())
+}
+
+/// Syntactically invalid JSON to `auth/options` yields the uniform JSON
+/// `400 INVALID_REQUEST` (not a plaintext axum rejection) and no cookie.
+#[tokio::test]
+async fn passkey_auth_options_rejects_malformed_json_with_json_error_without_cookie() -> Result<()>
+{
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/options")
+        .header("content-type", "application/json")
+        .body(body::Body::from("{ this is not valid json"))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        json["error"], "INVALID_REQUEST",
+        "malformed JSON must yield a structured JSON error"
+    );
+    Ok(())
+}
+
+/// Syntactically invalid JSON to `auth/verify` yields the uniform JSON
+/// `400 INVALID_REQUEST` and no cookie.
+#[tokio::test]
+async fn passkey_auth_verify_rejects_malformed_json_with_json_error_without_cookie() -> Result<()> {
+    let state = test_state_with_webauthn()?;
+    let app = app_with_auth(state);
+
+    let req = Request::post("/auth/passkeys/auth/verify")
+        .header("content-type", "application/json")
+        .body(body::Body::from("not json at all"))?;
+    let res = app.oneshot(req).await?;
+
+    assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+    assert!(!res.headers().contains_key(axum::http::header::SET_COOKIE));
+    let bytes = body::to_bytes(res.into_body(), usize::MAX).await?;
+    let json: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(json["error"], "INVALID_REQUEST");
+    Ok(())
+}

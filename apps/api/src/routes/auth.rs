@@ -1,6 +1,6 @@
 use axum::{
     extract::Path as AxumPath,
-    extract::{ConnectInfo, Form, Json, Query, State},
+    extract::{rejection::JsonRejection, ConnectInfo, Form, Json, Query, State},
     http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
     Extension,
@@ -152,6 +152,28 @@ fn session_backend_json_response_with_jar(
         Json(serde_json::json!({"error": "SESSION_BACKEND_UNAVAILABLE"})),
     )
         .into_response()
+}
+
+/// Maps an axum `JsonRejection` (missing body, wrong content-type, syntactically
+/// invalid JSON, or a type mismatch) to the passkey login endpoints' uniform
+/// `400 INVALID_REQUEST` JSON shape — never a plaintext rejection, never a cookie.
+fn passkey_login_json_rejection(
+    request_id: &str,
+    endpoint: &'static str,
+    rejection: &JsonRejection,
+) -> axum::response::Response {
+    tracing::warn!(
+        event = "auth.passkey.json_rejected",
+        request_id = %request_id,
+        endpoint = endpoint,
+        rejection = %rejection,
+        "Passkey login request body could not be parsed"
+    );
+    let err = serde_json::json!({
+        "error": "INVALID_REQUEST",
+        "message": "A valid JSON request body is required"
+    });
+    (StatusCode::BAD_REQUEST, Json(err)).into_response()
 }
 
 #[derive(Clone)]
@@ -2098,7 +2120,7 @@ pub async fn passkey_auth_options(
     State(state): State<ApiState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    payload: Option<Json<PasskeyAuthOptionsPayload>>,
+    payload: Result<Json<PasskeyAuthOptionsPayload>, JsonRejection>,
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
 
@@ -2118,15 +2140,23 @@ pub async fn passkey_auth_options(
         }
     };
 
-    let email = match payload.as_ref().map(|p| p.email.trim()) {
-        Some(email) if !email.is_empty() && email.len() <= MAX_EMAIL_LEN => email.to_string(),
-        _ => {
+    let Json(payload) = match payload {
+        Ok(payload) => payload,
+        Err(rejection) => {
+            return passkey_login_json_rejection(&request_id, "auth_options", &rejection)
+        }
+    };
+
+    let email = {
+        let trimmed = payload.email.trim();
+        if trimmed.is_empty() || trimmed.len() > MAX_EMAIL_LEN {
             let err = serde_json::json!({
                 "error": "INVALID_REQUEST",
                 "message": "A valid email is required"
             });
             return (StatusCode::BAD_REQUEST, Json(err)).into_response();
         }
+        trimmed.to_string()
     };
 
     // Rate-limit BEFORE any expensive or state-creating work (account lookup,
@@ -2262,9 +2292,10 @@ pub struct PasskeyAuthVerifyPayload {
 /// rejected.
 pub async fn passkey_auth_verify(
     State(state): State<ApiState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     jar: CookieJar,
-    payload: Option<Json<PasskeyAuthVerifyPayload>>,
+    payload: Result<Json<PasskeyAuthVerifyPayload>, JsonRejection>,
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
 
@@ -2284,20 +2315,40 @@ pub async fn passkey_auth_verify(
         }
     };
 
-    let payload = match payload {
-        Some(Json(payload)) => payload,
-        None => {
-            let err = serde_json::json!({
-                "error": "INVALID_REQUEST",
-                "message": "A valid authentication_id and credential are required"
-            });
-            return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    let Json(payload) = match payload {
+        Ok(payload) => payload,
+        Err(rejection) => {
+            return passkey_login_json_rejection(&request_id, "auth_verify", &rejection)
         }
     };
 
-    if payload.authentication_id.trim().is_empty() {
+    let authentication_id = payload.authentication_id.trim();
+    if authentication_id.is_empty() {
         let err = serde_json::json!({"error": "INVALID_REQUEST"});
         return (StatusCode::BAD_REQUEST, Json(err)).into_response();
+    }
+
+    // Rate-limit BEFORE consuming the single-use state or running any WebAuthn
+    // crypto. Keyed by client IP (mandatory) plus a hash of the authentication_id,
+    // so a flood from one peer — or against one ceremony — is bounded, and a
+    // throttled request never consumes the challenge.
+    let client_ip = effective_client_ip(addr, &headers);
+    let auth_id_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(authentication_id.as_bytes());
+        let full = format!("{:x}", hasher.finalize());
+        full[..16].to_string()
+    };
+    if let Err(e) = state.rate_limiter.check(client_ip, &auth_id_hash) {
+        tracing::warn!(
+            event = "auth.passkey.auth_verify.rate_limited",
+            request_id = %request_id,
+            client_ip = %client_ip,
+            error = %e,
+            "Passkey auth-verify rate limited"
+        );
+        let err = serde_json::json!({"error": "RATE_LIMITED"});
+        return (StatusCode::TOO_MANY_REQUESTS, Json(err)).into_response();
     }
 
     // Single-use consume of the server-side authentication state. Unknown,
@@ -2305,7 +2356,7 @@ pub async fn passkey_auth_verify(
     // challenge can never be probed twice).
     let (expected_account_id, auth_state) = match state
         .passkey_authentications
-        .consume(&payload.authentication_id)
+        .consume(authentication_id)
         .await
     {
         Some(value) => value,
@@ -2363,6 +2414,19 @@ pub async fn passkey_auth_verify(
             return (StatusCode::UNAUTHORIZED, Json(err)).into_response();
         }
     };
+
+    // Reject before mutating any credential state if the account has been deleted
+    // or disabled since auth/options. (Re-checked again immediately before the
+    // session is minted, below, to also close the update -> session window.)
+    if !state.accounts.read().await.is_account_active(&account_id) {
+        tracing::warn!(
+            event = "auth.passkey.auth_verify.account_inactive_pre_update",
+            request_id = %request_id,
+            "Passkey auth-verify: account missing or disabled before credential update; refusing session"
+        );
+        let err = serde_json::json!({"error": "ACCOUNT_INACTIVE"});
+        return (StatusCode::FORBIDDEN, Json(err)).into_response();
+    }
 
     // Persist the WebAuthn credential state (signature counter, backup flags) per
     // webauthn-rs semantics. `update_credential` never changes the credential ID,
