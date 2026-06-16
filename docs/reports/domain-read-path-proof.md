@@ -3,6 +3,10 @@ id: reports.domain-read-path-proof
 title: "Domain Read Path Proof"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: proof
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 created: 2026-06-03
 lang: de
 summary: >
@@ -48,6 +52,13 @@ Geltende Grenzen:
 > Account-Write-Source weiterhin `jsonl` ist. Knoten-, Kanten-, Step-up-E-Mail-
 > und WebAuthn-Writeback-Mutationen bleiben blockiert bzw. unverändert. Details:
 > `docs/reports/domain-account-write-path-proof.md`.
+
+## Lifecycle
+
+- Zweck: Belegt den OPT-ARC-001 PostgreSQL-Teilpfad für den optionalen PostgreSQL-Read-Path im dokumentierten Scope.
+- Bereitet vor: Fortlaufende OPT-ARC-001 Cutover- und Proof-Matrix-Entscheidungen.
+- Gültig bis: Review am 2026-07-16 oder bis ein neuerer Proof diesen Bericht ersetzt.
+- Wird abgelöst durch: Noch offen; mögliche spätere Runtime-/Cutover-Proofs oder aktualisierte Proof-Matrix-Artefakte.
 
 ## Implementierte Belege
 

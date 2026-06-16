@@ -3,6 +3,10 @@ id: reports.domain-edge-reference-audit
 title: "Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 created: 2026-06-14
 lang: de
 summary: >
@@ -63,6 +67,13 @@ Nicht geprüft oder nicht geändert:
 - keine Edge-Normalisierung
 - keine Quarantäne-Mutation
 - keine JSONL-Demontage
+
+## Lifecycle
+
+- Zweck: Auditiert Edge-Referenzen gegen vorhandene Nodes und bereitet die FK-Entscheidung vor.
+- Bereitet vor: OPT-ARC-001 Entscheidung zwischen strikten Node-FKs und loser Referenzsemantik.
+- Gültig bis: Review am 2026-07-16 oder bis ein repräsentativer Runtime-Datenlauf den Audit ersetzt.
+- Wird abgelöst durch: Noch offen; erforderlich ist ein Auditlauf gegen repräsentative Runtime-Daten.
 
 ## Blueprint-Anker
 

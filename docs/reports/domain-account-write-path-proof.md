@@ -3,6 +3,10 @@ id: reports.domain-account-write-path-proof
 title: "Domain Account Write Path Proof"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: proof
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 canonicality: evidence
 created: 2026-06-04
 lang: de
@@ -61,6 +65,13 @@ Geltende Grenzen:
 - Keine Entfernung von JSONL.
 - Kein Startup-Backfill.
 - Kein Produktions-Cutover. OPT-ARC-001 bleibt `partial`.
+
+## Lifecycle
+
+- Zweck: Belegt den OPT-ARC-001 PostgreSQL-Teilpfad für den Account-Schreibpfad `POST /accounts` im dokumentierten Scope.
+- Bereitet vor: Fortlaufende OPT-ARC-001 Cutover- und Proof-Matrix-Entscheidungen.
+- Gültig bis: Review am 2026-07-16 oder bis ein neuerer Proof diesen Bericht ersetzt.
+- Wird abgelöst durch: Noch offen; mögliche spätere Runtime-/Cutover-Proofs oder aktualisierte Proof-Matrix-Artefakte.
 
 ## Konfiguration
 

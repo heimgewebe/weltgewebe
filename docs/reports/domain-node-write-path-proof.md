@@ -3,6 +3,10 @@ id: reports.domain-node-write-path-proof
 title: "Domain Node Write Path Proof"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: proof
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 canonicality: evidence
 created: 2026-06-05
 lang: de
@@ -42,6 +46,13 @@ OPT-ARC-001 Phase E-B implementiert einen engen PostgreSQL-Write-Path nur für
 - kein JSONL-Abbau
 - kein Produktions-Cutover
 - kein Dual-Write
+
+## Lifecycle
+
+- Zweck: Belegt den OPT-ARC-001 PostgreSQL-Teilpfad für den Node-Schreibpfad `PATCH /nodes` im dokumentierten Scope.
+- Bereitet vor: Fortlaufende OPT-ARC-001 Cutover- und Proof-Matrix-Entscheidungen.
+- Gültig bis: Review am 2026-07-16 oder bis ein neuerer Proof diesen Bericht ersetzt.
+- Wird abgelöst durch: Noch offen; mögliche spätere Runtime-/Cutover-Proofs oder aktualisierte Proof-Matrix-Artefakte.
 
 ## Config-Matrix
 

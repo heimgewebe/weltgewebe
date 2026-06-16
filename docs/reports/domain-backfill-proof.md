@@ -3,6 +3,10 @@ id: reports.domain-backfill-proof
 title: Domain Backfill Proof
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: proof
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 canonicality: evidence
 summary: >
   Proof-Bericht für OPT-ARC-001 Phase C: deterministischer JSONL→PostgreSQL-Backfill
@@ -32,6 +36,13 @@ Phase C only: deterministic JSONL→PostgreSQL import proof for domain data (nod
 - No API endpoint behavior changes.
 - No production data migration on API startup.
 - Does not mark OPT-ARC-001 done.
+
+## Lifecycle
+
+- Zweck: Belegt den OPT-ARC-001 PostgreSQL-Teilpfad für den deterministischen JSONL→PostgreSQL-Backfill im dokumentierten Scope.
+- Bereitet vor: Fortlaufende OPT-ARC-001 Cutover- und Proof-Matrix-Entscheidungen.
+- Gültig bis: Review am 2026-07-16 oder bis ein neuerer Proof diesen Bericht ersetzt.
+- Wird abgelöst durch: Noch offen; mögliche spätere Runtime-/Cutover-Proofs oder aktualisierte Proof-Matrix-Artefakte.
 
 ## Phase Boundary Confirmation
 
