@@ -1,0 +1,314 @@
+{
+  "id": "MAP-PROOF-001",
+  "status": "diagnosis-reconciliation-only",
+  "date": "2026-06-15",
+  "scope": "map / basemap / Caddy / PMTiles / HTTP Range / CI / visual proof",
+  "generated_from": [
+    "scripts/guard/basemap-runtime-proof.sh",
+    ".github/workflows/basemap-runtime-proof.yml",
+    "scripts/basemap/build-hamburg-pmtiles.sh",
+    "infra/caddy/Caddyfile.proof",
+    "infra/caddy/Caddyfile",
+    "infra/caddy/Caddyfile.heim",
+    "infra/caddy/Caddyfile.prod",
+    "infra/caddy/Dockerfile",
+    "infra/compose/compose.core.yml",
+    "infra/compose/compose.prod.yml",
+    "map-style/style.json",
+    "apps/web/src/lib/map/basemap.ts",
+    "apps/web/src/lib/map/config/basemap.current.ts",
+    "apps/web/tests/basemap-client-integration.spec.ts",
+    "apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts",
+    "docs/proofs/basemap-hamburg-artifact-proof.md",
+    "docs/reports/map-status-matrix.md",
+    "docs/reports/map-status-matrix.json",
+    "docs/blueprints/kartenklarheit-phase6.md",
+    "docs/blueprints/kartenklarheit-roadmap.md"
+  ],
+  "proof_levels": [
+    {
+      "id": "P0",
+      "name": "static-config-proven",
+      "status": "PROVEN",
+      "scope": "code+docs (static)",
+      "evidence": {
+        "files": [
+          "map-style/style.json",
+          "apps/web/src/lib/map/basemap.ts",
+          "apps/web/src/lib/map/config/basemap.current.ts",
+          "apps/web/tests/basemap.spec.ts"
+        ],
+        "ci_runs": [],
+        "ci_jobs": [],
+        "descriptions": ["Static basemap style/config and mode resolution, covered by mode tests."],
+        "artifacts": [],
+        "signals": []
+      },
+      "does_not_establish": ["runtime_delivery", "rendering"]
+    },
+    {
+      "id": "P1",
+      "name": "mocked-client-path-proven",
+      "status": "PROVEN",
+      "scope": "test (mocked)",
+      "evidence": {
+        "files": [
+          "apps/web/tests/basemap-client-integration.spec.ts",
+          "apps/web/tests/basemap-sovereignty-testbuild.spec.ts"
+        ],
+        "ci_runs": [],
+        "ci_jobs": [],
+        "descriptions": ["MapLibre resolves pmtiles:// and issues a Range header against a mocked /local-basemap/ backend."],
+        "artifacts": [],
+        "signals": []
+      },
+      "does_not_establish": ["real_http_backend_delivery", "real_content"]
+    },
+    {
+      "id": "P2",
+      "name": "caddy-range-synthetic-proven",
+      "status": "PROVEN",
+      "scope": "ci|synthetic",
+      "evidence": {
+        "files": ["infra/caddy/Caddyfile.proof"],
+        "ci_runs": [27028165272, 26535801825, 26447341921, 25970466659],
+        "ci_jobs": ["basemap-range-delivery-proof"],
+        "descriptions": ["Real caddy:2.7 + Caddyfile.proof serves a synthetic 64 KiB artifact; guard asserts HTTP 206 + Accept-Ranges/Content-Range."],
+        "artifacts": [],
+        "signals": ["PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)"]
+      },
+      "does_not_establish": ["real_map_content"]
+    },
+    {
+      "id": "P3",
+      "name": "real-pmtiles-magic-local-proven",
+      "status": "PROVEN",
+      "scope": "ci|local|magic+hash",
+      "evidence": {
+        "files": [
+          "scripts/basemap/build-hamburg-pmtiles.sh",
+          "docs/proofs/basemap-hamburg-artifact-proof.md"
+        ],
+        "ci_runs": [27028165272, 26535801825, 26447341921],
+        "ci_jobs": ["basemap-pmtiles-content-proof"],
+        "descriptions": ["Real Hamburg PMTiles built in CI; magic 'PMTiles' at offset 0 + intra-run SHA256; Caddy serves bytes 0-6 via HTTP 206."],
+        "artifacts": [],
+        "signals": [
+          "PROVEN: HTTP-served PMTiles Magic verified",
+          "PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)"
+        ]
+      },
+      "does_not_establish": ["deep_structure", "cross_environment_reproducibility"]
+    },
+    {
+      "id": "P4",
+      "name": "real-pmtiles-structure-validation",
+      "status": "NOT_PROVEN",
+      "scope": "none",
+      "evidence": {
+        "files": ["scripts/guard/basemap-runtime-proof.sh"],
+        "ci_runs": [],
+        "ci_jobs": [],
+        "descriptions": ["Guard explicitly prints NOT_PROVEN for deep PMTiles structure validation; only the 7-byte magic is checked."],
+        "artifacts": [],
+        "signals": ["NOT_PROVEN: Deep PMTiles structure validation (tile index, directory, metadata integrity)"]
+      },
+      "does_not_establish": ["pmtiles_structure", "tile_directory_integrity", "metadata_integrity", "tile_read"],
+      "gap_description": "Parse PMTiles v3 header / root directory / metadata, or perform a single tile read on a fixture."
+    },
+    {
+      "id": "P5",
+      "name": "browser-pmtiles-protocol-init",
+      "status": "PROVEN",
+      "scope": "ci|real_map|header_range_and_render_init|via-vite-middleware",
+      "evidence": {
+        "files": ["apps/web/tests/proofs/basemap-real-hamburg-visual.proof.ts"],
+        "ci_runs": [27028165272, 26535801825],
+        "ci_jobs": [
+          "basemap-visual-proof (job 79773804577, run 27028165272)",
+          "basemap-visual-proof (job 78164572577, run 26535801825)"
+        ],
+        "descriptions": ["Browser accesses the real Hamburg artifact via the Vite middleware; a separate direct Range request proves HTTP 206 for the artifact; MapLibre canvas is visible, isStyleLoaded=true, at least one local PMTiles request is observed, and remote tile providers are not contacted. This does not prove vector-tile payload delivery."],
+        "artifacts": [],
+        "signals": ["direct_http_206_range", "pmtiles_request_observed", "canvas_visible", "isStyleLoaded=true", "remote_violations=0"]
+      },
+      "does_not_establish": ["vector_tile_payload_read", "tile_data_delivery", "source_loaded_with_tile_payload", "caddy_path_for_visual", "visual_correctness_pixel", "production"]
+    },
+    {
+      "id": "P6",
+      "name": "visual-artifact-partial",
+      "status": "PARTIAL",
+      "scope": "ci|screenshot-no-baseline",
+      "evidence": {
+        "files": [],
+        "ci_runs": [27028165272],
+        "ci_jobs": ["basemap-visual-proof (job 79773804577)"],
+        "descriptions": ["Screenshot and proof-summary.json captured as CI artifacts; canvas/style/206/sovereignty signals asserted, but no pixel/baseline comparison."],
+        "artifacts": [
+          "build/proofs/basemap-visual/screenshot.png",
+          "build/proofs/basemap-visual/proof-summary.json"
+        ],
+        "signals": []
+      },
+      "does_not_establish": ["visual_correctness_pixel_or_baseline"],
+      "note": "Pixelvergleich ist ein bewusstes Nicht-Ziel."
+    },
+    {
+      "id": "P7",
+      "name": "production-like-caddy-validation",
+      "status": "NOT_PROVEN",
+      "scope": "none",
+      "evidence": {
+        "files": [
+          "infra/caddy/Caddyfile.proof",
+          "infra/caddy/Dockerfile",
+          "infra/caddy/Caddyfile.heim",
+          "infra/caddy/Caddyfile.prod"
+        ],
+        "ci_runs": [],
+        "ci_jobs": [],
+        "descriptions": ["Proof path uses caddy:2.7 + Caddyfile.proof (or the Vite middleware); production/heim path builds caddy:2.8.4 + caddy-ratelimit and uses Caddyfile.heim. Caddyfile.prod (weltgewebe.net) has no /local-basemap/ route."],
+        "artifacts": [],
+        "signals": []
+      },
+      "does_not_establish": [
+        "production_caddy_version_match",
+        "ratelimit_plugin_integration",
+        "production_config_surface_equivalence",
+        "production_caddy_routing",
+        "heim_vs_net_architecture_equivalence"
+      ],
+      "gap_description": "Version drift (2.7 vs 2.8.4 + caddy-ratelimit), config-surface drift (CORS/CSP/reverse-proxy/regexp routing), and heim-vs-net architecture divergence."
+    }
+  ],
+  "reproducibility": {
+    "status": "NOT_PROVEN",
+    "heimserver_artifact": {
+      "sha256": "f0734f0137c69b345ea81ed865519402d96f226fe15bc6c976134d9ed1f28a8e",
+      "size_bytes": 23948877
+    },
+    "ci_artifact": {
+      "run_id": 26447341921,
+      "sha256": "3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab",
+      "size_bytes": 23948909
+    },
+    "note": "Gleicher gepinnter Planetiler-Digest und OSM-Input-Hash, aber abweichende Ausgabe (Delta 32 Bytes). Guard-SHA256 ist intra-run/selbstreferenziell.",
+    "cause_status": "not_established",
+    "cause_hypotheses_unverified": ["pmtiles_or_mbtiles_metadata", "build_timestamps", "sqlite_or_page_layout", "planetiler_output_details", "thread_count_or_cpu_core_divergence_in_parallel_packaging"]
+  },
+  "known_proven_scopes": [
+    "static-config (P0)",
+    "mocked-client-path (P1)",
+    "caddy-range-delivery (P2, synthetic, CI)",
+    "real-pmtiles-magic+hash (P3, CI)",
+    "browser-pmtiles-protocol-init (P5, via Vite middleware, CI)"
+  ],
+  "known_not_proven_scopes": [
+    "pmtiles-structural-validation (P4)",
+    "vector-tile-payload-delivery",
+    "source-loaded-with-real-tile-data",
+    "visual-correctness-pixel (P6, partial only)",
+    "production-like-caddy (P7)",
+    "cross-environment-reproducibility"
+  ],
+  "verified_ci_evidence": {
+    "source": "GitHub Actions API, heimgewebe/weltgewebe, workflow 'Basemap Runtime Proof'",
+    "verified_at": "2026-06-15",
+    "runs": [
+      {
+        "run_id": 27028165272,
+        "branch": "main",
+        "event": "push",
+        "head_sha": "303e88f9b9faf02a904a6ac3a3bb31ebac371db1",
+        "date": "2026-06-05",
+        "jobs": {
+          "basemap-runtime-proof": "success",
+          "basemap-range-delivery-proof": "success",
+          "basemap-pmtiles-content-proof": "success",
+          "basemap-visual-proof": "success"
+        }
+      },
+      {
+        "run_id": 26535801825,
+        "branch": "main",
+        "event": "push",
+        "date": "2026-05-27",
+        "jobs": {
+          "basemap-runtime-proof": "success",
+          "basemap-range-delivery-proof": "success",
+          "basemap-pmtiles-content-proof": "success",
+          "basemap-visual-proof": "success"
+        }
+      },
+      {
+        "run_id": 26447341921,
+        "branch": "chore/api-dockerfile-cargo-build-jobs",
+        "event": "pull_request",
+        "date": "2026-05-26",
+        "note": "visual job not yet present in this run",
+        "jobs": {
+          "basemap-runtime-proof": "success",
+          "basemap-range-delivery-proof": "success",
+          "basemap-pmtiles-content-proof": "success"
+        }
+      }
+    ]
+  },
+  "reconciliation": [
+    {
+      "statement": "visual proof: READY_FOR_CI_PROOF / no green run yet",
+      "sources": ["docs/reports/map-status-matrix.md", "docs/reports/map-status-matrix.json", "docs/blueprints/kartenklarheit-phase6.md", "docs/blueprints/kartenklarheit-roadmap.md"],
+      "finding": "green on main (runs 27028165272, 26535801825); proves PMTiles protocol/header access + render initialization, not vector-tile payload delivery",
+      "assessment": "stale_underclaim"
+    },
+    {
+      "statement": "pmtiles-content magic check still open ([ ])",
+      "sources": ["docs/blueprints/kartenklarheit-phase6.md", "docs/blueprints/kartenklarheit-roadmap.md"],
+      "finding": "PROVEN in CI; map-status-matrix already says PROVEN",
+      "assessment": "intra_repo_contradiction"
+    },
+    {
+      "statement": "Hamburg builds run only via workflow_dispatch",
+      "sources": ["docs/blueprints/kartenklarheit-phase6.md", "docs/blueprints/kartenklarheit-roadmap.md"],
+      "finding": "runs path-gated on pull_request/push to main plus workflow_dispatch",
+      "assessment": "false_trigger_drift"
+    },
+    {
+      "statement": "visual abnahme in test:ci is NOT_PROVEN",
+      "sources": ["docs/proofs/basemap-hamburg-artifact-proof.md"],
+      "finding": "correct: test:ci does not run the opt-in proof; green run is in the dedicated workflow",
+      "assessment": "consistent"
+    },
+    {
+      "statement": "artifact sha256/size",
+      "sources": ["docs/proofs/basemap-hamburg-artifact-proof.md", "docs/reports/map-status-matrix.md"],
+      "finding": "differ across environments -> not reproducible",
+      "assessment": "unframed_gap"
+    },
+    {
+      "statement": "caddy version proof vs production",
+      "sources": ["unreconciled"],
+      "finding": "proof caddy:2.7 vs prod caddy:2.8.4 + caddy-ratelimit (infra/caddy/Dockerfile)",
+      "assessment": "new_finding_p7"
+    }
+  ],
+  "residual_drift": [],
+  "phase6_sync": {
+    "status": "updated_in_this_pr",
+    "doc": "docs/blueprints/kartenklarheit-phase6.md",
+    "note": "Phase 6 now lists pmtiles-content and the browser/PMTiles-init proof as PROVEN (with scope limits); P4 structure, vector-tile payload delivery, P6 pixel correctness and P7 production-like Caddy remain open."
+  },
+  "future_cleanup": [
+    "docs/reports/map-status-matrix.json currently stores some evidence as prose strings (proven[], open_architectural_decisions); a future report-schema cleanup should normalize these into structured evidence objects. Out of scope for this PR."
+  ],
+  "recommended_next_pr": "MAP-PROOF-002",
+  "recommended_next_pr_title": "Real PMTiles structural validation fixture",
+  "recommended_fixture_strategy": "Option A: tiny committed real PMTiles fixture (KB) + structural parse beyond magic; no large Hamburg build in normal CI; no unbounded download",
+  "does_not_establish": [
+    "runtime_correctness",
+    "visual_correctness",
+    "production_equivalence",
+    "pmtiles_structure_beyond_magic",
+    "cross_environment_reproducibility"
+  ]
+}

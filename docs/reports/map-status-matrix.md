@@ -58,14 +58,23 @@ Repo-Stand tatsaechlich vorhanden sind.
 ## 6. Runtime-Integration
 
 - **Soll**: Echter HTTP-206-Nachweis, dass Caddy ein reales PMTiles-Artefakt per Range-Request korrekt ausliefert.
-- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (Endpoint + HTTP-206-Range + 7-Byte-Magic `PMTiles` + optionale SHA256-Validierung). Der CI-Workflow betreibt drei Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose), `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`) und `basemap-pmtiles-content-proof` (require-Modus + Scope `pmtiles-content`). Der Content-Job erzeugt ein echtes PMTiles-Artefakt ueber `scripts/basemap/build-hamburg-pmtiles.sh` (Planetiler-Pinning + verifizierter OSM-Snapshot), startet Caddy und laesst den Guard hart fehlschlagen, sobald Endpoint/206/Magic/SHA nicht stimmen.
+- **Ist**: `basemap-client-integration.spec.ts` und `basemap-sovereignty-testbuild.spec.ts` belegen den lokalen clientseitigen Basemap-Pfad im Testkontext. Das Guard-Script `scripts/guard/basemap-runtime-proof.sh` prueft den echten Live-Pfad gegen Caddy plus `.pmtiles`-Datei und unterscheidet explizit zwischen PROVEN und NOT_PROVEN. Der Guard kennt zwei Scopes: `range-delivery` (HTTP-206-Beweis) und `pmtiles-content` (Endpoint + HTTP-206-Range + 7-Byte-Magic `PMTiles` + optionale SHA256-Validierung). Der CI-Workflow betreibt vier Jobs: `basemap-runtime-proof` (skip-Modus, Diagnose), `basemap-range-delivery-proof` (require-Modus + Scope `range-delivery`), `basemap-pmtiles-content-proof` (require-Modus + Scope `pmtiles-content`) und `basemap-visual-proof` (Playwright Browser-/PMTiles-Init-Proof via Vite-Middleware, `needs: basemap-pmtiles-content-proof`). Der Content-Job erzeugt ein echtes PMTiles-Artefakt ueber `scripts/basemap/build-hamburg-pmtiles.sh` (Planetiler-Pinning + verifizierter OSM-Snapshot), startet Caddy und laesst den Guard hart fehlschlagen, sobald Endpoint/206/Magic/SHA nicht stimmen.
 - **Status**: Teil (HTTP-206-Range-Delivery: PROVEN — CI-Lauf #25970466659, Commit 14feefd6, Guard-Output `PROVEN: Caddy PMTiles Range delivery verified (scope=range-delivery)`, Response `HTTP/1.1 206 Partial Content`; pmtiles-content: PROVEN (scope=pmtiles-content) — CI-Lauf #26447341921, Job `basemap-pmtiles-content-proof` (#77857000606), Commit 3410c872964669fa27bfee958169ad9ce95594ae, Guard-Output `PROVEN: HTTP-served PMTiles Magic verified` und `PROVEN: Caddy PMTiles content verified (scope=pmtiles-content)`, Artefakt `basemap-hamburg-v0.1.0.pmtiles`, SHA256 `3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab`, Groesse `23948909` Bytes)
 - **Nachweis**: `apps/web/tests/basemap-client-integration.spec.ts`, `apps/web/tests/basemap-sovereignty-testbuild.spec.ts`, `scripts/guard/basemap-runtime-proof.sh`, `.github/workflows/basemap-runtime-proof.yml`, `infra/caddy/Caddyfile.proof`
 - **Fehlend**: Tile-Directory- und strukturelle PMTiles-Validierung bleiben Future Work.
   **Visueller Beweis differenzieren**: Lokale Ausführung (Heimserver, `basemap-real-hamburg-visual.proof.ts`) PROVEN
   (Canvas 1280×720, style_loaded true, direct_range_status 206, zero remote_violations).
-  CI-Ausführung des visuellen Proofs: READY_FOR_CI_PROOF — Job `basemap-visual-proof` in
-  `.github/workflows/basemap-runtime-proof.yml` eingerichtet; kein grüner GitHub-Actions-Lauf liegt noch vor.
+  CI-Ausführung des Browser-/PMTiles-Init-Proofs: PROVEN — Job `basemap-visual-proof` in
+  `.github/workflows/basemap-runtime-proof.yml` ist grün auf `main`
+  ([CI-Lauf 27028165272](https://github.com/heimgewebe/weltgewebe/actions/runs/27028165272),
+  Job 79773804577, 2026-06-05; zuvor [CI-Lauf 26535801825](https://github.com/heimgewebe/weltgewebe/actions/runs/26535801825),
+  Job 78164572577, 2026-05-27). Belegt sind ein separater direkter PMTiles-Range-Request
+  mit HTTP 206, ein beobachteter lokaler PMTiles-Request, MapLibre-Canvas, `isStyleLoaded()`
+  und 0 externe Provider — Scope: echtes Hamburg-Artefakt über die Vite-Middleware (nicht
+  Caddy). Dieser Proof belegt **keinen** Vector-Tile-Payload-Read und keine Tile-Datenlieferung über
+  Header-/Indexzugriffe hinaus. Vector-Tile-Payload-Lieferung, visuelle Korrektheit
+  (Pixel-/Baseline-Vergleich) und produktionsnaher Caddy bleiben NOT_PROVEN; differenzierte
+  Einordnung in `docs/reports/map-basemap-proof-gap-reconciliation.md`.
   Map-Interaktion und clientseitige Fehlerbehandlung sind belegt.
   Produktentscheidung (remote-style vs. local-sovereign im Produktionsbetrieb): ausstehend.
 
@@ -164,5 +173,13 @@ Commit 3410c872964669fa27bfee958169ad9ce95594ae), Guard-Output
 `basemap-hamburg-v0.1.0.pmtiles` mit SHA256
 `3eea9946f90a1cca425916c5b3272692ae8a1030bf22e700b67908cfafee8eab` und
 Groesse `23948909` Bytes.
-Offen bleiben die Produktionsentscheidung fuer den
-Basemap-Modus und die visuelle Kartenabnahme in GitHub Actions.
+Der Browser-/PMTiles-Init-Proof in GitHub Actions ist inzwischen PROVEN (Job
+`basemap-visual-proof` grün auf `main`, CI-Lauf 27028165272/26535801825; Scope:
+echtes Artefakt via Vite-Middleware, nicht Caddy). Dieser Proof belegt keinen
+Vector-Tile-Payload-Read und keine Tile-Datenlieferung über Header-/Indexzugriffe
+hinaus. Offen bleiben die Produktionsentscheidung fuer den Basemap-Modus, die
+Vector-Tile-Payload-/Tile-Datenlieferung, die visuelle Korrektheit
+(Pixel-/Baseline-Vergleich), ein produktionsnaher Caddy-Proof (Proof nutzt
+`caddy:2.7`, der Produktions-/Heim-Pfad basiert auf `caddy:2.8.4`) und die tiefe
+PMTiles-Strukturvalidierung — Einordnung in
+`docs/reports/map-basemap-proof-gap-reconciliation.md`.
