@@ -377,13 +377,13 @@ fn routes_dir() -> PathBuf {
 const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/auth/session/refresh"),
     ("POST", "/auth/logout-all"),
-    ("DELETE", "/auth/devices/:id"),
+    ("DELETE", "/auth/devices/{id}"),
     ("PUT", "/auth/me/email"),
     ("POST", "/auth/step-up/magic-link/request"),
     ("POST", "/auth/step-up/magic-link/consume"),
     ("POST", "/auth/passkeys/register/options"),
     ("POST", "/auth/passkeys/register/verify"),
-    ("PATCH", "/nodes/:id"),
+    ("PATCH", "/nodes/{id}"),
     ("POST", "/edges"),
     ("POST", "/accounts"),
 ];
@@ -516,7 +516,7 @@ fn extract_mutating_routes(route_call: &str) -> Vec<(String, String)> {
 
 #[test]
 fn extract_mutating_routes_recognizes_on_and_service_forms() {
-    let route = r#".route("/devices/:id", MethodRouter::on(MethodFilter::POST | MethodFilter::PUT, handler).on(MethodFilter::PATCH, handler).on(MethodFilter::DELETE, handler))"#;
+    let route = r#".route("/devices/{id}", MethodRouter::on(MethodFilter::POST | MethodFilter::PUT, handler).on(MethodFilter::PATCH, handler).on(MethodFilter::DELETE, handler))"#;
     let mutating = extract_mutating_routes(route)
         .into_iter()
         .map(|(method, _)| method)
@@ -531,7 +531,7 @@ fn extract_mutating_routes_recognizes_on_and_service_forms() {
         ])
     );
 
-    let service_route = r#".route("/devices/:id", on(MethodFilter::POST | MethodFilter::DELETE, handler).route_layer(axum::middleware::from_fn(require_auth)).and(axum::routing::put_service(service)).and(patch_service(service)).and(post_service(service)).and(delete_service(service)).and(axum::routing::post_service(service)).and(axum::routing::delete_service(service)))"#;
+    let service_route = r#".route("/devices/{id}", on(MethodFilter::POST | MethodFilter::DELETE, handler).route_layer(axum::middleware::from_fn(require_auth)).and(axum::routing::put_service(service)).and(patch_service(service)).and(post_service(service)).and(delete_service(service)).and(axum::routing::post_service(service)).and(axum::routing::delete_service(service)))"#;
     let service_mutating = extract_mutating_routes(service_route)
         .into_iter()
         .map(|(method, _)| method)
