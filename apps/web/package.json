@@ -58,30 +58,30 @@
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173"
   },
   "devDependencies": {
-    "@opentelemetry/api": "^1.9.0",
-    "@playwright/test": "1.55.1",
+    "@opentelemetry/api": "^1.9.1",
+    "@playwright/test": "1.61.0",
     "@sveltejs/adapter-static": "^3.0.10",
-    "@sveltejs/kit": "2.59.0",
+    "@sveltejs/kit": "2.65.2",
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@types/node": "^20.19.0",
-    "@typescript-eslint/eslint-plugin": "8.8.0",
-    "@typescript-eslint/parser": "8.8.0",
+    "@typescript-eslint/eslint-plugin": "8.61.1",
+    "@typescript-eslint/parser": "8.61.1",
     "cross-env": "^10.1.0",
     "eslint": "9.11.1",
     "eslint-plugin-svelte": "2.45.1",
     "globals": "15.9.0",
-    "prettier": "3.3.3",
+    "prettier": "3.8.4",
     "prettier-plugin-svelte": "3.2.6",
     "rimraf": "5",
-    "svelte": "^5.53.5",
-    "svelte-check": "^4.3.2",
+    "svelte": "^5.56.3",
+    "svelte-check": "^4.6.0",
     "typescript": "5.9.2",
     "vite": "^6.4.2",
     "vitest": "^3.2.4"
   },
   "dependencies": {
     "maplibre-gl": "4.7.1",
-    "pmtiles": "^4.4.0"
+    "pmtiles": "^4.4.1"
   },
   "engines": {
     "node": "^20.19.0 || ^22.13.0 || >=24"
