@@ -380,13 +380,14 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         from scripts.docmeta.audit_domain_edge_references import load_postgres_nodes
 
         with patch("scripts.docmeta.audit_domain_edge_references.iter_psql_lines") as mock_iter:
-            mock_iter.return_value = ["node-a", "node-b", "node-a"]
+            mock_iter.return_value = ["node-a\n", "node-b\n", "node-a\n", "   \n"]
             node_ids, summary = load_postgres_nodes({})
 
             self.assertEqual(node_ids, {"node-a", "node-b"})
-            self.assertEqual(summary["node_records_total"], 3)
+            self.assertEqual(summary["node_records_total"], 4)
             self.assertEqual(summary["node_ids_total"], 2)
             self.assertEqual(summary["node_duplicate_ids"], 1)
+            self.assertEqual(summary["nodes_empty_id"], 1)
             self.assertEqual(summary["node_invalid_json_records"], 0)
 
     def test_max_findings_truncates_findings(self):

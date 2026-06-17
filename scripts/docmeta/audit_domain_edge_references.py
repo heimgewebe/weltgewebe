@@ -234,7 +234,7 @@ def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[st
     for line in iter_psql_lines(sql, postgres_env, "domain_nodes"):
         summary["node_records_total"] += 1
 
-        node_id = line
+        node_id = line.strip()
         if not node_id:
             summary["nodes_empty_id"] += 1
             continue
