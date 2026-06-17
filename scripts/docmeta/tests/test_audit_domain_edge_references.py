@@ -207,6 +207,21 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             data = json.loads(result.stdout)
             self.assertEqual(data["summary"]["malformed_edges"], 1)
 
+    def test_jsonl_whitespace_lines_are_ignored(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write(' \n\t\n{"id": "node-a"}\n  \n')
+            nf.flush()
+            ef.write('  \n{"id": "edge-1", "source_id": "node-a", "target_id": "node-a"}\n \t \n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--source-kind", "runtime")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(data["summary"]["node_records_total"], 1)
+            self.assertEqual(data["summary"]["edge_records_total"], 1)
+            self.assertEqual(data["summary"]["node_invalid_json_records"], 0)
+            self.assertEqual(data["summary"]["invalid_json_records"], 0)
+
     def test_node_invalid_json_is_reported(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
             nf.write('{invalid_json_here}\n')
@@ -360,6 +375,20 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
         self.assertEqual(env.get("PGSSLMODE"), "require")
         self.assertEqual(env.get("PGCONNECT_TIMEOUT"), "10")
 
+    def test_load_postgres_nodes_reads_plain_ids(self):
+        from unittest.mock import patch
+        from scripts.docmeta.audit_domain_edge_references import load_postgres_nodes
+
+        with patch("scripts.docmeta.audit_domain_edge_references.iter_psql_lines") as mock_iter:
+            mock_iter.return_value = ["node-a", "node-b", "node-a"]
+            node_ids, summary = load_postgres_nodes({})
+
+            self.assertEqual(node_ids, {"node-a", "node-b"})
+            self.assertEqual(summary["node_records_total"], 3)
+            self.assertEqual(summary["node_ids_total"], 2)
+            self.assertEqual(summary["node_duplicate_ids"], 1)
+            self.assertEqual(summary["node_invalid_json_records"], 0)
+
     def test_max_findings_truncates_findings(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
             nf.write('{"id": "node-a"}\n')
@@ -392,10 +421,26 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
             self.assertEqual(data["summary"]["untyped_existing_node_references"], 1)
 
-    def test_negative_max_findings_fails(self):
-        result = run_script("--max-findings", "-1")
+    def test_max_findings_below_minus_one_fails(self):
+        result = run_script("--max-findings", "-2")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("--max-findings must be >= 0", result.stderr)
+        self.assertIn("--max-findings must be -1 or >= 0", result.stderr)
+
+    def test_max_findings_minus_one_means_unlimited(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            ef.write('{"id": "edge-1", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.write('{"id": "edge-2", "source_id": "missing-b", "target_id": "node-a"}\n')
+            ef.flush()
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "-1")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(len(data["findings"]), 2)
+            self.assertIs(data["findings_truncated"], False)
+            self.assertIsNone(data["findings_limit"])
+            self.assertIs(data["findings_unlimited"], True)
 
     def test_node_duplicate_ids_are_reported(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
@@ -590,12 +635,13 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertIn("nodes file", result.stderr.lower())
             self.assertNotIn("Traceback", result.stderr)
 
-    def test_postgres_edges_query_orders_by_id(self):
+    def test_postgres_edges_query_does_not_order_by_id(self):
         import inspect
         from scripts.docmeta.audit_domain_edge_references import iter_postgres_edges
 
         source = inspect.getsource(iter_postgres_edges)
-        self.assertIn("ORDER BY id", source)
+        self.assertIn("FROM domain_edges", source)
+        self.assertNotIn("ORDER BY id", source)
 
     def test_empty_runtime_smoke_requires_representative_runtime_data(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as nf, tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl") as ef:
