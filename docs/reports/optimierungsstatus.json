@@ -369,7 +369,7 @@
         ".github/dependabot.yml"
       ],
       "missing_evidence": [],
-      "next_action": "Dependabot minimal konfiguriert (weekly, gruppiert, PR-Limit 2; Actions/npm-root/apps-web-npm/Cargo aktiviert; Docker/Python/uv bewusst ausgeschlossen)",
+      "next_action": "Dependabot konfiguriert (weekly; Version-Update-PR-Limit 2; Minor/Patch gruppiert; Major-Updates einzeln; Actions/npm-root/apps-web-npm/Cargo aktiviert; Docker/Python/uv dokumentierte Scope-Ausschlüsse, keine Restlücke dieses Tasks)",
       "updated_at": "2026-06-17"
     },
     {

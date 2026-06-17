@@ -104,4 +104,4 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 | OPT-API-003 | api | DB-Migrationen | `apps/api/migrations/`, in CI belegt, Commit `00a43a00` |
 | OPT-API-004 | api | Limit-Obergrenze `/nodes` & `/accounts` | `apps/api/src/routes/query.rs`, Tests 4+9 passed |
 | OPT-FE-003 | web | Panel-Detail-Fetch-Logik extrahieren | `apps/web/src/lib/panels/panelDetails.ts`, 10+5 Tests passed |
-| OPT-CI-004 | ci | Dependency-Update-Automation (Dependabot/Renovate) | `.github/dependabot.yml` (weekly, gruppiert, PR-Limit 2; Actions/npm-root/apps-web-npm/Cargo aktiviert; Docker/Python/uv bewusst ausgeschlossen) |
+| OPT-CI-004 | ci | Dependency-Update-Automation (Dependabot/Renovate) | `.github/dependabot.yml` (weekly; Version-Update-PR-Limit 2; Minor/Patch gruppiert; Major-Updates einzeln; Actions/npm-root/apps-web-npm/Cargo aktiviert; Docker/Python/uv dokumentierte Scope-Ausschlüsse) |
