@@ -134,6 +134,12 @@ status: active
         self.assertIn("No findings.", stdout)
         self.assertEqual(stderr, "")
 
+    def test_run_rejects_invalid_mode(self) -> None:
+        # run(root, mode) should reject unsupported modes directly.
+        with self.assertRaises(ValueError) as ctx:
+            run(self.tmp_root, "nonsense")
+        self.assertIn("unsupported report lifecycle mode", str(ctx.exception))
+
     def test_github_warning_annotation_escapes_special_characters(self) -> None:
         # Data escaping: percent first, then CR/LF.
         self.assertEqual(_gha_escape_data("100%"), "100%25")

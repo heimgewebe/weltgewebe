@@ -12,6 +12,7 @@ if __package__ in {None, ""}:
 from scripts.docmeta.docmeta import parse_frontmatter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+VALID_MODES = ("report", "warn", "strict")
 
 
 @dataclass(frozen=True)
@@ -212,6 +213,8 @@ def _render_github_warnings(findings: list[Finding]) -> str:
 
 
 def run(root: Path, mode: str) -> tuple[str, int]:
+    if mode not in VALID_MODES:
+        raise ValueError(f"unsupported report lifecycle mode: {mode}")
     paths = _iter_report_paths(root)
     all_findings = []
     reports_checked = 0
@@ -252,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate report lifecycle metadata.")
     parser.add_argument(
         "--mode",
-        choices=["report", "warn", "strict"],
+        choices=VALID_MODES,
         default="report",
         help="Validation mode"
     )
