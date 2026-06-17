@@ -20,6 +20,24 @@ relations:
 > Arbeitssteuerung, keine Wahrheitsschicht.
 > Statuswechsel brauchen Evidenz in Statusmatrizen, Reports, PRs oder Tests.
 
+## Einordnung 2026-06-16 — optimierte TODO-Liste (Strang A Cutover / Strang B Hygiene)
+
+Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert:
+
+- **Bereits erledigt & belegt — keine Reaktivierung:** E-Mail-Duplicate-Audit (Listen-TODO 1)
+  ist umgesetzt (`scripts/docmeta/audit_account_email_uniqueness.py`,
+  `docs/reports/domain-account-email-uniqueness-audit.md`, Runtime-Audit 2026-06-13: 0 Duplikate);
+  der normalisierte E-Mail-Unique-Index inkl. `409`-Mapping (Listen-TODO 4) ist umgesetzt und
+  CI-belegt (`apps/api/migrations/20260613000001_*`, CI-Run `27487642549`). Diese entsprechen den
+  repo-internen Schritten „TODO 2 / TODO 2A" als OPT-ARC-001-Sub-Deliverables.
+- **Bleibt unter OPT-ARC-001 (nicht dupliziert):** Listenparitäts-Proof (Listen-TODO 3) ist der
+  vorhandene Read-Path-Proof-Harness (`prepared`, Legacy-Order-Preservation-Blocker);
+  Runtime-Smoke (TODO 11) und JSONL-Demontage (TODO 12) sind OPT-ARC-001-Cutover-Akzeptanz.
+- **Neu als eigene PR-Schnitte:** Edge-Orphan-Audit, Edge-Referenz-Policy, Single-/Multi-Instance,
+  Step-up-E-Mail- und WebAuthn-Persistenz, `webauthn_user_id`-Backfill, Edge-Cache-Design
+  (DB-PROOF-/DOMAIN-PG-/AUTH-PG-IDs).
+- **Strang A (PostgreSQL/Auth-Cutover) und Strang B (Repo-/CI-/Docs-Hygiene) nicht in einen PR mischen.**
+
 ## Aktive Prioritäten
 
 | ID | Bereich | Titel | Status | Priorität | Evidenz | Nächste Aktion |
@@ -39,24 +57,39 @@ relations:
 | TASK-CTL-005 | docs | Bestehende Planning-Registration-Findings triagieren und Ratchet vorbereiten | done | high | `docs/reports/planning-registration-findings.md`, `.github/workflows/task-index.yml`, `scripts/docmeta/check_planning_registration.py` | 8 Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal); planning-registration guard läuft blockierend im Strict-Modus |
 | DOCMETA-FRESHNESS-001 | docs | Claim-Evidence/Freshness-Spine registrieren und reviewbar halten | partial | medium | `docs/claims/registry.yml`, `docs/claims/README.md`, `docs/doc-freshness-registry.yml`, `scripts/docmeta/validate_claim_registry.py`, `scripts/docmeta/validate_doc_freshness_registry.py`, `scripts/docmeta/freshness_scope_policy.yml`, `scripts/docmeta/generate_claim_evidence_map.py`, `.github/workflows/claim-registry.yml`, `.github/workflows/docs-guard.yml` | Claim-Evidence/Freshness-Spine ist implementiert und validierbar; Markdown-Details je Claim implementiert (DOC-MECH-FRESHNESS-S2); Scope wird deklarativ via `scripts/docmeta/freshness_scope_policy.yml` entschieden, realer Scope bleibt CLAIM-AGENT-SAFE-* (DOC-MECH-FRESHNESS-S3); Claim-Evidence-Information ist intern als `ClaimInfo` typisiert (DOC-MECH-FRESHNESS-TYPED-CLAIMINFO); Review-Age-Hygiene für kanonische Architektur-/Runtime-/Runbook-Dokumente durchgeführt (DOCMETA-FRESHNESS-REVIEW-AGE-001); bleibt `partial`, da Scope bewusst klein bleibt und alle drei Claims `requires_live_check` tragen (kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis) |
 | DOCMETA-PROOF-001 | docs | Proof-Matrix-Validator-Schema vormerken | open | medium | `docs/reports/opt-arc-001-db-proof-matrix.json`, `scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py`, `scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py`, `.github/workflows/opt-arc-001-db-proof-matrix.yml` | Zweiten echten Proof-Matrix-Anwendungsfall abwarten; danach OPT-ARC-001-Pattern retrospektiv prüfen und nur bei wiederholter Struktur ein generisches Schema/Validator-Pattern ableiten |
+| DB-PROOF-001 | api | Edge-Orphan- und Referenz-Audit | open | high | `apps/api/migrations/20260531000002_create_domain_edges.up.sql` (FK in Migration ausdrücklich deferred); Pendant zu `scripts/docmeta/audit_account_email_uniqueness.py` fehlt für Edges | Read-only Audit-Skript + redigierten Report bauen; valide/Orphan-Counts; Option A (FK auf `domain_nodes(id)`) vs. Option B (Guard/Quarantäne) entscheidungsfähig machen; keine Migration |
+| DOMAIN-PG-002 | infra | Single-Instance-Invariante oder Multi-Instance-Kohärenz entscheiden | open | high | keine dokumentierte Betriebsentscheidung; prozesslokale Caches unadressiert | Single-Instance-Grenze ODER Cross-Instance-Kohärenz entscheiden und im Cutover-Blueprint verankern; kein stiller Cache-Split-Brain |
+| AUTH-PG-001 | auth | Step-up-E-Mail-Persistenz nach PostgreSQL | open | high | `apps/api/src/routes/auth.rs` (PUT /auth/me/email vorhanden); OPT-ARC-001-Non-Goal `step_up_email_persistence` | PostgreSQL-Write-Pfad + Restart-Stabilitäts-Proof; E-Mail-Unique-Regel bleibt gewahrt (409) |
+| AUTH-PG-002 | auth | WebAuthn-Credential-Persistenz / Passkey-Cutover | open | high | `apps/api/src/auth/passkeys.rs` (PasskeyStore In-Memory); OPT-ARC-001-Non-Goal `webauthn_credential_writeback` | PostgreSQL-Persistenzmodell + Restart-Proof (Register→Reload→Login); Public/Private-Trennung; menschliches Review (credentials/) |
+| OPT-CI-004 | ci | Dependency-Update-Automation (Dependabot/Renovate) | open | medium | keine `.github/dependabot.yml`/Renovate-Config (Statusmatrix: `docs/reports/optimierungsstatus.md`) | Dependabot ODER Renovate konfigurieren; PR-Flut begrenzen (Limit/Gruppierung); Ökosysteme bewusst ein-/ausschließen |
+| CI-TOOL-001 | ci | Dev-Setup: Task-Runner-Dedup (Makefile/Justfile) + Node/pnpm engines | open | medium | `Makefile`, `Justfile` (beide direkt `docker compose ... up/down`), `apps/web/package.json` (engines vorhanden), Root-`package.json` (engines fehlt) | Eine Compose-Ebene führt, andere delegiert; engines konsistent ergänzen; kleiner risikoarmer PR |
+| DOCS-CTL-001 | docs | Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B) | open | medium | `docs/reports/cost-report.md`, `docs/tasks/DEPLOY-DNS-001B.md` (beide im Orphan-Generator) | Fachliche Lifecycle-Einordnung statt kosmetischer Verlinkung; alte Deploy-/DNS-Aufgabe nicht reaktivieren |
+| DOCS-CTL-002 | docs | Blueprint-/Planning-Status-Konsistenz | open | medium | `docs/reports/planning-registration-findings.md`; `kartenklarheit.md`/`map-blaupause.md` sind `draft`, in `docs/index.md` aber als aktiv/normativ geführt | Betroffene Blueprints einzeln prüfen; nicht pauschal hochstufen; deprecated nicht reaktivieren; Planning-Guard bleibt grün |
 
 ## Blocker
 
 | ID | Blocker | Fehlt | Folge |
 |---|---|---|---|
 | OPT-ARC-001 | Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback offen; Runtime-Smoke und Cutover ausstehend; JSONL-Demontage ausstehend | Offene Migrationsteile bzw. Cutover-Proof vorbereiten | JSONL bleibt Default-Lesequelle und Write-Truth bis vollständiger Cutover; POST /accounts, PATCH /nodes und POST /edges schreiben optional PostgreSQL; Schema- und Backfill-Proof sind belegt; der geänderte Read-Path-Proof-Harness wartet auf frische PR-CI-Evidence |
+| DOMAIN-PG-001 | Edge-Referenz-Policy (FK oder Guard) hängt am Edge-Orphan-Audit | DB-PROOF-001 nicht abgeschlossen; FK-Entscheidung in der Edge-Schema-Migration ausdrücklich deferred | Kein FK-/Referenz-Cutover vor Audit; Orphans dürfen nicht still verworfen werden |
+| AUTH-PG-003 | `webauthn_user_id`-Backfill und späteres `NOT NULL` hängen an WebAuthn-Persistenz | AUTH-PG-002 fachlich offen; kein NULL-Audit, kein Backfill-Test | Kein `NOT NULL` vor Audit + Backfill; keine stille UUID-Neuerzeugung bei Reload |
 
 ## Nächste PR-Kandidaten
 
 | ID | PR-Schnitt | Akzeptanzkriterium |
 |---|---|---|
 | OPT-CON-001 | Schema-Constraints: `additionalProperties: false` alle 6 Schemas | `just contracts-domain-check` pass + kein permissives Nested-Object |
+| DB-PROOF-001 | Edge-Orphan-/Referenz-Audit (read-only, keine Migration) | Reproduzierbarer redigierter Bericht: valide/Orphan-Counts + Policy-Empfehlung (Option A FK vs. Option B Guard) |
+| CI-TOOL-001 | Dev-Setup: Makefile/Justfile-Dedup + Node/pnpm engines (kleiner Hygiene-PR) | Eine Compose-Ebene führt, andere delegiert; engines konsistent; JSON valide; keine Container-Starts nötig |
 
 ## Zurückgestellte / optionale Tasks
 
 | ID | Grund | Wiederaufnahmebedingung |
 |---|---|---|
 | TASK-CTL-002 | GitHub Issue Forms, PR-Template und Release-Konfiguration sind aktuell nicht eingeführt, weil der Nutzen gegenüber kontextgenauen PR-Bodies nicht belegt ist. | Externe Beitragende ohne Projekteinblick werden relevant, PR-Bodies verlieren wiederholt Task-/Evidenzbezüge oder der Release-Prozess ist stabil genug für Release-Labels. |
+| DOMAIN-PG-003 | Edge-Cache-Limit-Performance: kein Lastproblem und kein Cutover-Blocker nachgewiesen (TODO C1) | Erst Messpunkt/Design mit Trade-offs, dann ggf. Umbau; kein spekulativer Performance-Umbau |
+| OPT-CI-003 | dtolnay/uv-Ref-Vereinheitlichung: niedrige Priorität, nicht cutover-relevant | Jederzeit als kleiner CI-Hygiene-PR möglich |
+| OPT-INF-002 | SHA-Pinning der Third-Party-Actions: erst nach Update-Automation sinnvoll (TODO C3) | Nach OPT-CI-004 (Dependency-Update-Automation/Policy) |
 
 ## Erledigte Tasks
 
