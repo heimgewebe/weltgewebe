@@ -558,7 +558,7 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
         assert_eq!(cached.target_type.as_deref(), Some("node"));
     }
 
-    // GET /edges/:id serves the created edge.
+    // GET /edges/{id} serves the created edge.
     let uri = format!("/edges/{id}");
     let res = app
         .oneshot(Request::get(uri.as_str()).body(body::Body::empty())?)

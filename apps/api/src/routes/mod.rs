@@ -32,7 +32,7 @@ pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
         .route("/nodes", get(list_nodes))
         .route(
-            "/nodes/:id",
+            "/nodes/{id}",
             get(get_node)
                 .patch(patch_node)
                 .route_layer(from_fn(require_write)),
@@ -43,14 +43,14 @@ pub fn api_router() -> Router<ApiState> {
                 .post(create_edge)
                 .route_layer(from_fn(require_write)),
         )
-        .route("/edges/:id", get(get_edge))
+        .route("/edges/{id}", get(get_edge))
         .route(
             "/accounts",
             get(list_accounts)
                 .post(create_account)
                 .route_layer(from_fn(require_admin)),
         )
-        .route("/accounts/:id", get(get_account))
+        .route("/accounts/{id}", get(get_account))
         .route("/auth/dev/accounts", get(list_dev_accounts))
         .route("/auth/dev/login", post(dev_login))
         .route("/auth/magic-link/request", post(request_login))
@@ -61,7 +61,7 @@ pub fn api_router() -> Router<ApiState> {
         .route("/auth/logout", post(logout))
         .route("/auth/logout-all", post(logout_all))
         .route("/auth/devices", get(list_devices))
-        .route("/auth/devices/:id", axum::routing::delete(remove_device))
+        .route("/auth/devices/{id}", axum::routing::delete(remove_device))
         .route("/auth/me", get(me))
         .route("/auth/me/email", axum::routing::put(update_email))
         .route("/auth/session", get(session))
