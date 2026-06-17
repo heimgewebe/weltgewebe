@@ -2,7 +2,11 @@
 id: reports.auth-persistence-next-step
 title: "Auth-Persistenz — Nächster Schritt"
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: superseded
+lifecycle: decision-prep
+owner_task: OPT-API-002
+superseded_by: docs/reports/optimierungsstatus.md
 created: 2026-05-04
 lang: de
 summary: >
@@ -34,6 +38,13 @@ relations:
 > **Zweck:** Diagnose- und Entscheidungsgrundlage. Kein Implementierungs-PR.
 > Ziel: belegter Ist-Zustand nach Migration-Schema-PR, Klärung offener
 > Implementierungsfragen, konkreter Folge-PR-Vorschlag.
+
+## Lifecycle
+- **Lifecycle-State:** superseded
+- **Lifecycle:** decision-prep
+- **Owner-Task:** OPT-API-002
+- **Superseded by:** `docs/reports/optimierungsstatus.md`
+- **Bewertung:** Historische Entscheidungs- und Umsetzungsvorbereitung. Der vorgeschlagene `DbSessionStore`-/PostgreSQL-Pfad ist inzwischen umgesetzt und im Optimierungsstatus belegt. Keine aktuelle Next-Step-Quelle.
 
 ---
 

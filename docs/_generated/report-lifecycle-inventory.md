@@ -21,16 +21,16 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 25 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 8 |
-| files_missing_lifecycle_state | 17 |
-| files_with_lifecycle | 8 |
-| files_missing_lifecycle | 17 |
-| files_with_owner_task | 8 |
-| files_missing_owner_task | 17 |
-| files_with_review_after | 7 |
-| files_missing_review_after | 18 |
-| files_primary_referenced | 21 |
-| files_primary_unreferenced | 4 |
+| files_with_lifecycle_state | 13 |
+| files_missing_lifecycle_state | 12 |
+| files_with_lifecycle | 13 |
+| files_missing_lifecycle | 12 |
+| files_with_owner_task | 13 |
+| files_missing_owner_task | 12 |
+| files_with_review_after | 8 |
+| files_missing_review_after | 17 |
+| files_primary_referenced | 22 |
+| files_primary_unreferenced | 3 |
 | files_with_derived_references | 25 |
 | files_with_relations | 24 |
 | files_with_missing_supersession_target | 0 |
@@ -49,28 +49,28 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | supersession target diagnostic |
 | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |
 | docs/reports/agent-readiness-audit.md | documentation | active |  |  |  |  |  | 2 | 4 | 1 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/auth-persistence-next-step.md | report | active |  |  |  |  |  | 5 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/auth-persistence-readiness.md | report | active |  |  |  |  |  | 4 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/auth-persistence-runtime-proof.md | report | active |  |  |  |  |  | 4 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active |  |  |  |  |  | 1 | 4 | 5 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | report | deprecated | superseded | audit | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 0 | 4 | 4 | review_after |  |
+| docs/reports/auth-persistence-next-step.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 6 | 5 | 4 | review_after |  |
+| docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/auth-persistence-next-step.md | 4 | 5 | 3 | review_after |  |
+| docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | 4 | 4 | 6 | review_after |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | active | active | decision-prep | OPT-API-002 | 2026-07-17 |  | 1 | 4 | 5 |  |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | 5 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/cost-report.md | reference | active |  |  |  |  |  | 0 | 4 | 0 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 1 | 4 | 4 |  |  |
+| docs/reports/cost-report.md | reference | active |  |  |  |  |  | 1 | 4 | 0 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 2 | 4 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 5 | 7 | review_after |  |
-| docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 0 | 4 | 6 |  |  |
+| docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 0 | 3 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  |  | 1 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  |  | 1 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 5 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 3 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 17 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 19 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/planning-registration-findings.md | report | active |  |  |  |  |  | 1 | 4 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
 
@@ -79,11 +79,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | Path | Absent fields |
 | --- | --- |
 | docs/reports/agent-readiness-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/auth-persistence-next-step.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/auth-persistence-readiness.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/auth-persistence-runtime-proof.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/auth-persistence-direct-proof-diagnose-audit.md | review_after |
+| docs/reports/auth-persistence-next-step.md | review_after |
+| docs/reports/auth-persistence-readiness.md | review_after |
+| docs/reports/auth-persistence-runtime-proof.md | review_after |
 | docs/reports/auth-status-matrix.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/cost-report.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/domain-edge-create-semantics-preflight.md | review_after |
@@ -136,6 +135,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/auth-persistence-runtime-proof.md`
   - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
   - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
+  - `docs/reports/auth-persistence-readiness.md`
   - `docs/reports/auth-persistence-runtime-proof.md`
   - `docs/reports/passkey-register-verify-prep.md`
 
@@ -161,8 +161,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/passkey-register-verify-prep.md`
   - `docs/roadmap.md`
 
+- `docs/reports/cost-report.md`
+  - `docs/tasks/board.md`
+
 - `docs/reports/domain-account-email-uniqueness-audit.md`
   - `docs/reports/domain-backfill-proof.md`
+  - `docs/tasks/board.md`
 
 - `docs/reports/domain-account-write-path-proof.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
@@ -236,8 +240,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/doc-structure-task-control-roadmap.md`
   - `docs/blueprints/doc-structure-task-control.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
+  - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
   - `docs/reports/auth-persistence-next-step.md`
   - `docs/reports/auth-persistence-readiness.md`
+  - `docs/reports/auth-persistence-runtime-proof.md`
   - `docs/reports/domain-account-write-path-proof.md`
   - `docs/reports/domain-edge-create-semantics-preflight.md`
   - `docs/reports/domain-edge-write-path-proof.md`
@@ -331,7 +337,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/domain-edge-reference-audit.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
@@ -376,7 +381,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
   - `docs/_generated/backlinks.md`
-  - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
@@ -415,7 +419,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 ## Primary Unreferenced Reports
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
-- `docs/reports/cost-report.md`
 - `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/passkey-register-verify-prep.md`
 

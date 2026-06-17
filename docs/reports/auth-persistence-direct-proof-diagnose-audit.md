@@ -2,7 +2,11 @@
 id: reports.auth-persistence-direct-proof-diagnose-audit
 title: "Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof"
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: superseded
+lifecycle: audit
+owner_task: OPT-API-002
+superseded_by: docs/reports/optimierungsstatus.md
 created: 2026-05-14
 lang: de
 summary: >
@@ -31,6 +35,13 @@ relations:
 Hinweis zur Eingabe: `docs/proofs/auth-postgres-direct-proof.md` ist im Repo nicht vorhanden.
 Bewertet wurde stattdessen das vorhandene Dokument
 `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`.
+
+## Lifecycle
+- **Lifecycle-State:** superseded
+- **Lifecycle:** audit
+- **Owner-Task:** OPT-API-002
+- **Superseded by:** `docs/reports/optimierungsstatus.md`
+- **Bewertung:** Historisches Diagnose-Audit zur korrekten Lesart des Direct-Postgres-Proofs. Die damalige Warnung vor einer Überdeutung bleibt als Kontext nützlich, ist aber durch die spätere implementierte und CI-belegte Session-Persistenz nicht mehr handlungsleitend.
 
 ## Urteil
 
