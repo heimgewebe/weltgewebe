@@ -20,7 +20,7 @@ relations:
 > Arbeitssteuerung, keine Wahrheitsschicht.
 > Statuswechsel brauchen Evidenz in Statusmatrizen, Reports, PRs oder Tests.
 
-### Einordnung 2026-06-16 — optimierte TODO-Liste (Strang A Cutover / Strang B Hygiene)
+## Einordnung 2026-06-16 — optimierte TODO-Liste (Strang A Cutover / Strang B Hygiene)
 
 Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert:
 
