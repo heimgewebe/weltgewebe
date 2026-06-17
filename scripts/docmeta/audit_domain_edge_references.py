@@ -125,7 +125,7 @@ def sanitize_psql_stderr(stderr: str) -> str:
     # stderr is redirected to avoid pipe deadlocks; logged stderr is bounded here.
     return text[:MAX_PSQL_STDERR_LOG_BYTES]
 
-def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
+def iter_psql_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr_file:
         try:
             proc = subprocess.Popen(
@@ -160,6 +160,9 @@ def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> 
                 proc.kill()
                 proc.wait()
 
+def iter_psql_json_lines(sql: str, postgres_env: Dict[str, str], label: str) -> Iterator[str]:
+    yield from iter_psql_lines(sql, postgres_env, label)
+
 def is_non_empty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value) and not value.isspace()
 
@@ -179,8 +182,7 @@ def load_jsonl_nodes(path: str) -> Tuple[Set[str], Dict[str, int], Dict[str, Any
     try:
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
-                line = line.strip()
-                if not line:
+                if not line or line.isspace():
                     continue
                 summary["node_records_total"] += 1
                 try:
@@ -228,31 +230,20 @@ def load_postgres_nodes(postgres_env: Dict[str, str]) -> Tuple[Set[str], Dict[st
         "nodes_empty_id": 0,
     }
 
-    sql = "SELECT json_build_object('id', id) FROM domain_nodes;"
-    for line in iter_psql_json_lines(sql, postgres_env, "domain_nodes"):
+    sql = "SELECT id FROM domain_nodes;"
+    for line in iter_psql_lines(sql, postgres_env, "domain_nodes"):
         summary["node_records_total"] += 1
-        try:
-            obj = json.loads(line)
-        except json.JSONDecodeError:
-            summary["node_invalid_json_records"] += 1
-            continue
 
-        if not isinstance(obj, dict):
-            summary["node_non_object_json_records"] += 1
-            continue
-        if "id" not in obj:
-            summary["nodes_missing_id"] += 1
-            continue
-        if not isinstance(obj["id"], str):
-            summary["nodes_non_string_id"] += 1
-            continue
-        if obj["id"].strip() == "":
+        node_id = line.strip()
+        if not node_id:
             summary["nodes_empty_id"] += 1
             continue
-        if obj["id"] in node_ids:
+
+        if node_id in node_ids:
             summary["node_duplicate_ids"] += 1
             continue
-        node_ids.add(obj["id"])
+
+        node_ids.add(node_id)
         summary["node_ids_total"] += 1
 
     return node_ids, summary
@@ -263,8 +254,7 @@ def iter_jsonl_edges(path: str, edge_parse_summary: Dict[str, int]) -> Iterator[
             line_number = 0
             for line in f:
                 line_number += 1
-                line = line.strip()
-                if not line:
+                if not line or line.isspace():
                     continue
                 edge_parse_summary["edge_records_total"] += 1
                 try:
@@ -290,8 +280,7 @@ def iter_postgres_edges(postgres_env: Dict[str, str], edge_parse_summary: Dict[s
   'target_id', target_id,
   'source_type', payload->>'source_type',
   'target_type', payload->>'target_type'
-) FROM domain_edges
-ORDER BY id;"""
+) FROM domain_edges;"""
     row_number = 0
     for line in iter_psql_json_lines(sql, postgres_env, "domain_edges"):
         row_number += 1
@@ -358,15 +347,34 @@ def classify_edge_side(
         else:
             return "untyped_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_missing_reference"}
 
+def finding_sort_key(finding: Dict[str, Any]) -> Tuple[str, str, str, str]:
+    return (
+        finding.get("classification", ""),
+        finding.get("side", ""),
+        finding.get("edge_ref", ""),
+        str(finding.get("target_ref", "")),
+    )
+
 def append_finding(
     findings: list[Dict[str, Any]],
     finding: Dict[str, Any],
     max_findings: int,
 ) -> bool:
-    if max_findings > 0 and len(findings) < max_findings:
+    if max_findings == -1:
         findings.append(finding)
         return False
-    return True
+
+    if max_findings == 0:
+        return True
+
+    findings.append(finding)
+    findings.sort(key=finding_sort_key)
+
+    if len(findings) > max_findings:
+        findings.pop()
+        return True
+
+    return False
 
 def evaluate_audit_data(
     *,
@@ -534,12 +542,7 @@ def evaluate_audit_data(
     type_hint_backfill_recommended = summary["untyped_existing_node_references"] > 0
     fk_compatible_reference_sides = summary["typed_node_references"] + summary["untyped_existing_node_references"]
 
-    findings.sort(key=lambda x: (
-        x.get("classification", ""),
-        x.get("side", ""),
-        x.get("edge_ref", ""),
-        str(x.get("target_ref", ""))
-    ))
+    findings.sort(key=finding_sort_key)
 
     return {
         "schema_version": "1.0.0",
@@ -556,7 +559,8 @@ def evaluate_audit_data(
             "fk_compatible_reference_sides": fk_compatible_reference_sides
         },
         "findings_truncated": findings_truncated,
-        "findings_limit": max_findings,
+        "findings_limit": None if max_findings == -1 else max_findings,
+        "findings_unlimited": max_findings == -1,
         "findings": findings
     }
 
@@ -568,11 +572,11 @@ def main():
     parser.add_argument("--source-kind", type=str, choices=["repo-fixture", "runtime", "unknown"], default="unknown", help="Source kind; use runtime for FK-readiness decisions")
     parser.add_argument("--format", type=str, choices=["json"], default="json", help="Output format")
     parser.add_argument("--show-ids", action="store_true", help="Show full IDs (not for committed reports)")
-    parser.add_argument("--max-findings", type=int, default=100, help="Maximum number of findings to output")
+    parser.add_argument("--max-findings", type=int, default=100, help="Maximum findings to include. Use 0 for summary-only and -1 to include all findings.")
     args = parser.parse_args()
 
-    if args.max_findings < 0:
-        logging.error("--max-findings must be >= 0")
+    if args.max_findings < -1:
+        logging.error("--max-findings must be -1 or >= 0")
         sys.exit(1)
 
     if args.postgres:
