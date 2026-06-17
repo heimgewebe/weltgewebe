@@ -360,17 +360,17 @@
       "id": "OPT-CI-004",
       "area": "CI/CD",
       "title": "Dependency-Update-Automation (Dependabot/Renovate)",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
-      "evidence_status": "none",
-      "evidence": [],
-      "missing_evidence": [
-        "keine .github/dependabot.yml oder Renovate-Config vorhanden"
+      "evidence_status": "ci",
+      "evidence": [
+        ".github/dependabot.yml"
       ],
-      "next_action": "Dependabot oder Renovate konfigurieren",
-      "updated_at": "2026-05-25"
+      "missing_evidence": [],
+      "next_action": "Dependabot konfiguriert (weekly; Version-Update-PR-Limit 2; Minor/Patch gruppiert; Major-Updates einzeln; Actions/npm-root/apps-web-npm/Cargo aktiviert; Docker/Python/uv dokumentierte Scope-Ausschlüsse, keine Restlücke dieses Tasks)",
+      "updated_at": "2026-06-17"
     },
     {
       "id": "OPT-CI-005",
