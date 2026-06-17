@@ -3,6 +3,10 @@ id: reports.auth-persistence-runtime-target-reconciliation
 title: "Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres)"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: OPT-API-002
+review_after: 2026-07-17
 created: 2026-05-13
 lang: de
 summary: >
@@ -39,6 +43,16 @@ relations:
 > **Kein Produktionscode. Kein CI-Job. Keine Session-Persistenz. Keine Compose-Änderung.**
 >
 > Aussagen sind als **PROVEN / NOT_PROVEN / CONFLICT_RESOLVED / DECIDED** markiert.
+
+## Lifecycle
+
+- **Lifecycle-State:** active
+- **Lifecycle:** audit
+- **Owner-Task:** OPT-API-002
+- **Review after:** 2026-07-17
+- **Bewertung:** Weiterhin aktiver Architekturabgleich zur Produktionsentscheidung
+  direkter PostgreSQL-Pfad vs. PgBouncer-Dev-/Spezialpfad. Keine neue
+  Runtime-Aussage in diesem PR.
 
 ---
 

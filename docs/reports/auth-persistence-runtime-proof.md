@@ -2,7 +2,11 @@
 id: reports.auth-persistence-runtime-proof
 title: "Auth-Persistenz — Runtime-Proof"
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: superseded
+lifecycle: proof
+owner_task: OPT-API-002
+superseded_by: docs/reports/optimierungsstatus.md
 created: 2026-05-12
 lang: de
 summary: >
@@ -44,6 +48,16 @@ relations:
 > direkten PostgreSQL-Zugriff.
 >
 > Blueprint: `docs/blueprints/auth-persistence-runtime-proof.md`
+
+## Lifecycle
+
+- **Lifecycle-State:** superseded
+- **Lifecycle:** proof
+- **Owner-Task:** OPT-API-002
+- **Superseded by:** `docs/reports/optimierungsstatus.md`
+- **Bewertung:** Historischer Partial-Proof für Migration und CRUD-Pfad. Der
+  Bericht bleibt als Belegkette nützlich, wurde aber durch die spätere
+  `DbSessionStore`-Implementierung und den CI-belegten Persistenzpfad überholt.
 
 ---
 
