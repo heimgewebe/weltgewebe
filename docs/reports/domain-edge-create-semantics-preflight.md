@@ -2,7 +2,11 @@
 id: reports.domain-edge-create-semantics-preflight
 title: "Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C"
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: superseded
+lifecycle: decision-prep
+owner_task: OPT-ARC-001
+superseded_by: docs/reports/domain-edge-write-path-proof.md
 created: 2026-06-11
 lang: de
 summary: >
@@ -55,6 +59,13 @@ Status: diagnostic
   PostgreSQL-Write + Proof-Ripple). Ein einzelner PR wäre zu breit: er vermischt
   Contract-Klärung, Runtime-Logik, ein neues Config-Feld mit ~17 betroffenen
   `AppConfig`-Literalen und einen großen Proof-/Task-Control-Ripple.
+
+## Lifecycle
+
+- Zweck: Dokumentierte die Entscheidungs- und Semantikvorbereitung für OPT-ARC-001 Phase E-C.
+- Bereitet vor: Den späteren Edge-Write-Proof und dessen Proof-/Status-Ripple.
+- Gültig bis: Abgelöst durch den Edge-Write-Path-Proof.
+- Wird abgelöst durch: `docs/reports/domain-edge-write-path-proof.md`.
 
 ## Belege
 

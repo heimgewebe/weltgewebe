@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 124 |
-| Dokumente mit ausgehenden Relationen | 121 |
-| Dokumente als Ziel referenziert | 95 |
-| Relationen gesamt | 381 |
+| Dokumente gesamt | 126 |
+| Dokumente mit ausgehenden Relationen | 123 |
+| Dokumente als Ziel referenziert | 97 |
+| Relationen gesamt | 394 |
 | — depends_on | 18 |
-| — relates_to | 361 |
-| — supersedes | 2 |
+| — relates_to | 373 |
+| — supersedes | 3 |
 | Isolierte Dokumente | 2 |
 | depends_on Zyklen | 0 |
 
@@ -31,13 +31,14 @@ Generated automatically. Do not edit.
 - ⚠️ High outbound count (13): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
+- ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (14): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
+- ⚠️ High inbound count (11): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (10): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
-- ⚠️ High inbound count (10): `docs/tasks/board.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -50,6 +51,7 @@ _Keine Zyklen gefunden._
 - `docs/roadmap.md` — 13 ausgehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 12 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
+- `docs/reports/domain-edge-write-path-proof.md` — 8 ausgehende Relationen
 
 **Eingehend (inbound):**
 
@@ -58,8 +60,8 @@ _Keine Zyklen gefunden._
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/reports/optimierungsstatus.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
+- `docs/tasks/board.md` — 11 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 10 eingehende Relationen
-- `docs/tasks/board.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 

@@ -3,6 +3,10 @@ id: reports.domain-edge-write-path-proof
 title: "Domain Edge Write Path Proof"
 doc_type: report
 status: active
+lifecycle_state: active
+lifecycle: proof
+owner_task: OPT-ARC-001
+review_after: 2026-07-16
 canonicality: evidence
 created: 2026-06-12
 lang: de
@@ -12,6 +16,8 @@ summary: >
   JSONL bleibt Default; kein Dual-Write; Account-, Node-, Step-up-E-Mail-
   und WebAuthn-Writeback-Persistenz bleiben unverändert.
 relations:
+  - type: supersedes
+    target: docs/reports/domain-edge-create-semantics-preflight.md
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
   - type: relates_to
@@ -38,6 +44,13 @@ Edge-Writes waren im PostgreSQL-Cutover offen: `POST /edges` schrieb
 ausschließlich JSONL und wurde unter `WELTGEWEBE_DOMAIN_READ_SOURCE=postgres`
 pauschal mit 409 blockiert. Damit blieb der dritte Domain-Schreibpfad (nach
 Account-Create E-A und Node-Patch E-B) ohne PostgreSQL-Persistenz.
+
+## Lifecycle
+
+- Zweck: Belegt den OPT-ARC-001 PostgreSQL-Teilpfad für den Edge-Schreibpfad `POST /edges` im dokumentierten Scope.
+- Bereitet vor: Fortlaufende OPT-ARC-001 Cutover- und Proof-Matrix-Entscheidungen.
+- Gültig bis: Review am 2026-07-16 oder bis ein neuerer Proof diesen Bericht ersetzt.
+- Wird abgelöst durch: Noch offen; mögliche spätere Runtime-/Cutover-Proofs oder aktualisierte Proof-Matrix-Artefakte.
 
 ## Implementierte Semantik
 
