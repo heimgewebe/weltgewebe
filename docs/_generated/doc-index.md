@@ -73,7 +73,6 @@ Generated automatically. Do not edit.
 | konzepte.garnrolle | Garnrolle | reference | deprecated | docs/konzepte/garnrolle.md |
 | konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | docs/konzepte/garnrolle-und-verortung.md |
 | map-architekturkritik | Architekturkritik Map-Implementierung | report | active | docs/reports/map-architekturkritik.md |
-| map-basemap-proof-gap-reconciliation | MAP-PROOF-001 — Basemap Proof Gap Reconciliation | report | active | docs/reports/map-basemap-proof-gap-reconciliation.md |
 | map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
 | map-status-matrix | Map Status Matrix | status-matrix | active | docs/reports/map-status-matrix.md |
@@ -100,8 +99,7 @@ Generated automatically. Do not edit.
 | reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | active | docs/reports/domain-account-email-uniqueness-audit.md |
 | reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | active | docs/reports/domain-account-write-path-proof.md |
 | reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
-| reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | deprecated | docs/reports/domain-edge-create-semantics-preflight.md |
-| reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | active | docs/reports/domain-edge-reference-audit.md |
+| reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | active | docs/reports/domain-edge-create-semantics-preflight.md |
 | reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | active | docs/reports/domain-edge-write-path-proof.md |
 | reports.domain-node-write-path-proof | Domain Node Write Path Proof | report | active | docs/reports/domain-node-write-path-proof.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
