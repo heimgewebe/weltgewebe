@@ -2,6 +2,9 @@
   "name": "weltgewebe-root",
   "private": true,
   "packageManager": "pnpm@9.11.0",
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  },
   "scripts": {
     "contracts:domain:check": "bash ./scripts/contracts-domain-check.sh",
     "benchmark:account-api": "tsx scripts/benchmark_account_api.ts"
