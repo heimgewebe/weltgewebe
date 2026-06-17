@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 124 |
-| Dokumente mit ausgehenden Relationen | 121 |
-| Dokumente als Ziel referenziert | 95 |
-| Relationen gesamt | 381 |
+| Dokumente gesamt | 126 |
+| Dokumente mit ausgehenden Relationen | 123 |
+| Dokumente als Ziel referenziert | 96 |
+| Relationen gesamt | 393 |
 | — depends_on | 18 |
-| — relates_to | 361 |
+| — relates_to | 373 |
 | — supersedes | 2 |
 | Isolierte Dokumente | 2 |
 | depends_on Zyklen | 0 |
@@ -36,8 +36,8 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
+- ⚠️ High inbound count (11): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (10): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
-- ⚠️ High inbound count (10): `docs/tasks/board.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -58,8 +58,8 @@ _Keine Zyklen gefunden._
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/reports/optimierungsstatus.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
+- `docs/tasks/board.md` — 11 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 10 eingehende Relationen
-- `docs/tasks/board.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 

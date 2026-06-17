@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 381 |
+| Relationen gesamt | 393 |
 | — depends_on | 18 |
-| — relates_to | 361 |
+| — relates_to | 373 |
 | — supersedes | 2 |
 | relates_to Anteil | 95% |
 
@@ -30,11 +30,13 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (138 Dokumente):
+**Cluster 1** (143 Dokumente):
 
 - `.github/workflows/api.yml`
+- `.github/workflows/basemap-runtime-proof.yml`
 - `AGENTS.md`
 - `agent-policy.yaml`
+- `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
 - `apps/api/src/auth/accounts.rs`
 - `apps/api/src/routes/accounts.rs`
 - `apps/api/src/routes/edges.rs`
@@ -126,12 +128,14 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-account-write-path-proof.md`
 - `docs/reports/domain-backfill-proof.md`
 - `docs/reports/domain-edge-create-semantics-preflight.md`
+- `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/domain-edge-write-path-proof.md`
 - `docs/reports/domain-node-write-path-proof.md`
 - `docs/reports/domain-provider-role-finding.md`
 - `docs/reports/domain-read-path-proof.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
 - `docs/reports/map-architekturkritik.md`
+- `docs/reports/map-basemap-proof-gap-reconciliation.md`
 - `docs/reports/map-status-matrix.md`
 - `docs/reports/opt-arc-001-db-proof-matrix.json`
 - `docs/reports/optimierungsbericht.md`
@@ -167,6 +171,7 @@ _Keine Lücken erkannt._
 - `repo.meta.yaml`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
+- `scripts/docmeta/audit_domain_edge_references.py`
 - `scripts/docmeta/check_planning_registration.py`
 - `scripts/docmeta/validate_claim_registry.py`
 - `scripts/guard/basemap-runtime-proof.sh`

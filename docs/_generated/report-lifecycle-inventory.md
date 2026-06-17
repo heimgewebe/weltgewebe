@@ -60,14 +60,14 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 0 | 4 | 7 | review_after |  |
-| docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 0 | 1 | 6 |  |  |
+| docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 0 | 4 | 6 |  |  |
 | docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 7 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  |  | 1 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | report | active |  |  |  |  |  | 1 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-architekturkritik.md | report | active |  |  |  |  |  | 4 | 5 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 1 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 17 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
@@ -326,6 +326,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/domain-edge-reference-audit.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/domain-edge-write-path-proof.md`
@@ -366,6 +369,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/map-status-matrix.md`

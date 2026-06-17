@@ -15,6 +15,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-backfill-proof.md
 
+## .github/workflows/basemap-runtime-proof.yml
+
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
@@ -27,6 +31,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
+
+## apps/api/migrations/20260531000002_create_domain_edges.up.sql
+
+- [relates_to] docs/reports/domain-edge-reference-audit.md
 
 ## apps/api/src/auth/accounts.rs
 
@@ -68,6 +76,7 @@ Generated automatically. Do not edit.
 ## contracts/domain/edge.schema.json
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-reference-audit.md
 
 ## docs/_generated/report-lifecycle-inventory.md
 
@@ -184,12 +193,14 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-backfill-proof.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/domain-read-path-proof.md
 
 ## docs/blueprints/kartenklarheit-phase6.md
 
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 - [depends_on] docs/roadmap.md
 
 ## docs/blueprints/kartenklarheit-roadmap.md
@@ -197,6 +208,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
 - [relates_to] docs/blueprints/ui-interaction-doctrine.md
 - [relates_to] docs/reports/map-architekturkritik.md
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 - [relates_to] docs/reports/map-status-matrix.md
 - [depends_on] docs/roadmap.md
 
@@ -420,6 +432,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/README.md
 
+## docs/proofs/basemap-hamburg-artifact-proof.md
+
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+
 ## docs/proofs/sqlx-pgbouncer-session-crud-proof.md
 
 - [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
@@ -515,11 +531,13 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/kartenklarheit.md
 - [relates_to] docs/blueprints/map-roadmap.md
 - [relates_to] docs/reports/map-architekturkritik.md
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 - [depends_on] docs/roadmap.md
 
 ## docs/reports/opt-arc-001-db-proof-matrix.json
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-reference-audit.md
 
 ## docs/reports/optimierungsbericht.md
 
@@ -657,6 +675,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
+- [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
@@ -736,6 +755,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
 
+## scripts/docmeta/audit_domain_edge_references.py
+
+- [relates_to] docs/reports/domain-edge-reference-audit.md
+
 ## scripts/docmeta/check_planning_registration.py
 
 - [relates_to] docs/reports/planning-registration-findings.md
@@ -747,3 +770,4 @@ Generated automatically. Do not edit.
 ## scripts/guard/basemap-runtime-proof.sh
 
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
+- [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
