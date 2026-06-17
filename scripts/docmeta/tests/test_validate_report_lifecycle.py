@@ -8,7 +8,27 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from scripts.docmeta.validate_report_lifecycle import main, run, _validate_report
+from scripts.docmeta.validate_report_lifecycle import (
+    Finding,
+    main,
+    run,
+    _validate_report,
+    _gha_escape_data,
+    _gha_escape_property,
+    _render_github_warnings,
+)
+
+
+VALID_REPORT_FRONTMATTER = """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+lifecycle_state: active
+lifecycle: audit
+owner_task: OPT-ARC-001
+review_after: 2026-07-13
+"""
 
 
 def write_report(root: Path, name: str, frontmatter: str, body: str = "Body\n") -> Path:
@@ -51,6 +71,100 @@ status: active
         self.assertIn("missing_lifecycle", stdout)
         self.assertIn("missing_review_after", stdout)
         self.assertEqual(stderr, "")
+
+    def test_warn_mode_exits_zero_and_emits_github_warnings(self) -> None:
+        # Fixture with at least one lifecycle finding (missing lifecycle_state)
+        write_report(
+            self.tmp_root,
+            "example.md",
+            """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+            """
+        )
+
+        exit_code, stdout, stderr = self.run_main(["--mode", "warn", "--root", str(self.tmp_root)])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("::warning", stdout)
+        self.assertIn("docs/reports/example.md", stdout)
+        self.assertIn("missing_lifecycle_state", stdout)
+        # Markdown report (summary) is still emitted alongside the annotations.
+        self.assertIn("## Summary", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_warn_mode_exits_zero_without_findings(self) -> None:
+        # Fixture: minimal valid report (no findings).
+        write_report(self.tmp_root, "example.md", VALID_REPORT_FRONTMATTER)
+
+        exit_code, stdout, stderr = self.run_main(["--mode", "warn", "--root", str(self.tmp_root)])
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("::warning", stdout)
+        self.assertIn("| findings_total | 0 |", stdout)
+        self.assertIn("No findings.", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_strict_mode_exits_one_with_findings(self) -> None:
+        # Fixture with at least one lifecycle finding.
+        write_report(
+            self.tmp_root,
+            "example.md",
+            """
+id: reports.example
+title: Example
+doc_type: report
+status: active
+            """
+        )
+
+        exit_code, stdout, stderr = self.run_main(["--mode", "strict", "--root", str(self.tmp_root)])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("## Summary", stdout)
+        self.assertIn("missing_lifecycle_state", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_strict_mode_exits_zero_without_findings(self) -> None:
+        # Fixture: minimal valid report (no findings).
+        write_report(self.tmp_root, "example.md", VALID_REPORT_FRONTMATTER)
+
+        exit_code, stdout, stderr = self.run_main(["--mode", "strict", "--root", str(self.tmp_root)])
+        self.assertEqual(exit_code, 0)
+        self.assertIn("| findings_total | 0 |", stdout)
+        self.assertIn("No findings.", stdout)
+        self.assertEqual(stderr, "")
+
+    def test_github_warning_annotation_escapes_special_characters(self) -> None:
+        # Data escaping: percent first, then CR/LF.
+        self.assertEqual(_gha_escape_data("100%"), "100%25")
+        self.assertEqual(_gha_escape_data("line1\nline2"), "line1%0Aline2")
+        self.assertEqual(_gha_escape_data("a\rb"), "a%0Db")
+        # Property escaping additionally handles ":" and ",".
+        self.assertEqual(_gha_escape_property("a:b"), "a%3Ab")
+        self.assertEqual(_gha_escape_property("a,b"), "a%2Cb")
+        # Percent is escaped first, so no double-escaping of the "%0A"/"%3A" markers.
+        self.assertEqual(_gha_escape_property("%\n:"), "%25%0A%3A")
+
+        # End-to-end: the rendered annotation escapes path (property) and message (data).
+        finding = Finding(
+            path="docs/reports/weird,name.md",
+            code="missing_lifecycle_state",
+            severity="warn",
+            field="lifecycle_state",
+            message="needs 100% coverage: now",
+        )
+        rendered = _render_github_warnings([finding])
+        self.assertIn("::warning ", rendered)
+        self.assertIn("file=docs/reports/weird%2Cname.md", rendered)
+        self.assertIn("title=Report lifecycle finding", rendered)
+        # The message uses data escaping, so ":" stays but "%" becomes "%25".
+        self.assertIn("missing_lifecycle_state: needs 100%25 coverage: now", rendered)
+
+    def test_invalid_mode_is_rejected(self) -> None:
+        # argparse `choices` rejects unknown modes with a non-zero SystemExit.
+        with self.assertRaises(SystemExit) as ctx:
+            self.run_main(["--mode", "nonsense", "--root", str(self.tmp_root)])
+        self.assertNotEqual(ctx.exception.code, 0)
 
     def test_active_report_missing_lifecycle_and_review_after(self) -> None:
         # Fixture

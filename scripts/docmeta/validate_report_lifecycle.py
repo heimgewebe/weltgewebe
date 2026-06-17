@@ -184,6 +184,33 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
     return "\n".join(lines) + "\n"
 
 
+def _gha_escape_data(value: str) -> str:
+    return (
+        value
+        .replace("%", "%25")
+        .replace("\r", "%0D")
+        .replace("\n", "%0A")
+    )
+
+
+def _gha_escape_property(value: str) -> str:
+    return (
+        _gha_escape_data(value)
+        .replace(":", "%3A")
+        .replace(",", "%2C")
+    )
+
+
+def _render_github_warnings(findings: list[Finding]) -> str:
+    lines: list[str] = []
+    for finding in findings:
+        file_prop = _gha_escape_property(str(finding.path))
+        title_prop = _gha_escape_property("Report lifecycle finding")
+        message = _gha_escape_data(f"{finding.code}: {finding.message}")
+        lines.append(f"::warning file={file_prop},title={title_prop}::{message}")
+    return "\n".join(lines)
+
+
 def run(root: Path, mode: str) -> tuple[str, int]:
     paths = _iter_report_paths(root)
     all_findings = []
@@ -208,15 +235,24 @@ def run(root: Path, mode: str) -> tuple[str, int]:
         reports_checked=reports_checked,
         reports_ignored_non_report=reports_ignored_non_report,
     )
-    report_str = _render_report(all_findings, summary, mode)
-    return report_str, 0
+    output = _render_report(all_findings, summary, mode)
+
+    if mode == "warn":
+        warnings = _render_github_warnings(all_findings)
+        if warnings:
+            output = output + "\n" + warnings + "\n"
+
+    if mode == "strict" and summary["findings_total"] > 0:
+        return output, 1
+
+    return output, 0
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate report lifecycle metadata.")
     parser.add_argument(
         "--mode",
-        choices=["report"],
+        choices=["report", "warn", "strict"],
         default="report",
         help="Validation mode"
     )
