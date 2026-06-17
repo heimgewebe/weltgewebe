@@ -16,11 +16,11 @@ Generated automatically. Do not edit.
 | --- | --- |
 | Dokumente gesamt | 126 |
 | Dokumente mit ausgehenden Relationen | 123 |
-| Dokumente als Ziel referenziert | 96 |
-| Relationen gesamt | 393 |
+| Dokumente als Ziel referenziert | 97 |
+| Relationen gesamt | 394 |
 | — depends_on | 18 |
 | — relates_to | 373 |
-| — supersedes | 2 |
+| — supersedes | 3 |
 | Isolierte Dokumente | 2 |
 | depends_on Zyklen | 0 |
 
@@ -31,6 +31,7 @@ Generated automatically. Do not edit.
 - ⚠️ High outbound count (13): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
+- ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (14): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
@@ -50,6 +51,7 @@ _Keine Zyklen gefunden._
 - `docs/roadmap.md` — 13 ausgehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 12 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
+- `docs/reports/domain-edge-write-path-proof.md` — 8 ausgehende Relationen
 
 **Eingehend (inbound):**
 

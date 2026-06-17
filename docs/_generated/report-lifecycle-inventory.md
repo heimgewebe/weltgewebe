@@ -29,8 +29,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_missing_owner_task | 17 |
 | files_with_review_after | 7 |
 | files_missing_review_after | 18 |
-| files_primary_referenced | 20 |
-| files_primary_unreferenced | 5 |
+| files_primary_referenced | 21 |
+| files_primary_unreferenced | 4 |
 | files_with_derived_references | 25 |
 | files_with_relations | 24 |
 | files_with_missing_supersession_target | 0 |
@@ -59,9 +59,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-account-email-uniqueness-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-13 |  | 1 | 4 | 4 |  |  |
 | docs/reports/domain-account-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 7 | 4 | 6 |  |  |
 | docs/reports/domain-backfill-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 4 |  |  |
-| docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 0 | 4 | 7 | review_after |  |
+| docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | 1 | 5 | 7 | review_after |  |
 | docs/reports/domain-edge-reference-audit.md | report | active | active | audit | OPT-ARC-001 | 2026-07-16 |  | 0 | 4 | 6 |  |  |
-| docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 4 | 7 |  |  |
+| docs/reports/domain-edge-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 3 | 6 | 8 |  |  |
 | docs/reports/domain-node-write-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 6 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active |  |  |  |  |  | 1 | 4 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/domain-read-path-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-07-16 |  | 5 | 4 | 5 |  |  |
@@ -113,7 +113,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/domain-backfill-proof.md | 4 | relates_to | .github/workflows/api.yml, apps/api/tests/db_domain_backfill.rs, docs/blueprints/domain-data-postgres-cutover.md, docs/tasks/index.json |
 | docs/reports/domain-edge-create-semantics-preflight.md | 7 | relates_to | contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-node-write-path-proof.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-edge-reference-audit.md | 6 | relates_to | apps/api/migrations/20260531000002_create_domain_edges.up.sql, contracts/domain/edge.schema.json, docs/blueprints/domain-data-postgres-cutover.md, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, scripts/docmeta/audit_domain_edge_references.py |
-| docs/reports/domain-edge-write-path-proof.md | 7 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-node-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
+| docs/reports/domain-edge-write-path-proof.md | 8 | relates_to, supersedes | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-edge-create-semantics-preflight.md, docs/reports/domain-node-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-node-write-path-proof.md | 6 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md, docs/tasks/index.json |
 | docs/reports/domain-provider-role-finding.md | 3 | relates_to | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md, docs/runbooks/domain-mail-cutover.md, docs/tasks/board.md |
 | docs/reports/domain-read-path-proof.md | 5 | relates_to | docs/blueprints/domain-data-postgres-cutover.md, docs/reports/domain-account-write-path-proof.md, docs/reports/domain-backfill-proof.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
@@ -177,6 +177,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-read-path-proof.md`
   - `docs/reports/optimierungsstatus.md`
   - `docs/tasks/board.md`
+
+- `docs/reports/domain-edge-create-semantics-preflight.md`
+  - `docs/reports/domain-edge-write-path-proof.md`
 
 - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/reports/domain-edge-create-semantics-preflight.md`
@@ -324,6 +327,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/supersession-map.md`
 
 - `docs/reports/domain-edge-reference-audit.md`
   - `docs/_generated/backlinks.md`
@@ -335,7 +339,9 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/relations-analysis.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/supersession-map.md`
 
 - `docs/reports/domain-node-write-path-proof.md`
   - `docs/_generated/backlinks.md`
@@ -410,7 +416,6 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
 - `docs/reports/cost-report.md`
-- `docs/reports/domain-edge-create-semantics-preflight.md`
 - `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/passkey-register-verify-prep.md`
 

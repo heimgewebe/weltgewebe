@@ -16,6 +16,8 @@ summary: >
   JSONL bleibt Default; kein Dual-Write; Account-, Node-, Step-up-E-Mail-
   und WebAuthn-Writeback-Persistenz bleiben unverändert.
 relations:
+  - type: supersedes
+    target: docs/reports/domain-edge-create-semantics-preflight.md
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
   - type: relates_to

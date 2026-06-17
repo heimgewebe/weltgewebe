@@ -500,6 +500,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-read-path-proof.md
 
+## docs/reports/domain-edge-create-semantics-preflight.md
+
+- [supersedes] docs/reports/domain-edge-write-path-proof.md
+
 ## docs/reports/domain-node-write-path-proof.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
