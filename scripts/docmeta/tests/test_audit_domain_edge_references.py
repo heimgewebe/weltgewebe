@@ -407,6 +407,26 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
             self.assertIs(data["findings_truncated"], True)
             self.assertEqual(data["summary"]["untyped_missing_references"], 3) # Summary still complete
 
+    def test_positive_max_findings_keeps_sorted_top_findings(self):
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
+            nf.write('{"id": "node-a"}\n')
+            nf.flush()
+            # Create findings in reverse order: edge-z comes first in stream
+            ef.write('{"id": "edge-z", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.write('{"id": "edge-a", "source_id": "missing-a", "target_id": "node-a"}\n')
+            ef.flush()
+
+            # Using --show-ids so we can assert on exact edge_ref strings directly
+            result = run_script("--nodes-jsonl", nf.name, "--edges-jsonl", ef.name, "--format", "json", "--max-findings", "1", "--show-ids")
+            self.assertEqual(result.returncode, 0)
+            data = json.loads(result.stdout)
+
+            self.assertEqual(len(data["findings"]), 1)
+            self.assertEqual(data["findings"][0]["edge_ref"], "edge-a")
+            self.assertIs(data["findings_truncated"], True)
+            self.assertEqual(data["findings_limit"], 1)
+            self.assertIs(data["findings_unlimited"], False)
+
     def test_max_findings_zero_keeps_summary_and_truncates(self):
         with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as nf, tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl') as ef:
             nf.write('{"id": "node-a"}\n')
@@ -419,6 +439,8 @@ class TestAuditDomainEdgeReferences(unittest.TestCase):
 
             self.assertEqual(len(data["findings"]), 0)
             self.assertIs(data["findings_truncated"], True)
+            self.assertEqual(data["findings_limit"], 0)
+            self.assertIs(data["findings_unlimited"], False)
             self.assertEqual(data["summary"]["untyped_missing_references"], 1)
             self.assertEqual(data["summary"]["untyped_existing_node_references"], 1)
 

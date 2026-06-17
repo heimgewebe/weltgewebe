@@ -347,6 +347,14 @@ def classify_edge_side(
         else:
             return "untyped_missing_reference", {"edge_ref": edge_ref, "side": side, "target_ref": target_ref, "type_hint": None, "classification": "untyped_missing_reference"}
 
+def finding_sort_key(finding: Dict[str, Any]) -> Tuple[str, str, str, str]:
+    return (
+        finding.get("classification", ""),
+        finding.get("side", ""),
+        finding.get("edge_ref", ""),
+        str(finding.get("target_ref", "")),
+    )
+
 def append_finding(
     findings: list[Dict[str, Any]],
     finding: Dict[str, Any],
@@ -355,10 +363,18 @@ def append_finding(
     if max_findings == -1:
         findings.append(finding)
         return False
-    if max_findings > 0 and len(findings) < max_findings:
-        findings.append(finding)
-        return False
-    return True
+
+    if max_findings == 0:
+        return True
+
+    findings.append(finding)
+    findings.sort(key=finding_sort_key)
+
+    if len(findings) > max_findings:
+        findings.pop()
+        return True
+
+    return False
 
 def evaluate_audit_data(
     *,
@@ -526,12 +542,7 @@ def evaluate_audit_data(
     type_hint_backfill_recommended = summary["untyped_existing_node_references"] > 0
     fk_compatible_reference_sides = summary["typed_node_references"] + summary["untyped_existing_node_references"]
 
-    findings.sort(key=lambda x: (
-        x.get("classification", ""),
-        x.get("side", ""),
-        x.get("edge_ref", ""),
-        str(x.get("target_ref", ""))
-    ))
+    findings.sort(key=finding_sort_key)
 
     return {
         "schema_version": "1.0.0",
