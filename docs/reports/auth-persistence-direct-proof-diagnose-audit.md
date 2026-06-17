@@ -37,11 +37,15 @@ Bewertet wurde stattdessen das vorhandene Dokument
 `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`.
 
 ## Lifecycle
+
 - **Lifecycle-State:** superseded
 - **Lifecycle:** audit
 - **Owner-Task:** OPT-API-002
 - **Superseded by:** `docs/reports/optimierungsstatus.md`
-- **Bewertung:** Historisches Diagnose-Audit zur korrekten Lesart des Direct-Postgres-Proofs. Die damalige Warnung vor einer Überdeutung bleibt als Kontext nützlich, ist aber durch die spätere implementierte und CI-belegte Session-Persistenz nicht mehr handlungsleitend.
+- **Bewertung:** Historisches Diagnose-Audit zur korrekten Lesart des
+  Direct-Postgres-Proofs. Die damalige Warnung vor einer Überdeutung bleibt als
+  Kontext nützlich, ist aber durch die spätere implementierte und CI-belegte
+  Session-Persistenz nicht mehr handlungsleitend.
 
 ## Urteil
 

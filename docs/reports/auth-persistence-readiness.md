@@ -31,11 +31,14 @@ relations:
 > Ziel: belegter Ist-Zustand, fehlende Strukturen, Entscheidung, Testplan.
 
 ## Lifecycle
+
 - **Lifecycle-State:** superseded
 - **Lifecycle:** decision-prep
 - **Owner-Task:** OPT-API-002
 - **Superseded by:** `docs/reports/auth-persistence-next-step.md`
-- **Bewertung:** Historische Readiness-Diagnose. Der Bericht wurde durch den konkreteren Next-Step-Report abgelöst und enthält mittlerweile überholte Aussagen zum Fehlen von Migrationen. Keine aktuelle Umsetzungsquelle.
+- **Bewertung:** Historische Readiness-Diagnose. Der Bericht wurde durch den
+  konkreteren Next-Step-Report abgelöst und enthält mittlerweile überholte
+  Aussagen zum Fehlen von Migrationen. Keine aktuelle Umsetzungsquelle.
 
 ---
 

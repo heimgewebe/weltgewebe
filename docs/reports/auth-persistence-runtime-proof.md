@@ -50,11 +50,14 @@ relations:
 > Blueprint: `docs/blueprints/auth-persistence-runtime-proof.md`
 
 ## Lifecycle
+
 - **Lifecycle-State:** superseded
 - **Lifecycle:** proof
 - **Owner-Task:** OPT-API-002
 - **Superseded by:** `docs/reports/optimierungsstatus.md`
-- **Bewertung:** Historischer Partial-Proof für Migration und CRUD-Pfad. Der Bericht bleibt als Belegkette nützlich, wurde aber durch die spätere `DbSessionStore`-Implementierung und den CI-belegten Persistenzpfad überholt.
+- **Bewertung:** Historischer Partial-Proof für Migration und CRUD-Pfad. Der
+  Bericht bleibt als Belegkette nützlich, wurde aber durch die spätere
+  `DbSessionStore`-Implementierung und den CI-belegten Persistenzpfad überholt.
 
 ---
 

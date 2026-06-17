@@ -40,11 +40,14 @@ relations:
 > Implementierungsfragen, konkreter Folge-PR-Vorschlag.
 
 ## Lifecycle
+
 - **Lifecycle-State:** superseded
 - **Lifecycle:** decision-prep
 - **Owner-Task:** OPT-API-002
 - **Superseded by:** `docs/reports/optimierungsstatus.md`
-- **Bewertung:** Historische Entscheidungs- und Umsetzungsvorbereitung. Der vorgeschlagene `DbSessionStore`-/PostgreSQL-Pfad ist inzwischen umgesetzt und im Optimierungsstatus belegt. Keine aktuelle Next-Step-Quelle.
+- **Bewertung:** Historische Entscheidungs- und Umsetzungsvorbereitung. Der
+  vorgeschlagene `DbSessionStore`-/PostgreSQL-Pfad ist inzwischen umgesetzt
+  und im Optimierungsstatus belegt. Keine aktuelle Next-Step-Quelle.
 
 ---
 

@@ -4,7 +4,7 @@ title: "Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. dire
 doc_type: report
 status: active
 lifecycle_state: active
-lifecycle: decision-prep
+lifecycle: audit
 owner_task: OPT-API-002
 review_after: 2026-07-17
 created: 2026-05-13
@@ -45,11 +45,14 @@ relations:
 > Aussagen sind als **PROVEN / NOT_PROVEN / CONFLICT_RESOLVED / DECIDED** markiert.
 
 ## Lifecycle
+
 - **Lifecycle-State:** active
-- **Lifecycle:** decision-prep
+- **Lifecycle:** audit
 - **Owner-Task:** OPT-API-002
 - **Review after:** 2026-07-17
-- **Bewertung:** Weiterhin aktiver Architekturabgleich zur Produktionsentscheidung direkter PostgreSQL-Pfad vs. PgBouncer-Dev-/Spezialpfad. Keine neue Runtime-Aussage in diesem PR.
+- **Bewertung:** Weiterhin aktiver Architekturabgleich zur Produktionsentscheidung
+  direkter PostgreSQL-Pfad vs. PgBouncer-Dev-/Spezialpfad. Keine neue
+  Runtime-Aussage in diesem PR.
 
 ---
 
