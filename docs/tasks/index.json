@@ -1146,15 +1146,15 @@
       "id": "OPT-CI-004",
       "title": "Dependency-Update-Automation (Dependabot/Renovate)",
       "area": "ci",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "medium",
       "owner": "unknown",
-      "evidence": [],
-      "missing_evidence": [
-        "keine .github/dependabot.yml oder Renovate-Config vorhanden"
+      "evidence": [
+        ".github/dependabot.yml"
       ],
+      "missing_evidence": [],
       "acceptance": [
         "Update-Automation existiert (Dependabot oder Renovate); PR-Flut ist begrenzt (Limit/Gruppierung)",
         "Relevante Oekosysteme (Actions, pnpm/npm, Cargo, Docker, Python/uv) sind bewusst ein- oder ausgeschlossen"
@@ -1166,7 +1166,7 @@
           "docs/reports/optimierungsstatus.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-17"
     },
     {
       "id": "OPT-INF-002",
