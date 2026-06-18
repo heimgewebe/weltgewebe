@@ -32,11 +32,26 @@ def main() -> int:
 
     monthly_cost = active_users * avg_requests * request_cost_eur * 30
 
+    frontmatter = """---
+id: docs.reports.cost-report
+title: Cost Report
+doc_type: report
+status: active
+owner: docs-mechanik
+summary: Automatisch erzeugter monatlicher Kostenbericht aus tools/py/cost/model.csv.
+relations:
+  - type: relates_to
+    target: tools/py/cost/report.py
+  - type: relates_to
+    target: tools/py/cost/model.csv
+  - type: relates_to
+    target: .github/workflows/cost-report.yml
+---
+"""
+
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(
-        "# Cost Report {:%Y-%m}\n\n≈ {:.2f} EUR/Monat\n".format(
-            dt.date.today(), monthly_cost
-        ),
+        f"{frontmatter}# Cost Report {dt.date.today():%Y-%m}\n\n≈ {monthly_cost:.2f} EUR/Monat\n",
         encoding="utf-8",
     )
 

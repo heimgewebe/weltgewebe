@@ -5,6 +5,13 @@ doc_type: task
 status: done
 owner: operator
 summary: "Historical checklist work retained as evidence; its predelegation assumption is no longer operative."
+relations:
+  - type: relates_to
+    target: docs/tasks/board.md
+  - type: relates_to
+    target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+  - type: relates_to
+    target: docs/reports/inwx-zone-reconciliation-plan.md
 ---
 
 # Task Record: DEPLOY-DNS-001B
