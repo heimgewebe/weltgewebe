@@ -33,7 +33,8 @@ DB-PROOF-001 ist derzeit nicht durchführbar, weil keine repräsentativen Runtim
 - Sessions persistieren in PostgreSQL.
 - Domain-PostgreSQL ist nicht als Runtime-Domain-Quelle aktiv befüllt.
 - JSONL bleibt ohne Domain-Postgres-Schalter der Domain-Default-Pfad.
-- JSONL enthält derzeit keine repräsentativen Nodes/Edges.
+- Die hostseitige JSONL-Quelle enthält derzeit keine repräsentativen Nodes/Edges.
+- Die aktive containerseitige JSONL-Quelle unter `/data` hat keinen beobachteten Node-/Edge-Dateibestand.
 - DB-PROOF-001 kann nicht mit `auditable_edges_total > 0` erfüllt werden.
 
 ## What this does not prove
@@ -76,9 +77,13 @@ Deploy path:
 - `/opt/weltgewebe/.gewebe/in/demo.nodes.jsonl: 0 lines`
 - `/opt/weltgewebe/.gewebe/in/demo.edges.jsonl: 0 lines`
 
-Container-visible path:
+Container-visible active path (`GEWEBE_IN_DIR=/data`):
 
 - `/data/demo.accounts.jsonl: 1 line`
+- `/data/demo.nodes.jsonl: missing in observed container scan`
+- `/data/demo.edges.jsonl: missing in observed container scan`
+
+The container scan searched the API-visible candidate data paths and observed only `/data/demo.accounts.jsonl` for demo JSONL input. It did not observe active `/data` node or edge JSONL files.
 
 ## Code/Config Interpretation
 
