@@ -807,11 +807,12 @@
         "apps/api/migrations/20260531000002_create_domain_edges.up.sql",
         "scripts/docmeta/audit_domain_edge_references.py",
         "scripts/docmeta/tests/test_audit_domain_edge_references.py",
-        "docs/reports/domain-edge-reference-audit.md"
+        "docs/reports/domain-edge-reference-audit.md",
+        "docs/reports/domain-runtime-data-source-reconciliation.md"
       ],
       "missing_evidence": [
-        "Kein repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 vorhanden",
-        "Keine abschließende FK-vs-Guard-Policyentscheidung für domain_edges.source_id/target_id vorhanden"
+        "repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 fehlt",
+        "FK-vs-Guard-Policyentscheidung fehlt"
       ],
       "acceptance": [
         "Audit zaehlt reproduzierbar valide Edges, Orphans (fehlende source_id/target_id-Nodes) und betroffene Edge-Typen, ohne Orphans still zu verwerfen",
@@ -825,6 +826,7 @@
         "docs": [
           "docs/blueprints/domain-data-postgres-cutover.md",
           "docs/reports/domain-edge-reference-audit.md",
+          "docs/reports/domain-runtime-data-source-reconciliation.md",
           "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },

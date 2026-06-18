@@ -98,6 +98,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
 – **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (ADR-0007: Produktion direkter Postgres; PgBouncer Dev-/Spezialpfad)
 – **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
+– **Domain Runtime Data Source Reconciliation:** [reports/domain-runtime-data-source-reconciliation.md](reports/domain-runtime-data-source-reconciliation.md) (Diagnose zu DB-PROOF-001: Runtime-/JSONL-Domain-Datenquelle derzeit nicht auditfähig)
 – **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
 
 ### Prozess
