@@ -34,7 +34,7 @@ DB-PROOF-001 ist derzeit nicht durchführbar, weil keine repräsentativen Runtim
 - Domain-PostgreSQL ist nicht als Runtime-Domain-Quelle aktiv befüllt.
 - JSONL bleibt ohne Domain-Postgres-Schalter der Domain-Default-Pfad.
 - Die hostseitige JSONL-Quelle enthält derzeit keine repräsentativen Nodes/Edges.
-- Die aktive containerseitige JSONL-Quelle unter `/data` hat keinen beobachteten Node-/Edge-Dateibestand.
+- Für die containerseitige `/data`-Quelle wurden keine aktiven `demo.nodes.jsonl`- oder `demo.edges.jsonl`-Dateien beobachtet.
 - DB-PROOF-001 kann nicht mit `auditable_edges_total > 0` erfüllt werden.
 
 ## What this does not prove
@@ -77,13 +77,13 @@ Deploy path:
 - `/opt/weltgewebe/.gewebe/in/demo.nodes.jsonl: 0 lines`
 - `/opt/weltgewebe/.gewebe/in/demo.edges.jsonl: 0 lines`
 
-Container-visible active path (`GEWEBE_IN_DIR=/data`):
+Container-visible path for the production compose JSONL source (`GEWEBE_IN_DIR=/data`):
 
 - `/data/demo.accounts.jsonl: 1 line`
-- `/data/demo.nodes.jsonl: missing in observed container scan`
-- `/data/demo.edges.jsonl: missing in observed container scan`
+- `/data/demo.nodes.jsonl: not observed in container-visible scan`
+- `/data/demo.edges.jsonl: not observed in container-visible scan`
 
-The container scan searched the API-visible candidate data paths and observed only `/data/demo.accounts.jsonl` for demo JSONL input. It did not observe active `/data` node or edge JSONL files.
+The container-visible scan checked `/data` and observed only `/data/demo.accounts.jsonl` for demo JSONL input. It did not observe `/data/demo.nodes.jsonl` or `/data/demo.edges.jsonl`.
 
 ## Code/Config Interpretation
 
@@ -102,7 +102,7 @@ Backfill-, Read-Path- und Write-Path-Proofs belegen Fähigkeiten, aber keinen pr
 
 | Option | Beschreibung | Kann DB-PROOF-001 wieder aufnehmen? | Risiko |
 |---|---|---:|---|
-| Echte UI/API-Runtime erzeugt Domain-Daten | Operator erzeugt reale Nodes/Edges über vorhandene Runtime-Flows | Ja, wenn `domain_edges > 0` und Audit redigiert läuft | gering bis mittel |
+| Echte UI/API-Runtime erzeugt Domain-Daten | Operator erzeugt reale Nodes/Edges über vorhandene Runtime-Flows | Ja, wenn der Edge-Audit gegen die aktive Quelle `auditable_edges_total > 0` liefert und redigiert läuft | gering bis mittel |
 | Redigierter Runtime-JSONL-Snapshot | Repräsentativer Export mit Nodes/Edges, keine Rohdaten im Repo | Ja, wenn Herkunft und Repräsentativität belegt sind | mittel |
 | Kontrollierter Seed | Dedizierter Seed erzeugt repräsentative, nicht-produktive Domain-Daten | Nur wenn als repräsentativ beschlossen | mittel |
 | Postgres-Cutover | Domain-Read/Write auf PostgreSQL umstellen | Nein, Folgetask; kein DB-PROOF-Ersatz | hoch |
