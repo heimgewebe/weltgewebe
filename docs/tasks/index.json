@@ -1055,18 +1055,18 @@
       "id": "DOCS-CTL-001",
       "title": "Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B)",
       "area": "docs",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
       "owner": "unknown",
       "evidence": [
         "docs/reports/cost-report.md",
-        "docs/tasks/DEPLOY-DNS-001B.md"
+        "docs/tasks/DEPLOY-DNS-001B.md",
+        "PR #1240 auf Branch docs/docs-ctl-001-orphan-lifecycle (Commit c9a9a19d)",
+        "Generatorlauf bestätigt No orphans found"
       ],
-      "missing_evidence": [
-        "docs/reports/cost-report.md und docs/tasks/DEPLOY-DNS-001B.md werden vom Orphan-Generator weiterhin als verwaist gefuehrt; fachliche Lifecycle-Einordnung steht aus"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Beide Dokumente sind fachlich eingeordnet (aktiv/archived/superseded/Ausnahme), nicht nur kosmetisch verlinkt",
         "Orphan-Report ist leer oder die Ausnahmen sind bewusst dokumentiert",
@@ -1081,7 +1081,7 @@
           "docs/index.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "DOCS-CTL-002",
