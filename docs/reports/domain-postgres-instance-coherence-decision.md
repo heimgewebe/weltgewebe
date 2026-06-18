@@ -4,7 +4,7 @@ title: "Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002"
 doc_type: report
 status: active
 lifecycle_state: active
-lifecycle: decision-prep
+lifecycle: audit
 owner_task: DOMAIN-PG-002
 review_after: 2026-09-16
 created: 2026-06-18
@@ -137,8 +137,10 @@ and authoritative for reads.
 | scripts | scripts/weltgewebe-up | n/a | only `--scale caddy=0` (scales Caddy down); no `--scale api` | single-instance |
 | CI compose smoke | .github/workflows/compose-smoke.yml | `docker compose --profile dev up` (single) | no `--scale api` | single-instance smoke |
 
-No `deploy.replicas`, no `--scale api=N` (N>1), and no multi-API Caddy upstream
-exists anywhere in the working tree.
+No API scale-out evidence was found in the inspected deployment and automation
+surfaces: `infra/compose`, `infra/caddy`, `scripts`, `docs`,
+`.github/workflows`, `Makefile`, `Justfile`, `.devcontainer`. This is a static
+inspection of those surfaces, not a runtime proof of the live container count.
 
 ## Decision
 
@@ -163,17 +165,57 @@ state until one of the following exists:
 
 ## Guard
 
-A static guard enforces the obvious, robustly-detectable scale-out drift:
+A scope-limited static guard enforces the obvious, robustly-detectable
+scale-out drift:
 
 - `scripts/guard/domain-single-instance-guard.sh`
 - `scripts/tests/test_domain_single_instance_guard.sh`
 
-The guard blocks: `api`-service `replicas > 1` in compose files, `--scale api=N`
-(N>1) in docs/scripts/infra, and multiple API upstreams on a single Caddy
-`reverse_proxy` line. It is API-specific by design: `--scale caddy=0`, a single
-API instance (`replicas: 1`, `--scale api=1`), and `replicas > 1` on a non-API
-service are not flagged. The guard is wired into `scripts/guard/run.sh` and its
-test runs in the CI guard-test loop (`.github/workflows/ci.yml`).
+The guard blocks, API-specific and fail-closed:
+
+1. `replicas` on the `api` compose service whose value is not clearly `0` or
+   `1` — numeric `>= 2`, or a non-literal/`$`-expanded value (e.g.
+   `${API_REPLICAS:-2}`). Quoted and zero-padded values (`"2"`, `02`) are
+   normalised. Compose files are found by name; the `services:` indentation is
+   detected dynamically (not bound to two spaces).
+2. `docker compose --scale api=<value>` whose value is not clearly `0` or `1`,
+   across `docs`, `scripts`, `infra`, `.github/workflows`, `Makefile`,
+   `Justfile`, `.devcontainer`. The equals and space forms (`--scale=api=N`,
+   `--scale api N`), quoted, zero-padded and `$`-expanded (`api=${VAR}`) values
+   are all caught.
+3. multiple API upstreams on a single Caddy `reverse_proxy`/`to` directive line
+   (including `http(s)://` scheme upstreams).
+
+It does not flag: `--scale caddy=0`, a single API instance (`replicas: 1`,
+`--scale api=1`), `replicas` on a non-API service, a single API upstream, or a
+bare documentation placeholder such as `--scale api=N`.
+
+What the guard is **not**: it is not a runtime proof, not a full YAML or Caddy
+AST parser, and it does not (yet) detect multi-line Caddy `to` blocks that place
+one upstream per line. Its claims never exceed its static detection scope.
+
+The guard is wired into `scripts/guard/run.sh` and its test runs in the CI
+guard-test loop (`.github/workflows/ci.yml`).
+
+## Review triggers
+
+`review_after` is a calendar backstop. This decision should be revisited earlier
+when any of the following occurs:
+
+- domain reads become fully DB-backed (no process-local domain cache is authoritative);
+- a cross-instance invalidation/coherence mechanism is introduced;
+- horizontal API scaling is desired;
+- the Caddy or Compose topology is fundamentally changed.
+
+## Future improvements (not blockers for DOMAIN-PG-002)
+
+- central guard helpers for file scanning, excludes and `fail_with_location`;
+- a generic guard-test fixture pattern shared across guards;
+- an optional YAML AST check (e.g. pinned `yq`) if the core-guard toolchain
+  policy is adjusted to allow it;
+- an optional Caddy AST check via `caddy adapt` if Caddy is reliably available
+  in CI/dev;
+- claim-/freshness-system integration for DOMAIN-PG-002.
 
 ## Does not prove
 

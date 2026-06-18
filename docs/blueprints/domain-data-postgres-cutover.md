@@ -258,8 +258,11 @@ static guard (`scripts/guard/domain-single-instance-guard.sh`, tested by
 `scripts/tests/test_domain_single_instance_guard.sh`) blocks the obvious
 scale-out drift.
 
-This boundary does not unblock DOMAIN-PG-001. Edge FK-vs-Guard remains blocked by
-representative runtime edge-audit evidence.
+This boundary does not automatically unblock DOMAIN-PG-001, DB-PROOF-001,
+AUTH-PG-001 or AUTH-PG-002. Edge FK-vs-Guard remains blocked by representative
+runtime edge-audit evidence; the auth persistence tasks remain open and may
+proceed only under this single-instance boundary. This is a static decision and
+guard, not a runtime proof and not a PostgreSQL cutover.
 
 ## Regeln für die Datenmigration
 
