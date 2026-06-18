@@ -54,6 +54,7 @@ DB Container: weltgewebe-db-1
 ### API Environment
 
 Observed redacted keys:
+
 - `DATABASE_URL=<redacted>`
 - keine `WELTGEWEBE_DOMAIN_*`-Keys beobachtet
 
@@ -70,11 +71,13 @@ Raw data emitted: no
 ### JSONL Counts
 
 Deploy path:
+
 - `/opt/weltgewebe/.gewebe/in/demo.accounts.jsonl: 1 line`
 - `/opt/weltgewebe/.gewebe/in/demo.nodes.jsonl: 0 lines`
 - `/opt/weltgewebe/.gewebe/in/demo.edges.jsonl: 0 lines`
 
 Container-visible path:
+
 - `/data/demo.accounts.jsonl: 1 line`
 
 ## Code/Config Interpretation
@@ -82,6 +85,7 @@ Container-visible path:
 `DATABASE_URL` allein schaltet Domain-Daten nicht auf PostgreSQL um. Es ermöglicht Datenbankzugriff und Session-Persistenz. Domain-Read/Write bleibt ohne explizite Domain-Schalter beim JSONL/default-Pfad.
 
 Relevante Schalter:
+
 - `WELTGEWEBE_DOMAIN_READ_SOURCE`
 - `WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE`
 - `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE`
@@ -106,6 +110,7 @@ DB-PROOF-001 bleibt `partial`.
 Vor einem erneuten DB-PROOF-001-Audit muss eine repräsentative Domain-Datenquelle bereitstehen.
 
 Empfohlene nächste Entscheidung:
+
 1. Sollen echte Runtime-Flows Domain-Nodes/-Edges erzeugen?
 2. Soll ein redigierter Runtime-JSONL-Snapshot bereitgestellt werden?
 3. Soll ein kontrollierter Seed als repräsentativ gelten?
@@ -114,11 +119,13 @@ Empfohlene nächste Entscheidung:
 ## Follow-up Gate for DB-PROOF-001
 
 DB-PROOF-001 darf erst wieder aufgenommen werden, wenn eine repräsentative Domain-Datenquelle bereitsteht:
+
 - Runtime-PostgreSQL enthält `domain_nodes_count > 0` und `domain_edges_count > 0`, oder
 - ein redigierter Runtime-JSONL-Snapshot mit Nodes/Edges liegt vor, oder
 - ein kontrollierter Seed ist explizit als repräsentative Datenquelle beschlossen.
 
 Zusätzlich muss vor einer FK-vs-Guard-Entscheidung gelten:
+
 - der Edge-Audit läuft gegen diese Quelle,
 - `auditable_edges_total > 0`,
 - Auditoutput ist redigiert,
