@@ -32,7 +32,17 @@ relations:
 # Domain Edge Reference Audit
 
 Task: OPT-ARC-001 Teilaufgabe 4
-Status: diagnostic / decision-prep
+Status: partial / audit_harness_proven / postgres_empty_smoke_passed / representative_runtime_data_pending
+
+## Task-Control-Reconciliation
+
+DB-PROOF-001 ist nicht mehr `open`, weil Audit-Skript, Tests und Report vorhanden sind.
+Der korrekte Status ist `partial`: Harness und leerer PostgreSQL-Smoke sind belegt,
+aber ein repräsentativer Runtime-/Deployment-Datenlauf mit `auditable_edges_total > 0` fehlt.
+
+Dieser Report schließt DB-PROOF-001 fachlich nicht ab und gibt DOMAIN-PG-001 nicht frei.
+Die FK-vs-Guard-Policyentscheidung bleibt blockiert, bis repräsentative Runtime-Daten
+auditiert wurden.
 
 ## Kurzurteil
 

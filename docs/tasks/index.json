@@ -798,17 +798,20 @@
       "id": "DB-PROOF-001",
       "title": "Edge-Orphan- und Referenz-Audit vor PostgreSQL-FK-Entscheidung",
       "area": "api",
-      "status": "open",
+      "status": "partial",
       "priority": "high",
       "effort": "M",
       "risk": "medium",
       "owner": "unknown",
       "evidence": [
-        "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
+        "apps/api/migrations/20260531000002_create_domain_edges.up.sql",
+        "scripts/docmeta/audit_domain_edge_references.py",
+        "scripts/docmeta/tests/test_audit_domain_edge_references.py",
+        "docs/reports/domain-edge-reference-audit.md"
       ],
       "missing_evidence": [
-        "Kein Edge-Orphan-/Referenz-Audit-Skript und kein reproduzierbarer Audit-Report vorhanden (Pendant zu scripts/docmeta/audit_account_email_uniqueness.py fehlt fuer Edges)",
-        "Kein Datenlauf gegen Runtime-/Deployment-Edges, der valide vs. verwaiste source_id/target_id-Referenzen quantifiziert"
+        "Kein repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 vorhanden",
+        "Keine abschließende FK-vs-Guard-Policyentscheidung für domain_edges.source_id/target_id vorhanden"
       ],
       "acceptance": [
         "Audit zaehlt reproduzierbar valide Edges, Orphans (fehlende source_id/target_id-Nodes) und betroffene Edge-Typen, ohne Orphans still zu verwerfen",
@@ -821,10 +824,11 @@
         "prs": [],
         "docs": [
           "docs/blueprints/domain-data-postgres-cutover.md",
-          "docs/reports/domain-account-email-uniqueness-audit.md"
+          "docs/reports/domain-edge-reference-audit.md",
+          "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "DOMAIN-PG-001",
@@ -839,7 +843,7 @@
         "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
       ],
       "missing_evidence": [
-        "DB-PROOF-001 (Edge-Orphan-/Referenz-Audit) ist noch nicht abgeschlossen; die FK-Entscheidung ist in der Edge-Schema-Migration ausdruecklich deferred",
+        "DB-PROOF-001 ist nur partial; repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 und FK-vs-Guard-Policyentscheidung fehlen.",
         "Keine FK-Migration und kein Referenz-Guard implementiert"
       ],
       "acceptance": [
@@ -854,7 +858,7 @@
           "docs/blueprints/domain-data-postgres-cutover.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "DOMAIN-PG-002",
