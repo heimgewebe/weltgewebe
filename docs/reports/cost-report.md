@@ -1,5 +1,5 @@
 ---
-id: docs.reports.cost-report
+id: reports.cost-report
 title: Cost Report
 doc_type: report
 status: active

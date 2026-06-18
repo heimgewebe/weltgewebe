@@ -33,7 +33,7 @@ def main() -> int:
     monthly_cost = active_users * avg_requests * request_cost_eur * 30
 
     frontmatter = """---
-id: docs.reports.cost-report
+id: reports.cost-report
 title: Cost Report
 doc_type: report
 status: active
