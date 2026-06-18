@@ -228,6 +228,26 @@ write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
 CADDY
 expect_fail "$root" "Caddy reverse_proxy block: to api:8080 api-2:8080"
 
+root="$(make_fixture_root)"
+write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
+:8081 {
+  handle /api/* {
+    reverse_proxy api:8080 [::1]:8080
+  }
+}
+CADDY
+expect_fail "$root" "Caddy reverse_proxy api plus bracketed IPv6 upstream"
+
+root="$(make_fixture_root)"
+write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
+:8081 {
+  handle /api/* {
+    reverse_proxy http://api:8080 http://[::1]:8080
+  }
+}
+CADDY
+expect_fail "$root" "Caddy reverse_proxy http scheme plus bracketed IPv6 upstream"
+
 # ----------------------------------------------------------------------------
 # Positive tests — must PASS
 # ----------------------------------------------------------------------------
@@ -292,6 +312,38 @@ write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
 }
 CADDY
 expect_pass "$root" "Single API upstream + separate web upstream"
+
+root="$(make_fixture_root)"
+write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
+:8081 {
+  reverse_proxy capital:8080 web:5173
+}
+CADDY
+expect_pass "$root" "Caddy non-api hostname containing api substring does not false-positive"
+
+root="$(make_fixture_root)"
+write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
+:8081 {
+  reverse_proxy [::1]:8080
+}
+CADDY
+expect_pass "$root" "Caddy bracketed IPv6 non-api upstream passes"
+
+root="$(make_fixture_root)"
+write_file "$root/target/compose.generated.yml" <<'YAML'
+services:
+  api:
+    replicas: 99
+YAML
+expect_pass "$root" "target compose artifact is pruned"
+
+root="$(make_fixture_root)"
+write_file "$root/.venv/compose.generated.yml" <<'YAML'
+services:
+  api:
+    replicas: 99
+YAML
+expect_pass "$root" ".venv compose artifact is pruned"
 
 # ----------------------------------------------------------------------------
 # Real repository drift check (not a guard-logic test — asserts the working

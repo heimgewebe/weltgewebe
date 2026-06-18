@@ -128,7 +128,12 @@ BEGIN { rc=0 }
   n=split(rest, toks, /[[:space:]]+/); ups=0; api_up=0
   for (i=1;i<=n;i++){
     tok=toks[i]; sub(/^https?:\/\//,"",tok); gsub(/[{}]/,"",tok)
-    if (tok ~ /^[A-Za-z0-9_.-]+:[0-9]+$/){ ups++; if (tok ~ /api/) api_up=1 }
+    if (tok ~ /^([A-Za-z0-9_.-]+|\[[0-9A-Fa-f:.%_-]+\]):[0-9]+$/) {
+      ups++
+      host = tok
+      sub(/:[0-9]+$/, "", host)
+      if (host ~ /(^|[-_.])api($|[-_.])/) api_up = 1
+    }
   }
   if (api_up && ups>=2){ printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
 }
@@ -144,7 +149,7 @@ check_compose_replicas() {
     [ -n "$f" ] || continue
     hits="$(awk "$REPLICAS_AWK" "$f" 2>/dev/null || true)"
     report_hits "$hits" "api service declares replicas that are not clearly 0 or 1 (fail-closed for non-literal/>=2 values)"
-  done < <(find "$REPO_ROOT" \( -name .git -o -name node_modules \) -prune -o \
+  done < <(find "$REPO_ROOT" \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
     -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
     -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>/dev/null)
 }
