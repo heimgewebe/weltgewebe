@@ -62,7 +62,7 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 | AUTH-PG-002 | auth | WebAuthn-Credential-Persistenz / Passkey-Cutover | open | high | `apps/api/src/auth/passkeys.rs` (PasskeyStore In-Memory); OPT-ARC-001-Non-Goal `webauthn_credential_writeback` | PostgreSQL-Persistenzmodell + Restart-Proof (Register→Reload→Login); Public/Private-Trennung; menschliches Review (credentials/) |
 | CI-TOOL-001 | ci | Dev-Setup: Task-Runner-Dedup (Makefile/Justfile) + Node/pnpm engines | open | medium | `Makefile`, `Justfile` (beide direkt `docker compose ... up/down`), `apps/web/package.json` (engines vorhanden), Root-`package.json` (engines fehlt) | Eine Compose-Ebene führt, andere delegiert; engines konsistent ergänzen; kleiner risikoarmer PR |
 | DOCS-CTL-001 | docs | Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B) | done | medium | `docs/reports/cost-report.md`, `docs/tasks/DEPLOY-DNS-001B.md` (beide im Orphan-Generator), PR #1240 | Fachliche Lifecycle-Einordnung statt kosmetischer Verlinkung; alte Deploy-/DNS-Aufgabe nicht reaktivieren |
-| DOCS-CTL-002 | docs | Blueprint-/Planning-Status-Konsistenz | open | medium | `docs/reports/planning-registration-findings.md`; `kartenklarheit.md`/`map-blaupause.md` sind `draft`, in `docs/index.md` aber als aktiv/normativ geführt | Betroffene Blueprints einzeln prüfen; nicht pauschal hochstufen; deprecated nicht reaktivieren; Planning-Guard bleibt grün |
+| DOCS-CTL-002 | docs | Blueprint-/Planning-Status-Konsistenz | partial | medium | `docs/reports/planning-registration-findings.md`, `docs/blueprints/kartenklarheit.md`, `docs/blueprints/map-blaupause.md`, `docs/index.md` | PR-CI fehlt noch; Blueprint-Status und Indexsprache wurden lokal konsistent gemacht |
 
 ## Blocker
 
