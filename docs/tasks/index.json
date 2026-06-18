@@ -1087,7 +1087,7 @@
       "id": "DOCS-CTL-002",
       "title": "Blueprint-/Planning-Status-Konsistenz (draft/active/canonical/deprecated)",
       "area": "docs",
-      "status": "open",
+      "status": "partial",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
@@ -1096,10 +1096,12 @@
         "docs/reports/planning-registration-findings.md",
         "scripts/docmeta/planning_registration.yml",
         "docs/blueprints/kartenklarheit.md",
-        "docs/blueprints/map-blaupause.md"
+        "docs/blueprints/map-blaupause.md",
+        "docs/index.md",
+        "PR #1241 auf Branch docs/docs-ctl-002-blueprint-status"
       ],
       "missing_evidence": [
-        "kartenklarheit.md und map-blaupause.md tragen frontmatter-status 'draft', werden in docs/index.md aber als aktive/normative Leitdokumente gefuehrt (Status-Widerspruch)"
+        "PR-CI-Endzustand auf finalem HEAD fehlt noch; Blueprint-Status und Indexsprache wurden lokal konsistent gemacht"
       ],
       "acceptance": [
         "Keine unbegruendeten draft-/canonical-Widersprueche; betroffene Blueprints werden einzeln gelesen und nicht pauschal hochgestuft",
@@ -1112,10 +1114,11 @@
         "docs": [
           "docs/blueprints/kartenklarheit.md",
           "docs/blueprints/map-blaupause.md",
-          "docs/reports/planning-registration-findings.md"
+          "docs/reports/planning-registration-findings.md",
+          "docs/index.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "OPT-CI-003",
