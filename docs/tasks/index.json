@@ -864,30 +864,39 @@
       "id": "DOMAIN-PG-002",
       "title": "Single-Instance-Invariante oder Multi-Instance-Kohaerenz entscheiden",
       "area": "infra",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
       "owner": "unknown",
-      "evidence": [],
-      "missing_evidence": [
-        "Keine dokumentierte Betriebsentscheidung Single-Instance vs. Multi-Instance fuer den PostgreSQL-Domain-Pfad; prozesslokale Runtime-Caches bleiben unadressiert",
-        "Kein Guard/Smoke, der Cross-Instance-Kohaerenz oder die Single-Instance-Grenze belegt"
+      "evidence": [
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "scripts/guard/domain-single-instance-guard.sh",
+        "scripts/tests/test_domain_single_instance_guard.sh",
+        "infra/compose/compose.core.yml",
+        "infra/compose/compose.prod.yml",
+        "infra/compose/compose.heimserver.override.yml",
+        "infra/caddy/Caddyfile.dev",
+        "infra/caddy/Caddyfile.prod",
+        "infra/caddy/Caddyfile.heim"
       ],
+      "missing_evidence": [],
       "acceptance": [
-        "Option A: horizontale Skalierung ist ausdruecklich ausgeschlossen, das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Deployment-/Runtime-Doku festgehalten",
-        "oder Option B: Cross-Instance-Kohaerenz ist technisch geloest oder klar begrenzt und durch Test/Smoke belegt",
+        "Option A entschieden: Single-Instance-Grenze fuer den PostgreSQL-Domain-Pfad ist dokumentiert; horizontale API-Skalierung ist ausdruecklich ausgeschlossen",
+        "Das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Decision-Report und Cutover-Blueprint festgehalten; kein Cross-Instance-Kohaerenz-Claim",
+        "Statischer Guard blockiert offensichtliche Scale-out-Drift (api replicas>1, --scale api>1, Caddy-Mehrfach-API-Upstream) und ist getestet",
         "Entscheidung ist im Cutover-Blueprint verankert; kein stiller Cache-Split-Brain"
       ],
       "links": {
         "issues": [],
         "prs": [],
         "docs": [
-          "docs/blueprints/domain-data-postgres-cutover.md",
-          "docs/reports/auth-persistence-readiness.md"
+          "docs/reports/domain-postgres-instance-coherence-decision.md",
+          "docs/blueprints/domain-data-postgres-cutover.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "AUTH-PG-001",

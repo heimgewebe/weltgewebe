@@ -218,8 +218,12 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   entschieden werden, ob `domain_edges.source_id`/`target_id` strikte
   Foreign Keys auf `domain_nodes(id)` erhalten oder ob eine lose
   Referenzsemantik mit Guard/Quarantäne-Report bewusst akzeptiert wird.
-- Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten,
-  dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
+- Multi-Instance-Kohärenz ist entschieden (DOMAIN-PG-002, Option A
+  Single-Instance-Invariant; siehe Abschnitt „Instance Coherence Boundary"
+  und `docs/reports/domain-postgres-instance-coherence-decision.md`):
+  prozesslokale Caches bedeuten, dass Instanz B Writes von Instanz A nicht
+  automatisch sieht, daher ist horizontale API-Skalierung bis auf Weiteres
+  ausgeschlossen.
 - E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
 - Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
 - WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
@@ -229,6 +233,33 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   nicht performance-optimiert.
 - Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb ist offen.
 - JSONL-Demontage ist offen.
+
+## Instance Coherence Boundary
+
+For the current PostgreSQL-domain transition, the API domain read/write path is
+constrained to a single API instance (DOMAIN-PG-002, Option A). Process-local
+domain state/caches are not cross-instance coherent. Horizontal scaling of API
+instances is explicitly out of scope until domain reads are fully DB-backed or a
+tested invalidation/coherence mechanism exists.
+
+This is a deployment invariant, not a cross-instance coherence implementation.
+
+Operational consequences:
+
+- Do not run `docker compose --scale api=N` with `N > 1`.
+- Do not configure `deploy.replicas > 1` for the API service.
+- Do not configure multiple API upstreams for Caddy.
+- Do not treat optional NATS availability as domain-cache coherence unless a
+  dedicated invalidation path and tests exist.
+
+The decision, the state/cache inventory and the deployment-topology evidence are
+recorded in `docs/reports/domain-postgres-instance-coherence-decision.md`. A
+static guard (`scripts/guard/domain-single-instance-guard.sh`, tested by
+`scripts/tests/test_domain_single_instance_guard.sh`) blocks the obvious
+scale-out drift.
+
+This boundary does not unblock DOMAIN-PG-001. Edge FK-vs-Guard remains blocked by
+representative runtime edge-audit evidence.
 
 ## Regeln für die Datenmigration
 
