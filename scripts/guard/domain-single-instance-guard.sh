@@ -20,7 +20,8 @@ set -euo pipefail
 #      0 or 1 (numeric >= 2, or a non-literal/`$`-expanded value -> fail-closed)
 #   2. `docker compose --scale api=<value>` where <value> is not clearly 0 or 1
 #      (numeric >= 2, or a non-literal/`$`-expanded value -> fail-closed)
-#   3. multiple API upstreams on a single Caddy `reverse_proxy`/`to` directive
+#   3. an API upstream together with any additional upstream on the same Caddy
+#      `reverse_proxy`/`to` directive line
 #
 # It is deliberately API-specific: `--scale caddy=0`, a single API instance
 # (`replicas: 1`, `--scale api=1`) and `replicas` on a non-API service are not
@@ -112,7 +113,8 @@ END { exit rc }
 AWK
 )
 
-# Check 3 — multiple API upstreams on one Caddy `reverse_proxy`/`to` directive.
+# Check 3 — an API upstream plus any additional upstream on one Caddy
+# `reverse_proxy`/`to` directive line.
 # Strips an optional http(s):// scheme, ignores path matchers and `{`, counts
 # host:port upstream tokens, and flags only lines that carry an API upstream
 # together with a second upstream (single-line drift).
@@ -166,7 +168,7 @@ check_caddy_upstreams() {
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     hits="$(awk "$CADDY_AWK" "$f" 2>/dev/null || true)"
-    report_hits "$hits" "multiple API upstreams on a single reverse_proxy/to directive line"
+    report_hits "$hits" "an API upstream together with any additional upstream on the same reverse_proxy/to directive line"
   done < <(find "$caddy_dir" -type f -print 2>/dev/null)
 }
 

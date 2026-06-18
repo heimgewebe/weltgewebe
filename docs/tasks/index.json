@@ -885,7 +885,7 @@
       "acceptance": [
         "Option A entschieden: Single-Instance-Grenze fuer den PostgreSQL-Domain-Pfad ist dokumentiert; horizontale API-Skalierung ist ausdruecklich ausgeschlossen",
         "Das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Decision-Report und Cutover-Blueprint festgehalten; kein Cross-Instance-Kohaerenz-Claim",
-        "Statischer Guard blockiert offensichtliche Scale-out-Drift fail-closed (api-replicas != 0/1 inkl. nicht-literaler Werte, --scale api != 0/1 ueber docs/scripts/infra/.github-workflows/Makefile/Justfile/.devcontainer, Caddy-Mehrfach-API-Upstream) und ist getestet",
+        "Statischer Guard blockiert offensichtliche Scale-out-Drift fail-closed (api-replicas != 0/1 inkl. nicht-literaler Werte, --scale api != 0/1 ueber docs/scripts/infra/.github-workflows/Makefile/Justfile/.devcontainer, API-Upstream zusammen mit einem weiteren Upstream auf derselben Caddy reverse_proxy/to-Direktivzeile) und ist getestet",
         "Entscheidung ist im Cutover-Blueprint verankert; kein stiller Cache-Split-Brain; kein Runtime-Proof und kein PostgreSQL-Cutover"
       ],
       "links": {

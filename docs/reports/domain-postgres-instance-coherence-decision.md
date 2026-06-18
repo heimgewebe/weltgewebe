@@ -11,10 +11,11 @@ created: 2026-06-18
 lang: en
 summary: >
   DOMAIN-PG-002 decision record. Selects Option A (single-instance invariant)
-  for the current PostgreSQL-domain transition: weltgewebe supports exactly one
-  API instance for domain read/write state because domain and parts of auth
-  state are process-local caches with no tested cross-instance invalidation.
-  Backed by a static guard against obvious API scale-out drift.
+  for the current PostgreSQL-domain transition: weltgewebe runs at most one
+  API instance for domain read/write state (normal operation expects one live
+  instance) because domain and parts of auth state are process-local caches
+  with no tested cross-instance invalidation. Backed by a static guard against
+  obvious API scale-out drift.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -38,10 +39,15 @@ relations:
 
 ## Kurzurteil
 
-For the current PostgreSQL-domain transition, weltgewebe supports exactly one
-API instance for domain read/write state. Horizontal scaling of API instances
+For the current PostgreSQL-domain transition, weltgewebe supports at most one
+API instance for domain read/write state for this coherence boundary; normal
+operation expects one live API instance. Horizontal scaling of API instances
 is explicitly out of scope until domain reads are fully DB-backed or a tested
 cross-instance invalidation/coherence mechanism exists.
+
+Scale-to-zero (`replicas: 0`, `--scale api=0`) is not a coherence violation, so
+the guard does not block it. This report defines a coherence boundary, not an
+availability proof.
 
 This is a deployment invariant, not a cross-instance coherence implementation.
 
@@ -160,7 +166,8 @@ state until one of the following exists:
 - Do not run more than one API instance for the current domain PostgreSQL transition.
 - Do not use `docker compose --scale api=N` with `N > 1`.
 - Do not add `deploy.replicas > 1` for `api`.
-- Do not configure Caddy with multiple API upstreams.
+- Do not place an API upstream together with any additional upstream on the
+  same Caddy `reverse_proxy`/`to` directive line.
 - Future scale-out requires a new task and proof.
 
 ## Guard
@@ -183,12 +190,14 @@ The guard blocks, API-specific and fail-closed:
    `Justfile`, `.devcontainer`. The equals and space forms (`--scale=api=N`,
    `--scale api N`), quoted, zero-padded and `$`-expanded (`api=${VAR}`) values
    are all caught.
-3. multiple API upstreams on a single Caddy `reverse_proxy`/`to` directive line
-   (including `http(s)://` scheme upstreams).
+3. an API upstream together with any additional upstream on the same Caddy
+   `reverse_proxy`/`to` directive line (single-line drift; `http(s)://` scheme
+   upstreams included).
 
-It does not flag: `--scale caddy=0`, a single API instance (`replicas: 1`,
-`--scale api=1`), `replicas` on a non-API service, a single API upstream, or a
-bare documentation placeholder such as `--scale api=N`.
+It does not flag: `--scale caddy=0`, a clear 0-or-1 API instance count
+(`replicas: 0`, `replicas: 1`, `--scale api=0`, `--scale api=1`), `replicas` on
+a non-API service, a single API upstream, or a bare documentation placeholder
+such as `--scale api=N`.
 
 What the guard is **not**: it is not a runtime proof, not a full YAML or Caddy
 AST parser, and it does not (yet) detect multi-line Caddy `to` blocks that place

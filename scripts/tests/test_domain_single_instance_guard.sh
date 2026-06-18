@@ -4,7 +4,8 @@ set -euo pipefail
 # Test: scripts/guard/domain-single-instance-guard.sh
 #
 # Verifies that the DOMAIN-PG-002 single-instance guard detects API scale-out
-# drift (compose replicas, --scale api, multi-upstream Caddy), including quoted,
+# drift (compose replicas, --scale api, an API upstream plus any additional
+# upstream on one Caddy directive line), including quoted,
 # zero-padded and non-literal/`$`-expanded values (fail-closed), while NOT
 # producing false positives for non-api scaling, single instances, or
 # documentation placeholders.

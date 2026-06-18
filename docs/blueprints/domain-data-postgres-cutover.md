@@ -237,18 +237,22 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 ## Instance Coherence Boundary
 
 For the current PostgreSQL-domain transition, the API domain read/write path is
-constrained to a single API instance (DOMAIN-PG-002, Option A). Process-local
-domain state/caches are not cross-instance coherent. Horizontal scaling of API
-instances is explicitly out of scope until domain reads are fully DB-backed or a
-tested invalidation/coherence mechanism exists.
+constrained to at most one API instance for this coherence boundary
+(DOMAIN-PG-002, Option A); normal operation expects one live API instance.
+Process-local domain state/caches are not cross-instance coherent. Horizontal
+scaling of API instances is explicitly out of scope until domain reads are fully
+DB-backed or a tested invalidation/coherence mechanism exists.
 
 This is a deployment invariant, not a cross-instance coherence implementation.
+Scale-to-zero is not a coherence violation; this boundary is not an availability
+proof.
 
 Operational consequences:
 
 - Do not run `docker compose --scale api=N` with `N > 1`.
 - Do not configure `deploy.replicas > 1` for the API service.
-- Do not configure multiple API upstreams for Caddy.
+- Do not place an API upstream together with any additional upstream on the
+  same Caddy `reverse_proxy`/`to` directive line.
 - Do not treat optional NATS availability as domain-cache coherence unless a
   dedicated invalidation path and tests exist.
 
