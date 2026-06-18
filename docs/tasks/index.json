@@ -1087,7 +1087,7 @@
       "id": "DOCS-CTL-002",
       "title": "Blueprint-/Planning-Status-Konsistenz (draft/active/canonical/deprecated)",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
@@ -1097,11 +1097,11 @@
         "scripts/docmeta/planning_registration.yml",
         "docs/blueprints/kartenklarheit.md",
         "docs/blueprints/map-blaupause.md",
-        "docs/index.md"
+        "docs/index.md",
+        "PR #1241 auf Branch docs/docs-ctl-002-blueprint-status (Commit 39334fad)",
+        "CI-Nachweis grün"
       ],
-      "missing_evidence": [
-        "PR-CI fehlt noch; Blueprint-Status und Indexsprache wurden lokal konsistent gemacht"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Keine unbegruendeten draft-/canonical-Widersprueche; betroffene Blueprints werden einzeln gelesen und nicht pauschal hochgestuft",
         "Deprecated-Dokumente werden nicht reaktiviert",
