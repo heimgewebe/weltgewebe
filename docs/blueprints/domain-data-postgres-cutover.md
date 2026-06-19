@@ -249,9 +249,10 @@ Operative Konsequenzen:
   ausschließlich `services.api.scale` oder `services.api.deploy.replicas`,
   jeweils mit dem Literal `0` oder `1`.
 - Auf ausführbaren Flächen darf `docker compose --scale api=<value>`,
-  `docker compose scale api=<value>` oder die entsprechende `docker-compose`-
-  Form nur mit `0` oder `1` verwendet werden; Dokumentation darf ausschließlich
-  die Werte `0`, `1`, `N` oder `<value>` verwenden.
+  `docker compose --scale=api=<value>`, `docker compose scale api=<value>`
+  oder die entsprechende `docker-compose`-Form nur mit `0` oder `1` verwendet
+  werden; Dokumentation darf ausschließlich die Werte `0`, `1`, `N` oder
+  `<value>` verwenden.
 - Ein geschützter API-Upstream darf nicht zusammen mit einem weiteren Upstream
   auf derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile stehen.
 - NATS gilt ohne dedizierten Invalidierungspfad und Tests nicht als

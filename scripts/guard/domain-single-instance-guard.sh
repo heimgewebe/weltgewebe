@@ -207,6 +207,12 @@ function value_after_api(pos, v) {
   }
   return t[pos+1]
 }
+function scale_api_pos(pos, p) {
+  p=pos+1
+  if (p <= n && t[p] == "=") p++
+  if (p > n || t[p] != "api") return 0
+  return p
+}
 BEGIN { rc=0 }
 {
   raw=$0
@@ -232,9 +238,12 @@ BEGIN { rc=0 }
 
   for (i=start; i<=n; i++) {
     if (t[i] == "--scale") {
-      if (i+1 > n) { finding(); continue }
-      if (t[i+1] != "api") continue
-      check_value(value_after_api(i+1))
+      api_pos=scale_api_pos(i)
+      if (api_pos == 0) {
+        if (i+1 > n) finding()
+        continue
+      }
+      check_value(value_after_api(api_pos))
       continue
     }
 

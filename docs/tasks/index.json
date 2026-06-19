@@ -883,7 +883,7 @@
       "acceptance": [
         "Option A ist entschieden: Der aktuelle PostgreSQL-Domain-Pfad ist auf hoechstens eine API-Instanz begrenzt; kein Cross-Instance-Kohaerenz-Claim",
         "Decision-Report und Cutover-Blueprint benennen Risiko, operative Folgen, Review-Trigger, Parsergrenzen und Nicht-Beweise",
-        "Der statische Guard akzeptiert an services.api.scale und services.api.deploy.replicas nur literal 0/1, verbietet direkte services.api.replicas, trennt ausfuehrbare CLI-Werte von Dokumentationsplatzhaltern und entfernt Caddy-Kommentare vor der Direktiverkennung",
+        "Der statische Guard akzeptiert an services.api.scale und services.api.deploy.replicas nur literal 0/1, verbietet direkte services.api.replicas, trennt ausfuehrbare CLI-Werte von Dokumentationsplatzhaltern, prueft Docker-Compose-CLI-Formen inklusive --scale api=*, --scale=api=* und scale api=* und entfernt Caddy-Kommentare vor der Direktiverkennung",
         "Der Guard ist in einem unabhaengigen CI-Job und der Guard-Orchestrierung angebunden; gezielte Fixtures plus Real-Repo-Drift-Check sind gruen",
         "Die Entscheidung beweist weder den Live-Containerstand noch Runtime-Korrektheit oder PostgreSQL-Cutover-Readiness"
       ],

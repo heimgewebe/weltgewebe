@@ -184,9 +184,11 @@ Auf ausführbaren Flächen (`scripts`, `infra`, `.github/workflows`,
 hinter einem tokenbasiert erkannten `docker compose`- oder `docker-compose`-
 Kommando nur `0` und `1` erlaubt. Erkannt werden insbesondere
 `docker compose up --scale api=1`, `docker compose up --scale api 1`,
-`docker compose scale api=1`, `docker compose scale api 1` und die
-entsprechenden `docker-compose`-Formen. Fehlende, symbolische, expandierte oder
-andere Werte werden blockiert. Zeilen wie `some compose scale api=2` oder
+`docker compose up --scale=api=1`, `docker compose scale api=1`,
+`docker compose scale api 1` und die entsprechenden `docker-compose`-Formen.
+Die tokenisierte `--scale = api = 1`-Form wird dabei wie `--scale=api=1`
+behandelt. Fehlende, symbolische, expandierte oder andere Werte werden
+blockiert. Zeilen wie `some compose scale api=2` oder
 `some-tool --scale api=2` gelten nicht als Docker-Compose-Kommando.
 
 In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N` und

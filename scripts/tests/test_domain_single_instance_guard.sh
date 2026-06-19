@@ -111,12 +111,19 @@ for value in 01 -1 1.0 '"1x"' '${API_SCALE:-1}' '*alias'; do
     $'services:\n  api:\n    scale: '"$value"
 done
 
+# shellcheck disable=SC2016 # Literal CLI fixture values, not shell expansions.
 for cmd in \
   'docker compose up --scale api=2' \
   'docker compose up --scale api 2' \
+  'docker compose up --scale=api=2' \
+  'docker compose up --scale=api=two' \
+  'docker compose up --scale=api=N' \
+  'docker compose up --scale=api=<value>' \
+  'docker compose up --scale=api=${API_SCALE}' \
   'docker compose scale api=2' \
   'docker compose scale api 2' \
   'docker-compose up --scale api=2' \
+  'docker-compose up --scale=api=2' \
   'docker-compose scale api=2' \
   'docker compose up --scale api=two' \
   'docker compose up --scale api=*api_scale' \
@@ -124,15 +131,23 @@ for cmd in \
   'docker compose scale api'; do
   check fail "reject CLI: $cmd" scripts/deploy.sh "$cmd"
 done
-check pass 'safe executable CLI' scripts/deploy.sh $'# docker compose up --scale api=9\ndocker compose up --scale api=1\ndocker compose up --scale api 0\ndocker compose scale api=1\ndocker compose scale api 0\ndocker-compose up --scale api=1\ndocker-compose scale api=1\ndocker compose up --scale caddy=0'
+check pass 'safe executable CLI' scripts/deploy.sh $'# docker compose up --scale api=9\ndocker compose up --scale api=1\ndocker compose up --scale api 0\ndocker compose up --scale=api=1\ndocker compose up --scale=api=0\ndocker compose scale api=1\ndocker compose scale api 0\ndocker-compose up --scale api=1\ndocker-compose up --scale=api=1\ndocker-compose scale api=1\ndocker compose up --scale caddy=0'
 check pass 'non-compose command ignored' scripts/deploy.sh $'some compose scale api=2\nsome-tool --scale api=2'
 for value in N '<value>' 0 1; do
   check pass "docs: api=$value" docs/example.md '`docker compose up --scale api='"$value"'`'
 done
+# shellcheck disable=SC2016 # Literal Markdown command fixture.
+check pass 'docs: --scale=api=N placeholder' docs/example.md '`docker compose up --scale=api=N`'
+# shellcheck disable=SC2016 # Literal Markdown command fixture.
+check pass 'docs: --scale=api=<value> placeholder' docs/example.md '`docker compose up --scale=api=<value>`'
 # shellcheck disable=SC2016 # Literal docs fixture values, not shell expansions.
 for value in '<N>' banana '*alias' -1 1.5 '<whatever>' '${API_SCALE}' 2; do
   check fail "docs reject api=$value" docs/example.md '`docker compose up --scale api='"$value"'`'
 done
+# shellcheck disable=SC2016 # Literal Markdown command fixture.
+check fail 'docs reject --scale=api=2' docs/example.md '`docker compose up --scale=api=2`'
+# shellcheck disable=SC2016 # Literal Markdown command fixture.
+check fail 'docs reject --scale=api=<N>' docs/example.md '`docker compose up --scale=api=<N>`'
 
 check fail 'Caddy second upstream' infra/caddy/Caddyfile 'reverse_proxy api:8080 api-2:8080'
 check fail 'Caddy IPv6 second upstream' infra/caddy/Caddyfile 'reverse_proxy http://api:8080 http://[::1]:8080'
