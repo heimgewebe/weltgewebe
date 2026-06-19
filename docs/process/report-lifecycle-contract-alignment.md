@@ -151,24 +151,22 @@ Dabei gilt:
 - Der Validator existiert.
 - Modi `report`, `warn` und `strict` existieren.
 - Pilot und Teil-Backfills sind erfolgt.
-- Warnmodus wird in diesem PR in CI aktiviert.
+- Der Warnmodus ist im Docs Guard aktiv.
 - Findings bleiben nicht blockierend.
 - Toolfehler bleiben blockierend.
 - Beide Generatorartefakte werden im Diagnosejob erzeugt.
 - Kein Strict-Blocking.
+- Validator und Inventory erfassen derzeit nur direkte Markdown-Dateien unter
+  `docs/reports/`; rekursive Archivpfade bleiben Folgearbeit.
 
 ## Legacy ohne Ersatz
 
-Archivierte oder veraltete Legacy-Reports ohne eindeutiges Ersatzartefakt
-dürfen nicht durch künstliche `superseded_by`-Pfade repariert werden.
-
-Dafür braucht es später eine explizite Regel, zum Beispiel:
-
-- ein eigenes Ausnahmefeld,
-- eine dokumentierte Verwerfungsbegründung,
-- oder ein Validator-Verhalten für historische Reports.
-
-In diesem Slice wird keine solche Ausnahme technisch eingeführt.
+Archivierte Legacy-Reports dürfen ohne künstlichen `superseded_by`-Pfad
+geführt werden, sofern die fehlende Ablösung fachlich begründet ist.
+Für `lifecycle_state: superseded` bleibt ein nachvollziehbarer Ersatzpfad
+erforderlich.
+Eine maschinenlesbare Legacy-Ausnahme und deren Validatorprüfung sind noch
+nicht implementiert.
 
 ## Verbleibende Entscheidungen
 

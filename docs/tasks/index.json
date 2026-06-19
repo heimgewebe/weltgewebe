@@ -1235,7 +1235,10 @@
       ],
       "missing_evidence": [
         "Der vom aktuellen Lifecycle-Validator gemeldete Restbestand ist noch nicht vollständig evidenzbasiert klassifiziert",
-        "Semantische Validatorprüfungen für Enums, ISO-Datum, owner_task-Existenz und Supersession-Konsistenz fehlen",
+        "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
+        "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
+        "Der zulässige Namensraum für owner_task und die darauf aufbauende Existenzprüfung sind noch nicht festgelegt",
+        "Physische Archivpfade unter docs/reports/archive/** werden von Validator und Inventory noch nicht rekursiv erfasst",
         "Changed-only strict ist noch nicht umgesetzt",
         "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
       ],

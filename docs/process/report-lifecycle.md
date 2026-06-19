@@ -38,17 +38,18 @@ Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
 ## Geltungsbereich
 
-**Discovery-Surface:** Alle Markdown-Dateien unter `docs/reports/` werden
-inventarisiert.
+**Discovery-Surface:** Alle Markdown-Dateien direkt unter `docs/reports/`
+(`docs/reports/*.md`) werden inventarisiert.
 
-**Policy-Scope:** Die Report-Lifecycle-Regeln gelten zunächst für Dateien
-unter `docs/reports/` mit `doc_type: report`.
+**Policy-Scope:** Die Report-Lifecycle-Regeln gelten für Dateien direkt unter
+`docs/reports/` mit `doc_type: report`.
 
-**Aktueller Validator-Scope:** Der Validator untersucht dieselbe Population,
-setzt die Policy aber derzeit nur teilweise technisch durch.
+**Aktueller Validator-Scope:** Der Validator prüft Markdown-Dateien direkt
+unter `docs/reports/`, deren `doc_type` den Wert `report` trägt. Er setzt die
+Policy derzeit nur teilweise technisch durch.
 
-Andere `doc_type`-Werte unter `docs/reports/` erscheinen im Inventory, werden
-aber nicht als Reports validiert.
+Andere `doc_type`-Werte direkt unter `docs/reports/` erscheinen im Inventory,
+werden aber nicht als Reports validiert.
 
 ## Aktuelle Nicht-Ziele
 
@@ -75,7 +76,7 @@ aber nicht als Reports validiert.
 - generierte Overview,
 - Teil-Backfills.
 
-### In diesem Slice
+### Aktueller Rollout-Stand
 
 - vollständige Dokument-Reconciliation,
 - CI-Warnmodus,
@@ -222,11 +223,20 @@ referenzierenden Dokuments ab.
 
 Standard ist `status: deprecated` mit `lifecycle_state: archived`.
 
-Lifecycle-State-only Archivierung ist der Standard der ersten Ausbaustufen.
-Die Datei bleibt zunächst am Ort; Links bleiben stabil.
+Lifecycle-State-only-Archivierung ist der derzeit unterstützte Weg. Die Datei
+bleibt an ihrem bestehenden Pfad; dadurch bleiben Links und die aktuelle
+Scannerreichweite stabil.
 
-Physische Archivierung nach `docs/reports/archive/YYYY/<report>.md` ist nur
-zulässig, wenn:
+Physische Archivierung nach
+`docs/reports/archive/YYYY/<report>.md` ist derzeit nicht operativ
+freigegeben. Validator und Inventory erfassen aktuell nur Markdown-Dateien
+direkt unter `docs/reports/`.
+
+Vor der ersten physischen Archivierung müssen beide Scanner rekursiv arbeiten
+und durch Tests für verschachtelte Archivpfade abgesichert sein.
+
+Für eine spätere physische Archivierung gelten zusätzlich folgende
+Voraussetzungen:
 
 - keine aktiven Primary References brechen,
 - `superseded_by` geprüft ist oder eine historische Begründung existiert,
@@ -234,7 +244,7 @@ zulässig, wenn:
 - generierte Dokumente reproduziert wurden,
 - ein eigener PR erstellt wird.
 
-Dieser Slice archiviert keine Reports.
+Der aktuelle Rollout archiviert oder löscht keine Reports automatisch.
 
 ## Löschregeln
 
@@ -288,9 +298,11 @@ superseded_by: docs/reports/new-proof.md
 
 ### Archived legacy report
 
-Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine
-offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder
-Validator-Verhalten modelliert werden.
+Archivierte Legacy-Dokumente dürfen ohne künstlichen `superseded_by`-Pfad
+modelliert werden.
+Wenn kein Ersatzartefakt existiert, muss dies bis zur Einführung einer
+maschinenlesbaren Ausnahme fachlich nachvollziehbar im Report oder im
+zugehörigen Task begründet werden.
 
 ## Offene Entscheidungen
 
