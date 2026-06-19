@@ -9,7 +9,7 @@ services:
       - ${WELTGEWEBE_ENV_FILE:-/opt/weltgewebe/.env}
     environment:
       POLICY_LIMITS_PATH: /app/policies/limits.yaml
-      APP_BASE_URL: https://weltgewebe.home.arpa
+      APP_BASE_URL: https://weltgewebe.net
       AUTH_PUBLIC_LOGIN: '1'
       AUTH_LOG_MAGIC_TOKEN: '0'
       AUTH_AUTO_PROVISION: '1'
