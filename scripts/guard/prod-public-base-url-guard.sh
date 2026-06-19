@@ -65,33 +65,33 @@ caddy_env = services.get("caddy", {}).get("environment", {})
 errors = []
 
 # Check api_env
-if api_env.get("APP_BASE_URL") != "https://weltgewebe.net":
-    val = api_env.get("APP_BASE_URL")
+val = api_env.get("APP_BASE_URL")
+if val != "https://weltgewebe.net":
     errors.append(f"api.environment.APP_BASE_URL expected https://weltgewebe.net, got {val}")
 
-if api_env.get("AUTH_PUBLIC_LOGIN") != "1":
-    val = api_env.get("AUTH_PUBLIC_LOGIN")
+val = api_env.get("AUTH_PUBLIC_LOGIN")
+if val != "1":
     errors.append(f"api.environment.AUTH_PUBLIC_LOGIN expected 1, got {val}")
 
-if api_env.get("AUTH_LOG_MAGIC_TOKEN") != "0":
-    val = api_env.get("AUTH_LOG_MAGIC_TOKEN")
+val = api_env.get("AUTH_LOG_MAGIC_TOKEN")
+if val != "0":
     errors.append(f"api.environment.AUTH_LOG_MAGIC_TOKEN expected 0, got {val}")
 
-if api_env.get("WEB_UPSTREAM_HOST") != "weltgewebe.home.arpa":
-    val = api_env.get("WEB_UPSTREAM_HOST")
+val = api_env.get("WEB_UPSTREAM_HOST")
+if val != "weltgewebe.home.arpa":
     errors.append(f"api.environment.WEB_UPSTREAM_HOST expected weltgewebe.home.arpa, got {val}")
 
-if api_env.get("WEB_UPSTREAM_URL") != "https://weltgewebe.home.arpa":
-    val = api_env.get("WEB_UPSTREAM_URL")
+val = api_env.get("WEB_UPSTREAM_URL")
+if val != "https://weltgewebe.home.arpa":
     errors.append(f"api.environment.WEB_UPSTREAM_URL expected https://weltgewebe.home.arpa, got {val}")
 
 # Check caddy_env
-if caddy_env.get("WEB_UPSTREAM_HOST") != "weltgewebe.home.arpa":
-    val = caddy_env.get("WEB_UPSTREAM_HOST")
+val = caddy_env.get("WEB_UPSTREAM_HOST")
+if val != "weltgewebe.home.arpa":
     errors.append(f"caddy.environment.WEB_UPSTREAM_HOST expected weltgewebe.home.arpa, got {val}")
 
-if caddy_env.get("WEB_UPSTREAM_URL") != "https://weltgewebe.home.arpa":
-    val = caddy_env.get("WEB_UPSTREAM_URL")
+val = caddy_env.get("WEB_UPSTREAM_URL")
+if val != "https://weltgewebe.home.arpa":
     errors.append(f"caddy.environment.WEB_UPSTREAM_URL expected https://weltgewebe.home.arpa, got {val}")
 
 if errors:
