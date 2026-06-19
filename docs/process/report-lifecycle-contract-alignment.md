@@ -38,27 +38,18 @@ relations:
 - Supersession-Relation existiert,
 - globaler DocMeta-Contract kennt keine Lifecycle-Spezialzustände.
 
-
 ## Ursprüngliche Nicht-Ziele des Entscheidungs-Slices
 
 - Keine Änderung an `contracts/docmeta.schema.json`.
 - Keine Änderung an `architecture/docmeta.schema.md`.
 - Keine Änderung an `repo.meta.yaml`.
 - Keine Änderung an `scripts/docmeta/**`.
-- kein Validator.
-- kein Backfill.
-- kein Pilot-Report.
+- Kein Validator.
+- Kein Backfill.
+- Kein Pilot-Report.
 - Keine Report-Frontmatter-Änderung.
 - Keine Archivierung.
 - Keine Löschung.
-
-## Aktuelle Nicht-Ziele
-
-- kein globaler Contract-Umbau,
-- kein Massen-Backfill,
-- kein Strict-Enforcement,
-- keine Archivierung oder Löschung,
-- keine automatische Owner- oder Reviewdatum-Ableitung.
 
 ## Aktuelle Nicht-Ziele
 
@@ -163,8 +154,8 @@ Dabei gilt:
 - Warnmodus wird in diesem PR in CI aktiviert.
 - Findings bleiben nicht blockierend.
 - Toolfehler bleiben blockierend.
-- beide Generatorartefakte werden im Diagnosejob erzeugt.
-- kein Strict-Blocking.
+- Beide Generatorartefakte werden im Diagnosejob erzeugt.
+- Kein Strict-Blocking.
 
 ## Legacy ohne Ersatz
 
@@ -182,9 +173,10 @@ In diesem Slice wird keine solche Ausnahme technisch eingeführt.
 ## Verbleibende Entscheidungen
 
 - Schemaort für report-spezifische Lifecycle-Felder
-- Zulässige Enums für `lifecycle` und `owner_task`
+- zulässige Werte für `lifecycle`
+- zulässige Werte für `lifecycle_state`
 - ISO-Datumsvalidierung für `review_after`
 - `owner_task`-Existenzprüfung
-- Supersession-Konsistenz (`superseded_by` vs `relations[type=supersedes]`)
+- Supersession-Konsistenz (`superseded_by` vs. `relations[type=supersedes]`)
 - Changed-only strict
 - Global strict
