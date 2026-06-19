@@ -10,6 +10,26 @@ REPO_ROOT="${REPO_ROOT:-$(
   pwd
 )}"
 
+BASE_FILE="${REPO_ROOT}/infra/compose/compose.prod.yml"
+OVERRIDE_FILE="${REPO_ROOT}/infra/compose/compose.prod.override.yml"
+
+for required_file in "$BASE_FILE" "$OVERRIDE_FILE"; do
+  if [[ ! -f "$required_file" ]]; then
+    echo "ERROR: required Compose file missing: $required_file" >&2
+    exit 2
+  fi
+done
+
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+  echo "ERROR: docker compose is required" >&2
+  exit 2
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "ERROR: python3 is required" >&2
+  exit 2
+fi
+
 TMP_ENV="$(mktemp)"
 TMP_JSON="$(mktemp)"
 TMP_ERR="$(mktemp)"
@@ -19,27 +39,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat > "$TMP_ENV" << 'EOF'
+cat >"$TMP_ENV" <<'EOF_ENV'
 DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy
 POSTGRES_USER=dummy
 POSTGRES_PASSWORD=dummy
 POSTGRES_DB=dummy
 WEB_UPSTREAM_HOST=weltgewebe.home.arpa
 WEB_UPSTREAM_URL=https://weltgewebe.home.arpa
-EOF
+EOF_ENV
 
-if [ ! -f "$REPO_ROOT/infra/compose/compose.prod.yml" ] || [ ! -f "$REPO_ROOT/infra/compose/compose.prod.override.yml" ]; then
-  echo "Error: Compose files not found at $REPO_ROOT/infra/compose/" >&2
-  exit 2
-fi
-
-# Compose render explicitly with the expected override
 if ! WELTGEWEBE_ENV_FILE="$TMP_ENV" \
   REPO_DIR="$REPO_ROOT" \
   docker compose \
     --env-file "$TMP_ENV" \
-    -f "$REPO_ROOT/infra/compose/compose.prod.yml" \
-    -f "$REPO_ROOT/infra/compose/compose.prod.override.yml" \
+    -f "$BASE_FILE" \
+    -f "$OVERRIDE_FILE" \
     config --format json >"$TMP_JSON" 2>"$TMP_ERR"
 then
   echo "ERROR: docker compose config failed" >&2
@@ -47,58 +61,77 @@ then
   exit 2
 fi
 
-# Use Python to evaluate the JSON configuration
-python3 -c '
-import sys, json
+python3 - "$TMP_JSON" <<'PY'
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def fail_structural(message: str) -> None:
+    print(f"ERROR: {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def require_mapping(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        fail_structural(f"{label} must be a mapping")
+    return value
+
 
 try:
-    with open(sys.argv[1], "r") as f:
-        config = json.load(f)
-except Exception as e:
-    print(f"Error parsing compose config JSON: {e}", file=sys.stderr)
-    sys.exit(2)
+    config = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError) as exc:
+    fail_structural(f"cannot parse Compose JSON: {exc}")
 
-services = config.get("services", {})
-api_env = services.get("api", {}).get("environment", {})
-caddy_env = services.get("caddy", {}).get("environment", {})
+config_map = require_mapping(config, "Compose root")
+services = require_mapping(config_map.get("services"), "services")
+api = require_mapping(services.get("api"), "services.api")
+caddy = require_mapping(services.get("caddy"), "services.caddy")
+api_env = require_mapping(api.get("environment"), "services.api.environment")
+caddy_env = require_mapping(caddy.get("environment"), "services.caddy.environment")
 
-errors = []
+expected = {
+    "services.api.environment.APP_BASE_URL": (
+        api_env.get("APP_BASE_URL"),
+        "https://weltgewebe.net",
+    ),
+    "services.api.environment.AUTH_PUBLIC_LOGIN": (
+        api_env.get("AUTH_PUBLIC_LOGIN"),
+        "1",
+    ),
+    "services.api.environment.AUTH_LOG_MAGIC_TOKEN": (
+        api_env.get("AUTH_LOG_MAGIC_TOKEN"),
+        "0",
+    ),
+    "services.api.environment.WEB_UPSTREAM_HOST": (
+        api_env.get("WEB_UPSTREAM_HOST"),
+        "weltgewebe.home.arpa",
+    ),
+    "services.api.environment.WEB_UPSTREAM_URL": (
+        api_env.get("WEB_UPSTREAM_URL"),
+        "https://weltgewebe.home.arpa",
+    ),
+    "services.caddy.environment.WEB_UPSTREAM_HOST": (
+        caddy_env.get("WEB_UPSTREAM_HOST"),
+        "weltgewebe.home.arpa",
+    ),
+    "services.caddy.environment.WEB_UPSTREAM_URL": (
+        caddy_env.get("WEB_UPSTREAM_URL"),
+        "https://weltgewebe.home.arpa",
+    ),
+}
 
-# Check api_env
-val = api_env.get("APP_BASE_URL")
-if val != "https://weltgewebe.net":
-    errors.append(f"api.environment.APP_BASE_URL expected https://weltgewebe.net, got {val}")
-
-val = api_env.get("AUTH_PUBLIC_LOGIN")
-if val != "1":
-    errors.append(f"api.environment.AUTH_PUBLIC_LOGIN expected 1, got {val}")
-
-val = api_env.get("AUTH_LOG_MAGIC_TOKEN")
-if val != "0":
-    errors.append(f"api.environment.AUTH_LOG_MAGIC_TOKEN expected 0, got {val}")
-
-val = api_env.get("WEB_UPSTREAM_HOST")
-if val != "weltgewebe.home.arpa":
-    errors.append(f"api.environment.WEB_UPSTREAM_HOST expected weltgewebe.home.arpa, got {val}")
-
-val = api_env.get("WEB_UPSTREAM_URL")
-if val != "https://weltgewebe.home.arpa":
-    errors.append(f"api.environment.WEB_UPSTREAM_URL expected https://weltgewebe.home.arpa, got {val}")
-
-# Check caddy_env
-val = caddy_env.get("WEB_UPSTREAM_HOST")
-if val != "weltgewebe.home.arpa":
-    errors.append(f"caddy.environment.WEB_UPSTREAM_HOST expected weltgewebe.home.arpa, got {val}")
-
-val = caddy_env.get("WEB_UPSTREAM_URL")
-if val != "https://weltgewebe.home.arpa":
-    errors.append(f"caddy.environment.WEB_UPSTREAM_URL expected https://weltgewebe.home.arpa, got {val}")
+errors = [
+    f"{label} expected {wanted!r}, got {actual!r}"
+    for label, (actual, wanted) in expected.items()
+    if actual != wanted
+]
 
 if errors:
-    for err in errors:
-        print(err, file=sys.stderr)
-    sys.exit(1)
+    for error in errors:
+        print(f"ERROR: {error}", file=sys.stderr)
+    raise SystemExit(1)
 
 print("prod-public-base-url guard passed")
-sys.exit(0)
-' "$TMP_JSON"
+PY
