@@ -11,8 +11,8 @@ set -euo pipefail
 # 2 = internal error (a find/grep/awk scanner failed or a check could not run).
 # Internal error outranks a policy violation.
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." > /dev/null 2>&1 && pwd)}"
 
 GUARD_SELF="domain-single-instance-guard.sh"
 GUARD_TEST="test_domain_single_instance_guard.sh"
@@ -35,7 +35,7 @@ report_hits() {
     echo "  ${line}" >&2
     echo "  api scale-out is forbidden by DOMAIN-PG-002; see ${DECISION_REF}" >&2
     FAILED=1
-  done <<<"$hits"
+  done <<< "$hits"
 }
 
 report_scan_error() {
@@ -65,27 +65,51 @@ run_awk_check() {
 
 # Block-style Compose parser. It checks only structurally relevant keys:
 # - direct api.scale
-# - direct api.replicas (legacy/suspicious form)
+# - direct api.replicas (always forbidden)
 # - direct api.deploy.replicas
-# Values fail closed: only literal 0 or 1, optionally quoted, are accepted.
-# Non-provable shapes on the api service or its deploy block also fail closed:
-# inline flow mappings (api: { ... } / deploy: { ... }), an alias service value
-# (api: *anchor) and a merge key (<<: *anchor).
-REPLICAS_AWK=$(cat <<'AWK'
+# Count values fail closed: only exact literal 0/1, optionally fully quoted,
+# are accepted. Non-provable shapes on the api service or its deploy block also
+# fail closed: inline flow mappings, aliases and merge keys. Pure block anchors
+# are allowed, and their child keys are still checked.
+REPLICAS_AWK=$(
+  cat << 'AWK'
 function trim(v) {
   sub(/^[[:space:]]+/, "", v)
   sub(/[[:space:]]+$/, "", v)
   return v
 }
-function value_after_key(line, key, v) {
-  v=line
-  sub("^[[:space:]]*" key ":[[:space:]]*", "", v)
-  sub(/[[:space:]]+#.*$/, "", v)
+function unquote_key(v) {
   v=trim(v)
-  if ((v ~ /^".*"$/) || (v ~ /^'.*'$/)) v=substr(v, 2, length(v)-2)
+  if ((v ~ /^"[^"]*"$/) || (v ~ /^'[^']*'$/)) {
+    return substr(v, 2, length(v)-2)
+  }
+  return v
+}
+function parse_mapping(src, body, pos) {
+  body=trim(src)
+  pos=index(body, ":")
+  if (pos == 0) return 0
+  map_key=unquote_key(substr(body, 1, pos-1))
+  map_value=trim(substr(body, pos+1))
+  return 1
+}
+function strip_value_comment(v) {
+  if (v ~ /^#/) return ""
+  sub(/[[:space:]]+#.*$/, "", v)
   return trim(v)
 }
-function unsafe_count(v) { return !(v == "0" || v == "1") }
+function allowed_count(v) {
+  v=strip_value_comment(v)
+  return v == "0" || v == "1" || v == "\"0\"" || v == "\"1\"" || v == "'0'" || v == "'1'"
+}
+function unprovable_inline_value(v) {
+  v=strip_value_comment(v)
+  if (v == "") return 0
+  if (v ~ /^\*/) return 1
+  if (index(v, "{") > 0) return 1
+  if (v ~ /^&[A-Za-z0-9_.-]+$/) return 0
+  return 1
+}
 function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
 BEGIN {
   in_services=0; services_indent=-1; service_indent=-1
@@ -97,10 +121,10 @@ BEGIN {
   raw=$0
   line=$0
   if (line ~ /^[[:space:]]*($|#)/) next
-  sub(/[[:space:]]+#.*$/, "", line)
   match(line, /^ */); ind=RLENGTH
+  if (!parse_mapping(line)) next
 
-  if (line ~ /^[[:space:]]*services:[[:space:]]*$/) {
+  if (map_key == "services" && strip_value_comment(map_value) == "") {
     in_services=1; services_indent=ind; service_indent=-1
     in_api=0; api_child_indent=-1; in_deploy=0
     next
@@ -113,18 +137,11 @@ BEGIN {
 
   if (service_indent == -1) service_indent=ind
   if (ind == service_indent) {
-    name=line
-    sub(/^[[:space:]]+/, "", name)
-    sub(/[[:space:]]*:.*$/, "", name)
+    name=map_key
     in_api=(name == "api")
     api_child_indent=-1; in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
     if (in_api) {
-      after=line
-      sub(/^[[:space:]]*api[[:space:]]*:[[:space:]]*/, "", after)
-      after=trim(after)
-      # inline flow mapping (api: { ... }) or alias service (api: *anchor):
-      # single-instance safety cannot be proven statically -> fail closed.
-      if (after ~ /^\{/ || after ~ /^\*/) finding()
+      if (unprovable_inline_value(map_value)) finding()
     }
     next
   }
@@ -136,22 +153,18 @@ BEGIN {
     in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
 
     # YAML merge key under api (<<: *anchor): unprovable -> fail closed.
-    if (line ~ /^[[:space:]]*<<[[:space:]]*:/) { finding(); next }
-    if (line ~ /^[[:space:]]*deploy[[:space:]]*:/) {
-      after=line
-      sub(/^[[:space:]]*deploy[[:space:]]*:[[:space:]]*/, "", after)
-      after=trim(after)
-      # inline deploy mapping (deploy: { ... }) or alias: unprovable -> fail closed.
-      if (after ~ /^\{/ || after ~ /^\*/) { finding(); next }
-      if (after == "") { in_deploy=1; deploy_indent=ind; next }
+    if (map_key == "<<") { finding(); next }
+    if (map_key == "deploy") {
+      if (unprovable_inline_value(map_value)) { finding(); next }
+      in_deploy=1; deploy_indent=ind
       next
     }
-    if (line ~ /^[[:space:]]*scale:[[:space:]]*/) {
-      if (unsafe_count(value_after_key(line, "scale"))) finding()
+    if (map_key == "scale") {
+      if (!allowed_count(map_value)) finding()
       next
     }
-    if (line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
-      if (unsafe_count(value_after_key(line, "replicas"))) finding()
+    if (map_key == "replicas") {
+      finding()
       next
     }
   }
@@ -161,8 +174,9 @@ BEGIN {
       in_deploy=0
     } else {
       if (deploy_child_indent == -1) deploy_child_indent=ind
-      if (ind == deploy_child_indent && line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
-        if (unsafe_count(value_after_key(line, "replicas"))) finding()
+      if (ind == deploy_child_indent) {
+        if (map_key == "<<") { finding(); next }
+        if (map_key == "replicas" && !allowed_count(map_value)) finding()
       }
     }
   }
@@ -172,13 +186,27 @@ AWK
 )
 
 # Docker Compose CLI parser.
-# Executable surfaces accept only literal 0/1. Documentation additionally accepts
-# the abstract placeholders N and <value> (the only forms the repo docs actually
-# use); concrete or malformed values, including <N>, still fail.
-SCALE_AWK=$(cat <<'AWK'
+# It recognizes only token sequences starting at docker-compose or docker compose,
+# then checks API scale arguments after that command. Executable surfaces accept
+# only literal 0/1. Documentation additionally accepts the abstract placeholders
+# N and <value>; concrete or malformed values, including <N>, still fail.
+SCALE_AWK=$(
+  cat << 'AWK'
 function safe_value(v) { return v == "0" || v == "1" }
 function doc_placeholder(v) { return v == "N" || v == "<value>" }
+function permitted(v) { return safe_value(v) || (mode == "docs" && doc_placeholder(v)) }
 function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
+function check_value(v) {
+  if (v == "" || !permitted(v)) finding()
+}
+function value_after_api(pos, v) {
+  if (pos+1 > n) return ""
+  if (t[pos+1] == "=") {
+    if (pos+2 > n) return ""
+    return t[pos+2]
+  }
+  return t[pos+1]
+}
 BEGIN { rc=0 }
 {
   raw=$0
@@ -188,28 +216,33 @@ BEGIN { rc=0 }
     sub(/[[:space:]]+#.*$/, "", line)
   }
 
-  gsub(/[`'\"]/, " ", line)
-  gsub(/=/, " ", line)
+  gsub(/[`'"]/, " ", line)
+  gsub(/=/, " = ", line)
   gsub(/[[:space:]]+/, " ", line)
   sub(/^ /, "", line); sub(/ $/, "", line)
   if (line == "") next
 
   n=split(line, t, " ")
-  compose=0
-  for (j=1; j<n; j++) {
-    if (t[j] == "docker" && t[j+1] == "compose") { compose=1; break }
+  start=0
+  for (j=1; j<=n; j++) {
+    if (t[j] == "docker-compose") { start=j+1; break }
+    if (j < n && t[j] == "docker" && t[j+1] == "compose") { start=j+2; break }
   }
-  if (!compose) next
+  if (start == 0) next
 
-  for (i=1; i<=n; i++) {
-    if (t[i] != "--scale") continue
-    if (i+1 > n || t[i+1] != "api") continue
-    if (i+2 > n || t[i+2] == "") { finding(); continue }
+  for (i=start; i<=n; i++) {
+    if (t[i] == "--scale") {
+      if (i+1 > n) { finding(); continue }
+      if (t[i+1] != "api") continue
+      check_value(value_after_api(i+1))
+      continue
+    }
 
-    val=t[i+2]
-    if (safe_value(val)) continue
-    if (mode == "docs" && doc_placeholder(val)) continue
-    finding()
+    if (t[i] == "scale") {
+      for (k=i+1; k<=n; k++) {
+        if (t[k] == "api") check_value(value_after_api(k))
+      }
+    }
   }
 }
 END { exit rc }
@@ -220,7 +253,8 @@ AWK
 # identity is deliberately narrow: api, weltgewebe-api, or those with a numeric
 # instance suffix (-, _ or . separator, e.g. api-2 / weltgewebe-api-1). Names
 # such as api-gateway, capital-api or myapi are not treated as the protected API.
-CADDY_AWK=$(cat <<'AWK'
+CADDY_AWK=$(
+  cat << 'AWK'
 BEGIN { rc=0 }
 {
   raw=$0
@@ -259,9 +293,9 @@ AWK
 check_compose_counts() {
   local files f
   if ! files="$("$FIND_BIN" "$REPO_ROOT" \
-      \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
-      -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
-      -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>&1)"; then
+    \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
+    -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
+    -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>&1)"; then
     report_scan_error "find failed while locating Compose files: ${files}"
     return
   fi
@@ -270,17 +304,19 @@ check_compose_counts() {
     [ -n "$f" ] || continue
     run_awk_check "$REPLICAS_AWK" "$f" \
       "api Compose scale/replicas is not a literal 0 or 1, or uses an unprovable inline/alias/merge shape"
-  done <<<"$files"
+  done <<< "$files"
 }
 
 scan_scale_surface() {
-  local mode="$1"; shift
+  local mode="$1"
+  shift
   local files status f
 
   if files="$("$GREP_BIN" -rIlE \
-      --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" \
-      --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.venv \
-      -- '--scale' "$@" 2>&1)"; then
+    --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" \
+    --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target \
+    --exclude-dir=.venv --exclude-dir=_generated --exclude-dir=docs/_generated \
+    -- 'docker-compose|docker[[:space:]]+compose|--scale' "$@" 2>&1)"; then
     status=0
   else
     status=$?
@@ -298,7 +334,7 @@ scan_scale_surface() {
     [ -n "$f" ] || continue
     run_awk_check "$SCALE_AWK" "$f" \
       "docker compose --scale api value is malformed or not permitted for this surface" "$mode"
-  done <<<"$files"
+  done <<< "$files"
 }
 
 check_scale_flags() {
@@ -326,7 +362,7 @@ check_caddy_upstreams() {
     [ -n "$f" ] || continue
     run_awk_check "$CADDY_AWK" "$f" \
       "an API upstream appears with another upstream on one reverse_proxy/to directive line"
-  done <<<"$files"
+  done <<< "$files"
 }
 
 check_compose_counts

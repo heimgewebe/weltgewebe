@@ -88,6 +88,26 @@ else
   report 1 "Short token (9 chars) should not trigger detection"
 fi
 
+# Case 6: Auth consume route without token query is a route string, not a secret
+setup_git_repo
+echo "/api/auth/magic-link/consume" > route.txt
+git add . && git commit -q -m "route only"
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+  report 0 "Route-only magic-link consume path passes"
+else
+  report 1 "Route-only magic-link consume path should pass"
+fi
+
+# Case 7: Auth consume URL with token query is still detected through token=
+setup_git_repo
+echo "https://example.test/api/auth/magic-link/consume?token=abcdefghij1234567890" > url.txt
+git add . && git commit -q -m "url token"
+if REPO_ROOT="$TEMP_DIR/repo" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
+  report 1 "Magic-link consume URL with token should fail"
+else
+  report 0 "Magic-link consume URL with token correctly detected"
+fi
+
 echo ""
 echo "test_token_leak_guard: $PASS passed, $FAIL failed"
 if [ "$FAIL" -ne 0 ]; then

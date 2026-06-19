@@ -132,9 +132,11 @@ Option A wird verbindlich gewählt:
 
 - Kein `api.scale` größer als eins.
 - Kein `api.deploy.replicas` größer als eins.
-- Kein direktes `api.replicas` außerhalb der erlaubten Literale null oder eins.
-- Kein konkretes `docker compose --scale api=<value>` mit einem Wert ungleich null
-  oder eins auf ausführbaren Flächen.
+- Kein direkter `api.replicas`-Key; diese Form ist auch mit `0` oder `1`
+  unzulässig.
+- Kein konkretes `docker compose --scale api=<value>`,
+  `docker compose scale api=<value>` oder `docker-compose`-Äquivalent mit
+  einem Wert ungleich null oder eins auf ausführbaren Flächen.
 - Kein geschützter API-Upstream zusammen mit einem weiteren Upstream auf
   derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile.
 - Optionale NATS-Verfügbarkeit gilt nicht als Cache-Kohärenz.
@@ -142,9 +144,11 @@ Option A wird verbindlich gewählt:
 ## Statischer Guard
 
 `scripts/guard/domain-single-instance-guard.sh` wird über
-`scripts/guard/run.sh` und den Guard-Test-Loop in `.github/workflows/ci.yml`
-ausgeführt. `scripts/tests/test_domain_single_instance_guard.sh` ruft stets den
-echten Guard über einen `REPO_ROOT`-Override auf.
+`scripts/guard/run.sh` und den unabhängigen Job `Core Guard Tests` in
+`.github/workflows/ci.yml` ausgeführt. Dieser Job hängt nicht vom
+Markdown-/Docs-Filter des schweren `ci`-Jobs ab.
+`scripts/tests/test_domain_single_instance_guard.sh` ruft stets den echten
+Guard über einen `REPO_ROOT`-Override auf.
 
 Der Guard prüft:
 
@@ -154,31 +158,50 @@ Für blockartig geschriebenes Compose-YAML werden nur strukturell relevante Keys
 unter `services.api` ausgewertet:
 
 - direkter Key `scale`;
-- direkter Key `replicas` als Legacy-/Fehlkonfigurationsfläche;
+- direkter Key `replicas` als immer unzulässige Fehlkonfigurationsfläche;
 - direkter Key `deploy.replicas`.
 
 Nur die Literale `0` und `1`, optional vollständig einfach oder doppelt zitiert,
-sind erlaubt. Leere, numerisch größere, symbolische, Alias- und expandierte
-Werte werden an diesen erkannten Keys blockiert. Gleichnamige Keys unter
+sind an `scale` und `deploy.replicas` erlaubt. Leere, numerisch größere,
+symbolische, Alias- und expandierte Werte werden an diesen erkannten Keys
+blockiert. Zitierte Mapping-Keys wie `"services"`, `'api'`, `"deploy"` und
+`'replicas'` werden wie unzitierte Keys behandelt. Gleichnamige Keys unter
 `environment`, `labels` oder tieferen Unterobjekten werden ignoriert.
 
 Nicht statisch beweisbare Formen am `api`-Service oder seinem `deploy`-Block
 werden fail-closed blockiert: ein Inline-Flow-Mapping (`api: { … }`,
-`deploy: { … }`), ein Alias als Servicewert (`api: *anchor`) und ein
-Merge-Key (`<<: *anchor`). Eine vollständige YAML-Anker-/Merge-Auflösung
-findet bewusst nicht statt.
+`deploy: { … }`), ein Alias als vollständiger Wert (`api: *anchor`,
+`deploy: *deployment`) und ein Merge-Key (`<<: *anchor`) auf API- oder
+Deploy-Ebene. Reine Block-Anchor-Definitionen wie `api: &defaults` oder
+`deploy: &deployment` sind erlaubt; die darunterliegenden Kinder werden
+weiterhin geprüft. Eine vollständige YAML-Anker-/Merge-Auflösung findet bewusst
+nicht statt.
 
 ### Docker-Compose-CLI
 
 Auf ausführbaren Flächen (`scripts`, `infra`, `.github/workflows`,
-`.devcontainer`, `Makefile`, `Justfile`) sind für `--scale api` nur `0` und `1`
-erlaubt. Fehlende, symbolische, expandierte oder andere Werte werden blockiert.
+`.devcontainer`, `Makefile`, `Justfile`) sind für API-Skalierungsargumente
+hinter einem tokenbasiert erkannten `docker compose`- oder `docker-compose`-
+Kommando nur `0` und `1` erlaubt. Erkannt werden insbesondere
+`docker compose up --scale api=1`, `docker compose up --scale api 1`,
+`docker compose scale api=1`, `docker compose scale api 1` und die
+entsprechenden `docker-compose`-Formen. Fehlende, symbolische, expandierte oder
+andere Werte werden blockiert. Zeilen wie `some compose scale api=2` oder
+`some-tool --scale api=2` gelten nicht als Docker-Compose-Kommando.
 
 In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N` und
-`<value>` erlaubt — die einzigen Formen, die die Repo-Dokumentation tatsächlich
-verwendet. `<N>`, `two`, `many`, `auto`, numerisch größere und expandierte Werte
-bleiben blockiert; konkrete ungültige Dokumentationswerte werden nicht als
-Platzhalter glattgebügelt.
+`<value>` erlaubt. Die dokumentierte Positivliste ist damit `0`, `1`, `N` und
+`<value>`. Alles andere bleibt blockiert, insbesondere `<N>`, `banana`,
+`*alias`, `-1`, `1.5`, `<whatever>`, `${API_SCALE}` und `2`. Konkrete
+ungültige Dokumentationswerte werden nicht als Platzhalter glattgebügelt.
+
+Der CLI-Scan schließt `.git`, `node_modules`, `target`, `.venv` und
+`docs/_generated` aus. `docs/_generated` ist eine generierte diagnostische
+Oberfläche und wird nicht durch manuelle Guard-Reparaturen erzwungen.
+
+Der CLI-Scanner ist kein vollständiger Shell-Parser. Quoted Strings, `echo`,
+Shell-Aliase und komplexe Pipeline-Semantik bleiben bewusst außerhalb dieses
+Schnitts.
 
 ### Caddy
 
@@ -189,6 +212,10 @@ Adressen. Als geschützte API-Hosts gelten `api`, `weltgewebe-api` und ihre
 numerisch suffigierten Instanznamen wie `api-2`, `api_2`, `api.2` oder
 `weltgewebe-api-1`. Namen wie `api-gateway`, `capital-api` oder `myapi` gelten
 nicht als diese API.
+
+Nummerierte `weltgewebe-api`-Formen werden konservativ als potenzielle
+API-Instanzidentitäten erkannt. Das macht sie nicht zu erlaubten oder stabilen
+Routing-Aliasen; kanonischer stabiler Alias bleibt `weltgewebe-api`.
 
 ### Scanfehler und Exitcodes
 
@@ -208,6 +235,8 @@ sind insbesondere:
 
 - vollständige Auflösung von Compose-Inline-Maps, YAML-Ankern und Merge-Keys
   (diese Formen werden am `api`-Service fail-closed blockiert, nicht aufgelöst);
+- vollständige Shell-Semantik, Shell-Aliase, Quoting-Kontexte, `echo`-Beispiele
+  und komplexe Pipeline-Auswertung;
 - mehrzeilige Caddy-`to`-Blöcke mit einem Upstream pro Zeile;
 - Caddy-Upstreamformen außerhalb der erkannten `host:port`-Tokens;
 - alternative API-Aliasnamen außerhalb der dokumentierten Hostkonvention;

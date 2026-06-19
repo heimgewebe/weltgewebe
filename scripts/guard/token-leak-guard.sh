@@ -17,7 +17,7 @@ set +e
 #   runbook.md                — operational docs with auth example commands
 #   auth-and-ui-routing.md    — architecture blueprint with auth flow examples
 #   verify_magic_link.py      — deployment verification script with auth URLs
-MATCHES=$(git -C "$REPO_ROOT" grep -i -E "token=[a-zA-Z0-9-]{10,}|/api/auth/(magic-link|login)/consume|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" \
+MATCHES=$(git -C "$REPO_ROOT" grep -i -E "token=[a-zA-Z0-9-]{10,}|Authorization:[[:space:]]*Bearer[[:space:]]+[a-zA-Z0-9-]{10,}|secret=[a-zA-Z0-9-]{10,}|password=[a-zA-Z0-9-]{10,}" \
   -- . \
   ':!scripts/guard/token-leak-guard.sh' \
   ':!scripts/tests/test_token_leak_guard.sh' \
