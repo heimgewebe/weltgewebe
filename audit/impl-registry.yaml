@@ -184,3 +184,15 @@ implementations:
     verified_by:
       - scripts/tests/test_domain_single_instance_guard.sh
       - .github/workflows/ci.yml
+
+  - id: impl.guard.prod-public-base-url
+    path: scripts/guard/prod-public-base-url-guard.sh
+    impl_type: guard
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/public-app-base-url.md
+    verified_by:
+      - scripts/tests/test_prod_public_base_url_guard.sh
+      - .github/workflows/ci.yml

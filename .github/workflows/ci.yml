@@ -57,6 +57,8 @@ jobs:
           set -euo pipefail
           bash -n scripts/guard/domain-single-instance-guard.sh
           bash -n scripts/tests/test_domain_single_instance_guard.sh
+          bash -n scripts/guard/prod-public-base-url-guard.sh
+          bash -n scripts/tests/test_prod_public_base_url_guard.sh
           bash -n scripts/guard/run.sh
 
       - name: Run guard fixture suites
@@ -67,11 +69,19 @@ jobs:
             scripts/tests/test_token_leak_guard.sh \
             scripts/tests/test_compose_volumes_guard.sh \
             scripts/tests/test_metrics_ref_guard.sh \
-            scripts/tests/test_domain_single_instance_guard.sh
+            scripts/tests/test_domain_single_instance_guard.sh \
+            scripts/tests/test_prod_public_base_url_guard.sh
           do
             echo "── $t ──"
             bash "$t"
           done
+
+      - name: Validate production public base URL contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO_ROOT="$GITHUB_WORKSPACE" \
+            bash scripts/guard/prod-public-base-url-guard.sh
 
       - name: Run core guard orchestrator
         shell: bash
