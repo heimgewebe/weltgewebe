@@ -74,11 +74,12 @@ jobs:
 
           if [[ -z "$base" \
             && -n "${GH_PUSH_BEFORE:-}" \
-            && ! "${GH_PUSH_BEFORE}" =~ ^0{40}$ \
-            && $(git rev-parse --verify "${GH_PUSH_BEFORE}^{commit}" >/dev/null 2>&1; echo $?) -eq 0 ]]
+            && ! "${GH_PUSH_BEFORE}" =~ ^0{40}$ ]]
           then
-            base="$GH_PUSH_BEFORE"
-            base_source="push-before"
+            if git rev-parse --verify "${GH_PUSH_BEFORE}^{commit}" >/dev/null 2>&1; then
+              base="$GH_PUSH_BEFORE"
+              base_source="push-before"
+            fi
           fi
 
           if [[ -z "$base" ]]; then
