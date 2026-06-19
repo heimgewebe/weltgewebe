@@ -1,55 +1,15 @@
 #!/usr/bin/env bash
-# Intentionally no `set -e`: scanner failures must map to a dedicated internal
-# exit code (2), not abort the script with an arbitrary status. See the exit
-# code contract below.
-set -uo pipefail
+set -euo pipefail
 
-# Guard: DOMAIN-PG-002 single-instance boundary for the domain PostgreSQL path
+# DOMAIN-PG-002: static single-instance boundary for the API.
 #
-# Background (see docs/reports/domain-postgres-instance-coherence-decision.md
-# and docs/blueprints/domain-data-postgres-cutover.md § Instance Coherence
-# Boundary):
+# The API still has process-local domain/auth state without tested cross-instance
+# invalidation. This guard blocks obvious static scale-out drift. It is not a
+# runtime proof and not a complete YAML/Caddy parser.
 #
-# The API keeps domain state (nodes, edges, accounts) and parts of the auth
-# state (tokens, step-up tokens, challenges, passkeys) in process-local
-# in-memory caches with no tested cross-instance invalidation mechanism. Running
-# more than one API instance would create a silent cache split-brain: instance B
-# does not observe instance A's writes through its local cache until it restarts.
-#
-# This is a scope-limited static guard, not a runtime proof and not a full
-# YAML/Caddy parser. It is a fence against the obvious static drift that would
-# quietly enable API scale-out:
-#
-#   1. compose api scaling — only `services.api.scale` and
-#      `services.api.deploy.replicas` are inspected, and only literal `0` or `1`
-#      (optionally quoted) are accepted. A direct `services.api.replicas` key, an
-#      inline/alias/merge shape on the api service or its deploy block, and any
-#      non-literal value are blocked (fail-closed). Same-named keys nested under
-#      `environment`, `labels`, `annotations` or `x-*` are ignored.
-#   2. `docker compose --scale api=<value>` / `docker compose scale api=<value>`
-#      on executable surfaces — only literal `0` or `1` pass; missing or any
-#      other value is blocked. Under `docs/` the abstract placeholders `N` and
-#      `<value>` are additionally allowed.
-#   3. an API upstream together with any additional upstream on the same Caddy
-#      `reverse_proxy`/`to` directive line.
-#
-# The API host family for Caddy is `api`, `weltgewebe-api`, and their numbered
-# variants `api-<n>` / `weltgewebe-api-<n>`. Hosts that merely contain the
-# substring "api" (e.g. `myapi`, `api-gateway`, `capital-api`) are not API hosts.
-#
-# Exit code contract:
-#   0 = no violation
-#   1 = single-instance policy violation
-#   2 = internal error (scanner failure / guard could not complete a check)
-# Priority: internal error (2) outranks policy violation (1) outranks ok (0).
-#
-# Known limitations (tracked as future work, not blockers for DOMAIN-PG-002):
-#   - multi-line Caddy `reverse_proxy`/`to` blocks (one upstream per line)
-#   - dynamic Caddy upstream placeholders (e.g. `{env.WEB_UPSTREAM_URL}`) are not
-#     statically resolved
-#   - individual compose files are inspected, not the rendered multi-file model
-#   - shell line continuations of a `docker compose --scale` command
-#   - a real YAML/Caddy AST check (would need yq/caddy in CI as a hard dep)
+# Exit codes: 0 = no violation, 1 = single-instance policy violation,
+# 2 = internal error (a find/grep/awk scanner failed or a check could not run).
+# Internal error outranks a policy violation.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
@@ -57,21 +17,15 @@ REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 GUARD_SELF="domain-single-instance-guard.sh"
 GUARD_TEST="test_domain_single_instance_guard.sh"
 DECISION_REF="docs/reports/domain-postgres-instance-coherence-decision.md"
+FAILED=0
+INTERNAL=0
 
-# Configurable scanners so tests can inject failing fakes (see exit code 2).
+# Configurable scanners so tests can inject failing fakes. A scanner failure is
+# an internal error (exit 2), never a silent pass.
 FIND_BIN="${FIND_BIN:-find}"
 GREP_BIN="${GREP_BIN:-grep}"
 AWK_BIN="${AWK_BIN:-awk}"
 
-VIOLATION=0
-INTERNAL_ERR=0
-
-internal_error() {
-  echo "DOMAIN-SINGLE-INSTANCE-GUARD: internal error: $*" >&2
-  INTERNAL_ERR=1
-}
-
-# Print one finding block per offending location with a single shared reason.
 report_hits() {
   local hits="$1" reason="$2" line
   [ -n "$hits" ] || return 0
@@ -79,204 +33,208 @@ report_hits() {
     [ -n "$line" ] || continue
     echo "DOMAIN-SINGLE-INSTANCE-GUARD: ${reason}" >&2
     echo "  ${line}" >&2
-    echo "  api scale-out is forbidden by DOMAIN-PG-002 single-instance boundary; see ${DECISION_REF}" >&2
-    VIOLATION=1
+    echo "  api scale-out is forbidden by DOMAIN-PG-002; see ${DECISION_REF}" >&2
+    FAILED=1
   done <<<"$hits"
 }
 
-# Print one finding block per offending location; the reason is selected from a
-# leading TAG (TAG<TAB>file:line:content), so the compose check can speak to the
-# specific drift class it detected.
-report_tagged() {
-  local hits="$1" tag rest reason
-  [ -n "$hits" ] || return 0
-  while IFS=$'\t' read -r tag rest; do
-    [ -n "$tag" ] || continue
-    case "$tag" in
-      VALUE) reason="api service declares scale/replicas that is not literal 0 or 1 (fail-closed)" ;;
-      DIRECT) reason="api service uses unsupported direct replicas key; use api.scale or api.deploy.replicas with literal 0 or 1" ;;
-      SHAPE) reason="api service uses an unsupported inline, alias or merge shape; single-instance safety cannot be proven statically" ;;
-      *) reason="api single-instance violation" ;;
-    esac
-    echo "DOMAIN-SINGLE-INSTANCE-GUARD: ${reason}" >&2
-    echo "  ${rest}" >&2
-    echo "  api scale-out is forbidden by DOMAIN-PG-002 single-instance boundary; see ${DECISION_REF}" >&2
-    VIOLATION=1
-  done <<<"$hits"
+report_scan_error() {
+  local detail="$1"
+  echo "DOMAIN-SINGLE-INSTANCE-GUARD: scan failed" >&2
+  echo "  ${detail}" >&2
+  echo "  refusing to pass with incomplete evidence; see ${DECISION_REF}" >&2
+  INTERNAL=1
 }
 
-# --- awk programs (quoted heredocs: single/double quotes used freely) ---------
+run_awk_check() {
+  local program="$1" file="$2" reason="$3" mode="${4:-}" hits status
 
-# Check 1 — api scaling in a single compose file.
-# Indentation-based state machine (mawk-portable). Only the direct child key
-# `services.api.scale` and the direct child key `services.api.deploy.replicas`
-# are evaluated; a direct `services.api.replicas`, inline/alias/merge shapes and
-# any non-literal value are flagged. environment/labels/annotations/x-* subtrees
-# under api are skipped so same-named keys there do not trigger.
+  if hits="$("$AWK_BIN" ${mode:+-v mode="$mode"} "$program" "$file" 2>&1)"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  if [ "$status" -gt 1 ]; then
+    report_scan_error "awk failed for ${file}: ${hits}"
+    return 0
+  fi
+
+  report_hits "$hits" "$reason"
+}
+
+# Block-style Compose parser. It checks only structurally relevant keys:
+# - direct api.scale
+# - direct api.replicas (legacy/suspicious form)
+# - direct api.deploy.replicas
+# Values fail closed: only literal 0 or 1, optionally quoted, are accepted.
+# Non-provable shapes on the api service or its deploy block also fail closed:
+# inline flow mappings (api: { ... } / deploy: { ... }), an alias service value
+# (api: *anchor) and a merge key (<<: *anchor).
 REPLICAS_AWK=$(cat <<'AWK'
-function bad_value(v) {
-  sub(/[[:space:]]*#.*$/, "", v)
-  gsub(/['"]/, "", v)
-  gsub(/[[:space:]]/, "", v)
-  if (v == "0" || v == "1") return 0
-  return 1
+function trim(v) {
+  sub(/^[[:space:]]+/, "", v)
+  sub(/[[:space:]]+$/, "", v)
+  return v
 }
+function value_after_key(line, key, v) {
+  v=line
+  sub("^[[:space:]]*" key ":[[:space:]]*", "", v)
+  sub(/[[:space:]]+#.*$/, "", v)
+  v=trim(v)
+  if ((v ~ /^".*"$/) || (v ~ /^'.*'$/)) v=substr(v, 2, length(v)-2)
+  return trim(v)
+}
+function unsafe_count(v) { return !(v == "0" || v == "1") }
+function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
 BEGIN {
-  in_services=0; services_indent=-1
-  svc_indent=-1; in_api=0; api_child_indent=-1
+  in_services=0; services_indent=-1; service_indent=-1
+  in_api=0; api_child_indent=-1
   in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
-  ignore_indent=-1; rc=0
+  rc=0
 }
-/^[[:space:]]*($|#)/ { next }
 {
+  raw=$0
   line=$0
-  match(line, /^[ ]*/); ind=RLENGTH
+  if (line ~ /^[[:space:]]*($|#)/) next
+  sub(/[[:space:]]+#.*$/, "", line)
+  match(line, /^ */); ind=RLENGTH
 
-  # inside an ignored subtree (environment/labels/annotations/x-*)
-  if (ignore_indent >= 0) {
-    if (ind > ignore_indent) next
-    ignore_indent=-1
+  if (line ~ /^[[:space:]]*services:[[:space:]]*$/) {
+    in_services=1; services_indent=ind; service_indent=-1
+    in_api=0; api_child_indent=-1; in_deploy=0
+    next
   }
-
-  # dedent context resets
-  if (in_deploy && ind <= deploy_indent) { in_deploy=0; deploy_child_indent=-1 }
-  if (in_api && ind <= svc_indent) { in_api=0; in_deploy=0; api_child_indent=-1; deploy_child_indent=-1 }
-  if (in_services && services_indent >= 0 && ind <= services_indent && line !~ /^[[:space:]]*services:/) {
+  if (!in_services) next
+  if (ind <= services_indent) {
     in_services=0; in_api=0; in_deploy=0
-  }
-
-  if (line ~ /^[[:space:]]*services:[[:space:]]*($|#)/) {
-    in_services=1; services_indent=ind; svc_indent=-1; in_api=0; in_deploy=0
-    api_child_indent=-1; deploy_child_indent=-1
     next
   }
 
-  if (!in_services) next
-  if (ind <= services_indent) next
-
-  if (svc_indent == -1) svc_indent=ind
-
-  if (ind == svc_indent) {
-    in_deploy=0; deploy_child_indent=-1; api_child_indent=-1
-    rest=line; sub(/^[[:space:]]+/, "", rest)
-    name=rest; sub(/[[:space:]]*:.*$/, "", name)
+  if (service_indent == -1) service_indent=ind
+  if (ind == service_indent) {
+    name=line
+    sub(/^[[:space:]]+/, "", name)
+    sub(/[[:space:]]*:.*$/, "", name)
     in_api=(name == "api")
+    api_child_indent=-1; in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
     if (in_api) {
-      after=rest; sub(/^api[[:space:]]*:[[:space:]]*/, "", after)
-      sub(/[[:space:]]*#.*$/, "", after); gsub(/[[:space:]]+$/, "", after)
-      if (after ~ /^\{/ || after ~ /^\*/) { printf "SHAPE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+      after=line
+      sub(/^[[:space:]]*api[[:space:]]*:[[:space:]]*/, "", after)
+      after=trim(after)
+      # inline flow mapping (api: { ... }) or alias service (api: *anchor):
+      # single-instance safety cannot be proven statically -> fail closed.
+      if (after ~ /^\{/ || after ~ /^\*/) finding()
     }
     next
   }
 
-  if (!in_api) next
-
+  if (!in_api || ind <= service_indent) next
   if (api_child_indent == -1) api_child_indent=ind
 
   if (ind == api_child_indent) {
-    in_deploy=0; deploy_child_indent=-1
-    key=line; sub(/^[[:space:]]+/, "", key)
-    kname=key; sub(/[[:space:]]*:.*$/, "", kname)
-    if (kname == "environment" || kname == "labels" || kname == "annotations" || kname ~ /^x-/) {
-      ignore_indent=ind; next
-    }
-    if (kname == "<<") { printf "SHAPE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1; next }
-    if (kname == "scale") {
-      val=key; sub(/^scale[[:space:]]*:[[:space:]]*/, "", val)
-      if (val ~ /^\*/) { printf "SHAPE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-      else if (bad_value(val)) { printf "VALUE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+    in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
+
+    # YAML merge key under api (<<: *anchor): unprovable -> fail closed.
+    if (line ~ /^[[:space:]]*<<[[:space:]]*:/) { finding(); next }
+    if (line ~ /^[[:space:]]*deploy[[:space:]]*:/) {
+      after=line
+      sub(/^[[:space:]]*deploy[[:space:]]*:[[:space:]]*/, "", after)
+      after=trim(after)
+      # inline deploy mapping (deploy: { ... }) or alias: unprovable -> fail closed.
+      if (after ~ /^\{/ || after ~ /^\*/) { finding(); next }
+      if (after == "") { in_deploy=1; deploy_indent=ind; next }
       next
     }
-    if (kname == "replicas") { printf "DIRECT\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1; next }
-    if (kname == "deploy") {
-      after=key; sub(/^deploy[[:space:]]*:[[:space:]]*/, "", after)
-      sub(/[[:space:]]*#.*$/, "", after); gsub(/[[:space:]]+$/, "", after)
-      if (after ~ /^\{/ || after ~ /^\*/) { printf "SHAPE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1; next }
-      in_deploy=1; deploy_indent=ind; deploy_child_indent=-1; next
+    if (line ~ /^[[:space:]]*scale:[[:space:]]*/) {
+      if (unsafe_count(value_after_key(line, "scale"))) finding()
+      next
     }
-    next
+    if (line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
+      if (unsafe_count(value_after_key(line, "replicas"))) finding()
+      next
+    }
   }
 
-  if (in_deploy && ind > deploy_indent) {
-    if (deploy_child_indent == -1) deploy_child_indent=ind
-    if (ind == deploy_child_indent) {
-      key=line; sub(/^[[:space:]]+/, "", key)
-      kname=key; sub(/[[:space:]]*:.*$/, "", kname)
-      if (kname == "replicas") {
-        val=key; sub(/^replicas[[:space:]]*:[[:space:]]*/, "", val)
-        if (val ~ /^\*/) { printf "SHAPE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-        else if (bad_value(val)) { printf "VALUE\t%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+  if (in_deploy) {
+    if (ind <= deploy_indent) {
+      in_deploy=0
+    } else {
+      if (deploy_child_indent == -1) deploy_child_indent=ind
+      if (ind == deploy_child_indent && line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
+        if (unsafe_count(value_after_key(line, "replicas"))) finding()
       }
     }
-    next
   }
 }
 END { exit rc }
 AWK
 )
 
-# Check 2 — `docker compose --scale api=<value>` / `docker compose scale api=...`.
-# Comments are stripped first. A line is only considered when it actually carries
-# a `docker compose` / `docker-compose` invocation, so unrelated tools and prose
-# do not trigger. Quotes/backticks and `=` are normalised to spaces so the
-# equals, space and quoted forms collapse to one token stream. The value policy
-# depends on the surface mode (exec: only 0/1; docs: also N and <value>).
+# Docker Compose CLI parser.
+# Executable surfaces accept only literal 0/1. Documentation additionally accepts
+# the abstract placeholders N and <value> (the only forms the repo docs actually
+# use); concrete or malformed values, including <N>, still fail.
 SCALE_AWK=$(cat <<'AWK'
-function val_blocks(v, mode) {
-  gsub(/['"`]/, "", v)
-  if (v == "0" || v == "1") return 0
-  if (mode == "docs") {
-    if (v ~ /^[0-9]+$/ && (v + 0) >= 2) return 1
-    if (v ~ /\$/) return 1
-    if (v == "two" || v == "many" || v == "auto" || v == "<N>") return 1
-    return 0
-  }
-  return 1
-}
+function safe_value(v) { return v == "0" || v == "1" }
+function doc_placeholder(v) { return v == "N" || v == "<value>" }
+function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
 BEGIN { rc=0 }
 {
+  raw=$0
   line=$0
-  sub(/^[[:space:]]*#.*/, "", line)
-  sub(/[[:space:]]#.*/, "", line)
-  has_compose=(line ~ /docker[ -]compose/)
-  norm=line
-  gsub(/['"`]/, " ", norm); gsub(/=/, " ", norm); gsub(/[[:space:]]+/, " ", norm)
-  n=split(norm, t, " ")
+  if (mode == "exec") {
+    if (line ~ /^[[:space:]]*#/) next
+    sub(/[[:space:]]+#.*$/, "", line)
+  }
+
+  gsub(/[`'\"]/, " ", line)
+  gsub(/=/, " ", line)
+  gsub(/[[:space:]]+/, " ", line)
+  sub(/^ /, "", line); sub(/ $/, "", line)
+  if (line == "") next
+
+  n=split(line, t, " ")
+  compose=0
+  for (j=1; j<n; j++) {
+    if (t[j] == "docker" && t[j+1] == "compose") { compose=1; break }
+  }
+  if (!compose) next
+
   for (i=1; i<=n; i++) {
-    if (has_compose && t[i] == "--scale" && t[i+1] == "api") {
-      if (i + 2 > n) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-      else if (val_blocks(t[i+2], mode)) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-    }
-    if (t[i] == "scale" && i > 1 && t[i-1] == "compose" && t[i+1] == "api") {
-      if (i + 2 > n) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-      else if (val_blocks(t[i+2], mode)) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
-    }
+    if (t[i] != "--scale") continue
+    if (i+1 > n || t[i+1] != "api") continue
+    if (i+2 > n || t[i+2] == "") { finding(); continue }
+
+    val=t[i+2]
+    if (safe_value(val)) continue
+    if (mode == "docs" && doc_placeholder(val)) continue
+    finding()
   }
 }
 END { exit rc }
 AWK
 )
 
-# Check 3 — an API upstream plus any additional upstream on one Caddy
-# `reverse_proxy`/`to` directive line. Comments are removed first, the directive
-# keyword is anchored at line start, an optional http(s):// scheme and `{}` are
-# stripped, bracketed IPv6 hosts are recognised, path/named matchers are ignored
-# (they are not host:port), and only the strict API host family counts as api.
+# Caddy line heuristic. Comments are removed before directive recognition. API
+# identity is deliberately narrow: api, weltgewebe-api, or those with a numeric
+# instance suffix (-, _ or . separator, e.g. api-2 / weltgewebe-api-1). Names
+# such as api-gateway, capital-api or myapi are not treated as the protected API.
 CADDY_AWK=$(cat <<'AWK'
-function is_api_host(h) {
-  return (h == "api" || h == "weltgewebe-api" || h ~ /^api[-_.][0-9]+$/ || h ~ /^weltgewebe-api[-_.][0-9]+$/)
-}
 BEGIN { rc=0 }
 {
-  cline=$0
-  sub(/^[[:space:]]*#.*/, "", cline)
-  sub(/[[:space:]]#.*/, "", cline)
-  is_rp=(cline ~ /^[[:space:]]*reverse_proxy([[:space:]]|$)/)
-  is_to=(cline ~ /^[[:space:]]*to([[:space:]]|$)/)
+  raw=$0
+  line=$0
+  sub(/#.*/, "", line)
+
+  is_rp=(line ~ /^[[:space:]]*reverse_proxy([[:space:]]|$)/)
+  is_to=(line ~ /^[[:space:]]*to([[:space:]]|$)/)
   if (!is_rp && !is_to) next
-  rest=cline
+
+  rest=line
   if (is_rp) sub(/^[[:space:]]*reverse_proxy[[:space:]]*/, "", rest)
-  else sub(/^[[:space:]]*to[[:space:]]+/, "", rest)
+  else sub(/^[[:space:]]*to[[:space:]]*/, "", rest)
+
   n=split(rest, toks, /[[:space:]]+/); ups=0; api_up=0
   for (i=1; i<=n; i++) {
     tok=toks[i]
@@ -284,129 +242,112 @@ BEGIN { rc=0 }
     gsub(/[{}]/, "", tok)
     if (tok ~ /^([A-Za-z0-9_.-]+|\[[0-9A-Fa-f:.%_-]+\]):[0-9]+$/) {
       ups++
-      host=tok; sub(/:[0-9]+$/, "", host)
-      if (is_api_host(host)) api_up=1
+      host=tok
+      sub(/:[0-9]+$/, "", host)
+      if (host ~ /^api([-_.][0-9]+)?$/ || host ~ /^weltgewebe-api([-_.][0-9]+)?$/) api_up=1
     }
   }
-  if (api_up && ups >= 2) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+  if (api_up && ups >= 2) {
+    printf "%s:%d:%s\n", FILENAME, FNR, raw
+    rc=1
+  }
 }
 END { exit rc }
 AWK
 )
 
-# --- scanners (fail-visible: surface errors as internal error / exit 2) --------
-
-SCAN_FILES=()
-
-# run_find <find-args...> ; appends `-print0`. Writes the NUL-delimited list to a
-# temp file, checks the exit status, then loads it into SCAN_FILES. A find
-# failure is an internal error, never a silently-empty result.
-run_find() {
-  SCAN_FILES=()
-  local tmp rc f
-  tmp="$(mktemp 2>/dev/null)" || { internal_error "mktemp failed"; return 1; }
-  "$FIND_BIN" "$@" -print0 >"$tmp" 2>/dev/null
-  rc=$?
-  if [ "$rc" -ne 0 ]; then
-    rm -f "$tmp"
-    internal_error "find failed (exit ${rc})"
-    return 1
+check_compose_counts() {
+  local files f
+  if ! files="$("$FIND_BIN" "$REPO_ROOT" \
+      \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
+      -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
+      -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>&1)"; then
+    report_scan_error "find failed while locating Compose files: ${files}"
+    return
   fi
-  while IFS= read -r -d '' f; do SCAN_FILES+=("$f"); done <"$tmp"
-  rm -f "$tmp"
-  return 0
-}
 
-# awk_scan <out-var-name> <file> [extra awk args...] <program>
-# Runs awk on a single file, distinguishing rc 0/1 (clean/violations) from
-# rc > 1 (internal error). Sets the named variable to the awk stdout.
-awk_scan() {
-  local __outvar="$1" __file="$2"
-  shift 2
-  local __out __rc
-  __out="$("$AWK_BIN" "$@" "$__file" 2>/dev/null)"
-  __rc=$?
-  if [ "$__rc" -gt 1 ]; then
-    internal_error "awk failed (exit ${__rc}) on ${__file}"
-    return 1
-  fi
-  printf -v "$__outvar" '%s' "$__out"
-  return 0
-}
-
-check_compose_replicas() {
-  run_find "$REPO_ROOT" \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
-    -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
-    -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) || return 0
-  local f out
-  for f in "${SCAN_FILES[@]}"; do
-    [ -n "$f" ] || continue
-    awk_scan out "$f" "$REPLICAS_AWK" || continue
-    report_tagged "$out"
-  done
-}
-
-# scan_scale <mode> <surface...> — grep is a pre-filter (rc 1 = no match is
-# normal; rc > 1 is an internal error); awk does the precise, mode-aware check.
-scan_scale() {
-  local mode="$1"
-  shift
-  local surfaces=() s
-  for s in "$@"; do [ -e "$s" ] && surfaces+=("$s"); done
-  [ "${#surfaces[@]}" -gt 0 ] || return 0
-  local out rc f ao reason
-  out="$("$GREP_BIN" -rIlE --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" -- 'scale' "${surfaces[@]}" 2>/dev/null)"
-  rc=$?
-  if [ "$rc" -gt 1 ]; then internal_error "grep (scale) failed (exit ${rc})"; return 0; fi
-  [ "$rc" -eq 0 ] || return 0
-  if [ "$mode" = "docs" ]; then
-    reason="docker compose api scaling example uses a disallowed value (only 0, 1 or the N / <value> placeholders are allowed under docs/)"
-  else
-    reason="docker compose api scaling on an executable surface must be literal 0 or 1 (fail-closed)"
-  fi
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    awk_scan ao "$f" -v mode="$mode" "$SCALE_AWK" || continue
-    report_hits "$ao" "$reason"
-  done <<<"$out"
+    run_awk_check "$REPLICAS_AWK" "$f" \
+      "api Compose scale/replicas is not a literal 0 or 1, or uses an unprovable inline/alias/merge shape"
+  done <<<"$files"
 }
 
-check_scale_flag() {
-  scan_scale exec \
-    "${REPO_ROOT}/scripts" "${REPO_ROOT}/infra" "${REPO_ROOT}/.github/workflows" \
-    "${REPO_ROOT}/.devcontainer" "${REPO_ROOT}/Makefile" "${REPO_ROOT}/Justfile"
-  scan_scale docs "${REPO_ROOT}/docs"
+scan_scale_surface() {
+  local mode="$1"; shift
+  local files status f
+
+  if files="$("$GREP_BIN" -rIlE \
+      --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" \
+      --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.venv \
+      -- '--scale' "$@" 2>&1)"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  if [ "$status" -eq 1 ]; then
+    return 0
+  fi
+  if [ "$status" -ne 0 ]; then
+    report_scan_error "grep failed while scanning ${mode} scale surfaces: ${files}"
+    return 0
+  fi
+
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    run_awk_check "$SCALE_AWK" "$f" \
+      "docker compose --scale api value is malformed or not permitted for this surface" "$mode"
+  done <<<"$files"
+}
+
+check_scale_flags() {
+  local docs=() exec_surfaces=() s
+
+  [ -d "${REPO_ROOT}/docs" ] && docs+=("${REPO_ROOT}/docs")
+  for s in scripts infra .github/workflows .devcontainer Makefile Justfile; do
+    [ -e "${REPO_ROOT}/${s}" ] && exec_surfaces+=("${REPO_ROOT}/${s}")
+  done
+
+  [ "${#docs[@]}" -eq 0 ] || scan_scale_surface docs "${docs[@]}"
+  [ "${#exec_surfaces[@]}" -eq 0 ] || scan_scale_surface exec "${exec_surfaces[@]}"
 }
 
 check_caddy_upstreams() {
-  local caddy_dir="${REPO_ROOT}/infra/caddy" f out
+  local caddy_dir="${REPO_ROOT}/infra/caddy" files f
   [ -d "$caddy_dir" ] || return 0
-  run_find "$caddy_dir" -type f || return 0
-  for f in "${SCAN_FILES[@]}"; do
+
+  if ! files="$("$FIND_BIN" "$caddy_dir" -type f -print 2>&1)"; then
+    report_scan_error "find failed while locating Caddy files: ${files}"
+    return
+  fi
+
+  while IFS= read -r f; do
     [ -n "$f" ] || continue
-    awk_scan out "$f" "$CADDY_AWK" || continue
-    report_hits "$out" "an API upstream together with any additional upstream on the same reverse_proxy/to directive line"
-  done
+    run_awk_check "$CADDY_AWK" "$f" \
+      "an API upstream appears with another upstream on one reverse_proxy/to directive line"
+  done <<<"$files"
 }
 
-check_compose_replicas
-check_scale_flag
+check_compose_counts
+check_scale_flags
 check_caddy_upstreams
 
-if [ "$INTERNAL_ERR" -ne 0 ]; then
+# Exit-code contract: 0 = no violation, 1 = policy violation, 2 = internal error.
+# Internal error outranks a policy violation, so a crashed/failed scanner is
+# reported as inconclusive (2), never as a silent pass.
+if [ "$INTERNAL" -ne 0 ]; then
   echo "" >&2
   echo "DOMAIN-SINGLE-INSTANCE-GUARD: internal error — a check could not be completed." >&2
-  echo "  The single-instance boundary was NOT proven; treat as inconclusive, not as a pass." >&2
+  echo "  Treat as inconclusive (exit 2), not as a pass." >&2
   exit 2
 fi
 
-if [ "$VIOLATION" -ne 0 ]; then
+if [ "$FAILED" -ne 0 ]; then
   echo "" >&2
   echo "DOMAIN-SINGLE-INSTANCE-GUARD: single-instance boundary violated." >&2
-  echo "  Horizontal API scale-out requires a new task plus a tested cross-instance" >&2
-  echo "  cache invalidation/coherence mechanism — it is not enabled by config drift." >&2
+  echo "  Horizontal API scale-out requires a new task and tested cross-instance coherence." >&2
   exit 1
 fi
 
 echo "DOMAIN-SINGLE-INSTANCE-GUARD: ok"
-exit 0
