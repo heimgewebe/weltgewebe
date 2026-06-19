@@ -4,9 +4,7 @@ title: Report Lifecycle Contract Alignment
 doc_type: decision
 status: active
 summary: >
-  Entscheidungsvorbereitung und Zielentscheidung zur Abgrenzung von DocMeta-
-  Status, Report-Lifecycle-Zustand, Lifecycle-Feldern, Inventory-Tooling und
-  Supersession-Relationen.
+  Implementierte Abgrenzungsentscheidung zwischen globalem DocMeta-Status und report-spezifischem Lifecycle-Modell sowie Dokumentation der verbleibenden Durchsetzungsfragen.
 relations:
   - type: relates_to
     target: docs/process/report-lifecycle.md
@@ -18,26 +16,30 @@ relations:
 
 ## Zweck
 
-Dieses Dokument entscheidet die Abgrenzung zwischen bestehendem DocMeta-Modell
-und künftigem Report-Lifecycle-Modell.
+### Ursprüngliche Entscheidungsfrage
 
-Die Report-Lifecycle-Policy beschreibt ein Zielmodell. Vor Pilot, Backfill oder
-Validator muss festgelegt werden, welche Felder bestehende DocMeta-Wahrheit sind
-und welche Felder als report-spezifisches Lifecycle-Modell eingeführt werden.
+- globale DocMeta-Wahrheit versus report-spezifische Felder,
+- keine Überladung von `status`,
+- Supersession-Richtung.
+
+### Heutige Geltung
+
+- Entscheidung ist implementiert,
+- report-spezifische Felder werden verwendet,
+- globaler Contract bleibt unverändert,
+- Warnmodus ist CI-aktiv,
+- Strict und semantische Härtung bleiben offen.
 
 ## Ausgangslage
 
-- `docs/_generated/report-lifecycle-inventory.md` zeigt den Reportbestand und
-  die aktuell fehlenden Lifecycle-Felder.
-- `docs/process/report-lifecycle.md` beschreibt das Zielmodell.
-- Der bestehende DocMeta-Contract kennt bereits allgemeine Dokumentstatuswerte.
-- `deferred`, `superseded` und `archived` sind aktuell keine global gültigen
-  DocMeta-Statuswerte.
-- Die bestehende Supersession-Mechanik nutzt `relations` mit
-  `type: supersedes`.
+- Inventory verarbeitet `lifecycle_state`,
+- Validator existiert,
+- Pilot und Backfills existieren,
+- Supersession-Relation existiert,
+- globaler DocMeta-Contract kennt keine Lifecycle-Spezialzustände.
 
 
-## Nicht-Ziele
+## Ursprüngliche Nicht-Ziele des Entscheidungs-Slices
 
 - Keine Änderung an `contracts/docmeta.schema.json`.
 - Keine Änderung an `architecture/docmeta.schema.md`.
@@ -50,6 +52,14 @@ und welche Felder als report-spezifisches Lifecycle-Modell eingeführt werden.
 - Keine Archivierung.
 - Keine Löschung.
 
+## Aktuelle Nicht-Ziele
+
+- kein globaler Contract-Umbau,
+- kein Massen-Backfill,
+- kein Strict-Enforcement,
+- keine Archivierung oder Löschung,
+- keine automatische Owner- oder Reviewdatum-Ableitung.
+
 ## Ursprüngliche Entscheidung
 
 Report-Lifecycle-Metadaten werden zunächst als report-spezifisches Zielmodell
@@ -58,7 +68,7 @@ behandelt.
 Der bestehende DocMeta-Status bleibt global und wird nicht mit
 report-spezifischen Lifecycle-Zuständen überladen.
 
-Für Reports wird folgende Zielstruktur vorbereitet:
+Folgende report-spezifische Struktur wurde eingeführt:
 
 ```yaml
 doc_type: report
@@ -123,9 +133,7 @@ neues Artefakt --supersedes--> altes Artefakt
 
 `superseded_by` darf nicht als alleinige Wahrheit eingeführt werden.
 
-Wenn `superseded_by` später genutzt wird, muss ein Validator mindestens prüfen,
-ob die umgekehrte `relations[type=supersedes]`-Relation existiert oder ob
-bewusst eine andere kanonische Richtung beschlossen wurde.
+`superseded_by` wird bereits verwendet. `relations[type=supersedes]` bleibt bestehende gerichtete Relation. Die vollständige Konsistenzprüfung ist noch offen.
 
 ## Implementierter Stand
 
@@ -144,7 +152,11 @@ Dabei gilt:
 - Der Validator existiert.
 - Modi `report`, `warn` und `strict` existieren.
 - Pilot und Teil-Backfills sind erfolgt.
-- CI-Blocking ist noch nicht aktiviert.
+- Warnmodus wird in diesem PR in CI aktiviert.
+- Findings bleiben nicht blockierend.
+- Toolfehler bleiben blockierend.
+- beide Generatorartefakte werden im Diagnosejob erzeugt.
+- kein Strict-Blocking.
 
 ## Legacy ohne Ersatz
 
@@ -157,7 +169,7 @@ Dafür braucht es später eine explizite Regel, zum Beispiel:
 - eine dokumentierte Verwerfungsbegründung,
 - oder ein Validator-Verhalten für historische Reports.
 
-In diesem PR wird keine solche Ausnahme technisch eingeführt.
+In diesem Slice wird keine solche Ausnahme technisch eingeführt.
 
 ## Verbleibende Entscheidungen
 

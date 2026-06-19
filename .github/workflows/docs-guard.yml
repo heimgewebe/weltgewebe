@@ -50,6 +50,9 @@ jobs:
         with:
           python-version-file: '.python-version'
 
+      - name: Report lifecycle warnings
+        run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
+
       - name: run-ci-validate
         run: make ci-validate
 
@@ -67,9 +70,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version-file: '.python-version'
-
-      - name: Report lifecycle warnings
-        run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
 
       - name: generate-doc-index
         run: bash scripts/docmeta/generate-doc-index.sh

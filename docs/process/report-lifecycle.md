@@ -40,73 +40,65 @@ Wichtig: Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
 ## Geltungsbereich
 
-Gilt für:
+Discovery-Surface:
+Alle Markdown-Dateien unter `docs/reports/` werden inventarisiert.
 
-- `docs/reports/*.md`
+Validator- und Policy-Scope:
+Verbindlich geprüft werden zunächst Dateien unter `docs/reports/` mit `doc_type: report`.
 
-Noch nicht verbindlich für:
+Andere `doc_type`-Werte unter `docs/reports/` erscheinen im Inventory, werden aber nicht als Reports validiert.
 
-- `docs/proofs/**`
-- `docs/adr/**`
-- `docs/specs/**`
-- `docs/blueprints/**`
-- `docs/tasks/**`
+## Aktuelle Nicht-Ziele
 
-Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports referenzieren und dadurch deren Archivierung oder Löschung blockieren, werden aber selbst nicht durch diese Policy klassifiziert.
-
-## Nicht-Ziele
-
-- Diese Policy klassifiziert noch keine bestehenden Reports.
-- Diese Policy archiviert keine Reports.
-- Diese Policy löscht keine Reports.
-- Diese Policy aktiviert keinen Validator.
-- Diese Policy verschärft keine CI.
-- Diese Policy verändert keine Task-Wahrheit.
-- Diese Policy ersetzt keine fachliche Review-Entscheidung.
+- kein Massen-Backfill bestehender Reports,
+- kein changed-only strict,
+- kein global strict,
+- keine Erweiterung des globalen DocMeta-Contracts,
+- keine automatische Archivierung,
+- keine Löschung,
+- keine automatische owner_task-Zuordnung,
+- keine automatisch berechneten review_after-Daten,
+- keine fachliche Wahrheitsbewertung von Reportinhalten.
 
 ## Implementierungsstand
 
 ### Umgesetzt
 
-- Lifecycle-Inventar
-- Policy
-- Contract-Alignment
-- Pilotannotation
-- report-spezifischer Validator
-- Modi `report`, `warn`, `strict`
-- generierte Lifecycle-Übersicht
-- mehrere kleine Backfill-Slices
+- Inventory,
+- Policy,
+- Alignment-Entscheidung,
+- Pilot,
+- report-spezifischer Validator,
+- Modi `report`, `warn`, `strict`,
+- generierte Overview,
+- Teil-Backfills.
 
-### Aktuell in Arbeit
+### In diesem Slice
 
-- Reconciliation von Policy und implementiertem Stand
-- nicht blockierender CI-Warnmodus
-- verbleibende Report-Triage
-- kleine Backfill-Slices
+- vollständige Dokument-Reconciliation,
+- CI-Warnmodus,
+- deterministische Erzeugung beider Lifecycle-Flächen,
+- Task-Control-Registrierung.
 
-### Noch nicht umgesetzt
+### Nachgelagert
 
-- vollständiger Rest-Backfill
-- semantisch gehärtete Feldvalidierung
-- changed-only strict
-- global strict
+- restliche Reportklassifikation,
+- semantische Validatorhärtung,
+- changed-only strict,
+- global strict,
+- Archivierungsprozess,
+- separate Löschprüfung.
 
-## Contract-Alignment-Gate
+## Geltungs- und Durchsetzungsgrenze
 
-Diese Policy beschreibt weiterhin ein Zielmodell. Die hier beschriebenen
-Lifecycle-Felder sind durch diesen PR noch nicht automatisch Teil des
-bestehenden DocMeta-Contracts, eines Validators oder eines CI-Guards.
-
-Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
-`superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
-`docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
-
-Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
-kanonische Policy-Quelle.
-
-Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
-Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
-späterer Übersicht folgt in separaten Tooling-PRs.
+- Lifecycle-Felder sind als report-spezifisches Modell implementiert.
+- Der globale DocMeta-Contract bleibt unverändert.
+- Inventory und Validator lesen `lifecycle_state`.
+- CI-Warnmodus ist aktiv.
+- Findings im Warnmodus blockieren nicht.
+- Parser-, Import- und Laufzeitfehler des Validators müssen blockieren.
+- Semantische Enums, ISO-Datum, Task-Existenz und Supersession-Konsistenz sind noch nicht vollständig geprüft.
+- Strict-Modi bleiben deaktiviert.
 
 ## Begriffe
 
@@ -179,20 +171,8 @@ Wichtig:
   - Kein pauschaler, unbelegter 30-Tage-Default.
   - Ein überfälliges Datum macht einen Report nicht automatisch falsch, sondern reviewbedürftig.
   - Externe Provider-, DNS- oder Runtime-Claims benötigen vor Bestätigung einen frischen Live-Check.
-- **lifecycle_state**: Report-spezifischer Lifecycle-Zustand, zum Beispiel
-  `active`, `deferred`, `superseded` oder `archived`. Dieses Feld ist Teil des
-  Zielmodells und wird erst nach Contract-Alignment oder eigenem
-  Lifecycle-Schema validatorfähig.
-- **superseded_by**: Pfad zum ablösenden Artefakt. Dieses Feld darf nicht als
-  alleinige Supersession-Wahrheit verstanden werden. Die bestehende
-  Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes`
-  ab: Das neue Artefakt verweist auf das alte Artefakt. Ein späterer Validator
-  muss `superseded_by` und `relations[type=supersedes]` gegeneinander prüfen
-  oder eine der beiden Formen als kanonisch festlegen.
-
-Auch diese zusätzlichen Lifecycle-Felder sind Zielmodell-Felder. Ob sie direkt
-im DocMeta-Frontmatter, in einem separaten Lifecycle-Schema oder über einen
-späteren Validator geprüft werden, entscheidet das Contract-Alignment-Gate.
+- **lifecycle_state**: Report-spezifischer Lifecycle-Zustand, zum Beispiel `active`, `deferred`, `superseded` oder `archived`. Der Validator verarbeitet `lifecycle_state` bereits für Anwesenheits- und zustandsabhängige Pflichtfeldprüfungen. Zulässige Enums und weitere semantische Konsistenzprüfungen sind noch nachgelagert.
+- **superseded_by**: Pfad zum ablösenden Artefakt. Feld wird bereits verwendet, es darf nicht alleinige Supersession-Wahrheit sein, Relationenkonsistenz wird noch nicht vollständig geprüft. Die bestehende Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes` ab: Das neue Artefakt verweist auf das alte Artefakt.
 
 `lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart im
 Repo, zum Beispiel `report` oder `policy`. `lifecycle` beschreibt die Rolle
@@ -241,12 +221,8 @@ Spätere Validatoren sollen abweichende Schreibweisen wie `ownerTask`,
 `draft` und `deprecated` bleiben DocMeta-Statuswerte. Wenn ein Report zusätzlich
 einen Lifecycle-Zustand braucht, wird dieser über `lifecycle_state` modelliert.
 
-`erforderlich*` bedeutet: Das aktuelle Inventory meldet terminale Status ohne
-`superseded_by` als Lücke. Nach der Contract-Alignment-Entscheidung muss ein
-späterer Tooling-PR diese Prüfung auf `lifecycle_state` oder ein separates
-Lifecycle-Schema ausrichten.
-
-Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
+Die Tabelle ist aktive Policy.
+Der derzeitige Validator setzt davon nur einen Teil technisch durch.
 
 ## Referenzklassen
 
@@ -325,9 +301,7 @@ Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature
 
 ## Beispiele
 
-Die folgenden Beispiele zeigen das Zielmodell nach abgeschlossenem
-Contract-Alignment. Sie sind in dieser Phase noch keine allgemein gültigen
-DocMeta-Frontmatter-Vorgaben.
+Die folgenden Beispiele zeigen das Modell. Sie sind in dieser Phase noch keine allgemein gültigen DocMeta-Frontmatter-Vorgaben.
 
 ### Active audit
 
@@ -351,11 +325,9 @@ superseded_by: docs/reports/new-proof.md
 
 ### Archived legacy report
 
-Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine
-offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder
-Validator-Verhalten modelliert werden.
+Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder Validator-Verhalten modelliert werden.
 
-Diese Beispiele zeigen das Zielmodell nach abgeschlossenem Contract Alignment.
+Diese Beispiele zeigen das Modell.
 
 ## Offene Entscheidungen
 
