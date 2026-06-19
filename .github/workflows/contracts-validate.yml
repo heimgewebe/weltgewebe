@@ -13,16 +13,20 @@ permissions:
   workflow_dispatch:
   push:
     paths:
-      - "contracts/**/*.json"
-      - "tests/fixtures/**/*.json"
+      - "contracts/**"
+      - "tests/fixtures/**"
       - ".github/workflows/contracts-validate.yml"
       - "scripts/contracts-domain-check.sh"
+      - "package.json"
+      - "pnpm-lock.yaml"
   pull_request:
     paths:
-      - "contracts/**/*.json"
-      - "tests/fixtures/**/*.json"
+      - "contracts/**"
+      - "tests/fixtures/**"
       - ".github/workflows/contracts-validate.yml"
       - "scripts/contracts-domain-check.sh"
+      - "package.json"
+      - "pnpm-lock.yaml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -178,8 +182,8 @@ jobs:
           node-version-file: ".node-version"
           cache: "pnpm"
 
-      - name: Install AJV tooling
-        run: pnpm install --global ajv-cli ajv-formats
+      - name: Install locked repository dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Validate repository-owned domain contracts
         run: bash scripts/contracts-domain-check.sh
