@@ -866,30 +866,38 @@
       "id": "DOMAIN-PG-002",
       "title": "Single-Instance-Invariante oder Multi-Instance-Kohaerenz entscheiden",
       "area": "infra",
-      "status": "open",
+      "status": "done",
       "priority": "high",
       "effort": "M",
       "risk": "high",
       "owner": "unknown",
-      "evidence": [],
-      "missing_evidence": [
-        "Keine dokumentierte Betriebsentscheidung Single-Instance vs. Multi-Instance fuer den PostgreSQL-Domain-Pfad; prozesslokale Runtime-Caches bleiben unadressiert",
-        "Kein Guard/Smoke, der Cross-Instance-Kohaerenz oder die Single-Instance-Grenze belegt"
+      "evidence": [
+        "docs/reports/domain-postgres-instance-coherence-decision.md",
+        "docs/blueprints/domain-data-postgres-cutover.md",
+        "scripts/guard/domain-single-instance-guard.sh",
+        "scripts/tests/test_domain_single_instance_guard.sh",
+        ".github/workflows/ci.yml",
+        "scripts/guard/run.sh"
       ],
+      "missing_evidence": [],
       "acceptance": [
-        "Option A: horizontale Skalierung ist ausdruecklich ausgeschlossen, das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Deployment-/Runtime-Doku festgehalten",
-        "oder Option B: Cross-Instance-Kohaerenz ist technisch geloest oder klar begrenzt und durch Test/Smoke belegt",
-        "Entscheidung ist im Cutover-Blueprint verankert; kein stiller Cache-Split-Brain"
+        "Option A ist entschieden: Der aktuelle PostgreSQL-Domain-Pfad ist auf hoechstens eine API-Instanz begrenzt; kein Cross-Instance-Kohaerenz-Claim",
+        "Decision-Report und Cutover-Blueprint benennen Risiko, operative Folgen, Review-Trigger, Parsergrenzen und Nicht-Beweise",
+        "Der statische Guard akzeptiert an services.api.scale und services.api.deploy.replicas nur literal 0/1, verbietet direkte services.api.replicas, trennt ausfuehrbare CLI-Werte von Dokumentationsplatzhaltern, prueft Docker-Compose-CLI-Formen inklusive --scale api=*, --scale=api=* und scale api=* und entfernt Caddy-Kommentare vor der Direktiverkennung",
+        "Der Guard ist in einem unabhaengigen CI-Job und der Guard-Orchestrierung angebunden; gezielte Fixtures plus Real-Repo-Drift-Check sind gruen",
+        "Die Entscheidung beweist weder den Live-Containerstand noch Runtime-Korrektheit oder PostgreSQL-Cutover-Readiness"
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "1242"
+        ],
         "docs": [
-          "docs/blueprints/domain-data-postgres-cutover.md",
-          "docs/reports/auth-persistence-readiness.md"
+          "docs/reports/domain-postgres-instance-coherence-decision.md",
+          "docs/blueprints/domain-data-postgres-cutover.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-19"
     },
     {
       "id": "AUTH-PG-001",

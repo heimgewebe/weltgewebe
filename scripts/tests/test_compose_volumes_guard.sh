@@ -78,7 +78,11 @@ services:
     image: caddy:latest
     volumes:
       - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - ../caddy/Caddyfile.heim:/etc/caddy/Caddyfile:ro
       - ../caddy/heimserver:/etc/caddy/heimserver:ro
+      - ../../build/basemap:/srv/weltgewebe-basemap:ro
+      - ../../map-style:/srv/weltgewebe-map-style:ro
+      - ../../apps/web/build:/srv/weltgewebe-web:ro
 YAML
 
 if bash "$GUARD_SCRIPT" "$TEMP_DIR/compose.prod.yml" >/dev/null 2>&1; then

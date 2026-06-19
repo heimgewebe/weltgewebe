@@ -19,6 +19,8 @@ relations:
   - type: relates_to
     target: docs/reports/domain-account-write-path-proof.md
   - type: relates_to
+    target: docs/reports/domain-postgres-instance-coherence-decision.md
+  - type: relates_to
     target: docs/reports/domain-node-write-path-proof.md
   - type: relates_to
     target: docs/reports/optimierungsbericht.md
@@ -218,8 +220,10 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   entschieden werden, ob `domain_edges.source_id`/`target_id` strikte
   Foreign Keys auf `domain_nodes(id)` erhalten oder ob eine lose
   Referenzsemantik mit Guard/Quarantäne-Report bewusst akzeptiert wird.
-- Multi-Instance-Kohärenz ist nicht entschieden: prozesslokale Caches bedeuten,
-  dass Instanz B Writes von Instanz A nicht automatisch sehen muss.
+- Multi-Instance-Kohärenz ist entschieden (`DOMAIN-PG-002`, Option A):
+  prozesslokale Caches sind nicht instanzübergreifend kohärent; horizontale
+  API-Skalierung bleibt bis zu einer getesteten Kohärenzlösung ausgeschlossen.
+  Siehe `docs/reports/domain-postgres-instance-coherence-decision.md`.
 - E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
 - Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
 - WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
@@ -229,6 +233,37 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   nicht performance-optimiert.
 - Runtime-Smoke für vollständigen PostgreSQL-Domain-Betrieb ist offen.
 - JSONL-Demontage ist offen.
+
+## Instance Coherence Boundary
+
+Für den aktuellen PostgreSQL-Domain-Pfad gilt `DOMAIN-PG-002`, Option A:
+höchstens eine API-Instanz innerhalb dieser Kohärenzgrenze; der Normalbetrieb
+erwartet eine lebende Instanz. Das ist eine Deployment-Invariante, keine
+Multi-Instance-Kohärenzimplementierung und kein Verfügbarkeitsbeweis.
+
+Operative Konsequenzen:
+
+- `services.api.scale` darf nur das Literal `0` oder `1` sein.
+- `services.api.deploy.replicas` darf nur das Literal `0` oder `1` sein.
+- Ein direkter `services.api.replicas`-Key ist unzulässig. Verwende
+  ausschließlich `services.api.scale` oder `services.api.deploy.replicas`,
+  jeweils mit dem Literal `0` oder `1`.
+- Auf ausführbaren Flächen darf `docker compose --scale api=<value>`,
+  `docker compose --scale=api=<value>`, `docker compose scale api=<value>`
+  oder die entsprechende `docker-compose`-Form nur mit `0` oder `1` verwendet
+  werden; Dokumentation darf ausschließlich die Werte `0`, `1`, `N` oder
+  `<value>` verwenden.
+- Ein geschützter API-Upstream darf nicht zusammen mit einem weiteren Upstream
+  auf derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile stehen.
+- NATS gilt ohne dedizierten Invalidierungspfad und Tests nicht als
+  Domain-Cache-Kohärenz.
+
+Der statische Guard
+`scripts/guard/domain-single-instance-guard.sh` und sein Test
+`scripts/tests/test_domain_single_instance_guard.sh` sichern diese klar
+erkennbaren Konfigurationsflächen ab. Parsergrenzen und Nicht-Beweise sind im
+Decision-Report dokumentiert. Die Grenze entsperrt weder `DOMAIN-PG-001` noch
+`DB-PROOF-001`, `AUTH-PG-001`, `AUTH-PG-002` oder den PostgreSQL-Cutover.
 
 ## Regeln für die Datenmigration
 

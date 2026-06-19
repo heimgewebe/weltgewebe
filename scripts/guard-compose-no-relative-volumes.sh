@@ -28,9 +28,9 @@ fi
 base="$(basename "$COMPOSE_FILE")"
 
 if [[ "$base" == "compose.prod.yml" ]]; then
-  # Explicit allowlist for prod only (Caddy mounts)
+  # Explicit allowlist for prod only (Caddy config and static asset mounts)
   # :ro is optional, whitespace tolerated
-  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.prod:\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?)[[:space:]]*$'
+  allowed_line_re='^[0-9]+:[[:space:]]*-[[:space:]]*(\.\.\/caddy\/Caddyfile\.(prod|heim):\/etc\/caddy\/Caddyfile(:ro)?|\.\.\/caddy\/heimserver:\/etc\/caddy\/heimserver(:ro)?|\.\.\/\.\.\/build\/basemap:\/srv\/weltgewebe-basemap(:ro)?|\.\.\/\.\.\/map-style:\/srv\/weltgewebe-map-style(:ro)?|\.\.\/\.\.\/apps\/web\/build:\/srv\/weltgewebe-web(:ro)?)[[:space:]]*$'
   filtered="$(echo "$bad_lines" | grep -vE "$allowed_line_re" || true)"
 else
   # No allowlist for non-prod compose files
@@ -46,7 +46,11 @@ if [[ -n "$filtered" ]]; then
   if [[ "$base" == "compose.prod.yml" ]]; then
     echo "Allowed exceptions in compose.prod.yml:" >&2
     echo "  - ../caddy/Caddyfile.prod:/etc/caddy/Caddyfile[:ro]" >&2
+    echo "  - ../caddy/Caddyfile.heim:/etc/caddy/Caddyfile[:ro]" >&2
     echo "  - ../caddy/heimserver:/etc/caddy/heimserver[:ro]" >&2
+    echo "  - ../../build/basemap:/srv/weltgewebe-basemap[:ro]" >&2
+    echo "  - ../../map-style:/srv/weltgewebe-map-style[:ro]" >&2
+    echo "  - ../../apps/web/build:/srv/weltgewebe-web[:ro]" >&2
     echo >&2
   fi
 
