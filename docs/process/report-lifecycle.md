@@ -41,8 +41,11 @@ Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 **Discovery-Surface:** Alle Markdown-Dateien unter `docs/reports/` werden
 inventarisiert.
 
-**Validator- und Policy-Scope:** Verbindlich geprüft werden zunächst Dateien
+**Policy-Scope:** Die Report-Lifecycle-Regeln gelten zunächst für Dateien
 unter `docs/reports/` mit `doc_type: report`.
+
+**Aktueller Validator-Scope:** Der Validator untersucht dieselbe Population,
+setzt die Policy aber derzeit nur teilweise technisch durch.
 
 Andere `doc_type`-Werte unter `docs/reports/` erscheinen im Inventory, werden
 aber nicht als Reports validiert.
@@ -94,8 +97,11 @@ aber nicht als Reports validiert.
 - Der globale DocMeta-Contract bleibt unverändert.
 - Inventory und Validator lesen `lifecycle_state`.
 - Der CI-Warnmodus ist aktiv.
-- Findings im Warnmodus blockieren nicht.
-- Parser-, Import- und Laufzeitfehler des Validators blockieren.
+- Technische Validatorfehler wie ungefangene Import- oder Laufzeitfehler
+  blockieren.
+- Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
+- Die vollständige blockierende Erkennung fehlenden oder nicht parsebaren
+  Report-Frontmatters ist noch nicht umgesetzt.
 - Enums, ISO-Datum, Task-Existenz und Supersession-Konsistenz sind noch nicht
   vollständig geprüft.
 - Strict-Modi bleiben deaktiviert.
@@ -184,7 +190,7 @@ Die Feldnamen sind verbindlich snake_case:
 | active | erforderlich | erforderlich | erforderlich | nein | Zweck, Verantwortung und Review-Zeitpunkt |
 | deferred | erforderlich | erforderlich | erforderlich | nein | Prüfung oder Reaktivierung ausstehend |
 | superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung explizit nachvollziehbar |
-| archived | erforderlich | erforderlich | nein | erforderlich* | historische Erhaltung; Legacy-Ausnahme noch offen |
+| archived | erforderlich | erforderlich | nein | optional | Bei tatsächlicher Ablösung Zielpfad angeben; Legacy ohne Ersatz bleibt gesondert zu begründen |
 
 Die Tabelle ist aktive Policy. Der Validator setzt davon derzeit nur einen
 Teil technisch durch.
