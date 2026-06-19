@@ -11,7 +11,7 @@
   "tasks": [
     {
       "id": "DEPLOY-DNS-001",
-      "title": "INWX Registrar/DNS Cutover vorbereiten und durchführen",
+      "title": "INWX Registrar/DNS Cutover vorbereiten und durchf\u00fchren",
       "area": "infra",
       "status": "open",
       "priority": "high",
@@ -26,9 +26,9 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Offline-Zonenmanifest ist vollständig und reviewed",
+        "Offline-Zonenmanifest ist vollst\u00e4ndig und reviewed",
         "Abruptes INWX-Aktivierungsfenster ist dokumentiert",
-        "DNSSEC ist für alle drei Cutover-Domains geprüft; bei Bedarf deaktiviert und jeweilige Parent-DS-Entfernung verifiziert; alter DS ohne passende INWX-Signierung blockiert die betroffene Domain",
+        "DNSSEC ist f\u00fcr alle drei Cutover-Domains gepr\u00fcft; bei Bedarf deaktiviert und jeweilige Parent-DS-Entfernung verifiziert; alter DS ohne passende INWX-Signierung blockiert die betroffene Domain",
         "INWX authoritative DNS sowie Web-, mailbox.org- und Brevo-DNS/Subdomain-Gates pass",
         "Live-Runtime zeigt nach Restart/Recreate die erwarteten Brevo-SMTP-Werte",
         "Ein erst danach erzeugter Magic-Link wird via Brevo zugestellt und erzeugt erfolgreich eine Session",
@@ -94,7 +94,7 @@
       "missing_evidence": [],
       "acceptance": [
         "docs/tasks/ existiert und alle Phase-2-Artefakte sind vorhanden",
-        "Validator läuft mit exit 0 gegen docs/tasks/index.json",
+        "Validator l\u00e4uft mit exit 0 gegen docs/tasks/index.json",
         "README, CONTRIBUTING und docs/index.md beschreiben Task-Control korrekt"
       ],
       "links": {
@@ -118,12 +118,12 @@
       "owner": "unknown",
       "evidence": [],
       "missing_evidence": [
-        "Issue Forms, PR-Template und Release-Konfiguration bewusst zurückgestellt: erhöhen Formular-Overhead ohne belegten Mehrwert gegenüber kontextgenauen PR-Bodies",
+        "Issue Forms, PR-Template und Release-Konfiguration bewusst zur\u00fcckgestellt: erh\u00f6hen Formular-Overhead ohne belegten Mehrwert gegen\u00fcber kontextgenauen PR-Bodies",
         "Wiederaufnahme sinnvoll wenn: externe Beitragende ohne Projekteinblick aktiv werden oder Release-Prozess stabilisiert ist"
       ],
       "acceptance": [
         "Entscheidung dokumentiert in CONTRIBUTING.md und board.md",
-        "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingeführt"
+        "Kein Artefakt unter .github/ISSUE_TEMPLATE/ oder .github/pull_request_template.md ohne belegten Nutzen eingef\u00fchrt"
       ],
       "links": {
         "issues": [],
@@ -136,7 +136,7 @@
     },
     {
       "id": "TASK-CTL-003",
-      "title": "Task-Index Generator und CI-Guard einführen",
+      "title": "Task-Index Generator und CI-Guard einf\u00fchren",
       "area": "ci",
       "status": "done",
       "priority": "medium",
@@ -149,14 +149,14 @@
         "scripts/docmeta/agent_entrypoint_smoke.py",
         "scripts/docmeta/tests/test_agent_entrypoint_smoke.py",
         ".github/workflows/task-index.yml",
-        "PR-CI-Lauf 27643872404 (pull_request, PR #1209, Commit 7cb5ec3364e1f47562574ca6fc729679c5056b29): task-index grün"
+        "PR-CI-Lauf 27643872404 (pull_request, PR #1209, Commit 7cb5ec3364e1f47562574ca6fc729679c5056b29): task-index gr\u00fcn"
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Generator erzeugt oder prüft docs/tasks/index.json deterministisch (--check-Modus)",
-        "CI prüft Drift zwischen board.md, index.json und optimierungsstatus.json, schreibt aber nicht still",
-        "Fehlende Evidenz wird gemeldet, nicht geglättet",
-        "docs/_generated/* werden nicht manuell geändert"
+        "Generator erzeugt oder pr\u00fcft docs/tasks/index.json deterministisch (--check-Modus)",
+        "CI pr\u00fcft Drift zwischen board.md, index.json und optimierungsstatus.json, schreibt aber nicht still",
+        "Fehlende Evidenz wird gemeldet, nicht gegl\u00e4ttet",
+        "docs/_generated/* werden nicht manuell ge\u00e4ndert"
       ],
       "links": {
         "issues": [],
@@ -169,7 +169,7 @@
     },
     {
       "id": "TASK-CTL-004",
-      "title": "Guard gegen uneingeordnete Blueprints und Pläne einführen",
+      "title": "Guard gegen uneingeordnete Blueprints und Pl\u00e4ne einf\u00fchren",
       "area": "docs",
       "status": "done",
       "priority": "medium",
@@ -190,7 +190,7 @@
       "acceptance": [
         "neuer Blueprint oder Plan ohne Index-/Roadmap-/Task-Control-Einordnung wird im Check-Modus gemeldet",
         "eingeordnete neue Blueprint-/Roadmap-Dateien bestehen den Guard",
-        "explizite Ausnahmen sind schema-konform und begründet",
+        "explizite Ausnahmen sind schema-konform und begr\u00fcndet",
         "Ratchet kann mindestens report-only und warn unterscheiden, bevor blocking aktiviert wird"
       ],
       "links": {
@@ -206,7 +206,7 @@
     },
     {
       "id": "AGENT-SAFE-001",
-      "title": "Safety-Preflight Guard minimal einführen",
+      "title": "Safety-Preflight Guard minimal einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -223,9 +223,9 @@
         "Claim-Spine, Agent-Contracts und Blocking-Mode sind bewusst in AGENT-SAFE-002 bis AGENT-SAFE-004 nachgelagert"
       ],
       "acceptance": [
-        "ein minimaler Preflight prüft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
+        "ein minimaler Preflight pr\u00fcft vor agentischen Schreiboperationen Task-ID, Ziel, erlaubte Pfade, Claims, erwartete Evidence und Validierungskommandos",
         "fehlende Pflichtfelder blockieren den Task deterministisch statt still weiterzulaufen",
-        "der erste Slice bleibt report-only oder warn und setzt keinen Done-Status für Folgepfade"
+        "der erste Slice bleibt report-only oder warn und setzt keinen Done-Status f\u00fcr Folgepfade"
       ],
       "links": {
         "issues": [],
@@ -240,7 +240,7 @@
     },
     {
       "id": "AGENT-SAFE-002",
-      "title": "Readiness Hard Fail für Agent-Fähigkeiten einführen",
+      "title": "Readiness Hard Fail f\u00fcr Agent-F\u00e4higkeiten einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -257,8 +257,8 @@
         "Handoff-Validierung, Non-Ideal-Guard und Dry-Run-Runner sind noch nicht implementiert"
       ],
       "acceptance": [
-        "fehlende als verpflichtend markierte Agent-Fähigkeiten führen zu hard fail statt soft degrade",
-        "Capability-Matrix oder äquivalente Quelle unterscheidet optionale und verpflichtende Fähigkeiten",
+        "fehlende als verpflichtend markierte Agent-F\u00e4higkeiten f\u00fchren zu hard fail statt soft degrade",
+        "Capability-Matrix oder \u00e4quivalente Quelle unterscheidet optionale und verpflichtende F\u00e4higkeiten",
         "Task-Control und Roadmap behaupten keinen Done-Status ohne belegten Hard-Fail-Mechanismus",
         "offene Capability-Artefakte bleiben explizit in missing_evidence und Folge-Slices AGENT-SAFE-003/004"
       ],
@@ -309,7 +309,7 @@
     },
     {
       "id": "AGENT-SAFE-004",
-      "title": "Minimale Agent-Contracts und Non-Ideal-Guard einführen",
+      "title": "Minimale Agent-Contracts und Non-Ideal-Guard einf\u00fchren",
       "area": "governance",
       "status": "done",
       "priority": "high",
@@ -334,9 +334,9 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade für agentische Tasks",
-        "ein Guard blockiert Non-Ideal-Tasks ohne vollständigen Arbeitsauftrag",
-        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu glätten"
+        "ein minimaler Contract beschreibt Pflichtfelder, Claims und erlaubte Pfade f\u00fcr agentische Tasks",
+        "ein Guard blockiert Non-Ideal-Tasks ohne vollst\u00e4ndigen Arbeitsauftrag",
+        "Readiness zeigt Agent-Contracts und Non-Ideal-Guard als vorhanden, ohne offene Hard-Gaps zu gl\u00e4tten"
       ],
       "links": {
         "issues": [],
@@ -376,12 +376,12 @@
       "acceptance": [
         "Eine minimale Claim-Evidence-Spine existiert mit drei CLAIM-AGENT-SAFE-* Claims",
         "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map",
-        "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
+        "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und \u00fcber Repo-Checks validierbar",
         "Task-Control-Registrierung bleibt sichtbar; epistemische Grenzen bleiben sichtbar",
         "Scope wird deklarativ durch scripts/docmeta/freshness_scope_policy.yml entschieden; aktueller realer Scope bleibt CLAIM-AGENT-SAFE-* (S3-Scope-Policy umgesetzt)",
-        "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis",
-        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert",
-        "Review-Age-Hygiene für kanonische Architektur-/Runtime-/Runbook-Dokumente wurde durchgeführt; betroffene Dokumente sind geprüft, aktualisiert oder explizit eingeordnet"
+        "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalit\u00e4ts-/Vollst\u00e4ndigkeitsbeweis",
+        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unver\u00e4ndert",
+        "Review-Age-Hygiene f\u00fcr kanonische Architektur-/Runtime-/Runbook-Dokumente wurde durchgef\u00fchrt; betroffene Dokumente sind gepr\u00fcft, aktualisiert oder explizit eingeordnet"
       ],
       "links": {
         "issues": [],
@@ -412,13 +412,13 @@
       ],
       "missing_evidence": [
         "Zweiter echter Proof-Matrix-Anwendungsfall fehlt; Generalisierung darf nicht aus nur einem OPT-ARC-001-Spezialfall abgeleitet werden",
-        "Entscheidung fehlt, welche Teile generisch werden sollen: Matrix-Schema, Status-Sync, Evidence-Regeln, Workflow-Trigger-Regeln, Shell-Command-Prüfung",
+        "Entscheidung fehlt, welche Teile generisch werden sollen: Matrix-Schema, Status-Sync, Evidence-Regeln, Workflow-Trigger-Regeln, Shell-Command-Pr\u00fcfung",
         "Nachweis fehlt, dass ein gemeinsames Schema mehr Nutzen als projektspezifische Validatoren stiftet"
       ],
       "acceptance": [
-        "OPT-ARC-001-Validator ist nach Abschluss oder spätestens beim zweiten ähnlichen Proof-Guard retrospektiv ausgewertet",
+        "OPT-ARC-001-Validator ist nach Abschluss oder sp\u00e4testens beim zweiten \u00e4hnlichen Proof-Guard retrospektiv ausgewertet",
         "Gemeinsame und spezifische Bestandteile des Proof-Matrix-Patterns sind dokumentiert",
-        "Ein generisches Validator-Schema wird nur gebaut, wenn mindestens ein zweiter echter Anwendungsfall dieselbe Struktur benötigt",
+        "Ein generisches Validator-Schema wird nur gebaut, wenn mindestens ein zweiter echter Anwendungsfall dieselbe Struktur ben\u00f6tigt",
         "Falls kein zweiter Anwendungsfall entsteht, bleibt der Task als bewusst nicht umgesetzte Generalisierung dokumentiert"
       ],
       "links": {
@@ -434,7 +434,7 @@
     },
     {
       "id": "DOCMETA-WARN-MODE-001",
-      "title": "Warn-Mode stderr semantics für Docmeta-Guards schließen",
+      "title": "Warn-Mode stderr semantics f\u00fcr Docmeta-Guards schlie\u00dfen",
       "area": "docs",
       "status": "done",
       "priority": "medium",
@@ -453,7 +453,7 @@
         "warn-Mode meldet fehlende Doc-IDs auf stderr und endet mit Exit-Code 0",
         "warn-Mode meldet broken doc:<id>-Links auf stderr und endet mit Exit-Code 0",
         "strict / fail-closed blockieren weiterhin bei missing IDs und broken doc links",
-        "Blueprint-Checkbox ist nur gesetzt, weil Code und Tests beide Oberflächen abdecken"
+        "Blueprint-Checkbox ist nur gesetzt, weil Code und Tests beide Oberfl\u00e4chen abdecken"
       ],
       "links": {
         "issues": [],
@@ -490,13 +490,13 @@
       "missing_evidence": [],
       "acceptance": [
         "depends_on ist direktes Feld im Docmeta-Schema",
-        "depends_on und verifies_with sind für kanonische Docs verpflichtend",
-        "Alle in manifest/repo-index.yaml geführten kanonischen Docs tragen depends_on",
-        "depends_on: [] ist gültig",
+        "depends_on und verifies_with sind f\u00fcr kanonische Docs verpflichtend",
+        "Alle in manifest/repo-index.yaml gef\u00fchrten kanonischen Docs tragen depends_on",
+        "depends_on: [] ist g\u00fcltig",
         "Direkter depends_on-Wert gewinnt vor Legacy-relations[type=depends_on]",
-        "Legacy-Fallback über relations[type=depends_on] bleibt erhalten",
+        "Legacy-Fallback \u00fcber relations[type=depends_on] bleibt erhalten",
         "Review-Impact und System-Map nutzen konsistente Dependency-Semantik",
-        "Docmeta-Tests und Guards sind grün"
+        "Docmeta-Tests und Guards sind gr\u00fcn"
       ],
       "links": {
         "issues": [],
@@ -562,10 +562,10 @@
         "scripts/contracts-domain-check.sh"
       ],
       "missing_evidence": [
-        "CI-Nachweis der gehärteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
+        "CI-Nachweis der geh\u00e4rteten Schemas via contracts-domain.yml steht aus; lokaler Check muss im PR-Body belegt werden"
       ],
       "acceptance": [
-        "alle 6 Domain-Schemas schließen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Flächen sind wertseitig begrenzt",
+        "alle 6 Domain-Schemas schlie\u00dfen unkontrollierte Zusatzfelder; Top-Level additionalProperties ist false, bewusste Extension-Fl\u00e4chen sind wertseitig begrenzt",
         "String-Constraints (minLength, maxLength) konsistent gesetzt",
         "just contracts-domain-check pass"
       ],
@@ -637,8 +637,8 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "docs/runbooks/incident-response.md existiert mit vollständigem Ablauf",
-        "docs/runbooks/db-recovery.md existiert mit vollständigem Ablauf"
+        "docs/runbooks/incident-response.md existiert mit vollst\u00e4ndigem Ablauf",
+        "docs/runbooks/db-recovery.md existiert mit vollst\u00e4ndigem Ablauf"
       ],
       "links": {
         "issues": [],
@@ -696,8 +696,8 @@
         "CI-Job: db-domain-edge-write-path-proof",
         "docs/reports/opt-arc-001-db-proof-matrix.json",
         "scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py",
-        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): fünf DB-Domain-Proof-Jobs grün (historisch; Schema-, Backfill- und Read-Path-Proof weiter gültig)",
-        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof grün"
+        "PR-CI-Lauf 27041187630 (pull_request, PR #1165, Commit b10076ee743202d3ef07af42a464267c82f4a5c0): f\u00fcnf DB-Domain-Proof-Jobs gr\u00fcn (historisch; Schema-, Backfill- und Read-Path-Proof weiter g\u00fcltig)",
+        "PR-CI-Lauf 27441828545 (pull_request, PR #1188, Commit 75ad1ebbaecbc41353d2fb0b39c2d6a9d90434ff): db-domain-edge-write-path-proof gr\u00fcn"
       ],
       "missing_evidence": [
         "Step-up-E-Mail-Persistenz und WebAuthn-User-ID-Writeback ausstehend",
@@ -705,7 +705,7 @@
         "Phase D (read-only), Phase E-A, E-B und E-C sind opt-in belegt; kein Produktions-Cutover"
       ],
       "acceptance": [
-        "PostgreSQL-Pfad für alle Domänen-Endpunkte (nodes, accounts, edges) aktiv",
+        "PostgreSQL-Pfad f\u00fcr alle Dom\u00e4nen-Endpunkte (nodes, accounts, edges) aktiv",
         "Migrations-SQL vorhanden und per CI belegt",
         "Phase E Write-Path-Cutover belegt; JSONL nicht mehr versteckte Runtime-Wahrheit"
       ],
@@ -744,10 +744,10 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "README.md enthält oben einen Start-Here-Block mit expliziten Links zu Constitution, System Map, Runtime, Operations und Architecture Overview",
+        "README.md enth\u00e4lt oben einen Start-Here-Block mit expliziten Links zu Constitution, System Map, Runtime, Operations und Architecture Overview",
         "Alle Start-Here-Zielpfade existieren im Repo",
-        "docs/_generated/system-map.md wird über Makefile blockierend drift-geprüft",
-        "System-Map-Generator läuft deterministisch genug für einen diff-guard",
+        "docs/_generated/system-map.md wird \u00fcber Makefile blockierend drift-gepr\u00fcft",
+        "System-Map-Generator l\u00e4uft deterministisch genug f\u00fcr einen diff-guard",
         "Docmeta-Blueprint Phase 5.1 ist nur nach Code-/Guard-Beleg abgehakt"
       ],
       "links": {
@@ -776,11 +776,11 @@
       ],
       "missing_evidence": [
         "PR-CI-Lauf unter erzwungener Node-24-Action-Runtime ausstehend",
-        "Verbleibende Node-20-Metadatenwarnungen müssen nach PR-CI für Stage B erfasst werden",
+        "Verbleibende Node-20-Metadatenwarnungen m\u00fcssen nach PR-CI f\u00fcr Stage B erfasst werden",
         "Action-Ref-Modernisierung bleibt Stage B, falls Warnungen bestehen"
       ],
       "acceptance": [
-        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgeführten Workflows mit bekannten JavaScript-Actions gesetzt.",
+        "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 ist in direkt ausgef\u00fchrten Workflows mit bekannten JavaScript-Actions gesetzt.",
         "Kein Gebrauch von ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION.",
         "CI-Lauf dokumentiert, ob Node-20-Metadatenwarnungen verbleiben; verbleibende Warnungen werden Stage B zugeordnet."
       ],
@@ -811,7 +811,7 @@
         "docs/reports/domain-runtime-data-source-reconciliation.md"
       ],
       "missing_evidence": [
-        "repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 fehlt",
+        "repr\u00e4sentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 fehlt",
         "FK-vs-Guard-Policyentscheidung fehlt"
       ],
       "acceptance": [
@@ -845,7 +845,7 @@
         "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
       ],
       "missing_evidence": [
-        "DB-PROOF-001 ist nur partial; repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 und FK-vs-Guard-Policyentscheidung fehlen.",
+        "DB-PROOF-001 ist nur partial; repr\u00e4sentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 und FK-vs-Guard-Policyentscheidung fehlen.",
         "Keine FK-Migration und kein Referenz-Guard implementiert"
       ],
       "acceptance": [
@@ -1074,7 +1074,7 @@
         "docs/reports/cost-report.md",
         "docs/tasks/DEPLOY-DNS-001B.md",
         "PR #1240 auf Branch docs/docs-ctl-001-orphan-lifecycle (Commit c9a9a19d)",
-        "Generatorlauf bestätigt No orphans found"
+        "Generatorlauf best\u00e4tigt No orphans found"
       ],
       "missing_evidence": [],
       "acceptance": [
@@ -1214,6 +1214,49 @@
         ]
       },
       "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOCMETA-REPORT-LIFECYCLE-001",
+      "title": "Report-Lifecycle-Rollout reconciliieren und Restbestand ratcheten",
+      "area": "docs",
+      "status": "partial",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "docs/process/report-lifecycle.md",
+        "docs/process/report-lifecycle-contract-alignment.md",
+        "scripts/docmeta/validate_report_lifecycle.py",
+        "scripts/docmeta/tests/test_validate_report_lifecycle.py",
+        "scripts/docmeta/generate_report_lifecycle.py",
+        "scripts/docmeta/generate_report_lifecycle_inventory.py",
+        ".github/workflows/docs-guard.yml"
+      ],
+      "missing_evidence": [
+        "Der vom aktuellen Lifecycle-Validator gemeldete Restbestand ist noch nicht vollst\u00e4ndig evidenzbasiert klassifiziert",
+        "Semantische Validatorpr\u00fcfungen f\u00fcr Enums, ISO-Datum, owner_task-Existenz und Supersession-Konsistenz fehlen",
+        "Changed-only strict ist noch nicht umgesetzt",
+        "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
+      ],
+      "acceptance": [
+        "Policy und Contract-Alignment beschreiben den tats\u00e4chlich implementierten Rollout-Stand ohne \u00fcberholte Gegenwartsclaims",
+        "owner_task- und review_after-Semantik sind als report-spezifische Prozessregel dokumentiert",
+        "Der Lifecycle-Validator l\u00e4uft f\u00fcr relevante \u00c4nderungen nicht blockierend im CI-Warnmodus",
+        "Lifecycle-Overview und Lifecycle-Inventory werden deterministisch durch ihre Generatoren erzeugt",
+        "Alle verbleibenden Reports erhalten in sp\u00e4teren kleinen Slices eine evidenzbasierte Klassifikation oder eine explizit begr\u00fcndete Leerstelle",
+        "Changed-only strict wird erst nach ausreichender Bestandsbereinigung eingef\u00fchrt",
+        "Global strict bleibt deaktiviert, solange Bestandsfindings existieren"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [],
+        "docs": [
+          "docs/process/report-lifecycle.md",
+          "docs/process/report-lifecycle-contract-alignment.md"
+        ]
+      },
+      "updated_at": "2026-06-19"
     }
   ]
 }

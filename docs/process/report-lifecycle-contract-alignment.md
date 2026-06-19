@@ -2,7 +2,7 @@
 id: process.report-lifecycle-contract-alignment
 title: Report Lifecycle Contract Alignment
 doc_type: decision
-status: draft
+status: active
 summary: >
   Entscheidungsvorbereitung und Zielentscheidung zur Abgrenzung von DocMeta-
   Status, Report-Lifecycle-Zustand, Lifecycle-Feldern, Inventory-Tooling und
@@ -35,8 +35,7 @@ und welche Felder als report-spezifisches Lifecycle-Modell eingeführt werden.
   DocMeta-Statuswerte.
 - Die bestehende Supersession-Mechanik nutzt `relations` mit
   `type: supersedes`.
-- Das aktuelle Inventory-Tooling liest noch `status` für terminale Zustände und
-  kennt `lifecycle_state` noch nicht.
+
 
 ## Nicht-Ziele
 
@@ -51,7 +50,7 @@ und welche Felder als report-spezifisches Lifecycle-Modell eingeführt werden.
 - Keine Archivierung.
 - Keine Löschung.
 
-## Entscheidung
+## Ursprüngliche Entscheidung
 
 Report-Lifecycle-Metadaten werden zunächst als report-spezifisches Zielmodell
 behandelt.
@@ -128,30 +127,24 @@ Wenn `superseded_by` später genutzt wird, muss ein Validator mindestens prüfen
 ob die umgekehrte `relations[type=supersedes]`-Relation existiert oder ob
 bewusst eine andere kanonische Richtung beschlossen wurde.
 
-## Inventory- und Validator-Abgrenzung
+## Implementierter Stand
 
-Das bestehende Report-Lifecycle-Inventory-Tooling bleibt in diesem PR
-unverändert.
+Die Entscheidung wurde in folgenden Repo-Flächen umgesetzt:
 
-Das generierte Inventory-Artefakt darf sich nur ändern, wenn `make generate`
-eine reproduzierbare Aktualisierung des aktuellen Dokumentationsgraphen erzeugt.
+- `scripts/docmeta/generate_report_lifecycle_inventory.py`
+- `scripts/docmeta/generate_report_lifecycle.py`
+- `scripts/docmeta/validate_report_lifecycle.py`
+- `scripts/docmeta/tests/test_validate_report_lifecycle.py`
+- `docs/_generated/report-lifecycle-inventory.md`
+- `docs/_generated/report-lifecycle.md`
 
-Es ist aktuell eine Bestandsaufnahme und liest noch:
+Dabei gilt:
 
-- `status`
-- `lifecycle`
-- `owner_task`
-- `review_after`
-- `superseded_by`
-
-Das Inventory kennt `lifecycle_state` noch nicht. Diese Abweichung ist in Phase
-1.5 bewusst akzeptiert, weil dieser PR nur die Modellentscheidung trifft.
-
-Ein späterer Tooling-PR muss entscheiden, ob:
-
-- das Inventory zusätzlich `lifecycle_state` ausliest,
-- terminale Zustände von `status` auf `lifecycle_state` umgestellt werden,
-- oder ein separates Report-Lifecycle-Schema diese Prüfung übernimmt.
+- `lifecycle_state` wird vom Inventory verarbeitet.
+- Der Validator existiert.
+- Modi `report`, `warn` und `strict` existieren.
+- Pilot und Teil-Backfills sind erfolgt.
+- CI-Blocking ist noch nicht aktiviert.
 
 ## Legacy ohne Ersatz
 
@@ -166,46 +159,12 @@ Dafür braucht es später eine explizite Regel, zum Beispiel:
 
 In diesem PR wird keine solche Ausnahme technisch eingeführt.
 
-## Konsequenzen für Phase 2
+## Verbleibende Entscheidungen
 
-Der Pilot darf erst nach dieser Entscheidung erfolgen.
-
-Für den ersten Pilot-Report soll nur bestehendes DocMeta-Vokabular im Feld
-`status` verwendet werden. Neue Report-Zustände gehören in `lifecycle_state`,
-nicht in `status`.
-
-Beispiel für den späteren Pilot:
-
-```yaml
-doc_type: report
-status: active
-lifecycle: audit
-owner_task: OPT-ARC-001
-review_after: 2026-07-13
-lifecycle_state: active
-```
-
-## Konsequenzen für Phase 3
-
-Der spätere Validator soll zunächst report-spezifisch arbeiten.
-
-Er soll prüfen:
-
-- Reports unter `docs/reports/*.md`.
-- Existenz und Format von `lifecycle`.
-- Existenz und Format von `owner_task`.
-- ISO-Format von `review_after`.
-- Zulässigkeit von `lifecycle_state`.
-- Konsistenz von `superseded_by` mit `relations[type=supersedes]`.
-- Keine harte globale DocMeta-Status-Erweiterung ohne separaten Contract-PR.
-
-## Offene Folgeentscheidungen
-
-- Wird `lifecycle_state` Teil von `contracts/docmeta.schema.json`?
-- Oder entsteht ein eigenes Report-Lifecycle-Schema?
-- Wird `superseded_by` gespeichert, abgeleitet oder vermieden?
-- Wie wird Legacy ohne Ersatz maschinenlesbar ausgenommen?
-- Wann darf `status: deprecated` mit `lifecycle_state: archived` kombiniert
-  werden?
-- Wann wird das Inventory-Tooling auf `lifecycle_state` ausgerichtet?
-- Ob und wann `repo.meta.yaml` diese Policy als kanonische Quelle registriert.
+- Schemaort für report-spezifische Lifecycle-Felder
+- Zulässige Enums für `lifecycle` und `owner_task`
+- ISO-Datumsvalidierung für `review_after`
+- `owner_task`-Existenzprüfung
+- Supersession-Konsistenz (`superseded_by` vs `relations[type=supersedes]`)
+- Changed-only strict
+- Global strict

@@ -2,7 +2,7 @@
 id: process.report-lifecycle
 title: Report Lifecycle Policy
 doc_type: policy
-status: draft
+status: active
 summary: >
   Policy für Lebenszyklus, Status, Pflichtfelder, Archivierung und Löschung
   von Reports.
@@ -19,10 +19,11 @@ relations:
 
 ## Zweck
 
-Diese Datei ist der vorgeschlagene Zielort für Report-Lifecycle-Regeln. Sie
-bleibt `draft`, bis die Policy in einem späteren Schritt in das Truth Model
-und den DocMeta-Contract integriert oder bewusst als nicht-kanonische
-Prozessregel bestätigt wird.
+Diese Datei ist die Report-Lifecycle-Regel.
+
+Diese Policy ist eine aktive, report-spezifische Prozessregel.
+Sie erweitert den globalen DocMeta-Contract nicht.
+Neue globale DocMeta-Felder oder Statuswerte benötigen weiterhin einen separaten Contract-PR.
 
 Reports sollen nicht dauerhaft als scheinbar aktuelle Wahrheit im Repo liegen.
 Jeder Report soll später beantworten können:
@@ -62,6 +63,33 @@ Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports 
 - Diese Policy verschärft keine CI.
 - Diese Policy verändert keine Task-Wahrheit.
 - Diese Policy ersetzt keine fachliche Review-Entscheidung.
+
+## Implementierungsstand
+
+### Umgesetzt
+
+- Lifecycle-Inventar
+- Policy
+- Contract-Alignment
+- Pilotannotation
+- report-spezifischer Validator
+- Modi `report`, `warn`, `strict`
+- generierte Lifecycle-Übersicht
+- mehrere kleine Backfill-Slices
+
+### Aktuell in Arbeit
+
+- Reconciliation von Policy und implementiertem Stand
+- nicht blockierender CI-Warnmodus
+- verbleibende Report-Triage
+- kleine Backfill-Slices
+
+### Noch nicht umgesetzt
+
+- vollständiger Rest-Backfill
+- semantisch gehärtete Feldvalidierung
+- changed-only strict
+- global strict
 
 ## Contract-Alignment-Gate
 
@@ -139,9 +167,18 @@ Wichtig:
 ## Lifecycle-Felder
 
 - **lifecycle**: Report-Klasse oder Lifecycle-Rolle.
-- **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
+- **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt.
+  - `owner_task` verweist bevorzugt auf eine registrierte Task-ID.
+  - Ein abgeschlossener Task darf Eigentümer eines historischen Proof- oder Audit-Reports bleiben.
+  - Keine Pseudo-Task-ID nur zur Befüllung des Feldes erfinden.
+  - Fehlt ein belastbarer Eigentümer, bleibt die Leerstelle sichtbar.
+  - Querschnittsreports dürfen erst annotiert werden, wenn ein ehrlicher Eigentümer bestimmt ist.
 - **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
   fällig wird.
+  - Das Datum muss durch fachlichen Anlass, Meilenstein oder Review-Rhythmus begründet sein.
+  - Kein pauschaler, unbelegter 30-Tage-Default.
+  - Ein überfälliges Datum macht einen Report nicht automatisch falsch, sondern reviewbedürftig.
+  - Externe Provider-, DNS- oder Runtime-Claims benötigen vor Bestätigung einen frischen Live-Check.
 - **lifecycle_state**: Report-spezifischer Lifecycle-Zustand, zum Beispiel
   `active`, `deferred`, `superseded` oder `archived`. Dieses Feld ist Teil des
   Zielmodells und wird erst nach Contract-Alignment oder eigenem
@@ -277,19 +314,12 @@ Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
 
 ## Rollout-Modell
 
-1. **Inventory vorhanden**: Reportbestand sichtbar machen.
-2. **Policy definieren**: diese Datei.
-3. **Contract Alignment**: entscheiden, ob DocMeta-Contract,
-   Architecture-Doku oder ein separates Lifecycle-Schema erweitert wird.
-4. **Pilot**: genau einen Report annotieren, erst nach Contract Alignment.
-5. **Validator**: `report`, `warn` und `strict` implementieren. `report` ist
-   lokal nutzbar, `warn` kann nicht-blockierend in CI laufen, `strict` bleibt
-   vorhanden, aber noch nicht aktiv.
-6. **Backfill**: kleine Slices statt Massen-PR.
-7. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
-8. **Global strict**: erst nach abgeschlossenem Backfill.
-9. **Archivierung**: zunächst Lifecycle-State-only.
-10. **Löschung**: nur separat und nach Referenzcheck.
+1. Warnmodus in CI,
+2. evidenzbasierte Resttriage,
+3. kleine Backfill-Slices,
+4. semantische Validatorhärtung,
+5. changed-only strict,
+6. global strict erst bei bereinigtem Bestand.
 
 Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
 
