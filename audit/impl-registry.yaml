@@ -79,6 +79,8 @@ implementations:
       - .github/workflows/compose-smoke.yml
       - scripts/tests/test_compose_volumes_guard.sh
       - scripts/guard-compose-no-relative-volumes.sh
+      - scripts/guard/domain-single-instance-guard.sh
+      - scripts/tests/test_domain_single_instance_guard.sh
 
   - id: impl.contracts
     path: contracts/domain/
@@ -142,6 +144,8 @@ implementations:
       - docs/blueprints/map-blaupause.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
+      - scripts/guard/domain-single-instance-guard.sh
+      - scripts/tests/test_domain_single_instance_guard.sh
 
   - id: impl.guard.basemap-runtime-proof
     path: scripts/guard/basemap-runtime-proof.sh
@@ -167,3 +171,16 @@ implementations:
       - docs/blueprints/auth-roadmap.md
     verified_by:
       - apps/api/tests/db_session_store_persistence.rs
+
+  - id: impl.guard.domain-single-instance
+    path: scripts/guard/domain-single-instance-guard.sh
+    impl_type: guard
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/reports/domain-postgres-instance-coherence-decision.md
+      - docs/blueprints/domain-data-postgres-cutover.md
+    verified_by:
+      - scripts/tests/test_domain_single_instance_guard.sh
+      - .github/workflows/ci.yml

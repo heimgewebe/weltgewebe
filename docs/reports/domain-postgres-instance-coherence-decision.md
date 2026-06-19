@@ -160,39 +160,60 @@ unter `services.api` ausgewertet:
 Nur die Literale `0` und `1`, optional vollständig einfach oder doppelt zitiert,
 sind erlaubt. Leere, numerisch größere, symbolische, Alias- und expandierte
 Werte werden an diesen erkannten Keys blockiert. Gleichnamige Keys unter
-`environment`, `labels` oder tieferen Unterobjekten werden ignoriert.
+`environment`, `labels`, `annotations`, `x-*` oder tieferen Unterobjekten werden
+ignoriert.
+
+Nicht statisch beweisbare Formen am `api`-Service oder seinem `deploy`-Block
+werden fail-closed blockiert: ein Inline-Flow-Mapping (`api: { … }`,
+`deploy: { … }`), ein Alias als Servicewert (`api: *anchor`) und ein
+Merge-Key (`<<: *anchor`). Eine vollständige YAML-Anker-/Merge-Auflösung
+findet bewusst nicht statt.
 
 ### Docker-Compose-CLI
 
+Geprüft werden nur Zeilen, die tatsächlich ein `docker compose`- bzw.
+`docker-compose`-Kommando tragen (Flag-Form `--scale api=<value>` und
+Subkommando-Form `docker compose scale api=<value>`); fremde Tools und reine
+Prosa lösen nicht aus. Kommentare werden zuvor entfernt.
+
 Auf ausführbaren Flächen (`scripts`, `infra`, `.github/workflows`,
-`.devcontainer`, `Makefile`, `Justfile`) sind für `--scale api` nur `0` und `1`
+`.devcontainer`, `Makefile`, `Justfile`) sind für `api` nur `0` und `1`
 erlaubt. Fehlende, symbolische, expandierte oder andere Werte werden blockiert.
 
-In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N`, `<N>`
-und `<value>` erlaubt. Konkrete ungültige Dokumentationswerte bleiben sichtbar
-und werden nicht als Platzhalter glattgebügelt.
+In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N` und
+`<value>` erlaubt. `<N>`, `two`, `many`, `auto`, numerisch größere und
+expandierte Werte bleiben blockiert; konkrete ungültige Dokumentationswerte
+werden nicht als Platzhalter glattgebügelt.
 
 ### Caddy
 
 Kommentare werden entfernt, bevor eine Direktive erkannt wird. Gezählt werden
 `host:port`-Upstreams auf einer einzelnen `reverse_proxy`- oder `to`-Zeile,
 inklusive optionalem `http://` beziehungsweise `https://` und geklammerter IPv6-
-Adressen. Als geschützte API-Hosts gelten `api` und numerisch suffigierte
-Instanznamen wie `api-2`, `api_2` oder `api.2`. Namen wie `api-gateway`,
-`capital-api` oder `myapi` gelten nicht automatisch als diese API.
+Adressen. Als geschützte API-Hosts gelten `api`, `weltgewebe-api` und ihre
+numerisch suffigierten Instanznamen wie `api-2`, `api_2`, `api.2` oder
+`weltgewebe-api-1`. Namen wie `api-gateway`, `capital-api` oder `myapi` gelten
+nicht als diese API.
 
-### Scanfehler
+### Scanfehler und Exitcodes
 
-Fehler beim Auffinden oder Parsen der geprüften Dateien führen nicht zu einem
-stillen Pass. Der Guard meldet den unvollständigen Scan und schlägt fehl.
+Die Exitcodes sind getrennt: `0` = keine Verletzung, `1` = Single-Instance-
+Policy verletzt, `2` = interner Fehler (ein Scanner wie `find`, `grep` oder
+`awk` ist gescheitert oder eine Prüfung konnte nicht laufen). Interner Fehler
+hat Vorrang vor der Policy-Verletzung. Ein gescheiterter oder abgestürzter
+Scanner führt damit zu `2` (inconclusive), niemals zu einem stillen Pass und
+niemals zu einem bestandenen Negativtest.
 
 ## Bewusste Grenzen
 
 Der Guard ist kein vollständiger YAML-, Shell- oder Caddy-Parser. Nicht belegt
 sind insbesondere:
 
-- Compose-Inline-Maps und YAML-Merge-Key-Semantik;
+- vollständige Auflösung von Compose-Inline-Maps, YAML-Ankern und Merge-Keys
+  (diese Formen werden am `api`-Service fail-closed blockiert, nicht aufgelöst);
 - mehrzeilige Caddy-`to`-Blöcke mit einem Upstream pro Zeile;
+- das gerenderte Multi-File-Compose-Modell; geprüft werden einzelne Dateien;
+- Shell-Zeilenfortsetzungen eines `docker compose --scale`-Kommandos;
 - Caddy-Upstreamformen außerhalb der erkannten `host:port`-Tokens;
 - alternative API-Aliasnamen außerhalb der dokumentierten Hostkonvention;
 - der reale Live-Containerstand;
