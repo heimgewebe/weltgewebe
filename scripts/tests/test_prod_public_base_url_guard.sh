@@ -5,172 +5,191 @@ SCRIPT_DIR="$(
   cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1
   pwd
 )"
-GUARD_SCRIPT="${SCRIPT_DIR}/../guard/prod-public-base-url-guard.sh"
+REPO_ROOT="$(
+  cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1
+  pwd
+)"
+GUARD_SCRIPT="${REPO_ROOT}/scripts/guard/prod-public-base-url-guard.sh"
+BASE_SOURCE="${REPO_ROOT}/infra/compose/compose.prod.yml"
 
-if [ ! -f "$GUARD_SCRIPT" ]; then
-    echo "Guard script not found at $GUARD_SCRIPT" >&2
-    exit 1
-fi
+for required_file in "$GUARD_SCRIPT" "$BASE_SOURCE"; do
+  if [[ ! -f "$required_file" ]]; then
+    echo "ERROR: required test input missing: $required_file" >&2
+    exit 2
+  fi
+done
 
-TEST_TMP=$(mktemp -d)
-trap 'rm -rf "$TEST_TMP"' EXIT
+TEST_TMP="$(mktemp -d)"
+LAST_EXIT=0
+LAST_OUTPUT=""
+
+cleanup() {
+  rm -rf "$TEST_TMP"
+}
+trap cleanup EXIT
 
 mkdir -p "$TEST_TMP/infra/compose"
-cp "${SCRIPT_DIR}/../../infra/compose/compose.prod.yml" "$TEST_TMP/infra/compose/"
-
-run_guard() {
-    local caddy_web_host="$1"
-    local caddy_web_url="$2"
-
-    local tmp_env="$TEST_TMP/test.env"
-    cat > "$tmp_env" <<EOF
-DATABASE_URL=postgres://dummy:dummy@localhost:5432/dummy
-POSTGRES_USER=dummy
-POSTGRES_PASSWORD=dummy
-POSTGRES_DB=dummy
-WEB_UPSTREAM_HOST=$caddy_web_host
-WEB_UPSTREAM_URL=$caddy_web_url
-EOF
-
-    local out
-    local exit_code=0
-    # Provide the env file to the guard through WELTGEWEBE_ENV_FILE but actually we can't easily override the TMP_ENV inside the guard unless we export it or it uses an argument.
-    # Wait, the guard creates its own TMP_ENV. We can't override its TMP_ENV directly.
-    # Instead, the guard's TMP_ENV has hardcoded values!
-    # Ah! The prompt says "Die Fixture muss WEB_UPSTREAM_* dort setzen, wo der reale gerenderte Vertrag sie benötigt ... Caddy-Werte über die synthetische Env beziehungsweise einen gezielten Caddy-Override."
-    # Since the guard script hardcodes its TMP_ENV, the test script can't change the Caddy env via the guard's TMP_ENV easily unless we provide an override file for caddy too!
-
-    # We can inject Caddy values via the override file in the test.
-    out=$(REPO_ROOT="$TEST_TMP" bash "$GUARD_SCRIPT" 2>&1) || exit_code=$?
-
-    echo "$exit_code"
-    echo "$out"
-}
+cp "$BASE_SOURCE" "$TEST_TMP/infra/compose/compose.prod.yml"
 
 write_override() {
-    local app_base="$1"
-    local web_host="$2"
-    local web_url="$3"
-    local caddy_web_host="$4"
-    local caddy_web_url="$5"
-    local auth_login="$6"
-    local auth_token="$7"
+  local app_base="$1"
+  local api_web_host="$2"
+  local api_web_url="$3"
+  local caddy_web_host="$4"
+  local caddy_web_url="$5"
+  local auth_login="$6"
+  local auth_token="$7"
 
-    cat > "$TEST_TMP/infra/compose/compose.prod.override.yml" <<EOF
+  cat >"$TEST_TMP/infra/compose/compose.prod.override.yml" <<EOF_OVERRIDE
 services:
   api:
     environment:
       APP_BASE_URL: $app_base
       AUTH_PUBLIC_LOGIN: '$auth_login'
       AUTH_LOG_MAGIC_TOKEN: '$auth_token'
-      WEB_UPSTREAM_HOST: $web_host
-      WEB_UPSTREAM_URL: $web_url
+      WEB_UPSTREAM_HOST: $api_web_host
+      WEB_UPSTREAM_URL: $api_web_url
   caddy:
     environment:
       WEB_UPSTREAM_HOST: $caddy_web_host
       WEB_UPSTREAM_URL: $caddy_web_url
-EOF
+EOF_OVERRIDE
 }
 
-check_result() {
-    local name="$1"
-    local exit_code="$2"
-    local expected_code="$3"
-    local output="$4"
-    local expected_msg="$5"
-
-    if [ "$exit_code" -ne "$expected_code" ]; then
-        echo "FAIL: $name - Expected exit $expected_code, got $exit_code" >&2
-        echo "Output was: $output" >&2
-        exit 1
-    fi
-    if [ -n "$expected_msg" ] && [[ "$output" != *"$expected_msg"* ]]; then
-        echo "FAIL: $name - Expected message '$expected_msg' not found in output" >&2
-        echo "Output was: $output" >&2
-        exit 1
-    fi
-    echo "PASS: $name"
+run_guard() {
+  LAST_EXIT=0
+  LAST_OUTPUT="$(REPO_ROOT="$TEST_TMP" bash "$GUARD_SCRIPT" 2>&1)" || LAST_EXIT=$?
 }
 
-echo "Running prod-public-base-url-guard tests..."
+assert_result() {
+  local name="$1"
+  local expected_exit="$2"
+  local expected_fragment="$3"
 
-# Helper to run and check
-run_test() {
-    local name="$1"
-    local app_base="$2"
-    local web_host="$3"
-    local web_url="$4"
-    local caddy_host="$5"
-    local caddy_url="$6"
-    local auth_login="${7:-1}"
-    local auth_token="${8:-0}"
-    local expected_code="$9"
-    local expected_msg="${10}"
+  if [[ "$LAST_EXIT" -ne "$expected_exit" ]]; then
+    echo "FAIL: $name: expected exit $expected_exit, got $LAST_EXIT" >&2
+    echo "$LAST_OUTPUT" >&2
+    exit 1
+  fi
 
-    write_override "$app_base" "$web_host" "$web_url" "$caddy_host" "$caddy_url" "$auth_login" "$auth_token"
+  if [[ -n "$expected_fragment" && "$LAST_OUTPUT" != *"$expected_fragment"* ]]; then
+    echo "FAIL: $name: expected output fragment '$expected_fragment'" >&2
+    echo "$LAST_OUTPUT" >&2
+    exit 1
+  fi
 
-    # We pass the Caddy host/url to run_guard, but right now run_guard uses the override file to set Caddy env.
-    local res
-    res=$(run_guard "$caddy_host" "$caddy_url")
-    local exit_code
-    exit_code=$(echo "$res" | head -n1)
-    local output
-    output=$(echo "$res" | tail -n +2)
-
-    check_result "$name" "$exit_code" "$expected_code" "$output" "$expected_msg"
+  echo "PASS: $name"
 }
 
-# 1. Positiv
-run_test "1. Positiv: gültige Konfiguration" \
-    "https://weltgewebe.net" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "1" "0" \
-    0 ""
+run_case() {
+  local name="$1"
+  local app_base="$2"
+  local api_web_host="$3"
+  local api_web_url="$4"
+  local caddy_web_host="$5"
+  local caddy_web_url="$6"
+  local auth_login="$7"
+  local auth_token="$8"
+  local expected_exit="$9"
+  local expected_fragment="${10}"
 
-# 2. Negativ: interne APP_BASE_URL
-run_test "2. Negativ: interne APP_BASE_URL" \
-    "https://weltgewebe.home.arpa" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "1" "0" \
-    1 "api.environment.APP_BASE_URL"
+  write_override \
+    "$app_base" \
+    "$api_web_host" \
+    "$api_web_url" \
+    "$caddy_web_host" \
+    "$caddy_web_url" \
+    "$auth_login" \
+    "$auth_token"
+  run_guard
+  assert_result "$name" "$expected_exit" "$expected_fragment"
+}
 
-# 3. Negativ: öffentliche Caddy-WEB_UPSTREAM_URL
-run_test "3. Negativ: öffentliche Caddy-WEB_UPSTREAM_URL" \
-    "https://weltgewebe.net" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.home.arpa" "https://weltgewebe.net" \
-    "1" "0" \
-    1 "caddy.environment.WEB_UPSTREAM_URL"
+echo "Running prod-public-base-url guard tests..."
 
-# 4. Negativ: öffentlicher Caddy-WEB_UPSTREAM_HOST
-run_test "4. Negativ: öffentlicher Caddy-WEB_UPSTREAM_HOST" \
-    "https://weltgewebe.net" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.net" "https://weltgewebe.home.arpa" \
-    "1" "0" \
-    1 "caddy.environment.WEB_UPSTREAM_HOST"
+run_case \
+  "valid production contract" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "1" "0" \
+  0 "prod-public-base-url guard passed"
 
-# 5. Negativ: AUTH_PUBLIC_LOGIN ungleich 1
-run_test "5. Negativ: AUTH_PUBLIC_LOGIN ungleich 1" \
-    "https://weltgewebe.net" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "0" "0" \
-    1 "api.environment.AUTH_PUBLIC_LOGIN"
+run_case \
+  "internal APP_BASE_URL is rejected" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "1" "0" \
+  1 "services.api.environment.APP_BASE_URL"
 
-# 6. Negativ: AUTH_LOG_MAGIC_TOKEN ungleich 0
-run_test "6. Negativ: AUTH_LOG_MAGIC_TOKEN ungleich 0" \
-    "https://weltgewebe.net" "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "weltgewebe.home.arpa" "https://weltgewebe.home.arpa" \
-    "1" "1" \
-    1 "api.environment.AUTH_LOG_MAGIC_TOKEN"
+run_case \
+  "public API WEB_UPSTREAM_URL is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "1" "0" \
+  1 "services.api.environment.WEB_UPSTREAM_URL"
 
-# 7. fehlende Basisdatei
+run_case \
+  "public Caddy WEB_UPSTREAM_HOST is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.net" \
+  "https://weltgewebe.home.arpa" \
+  "1" "0" \
+  1 "services.caddy.environment.WEB_UPSTREAM_HOST"
+
+run_case \
+  "public Caddy WEB_UPSTREAM_URL is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.net" \
+  "1" "0" \
+  1 "services.caddy.environment.WEB_UPSTREAM_URL"
+
+run_case \
+  "disabled public login is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "0" "0" \
+  1 "services.api.environment.AUTH_PUBLIC_LOGIN"
+
+run_case \
+  "magic-token logging is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "1" "1" \
+  1 "services.api.environment.AUTH_LOG_MAGIC_TOKEN"
+
 rm "$TEST_TMP/infra/compose/compose.prod.yml"
-res=$(REPO_ROOT="$TEST_TMP" bash "$GUARD_SCRIPT" 2>&1) || exit_code=$?
-check_result "7. Negativ: fehlende Basisdatei" "$exit_code" 2 "$res" "Error: Compose files not found"
-cp "${SCRIPT_DIR}/../../infra/compose/compose.prod.yml" "$TEST_TMP/infra/compose/"
+run_guard
+assert_result \
+  "missing base Compose file is an execution error" \
+  2 \
+  "required Compose file missing: $TEST_TMP/infra/compose/compose.prod.yml"
+cp "$BASE_SOURCE" "$TEST_TMP/infra/compose/compose.prod.yml"
 
-# 8. fehlende Override-Datei
 rm "$TEST_TMP/infra/compose/compose.prod.override.yml"
-res=$(REPO_ROOT="$TEST_TMP" bash "$GUARD_SCRIPT" 2>&1) || exit_code=$?
-check_result "8. Negativ: fehlende Override-Datei" "$exit_code" 2 "$res" "Error: Compose files not found"
+run_guard
+assert_result \
+  "missing override Compose file is an execution error" \
+  2 \
+  "required Compose file missing: $TEST_TMP/infra/compose/compose.prod.override.yml"
 
-echo "All tests passed."
+echo "All prod-public-base-url guard tests passed."
