@@ -1089,7 +1089,7 @@
       "id": "DOCS-CTL-002",
       "title": "Blueprint-/Planning-Status-Konsistenz (draft/active/canonical/deprecated)",
       "area": "docs",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
@@ -1100,11 +1100,10 @@
         "docs/blueprints/kartenklarheit.md",
         "docs/blueprints/map-blaupause.md",
         "docs/index.md",
-        "PR #1241 auf Branch docs/docs-ctl-002-blueprint-status"
+        "PR #1241 merged from final head b6c58e751b934234e59848b5f0de7ecc34b77cac as merge commit 55b3c4b91a03855be96ece4b2ea54cef680a7b48",
+        "GitHub Actions run 27756033230 (task-index, pull_request, final head b6c58e751b934234e59848b5f0de7ecc34b77cac): task-index-check and all four task-control steps passed"
       ],
-      "missing_evidence": [
-        "PR-CI-Endzustand auf finalem HEAD fehlt noch; Blueprint-Status und Indexsprache wurden lokal konsistent gemacht"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Keine unbegruendeten draft-/canonical-Widersprueche; betroffene Blueprints werden einzeln gelesen und nicht pauschal hochgestuft",
         "Deprecated-Dokumente werden nicht reaktiviert",
@@ -1112,7 +1111,9 @@
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "1241"
+        ],
         "docs": [
           "docs/blueprints/kartenklarheit.md",
           "docs/blueprints/map-blaupause.md",
@@ -1120,7 +1121,7 @@
           "docs/index.md"
         ]
       },
-      "updated_at": "2026-06-18"
+      "updated_at": "2026-06-19"
     },
     {
       "id": "OPT-CI-003",

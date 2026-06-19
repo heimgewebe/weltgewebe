@@ -62,7 +62,6 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 | AUTH-PG-002 | auth | WebAuthn-Credential-Persistenz / Passkey-Cutover | open | high | `apps/api/src/auth/passkeys.rs` (PasskeyStore In-Memory); OPT-ARC-001-Non-Goal `webauthn_credential_writeback` | PostgreSQL-Persistenzmodell + Restart-Proof (Register→Reload→Login); Public/Private-Trennung; menschliches Review (credentials/) |
 | CI-TOOL-001 | ci | Dev-Setup: Task-Runner-Dedup (Makefile/Justfile) + Node/pnpm engines | open | medium | `Makefile`, `Justfile` (beide direkt `docker compose ... up/down`), `apps/web/package.json` (engines vorhanden), Root-`package.json` (engines fehlt) | Eine Compose-Ebene führt, andere delegiert; engines konsistent ergänzen; kleiner risikoarmer PR |
 | DOCS-CTL-001 | docs | Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B) | done | medium | `docs/reports/cost-report.md`, `docs/tasks/DEPLOY-DNS-001B.md` (beide im Orphan-Generator), PR #1240 | Fachliche Lifecycle-Einordnung statt kosmetischer Verlinkung; alte Deploy-/DNS-Aufgabe nicht reaktivieren |
-| DOCS-CTL-002 | docs | Blueprint-/Planning-Status-Konsistenz | partial | medium | `docs/reports/planning-registration-findings.md`, `docs/blueprints/kartenklarheit.md`, `docs/blueprints/map-blaupause.md`, `docs/index.md`, PR #1241 auf Branch docs/docs-ctl-002-blueprint-status | PR-CI-Endzustand auf finalem HEAD fehlt noch; Blueprint-Status und Indexsprache wurden lokal konsistent gemacht |
 
 ## Blocker
 
@@ -93,6 +92,7 @@ Die optimierte TODO-Liste wurde gegen den Repo-Stand abgeglichen und einsortiert
 
 | ID | Bereich | Titel | Evidenz |
 |---|---|---|---|
+| DOCS-CTL-002 | docs | Blueprint-/Planning-Status-Konsistenz | `docs/blueprints/kartenklarheit.md`, `docs/blueprints/map-blaupause.md`, `docs/index.md`; PR #1241; finaler `task-index`-Run `27756033230` auf HEAD `b6c58e751b934234e59848b5f0de7ecc34b77cac` grün |
 | TASK-CTL-001 | docs | Task-Control Phase 2 etablieren | `docs/tasks/`, `docs/reports/optimierungsstatus.json`, `scripts/docmeta/validate_task_index.py`, `scripts/docmeta/tests/test_validate_task_index.py` |
 | TASK-CTL-003 | ci | Task-Index-Generator und CI-Guard | `scripts/docmeta/generate_task_index.py`, `scripts/docmeta/tests/test_generate_task_index.py`, `scripts/docmeta/agent_entrypoint_smoke.py`, `scripts/docmeta/tests/test_agent_entrypoint_smoke.py`, `.github/workflows/task-index.yml`; PR-CI-Lauf 27643872404 (PR #1209, Commit `7cb5ec3364e1f47562574ca6fc729679c5056b29`): `task-index` grün |
 | DOCMETA-START-HERE-001 | docs | Start-Here Navigation und System-Map Drift Guard | `README.md`, `architecture/blueprint.docmeta-engine.md`, `scripts/docmeta/generate_system_map.py`, `Makefile` |
