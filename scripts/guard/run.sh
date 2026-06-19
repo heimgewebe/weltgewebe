@@ -23,3 +23,6 @@ echo "== guard: metrics ref consistency =="
 
 echo "== guard: caddy basemap route contract =="
 "${REPO_ROOT}/scripts/guard/caddy-basemap-route-guard.sh"
+
+echo "== guard: domain single-instance boundary =="
+"${REPO_ROOT}/scripts/guard/domain-single-instance-guard.sh"
