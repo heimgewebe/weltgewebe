@@ -45,12 +45,20 @@ relations:
 - Keine Änderung an `architecture/docmeta.schema.md`.
 - Keine Änderung an `repo.meta.yaml`.
 - Keine Änderung an `scripts/docmeta/**`.
-- Kein Validator.
-- Kein Backfill.
-- Kein Pilot-Report.
+- kein Validator.
+- kein Backfill.
+- kein Pilot-Report.
 - Keine Report-Frontmatter-Änderung.
 - Keine Archivierung.
 - Keine Löschung.
+
+## Aktuelle Nicht-Ziele
+
+- kein globaler Contract-Umbau,
+- kein Massen-Backfill,
+- kein Strict-Enforcement,
+- keine Archivierung oder Löschung,
+- keine automatische Owner- oder Reviewdatum-Ableitung.
 
 ## Aktuelle Nicht-Ziele
 
