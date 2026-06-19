@@ -152,9 +152,10 @@ Dabei gilt:
 - Modi `report`, `warn` und `strict` existieren.
 - Pilot und Teil-Backfills sind erfolgt.
 - Der Warnmodus ist im Docs Guard aktiv.
-- Findings bleiben nicht blockierend.
-- Toolfehler bleiben blockierend.
-- Beide Generatorartefakte werden im Diagnosejob erzeugt.
+- Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
+- Technische Fehler des Lifecycle-Validators bleiben im blockierenden
+  Validierungsjob blockierend.
+- Die Lifecycle-Generatoren laufen im nicht blockierenden Diagnosejob.
 - Kein Strict-Blocking.
 - Validator und Inventory erfassen derzeit nur direkte Markdown-Dateien unter
   `docs/reports/`; rekursive Archivpfade bleiben Folgearbeit.
