@@ -76,6 +76,13 @@ jobs:
             bash "$t"
           done
 
+      - name: Validate production public base URL contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO_ROOT="$GITHUB_WORKSPACE" \
+            bash scripts/guard/prod-public-base-url-guard.sh
+
       - name: Run core guard orchestrator
         shell: bash
         run: bash scripts/guard/run.sh
