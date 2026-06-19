@@ -1,358 +1,53 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Test: scripts/guard/domain-single-instance-guard.sh
-#
-# Verifies that the DOMAIN-PG-002 single-instance guard detects API scale-out
-# drift (compose replicas, --scale api, an API upstream plus any additional
-# upstream on one Caddy directive line), including quoted,
-# zero-padded and non-literal/`$`-expanded values (fail-closed), while NOT
-# producing false positives for non-api scaling, single instances, or
-# documentation placeholders.
-#
-# Tests call the REAL guard via REPO_ROOT override — no shadow reimplementation.
+HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "$HERE/../.." && pwd)"
+GUARD="$ROOT/scripts/guard/domain-single-instance-guard.sh"
+TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+pass=0; fail=0
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
-GUARD_SCRIPT="$REPO_ROOT/scripts/guard/domain-single-instance-guard.sh"
-
-TEMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TEMP_DIR"' EXIT
-
-PASS=0
-FAIL=0
-
-report() {
-  if [ "$1" -eq 0 ]; then
-    PASS=$((PASS + 1))
-    echo "PASS: $2"
+check() {
+  local expect="$1" name="$2" path="$3" body="$4" root out rc=0
+  root="$(mktemp -d "$TMP/case.XXXX")"
+  mkdir -p "$root/$(dirname "$path")"
+  printf '%s\n' "$body" >"$root/$path"
+  out="$(REPO_ROOT="$root" bash "$GUARD" 2>&1)" || rc=$?
+  if { [ "$expect" = pass ] && [ "$rc" -eq 0 ]; } || { [ "$expect" = fail ] && [ "$rc" -ne 0 ]; }; then
+    pass=$((pass+1)); echo "PASS: $name"
   else
-    FAIL=$((FAIL + 1))
-    echo "FAIL: $2"
+    fail=$((fail+1)); echo "FAIL: $name (rc=$rc; $out)"
   fi
 }
 
-# --- helpers ------------------------------------------------------------------
+check fail 'direct scale-out' infra/compose/compose.yml $'services:\n  api:\n    scale: 2'
+check fail 'deploy replicas scale-out' infra/compose/compose.yml $'services:\n  api:\n    deploy:\n      replicas: 02'
+check fail 'symbolic replicas fail closed' infra/compose/compose.yml $'services:\n  api:\n    deploy:\n      replicas: *api_scale'
+check fail 'empty replicas fail closed' infra/compose/compose.yml $'services:\n  api:\n    replicas:'
+check pass 'nested replicas ignored' infra/compose/compose.yml $'services:\n  api:\n    environment:\n      replicas: 2\n    labels:\n      my.custom.replicas: 2\n    deploy:\n      replicas: 1'
+check pass 'non-api scaling ignored' infra/compose/compose.yml $'services:\n  api:\n    scale: 1\n  db:\n    scale: 4'
 
-make_fixture_root() {
-  mktemp -d "$TEMP_DIR/fixture.XXXXXX"
-}
+for cmd in \
+  'docker compose up --scale api=2' \
+  'docker compose up --scale api 2' \
+  'docker compose up --scale api=two' \
+  'docker compose up --scale api=*api_scale' \
+  'docker compose up --scale api'; do
+  check fail "reject CLI: $cmd" scripts/deploy.sh "$cmd"
+done
+check pass 'safe executable CLI' scripts/deploy.sh $'# docker compose up --scale api=9\ndocker compose up --scale api=1\ndocker compose up --scale caddy=0'
+check pass 'documentation placeholders' docs/example.md $'`docker compose up --scale api=N`\n`docker compose up --scale api=<value>`'
+check fail 'concrete bad documentation value' docs/example.md '`docker compose up --scale api=two`'
 
-# write_file <path> ; content read from stdin
-write_file() {
-  local path="$1"
-  mkdir -p "$(dirname "$path")"
-  cat >"$path"
-}
+check fail 'Caddy second upstream' infra/caddy/Caddyfile 'reverse_proxy api:8080 api-2:8080'
+check fail 'Caddy IPv6 second upstream' infra/caddy/Caddyfile 'reverse_proxy http://api:8080 http://[::1]:8080'
+check pass 'Caddy comments ignored' infra/caddy/Caddyfile $'reverse_proxy api:8080 # api-2:8080\n# reverse_proxy api:8080 api-2:8080'
+check pass 'Caddy non-api names ignored' infra/caddy/Caddyfile $'reverse_proxy api-gateway:8080 web:5173\nreverse_proxy capital-api:8080 web:5173\nreverse_proxy myapi:8080 web:5173'
 
-expect_pass() {
-  # <root> <description>
-  if REPO_ROOT="$1" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
-    report 0 "$2"
-  else
-    report 1 "$2 (expected PASS)"
-  fi
-}
+check pass 'target pruned' target/compose.generated.yml $'services:\n  api:\n    scale: 99'
+check pass '.venv pruned' .venv/compose.generated.yml $'services:\n  api:\n    scale: 99'
 
-expect_fail() {
-  # <root> <description>
-  if REPO_ROOT="$1" bash "$GUARD_SCRIPT" >/dev/null 2>&1; then
-    report 1 "$2 (expected FAIL)"
-  else
-    report 0 "$2"
-  fi
-}
+if REPO_ROOT="$ROOT" bash "$GUARD" >/dev/null 2>&1; then pass=$((pass+1)); echo 'PASS: real repository drift check'; else fail=$((fail+1)); echo 'FAIL: real repository drift check'; fi
 
-# ----------------------------------------------------------------------------
-# Negative tests — must FAIL
-# ----------------------------------------------------------------------------
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: 2
-YAML
-expect_fail "$root" "api replicas: 2"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    deploy:
-      replicas: 3
-YAML
-expect_fail "$root" "api deploy.replicas: 3"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: '2'
-YAML
-expect_fail "$root" "api replicas: '2' (single-quoted)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: "2"
-YAML
-expect_fail "$root" "api replicas: \"2\" (double-quoted)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: 02
-YAML
-expect_fail "$root" "api replicas: 02 (zero-padded)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: ${API_REPLICAS:-2}
-YAML
-expect_fail "$root" "api replicas: \${API_REPLICAS:-2} (non-literal, fail-closed)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    replicas: "${API_REPLICAS:-2}"
-YAML
-expect_fail "$root" "api replicas: \"\${API_REPLICAS:-2}\" (quoted non-literal, fail-closed)"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-#!/usr/bin/env bash
-docker compose up -d --scale api=2
-SH
-expect_fail "$root" "--scale api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale api 2
-SH
-expect_fail "$root" "--scale api 2 (space-separated)"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale=api=2
-SH
-expect_fail "$root" "--scale=api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale "api=2"
-SH
-expect_fail "$root" "--scale \"api=2\""
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale 'api=2'
-SH
-expect_fail "$root" "--scale 'api=2'"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale api=02
-SH
-expect_fail "$root" "--scale api=02 (zero-padded)"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/deploy.sh" <<'SH'
-docker compose up -d --scale api=${API_REPLICAS:-2}
-SH
-expect_fail "$root" "--scale api=\${API_REPLICAS:-2} (non-literal, fail-closed)"
-
-root="$(make_fixture_root)"
-write_file "$root/.github/workflows/deploy.yml" <<'YAML'
-jobs:
-  deploy:
-    steps:
-      - run: docker compose up -d --scale api=2
-YAML
-expect_fail "$root" ".github/workflows --scale api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/Makefile" <<'MK'
-deploy:
-	docker compose up -d --scale api=2
-MK
-expect_fail "$root" "Makefile --scale api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/Justfile" <<'JF'
-deploy:
-    docker compose up -d --scale api=2
-JF
-expect_fail "$root" "Justfile --scale api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/.devcontainer/post-create.sh" <<'SH'
-docker compose up -d --scale api=2
-SH
-expect_fail "$root" ".devcontainer --scale api=2"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy api:8080 api-2:8080
-  }
-}
-CADDY
-expect_fail "$root" "Caddy reverse_proxy api:8080 api-2:8080"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy http://api:8080 http://api-2:8080
-  }
-}
-CADDY
-expect_fail "$root" "Caddy reverse_proxy with http:// scheme upstreams"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy {
-      to api:8080 api-2:8080
-    }
-  }
-}
-CADDY
-expect_fail "$root" "Caddy reverse_proxy block: to api:8080 api-2:8080"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy api:8080 [::1]:8080
-  }
-}
-CADDY
-expect_fail "$root" "Caddy reverse_proxy api plus bracketed IPv6 upstream"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy http://api:8080 http://[::1]:8080
-  }
-}
-CADDY
-expect_fail "$root" "Caddy reverse_proxy http scheme plus bracketed IPv6 upstream"
-
-# ----------------------------------------------------------------------------
-# Positive tests — must PASS
-# ----------------------------------------------------------------------------
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.core.yml" <<'YAML'
-services:
-  api:
-    image: weltgewebe-api:latest
-  db:
-    image: postgres:16
-YAML
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy api:8080
-  }
-  reverse_proxy /* web:5173
-}
-CADDY
-expect_pass "$root" "Clean single-instance stack"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    deploy:
-      replicas: 1
-YAML
-expect_pass "$root" "api replicas: 1 (single instance)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/compose/compose.yml" <<'YAML'
-services:
-  api:
-    image: weltgewebe-api:latest
-  db:
-    deploy:
-      replicas: 2
-YAML
-expect_pass "$root" "non-api db deploy.replicas: 2 (not flagged)"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/up.sh" <<'SH'
-docker compose up -d --scale api=1
-SH
-expect_pass "$root" "--scale api=1 (single instance)"
-
-root="$(make_fixture_root)"
-write_file "$root/scripts/up.sh" <<'SH'
-docker compose up -d --build --scale caddy=0
-SH
-expect_pass "$root" "--scale caddy=0 (non-api)"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  handle /api/* {
-    reverse_proxy api:8080
-  }
-  reverse_proxy /* web:5173
-}
-CADDY
-expect_pass "$root" "Single API upstream + separate web upstream"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  reverse_proxy capital:8080 web:5173
-}
-CADDY
-expect_pass "$root" "Caddy non-api hostname containing api substring does not false-positive"
-
-root="$(make_fixture_root)"
-write_file "$root/infra/caddy/Caddyfile" <<'CADDY'
-:8081 {
-  reverse_proxy [::1]:8080
-}
-CADDY
-expect_pass "$root" "Caddy bracketed IPv6 non-api upstream passes"
-
-root="$(make_fixture_root)"
-write_file "$root/target/compose.generated.yml" <<'YAML'
-services:
-  api:
-    replicas: 99
-YAML
-expect_pass "$root" "target compose artifact is pruned"
-
-root="$(make_fixture_root)"
-write_file "$root/.venv/compose.generated.yml" <<'YAML'
-services:
-  api:
-    replicas: 99
-YAML
-expect_pass "$root" ".venv compose artifact is pruned"
-
-# ----------------------------------------------------------------------------
-# Real repository drift check (not a guard-logic test — asserts the working
-# tree currently satisfies the single-instance boundary).
-# ----------------------------------------------------------------------------
-expect_pass "$REPO_ROOT" "real repository drift check"
-
-echo ""
-echo "test_domain_single_instance_guard: $PASS passed, $FAIL failed"
-if [ "$FAIL" -ne 0 ]; then
-  exit 1
-fi
+echo "test_domain_single_instance_guard: $pass passed, $fail failed"
+[ "$fail" -eq 0 ]

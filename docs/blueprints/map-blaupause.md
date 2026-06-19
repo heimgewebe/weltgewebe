@@ -2,7 +2,7 @@
 id: map-blaupause
 title: Basemap-Architektur-Blaupause
 doc_type: blueprint
-status: draft
+status: active
 summary: >
   Architektur-Blaupause für einen souveränen Basemap-Stack basierend auf
   MapLibre, PMTiles und einer reproduzierbaren Tile-Generierungs-Pipeline
@@ -16,7 +16,8 @@ relations:
 
 # Basemap-Architektur-Blaupause
 
-> **Hinweis:** Dies ist das normative Architektur-Dokument. Der exekutive Inkrementpfad dazu befindet sich in der [Basemap-Umsetzungsroadmap](map-roadmap.md). Blueprint und Roadmap sind als Paket zu verstehen.
+> Status: Aktives Architektur-Leitdokument für die Karten-/Basemap-Schicht.
+> Der exekutive Inkrementpfad dazu befindet sich in der [Basemap-Umsetzungsroadmap](map-roadmap.md). Blueprint und Roadmap sind als Paket zu verstehen.
 
 ## Kontext
 

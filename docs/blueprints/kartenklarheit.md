@@ -2,7 +2,7 @@
 id: docs.blueprints.kartenklarheit
 title: Blaupause zur Optimierung der Karte
 doc_type: blueprint
-status: draft
+status: active
 relations:
   - type: relates_to
     target: docs/reports/map-architekturkritik.md
@@ -17,6 +17,8 @@ relations:
 summary: Blaupause zur Optimierung der Kartenarchitektur von stiller Leere zu expliziter Szene.
 ---
 # Blaupause zur Optimierung der Karte
+
+> Status: Aktive Arbeitsblaupause für Kartenklarheit und UI-/Map-Optimierung.
 
 **These:** Die Karte ist nicht primär ein Stilproblem, sondern ein Wahrheits-, Zustands- und Contract-Problem.
 **Antithese:** Reines Refactoring der großen Map-Route oder bloße UI-Politur würde das Grundproblem verdecken.

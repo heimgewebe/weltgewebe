@@ -56,9 +56,9 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 
 ### Karten-Architektur
 
-– **Kartenklarheit:** [blueprints/kartenklarheit.md](blueprints/kartenklarheit.md) (Blaupause zur Optimierung)
+– **Kartenklarheit:** [blueprints/kartenklarheit.md](blueprints/kartenklarheit.md) — aktive Arbeitsblaupause zur Optimierung der Kartenklarheit.
 – **Roadmap Kartenklarheit:** [blueprints/kartenklarheit-roadmap.md](blueprints/kartenklarheit-roadmap.md) (Umsetzung)
-– **Basemap-Blaupause:** [blueprints/map-blaupause.md](blueprints/map-blaupause.md) (Architektur)
+– **Basemap-Blaupause:** [blueprints/map-blaupause.md](blueprints/map-blaupause.md) — aktives Architektur-Leitdokument der Karten-/Basemap-Schicht.
 – **Basemap-Roadmap:** [blueprints/map-roadmap.md](blueprints/map-roadmap.md) (Umsetzung)
 – **Kartenklarheit Phase 6:** [blueprints/kartenklarheit-phase6.md](blueprints/kartenklarheit-phase6.md) (Der Wahrheitsbeweis)
 
@@ -98,6 +98,7 @@ Kanonische Navigation. Neue UI-Dokumente bestehenden Kategorien zuordnen.
 – **Auth-Persistenzbereitschaft:** [reports/auth-persistence-readiness.md](reports/auth-persistence-readiness.md) (Diagnose zu OPT-API-002)
 – **Auth-Persistenz Zielarchitektur-Abgleich:** [reports/auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md) (ADR-0007: Produktion direkter Postgres; PgBouncer Dev-/Spezialpfad)
 – **Passkey Register-Verify Vorbereitung:** [reports/passkey-register-verify-prep.md](reports/passkey-register-verify-prep.md) (Diagnose und Folge-PR-Entscheidung)
+– **Domain Runtime Data Source Reconciliation:** [reports/domain-runtime-data-source-reconciliation.md](reports/domain-runtime-data-source-reconciliation.md) (Diagnose zu DB-PROOF-001: Runtime-/JSONL-Domain-Datenquelle derzeit nicht auditfähig)
 – **Cost Report:** [reports/cost-report.md](reports/cost-report.md)
 
 ### Prozess

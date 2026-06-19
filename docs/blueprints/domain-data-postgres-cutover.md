@@ -19,6 +19,8 @@ relations:
   - type: relates_to
     target: docs/reports/domain-account-write-path-proof.md
   - type: relates_to
+    target: docs/reports/domain-postgres-instance-coherence-decision.md
+  - type: relates_to
     target: docs/reports/domain-node-write-path-proof.md
   - type: relates_to
     target: docs/reports/optimierungsbericht.md
@@ -218,12 +220,10 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
   entschieden werden, ob `domain_edges.source_id`/`target_id` strikte
   Foreign Keys auf `domain_nodes(id)` erhalten oder ob eine lose
   Referenzsemantik mit Guard/Quarantäne-Report bewusst akzeptiert wird.
-- Multi-Instance-Kohärenz ist entschieden (DOMAIN-PG-002, Option A
-  Single-Instance-Invariant; siehe Abschnitt „Instance Coherence Boundary"
-  und `docs/reports/domain-postgres-instance-coherence-decision.md`):
-  prozesslokale Caches bedeuten, dass Instanz B Writes von Instanz A nicht
-  automatisch sieht, daher ist horizontale API-Skalierung bis auf Weiteres
-  ausgeschlossen.
+- Multi-Instance-Kohärenz ist entschieden (`DOMAIN-PG-002`, Option A):
+  prozesslokale Caches sind nicht instanzübergreifend kohärent; horizontale
+  API-Skalierung bleibt bis zu einer getesteten Kohärenzlösung ausgeschlossen.
+  Siehe `docs/reports/domain-postgres-instance-coherence-decision.md`.
 - E-Mail-Eindeutigkeit ist PostgreSQL-seitig noch nicht abgesichert.
 - Step-up-E-Mail-Persistenz nach PostgreSQL ist offen.
 - WebAuthn-Credential-Writeback und Passkey-Cutover sind offen.
@@ -236,37 +236,31 @@ Konkrete Abweichungen und offene Constraints bleiben je Phase zu prüfen.
 
 ## Instance Coherence Boundary
 
-For the current PostgreSQL-domain transition, the API domain read/write path is
-constrained to at most one API instance for this coherence boundary
-(DOMAIN-PG-002, Option A); normal operation expects one live API instance.
-Process-local domain state/caches are not cross-instance coherent. Horizontal
-scaling of API instances is explicitly out of scope until domain reads are fully
-DB-backed or a tested invalidation/coherence mechanism exists.
+Für den aktuellen PostgreSQL-Domain-Pfad gilt `DOMAIN-PG-002`, Option A:
+höchstens eine API-Instanz innerhalb dieser Kohärenzgrenze; der Normalbetrieb
+erwartet eine lebende Instanz. Das ist eine Deployment-Invariante, keine
+Multi-Instance-Kohärenzimplementierung und kein Verfügbarkeitsbeweis.
 
-This is a deployment invariant, not a cross-instance coherence implementation.
-Scale-to-zero is not a coherence violation; this boundary is not an availability
-proof.
+Operative Konsequenzen:
 
-Operational consequences:
+- `services.api.scale` darf nur das Literal `0` oder `1` sein.
+- `services.api.deploy.replicas` darf nur das Literal `0` oder `1` sein.
+- Ein direktes `services.api.replicas` wird ebenfalls nur mit `0` oder `1`
+  toleriert.
+- Auf ausführbaren Flächen darf `docker compose --scale api=<value>` nur mit `0` oder
+  `1` verwendet werden; Dokumentation darf ausschließlich klar markierte
+  Platzhalter verwenden.
+- Ein geschützter API-Upstream darf nicht zusammen mit einem weiteren Upstream
+  auf derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile stehen.
+- NATS gilt ohne dedizierten Invalidierungspfad und Tests nicht als
+  Domain-Cache-Kohärenz.
 
-- Do not run `docker compose --scale api=N` with `N > 1`.
-- Do not configure `deploy.replicas > 1` for the API service.
-- Do not place an API upstream together with any additional upstream on the
-  same Caddy `reverse_proxy`/`to` directive line.
-- Do not treat optional NATS availability as domain-cache coherence unless a
-  dedicated invalidation path and tests exist.
-
-The decision, the state/cache inventory and the deployment-topology evidence are
-recorded in `docs/reports/domain-postgres-instance-coherence-decision.md`. A
-static guard (`scripts/guard/domain-single-instance-guard.sh`, tested by
-`scripts/tests/test_domain_single_instance_guard.sh`) blocks the obvious
-scale-out drift.
-
-This boundary does not automatically unblock DOMAIN-PG-001, DB-PROOF-001,
-AUTH-PG-001 or AUTH-PG-002. Edge FK-vs-Guard remains blocked by representative
-runtime edge-audit evidence; the auth persistence tasks remain open and may
-proceed only under this single-instance boundary. This is a static decision and
-guard, not a runtime proof and not a PostgreSQL cutover.
+Der statische Guard
+`scripts/guard/domain-single-instance-guard.sh` und sein Test
+`scripts/tests/test_domain_single_instance_guard.sh` sichern diese klar
+erkennbaren Konfigurationsflächen ab. Parsergrenzen und Nicht-Beweise sind im
+Decision-Report dokumentiert. Die Grenze entsperrt weder `DOMAIN-PG-001` noch
+`DB-PROOF-001`, `AUTH-PG-001`, `AUTH-PG-002` oder den PostgreSQL-Cutover.
 
 ## Regeln für die Datenmigration
 

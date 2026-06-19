@@ -10,5 +10,4 @@ summary: Automatisch generierte Liste verwaister Dokumente.
 
 Generated automatically. Do not edit.
 
-- docs/reports/cost-report.md
-- docs/tasks/DEPLOY-DNS-001B.md
+_No orphans found._

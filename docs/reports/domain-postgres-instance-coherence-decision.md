@@ -6,16 +6,15 @@ status: active
 lifecycle_state: active
 lifecycle: audit
 owner_task: DOMAIN-PG-002
-review_after: 2026-09-16
+review_after: 2026-12-18
 created: 2026-06-18
-lang: en
+last_reviewed: 2026-06-19
+lang: de
 summary: >
-  DOMAIN-PG-002 decision record. Selects Option A (single-instance invariant)
-  for the current PostgreSQL-domain transition: weltgewebe runs at most one
-  API instance for domain read/write state (normal operation expects one live
-  instance) because domain and parts of auth state are process-local caches
-  with no tested cross-instance invalidation. Backed by a static guard against
-  obvious API scale-out drift.
+  DOMAIN-PG-002 entscheidet für den aktuellen PostgreSQL-Domain-Pfad Option A:
+  höchstens eine API-Instanz innerhalb dieser Kohärenzgrenze. Prozesslokale
+  Domain- und Auth-Zustände besitzen keine getestete instanzübergreifende
+  Invalidierung. Ein statischer Guard blockiert klar erkennbare Scale-out-Drift.
 relations:
   - type: relates_to
     target: docs/blueprints/domain-data-postgres-cutover.md
@@ -33,220 +32,205 @@ relations:
 
 # Domain PostgreSQL Instance Coherence Decision
 
-- Task: DOMAIN-PG-002
-- Decision: Option A — Single-Instance-Invariant
-- Status: done / decision-recorded / guard-backed
+- Task: `DOMAIN-PG-002`
+- Entscheidung: **Option A — Single-Instance-Invariante**
+- Status: `done / decision-recorded / guard-backed`
 
 ## Kurzurteil
 
-For the current PostgreSQL-domain transition, weltgewebe supports at most one
-API instance for domain read/write state for this coherence boundary; normal
-operation expects one live API instance. Horizontal scaling of API instances
-is explicitly out of scope until domain reads are fully DB-backed or a tested
-cross-instance invalidation/coherence mechanism exists.
+Für den aktuellen PostgreSQL-Domain-Pfad darf innerhalb dieser Kohärenzgrenze
+höchstens eine API-Instanz laufen. Der Normalbetrieb erwartet eine lebende
+API-Instanz. Horizontale API-Skalierung bleibt ausgeschlossen, bis entweder
+prozesslokale autoritative Domain-Caches entfallen oder eine getestete
+instanzübergreifende Invalidierungs- beziehungsweise Kohärenzlösung existiert.
 
-Scale-to-zero (`replicas: 0`, `--scale api=0`) is not a coherence violation, so
-the guard does not block it. This report defines a coherence boundary, not an
-availability proof.
-
-This is a deployment invariant, not a cross-instance coherence implementation.
+`scale: 0`, `deploy.replicas: 0` und `docker compose --scale api=0` verletzen
+die Kohärenzgrenze nicht. Die Entscheidung ist daher kein Verfügbarkeitsbeweis.
+Sie ist auch keine Multi-Instance-Kohärenzimplementierung.
 
 ## Problem
 
-The API keeps domain and auth-related state in process-local structures. If
-multiple API instances run concurrently, instance A can write state that
-instance B does not observe through its local cache. That creates a silent
-cache split-brain risk.
+`nodes`, `edges` und `accounts` werden beim Start geladen und anschließend aus
+prozesslokalen `Arc<RwLock<…>>`-Strukturen gelesen. Optionale PostgreSQL-
+Schreibpfade aktualisieren PostgreSQL und den lokalen Cache derselben Instanz.
+Eine zweite Instanz sieht diesen lokalen Cache-Write nicht automatisch.
 
-Even when a domain read source of PostgreSQL is configured, `nodes`, `edges`
-and `accounts` are loaded once into process-local `Arc<RwLock<…>>` caches at
-startup and all reads are served from those caches (verified in
-`apps/api/src/routes/nodes.rs`, `apps/api/src/routes/edges.rs` and
-`apps/api/src/routes/accounts.rs`). The optional PostgreSQL write paths update
-both PostgreSQL and the local cache. The code itself documents the boundary at
-`apps/api/src/routes/nodes.rs`:
+Auch Teile des Auth-Zustands bleiben prozesslokal: Magic-Link-Tokens,
+Step-up-Tokens, Challenges und Passkey-Zwischenzustände. Ohne explizite
+Invalidierung entsteht bei mehreren Instanzen ein stiller Cache-Split-Brain.
 
-> This is an in-process coherence guard, not a multi-instance cache
-> invalidation mechanism.
+## Geprüfte Evidenz
 
-## Evidence inspected
+Runtime und State:
 
-Runtime / state:
+- `apps/api/src/state.rs`
+- `apps/api/src/lib.rs`
+- `apps/api/src/domain_db.rs`
+- `apps/api/src/routes/accounts.rs`
+- `apps/api/src/routes/nodes.rs`
+- `apps/api/src/routes/edges.rs`
+- `apps/api/src/routes/auth.rs`
+- `apps/api/src/auth/accounts.rs`
+- `apps/api/src/auth/session.rs`
+- `apps/api/src/auth/session_db.rs`
+- `apps/api/src/auth/tokens.rs`
+- `apps/api/src/auth/step_up_tokens.rs`
+- `apps/api/src/auth/challenges.rs`
+- `apps/api/src/auth/passkeys.rs`
 
-- `apps/api/src/state.rs` (`ApiState`, `OrderedCache`, `Arc<RwLock<…>>` caches)
-- `apps/api/src/lib.rs` (state construction; session backend selection)
-- `apps/api/src/domain_db.rs` (PostgreSQL load/write helpers)
-- `apps/api/src/routes/accounts.rs` (`state.accounts` read/write path)
-- `apps/api/src/routes/nodes.rs` (`state.nodes` read/write path; in-process coherence comment)
-- `apps/api/src/routes/edges.rs` (`state.edges` read/write path)
-- `apps/api/src/routes/auth.rs` (auth flows over the auth stores)
-- `apps/api/src/auth/accounts.rs` (`AccountStore`: in-memory map + email index)
-- `apps/api/src/auth/session.rs` (`SessionBackend`, in-memory `SessionStore`)
-- `apps/api/src/auth/session_db.rs` (`DbSessionStore`: PostgreSQL-backed sessions)
-- `apps/api/src/auth/tokens.rs` (`TokenStore`: in-memory)
-- `apps/api/src/auth/step_up_tokens.rs` (`StepUpTokenStore`: in-memory)
-- `apps/api/src/auth/challenges.rs` (`ChallengeStore`: in-memory)
-- `apps/api/src/auth/passkeys.rs` (passkey stores: in-memory)
-
-Deployment / topology:
+Deployment und Automatisierung:
 
 - `infra/compose/compose.core.yml`
 - `infra/compose/compose.prod.yml`
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.heimserver.override.yml`
-- `infra/caddy/Caddyfile`, `infra/caddy/Caddyfile.dev`, `infra/caddy/Caddyfile.heim`, `infra/caddy/Caddyfile.prod`
+- `infra/caddy/Caddyfile*`
 - `scripts/weltgewebe-up`
 - `.github/workflows/compose-smoke.yml`
-- `docs/blueprints/domain-data-postgres-cutover.md`
+- `Makefile`, `Justfile`, `.devcontainer`
 
-## State / cache matrix
+## Zustandsmatrix
 
-| Surface | File | Process-local? | DB-backed? | Cross-instance invalidation? | Consequence |
-|---|---|---|---|---|---|
-| accounts | apps/api/src/state.rs, apps/api/src/auth/accounts.rs, apps/api/src/routes/accounts.rs | yes | read loads JSONL or PostgreSQL at startup; reads served from cache; `POST /accounts` write opt-in to PostgreSQL | no | single-instance boundary |
-| nodes | apps/api/src/state.rs, apps/api/src/routes/nodes.rs | yes | read loads JSONL or PostgreSQL at startup; reads served from cache; `PATCH /nodes` write opt-in to PostgreSQL | no | single-instance boundary |
-| edges | apps/api/src/state.rs, apps/api/src/routes/edges.rs | yes | read loads JSONL or PostgreSQL at startup; reads served from cache; `POST /edges` write opt-in to PostgreSQL | no | single-instance boundary |
-| sessions | apps/api/src/auth/session.rs, apps/api/src/auth/session_db.rs | only without `DATABASE_URL` | yes — `DbSessionStore` (PostgreSQL) when `DATABASE_URL` is set; in-memory otherwise | n/a when DB-backed (PostgreSQL is shared truth) | coherent when DB-backed; otherwise single-instance |
-| tokens (magic-link) | apps/api/src/auth/tokens.rs | yes | no | no | single-instance boundary |
-| step_up_tokens | apps/api/src/auth/step_up_tokens.rs | yes | no | no | single-instance boundary |
-| challenges | apps/api/src/auth/challenges.rs | yes | no | no | single-instance boundary |
-| passkey_registrations | apps/api/src/auth/passkeys.rs | yes | no | no | single-instance boundary |
-| passkey_registration_grants | apps/api/src/auth/passkeys.rs | yes | no | no | single-instance boundary |
-| passkey_authentications | apps/api/src/auth/passkeys.rs | yes | no | no | single-instance boundary |
-| passkeys | apps/api/src/auth/passkeys.rs | yes | no | no | single-instance boundary |
-| nats_client | apps/api/src/state.rs | optional infra | n/a | not for domain cache | not a coherence solution |
+| Oberfläche | Prozesslokal | DB-gestützt | Instanzübergreifende Invalidierung | Konsequenz |
+|---|---:|---:|---:|---|
+| accounts | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
+| nodes | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
+| edges | ja | Read/Write opt-in | nein | Single-Instance-Grenze |
+| sessions | ohne `DATABASE_URL` | mit `DATABASE_URL` | PostgreSQL ist gemeinsame Wahrheit | allein nicht ausreichend |
+| magic-link tokens | ja | nein | nein | Single-Instance-Grenze |
+| step-up tokens | ja | nein | nein | Single-Instance-Grenze |
+| challenges | ja | nein | nein | Single-Instance-Grenze |
+| Passkey-Zwischenzustände | ja | nein | nein | Single-Instance-Grenze |
+| `nats_client` | optional | nicht zutreffend | kein Domain-Invalidierungspfad | keine Kohärenzlösung |
 
-NATS note: NATS is available as optional infrastructure but is not used as a
-tested domain cache invalidation mechanism. `nats_client` is only consulted by
-the readiness probe (`apps/api/src/routes/health.rs`); there is no
-publish/subscribe or invalidation path for domain caches in the code. It must
-not be treated as a coherence solution unless a dedicated invalidation path and
-tests are added.
+DB-gestützte Sessions heben die Grenze nicht auf, weil Domain-Caches und weitere
+Auth-Zustände weiterhin prozesslokal bleiben. NATS wird nur als optionale
+Infrastruktur beziehungsweise im Readiness-Kontext verwendet; ein getesteter
+Publish-/Subscribe-Invalidierungspfad für Domain-Caches existiert nicht.
 
-Session note: when `DATABASE_URL` is set, sessions are persisted in PostgreSQL
-via `DbSessionStore` and are therefore coherent across instances. Sessions are
-the only listed surface that becomes cross-instance coherent under the standard
-PostgreSQL deployment. They do not lift the single-instance boundary, because
-the domain caches (`nodes`, `edges`, `accounts`) and the remaining auth ephemera
-(`tokens`, `step_up_tokens`, `challenges`, passkey stores) stay process-local
-and authoritative for reads.
+## Topologiebefund
 
-## Topology matrix
+In den geprüften Compose-, Caddy-, Script-, CI- und Dokumentationsflächen wurde
+keine beabsichtigte API-Skalierung gefunden. Die vorhandenen Caddy-Routen nutzen
+jeweils einen API-Upstream. `scripts/weltgewebe-up` skaliert nur Caddy auf null,
+nicht die API.
 
-| Path | Evidence | API instances | Scale-out evidence | Result |
-|---|---|---|---|---|
-| dev compose | infra/compose/compose.core.yml | 1 service (`api`) | none found | single-instance |
-| prod compose | infra/compose/compose.prod.yml | 1 service (`api`) | none found | single-instance |
-| prod override | infra/compose/compose.prod.override.yml | env/volumes only on `api` | none found | single-instance |
-| heimserver override | infra/compose/compose.heimserver.override.yml | env only on `api`; no extra replica | none found | single-instance |
-| Caddy dev/heim/prod/base | infra/caddy/Caddyfile.dev, Caddyfile.heim, Caddyfile.prod, Caddyfile | `reverse_proxy api:8080` (single upstream per route) | no multi-upstream list | single API upstream |
-| scripts | scripts/weltgewebe-up | n/a | only `--scale caddy=0` (scales Caddy down); no `--scale api` | single-instance |
-| CI compose smoke | .github/workflows/compose-smoke.yml | `docker compose --profile dev up` (single) | no `--scale api` | single-instance smoke |
+Das ist ein statischer Repo-Befund. Er beweist weder den aktuellen Live-
+Containerstand noch die Laufzeitkorrektheit.
 
-No API scale-out evidence was found in the inspected deployment and automation
-surfaces: `infra/compose`, `infra/caddy`, `scripts`, `docs`,
-`.github/workflows`, `Makefile`, `Justfile`, `.devcontainer`. This is a static
-inspection of those surfaces, not a runtime proof of the live container count.
+## Entscheidung
 
-## Decision
+Option A wird verbindlich gewählt:
 
-Option A is selected.
+1. Der aktuelle Domain-Pfad unterstützt höchstens eine API-Instanz.
+2. Eine zweite Instanz darf nicht allein durch Konfigurationsdrift entstehen.
+3. Multi-Instance-Betrieb benötigt einen neuen Task und eigenen Proof.
+4. Die Entscheidung wird vorzeitig überprüft, sobald Domain-Reads vollständig
+   DB-gestützt sind oder eine Invalidierungs-/Kohärenzschicht eingeführt wird.
 
-The current PostgreSQL-domain transition is constrained to a single API
-instance. Multi-instance API deployment is unsupported for domain read/write
-state until one of the following exists:
+## Operative Folgen
 
-1. domain reads become fully DB-backed and no process-local domain cache is
-   authoritative;
-2. a tested cross-instance invalidation mechanism exists;
-3. a tested external state/coherence layer exists.
+- Kein `api.scale` größer als eins.
+- Kein `api.deploy.replicas` größer als eins.
+- Kein direktes `api.replicas` außerhalb der erlaubten Literale null oder eins.
+- Kein konkretes `docker compose --scale api=<value>` mit einem Wert ungleich null
+  oder eins auf ausführbaren Flächen.
+- Kein geschützter API-Upstream zusammen mit einem weiteren Upstream auf
+  derselben Caddy-`reverse_proxy`- oder `to`-Direktivzeile.
+- Optionale NATS-Verfügbarkeit gilt nicht als Cache-Kohärenz.
 
-## Consequences
+## Statischer Guard
 
-- Do not run more than one API instance for the current domain PostgreSQL transition.
-- Do not use `docker compose --scale api=N` with `N > 1`.
-- Do not add `deploy.replicas > 1` for `api`.
-- Do not place an API upstream together with any additional upstream on the
-  same Caddy `reverse_proxy`/`to` directive line.
-- Future scale-out requires a new task and proof.
+`scripts/guard/domain-single-instance-guard.sh` wird über
+`scripts/guard/run.sh` und den Guard-Test-Loop in `.github/workflows/ci.yml`
+ausgeführt. `scripts/tests/test_domain_single_instance_guard.sh` ruft stets den
+echten Guard über einen `REPO_ROOT`-Override auf.
 
-## Guard
+Der Guard prüft:
 
-A scope-limited static guard enforces the obvious, robustly-detectable
-scale-out drift:
+### Compose
 
-- `scripts/guard/domain-single-instance-guard.sh`
-- `scripts/tests/test_domain_single_instance_guard.sh`
+Für blockartig geschriebenes Compose-YAML werden nur strukturell relevante Keys
+unter `services.api` ausgewertet:
 
-The guard blocks, API-specific and fail-closed:
+- direkter Key `scale`;
+- direkter Key `replicas` als Legacy-/Fehlkonfigurationsfläche;
+- direkter Key `deploy.replicas`.
 
-1. `replicas` on the `api` compose service whose value is not clearly `0` or
-   `1` — numeric `>= 2`, or a non-literal/`$`-expanded value (e.g.
-   `${API_REPLICAS:-2}`). Quoted and zero-padded values (`"2"`, `02`) are
-   normalised. Compose files are found by name; the `services:` indentation is
-   detected dynamically (not bound to two spaces).
-2. `docker compose --scale api=<value>` whose value is not clearly `0` or `1`,
-   across `docs`, `scripts`, `infra`, `.github/workflows`, `Makefile`,
-   `Justfile`, `.devcontainer`. The equals and space forms (`--scale=api=N`,
-   `--scale api N`), quoted, zero-padded and `$`-expanded (`api=${VAR}`) values
-   are all caught.
-3. an API upstream together with any additional upstream on the same Caddy
-   `reverse_proxy`/`to` directive line (single-line drift; `http(s)://` scheme
-   upstreams included).
+Nur die Literale `0` und `1`, optional vollständig einfach oder doppelt zitiert,
+sind erlaubt. Leere, numerisch größere, symbolische, Alias- und expandierte
+Werte werden an diesen erkannten Keys blockiert. Gleichnamige Keys unter
+`environment`, `labels` oder tieferen Unterobjekten werden ignoriert.
 
-It does not flag: `--scale caddy=0`, a clear 0-or-1 API instance count
-(`replicas: 0`, `replicas: 1`, `--scale api=0`, `--scale api=1`), `replicas` on
-a non-API service, a single API upstream, or a bare documentation placeholder
-such as `--scale api=N`.
+### Docker-Compose-CLI
 
-What the guard is **not**: it is not a runtime proof, not a full YAML or Caddy
-AST parser, and it does not (yet) detect multi-line Caddy `to` blocks that place
-one upstream per line. Its claims never exceed its static detection scope.
+Auf ausführbaren Flächen (`scripts`, `infra`, `.github/workflows`,
+`.devcontainer`, `Makefile`, `Justfile`) sind für `--scale api` nur `0` und `1`
+erlaubt. Fehlende, symbolische, expandierte oder andere Werte werden blockiert.
 
-The guard is wired into `scripts/guard/run.sh` and its test runs in the CI
-guard-test loop (`.github/workflows/ci.yml`).
+In `docs` sind zusätzlich ausschließlich die abstrakten Platzhalter `N`, `<N>`
+und `<value>` erlaubt. Konkrete ungültige Dokumentationswerte bleiben sichtbar
+und werden nicht als Platzhalter glattgebügelt.
 
-## Review triggers
+### Caddy
 
-`review_after` is a calendar backstop. This decision should be revisited earlier
-when any of the following occurs:
+Kommentare werden entfernt, bevor eine Direktive erkannt wird. Gezählt werden
+`host:port`-Upstreams auf einer einzelnen `reverse_proxy`- oder `to`-Zeile,
+inklusive optionalem `http://` beziehungsweise `https://` und geklammerter IPv6-
+Adressen. Als geschützte API-Hosts gelten `api` und numerisch suffigierte
+Instanznamen wie `api-2`, `api_2` oder `api.2`. Namen wie `api-gateway`,
+`capital-api` oder `myapi` gelten nicht automatisch als diese API.
 
-- domain reads become fully DB-backed (no process-local domain cache is authoritative);
-- a cross-instance invalidation/coherence mechanism is introduced;
-- horizontal API scaling is desired;
-- the Caddy or Compose topology is fundamentally changed.
+### Scanfehler
 
-## Future improvements (not blockers for DOMAIN-PG-002)
+Fehler beim Auffinden oder Parsen der geprüften Dateien führen nicht zu einem
+stillen Pass. Der Guard meldet den unvollständigen Scan und schlägt fehl.
 
-- central guard helpers for file scanning, excludes and `fail_with_location`;
-- a generic guard-test fixture pattern shared across guards;
-- an optional YAML AST check (e.g. pinned `yq`) if the core-guard toolchain
-  policy is adjusted to allow it;
-- an optional Caddy AST check via `caddy adapt` if Caddy is reliably available
-  in CI/dev;
-- claim-/freshness-system integration for DOMAIN-PG-002.
+## Bewusste Grenzen
 
-## Does not prove
+Der Guard ist kein vollständiger YAML-, Shell- oder Caddy-Parser. Nicht belegt
+sind insbesondere:
 
-- live production currently runs exactly one container
-- cross-instance coherence
-- runtime correctness
-- PostgreSQL cutover readiness
-- Edge FK readiness
+- Compose-Inline-Maps und YAML-Merge-Key-Semantik;
+- mehrzeilige Caddy-`to`-Blöcke mit einem Upstream pro Zeile;
+- Caddy-Upstreamformen außerhalb der erkannten `host:port`-Tokens;
+- alternative API-Aliasnamen außerhalb der dokumentierten Hostkonvention;
+- der reale Live-Containerstand;
+- Cross-Instance-Kohärenz oder Runtime-Korrektheit.
 
-## Related blockers
+Diese Grenzen sind Claim-Grenzen, keine stillen Versprechen. Ein AST-basierter
+Guard wäre ein eigener Toolchain- und CI-Schnitt.
 
-- DOMAIN-PG-001 remains blocked by DB-PROOF-001 (representative runtime edge
-  audit) and the FK-vs-Guard policy decision.
-- AUTH-PG-001 and AUTH-PG-002 may proceed only under this single-instance
-  boundary.
-- OPT-ARC-001 remains partial.
+## Review-Trigger
 
-## Non-goals
+`review_after: 2026-12-18` ist nur ein Kalender-Backstop. Früher prüfen, wenn:
 
-- no runtime code changes
-- no SQL migrations
-- no Edge FK/Guard implementation
-- no Auth persistence implementation
-- no Redis/PubSub/NATS cache invalidation
-- no multi-instance coherence claim
+- Domain-Reads nicht mehr aus autoritativen Prozesscaches bedient werden;
+- ein Invalidierungs-/Kohärenzmechanismus eingeführt wird;
+- horizontale API-Skalierung gewünscht wird;
+- Compose- oder Caddy-Topologie grundlegend geändert wird;
+- die dokumentierten Parsergrenzen praktisch relevant werden.
+
+## Folgearbeiten, nicht Teil von DOMAIN-PG-002
+
+- optionaler YAML-AST-Guard mit gepinnter Toolchain;
+- optionaler Caddy-AST-Guard über `caddy adapt`;
+- gemeinsame Guard-Helper erst bei tatsächlich wiederholter stabiler Struktur;
+- Runtime-Singleton-/Lease-Mechanismus nur als eigener Architekturentscheid;
+- Claim-/Freshness-Integration für diese Invariante.
+
+## Verwandte Blocker
+
+- `DOMAIN-PG-001` bleibt durch `DB-PROOF-001` und die FK-vs-Guard-Entscheidung
+  blockiert.
+- `AUTH-PG-001` und `AUTH-PG-002` dürfen nur unter dieser Grenze fortschreiten.
+- `OPT-ARC-001` bleibt `partial`.
+
+## Nicht-Ziele
+
+- keine Rust-Runtime-Änderung;
+- keine SQL-Migration;
+- keine Edge-FK-/Guard-Implementierung;
+- keine Auth-Persistenzimplementierung;
+- keine Redis-/PubSub-/NATS-Invalidierung;
+- kein Multi-Instance-Kohärenz-Claim.

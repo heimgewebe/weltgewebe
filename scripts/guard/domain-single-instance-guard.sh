@@ -1,37 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Guard: DOMAIN-PG-002 single-instance boundary for the domain PostgreSQL path
+# DOMAIN-PG-002: static single-instance boundary for the API.
 #
-# Background (see docs/reports/domain-postgres-instance-coherence-decision.md
-# and docs/blueprints/domain-data-postgres-cutover.md § Instance Coherence
-# Boundary):
-#
-# The API keeps domain state (nodes, edges, accounts) and parts of the auth
-# state (tokens, step-up tokens, challenges, passkeys) in process-local
-# in-memory caches with no tested cross-instance invalidation mechanism. Running
-# more than one API instance would create a silent cache split-brain: instance B
-# does not observe instance A's writes through its local cache until it restarts.
-#
-# This is a scope-limited static guard, not a runtime proof and not a full
-# YAML/Caddy parser. It is a fence against the obvious static drift that would
-# quietly enable API scale-out:
-#   1. compose `replicas` on the `api` service with a value that is not clearly
-#      0 or 1 (numeric >= 2, or a non-literal/`$`-expanded value -> fail-closed)
-#   2. `docker compose --scale api=<value>` where <value> is not clearly 0 or 1
-#      (numeric >= 2, or a non-literal/`$`-expanded value -> fail-closed)
-#   3. an API upstream together with any additional upstream on the same Caddy
-#      `reverse_proxy`/`to` directive line
-#
-# It is deliberately API-specific: `--scale caddy=0`, a single API instance
-# (`replicas: 1`, `--scale api=1`) and `replicas` on a non-API service are not
-# flagged. A bare non-numeric token without `$` (e.g. a prose placeholder like
-# `N`) is treated as documentation, not a live value, so the guard does not eat
-# its own explanation.
-#
-# Known limitations (tracked as future work, not blockers for DOMAIN-PG-002):
-#   - multi-line Caddy `to` blocks (one upstream per line across several lines)
-#   - a real YAML/Caddy AST check (would need yq/caddy in CI as a hard dep)
+# The API still has process-local domain/auth state without tested cross-instance
+# invalidation. This guard blocks obvious static scale-out drift. It is not a
+# runtime proof and not a complete YAML/Caddy parser.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
@@ -39,11 +13,8 @@ REPO_ROOT="${REPO_ROOT:-$(cd -- "${SCRIPT_DIR}/../.." >/dev/null 2>&1 && pwd)}"
 GUARD_SELF="domain-single-instance-guard.sh"
 GUARD_TEST="test_domain_single_instance_guard.sh"
 DECISION_REF="docs/reports/domain-postgres-instance-coherence-decision.md"
-
 FAILED=0
 
-# Print one finding block per offending location: reason, file:line:content,
-# and a pointer to the decision record.
 report_hits() {
   local hits="$1" reason="$2" line
   [ -n "$hits" ] || return 0
@@ -51,61 +22,119 @@ report_hits() {
     [ -n "$line" ] || continue
     echo "DOMAIN-SINGLE-INSTANCE-GUARD: ${reason}" >&2
     echo "  ${line}" >&2
-    echo "  api scale-out is forbidden by DOMAIN-PG-002 single-instance boundary; see ${DECISION_REF}" >&2
+    echo "  api scale-out is forbidden by DOMAIN-PG-002; see ${DECISION_REF}" >&2
     FAILED=1
   done <<<"$hits"
 }
 
-# --- awk programs (quoted heredocs: single/double quotes used freely) ---------
+report_scan_error() {
+  local detail="$1"
+  echo "DOMAIN-SINGLE-INSTANCE-GUARD: scan failed" >&2
+  echo "  ${detail}" >&2
+  echo "  refusing to pass with incomplete evidence; see ${DECISION_REF}" >&2
+  FAILED=1
+}
 
-# Check 1 — `replicas` on the `api` service in compose files.
-# Scope-limited static guard, fail-closed for ambiguous API replicas. The
-# `services:` child indentation is detected dynamically (not bound to exactly
-# two spaces); both top-level `replicas:` and `deploy:`/`replicas:` are covered.
+run_awk_check() {
+  local program="$1" file="$2" reason="$3" mode="${4:-}" hits status
+
+  if hits="$(awk ${mode:+-v mode="$mode"} "$program" "$file" 2>&1)"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  if [ "$status" -gt 1 ]; then
+    report_scan_error "awk failed for ${file}: ${hits}"
+    return 0
+  fi
+
+  report_hits "$hits" "$reason"
+}
+
+# Block-style Compose parser. It checks only structurally relevant keys:
+# - direct api.scale
+# - direct api.replicas (legacy/suspicious form)
+# - direct api.deploy.replicas
+# Values fail closed: only literal 0 or 1, optionally quoted, are accepted.
 REPLICAS_AWK=$(cat <<'AWK'
-BEGIN { in_services=0; services_indent=0; svc_indent=-1; in_api=0; rc=0 }
-/^[[:space:]]*($|#)/ { next }
-{ match($0, /^ */); ind = RLENGTH }
-$0 ~ /^[[:space:]]*services:[[:space:]]*$/ { in_services=1; services_indent=ind; svc_indent=-1; in_api=0; next }
-{
-  if (in_services && ind <= services_indent) { in_services=0; in_api=0 }
-  else if (in_services) {
-    if (svc_indent == -1) svc_indent = ind
-    if (ind == svc_indent) { name=$0; sub(/^[[:space:]]+/,"",name); sub(/[[:space:]]*:.*$/,"",name); in_api=(name=="api") }
-  }
+function trim(v) {
+  sub(/^[[:space:]]+/, "", v)
+  sub(/[[:space:]]+$/, "", v)
+  return v
 }
-(in_services && in_api && ind > svc_indent && /replicas:[[:space:]]*/) {
-  val=$0
-  sub(/^.*replicas:[[:space:]]*/,"",val)
-  sub(/[[:space:]]*#.*$/,"",val)
-  gsub(/['"]/,"",val)
-  gsub(/[[:space:]]/,"",val)
-  blocked=0
-  if (val ~ /^[0-9]+$/) { if (val+0 >= 2) blocked=1 }
-  else if (val ~ /\$/) blocked=1
-  else if (val == "") blocked=1
-  if (blocked) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+function value_after_key(line, key, v) {
+  v=line
+  sub("^[[:space:]]*" key ":[[:space:]]*", "", v)
+  sub(/[[:space:]]+#.*$/, "", v)
+  v=trim(v)
+  if ((v ~ /^".*"$/) || (v ~ /^'.*'$/)) v=substr(v, 2, length(v)-2)
+  return trim(v)
 }
-END { exit rc }
-AWK
-)
-
-# Check 2 — `docker compose --scale api=<value>`.
-# Quotes and '=' are normalised to spaces so api=2, "api=2", 'api=2', --scale=api=2
-# and `--scale api 2` collapse to the same token stream. A value is blocked when
-# it is numeric >= 2 or contains `$` (non-literal -> fail-closed).
-SCALE_AWK=$(cat <<'AWK'
-BEGIN { rc=0 }
+function unsafe_count(v) { return !(v == "0" || v == "1") }
+function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
+BEGIN {
+  in_services=0; services_indent=-1; service_indent=-1
+  in_api=0; api_child_indent=-1
+  in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
+  rc=0
+}
 {
+  raw=$0
   line=$0
-  gsub(/['"]/," ",line); gsub(/=/," ",line); gsub(/[[:space:]]+/," ",line)
-  n=split(line, t, " ")
-  for (i=1; i+2<=n; i++) {
-    if (t[i]=="--scale" && t[i+1]=="api") {
-      val=t[i+2]; blocked=0
-      if (val ~ /^[0-9]+$/) { if (val+0>=2) blocked=1 }
-      else if (val ~ /\$/) blocked=1
-      if (blocked) { printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+  if (line ~ /^[[:space:]]*($|#)/) next
+  sub(/[[:space:]]+#.*$/, "", line)
+  match(line, /^ */); ind=RLENGTH
+
+  if (line ~ /^[[:space:]]*services:[[:space:]]*$/) {
+    in_services=1; services_indent=ind; service_indent=-1
+    in_api=0; api_child_indent=-1; in_deploy=0
+    next
+  }
+  if (!in_services) next
+  if (ind <= services_indent) {
+    in_services=0; in_api=0; in_deploy=0
+    next
+  }
+
+  if (service_indent == -1) service_indent=ind
+  if (ind == service_indent) {
+    name=line
+    sub(/^[[:space:]]+/, "", name)
+    sub(/[[:space:]]*:.*$/, "", name)
+    in_api=(name == "api")
+    api_child_indent=-1; in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
+    next
+  }
+
+  if (!in_api || ind <= service_indent) next
+  if (api_child_indent == -1) api_child_indent=ind
+
+  if (ind == api_child_indent) {
+    in_deploy=0; deploy_indent=-1; deploy_child_indent=-1
+
+    if (line ~ /^[[:space:]]*deploy:[[:space:]]*$/) {
+      in_deploy=1; deploy_indent=ind
+      next
+    }
+    if (line ~ /^[[:space:]]*scale:[[:space:]]*/) {
+      if (unsafe_count(value_after_key(line, "scale"))) finding()
+      next
+    }
+    if (line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
+      if (unsafe_count(value_after_key(line, "replicas"))) finding()
+      next
+    }
+  }
+
+  if (in_deploy) {
+    if (ind <= deploy_indent) {
+      in_deploy=0
+    } else {
+      if (deploy_child_indent == -1) deploy_child_indent=ind
+      if (ind == deploy_child_indent && line ~ /^[[:space:]]*replicas:[[:space:]]*/) {
+        if (unsafe_count(value_after_key(line, "replicas"))) finding()
+      }
     }
   }
 }
@@ -113,79 +142,172 @@ END { exit rc }
 AWK
 )
 
-# Check 3 — an API upstream plus any additional upstream on one Caddy
-# `reverse_proxy`/`to` directive line.
-# Strips an optional http(s):// scheme, ignores path matchers and `{`, counts
-# host:port upstream tokens, and flags only lines that carry an API upstream
-# together with a second upstream (single-line drift).
+# Docker Compose CLI parser.
+# Executable surfaces accept only literal 0/1. Documentation additionally accepts
+# explicit abstract placeholders N, <N> and <value>; concrete or malformed values
+# still fail.
+SCALE_AWK=$(cat <<'AWK'
+function safe_value(v) { return v == "0" || v == "1" }
+function doc_placeholder(v) { return v == "N" || v == "<N>" || v == "<value>" }
+function finding() { printf "%s:%d:%s\n", FILENAME, FNR, raw; rc=1 }
+BEGIN { rc=0 }
+{
+  raw=$0
+  line=$0
+  if (mode == "exec") {
+    if (line ~ /^[[:space:]]*#/) next
+    sub(/[[:space:]]+#.*$/, "", line)
+  }
+
+  gsub(/[`'\"]/, " ", line)
+  gsub(/=/, " ", line)
+  gsub(/[[:space:]]+/, " ", line)
+  sub(/^ /, "", line); sub(/ $/, "", line)
+  if (line == "") next
+
+  n=split(line, t, " ")
+  compose=0
+  for (j=1; j<n; j++) {
+    if (t[j] == "docker" && t[j+1] == "compose") { compose=1; break }
+  }
+  if (!compose) next
+
+  for (i=1; i<=n; i++) {
+    if (t[i] != "--scale") continue
+    if (i+1 > n || t[i+1] != "api") continue
+    if (i+2 > n || t[i+2] == "") { finding(); continue }
+
+    val=t[i+2]
+    if (safe_value(val)) continue
+    if (mode == "docs" && doc_placeholder(val)) continue
+    finding()
+  }
+}
+END { exit rc }
+AWK
+)
+
+# Caddy line heuristic. Comments are removed before directive recognition. API
+# identity is deliberately narrow: api or api-<numeric instance suffix> (also
+# ./_ separators). Names such as api-gateway or capital-api are not treated as
+# the protected API service.
 CADDY_AWK=$(cat <<'AWK'
 BEGIN { rc=0 }
 {
-  is_rp=($0 ~ /reverse_proxy/); is_to=($0 ~ /^[[:space:]]*to[[:space:]]/)
+  raw=$0
+  line=$0
+  sub(/#.*/, "", line)
+
+  is_rp=(line ~ /^[[:space:]]*reverse_proxy([[:space:]]|$)/)
+  is_to=(line ~ /^[[:space:]]*to([[:space:]]|$)/)
   if (!is_rp && !is_to) next
-  rest=$0
-  if (is_rp) sub(/^.*reverse_proxy/,"",rest); else sub(/^[[:space:]]*to[[:space:]]+/," ",rest)
+
+  rest=line
+  if (is_rp) sub(/^[[:space:]]*reverse_proxy[[:space:]]*/, "", rest)
+  else sub(/^[[:space:]]*to[[:space:]]*/, "", rest)
+
   n=split(rest, toks, /[[:space:]]+/); ups=0; api_up=0
-  for (i=1;i<=n;i++){
-    tok=toks[i]; sub(/^https?:\/\//,"",tok); gsub(/[{}]/,"",tok)
+  for (i=1; i<=n; i++) {
+    tok=toks[i]
+    sub(/^https?:\/\//, "", tok)
+    gsub(/[{}]/, "", tok)
     if (tok ~ /^([A-Za-z0-9_.-]+|\[[0-9A-Fa-f:.%_-]+\]):[0-9]+$/) {
       ups++
-      host = tok
+      host=tok
       sub(/:[0-9]+$/, "", host)
-      if (host ~ /(^|[-_.])api($|[-_.])/) api_up = 1
+      if (host ~ /^api([-_.][0-9]+)?$/) api_up=1
     }
   }
-  if (api_up && ups>=2){ printf "%s:%d:%s\n", FILENAME, FNR, $0; rc=1 }
+  if (api_up && ups >= 2) {
+    printf "%s:%d:%s\n", FILENAME, FNR, raw
+    rc=1
+  }
 }
 END { exit rc }
 AWK
 )
 
-# --- checks -------------------------------------------------------------------
+check_compose_counts() {
+  local files f
+  if ! files="$(find "$REPO_ROOT" \
+      \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
+      -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
+      -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>&1)"; then
+    report_scan_error "find failed while locating Compose files: ${files}"
+    return
+  fi
 
-check_compose_replicas() {
-  local f hits
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    hits="$(awk "$REPLICAS_AWK" "$f" 2>/dev/null || true)"
-    report_hits "$hits" "api service declares replicas that are not clearly 0 or 1 (fail-closed for non-literal/>=2 values)"
-  done < <(find "$REPO_ROOT" \( -name .git -o -name node_modules -o -name target -o -name .venv \) -prune -o \
-    -type f \( -name 'compose*.yml' -o -name 'compose*.yaml' \
-    -o -name 'docker-compose*.yml' -o -name 'docker-compose*.yaml' \) -print 2>/dev/null)
+    run_awk_check "$REPLICAS_AWK" "$f" \
+      "api Compose scale/replicas value is not a literal 0 or 1"
+  done <<<"$files"
 }
 
-check_scale_flag() {
-  local surfaces=() s f hits
-  for s in docs scripts infra .github/workflows .devcontainer Makefile Justfile; do
-    [ -e "${REPO_ROOT}/${s}" ] && surfaces+=("${REPO_ROOT}/${s}")
-  done
-  [ "${#surfaces[@]}" -gt 0 ] || return 0
+scan_scale_surface() {
+  local mode="$1"; shift
+  local files status f
+
+  if files="$(grep -rIlE \
+      --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" \
+      --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=target --exclude-dir=.venv \
+      -- '--scale' "$@" 2>&1)"; then
+    status=0
+  else
+    status=$?
+  fi
+
+  if [ "$status" -eq 1 ]; then
+    return 0
+  fi
+  if [ "$status" -ne 0 ]; then
+    report_scan_error "grep failed while scanning ${mode} scale surfaces: ${files}"
+    return 0
+  fi
+
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    hits="$(awk "$SCALE_AWK" "$f" 2>/dev/null || true)"
-    report_hits "$hits" "docker compose --scale api with a value that is not clearly 0 or 1 (fail-closed for non-literal/>=2 values)"
-  done < <(grep -rIlE --exclude="$GUARD_SELF" --exclude="$GUARD_TEST" -- '--scale' "${surfaces[@]}" 2>/dev/null || true)
+    run_awk_check "$SCALE_AWK" "$f" \
+      "docker compose --scale api value is malformed or not permitted for this surface" "$mode"
+  done <<<"$files"
+}
+
+check_scale_flags() {
+  local docs=() exec_surfaces=() s
+
+  [ -d "${REPO_ROOT}/docs" ] && docs+=("${REPO_ROOT}/docs")
+  for s in scripts infra .github/workflows .devcontainer Makefile Justfile; do
+    [ -e "${REPO_ROOT}/${s}" ] && exec_surfaces+=("${REPO_ROOT}/${s}")
+  done
+
+  [ "${#docs[@]}" -eq 0 ] || scan_scale_surface docs "${docs[@]}"
+  [ "${#exec_surfaces[@]}" -eq 0 ] || scan_scale_surface exec "${exec_surfaces[@]}"
 }
 
 check_caddy_upstreams() {
-  local caddy_dir="${REPO_ROOT}/infra/caddy" f hits
+  local caddy_dir="${REPO_ROOT}/infra/caddy" files f
   [ -d "$caddy_dir" ] || return 0
+
+  if ! files="$(find "$caddy_dir" -type f -print 2>&1)"; then
+    report_scan_error "find failed while locating Caddy files: ${files}"
+    return
+  fi
+
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    hits="$(awk "$CADDY_AWK" "$f" 2>/dev/null || true)"
-    report_hits "$hits" "an API upstream together with any additional upstream on the same reverse_proxy/to directive line"
-  done < <(find "$caddy_dir" -type f -print 2>/dev/null)
+    run_awk_check "$CADDY_AWK" "$f" \
+      "an API upstream appears with another upstream on one reverse_proxy/to directive line"
+  done <<<"$files"
 }
 
-check_compose_replicas
-check_scale_flag
+check_compose_counts
+check_scale_flags
 check_caddy_upstreams
 
 if [ "$FAILED" -ne 0 ]; then
   echo "" >&2
-  echo "DOMAIN-SINGLE-INSTANCE-GUARD: single-instance boundary violated." >&2
-  echo "  Horizontal API scale-out requires a new task plus a tested cross-instance" >&2
-  echo "  cache invalidation/coherence mechanism — it is not enabled by config drift." >&2
+  echo "DOMAIN-SINGLE-INSTANCE-GUARD: single-instance boundary violated or incompletely checked." >&2
+  echo "  Horizontal API scale-out requires a new task and tested cross-instance coherence." >&2
   exit 1
 fi
 

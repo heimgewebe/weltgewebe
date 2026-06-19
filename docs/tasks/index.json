@@ -807,11 +807,12 @@
         "apps/api/migrations/20260531000002_create_domain_edges.up.sql",
         "scripts/docmeta/audit_domain_edge_references.py",
         "scripts/docmeta/tests/test_audit_domain_edge_references.py",
-        "docs/reports/domain-edge-reference-audit.md"
+        "docs/reports/domain-edge-reference-audit.md",
+        "docs/reports/domain-runtime-data-source-reconciliation.md"
       ],
       "missing_evidence": [
-        "Kein repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 vorhanden",
-        "Keine abschließende FK-vs-Guard-Policyentscheidung für domain_edges.source_id/target_id vorhanden"
+        "repräsentativer Runtime-/Deployment-Datenlauf mit auditable_edges_total > 0 fehlt",
+        "FK-vs-Guard-Policyentscheidung fehlt"
       ],
       "acceptance": [
         "Audit zaehlt reproduzierbar valide Edges, Orphans (fehlende source_id/target_id-Nodes) und betroffene Edge-Typen, ohne Orphans still zu verwerfen",
@@ -825,6 +826,7 @@
         "docs": [
           "docs/blueprints/domain-data-postgres-cutover.md",
           "docs/reports/domain-edge-reference-audit.md",
+          "docs/reports/domain-runtime-data-source-reconciliation.md",
           "docs/reports/opt-arc-001-db-proof-matrix.json"
         ]
       },
@@ -874,29 +876,28 @@
         "docs/blueprints/domain-data-postgres-cutover.md",
         "scripts/guard/domain-single-instance-guard.sh",
         "scripts/tests/test_domain_single_instance_guard.sh",
-        "infra/compose/compose.core.yml",
-        "infra/compose/compose.prod.yml",
-        "infra/compose/compose.heimserver.override.yml",
-        "infra/caddy/Caddyfile.dev",
-        "infra/caddy/Caddyfile.prod",
-        "infra/caddy/Caddyfile.heim"
+        ".github/workflows/ci.yml",
+        "scripts/guard/run.sh"
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Option A entschieden: Single-Instance-Grenze fuer den PostgreSQL-Domain-Pfad ist dokumentiert; horizontale API-Skalierung ist ausdruecklich ausgeschlossen",
-        "Das Risiko 'Instanz B sieht A-Write erst nach Restart' ist in Decision-Report und Cutover-Blueprint festgehalten; kein Cross-Instance-Kohaerenz-Claim",
-        "Statischer Guard blockiert offensichtliche Scale-out-Drift fail-closed (api-replicas != 0/1 inkl. nicht-literaler Werte, --scale api != 0/1 ueber docs/scripts/infra/.github-workflows/Makefile/Justfile/.devcontainer, API-Upstream zusammen mit einem weiteren Upstream auf derselben Caddy reverse_proxy/to-Direktivzeile) und ist getestet",
-        "Entscheidung ist im Cutover-Blueprint verankert; kein stiller Cache-Split-Brain; kein Runtime-Proof und kein PostgreSQL-Cutover"
+        "Option A ist entschieden: Der aktuelle PostgreSQL-Domain-Pfad ist auf hoechstens eine API-Instanz begrenzt; kein Cross-Instance-Kohaerenz-Claim",
+        "Decision-Report und Cutover-Blueprint benennen Risiko, operative Folgen, Review-Trigger, Parsergrenzen und Nicht-Beweise",
+        "Der statische Guard akzeptiert an erkannten blockartigen Compose-Zaehler-Keys nur literal 0/1, trennt ausfuehrbare CLI-Werte von Dokumentationsplatzhaltern und entfernt Caddy-Kommentare vor der Direktiverkennung",
+        "Der Guard ist in CI und Guard-Orchestrierung angebunden; gezielte Fixtures plus Real-Repo-Drift-Check sind gruen",
+        "Die Entscheidung beweist weder den Live-Containerstand noch Runtime-Korrektheit oder PostgreSQL-Cutover-Readiness"
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "1242"
+        ],
         "docs": [
           "docs/reports/domain-postgres-instance-coherence-decision.md",
           "docs/blueprints/domain-data-postgres-cutover.md"
         ]
       },
-      "updated_at": "2026-06-18"
+      "updated_at": "2026-06-19"
     },
     {
       "id": "AUTH-PG-001",
@@ -1064,18 +1065,18 @@
       "id": "DOCS-CTL-001",
       "title": "Orphan-Dokumente einordnen (cost-report, DEPLOY-DNS-001B)",
       "area": "docs",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
       "owner": "unknown",
       "evidence": [
         "docs/reports/cost-report.md",
-        "docs/tasks/DEPLOY-DNS-001B.md"
+        "docs/tasks/DEPLOY-DNS-001B.md",
+        "PR #1240 auf Branch docs/docs-ctl-001-orphan-lifecycle (Commit c9a9a19d)",
+        "Generatorlauf bestätigt No orphans found"
       ],
-      "missing_evidence": [
-        "docs/reports/cost-report.md und docs/tasks/DEPLOY-DNS-001B.md werden vom Orphan-Generator weiterhin als verwaist gefuehrt; fachliche Lifecycle-Einordnung steht aus"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Beide Dokumente sind fachlich eingeordnet (aktiv/archived/superseded/Ausnahme), nicht nur kosmetisch verlinkt",
         "Orphan-Report ist leer oder die Ausnahmen sind bewusst dokumentiert",
@@ -1090,13 +1091,13 @@
           "docs/index.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-18"
     },
     {
       "id": "DOCS-CTL-002",
       "title": "Blueprint-/Planning-Status-Konsistenz (draft/active/canonical/deprecated)",
       "area": "docs",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "S",
       "risk": "low",
@@ -1105,11 +1106,12 @@
         "docs/reports/planning-registration-findings.md",
         "scripts/docmeta/planning_registration.yml",
         "docs/blueprints/kartenklarheit.md",
-        "docs/blueprints/map-blaupause.md"
+        "docs/blueprints/map-blaupause.md",
+        "docs/index.md",
+        "PR #1241 merged from final head b6c58e751b934234e59848b5f0de7ecc34b77cac as merge commit 55b3c4b91a03855be96ece4b2ea54cef680a7b48",
+        "GitHub Actions run 27756033230 (task-index, pull_request, final head b6c58e751b934234e59848b5f0de7ecc34b77cac): task-index-check and all four task-control steps passed"
       ],
-      "missing_evidence": [
-        "kartenklarheit.md und map-blaupause.md tragen frontmatter-status 'draft', werden in docs/index.md aber als aktive/normative Leitdokumente gefuehrt (Status-Widerspruch)"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Keine unbegruendeten draft-/canonical-Widersprueche; betroffene Blueprints werden einzeln gelesen und nicht pauschal hochgestuft",
         "Deprecated-Dokumente werden nicht reaktiviert",
@@ -1117,14 +1119,17 @@
       ],
       "links": {
         "issues": [],
-        "prs": [],
+        "prs": [
+          "1241"
+        ],
         "docs": [
           "docs/blueprints/kartenklarheit.md",
           "docs/blueprints/map-blaupause.md",
-          "docs/reports/planning-registration-findings.md"
+          "docs/reports/planning-registration-findings.md",
+          "docs/index.md"
         ]
       },
-      "updated_at": "2026-06-16"
+      "updated_at": "2026-06-19"
     },
     {
       "id": "OPT-CI-003",
