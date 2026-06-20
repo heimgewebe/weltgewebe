@@ -2,7 +2,7 @@
 id: process.report-lifecycle
 title: Report Lifecycle Policy
 doc_type: policy
-status: draft
+status: active
 summary: >
   Policy für Lebenszyklus, Status, Pflichtfelder, Archivierung und Löschung
   von Reports.
@@ -19,13 +19,12 @@ relations:
 
 ## Zweck
 
-Diese Datei ist der vorgeschlagene Zielort für Report-Lifecycle-Regeln. Sie
-bleibt `draft`, bis die Policy in einem späteren Schritt in das Truth Model
-und den DocMeta-Contract integriert oder bewusst als nicht-kanonische
-Prozessregel bestätigt wird.
+Diese Datei ist die aktive, report-spezifische Report-Lifecycle-Regel.
+Sie erweitert den globalen DocMeta-Contract nicht.
+Globale DocMeta-Felder oder Statuswerte benötigen einen separaten Contract-PR.
 
 Reports sollen nicht dauerhaft als scheinbar aktuelle Wahrheit im Repo liegen.
-Jeder Report soll später beantworten können:
+Jeder Report soll beantworten können:
 
 - Wozu existiert er?
 - Welcher Task oder welches Vorhaben gehört dazu?
@@ -35,181 +34,167 @@ Jeder Report soll später beantworten können:
 - Darf er archiviert werden?
 - Darf er gelöscht werden?
 
-Wichtig: Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
+Diese Policy ist eine Regelgrundlage, keine rückwirkende Bereinigung.
 
 ## Geltungsbereich
 
-Gilt für:
+**Discovery-Surface:** Alle Markdown-Dateien direkt unter `docs/reports/`
+(`docs/reports/*.md`) werden inventarisiert.
 
-- `docs/reports/*.md`
+**Policy-Scope:** Die Report-Lifecycle-Regeln gelten für Dateien direkt unter
+`docs/reports/` mit `doc_type: report`.
 
-Noch nicht verbindlich für:
+**Aktueller Validator-Scope:** Der Validator prüft Markdown-Dateien direkt
+unter `docs/reports/`, deren `doc_type` den Wert `report` trägt. Er setzt die
+Policy derzeit nur teilweise technisch durch.
 
-- `docs/proofs/**`
-- `docs/adr/**`
-- `docs/specs/**`
-- `docs/blueprints/**`
-- `docs/tasks/**`
+Andere `doc_type`-Werte direkt unter `docs/reports/` erscheinen im Inventory,
+werden aber nicht als Reports validiert.
 
-Diese Policy beschreibt zunächst Reports. Andere Dokumenttypen können Reports referenzieren und dadurch deren Archivierung oder Löschung blockieren, werden aber selbst nicht durch diese Policy klassifiziert.
+## Aktuelle Nicht-Ziele
 
-## Nicht-Ziele
+- kein Massen-Backfill bestehender Reports,
+- kein changed-only strict,
+- kein global strict,
+- keine Erweiterung des globalen DocMeta-Contracts,
+- keine automatische Archivierung,
+- keine Löschung,
+- keine automatische `owner_task`-Zuordnung,
+- keine automatisch berechneten `review_after`-Daten,
+- keine fachliche Wahrheitsbewertung von Reportinhalten.
 
-- Diese Policy klassifiziert noch keine bestehenden Reports.
-- Diese Policy archiviert keine Reports.
-- Diese Policy löscht keine Reports.
-- Diese Policy aktiviert keinen Validator.
-- Diese Policy verschärft keine CI.
-- Diese Policy verändert keine Task-Wahrheit.
-- Diese Policy ersetzt keine fachliche Review-Entscheidung.
+## Implementierungsstand
 
-## Contract-Alignment-Gate
+### Umgesetzt
 
-Diese Policy beschreibt weiterhin ein Zielmodell. Die hier beschriebenen
-Lifecycle-Felder sind durch diesen PR noch nicht automatisch Teil des
-bestehenden DocMeta-Contracts, eines Validators oder eines CI-Guards.
+- Inventory,
+- Policy,
+- Alignment-Entscheidung,
+- Pilot,
+- report-spezifischer Validator,
+- Modi `report`, `warn`, `strict`,
+- generierte Overview,
+- Teil-Backfills.
 
-Die Entscheidung zur Abgrenzung von `status`, `lifecycle_state`,
-`superseded_by`, Inventory-Tooling und `relations[type=supersedes]` wird in
-`docs/process/report-lifecycle-contract-alignment.md` vorbereitet.
+### Aktueller Rollout-Stand
 
-Das Report-Lifecycle-Inventory ist Diagnosebasis für diese Policy, aber keine
-kanonische Policy-Quelle.
+- vollständige Dokument-Reconciliation,
+- CI-Warnmodus,
+- deterministische Erzeugung beider Lifecycle-Flächen,
+- Task-Control-Registrierung.
 
-Das bestehende Inventory-Tooling kennt `lifecycle_state` noch nicht. Diese
-Policy benennt das Zielmodell; die Ausrichtung von Inventory, Validator und
-späterer Übersicht folgt in separaten Tooling-PRs.
+### Nachgelagert
+
+- restliche Reportklassifikation,
+- semantische Validatorhärtung,
+- changed-only strict,
+- global strict,
+- Archivierungsprozess,
+- separate Löschprüfung.
+
+## Geltungs- und Durchsetzungsgrenze
+
+- Lifecycle-Felder sind als report-spezifisches Modell implementiert.
+- Der globale DocMeta-Contract bleibt unverändert.
+- Inventory und Validator lesen `lifecycle_state`.
+- Der CI-Warnmodus ist aktiv.
+- Technische Validatorfehler wie ungefangene Import- oder Laufzeitfehler
+  blockieren.
+- Lifecycle-Findings bleiben im Warnmodus nicht blockierend.
+- Die vollständige blockierende Erkennung fehlenden oder nicht parsebaren
+  Report-Frontmatters ist noch nicht umgesetzt.
+- Enums, ISO-Datum, Task-Existenz und Supersession-Konsistenz sind noch nicht
+  vollständig geprüft.
+- Strict-Modi bleiben deaktiviert.
 
 ## Begriffe
 
-- **Report**: Ein Markdown-Dokument unter `docs/reports/*.md`, das einen Befund, Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung beschreibt.
-- **Lifecycle**: Die Rolle eines Reports im Lebenszyklus: warum er existiert, wie lange er handlungsleitend ist und wann er geprüft oder abgelöst wird.
-- **Status**: Der globale DocMeta-Status eines Reports, zum Beispiel `draft`, `active`, `deprecated` oder `canonical`.
-- **Lifecycle-Zustand**: Der report-spezifische Zustand in `lifecycle_state`, zum Beispiel `active`, `superseded` oder `archived`.
-- **Supersession**: Eine explizite Ablösung durch ein anderes Artefakt. Supersession bedeutet nicht automatisch Löschung.
-- **Archivierung**: Ein Report bleibt erhalten, ist aber nicht mehr handlungsleitend.
-- **Löschung**: Physisches Entfernen eines Reports aus dem Repo. Löschung ist der letzte Schritt und nur nach separater Prüfung erlaubt.
-- **Primary Reference**: Eine handgeschriebene Referenz aus fachlich relevanten Dokumenten, zum Beispiel Tasks, Blueprints, ADRs, Specs, Proofs, Reports oder Roadmap.
-- **Derived Reference**: Eine generierte Referenz aus `docs/_generated/**`. Sie zeigt Sichtbarkeit oder Indexierung, beweist aber nicht automatisch fachliche Aktualität.
+- **Report**: Markdown-Dokument unter `docs/reports/*.md`, das einen Befund,
+  Audit, Proof, Status oder eine entscheidungsvorbereitende Auswertung
+  beschreibt.
+- **Lifecycle**: Rolle eines Reports im Lebenszyklus: warum er existiert, wie
+  lange er handlungsleitend ist und wann er geprüft oder abgelöst wird.
+- **Status**: globaler DocMeta-Status, zum Beispiel `draft`, `active`,
+  `deprecated` oder `canonical`.
+- **Lifecycle-Zustand**: report-spezifischer Zustand in `lifecycle_state`, zum
+  Beispiel `active`, `superseded` oder `archived`.
+- **Supersession**: explizite Ablösung durch ein anderes Artefakt.
+- **Archivierung**: Report bleibt erhalten, ist aber nicht mehr
+  handlungsleitend.
+- **Löschung**: physisches Entfernen eines Reports aus dem Repo.
+- **Primary Reference**: handgeschriebene Referenz aus fachlich relevanten
+  Dokumenten.
+- **Derived Reference**: generierte Referenz aus `docs/_generated/**`.
 
 ## Report-Klassen
 
-- **audit**: Prüft einen Bestand, Datenzustand oder Prozesszustand. Risiko: veraltet schnell, wenn Daten oder Prozess wechseln.
-- **proof**: Belegt eine technische oder organisatorische Eigenschaft. Risiko: verliert Gültigkeit bei Code-, CI- oder Infrastrukturänderungen.
-  Die Klasse `proof` kann für Reports unter `docs/reports/*.md` genutzt werden,
-  die einen Proof-Charakter haben. Dateien unter `docs/proofs/**` bleiben in
-  dieser Phase vom Geltungsbereich ausgenommen und können später eine eigene
-  Lifecycle-Regel bekommen.
-- **status**: Verdichtet aktuellen Stand eines Vorhabens. Risiko: wird leicht mit dauerhafter Wahrheit verwechselt.
-- **decision-prep**: Bereitet eine Entscheidung vor, ersetzt sie aber nicht. Risiko: bleibt nach Entscheidung weiter sichtbar, obwohl die Entscheidung schon gefallen ist.
-- **generated**: Wird automatisch erzeugt und soll nicht manuell editiert werden. Risiko: Drift zwischen Generator und committed Artefakt.
-  Diese Klasse gilt nur für Artefakte, die ausdrücklich als Report geführt
-  werden. Nicht jedes Artefakt unter `docs/_generated/**` wird dadurch zu einem
-  Report.
-- **planning**: Beschreibt geplante Arbeit, offene Schritte oder Ordnungsvorhaben. Risiko: Planungsstand wird mit Umsetzung verwechselt.
-- **legacy**: Historisch nützlich, aber nicht mehr aktuell handlungsleitend. Risiko: unmarkierte Legacy-Dokumente erzeugen Scheinkohärenz.
+- **audit**: prüft einen Bestand, Datenzustand oder Prozesszustand.
+- **proof**: belegt eine technische oder organisatorische Eigenschaft.
+- **status**: verdichtet den aktuellen Stand eines Vorhabens.
+- **decision-prep**: bereitet eine Entscheidung vor, ersetzt sie aber nicht.
+- **generated**: wird automatisch erzeugt und nicht manuell editiert.
+- **planning**: beschreibt geplante Arbeit oder offene Schritte.
+- **legacy**: historisch nützlich, aber nicht mehr handlungsleitend.
+
+Die Klasse `proof` kann für Reports unter `docs/reports/*.md` genutzt werden.
+Dateien unter `docs/proofs/**` bleiben in dieser Phase vom Geltungsbereich
+ausgenommen und können später eine eigene Lifecycle-Regel bekommen.
 
 ## Status-Semantik
 
-Die folgenden Werte beschreiben das Zielvokabular für den report-spezifischen
-`lifecycle_state`. Bestehende DocMeta-Statuswerte wie `draft`, `active` und
-`deprecated` behalten ihre bisherige Contract-Bedeutung. Neue
-lifecycle-spezifische Zustände wie `deferred`, `superseded` und `archived`
-werden nicht direkt als globale DocMeta-Statuswerte eingeführt.
+Bestehende DocMeta-Statuswerte behalten ihre Contract-Bedeutung.
+Report-spezifische Zustände werden in `lifecycle_state` modelliert.
 
-- **active**: Aktuell handlungsleitend oder als gültiger Bezugspunkt verwendbar.
-- **deferred**: Bewusst zurückgestellt. Nicht verworfen, aber derzeit nicht handlungsleitend.
-- **superseded**: Durch ein anderes Artefakt ersetzt. Das ablösende Artefakt soll über `superseded_by` und/oder `relations[type=supersedes]` nachvollziehbar sein.
-- **archived**: Historisch erhalten, aber nicht mehr handlungsleitend.
+- **active**: aktuell handlungsleitend oder als gültiger Bezugspunkt verwendbar.
+- **deferred**: bewusst zurückgestellt.
+- **superseded**: durch ein anderes Artefakt ersetzt.
+- **archived**: historisch erhalten, aber nicht mehr handlungsleitend.
 
-`draft`, `active`, `deprecated` und `canonical` bleiben DocMeta-Statuswerte.
-Wenn ein Report zusätzlich einen Lifecycle-Zustand braucht, wird dieser über
-`lifecycle_state` modelliert.
+`active` kann sowohl als DocMeta-Status als auch als `lifecycle_state`
+vorkommen. Der DocMeta-Status beschreibt die allgemeine Dokumentgültigkeit;
+`lifecycle_state` beschreibt die fachliche Handlungsrelevanz.
 
-`active` kann sowohl als bestehender DocMeta-Status als auch als
-report-spezifischer `lifecycle_state` vorkommen. Der DocMeta-Status beschreibt
-die allgemeine Dokumentgültigkeit; `lifecycle_state: active` beschreibt, ob der
-Report fachlich noch handlungsleitend ist.
-
-Wichtig:
-`deprecated` ist kein Papierkorb.
-`archived` ist keine Löschung.
+`deprecated` ist kein Papierkorb. `archived` ist keine Löschung.
 `superseded` braucht eine nachvollziehbare Ablösung.
 
 ## Lifecycle-Felder
 
 - **lifecycle**: Report-Klasse oder Lifecycle-Rolle.
-- **owner_task**: Task, Vorhaben, Kontrollpunkt oder Prozess, der die Verantwortung für den Report trägt. In Phase 1 noch als menschlich lesbarer Wert (noch kein Enum erzwingen).
-- **review_after**: ISO-Datum im Format `YYYY-MM-DD`, ab dem erneute Prüfung
-  fällig wird.
-- **lifecycle_state**: Report-spezifischer Lifecycle-Zustand, zum Beispiel
-  `active`, `deferred`, `superseded` oder `archived`. Dieses Feld ist Teil des
-  Zielmodells und wird erst nach Contract-Alignment oder eigenem
-  Lifecycle-Schema validatorfähig.
-- **superseded_by**: Pfad zum ablösenden Artefakt. Dieses Feld darf nicht als
-  alleinige Supersession-Wahrheit verstanden werden. Die bestehende
-  Repo-Mechanik bildet Supersession über `relations` mit `type: supersedes`
-  ab: Das neue Artefakt verweist auf das alte Artefakt. Ein späterer Validator
-  muss `superseded_by` und `relations[type=supersedes]` gegeneinander prüfen
-  oder eine der beiden Formen als kanonisch festlegen.
+- **owner_task**: verantwortlicher Task, Vorhaben, Kontrollpunkt oder Prozess.
+  - bevorzugt registrierte Task-ID,
+  - abgeschlossene Tasks dürfen Proof- oder Audit-Reports weiter besitzen,
+  - keine Pseudo-Task-ID nur zur Befüllung des Feldes,
+  - unbelegte Eigentümerschaft bleibt als Leerstelle sichtbar.
+- **review_after**: ISO-Datum `YYYY-MM-DD`, ab dem erneute Prüfung fällig wird.
+  - fachlich durch Anlass, Meilenstein oder Review-Rhythmus begründet,
+  - kein pauschaler 30-Tage-Default,
+  - überfällig bedeutet reviewbedürftig, nicht automatisch falsch,
+  - externe Provider-, DNS- oder Runtime-Claims brauchen frischen Live-Check.
+- **lifecycle_state**: report-spezifischer Lifecycle-Zustand. Der Validator
+  verarbeitet das Feld bereits für Anwesenheits- und zustandsabhängige
+  Pflichtfeldprüfungen. Enums und weitere Konsistenzprüfungen sind
+  nachgelagert.
+- **superseded_by**: Pfad zum ablösenden Artefakt. Das Feld wird bereits
+  verwendet, darf aber nicht alleinige Supersession-Wahrheit sein. Die
+  Relationenkonsistenz wird noch nicht vollständig geprüft.
 
-Auch diese zusätzlichen Lifecycle-Felder sind Zielmodell-Felder. Ob sie direkt
-im DocMeta-Frontmatter, in einem separaten Lifecycle-Schema oder über einen
-späteren Validator geprüft werden, entscheidet das Contract-Alignment-Gate.
+`lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart;
+`lifecycle` beschreibt die Rolle des Reports im Lebenszyklus.
 
-`lifecycle` ersetzt `doc_type` nicht. `doc_type` beschreibt die Dokumentart im
-Repo, zum Beispiel `report` oder `policy`. `lifecycle` beschreibt die Rolle
-eines Reports innerhalb seines Lebenszyklus, zum Beispiel `audit`, `proof`
-oder `status`.
-
-Beispiel:
-
-```yaml
-doc_type: report
-lifecycle: audit
-```
-
-Beispiel für die spätere Abbildung einer Ablösung:
-
-Im alten Report, falls die Lifecycle-Felder contract-aktiv werden:
-
-```yaml
-status: deprecated
-lifecycle_state: superseded
-superseded_by: docs/reports/new-proof.md
-```
-
-Im neuen oder ersetzenden Dokument:
-
-```yaml
-relations:
-  - type: supersedes
-    target: docs/reports/old-proof.md
-```
-
-Die Lifecycle-Felder werden in exakt dieser snake_case-Schreibweise geführt:
+Die Feldnamen sind verbindlich snake_case:
 `lifecycle`, `owner_task`, `review_after`, `lifecycle_state`, `superseded_by`.
-Spätere Validatoren sollen abweichende Schreibweisen wie `ownerTask`,
-`reviewAfter` oder `lifecycleState` nicht als gleichwertig behandeln.
 
 ## Pflichtfelder nach Lifecycle-Zustand
 
 | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | Bemerkung |
 | --- | --- | --- | --- | --- | --- |
-| active | erforderlich | erforderlich | erforderlich | nein | Aktive Reports brauchen Zweck, Verantwortung und Review-Zeitpunkt. |
-| deferred | erforderlich | erforderlich | erforderlich | nein | Zurückgestellte Reports warten auf Prüfung oder Reaktivierung; abgelöste Reports sind `superseded`. |
-| superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung muss explizit nachvollziehbar sein. |
-| archived | erforderlich | erforderlich | nein | erforderlich* | Historisch erhalten, nicht mehr handlungsleitend; Legacy-Ausnahmen brauchen später ein explizites Ausnahmefeld. |
+| active | erforderlich | erforderlich | erforderlich | nein | Zweck, Verantwortung und Review-Zeitpunkt |
+| deferred | erforderlich | erforderlich | erforderlich | nein | Prüfung oder Reaktivierung ausstehend |
+| superseded | erforderlich | erforderlich | optional | erforderlich | Ablösung explizit nachvollziehbar |
+| archived | erforderlich | erforderlich | nein | optional | Bei tatsächlicher Ablösung Zielpfad angeben; Legacy ohne Ersatz bleibt gesondert zu begründen |
 
-`draft` und `deprecated` bleiben DocMeta-Statuswerte. Wenn ein Report zusätzlich
-einen Lifecycle-Zustand braucht, wird dieser über `lifecycle_state` modelliert.
-
-`erforderlich*` bedeutet: Das aktuelle Inventory meldet terminale Status ohne
-`superseded_by` als Lücke. Nach der Contract-Alignment-Entscheidung muss ein
-späterer Tooling-PR diese Prüfung auf `lifecycle_state` oder ein separates
-Lifecycle-Schema ausrichten.
-
-Diese Tabelle ist in Phase 1 eine Policy-Zieldefinition. Sie ist noch kein aktiver CI-Guard. Technische Durchsetzung folgt erst in späteren Phasen.
+Die Tabelle ist aktive Policy. Der Validator setzt davon derzeit nur einen
+Teil technisch durch.
 
 ## Referenzklassen
 
@@ -223,81 +208,73 @@ Primary references kommen aus handgeschriebenen Artefakten, zum Beispiel:
 - `docs/proofs/**`
 - `docs/roadmap.md`
 
-Derived references kommen aus:
-
-- `docs/_generated/**`
+Derived references kommen aus `docs/_generated/**`.
 
 Regeln:
 
 - Primary references können Archivierung und Löschung blockieren.
 - Derived references allein blockieren keine Archivierung.
-- Derived references zeigen aber, dass ein Report noch in generierten Übersichten erscheint.
 - Vor physischer Archivierung oder Löschung muss ein Referenzcheck laufen.
 
-Ob eine Primary Reference Archivierung oder Löschung blockiert, hängt vom
-Status und Zweck des referenzierenden Dokuments ab. Eine historische oder
-bereits archivierte Quelle blockiert nicht automatisch.
+Ob eine Primary Reference blockiert, hängt vom Status und Zweck des
+referenzierenden Dokuments ab.
 
 ## Archivierungsregeln
 
-Standard: `status: deprecated` mit `lifecycle_state: archived`
+Standard ist `status: deprecated` mit `lifecycle_state: archived`.
 
-Lifecycle-State-only Archivierung ist der Standard der ersten Ausbaustufen. Die Datei bleibt zunächst am Ort. Dadurch brechen keine Links.
+Lifecycle-State-only-Archivierung ist der derzeit unterstützte Weg. Die Datei
+bleibt an ihrem bestehenden Pfad; dadurch bleiben Links und die aktuelle
+Scannerreichweite stabil.
 
-Physische Archivierung ist später optional:
+Physische Archivierung nach
+`docs/reports/archive/YYYY/<report>.md` ist derzeit nicht operativ
+freigegeben. Validator und Inventory erfassen aktuell nur Markdown-Dateien
+direkt unter `docs/reports/`.
 
-- `docs/reports/archive/YYYY/<report>.md`
+Vor der ersten physischen Archivierung müssen beide Scanner rekursiv arbeiten
+und durch Tests für verschachtelte Archivpfade abgesichert sein.
 
-Nur erlaubt, wenn:
+Für eine spätere physische Archivierung gelten zusätzlich folgende
+Voraussetzungen:
 
-- keine aktiven Primary References brechen
-- `superseded_by` geprüft ist oder bewusste historische Begründung existiert
-- relevante Tasks, Proofs und Blueprints angepasst sind
-- generated docs reproduziert wurden
-- eigener PR erstellt wird
+- keine aktiven Primary References brechen,
+- `superseded_by` geprüft ist oder eine historische Begründung existiert,
+- relevante Tasks, Proofs und Blueprints angepasst sind,
+- generierte Dokumente reproduziert wurden,
+- ein eigener PR erstellt wird.
 
-Wichtig: Noch keine Archivierung in diesem PR.
+Der aktuelle Rollout archiviert oder löscht keine Reports automatisch.
 
 ## Löschregeln
 
 Direktes Löschen aus `status: draft`, `status: active` oder
 `lifecycle_state: active` ist nicht erlaubt.
 
-Löschen nur, wenn alle Bedingungen erfüllt sind:
+Löschen ist nur zulässig, wenn:
 
-- Report hat `lifecycle_state: archived` oder `lifecycle_state: superseded`.
-- `superseded_by` existiert oder ein später definiertes maschinenlesbares
-  Ausnahmefeld dokumentiert bewusst, warum kein Ersatzartefakt existiert.
-- Keine aktive Primary Reference existiert.
-- Kein Audit-, Compliance- oder historischer Rekonstruktionswert besteht.
-- Generierte Artefakte bleiben reproduzierbar.
-- Löschung erfolgt in eigenem PR mit klarer Begründung.
-
-Eine Löschung darf nie nebenbei in einem Feature-PR passieren.
+- `lifecycle_state` `archived` oder `superseded` ist,
+- `superseded_by` existiert oder eine explizite Ausnahme begründet ist,
+- keine aktive Primary Reference existiert,
+- kein Audit-, Compliance- oder Rekonstruktionswert besteht,
+- generierte Artefakte reproduzierbar bleiben,
+- die Löschung in einem eigenen PR erfolgt.
 
 ## Rollout-Modell
 
-1. **Inventory vorhanden**: Reportbestand sichtbar machen.
-2. **Policy definieren**: diese Datei.
-3. **Contract Alignment**: entscheiden, ob DocMeta-Contract,
-   Architecture-Doku oder ein separates Lifecycle-Schema erweitert wird.
-4. **Pilot**: genau einen Report annotieren, erst nach Contract Alignment.
-5. **Validator**: `report`, `warn` und `strict` implementieren. `report` ist
-   lokal nutzbar, `warn` kann nicht-blockierend in CI laufen, `strict` bleibt
-   vorhanden, aber noch nicht aktiv.
-6. **Backfill**: kleine Slices statt Massen-PR.
-7. **Changed-only strict**: neue oder geänderte Reports müssen Felder tragen.
-8. **Global strict**: erst nach abgeschlossenem Backfill.
-9. **Archivierung**: zunächst Lifecycle-State-only.
-10. **Löschung**: nur separat und nach Referenzcheck.
+1. Warnmodus in CI,
+2. evidenzbasierte Resttriage,
+3. kleine Backfill-Slices,
+4. semantische Validatorhärtung,
+5. changed-only strict,
+6. global strict erst bei bereinigtem Bestand,
+7. Archivierung nach Policy- und Referenzprüfung,
+8. Löschung nur separat und nach vollständigem Referenzcheck.
 
-Changed-only strict kommt vor global strict, damit Altlasten nicht jeden Feature-PR blockieren.
+Changed-only strict kommt vor global strict, damit Altlasten nicht jeden
+Feature-PR blockieren.
 
 ## Beispiele
-
-Die folgenden Beispiele zeigen das Zielmodell nach abgeschlossenem
-Contract-Alignment. Sie sind in dieser Phase noch keine allgemein gültigen
-DocMeta-Frontmatter-Vorgaben.
 
 ### Active audit
 
@@ -321,18 +298,19 @@ superseded_by: docs/reports/new-proof.md
 
 ### Archived legacy report
 
-Archivierte Legacy-Dokumente ohne eindeutiges Ersatzartefakt bleiben eine
-offene Entscheidung und dürfen erst nach einem eigenen Ausnahmefeld oder
-Validator-Verhalten modelliert werden.
-
-Diese Beispiele zeigen das Zielmodell nach abgeschlossenem Contract Alignment.
+Archivierte Legacy-Dokumente dürfen ohne künstlichen `superseded_by`-Pfad
+modelliert werden.
+Wenn kein Ersatzartefakt existiert, muss dies bis zur Einführung einer
+maschinenlesbaren Ausnahme fachlich nachvollziehbar im Report oder im
+zugehörigen Task begründet werden.
 
 ## Offene Entscheidungen
 
-- Welche Werte für `owner_task` genau zulässig werden.
-- Ob für `review_after` später zusätzliche Regeln wie maximale Review-Intervalle gelten.
-- Ob `lifecycle` später ein Enum wird.
-- Wann `deprecated` statt `superseded` verwendet wird.
-- Ob physische Archivierung überhaupt nötig ist.
-- Ob `docs/proofs/**` später eigene Lifecycle-Policy bekommt.
-- Ob generated Reports eigene Review-Logik brauchen.
+- zulässige Werte für `lifecycle`,
+- zulässige Werte für `lifecycle_state`,
+- genaue Regeln für `owner_task`,
+- zusätzliche Regeln für `review_after`,
+- Verhältnis von `deprecated` und `superseded`,
+- physische Archivierung,
+- eigene Lifecycle-Policy für `docs/proofs/**`,
+- Review-Logik für generierte Reports.

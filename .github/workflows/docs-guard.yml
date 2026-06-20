@@ -13,8 +13,14 @@ name: Docs Guard
       - 'runtime/**'
       - 'runbooks/**'
       - 'scripts/docmeta/**'
+      - '.github/workflows/docs-guard.yml'
       - 'docs/_generated/system-map.md'
+      - 'docs/_generated/report-lifecycle.md'
+      - 'docs/_generated/report-lifecycle-inventory.md'
       - 'docs/doc-freshness-registry.yml'
+      - 'docs/reports/**'
+      - 'docs/process/report-lifecycle.md'
+      - 'docs/process/report-lifecycle-contract-alignment.md'
       - 'docs/claims/**'
       - 'docs/_generated/claim-evidence-map.md'
       - 'AGENTS.md'
@@ -47,6 +53,9 @@ jobs:
         with:
           python-version-file: '.python-version'
 
+      - name: Report lifecycle warnings
+        run: python3 -m scripts.docmeta.validate_report_lifecycle --mode warn
+
       - name: run-ci-validate
         run: make ci-validate
 
@@ -76,6 +85,9 @@ jobs:
 
       - name: generate-system-map
         run: python3 -m scripts.docmeta.generate_system_map
+
+      - name: Generate report lifecycle overview
+        run: python3 -m scripts.docmeta.generate_report_lifecycle
 
       - name: generate-report-lifecycle-inventory
         run: python3 -m scripts.docmeta.generate_report_lifecycle_inventory
@@ -113,6 +125,7 @@ jobs:
             docs/_generated/backlinks.md
             docs/_generated/orphans.md
             docs/_generated/system-map.md
+            docs/_generated/report-lifecycle.md
             docs/_generated/report-lifecycle-inventory.md
             generated-drift-report.txt
           if-no-files-found: ignore

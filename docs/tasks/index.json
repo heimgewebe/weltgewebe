@@ -1214,6 +1214,54 @@
         ]
       },
       "updated_at": "2026-06-16"
+    },
+    {
+      "id": "DOCMETA-REPORT-LIFECYCLE-001",
+      "title": "Report-Lifecycle-Rollout reconciliieren und Restbestand ratcheten",
+      "area": "docs",
+      "status": "partial",
+      "priority": "medium",
+      "effort": "M",
+      "risk": "medium",
+      "owner": "docs-mechanik",
+      "evidence": [
+        "docs/process/report-lifecycle.md",
+        "docs/process/report-lifecycle-contract-alignment.md",
+        "scripts/docmeta/validate_report_lifecycle.py",
+        "scripts/docmeta/tests/test_validate_report_lifecycle.py",
+        "scripts/docmeta/generate_report_lifecycle.py",
+        "scripts/docmeta/generate_report_lifecycle_inventory.py",
+        ".github/workflows/docs-guard.yml"
+      ],
+      "missing_evidence": [
+        "Der vom aktuellen Lifecycle-Validator gemeldete Restbestand ist noch nicht vollständig evidenzbasiert klassifiziert",
+        "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
+        "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
+        "Der zulässige Namensraum für owner_task und die darauf aufbauende Existenzprüfung sind noch nicht festgelegt",
+        "Physische Archivpfade unter docs/reports/archive/** werden von Validator und Inventory noch nicht rekursiv erfasst",
+        "Changed-only strict ist noch nicht umgesetzt",
+        "Global strict bleibt bis zur Bereinigung des Bestands deaktiviert"
+      ],
+      "acceptance": [
+        "Policy und Contract-Alignment beschreiben den tatsächlich implementierten Rollout-Stand ohne überholte Gegenwartsclaims",
+        "owner_task- und review_after-Semantik sind als report-spezifische Prozessregel dokumentiert",
+        "Der Lifecycle-Validator läuft für relevante Änderungen im CI-Warnmodus; Lifecycle-Findings bleiben nicht blockierend, technische Validatorfehler bleiben blockierend",
+        "Lifecycle-Overview und Lifecycle-Inventory werden deterministisch durch ihre Generatoren erzeugt",
+        "Alle verbleibenden Reports erhalten in späteren kleinen Slices eine evidenzbasierte Klassifikation oder eine explizit begründete Leerstelle",
+        "Changed-only strict wird erst nach ausreichender Bestandsbereinigung eingeführt",
+        "Global strict bleibt deaktiviert, solange Bestandsfindings existieren"
+      ],
+      "links": {
+        "issues": [],
+        "prs": [
+          "1246"
+        ],
+        "docs": [
+          "docs/process/report-lifecycle.md",
+          "docs/process/report-lifecycle-contract-alignment.md"
+        ]
+      },
+      "updated_at": "2026-06-19"
     }
   ]
 }
