@@ -40,6 +40,7 @@ Generated automatically. Do not edit.
 | deploy.heim-first-phase0 | Heim-First Phase 0 | reference | active | docs/deploy/heim-first-phase0.md |
 | deploy.heimserver.deployment | Heimserver Deployment | reference | active | docs/deploy/heimserver.deployment.md |
 | deploy.heimserver.integration | Heimserver Integration | reference | active | docs/deploy/heimserver.integration.md |
+| deploy.public-app-base-url | Public APP_BASE_URL Contract | reference | active | docs/deploy/public-app-base-url.md |
 | deploy.security | Deploy Security | architecture | active | docs/deploy/security.md |
 | deploy.vps | VPS-Deployment | reference | active | docs/deploy/vps.md |
 | deploy.weltgewebe.naming | Weltgewebe Naming | reference | active | docs/deploy/weltgewebe.naming.md |
@@ -49,7 +50,7 @@ Generated automatically. Do not edit.
 | docs.architecture.overview | Architekturüberblick | architecture | active | docs/architekturstruktur.md |
 | docs.blueprints.agent-operability | Minimaler Agent-Operability-Kern | blueprint | draft | docs/blueprints/agent-operability-blaupause.md |
 | docs.blueprints.agent-safety-control-layer | Blueprint — Agent Safety Control Layer | blueprint | draft | docs/blueprints/blueprint-agent-safety-control-layer.md |
-| docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | draft | docs/blueprints/kartenklarheit.md |
+| docs.blueprints.kartenklarheit | Blaupause zur Optimierung der Karte | blueprint | active | docs/blueprints/kartenklarheit.md |
 | docs.blueprints.kartenklarheit-phase6 | Kartenklarheit Phase 6: Der Wahrheitsbeweis | blueprint | in progress | docs/blueprints/kartenklarheit-phase6.md |
 | docs.blueprints.kartenklarheit-roadmap | Roadmap - Kartenklarheit | roadmap | active | docs/blueprints/kartenklarheit-roadmap.md |
 | docs.claims.readme | Claim-Registry | reference | active | docs/claims/README.md |
@@ -59,6 +60,7 @@ Generated automatically. Do not edit.
 | docs.proofs.basemap-hamburg-artifact-proof | Basemap Hamburg Artifact Proof (Heimserver) | proof | active | docs/proofs/basemap-hamburg-artifact-proof.md |
 | docs.reference.agent-operability-fixture-matrix | Agent-Betriebsfaehigkeit: Fixture-Matrix | reference | active | docs/reference/agent-operability-fixture-matrix.md |
 | docs.reports.agent-readiness-audit | Agent Readiness Audit | documentation | active | docs/reports/agent-readiness-audit.md |
+| docs.reports.domain-runtime-data-source-reconciliation | Domain Runtime Data Source Reconciliation | report | active | docs/reports/domain-runtime-data-source-reconciliation.md |
 | docs.roadmap | Weltgewebe — Master-Umsetzungsroadmap | roadmap | active | docs/roadmap.md |
 | docs.runbook | Runbook | runbook | active | docs/runbook.md |
 | docs.runbook.observability | Observability Runbook | runbook | active | docs/runbook.observability.md |
@@ -73,7 +75,8 @@ Generated automatically. Do not edit.
 | konzepte.garnrolle | Garnrolle | reference | deprecated | docs/konzepte/garnrolle.md |
 | konzepte.garnrolle-und-verortung | Weltgewebe – Garnrolle, Verortung und Rolle ohne Namen | concept | active | docs/konzepte/garnrolle-und-verortung.md |
 | map-architekturkritik | Architekturkritik Map-Implementierung | report | active | docs/reports/map-architekturkritik.md |
-| map-blaupause | Basemap-Architektur-Blaupause | blueprint | draft | docs/blueprints/map-blaupause.md |
+| map-basemap-proof-gap-reconciliation | MAP-PROOF-001 — Basemap Proof Gap Reconciliation | report | active | docs/reports/map-basemap-proof-gap-reconciliation.md |
+| map-blaupause | Basemap-Architektur-Blaupause | blueprint | active | docs/blueprints/map-blaupause.md |
 | map-roadmap | Basemap-Umsetzungsroadmap | roadmap | draft | docs/blueprints/map-roadmap.md |
 | map-status-matrix | Map Status Matrix | status-matrix | active | docs/reports/map-status-matrix.md |
 | overview.inhalt | Inhalt (Übersicht) | reference | active | docs/overview/inhalt.md |
@@ -82,26 +85,28 @@ Generated automatically. Do not edit.
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
-| process.report-lifecycle | Report Lifecycle Policy | policy | draft | docs/process/report-lifecycle.md |
-| process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | draft | docs/process/report-lifecycle-contract-alignment.md |
+| process.report-lifecycle | Report Lifecycle Policy | policy | active | docs/process/report-lifecycle.md |
+| process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | active | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | docs/reference/glossar.md |
-| reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | active | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |
-| reports.auth-persistence-next-step | Auth-Persistenz — Nächster Schritt | report | active | docs/reports/auth-persistence-next-step.md |
-| reports.auth-persistence-readiness | Auth-Persistenzbereitschaft — OPT-API-002 | report | active | docs/reports/auth-persistence-readiness.md |
-| reports.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof | report | active | docs/reports/auth-persistence-runtime-proof.md |
+| reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | deprecated | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |
+| reports.auth-persistence-next-step | Auth-Persistenz — Nächster Schritt | report | deprecated | docs/reports/auth-persistence-next-step.md |
+| reports.auth-persistence-readiness | Auth-Persistenzbereitschaft — OPT-API-002 | report | deprecated | docs/reports/auth-persistence-readiness.md |
+| reports.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof | report | deprecated | docs/reports/auth-persistence-runtime-proof.md |
 | reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | active | docs/reports/auth-persistence-runtime-target-reconciliation.md |
 | reports.auth-status-matrix | Auth Status Matrix | reference | active | docs/reports/auth-status-matrix.md |
-| reports.cost-report | Cost Report | reference | active | docs/reports/cost-report.md |
+| reports.cost-report | Cost Report | report | active | docs/reports/cost-report.md |
 | reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | active | docs/reports/domain-account-email-uniqueness-audit.md |
 | reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | active | docs/reports/domain-account-write-path-proof.md |
 | reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
-| reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | active | docs/reports/domain-edge-create-semantics-preflight.md |
+| reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | deprecated | docs/reports/domain-edge-create-semantics-preflight.md |
+| reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | active | docs/reports/domain-edge-reference-audit.md |
 | reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | active | docs/reports/domain-edge-write-path-proof.md |
 | reports.domain-node-write-path-proof | Domain Node Write Path Proof | report | active | docs/reports/domain-node-write-path-proof.md |
+| reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
 | reports.domain-read-path-proof | Domain Read Path Proof | report | active | docs/reports/domain-read-path-proof.md |
 | reports.inwx-zone-reconciliation-plan | INWX Zone Reconciliation Plan | report | active | docs/reports/inwx-zone-reconciliation-plan.md |

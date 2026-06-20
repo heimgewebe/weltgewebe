@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 394 |
+| Relationen gesamt | 414 |
 | — depends_on | 18 |
-| — relates_to | 373 |
+| — relates_to | 393 |
 | — supersedes | 3 |
 | relates_to Anteil | 95% |
 
@@ -30,7 +30,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (143 Dokumente):
+**Cluster 1** (150 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -88,6 +88,7 @@ _Keine Lücken erkannt._
 - `docs/deploy/heim-first-phase0.md`
 - `docs/deploy/heimserver.deployment.md`
 - `docs/deploy/heimserver.integration.md`
+- `docs/deploy/public-app-base-url.md`
 - `docs/deploy/security.md`
 - `docs/deploy/vps.md`
 - `docs/deploy/weltgewebe.naming.md`
@@ -131,8 +132,10 @@ _Keine Lücken erkannt._
 - `docs/reports/domain-edge-reference-audit.md`
 - `docs/reports/domain-edge-write-path-proof.md`
 - `docs/reports/domain-node-write-path-proof.md`
+- `docs/reports/domain-postgres-instance-coherence-decision.md`
 - `docs/reports/domain-provider-role-finding.md`
 - `docs/reports/domain-read-path-proof.md`
+- `docs/reports/domain-runtime-data-source-reconciliation.md`
 - `docs/reports/inwx-zone-reconciliation-plan.md`
 - `docs/reports/map-architekturkritik.md`
 - `docs/reports/map-basemap-proof-gap-reconciliation.md`
@@ -161,6 +164,7 @@ _Keine Lücken erkannt._
 - `docs/specs/list-pagination-api.md`
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
+- `docs/tasks/DEPLOY-DNS-001B.md`
 - `docs/tasks/README.md`
 - `docs/tasks/board.md`
 - `docs/tasks/index.json`
@@ -168,6 +172,7 @@ _Keine Lücken erkannt._
 - `docs/vision.md`
 - `docs/weltgewebe-agenten-manifest.md`
 - `docs/zusammenstellung.md`
+- `infra/compose/compose.prod.override.yml`
 - `repo.meta.yaml`
 - `scripts/basemap/build-hamburg-pmtiles.sh`
 - `scripts/docmeta/audit_account_email_uniqueness.py`
@@ -175,15 +180,24 @@ _Keine Lücken erkannt._
 - `scripts/docmeta/check_planning_registration.py`
 - `scripts/docmeta/validate_claim_registry.py`
 - `scripts/guard/basemap-runtime-proof.sh`
+- `scripts/guard/domain-single-instance-guard.sh`
+- `scripts/tests/test_domain_single_instance_guard.sh`
 
 **Cluster 2** (4 Dokumente):
+
+- `.github/workflows/cost-report.yml`
+- `docs/reports/cost-report.md`
+- `tools/py/cost/model.csv`
+- `tools/py/cost/report.py`
+
+**Cluster 3** (4 Dokumente):
 
 - `contracts/agent/task.schema.json`
 - `docs/reference/agent-operability-fixture-matrix.md`
 - `scripts/agent/check_non_ideal_task.py`
 - `scripts/agent/tests/test_check_non_ideal_task.py`
 
-**Cluster 3** (3 Dokumente):
+**Cluster 4** (3 Dokumente):
 
 - `docs/adr/0042-consume-semantah-contracts.md`
 - `docs/x-repo/peers-learnings.md`
@@ -201,6 +215,7 @@ _Keine Lücken erkannt._
 - relates_to → `apps/api/src/state.rs`
 - relates_to → `docs/reports/domain-account-write-path-proof.md`
 - relates_to → `docs/reports/domain-node-write-path-proof.md`
+- relates_to → `docs/reports/domain-postgres-instance-coherence-decision.md`
 - relates_to → `docs/reports/optimierungsbericht.md`
 - relates_to → `docs/reports/optimierungsstatus.md`
 - relates_to → `docs/specs/contract.md`
