@@ -1245,7 +1245,7 @@
       "acceptance": [
         "Policy und Contract-Alignment beschreiben den tatsächlich implementierten Rollout-Stand ohne überholte Gegenwartsclaims",
         "owner_task- und review_after-Semantik sind als report-spezifische Prozessregel dokumentiert",
-        "Der Lifecycle-Validator läuft für relevante Änderungen nicht blockierend im CI-Warnmodus; echte Toolfehler bleiben blockierend",
+        "Der Lifecycle-Validator läuft für relevante Änderungen im CI-Warnmodus; Lifecycle-Findings bleiben nicht blockierend, technische Validatorfehler bleiben blockierend",
         "Lifecycle-Overview und Lifecycle-Inventory werden deterministisch durch ihre Generatoren erzeugt",
         "Alle verbleibenden Reports erhalten in späteren kleinen Slices eine evidenzbasierte Klassifikation oder eine explizit begründete Leerstelle",
         "Changed-only strict wird erst nach ausreichender Bestandsbereinigung eingeführt",
