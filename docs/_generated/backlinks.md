@@ -19,6 +19,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 
+## .github/workflows/cost-report.yml
+
+- [relates_to] docs/reports/cost-report.md
+
 ## AGENTS.md
 
 - [relates_to] docs/blueprints/agent-operability-blaupause.md
@@ -56,6 +60,7 @@ Generated automatically. Do not edit.
 ## apps/api/src/state.rs
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
 ## apps/api/tests/db_domain_account_write_path.rs
 
@@ -196,7 +201,9 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 - [relates_to] docs/reports/domain-read-path-proof.md
+- [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 
 ## docs/blueprints/kartenklarheit-phase6.md
 
@@ -295,9 +302,11 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 - [relates_to] docs/deploy/README.md
+- [relates_to] docs/deploy/public-app-base-url.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
+- [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 
 ## docs/deploy/heim-first-phase0.md
 
@@ -504,11 +513,19 @@ Generated automatically. Do not edit.
 
 - [supersedes] docs/reports/domain-edge-write-path-proof.md
 
+## docs/reports/domain-edge-reference-audit.md
+
+- [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
+
 ## docs/reports/domain-node-write-path-proof.md
 
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
+
+## docs/reports/domain-postgres-instance-coherence-decision.md
+
+- [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 
 ## docs/reports/domain-provider-role-finding.md
 
@@ -520,6 +537,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
 - [relates_to] docs/reports/optimierungsstatus.md
+
+## docs/reports/inwx-zone-reconciliation-plan.md
+
+- [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 
 ## docs/reports/map-architekturkritik.md
 
@@ -542,6 +563,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-reference-audit.md
+- [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 
 ## docs/reports/optimierungsbericht.md
 
@@ -682,10 +704,13 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-edge-reference-audit.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/domain-read-path-proof.md
+- [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
+- [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 - [relates_to] docs/tasks/README.md
 
 ## docs/tasks/index.json
@@ -698,6 +723,8 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+- [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 - [relates_to] docs/reports/planning-registration-findings.md
 - [relates_to] docs/tasks/board.md
 
@@ -737,6 +764,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/overview/zusammenstellung.md
 - [relates_to] docs/vision.md
 
+## infra/compose/compose.prod.override.yml
+
+- [relates_to] docs/deploy/public-app-base-url.md
+
 ## repo.meta.yaml
 
 - [relates_to] docs/blueprints/blueprint-agent-safety-control-layer.md
@@ -775,3 +806,19 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
+
+## scripts/guard/domain-single-instance-guard.sh
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## scripts/tests/test_domain_single_instance_guard.sh
+
+- [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
+
+## tools/py/cost/model.csv
+
+- [relates_to] docs/reports/cost-report.md
+
+## tools/py/cost/report.py
+
+- [relates_to] docs/reports/cost-report.md
