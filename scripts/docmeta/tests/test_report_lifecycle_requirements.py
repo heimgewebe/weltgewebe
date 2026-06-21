@@ -134,11 +134,31 @@ class TestReportLifecycleRequirements(unittest.TestCase):
                 {"doc_type": "report", "status": "active", "lifecycle_state": "archived"}
             ),
             (
-                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
-                ("missing_status", "status", "report documents should define status"),
-                ("missing_lifecycle", "lifecycle", "active reports should define lifecycle"),
-                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
-                ("missing_owner_task", "owner_task", "archived reports should define owner_task"),
+                (
+                    "missing_lifecycle_state",
+                    "lifecycle_state",
+                    "report documents should define lifecycle_state",
+                ),
+                (
+                    "missing_status",
+                    "status",
+                    "report documents should define status",
+                ),
+                (
+                    "missing_lifecycle",
+                    "lifecycle",
+                    "active reports should define lifecycle",
+                ),
+                (
+                    "missing_review_after",
+                    "review_after",
+                    "active/draft reports should define review_after",
+                ),
+                (
+                    "missing_owner_task",
+                    "owner_task",
+                    "archived reports should define owner_task",
+                ),
             ),
         )
         # superseded contributes superseded_by; status=active still wins lifecycle.
@@ -147,12 +167,36 @@ class TestReportLifecycleRequirements(unittest.TestCase):
                 {"doc_type": "report", "status": "active", "lifecycle_state": "superseded"}
             ),
             (
-                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
-                ("missing_status", "status", "report documents should define status"),
-                ("missing_lifecycle", "lifecycle", "active reports should define lifecycle"),
-                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
-                ("missing_owner_task", "owner_task", "superseded reports should define owner_task"),
-                ("missing_superseded_by", "superseded_by", "superseded reports should define superseded_by"),
+                (
+                    "missing_lifecycle_state",
+                    "lifecycle_state",
+                    "report documents should define lifecycle_state",
+                ),
+                (
+                    "missing_status",
+                    "status",
+                    "report documents should define status",
+                ),
+                (
+                    "missing_lifecycle",
+                    "lifecycle",
+                    "active reports should define lifecycle",
+                ),
+                (
+                    "missing_review_after",
+                    "review_after",
+                    "active/draft reports should define review_after",
+                ),
+                (
+                    "missing_owner_task",
+                    "owner_task",
+                    "superseded reports should define owner_task",
+                ),
+                (
+                    "missing_superseded_by",
+                    "superseded_by",
+                    "superseded reports should define superseded_by",
+                ),
             ),
         )
         # status=draft wins review_after message; deferred contributes lifecycle/owner_task.
@@ -161,11 +205,31 @@ class TestReportLifecycleRequirements(unittest.TestCase):
                 {"doc_type": "report", "status": "draft", "lifecycle_state": "deferred"}
             ),
             (
-                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
-                ("missing_status", "status", "report documents should define status"),
-                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
-                ("missing_lifecycle", "lifecycle", "deferred reports should define lifecycle"),
-                ("missing_owner_task", "owner_task", "deferred reports should define owner_task"),
+                (
+                    "missing_lifecycle_state",
+                    "lifecycle_state",
+                    "report documents should define lifecycle_state",
+                ),
+                (
+                    "missing_status",
+                    "status",
+                    "report documents should define status",
+                ),
+                (
+                    "missing_review_after",
+                    "review_after",
+                    "active/draft reports should define review_after",
+                ),
+                (
+                    "missing_lifecycle",
+                    "lifecycle",
+                    "deferred reports should define lifecycle",
+                ),
+                (
+                    "missing_owner_task",
+                    "owner_task",
+                    "deferred reports should define owner_task",
+                ),
             ),
         )
 

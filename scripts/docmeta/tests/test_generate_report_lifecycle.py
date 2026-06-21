@@ -125,15 +125,25 @@ class TestGenerateReportLifecycle(unittest.TestCase):
 
     def test_missing_currently_enforced_fields_section(self):
         self._write_report("unclass.md", "---\ndoc_type: report\nstatus: active\n---")
+        self._write_report("reference.md", "---\ndoc_type: reference\nstatus: active\n---")
         generate(self.root, self.output_path)
         content = self.output_path.read_text(encoding="utf-8")
 
         self.assertIn("## Reports With Missing Currently-Enforced Fields", content)
-        # Field names in rule-precedence order (not validator finding codes).
-        self.assertIn("lifecycle_state, lifecycle, review_after", content)
+        section = content.split(
+            "## Reports With Missing Currently-Enforced Fields", 1
+        )[1].split("\n## ", 1)[0]
+        # Exact row: field names in rule-precedence order (not finding codes).
+        self.assertIn(
+            "| docs/reports/unclass.md | active |  | "
+            "lifecycle_state, lifecycle, review_after |",
+            section,
+        )
         # Presence-only caveat present; no completeness overclaim.
-        self.assertIn("field presence only", content)
-        self.assertNotIn("Complete Reports", content)
+        self.assertIn("field presence only", section)
+        self.assertNotIn("Complete Reports", section)
+        # Non-reports never appear in the section.
+        self.assertNotIn("docs/reports/reference.md", section)
 
     def test_classified_report_absent_from_missing_fields_section(self):
         self._write_report(

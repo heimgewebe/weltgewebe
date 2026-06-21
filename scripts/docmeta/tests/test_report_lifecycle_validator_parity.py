@@ -150,6 +150,66 @@ def legacy_expected_findings(
     return tuple(findings)
 
 
+# Cross-product matrix inputs. The full product is exhaustively executed, but
+# the cases are not all distinct semantic states: the non-report combinations
+# (doc_type != "report") all terminate early with no findings. The redundancy
+# is intentional and cheap, and documents parity across the entire input
+# cross product rather than only the report-typed subset.
+DOC_TYPES = ("report", "reference")
+STATUSES = ("", "active", "draft", "deprecated")
+LIFECYCLE_STATES = (
+    "",
+    "active",
+    "deferred",
+    "superseded",
+    "archived",
+    "unknown",
+)
+MATRIX_FIELDS = ("lifecycle", "owner_task", "review_after", "superseded_by")
+EXPECTED_MATRIX_CASES = 768
+
+# Normalization probe surface. The probe count is frozen so the documented
+# number cannot silently drift from the executed test surface.
+NORMALIZATION_KEYS = (
+    "doc_type",
+    "status",
+    "lifecycle_state",
+    "lifecycle",
+    "owner_task",
+    "review_after",
+    "superseded_by",
+)
+NORMALIZATION_BASE: dict[str, object] = {
+    "doc_type": "report",
+    "status": "active",
+    "lifecycle_state": "superseded",
+    "lifecycle": "value",
+    "owner_task": "value",
+    "review_after": "value",
+    "superseded_by": "value",
+}
+EMPTY_VALUES = (None, "", "   ", [], (), set(), {})
+NON_STRING_SCALARS = (7, False, datetime.date(2026, 7, 13))
+CASE_AND_WHITESPACE_CASES = (
+    {
+        "doc_type": " Report ",
+        "status": " ACTIVE ",
+        "lifecycle_state": " Deferred ",
+    },
+    {
+        "doc_type": " REPORT ",
+        "status": " Draft ",
+        "lifecycle_state": " ARCHIVED ",
+    },
+    {
+        "doc_type": " Reference ",
+        "status": " ACTIVE ",
+        "lifecycle_state": " SUPERSEDED ",
+    },
+)
+EXPECTED_NORMALIZATION_CASES = 73
+
+
 class TestReportLifecycleValidatorParity(unittest.TestCase):
     ROOT = Path("/repo")
     PATH = ROOT / "docs" / "reports" / "sample.md"
@@ -175,25 +235,23 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
             msg=f"unexpected path for frontmatter={frontmatter!r}",
         )
 
-    def test_semantic_decision_matrix_matches_legacy_validator(self) -> None:
-        doc_types = ("report", "reference")
-        statuses = ("", "active", "draft", "deprecated")
-        lifecycle_states = (
-            "",
-            "active",
-            "deferred",
-            "superseded",
-            "archived",
-            "unknown",
-        )
-        fields = ("lifecycle", "owner_task", "review_after", "superseded_by")
+    def test_cross_product_matrix_matches_legacy_validator(self) -> None:
+        """Exhaustively executed cross product of doc_type, status,
+        lifecycle_state, and field presence.
+
+        These are fully executed matrix cases, not 768 distinct semantic
+        states: the non-report combinations terminate identically early.
+        Verifies the refactored validator matches the frozen legacy oracle on
+        finding code, field, message, severity, and order across the whole
+        cross product.
+        """
         case_count = 0
 
         for doc_type, status, lifecycle_state, presence in itertools.product(
-            doc_types,
-            statuses,
-            lifecycle_states,
-            itertools.product((False, True), repeat=len(fields)),
+            DOC_TYPES,
+            STATUSES,
+            LIFECYCLE_STATES,
+            itertools.product((False, True), repeat=len(MATRIX_FIELDS)),
         ):
             frontmatter: dict[str, object] = {
                 "doc_type": doc_type,
@@ -203,89 +261,60 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
             frontmatter.update(
                 {
                     field: "value" if present else ""
-                    for field, present in zip(fields, presence, strict=True)
+                    for field, present in zip(MATRIX_FIELDS, presence, strict=True)
                 }
             )
             self.assert_matches_legacy(frontmatter)
             case_count += 1
 
-        self.assertEqual(case_count, 768)
+        self.assertEqual(case_count, EXPECTED_MATRIX_CASES)
 
     def test_empty_value_normalization_matches_legacy_validator(self) -> None:
-        empty_values = (None, "", "   ", [], (), set(), {})
-        keys = (
-            "doc_type",
-            "status",
-            "lifecycle_state",
-            "lifecycle",
-            "owner_task",
-            "review_after",
-            "superseded_by",
-        )
-        base: dict[str, object] = {
-            "doc_type": "report",
-            "status": "active",
-            "lifecycle_state": "superseded",
-            "lifecycle": "value",
-            "owner_task": "value",
-            "review_after": "value",
-            "superseded_by": "value",
-        }
-
-        for key, empty_value in itertools.product(keys, empty_values):
-            frontmatter = dict(base)
+        for key, empty_value in itertools.product(
+            NORMALIZATION_KEYS, EMPTY_VALUES
+        ):
+            frontmatter = dict(NORMALIZATION_BASE)
             frontmatter[key] = empty_value
             with self.subTest(key=key, value=empty_value):
                 self.assert_matches_legacy(frontmatter)
 
     def test_non_string_scalar_normalization_matches_legacy_validator(self) -> None:
-        scalar_values = (7, False, datetime.date(2026, 7, 13))
-        keys = (
-            "doc_type",
-            "status",
-            "lifecycle_state",
-            "lifecycle",
-            "owner_task",
-            "review_after",
-            "superseded_by",
-        )
-        base: dict[str, object] = {
-            "doc_type": "report",
-            "status": "active",
-            "lifecycle_state": "superseded",
-            "lifecycle": "value",
-            "owner_task": "value",
-            "review_after": "value",
-            "superseded_by": "value",
-        }
-
-        for key, scalar_value in itertools.product(keys, scalar_values):
-            frontmatter = dict(base)
+        for key, scalar_value in itertools.product(
+            NORMALIZATION_KEYS, NON_STRING_SCALARS
+        ):
+            frontmatter = dict(NORMALIZATION_BASE)
             frontmatter[key] = scalar_value
             with self.subTest(key=key, value=scalar_value):
                 self.assert_matches_legacy(frontmatter)
 
     def test_case_and_whitespace_normalization_matches_legacy_validator(self) -> None:
-        cases = (
-            {
-                "doc_type": " Report ",
-                "status": " ACTIVE ",
-                "lifecycle_state": " Deferred ",
-            },
-            {
-                "doc_type": " REPORT ",
-                "status": " Draft ",
-                "lifecycle_state": " ARCHIVED ",
-            },
-            {
-                "doc_type": " Reference ",
-                "status": " ACTIVE ",
-                "lifecycle_state": " SUPERSEDED ",
-            },
-        )
-        for frontmatter in cases:
+        for frontmatter in CASE_AND_WHITESPACE_CASES:
             with self.subTest(frontmatter=frontmatter):
                 self.assert_matches_legacy(frontmatter)
+
+    def test_probe_surface_sizes_are_frozen(self) -> None:
+        """Pin the documented case counts to the executed test surface.
+
+        If the matrix or normalization constants change, these literals must be
+        updated deliberately, so the PR description cannot silently diverge from
+        what the tests actually exercise.
+        """
+        matrix_cases = (
+            len(DOC_TYPES)
+            * len(STATUSES)
+            * len(LIFECYCLE_STATES)
+            * 2 ** len(MATRIX_FIELDS)
+        )
+        self.assertEqual(matrix_cases, EXPECTED_MATRIX_CASES)
+        self.assertEqual(EXPECTED_MATRIX_CASES, 768)
+
+        normalization_cases = (
+            len(NORMALIZATION_KEYS) * len(EMPTY_VALUES)
+            + len(NORMALIZATION_KEYS) * len(NON_STRING_SCALARS)
+            + len(CASE_AND_WHITESPACE_CASES)
+        )
+        self.assertEqual(normalization_cases, EXPECTED_NORMALIZATION_CASES)
+        self.assertEqual(EXPECTED_NORMALIZATION_CASES, 73)
 
 
 if __name__ == "__main__":
