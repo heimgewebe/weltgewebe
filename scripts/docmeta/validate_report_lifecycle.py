@@ -10,6 +10,10 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.docmeta.docmeta import parse_frontmatter
+from scripts.docmeta.report_lifecycle_requirements import (
+    missing_required_report_field_rules,
+    string_value as _string_value,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALID_MODES = ("report", "warn", "strict")
@@ -22,16 +26,6 @@ class Finding:
     severity: str
     message: str
     field: str | None = None
-
-
-def _string_value(value: object) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, (list, tuple, set, dict)):
-        return ""
-    return str(value).strip()
 
 
 def _load_frontmatter(path: Path) -> dict[str, object]:
@@ -54,76 +48,16 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
     except ValueError:
         rel_path = str(path)
 
-    doc_type = _string_value(frontmatter.get("doc_type")).strip().lower()
-    if doc_type != "report":
-        return []
-
-    status = _string_value(frontmatter.get("status")).strip().lower()
-    lifecycle_state = _string_value(frontmatter.get("lifecycle_state")).strip().lower()
-    lifecycle = _string_value(frontmatter.get("lifecycle")).strip()
-    owner_task = _string_value(frontmatter.get("owner_task")).strip()
-    review_after = _string_value(frontmatter.get("review_after")).strip()
-    superseded_by = _string_value(frontmatter.get("superseded_by")).strip()
-
-    findings: list[Finding] = []
-    added_codes = set()
-
-    def add_finding(code: str, field: str, message: str):
-        if code not in added_codes:
-            findings.append(Finding(
-                path=rel_path,
-                code=code,
-                severity="warn",
-                field=field,
-                message=message
-            ))
-            added_codes.add(code)
-
-    # Rule: doc_type: report needs lifecycle_state
-    if not lifecycle_state:
-        add_finding("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state")
-
-    # Regel 1 — doc_type: report braucht status
-    if not status:
-        add_finding("missing_status", "status", "report documents should define status")
-
-    # Regel 2 — status: active braucht lifecycle
-    if status == "active" and not lifecycle:
-        add_finding("missing_lifecycle", "lifecycle", "active reports should define lifecycle")
-
-    # Regel 3 — status: active oder status: draft braucht review_after
-    if status in {"active", "draft"} and not review_after:
-        add_finding("missing_review_after", "review_after", "active/draft reports should define review_after")
-
-    # Regel 4 — Pflichtfeldlogik für bekannte lifecycle_state-Werte
-    if lifecycle_state == "active":
-        if not lifecycle:
-            add_finding("missing_lifecycle", "lifecycle", "active reports should define lifecycle")
-        if not owner_task:
-            add_finding("missing_owner_task", "owner_task", "active reports should define owner_task")
-        if not review_after:
-            add_finding("missing_review_after", "review_after", "active/draft reports should define review_after")
-    elif lifecycle_state == "deferred":
-        if not lifecycle:
-            add_finding("missing_lifecycle", "lifecycle", "deferred reports should define lifecycle")
-        if not owner_task:
-            add_finding("missing_owner_task", "owner_task", "deferred reports should define owner_task")
-        if not review_after:
-            add_finding("missing_review_after", "review_after", "deferred reports should define review_after")
-    elif lifecycle_state == "superseded":
-        if not lifecycle:
-            add_finding("missing_lifecycle", "lifecycle", "superseded reports should define lifecycle")
-        if not owner_task:
-            add_finding("missing_owner_task", "owner_task", "superseded reports should define owner_task")
-        if not superseded_by:
-            add_finding("missing_superseded_by", "superseded_by", "superseded reports should define superseded_by")
-    elif lifecycle_state == "archived":
-        if not lifecycle:
-            add_finding("missing_lifecycle", "lifecycle", "archived reports should define lifecycle")
-        if not owner_task:
-            add_finding("missing_owner_task", "owner_task", "archived reports should define owner_task")
-
-    return findings
+    return [
+        Finding(
+            path=rel_path,
+            code=requirement.code,
+            severity="warn",
+            field=requirement.field,
+            message=requirement.message,
+        )
+        for requirement in missing_required_report_field_rules(frontmatter)
+    ]
 
 
 def _build_summary(
