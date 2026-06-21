@@ -19,9 +19,9 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | files_scanned | 27 |
 | reports_checked | 23 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 14 |
-| reports_missing_lifecycle_state | 9 |
-| findings_total | 27 |
+| reports_with_lifecycle_state | 15 |
+| reports_missing_lifecycle_state | 8 |
+| findings_total | 24 |
 
 ## Lifecycle State Summary
 
@@ -30,16 +30,16 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | active | 9 |
 | deferred | 0 |
 | superseded | 5 |
-| archived | 0 |
-| missing | 9 |
+| archived | 1 |
+| missing | 8 |
 
 ## Finding Summary
 
 | Code | Count |
 | --- | ---: |
-| missing_lifecycle | 9 |
-| missing_lifecycle_state | 9 |
-| missing_review_after | 9 |
+| missing_lifecycle | 8 |
+| missing_lifecycle_state | 8 |
+| missing_review_after | 8 |
 
 ## Active Reports
 
@@ -75,7 +75,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| _None_ | | | | | |
+| docs/reports/planning-registration-findings.md | deprecated | audit | TASK-CTL-005 |  |  |
 
 ## Unclassified Reports
 
@@ -89,7 +89,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/map-basemap-proof-gap-reconciliation.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/passkey-register-verify-prep.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/planning-registration-findings.md | active |  |  |  | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Reports With Findings
 
@@ -103,7 +102,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/map-basemap-proof-gap-reconciliation.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/optimierungsbericht.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 | docs/reports/passkey-register-verify-prep.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
-| docs/reports/planning-registration-findings.md |  | active | missing_lifecycle, missing_lifecycle_state, missing_review_after |
 
 ## Non-Report Files Under docs/reports
 

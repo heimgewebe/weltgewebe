@@ -2,7 +2,10 @@
 id: reports.planning-registration-findings
 title: Planning Registration Findings Triage
 doc_type: report
-status: active
+status: deprecated
+lifecycle_state: archived
+lifecycle: audit
+owner_task: TASK-CTL-005
 summary: >
   Evidenzbericht zu TASK-CTL-005: Triage der acht bestehenden
   planning-registration-Findings und Beleg für den Strict-Ratchet des Guards.
@@ -18,6 +21,13 @@ relations:
 > Diagnostischer Evidenzbericht für `TASK-CTL-005`. Keine Wahrheitsschicht —
 > er belegt, warum der `planning-registration`-Guard von `--mode warn` auf
 > `--mode strict` umgestellt werden durfte.
+
+## Lifecycle-Einordnung
+
+Dieser Report bleibt am bestehenden Pfad als historische Evidenz für den
+abgeschlossenen Strict-Ratchet aus `TASK-CTL-005` erhalten. Ein ablösendes
+Report-Artefakt existiert nicht. Er wird daher ohne `superseded_by` fachlich
+archiviert.
 
 ## Source command
 

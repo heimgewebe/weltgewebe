@@ -21,12 +21,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | files_without_frontmatter | 0 |
 | files_with_status | 27 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 14 |
-| files_missing_lifecycle_state | 13 |
-| files_with_lifecycle | 14 |
-| files_missing_lifecycle | 13 |
-| files_with_owner_task | 14 |
-| files_missing_owner_task | 13 |
+| files_with_lifecycle_state | 15 |
+| files_missing_lifecycle_state | 12 |
+| files_with_lifecycle | 15 |
+| files_missing_lifecycle | 12 |
+| files_with_owner_task | 15 |
+| files_missing_owner_task | 12 |
 | files_with_review_after | 9 |
 | files_missing_review_after | 18 |
 | files_primary_referenced | 25 |
@@ -74,7 +74,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 19 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/planning-registration-findings.md | report | active |  |  |  |  |  | 1 | 4 | 2 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -97,7 +97,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsbericht.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/passkey-register-verify-prep.md | lifecycle, owner_task, review_after, lifecycle_state |
-| docs/reports/planning-registration-findings.md | lifecycle, owner_task, review_after, lifecycle_state |
+| docs/reports/planning-registration-findings.md | review_after |
 
 ## Relations
 
