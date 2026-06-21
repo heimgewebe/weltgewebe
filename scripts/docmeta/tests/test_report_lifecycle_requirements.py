@@ -114,15 +114,12 @@ class TestReportLifecycleRequirements(unittest.TestCase):
             ),
         )
 
-    def test_applicable_rule_precedence_and_messages_are_frozen(self) -> None:
-        """Freeze the precedence-sensitive (code, field, message) output.
+    def test_required_rule_precedence_and_messages_are_frozen(self) -> None:
+        """Freeze ordered applicable rule definitions before presence filtering.
 
         When status- and lifecycle_state-derived rules share a finding code,
-        the first occurrence (base, then status, then lifecycle_state) wins.
-        This locks the exact behavior the refactored validator reproduces —
-        proven byte-identical to the pre-refactor validator across the full
-        input matrix. Changing any tuple here is an intentional policy change,
-        not a refactor.
+        the first occurrence wins. This test covers internal compatibility
+        ordering. Emitted findings are covered by the validator parity test.
         """
 
         def rules(frontmatter: dict[str, object]) -> tuple[tuple[str, str, str], ...]:
