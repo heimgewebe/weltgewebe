@@ -123,6 +123,42 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         
         self.assertTrue(pos_a < pos_b < pos_c)
 
+    def test_missing_currently_enforced_fields_section(self):
+        self._write_report("unclass.md", "---\ndoc_type: report\nstatus: active\n---")
+        self._write_report("reference.md", "---\ndoc_type: reference\nstatus: active\n---")
+        generate(self.root, self.output_path)
+        content = self.output_path.read_text(encoding="utf-8")
+
+        self.assertIn("## Reports With Missing Currently-Enforced Fields", content)
+        section = content.split(
+            "## Reports With Missing Currently-Enforced Fields", 1
+        )[1].split("\n## ", 1)[0]
+        # Exact row: field names in rule-precedence order (not finding codes).
+        self.assertIn(
+            "| docs/reports/unclass.md | active |  | "
+            "lifecycle_state, lifecycle, review_after |",
+            section,
+        )
+        # Presence-only caveat present; no completeness overclaim.
+        self.assertIn("field presence only", section)
+        self.assertNotIn("Complete Reports", section)
+        # Non-reports never appear in the section.
+        self.assertNotIn("docs/reports/reference.md", section)
+
+    def test_classified_report_absent_from_missing_fields_section(self):
+        self._write_report(
+            "arch.md",
+            "---\ndoc_type: report\nstatus: deprecated\nlifecycle_state: archived\n"
+            "lifecycle: audit\nowner_task: T1\n---",
+        )
+        generate(self.root, self.output_path)
+        content = self.output_path.read_text(encoding="utf-8")
+
+        section = content.split("## Reports With Missing Currently-Enforced Fields", 1)[1]
+        section = section.split("\n## ", 1)[0]
+        self.assertIn("| _None_ |", section)
+        self.assertNotIn("docs/reports/arch.md", section)
+
     def test_no_real_repo_mutation_when_output_is_temp(self):
         import time
         start_time = time.time()

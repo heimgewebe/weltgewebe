@@ -17,6 +17,7 @@ from scripts.docmeta.generate_report_lifecycle_inventory import (
     _cell,
 )
 from scripts.docmeta.validate_report_lifecycle import _validate_report, _load_frontmatter
+from scripts.docmeta.report_lifecycle_requirements import missing_required_report_fields
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -50,6 +51,7 @@ class LifecycleOverviewRow:
     primary_refs: int
     derived_refs: int
     findings: tuple[str, ...]
+    missing_required_fields: tuple[str, ...]
 
 def collect_lifecycle_rows(root: Path, records: list[ReportRecord]) -> list[LifecycleOverviewRow]:
     rows = []
@@ -58,7 +60,7 @@ def collect_lifecycle_rows(root: Path, records: list[ReportRecord]) -> list[Life
         frontmatter = _load_frontmatter(full_path)
         findings = _validate_report(full_path, frontmatter, root)
         finding_codes = tuple(sorted(f.code for f in findings))
-        
+
         rows.append(
             LifecycleOverviewRow(
                 path=record.path,
@@ -73,6 +75,7 @@ def collect_lifecycle_rows(root: Path, records: list[ReportRecord]) -> list[Life
                 primary_refs=record.referenced_by_count,
                 derived_refs=len(record.derived_referenced_by_paths),
                 findings=finding_codes,
+                missing_required_fields=missing_required_report_fields(frontmatter),
             )
         )
     return rows
@@ -212,7 +215,36 @@ def render_markdown(rows: list[LifecycleOverviewRow], summary: dict[str, int]) -
     else:
         lines.append("| _None_ | | | |")
     lines.append("")
-    
+
+    reports_missing_fields = [
+        r for r in rows
+        if r.missing_required_fields and _norm(r.doc_type) == "report"
+    ]
+    reports_missing_fields.sort(key=lambda r: r.path)
+    lines.extend([
+        "## Reports With Missing Currently-Enforced Fields",
+        "",
+        (
+            "Fields required by the currently implemented validator rules that are "
+            + "absent, in rule-precedence order. This reflects field presence only; it "
+            + "is not a full normative lifecycle judgement and does not cover enum, "
+            + "date, owner, or relation checks. Future validator rules may surface "
+            + "additional requirements."
+        ),
+        "",
+        "| Report | status | lifecycle_state | Missing currently-enforced fields |",
+        "| --- | --- | --- | --- |"
+    ])
+    if reports_missing_fields:
+        for r in reports_missing_fields:
+            lines.append(
+                f"| {r.path} | {_cell(r.status)} | {_cell(r.lifecycle_state)} | "
+                f"{_cell(', '.join(r.missing_required_fields))} |"
+            )
+    else:
+        lines.append("| _None_ | | | |")
+    lines.append("")
+
     non_reports = groups.get("non_report", [])
     lines.extend([
         "## Non-Report Files Under docs/reports",
