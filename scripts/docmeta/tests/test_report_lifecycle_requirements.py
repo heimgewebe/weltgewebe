@@ -7,6 +7,7 @@ import unittest
 from scripts.docmeta.report_lifecycle_requirements import (
     missing_required_report_field_rules,
     missing_required_report_fields,
+    required_report_field_rules,
     string_value,
 )
 
@@ -110,6 +111,64 @@ class TestReportLifecycleRequirements(unittest.TestCase):
                     "owner_task",
                     "deferred reports should define owner_task",
                 ),
+            ),
+        )
+
+    def test_applicable_rule_precedence_and_messages_are_frozen(self) -> None:
+        """Freeze the precedence-sensitive (code, field, message) output.
+
+        When status- and lifecycle_state-derived rules share a finding code,
+        the first occurrence (base, then status, then lifecycle_state) wins.
+        This locks the exact behavior the refactored validator reproduces —
+        proven byte-identical to the pre-refactor validator across the full
+        input matrix. Changing any tuple here is an intentional policy change,
+        not a refactor.
+        """
+
+        def rules(frontmatter: dict[str, object]) -> tuple[tuple[str, str, str], ...]:
+            return tuple(
+                (rule.code, rule.field, rule.message)
+                for rule in required_report_field_rules(frontmatter)
+            )
+
+        # status=active wins the lifecycle/review_after message over archived.
+        self.assertEqual(
+            rules(
+                {"doc_type": "report", "status": "active", "lifecycle_state": "archived"}
+            ),
+            (
+                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
+                ("missing_status", "status", "report documents should define status"),
+                ("missing_lifecycle", "lifecycle", "active reports should define lifecycle"),
+                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
+                ("missing_owner_task", "owner_task", "archived reports should define owner_task"),
+            ),
+        )
+        # superseded contributes superseded_by; status=active still wins lifecycle.
+        self.assertEqual(
+            rules(
+                {"doc_type": "report", "status": "active", "lifecycle_state": "superseded"}
+            ),
+            (
+                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
+                ("missing_status", "status", "report documents should define status"),
+                ("missing_lifecycle", "lifecycle", "active reports should define lifecycle"),
+                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
+                ("missing_owner_task", "owner_task", "superseded reports should define owner_task"),
+                ("missing_superseded_by", "superseded_by", "superseded reports should define superseded_by"),
+            ),
+        )
+        # status=draft wins review_after message; deferred contributes lifecycle/owner_task.
+        self.assertEqual(
+            rules(
+                {"doc_type": "report", "status": "draft", "lifecycle_state": "deferred"}
+            ),
+            (
+                ("missing_lifecycle_state", "lifecycle_state", "report documents should define lifecycle_state"),
+                ("missing_status", "status", "report documents should define status"),
+                ("missing_review_after", "review_after", "active/draft reports should define review_after"),
+                ("missing_lifecycle", "lifecycle", "deferred reports should define lifecycle"),
+                ("missing_owner_task", "owner_task", "deferred reports should define owner_task"),
             ),
         )
 
