@@ -60,7 +60,6 @@ generate:
 	python3 -m scripts.docmeta.generate_relates_to_audit
 	python3 -m scripts.docmeta.generate_report_lifecycle
 	python3 -m scripts.docmeta.generate_report_lifecycle_inventory
-	python3 -m scripts.docmeta.generate_report_lifecycle_validator_requirements
 
 diagnose: generate
 
