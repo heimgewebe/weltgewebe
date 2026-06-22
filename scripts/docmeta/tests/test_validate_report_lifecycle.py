@@ -285,7 +285,7 @@ status: active
         findings = _validate_report(path, fm, self.tmp_root)
         self.assertEqual(findings, [])
 
-    def test_render_output_is_stable(self) -> None:
+    def test_render_output_contains_expected_structure(self) -> None:
         write_report(
             self.tmp_root,
             "example.md",
@@ -307,6 +307,64 @@ status: active
         self.assertIn("| findings_total |", rendered)
         self.assertIn("| missing_lifecycle_state |", rendered)
         self.assertIn("| Path | Severity | Code | Field | Message |", rendered)
+
+    def test_findings_are_deterministically_sorted_by_path_and_code(self) -> None:
+        write_report(
+            self.tmp_root,
+            "b_example.md",
+            """
+id: reports.b
+title: B
+doc_type: report
+status: active
+lifecycle_state: active
+            """
+        )
+        write_report(
+            self.tmp_root,
+            "a_example.md",
+            """
+id: reports.a
+title: A
+doc_type: report
+status: active
+lifecycle_state: active
+            """
+        )
+        rendered, exit_code = run(self.tmp_root, "report")
+        self.assertEqual(exit_code, 0)
+
+        lines = [
+            line
+            for line in rendered.splitlines()
+            if line.startswith("| docs/reports/")
+        ]
+        self.assertEqual(len(lines), 6)
+
+        extracted = []
+        for line in lines:
+            parts = [
+                part.strip()
+                for part in line.strip().strip("|").split("|")
+            ]
+            self.assertEqual(len(parts), 5)
+            extracted.append((parts[0], parts[2]))
+
+        self.assertEqual(
+            extracted,
+            [
+                ("docs/reports/a_example.md", "missing_lifecycle"),
+                ("docs/reports/a_example.md", "missing_owner_task"),
+                ("docs/reports/a_example.md", "missing_review_after"),
+                ("docs/reports/b_example.md", "missing_lifecycle"),
+                ("docs/reports/b_example.md", "missing_owner_task"),
+                ("docs/reports/b_example.md", "missing_review_after"),
+            ],
+        )
+
+        rendered_again, exit_code_again = run(self.tmp_root, "report")
+        self.assertEqual(exit_code_again, exit_code)
+        self.assertEqual(rendered_again, rendered)
 
     def test_validate_report_with_datetime_date_review_after(self) -> None:
         fm = {
