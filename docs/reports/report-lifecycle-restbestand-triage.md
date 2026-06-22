@@ -214,9 +214,13 @@ provisorisch, auch wenn der genannte Task registriert ist.
   überholter Gegenwartsaussage sollte nicht unverändert `active` gestempelt
   werden.
 - **Vorbedingung:** Inhaltsreconciliation der überholten CI-Artefakt-Aussage
-  (oder expliziter Nachtrag) **vor** Backfill. Kein erfundener Karten-Owner — es
-  existiert **kein** registrierter Map-Task (MAP-PROOF-001/002 sind keine Tasks;
-  nur `OPT-*` existieren). Owner bleibt offen bis zur Namensraum-Klärung.
+  (oder expliziter Nachtrag) **vor** Backfill. Kein erfundener Karten-Owner —
+  Im Task-Index existiert derzeit kein registrierter MAP-PROOF-* oder
+  anderer eindeutig zuständiger Karten-Task. MAP-PROOF-001 und
+  MAP-PROOF-002 sind im Repo als Proof- beziehungsweise
+  Kontrollpunktbezeichnungen belegt, aber nicht als Task-Einträge
+  registriert. Da der zulässige owner_task-Namensraum noch nicht
+  abschließend festgelegt ist, bleibt der Owner hier offen.
 
 ### R6 — `map-basemap-proof-gap-reconciliation.md`
 
@@ -284,13 +288,13 @@ provisorisch, auch wenn der genannte Task registriert ist.
 
 | Fall | Datei | lifecycle | lifecycle_state | owner_task | owner-Grad | Backfill-Reife |
 | --- | --- | --- | --- | --- | --- | --- |
-| R1 | `cost-report.md` | generated | active | — | offen | Generator-Blocker |
+| R1 | `cost-report.md` | generated | active | — | offen | Slice F |
 | R2 | `domain-provider-role-finding.md` | audit | active | DEPLOY-DNS-001 | belegt | Live-Check + review_after |
 | R3 | `domain-runtime-data-source-reconciliation.md` | audit | active | DB-PROOF-001 | belegt | Runtime-Recheck + review_after |
 | R4 | `inwx-zone-reconciliation-plan.md` | planning | active | DEPLOY-DNS-001 | belegt | Live/Window + Enum + review_after |
 | R5 | `map-architekturkritik.md` | audit | active | — | offen | Inhaltsreconciliation + Owner |
 | R6 | `map-basemap-proof-gap-reconciliation.md` | audit | active | — | offen | Owner-Namensraum |
-| R7 | `optimierungsbericht.md` | audit | archived | — | offen | Owner (Querschnitt) |
+| R7 | `optimierungsbericht.md` | audit | archived | — | offen | Slice E |
 | R8 | `passkey-register-verify-prep.md` | decision-prep | archived | AUTH-PG-002 | plausibel | reif (Owner-Vorbehalt) |
 
 ## Backfill-Slices (nach Umsetzungsreife, nicht nach Thema)
@@ -300,13 +304,15 @@ provisorisch, auch wenn der genannte Task registriert ist.
 > keine Generated-Datei von Hand, keine Vermischung von Strang A
 > (PostgreSQL/Auth) und Strang B (Hygiene) entgegen dem Board.
 
-### Slice A — Auth Decision-Prep (R8) — *entscheidungsreif*
+### Slice A — Auth Decision-Prep (R8) — *weitgehend entscheidungsreif; Owner-Bestätigung bleibt letztes Gate*
 
 - Dateien: `passkey-register-verify-prep.md`.
 - Vorgeschlagene Metadaten: `lifecycle: decision-prep`, `lifecycle_state:
   archived`, `owner_task: AUTH-PG-002`, kein `review_after`.
-- Offene Vorbedingung: Bestätigung, dass `AUTH-PG-002` der akzeptierte Owner des
-  historischen Prep-Berichts ist; sonst explizite Owner-Leerstelle.
+- Offene Vorbedingung: `AUTH-PG-002` ist ein plausibler Owner der offenen
+  Persistenz-Folgearbeit; er ist nicht automatisch der historische Owner des
+  abgeschlossenen Register-/Verify-Vorbereitungsberichts; ohne
+  Owner-Bestätigung kein Backfill.
 - Akzeptanz: 0 neue Findings; Register-Verify-Abschluss nicht als offen
   umdeklariert; Primary-Reference-Zahl bleibt 0.
 - Risiko/Abhängigkeit: gering; keine Runtime-/Generator-/Live-Abhängigkeit.
@@ -347,7 +353,33 @@ provisorisch, auch wenn der genannte Task registriert ist.
 - Begründung Reihenfolge: **nicht** in einen schnellen Backfill schieben — erst
   Governance/Inhalt klären.
 
-### Slice E — Generierter Cost-Report (R1) — *Generatoränderung nötig*
+### Slice E — Querschnittliche Optimierungsdiagnose (R7) — *Owner-Entscheidung offen*
+
+- Datei: `optimierungsbericht.md`.
+- Vorgeschlagene Metadaten:
+  `lifecycle: audit`,
+  `lifecycle_state: archived`,
+  kein `review_after`.
+- Harte Vorbedingung:
+  einen evidenzbasierten verantwortlichen Task, Prozess oder Kontrollpunkt
+  bestimmen. Kein einzelner OPT-Task darf allein wegen Teilüberdeckung
+  eingesetzt werden.
+- Alternativpfad:
+  Wenn kein belastbarer Owner bestimmt werden kann, bleibt der
+  Frontmatter-Backfill bis zur Klärung des `owner_task`-Namensraums
+  zurückgestellt.
+- Nicht zulässig:
+  `superseded` oder
+  `superseded_by: docs/reports/optimierungsstatus.md`,
+  solange kein Artefakt die vollständige Diagnose ersetzt.
+- Akzeptanz:
+  Die historische Diagnose bleibt rekonstruierbar; operative
+  Fortschrittswahrheit verbleibt in `optimierungsstatus.md`; keine
+  künstliche Ownership.
+- Risiko:
+  technisch niedrig, governance-seitig mittel.
+
+### Slice F — Generierter Cost-Report (R1) — *Generatoränderung nötig*
 
 - Dateien: `tools/py/cost/report.py` (Generator) **plus** Output — getrennt von
   reinen Frontmatter-Slices.
