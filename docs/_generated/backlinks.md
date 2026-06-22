@@ -436,6 +436,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/process/README.md
 - [relates_to] docs/process/report-lifecycle-contract-alignment.md
+- [relates_to] docs/reports/report-lifecycle-restbestand-triage.md
 
 ## docs/process/sprache.md
 
@@ -726,6 +727,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 - [relates_to] docs/reports/domain-runtime-data-source-reconciliation.md
 - [relates_to] docs/reports/planning-registration-findings.md
+- [relates_to] docs/reports/report-lifecycle-restbestand-triage.md
 - [relates_to] docs/tasks/board.md
 
 ## docs/techstack.md
@@ -801,6 +803,10 @@ Generated automatically. Do not edit.
 ## scripts/docmeta/validate_claim_registry.py
 
 - [relates_to] docs/claims/README.md
+
+## scripts/docmeta/validate_report_lifecycle.py
+
+- [relates_to] docs/reports/report-lifecycle-restbestand-triage.md
 
 ## scripts/guard/basemap-runtime-proof.sh
 

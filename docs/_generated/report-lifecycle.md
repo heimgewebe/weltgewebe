@@ -16,10 +16,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Metric | Count |
 | --- | ---: |
-| files_scanned | 27 |
-| reports_checked | 23 |
+| files_scanned | 28 |
+| reports_checked | 24 |
 | reports_ignored_non_report | 4 |
-| reports_with_lifecycle_state | 15 |
+| reports_with_lifecycle_state | 16 |
 | reports_missing_lifecycle_state | 8 |
 | findings_total | 24 |
 
@@ -30,7 +30,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | active | 9 |
 | deferred | 0 |
 | superseded | 5 |
-| archived | 1 |
+| archived | 2 |
 | missing | 8 |
 
 ## Finding Summary
@@ -76,6 +76,7 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
 | docs/reports/planning-registration-findings.md | deprecated | audit | TASK-CTL-005 |  |  |
+| docs/reports/report-lifecycle-restbestand-triage.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  |
 
 ## Unclassified Reports
 
