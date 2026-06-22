@@ -208,6 +208,7 @@ Ein erledigter oder geschlossener Task (Status `done`) darf weiterhin Owner eine
 ### Ungültige Platzhalter und unregistrierte Kontrollpunkte
 
 Nicht als aufgelöst gelten:
+
 - `TBD`, `none`, `null`
 - `pending`, `pending-namespace`
 - `docs-mechanik` oder andere freie Rollenbezeichnungen
@@ -219,6 +220,7 @@ Insbesondere IDs wie `MAP-PROOF-001` oder `MAP-PROOF-002` sind erst gültige Own
 ### Künftige Erweiterbarkeit
 
 Weitere Registrierungsquellen benötigen zwingend:
+
 - Eine kanonische Quelle
 - Eine dokumentierte ID-Semantik
 - Eine maschinenlesbare Oberfläche oder einen deterministischen Parser
@@ -229,16 +231,19 @@ Weitere Registrierungsquellen benötigen zwingend:
 
 Dieser Schritt entscheidet nur die Policy. Eine technische Owner-Existenzprüfung, Owner-Statusprüfung, Markdown–JSON-Paritätsguard, neue Lifecycle-Enums, neue Lifecycle-States oder Strict-Aktivierung sind nicht implementiert.
 
-### Beispiele
+### Gültige und ungültige Owner
 
 Gültig:
+
 ```yaml
 owner_task: DOCMETA-REPORT-LIFECYCLE-001
 owner_task: OPT-API-002
 ```
+
 Nur gültig, weil die IDs in einer normativen Quelle registriert sind.
 
-Ungültig:
+Ungültig (Rolle/Platzhalter ohne Task-Verknüpfung):
+
 ```yaml
 owner_task: TBD
 owner_task: docs-mechanik

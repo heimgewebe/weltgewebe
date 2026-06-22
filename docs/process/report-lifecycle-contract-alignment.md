@@ -179,13 +179,17 @@ nicht implementiert.
 
 ### Compatibility baseline
 
-| Owner-ID | Verwendungen | Task-Index | OPT-Markdown | OPT-JSON | Identität | Status | Parität |
-| -------- | -----------: | ---------- | ------------ | -------- | --------- | ------ | ------- |
-| `DOCMETA-REPORT-LIFECYCLE-001` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
-| `DOMAIN-PG-002` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
+Baseline: 2026-06-22, commit `e31e434d48e9b166de8ec894a79fc2d2a840e2f0`.
+Scanned all non-empty `owner_task` values in `docs/reports/*.md`.
+Result: 5 unique IDs across 16 report usages; 0 unresolved IDs.
+
+| Owner-ID | Verwendungen | Task-Index | OPT-Markdown | OPT-JSON | Identität | Normative Quellenstatus-Konsistenz | Parität |
+| -------- | -----------: | ---------- | ------------ | -------- | --------- | ---------------------------------- | ------- |
+| `DOCMETA-REPORT-LIFECYCLE-001` | 1 | True | False | False | resolved_task_index | not_comparable | not_applicable |
+| `DOMAIN-PG-002` | 1 | True | False | False | resolved_task_index | not_comparable | not_applicable |
 | `OPT-API-002` | 5 | False | True | True | resolved_opt_markdown | not_comparable | confirmed_for_id |
 | `OPT-ARC-001` | 8 | True | True | True | resolved_both | consistent | confirmed_for_id |
-| `TASK-CTL-005` | 1 | True | False | False | resolved_task_index | not_comparable | unproven |
+| `TASK-CTL-005` | 1 | True | False | False | resolved_task_index | not_comparable | not_applicable |
 
 ### Decision status
 
@@ -208,6 +212,7 @@ nicht implementiert.
 ### Enforcement-Vorbedingungen
 
 Eine spätere blockierende Owner-Prüfung darf erst aktiviert werden, wenn:
+
 - alle bestehenden Owner-IDs normativ auflösbar sind;
 - vollständige OPT-Markdown–JSON-Parität geprüft wird oder der Resolver direkt die kanonische Markdown-Quelle liest;
 - keine historische Ownership regressiert;
