@@ -72,7 +72,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 20 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 22 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 1 | 4 | 3 | review_after |  |
@@ -261,6 +261,8 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/blueprints/doc-structure-task-control-roadmap.md`
   - `docs/blueprints/doc-structure-task-control.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
+  - `docs/process/report-lifecycle-contract-alignment.md`
+  - `docs/process/report-lifecycle.md`
   - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
   - `docs/reports/auth-persistence-next-step.md`
   - `docs/reports/auth-persistence-readiness.md`
