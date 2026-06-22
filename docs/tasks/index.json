@@ -1231,10 +1231,11 @@
         "scripts/docmeta/tests/test_validate_report_lifecycle.py",
         "scripts/docmeta/generate_report_lifecycle.py",
         "scripts/docmeta/generate_report_lifecycle_inventory.py",
-        ".github/workflows/docs-guard.yml"
+        ".github/workflows/docs-guard.yml",
+        "docs/reports/report-lifecycle-restbestand-triage.md"
       ],
       "missing_evidence": [
-        "Der vom aktuellen Lifecycle-Validator gemeldete Restbestand ist noch nicht vollständig evidenzbasiert klassifiziert",
+        "Die acht vom Lifecycle-Validator gemeldeten Restbestand-Reports sind in docs/reports/report-lifecycle-restbestand-triage.md evidenzbasiert triagiert (je Fall Klassifikation oder begründete Leerstelle); der eigentliche Frontmatter-Backfill der acht Zielreports steht noch aus und erfolgt in kleinen Slices",
         "Fehlendes oder nicht parsebares Report-Frontmatter wird noch nicht vollständig blockierend erkannt",
         "Semantische Validatorprüfungen für Lifecycle-Enums, ISO-Datum und Supersession-Konsistenz fehlen",
         "Der zulässige Namensraum für owner_task und die darauf aufbauende Existenzprüfung sind noch nicht festgelegt",
@@ -1254,14 +1255,16 @@
       "links": {
         "issues": [],
         "prs": [
-          "1246"
+          "1246",
+          "1255",
+          "1256"
         ],
         "docs": [
           "docs/process/report-lifecycle.md",
           "docs/process/report-lifecycle-contract-alignment.md"
         ]
       },
-      "updated_at": "2026-06-19"
+      "updated_at": "2026-06-22"
     }
   ]
 }

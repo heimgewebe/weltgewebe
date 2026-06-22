@@ -114,6 +114,7 @@ Generated automatically. Do not edit.
 | reports.optimierungsstatus | Optimierungsstatus Weltgewebe | status-matrix | active | docs/reports/optimierungsstatus.md |
 | reports.passkey-register-verify-prep | Passkey Register-Verify – Vorbereitungsbericht | report | active | docs/reports/passkey-register-verify-prep.md |
 | reports.planning-registration-findings | Planning Registration Findings Triage | report | deprecated | docs/reports/planning-registration-findings.md |
+| reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
 | runbooks.db-recovery | DB Recovery Runbook | reference | active | docs/runbooks/db-recovery.md |

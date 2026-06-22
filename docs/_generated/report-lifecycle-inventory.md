@@ -16,23 +16,23 @@ Primary references are exact path matches in canonical documentation surfaces. D
 
 | Metric | Count |
 | --- | ---: |
-| files_total | 27 |
-| files_with_frontmatter | 27 |
+| files_total | 28 |
+| files_with_frontmatter | 28 |
 | files_without_frontmatter | 0 |
-| files_with_status | 27 |
+| files_with_status | 28 |
 | files_missing_status | 0 |
-| files_with_lifecycle_state | 15 |
+| files_with_lifecycle_state | 16 |
 | files_missing_lifecycle_state | 12 |
-| files_with_lifecycle | 15 |
+| files_with_lifecycle | 16 |
 | files_missing_lifecycle | 12 |
-| files_with_owner_task | 15 |
+| files_with_owner_task | 16 |
 | files_missing_owner_task | 12 |
 | files_with_review_after | 9 |
-| files_missing_review_after | 18 |
-| files_primary_referenced | 25 |
+| files_missing_review_after | 19 |
+| files_primary_referenced | 26 |
 | files_primary_unreferenced | 2 |
-| files_with_derived_references | 27 |
-| files_with_relations | 27 |
+| files_with_derived_references | 28 |
+| files_with_relations | 28 |
 | files_with_missing_supersession_target | 0 |
 
 ## Doc Type Distribution
@@ -41,7 +41,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | --- | ---: |
 | documentation | 1 |
 | reference | 1 |
-| report | 23 |
+| report | 24 |
 | status-matrix | 2 |
 
 ## Reports
@@ -72,9 +72,10 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/map-basemap-proof-gap-reconciliation.md | report | active |  |  |  |  |  | 2 | 4 | 6 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/map-status-matrix.md | status-matrix | active |  |  |  |  |  | 8 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/optimierungsbericht.md | report | active |  |  |  |  |  | 2 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 19 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | 20 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | active |  |  |  |  |  | 0 | 4 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | 1 | 4 | 2 | review_after |  |
+| docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 1 | 4 | 3 | review_after |  |
 
 ## Absent Core Lifecycle Metadata
 
@@ -98,6 +99,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsstatus.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/passkey-register-verify-prep.md | lifecycle, owner_task, review_after, lifecycle_state |
 | docs/reports/planning-registration-findings.md | review_after |
+| docs/reports/report-lifecycle-restbestand-triage.md | review_after |
 
 ## Relations
 
@@ -130,6 +132,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/optimierungsstatus.md | 4 | depends_on, relates_to | docs/policies/agent-reading-protocol.md, docs/reports/auth-persistence-readiness.md, docs/reports/domain-read-path-proof.md, docs/reports/optimierungsbericht.md |
 | docs/reports/passkey-register-verify-prep.md | 4 | relates_to | docs/adr/ADR-0006__auth-magic-link-session-passkey.md, docs/blueprints/auth-roadmap.md, docs/reports/auth-status-matrix.md, docs/specs/auth-api.md |
 | docs/reports/planning-registration-findings.md | 2 | relates_to | docs/tasks/index.json, scripts/docmeta/check_planning_registration.py |
+| docs/reports/report-lifecycle-restbestand-triage.md | 3 | relates_to | docs/process/report-lifecycle.md, docs/tasks/index.json, scripts/docmeta/validate_report_lifecycle.py |
 
 ## Primary Referenced Reports
 
@@ -268,12 +271,16 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/reports/domain-node-write-path-proof.md`
   - `docs/reports/domain-read-path-proof.md`
   - `docs/reports/optimierungsbericht.md`
+  - `docs/reports/report-lifecycle-restbestand-triage.md`
   - `docs/roadmap.md`
   - `docs/specs/list-pagination-api.md`
   - `docs/tasks/README.md`
   - `docs/tasks/board.md`
 
 - `docs/reports/planning-registration-findings.md`
+  - `docs/tasks/board.md`
+
+- `docs/reports/report-lifecycle-restbestand-triage.md`
   - `docs/tasks/board.md`
 
 ## Derived Referenced Reports
@@ -444,6 +451,12 @@ Primary references are exact path matches in canonical documentation surfaces. D
   - `docs/_generated/report-lifecycle.md`
 
 - `docs/reports/planning-registration-findings.md`
+  - `docs/_generated/backlinks.md`
+  - `docs/_generated/doc-index.md`
+  - `docs/_generated/relates-to-audit.md`
+  - `docs/_generated/report-lifecycle.md`
+
+- `docs/reports/report-lifecycle-restbestand-triage.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
